@@ -27,6 +27,16 @@ try{
  const programStatus=await page.locator('canvas').evaluate(canvas=>{const g=canvas.getContext('webgl');const p=g?.getParameter(g.CURRENT_PROGRAM);return {hasProgram:!!p,link:!!(p&&g.getProgramParameter(p,g.LINK_STATUS)),log:p?g.getProgramInfoLog(p):'No current program'};});
  console.log('WebGL program status:',programStatus);
  if(!programStatus.hasProgram||!programStatus.link)throw Error('3D WebGL shader program failed: '+programStatus.log);
+ const orientation=await page.locator('canvas').evaluate(canvas=>{
+   const g=canvas.getContext('webgl'),w=canvas.width,h=canvas.height;
+   const sample=(x,y)=>{const v=new Uint8Array(4);g.readPixels(Math.floor(w*x),Math.floor(h*y),1,1,g.RGBA,g.UNSIGNED_BYTE,v);return Array.from(v).slice(0,3)};
+   return {top:[sample(.25,.89),sample(.5,.89),sample(.75,.89)],bottom:[sample(.25,.2),sample(.5,.2),sample(.75,.2)]};
+ });
+ console.log('Rendered WebGL color orientation',orientation);
+ const upper=orientation.top.reduce((a,v)=>a+v[2]-v[1],0)/3;
+ const lower=orientation.bottom.reduce((a,v)=>a+v[2]-v[1],0)/3;
+ if(!(upper>lower+10))throw Error('Upside-down scene suspected: sky should be above green ground, differences '+upper+' / '+lower);
+
  if((await page.locator('#startLayer').innerText()).includes('3Dの起動エラー'))throw Error('3D start error dialog');
  await page.keyboard.down('ArrowUp');await page.waitForTimeout(700);await page.keyboard.up('ArrowUp');
  const moved=await page.locator('#pos').textContent();
