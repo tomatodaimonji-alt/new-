@@ -1,7 +1,11 @@
 import { chromium } from 'playwright';
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
-const html=readFileSync('index.html');
+const html=readFileSync('index.html','utf8');
+const vertex=html.match(/const VERT='([^']+)'/)?.[1]||'';
+const fragment=html.match(/const FRAG='([^']+)'/)?.[1]||'';
+if(!vertex.includes('precision mediump float;')||!fragment.includes('precision mediump float;'))throw Error('Shader float precision must match');
+if(vertex.includes('uniform vec3 uFog;'))throw Error('Unused uFog in vertex shader may cause link mismatch');
 const server=createServer((req,res)=>{res.writeHead(200,{'content-type':'text/html; charset=utf-8'});res.end(html)});
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const port=server.address().port;
@@ -20,6 +24,10 @@ try{
  await page.waitForTimeout(1500);
  const hidden=await page.locator('#startLayer').evaluate(e=>getComputedStyle(e).display==='none');
  if(!hidden)throw Error('Intro did not disappear after tap');
+ const programStatus=await page.locator('canvas').evaluate(canvas=>{const g=canvas.getContext('webgl');const p=g?.getParameter(g.CURRENT_PROGRAM);return {hasProgram:!!p,link:!!(p&&g.getProgramParameter(p,g.LINK_STATUS)),log:p?g.getProgramInfoLog(p):'No current program'};});
+ console.log('WebGL program status:',programStatus);
+ if(!programStatus.hasProgram||!programStatus.link)throw Error('3D WebGL shader program failed: '+programStatus.log);
+ if((await page.locator('#startLayer').innerText()).includes('3Dの起動エラー'))throw Error('3D start error dialog');
  await page.keyboard.down('ArrowUp');await page.waitForTimeout(700);await page.keyboard.up('ArrowUp');
  const moved=await page.locator('#pos').textContent();
  console.log('After:',moved);
