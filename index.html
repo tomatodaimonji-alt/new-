@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><meta name="theme-color" content="#08141a"><title>月影の遺跡</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#08141a;color:#f5f0d7;font-family:system-ui,sans-serif;touch-action:none}#game{position:absolute;inset:0;width:100%;height:100%;display:block}#hud{position:absolute;top:env(safe-area-inset-top,0px);left:0;right:0;display:flex;gap:7px;padding:12px;justify-content:center;pointer-events:none} .pill{border:1px solid #b4dbd050;background:#07191fdc;border-radius:24px;padding:8px 11px;font-size:13px;backdrop-filter:blur(8px)}#hint{position:absolute;top:58px;left:14px;right:14px;text-align:center;font-size:12px;color:#ceded2;text-shadow:0 2px 4px #000;pointer-events:none}#controls{position:absolute;bottom:max(20px,env(safe-area-inset-bottom));left:15px;right:15px;display:flex;justify-content:space-between;align-items:end;pointer-events:none}.pad{display:grid;grid-template-columns:repeat(3,57px);grid-template-rows:repeat(3,57px);gap:3px}.btn{touch-action:none;user-select:none;pointer-events:auto;border:1px solid #b9ead366;background:#17303acb;color:#f4f2d7;font-weight:800;font-size:25px;border-radius:17px;box-shadow:0 5px 20px #0008;display:flex;align-items:center;justify-content:center}.btn:active,.btn.pressed{background:#477e73e6;transform:scale(.96)}.empty{visibility:hidden}#attack{width:89px;height:89px;border-radius:50%;font-size:17px;background:#754539c9;border-color:#f4b8a6}#modal{position:absolute;inset:0;background:#041116bd;display:flex;align-items:center;justify-content:center;padding:26px}#panel{max-width:440px;width:100%;background:#142730f5;border:1px solid #abc8ae77;border-radius:23px;padding:26px 23px;text-align:center;box-shadow:0 20px 70px #000b}h1{font-size:27px;margin:0 0 12px;letter-spacing:.12em}p{font-size:14px;line-height:1.9;color:#d6ddd0}#start{padding:14px 25px;border-radius:13px;background:#c6b57a;color:#142025;border:0;font-size:17px;font-weight:800;margin-top:12px}#footer{position:absolute;bottom:4px;right:10px;color:#98b2ad7a;font-size:10px;pointer-events:none}@media(max-width:360px){.pad{grid-template-columns:repeat(3,49px);grid-template-rows:repeat(3,49px)}#attack{width:75px;height:75px}} </style></head>
+<body><canvas id="game"></canvas><div id="hud"><div class="pill" id="hp">♥ ♥ ♥ ♥ ♥</div><div class="pill" id="gems">◆ 0 / 3</div><div class="pill" id="time">00:00</div></div><div id="hint">光る結晶を3つ集めて、遺跡の門へ戻ろう</div>
+<div id="controls"><div class="pad"><div class="empty"></div><div class="btn" data-key="up">▲</div><div class="empty"></div><div class="btn" data-key="left">◀</div><div class="empty"></div><div class="btn" data-key="right">▶</div><div class="empty"></div><div class="btn" data-key="down">▼</div><div class="empty"></div></div><div class="btn" id="attack">攻撃</div></div><div id="footer">月影の遺跡 v0.1</div><div id="modal"><div id="panel"><h1 id="title">月影の遺跡</h1><p id="desc">月明かりの森に眠る小さな遺跡。<br>3つの結晶を集めて、入口の門から脱出しよう。<br><br>左の十字キーで移動、右のボタンで攻撃。<br>敵に触れると体力が減るよ。</p><button id="start">探索を始める</button></div></div>
+<script>
+(()=>{'use strict';
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d'),modal=document.getElementById('modal');
+const hpLabel=document.getElementById('hp'),gemLabel=document.getElementById('gems'),timeLabel=document.getElementById('time');
+const tile=48,W=29,H=29,keys=new Set(),walls=new Set(),rand=(a,b)=>Math.random()*(b-a)+a;
+let map=[],player,enemies=[],gems=[],particles=[],portal,playing=false,elapsed=0,last=0,shake=0;
+function resize(){const d=Math.min(devicePixelRatio||1,2);canvas.width=Math.round(innerWidth*d);canvas.height=Math.round(innerHeight*d);ctx.setTransform(d,0,0,d,0,0)}
+addEventListener('resize',resize);resize();
+function wall(x,y){return x<0||y<0||x>=W||y>=H||map[y][x]===1}
+function generate(){
+map=Array.from({length:H},(_,y)=>Array.from({length:W},(_,x)=>+(x===0||y===0||x===W-1||y===H-1||Math.random()<.13)));
+for(let y=2;y<H-2;y+=6)for(let x=2;x<W-2;x+=6){if(Math.random()<.55){for(let i=0;i<3;i++){let xx=x+i,yy=y;if(xx<W-1)map[yy][xx]=1}}}
+const seen=new Set(),stack=[[2,2]];map[2][2]=0;
+while(stack.length){const [x,y]=stack.pop(),id=y*W+x;if(seen.has(id))continue;seen.add(id);for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){let nx=x+dx,ny=y+dy;if(nx<1||ny<1||nx>=W-1||ny>=H-1)continue;if(!wall(nx,ny))stack.push([nx,ny])}}
+for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){if(!seen.has(y*W+x))map[y][x]=1}
+const free=[];for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++)if(!wall(x,y)&&Math.hypot(x-2,y-2)>6)free.push([x,y]);
+const pick=()=>free.splice(Math.floor(Math.random()*free.length),1)[0]||[3,3];
+portal={x:2.5*tile,y:2.5*tile};player={x:portal.x,y:portal.y,hp:5,inv:0,face:0,cool:0,invuln:0,attack:0};
+gems=Array.from({length:3},()=>{let [x,y]=pick();return{x:(x+.5)*tile,y:(y+.5)*tile,got:false,phase:rand(0,7)}});
+enemies=Array.from({length:11},()=>{let [x,y]=pick();return{x:(x+.5)*tile,y:(y+.5)*tile,hp:2,speed:rand(38,62),phase:rand(0,7),hit:0}});
+particles=[];elapsed=0;shake=0;updateHud();
+}
+function updateHud(){hpLabel.textContent='♥ '.repeat(Math.max(0,player.hp)).trim()||'♡';gemLabel.textContent='◆ '+player.inv+' / 3';let s=Math.floor(elapsed);timeLabel.textContent=String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
+function collide(x,y,r=13){return [[-r,-r],[r,-r],[-r,r],[r,r]].some(([dx,dy])=>wall(Math.floor((x+dx)/tile),Math.floor((y+dy)/tile)))}
+function move(o,dx,dy){if(!collide(o.x+dx,o.y))o.x+=dx;if(!collide(o.x,o.y+dy))o.y+=dy}
+function burst(x,y,color,count=12){for(let i=0;i<count;i++)particles.push({x,y,vx:rand(-135,135),vy:rand(-135,135),life:rand(.25,.7),max:.7,color})}
+function swing(){if(!playing||player.cool>0)return;player.cool=.38;player.attack=.17;const a=player.face,fx=Math.cos(a),fy=Math.sin(a);for(const e of enemies){if(e.hp<=0)continue;const dx=e.x-player.x,dy=e.y-player.y,dist=Math.hypot(dx,dy);if(dist<75&&(dx*fx+dy*fy)/Math.max(1,dist)>.15){e.hp--;e.hit=.2;burst(e.x,e.y,e.hp?'#d2d9a0':'#f5b87e',9);if(e.hp<=0)burst(e.x,e.y,'#d7ad65',15)}}}
+function finish(win){playing=false;modal.style.display='flex';document.getElementById('title').textContent=win?'脱出成功！':'探索失敗';document.getElementById('desc').innerHTML=win?'3つの結晶を持ち帰った！<br>探索時間 '+timeLabel.textContent+'<br>次はもっと早く帰れるかな？':'遺跡の魔物に倒されてしまった。<br>もう一度挑戦しよう。';document.getElementById('start').textContent='もう一度遊ぶ'}
+function update(dt){elapsed+=dt;player.cool=Math.max(0,player.cool-dt);player.attack=Math.max(0,player.attack-dt);player.invuln=Math.max(0,player.invuln-dt);shake=Math.max(0,shake-dt);
+let dx=(keys.has('right')?1:0)-(keys.has('left')?1:0),dy=(keys.has('down')?1:0)-(keys.has('up')?1:0);
+if(dx||dy){let l=Math.hypot(dx,dy);dx/=l;dy/=l;player.face=Math.atan2(dy,dx);move(player,dx*165*dt,dy*165*dt)}
+for(const g of gems)if(!g.got&&Math.hypot(player.x-g.x,player.y-g.y)<24){g.got=true;player.inv++;burst(g.x,g.y,'#7cf4d9',20)}
+for(const e of enemies){if(e.hp<=0)continue;e.hit=Math.max(0,e.hit-dt);const d=Math.hypot(player.x-e.x,player.y-e.y);if(d<275&&d>22){move(e,(player.x-e.x)/d*e.speed*dt,(player.y-e.y)/d*e.speed*dt)}else if(d>=275){e.phase+=dt;if(Math.random()<.006){const a=rand(0,7);e.phase=a}move(e,Math.cos(e.phase)*e.speed*.24*dt,Math.sin(e.phase)*e.speed*.24*dt)}
+if(d<27&&player.invuln===0){player.hp--;player.invuln=1.1;shake=.22;burst(player.x,player.y,'#f18e88',12);if(player.hp<=0){updateHud();finish(false);return}}}
+if(player.inv===3&&Math.hypot(player.x-portal.x,player.y-portal.y)<30){updateHud();finish(true);return}
+particles=particles.filter(p=>p.life>0);for(const p of particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt;p.vx*=.95;p.vy*=.95}updateHud()}
+function draw(t){const vw=innerWidth,vh=innerHeight;ctx.fillStyle='#08141a';ctx.fillRect(0,0,vw,vh);if(!player)return;const ox=vw/2-player.x+rand(-1,1)*shake*13,oy=vh/2-player.y+rand(-1,1)*shake*13;
+ctx.save();ctx.translate(ox,oy);
+const sx=Math.max(0,Math.floor(-ox/tile)-1),sy=Math.max(0,Math.floor(-oy/tile)-1),ex=Math.min(W,Math.ceil((vw-ox)/tile)+1),ey=Math.min(H,Math.ceil((vh-oy)/tile)+1);
+for(let y=sy;y<ey;y++)for(let x=sx;x<ex;x++){const xx=x*tile,yy=y*tile,n=(x*79+y*149)%11;ctx.fillStyle=n<3?'#263d38':'#233832';ctx.fillRect(xx,yy,tile+1,tile+1);ctx.fillStyle='#b5cba80c';ctx.fillRect(xx+4,yy+8,18,2);if(n===2){ctx.fillStyle='#7ba07520';ctx.fillRect(xx+32,yy+24,4,11)}
+if(map[y][x]){ctx.fillStyle='#46564e';ctx.fillRect(xx+2,yy+3,44,43);ctx.fillStyle='#6c7564';ctx.fillRect(xx+3,yy+3,42,8);ctx.fillStyle='#1c302c';ctx.fillRect(xx+7,yy+22,34,21);ctx.fillStyle='#82908433';ctx.fillRect(xx+25,yy+13,3,7)}} 
+const glow=(x,y,c,r)=>{let g=ctx.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,c);g.addColorStop(1,'#00000000');ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill()};
+glow(portal.x,portal.y,player.inv===3?'#8cfbdc70':'#c8b47a45',95);ctx.strokeStyle=player.inv===3?'#94ffe1':'#d1bb81';ctx.lineWidth=4;ctx.strokeRect(portal.x-21,portal.y-21,42,42);ctx.fillStyle='#d7c289';ctx.font='19px serif';ctx.textAlign='center';ctx.fillText(player.inv===3?'✦':'⌂',portal.x,portal.y+7);
+for(const g of gems)if(!g.got){const bob=Math.sin(t*2+g.phase)*5;glow(g.x,g.y,'#57f5df80',39);ctx.save();ctx.translate(g.x,g.y+bob);ctx.rotate(Math.PI/4);ctx.fillStyle='#8af9e2';ctx.fillRect(-10,-10,20,20);ctx.fillStyle='#e7fff7';ctx.fillRect(-5,-5,8,8);ctx.restore()}
+for(const e of enemies)if(e.hp>0){glow(e.x,e.y,'#f19a6250',30);ctx.fillStyle=e.hit?'#fff0bc':'#b86658';ctx.beginPath();ctx.arc(e.x,e.y,17+Math.sin(t*4+e.phase)*2,0,7);ctx.fill();ctx.fillStyle='#271f29';ctx.fillRect(e.x-8,e.y-3,5,5);ctx.fillRect(e.x+4,e.y-3,5,5);ctx.fillStyle='#d9bda5';ctx.fillRect(e.x-3,e.y+6,6,2)}
+if(!(player.invuln>0&&Math.floor(t*12)%2===0)){glow(player.x,player.y,'#f1ddb340',48);ctx.fillStyle='#d3c59a';ctx.beginPath();ctx.arc(player.x,player.y,16,0,7);ctx.fill();ctx.fillStyle='#435b61';ctx.beginPath();ctx.arc(player.x,player.y-5,11,Math.PI,0);ctx.fill();ctx.fillStyle='#1f3638';ctx.beginPath();ctx.arc(player.x+Math.cos(player.face)*7,player.y+Math.sin(player.face)*7,4,0,7);ctx.fill()}
+if(player.attack>0){ctx.strokeStyle='#fff0c7';ctx.lineWidth=7;ctx.lineCap='round';ctx.beginPath();ctx.arc(player.x,player.y,49,player.face-.8,player.face+.8);ctx.stroke()}
+for(const p of particles){ctx.globalAlpha=Math.max(0,p.life/p.max);ctx.fillStyle=p.color;ctx.fillRect(p.x-3,p.y-3,6,6)}ctx.globalAlpha=1;ctx.restore();
+const vign=ctx.createRadialGradient(vw/2,vh/2,Math.min(vw,vh)*.2,vw/2,vh/2,Math.max(vw,vh)*.85);vign.addColorStop(0,'#0000');vign.addColorStop(1,'#000a');ctx.fillStyle=vign;ctx.fillRect(0,0,vw,vh);
+}
+function frame(now){let dt=Math.min((now-last)/1000||0,.04);last=now;if(playing)update(dt);draw(now/1000);requestAnimationFrame(frame)}
+document.querySelectorAll('[data-key]').forEach(b=>{const k=b.dataset.key;b.addEventListener('pointerdown',ev=>{ev.preventDefault();b.setPointerCapture(ev.pointerId);keys.add(k);b.classList.add('pressed')});for(const event of ['pointerup','pointercancel','lostpointercapture'])b.addEventListener(event,()=>{keys.delete(k);b.classList.remove('pressed')})});
+document.getElementById('attack').addEventListener('pointerdown',ev=>{ev.preventDefault();swing()});
+const keyboard={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',w:'up',a:'left',s:'down',d:'right'};addEventListener('keydown',e=>{if(keyboard[e.key]){keys.add(keyboard[e.key]);e.preventDefault()}if(e.code==='Space'){swing();e.preventDefault()}});addEventListener('keyup',e=>{if(keyboard[e.key])keys.delete(keyboard[e.key])});
+document.getElementById('start').addEventListener('click',()=>{generate();modal.style.display='none';playing=true;keys.clear()});generate();requestAnimationFrame(frame);
+})();
+</script></body></html>
