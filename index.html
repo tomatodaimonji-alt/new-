@@ -47,8 +47,8 @@ startButton.addEventListener('click',()=>{
 function boot3d(){
 gl=canvas.getContext('webgl',{antialias:false,alpha:false,powerPreference:'low-power',preserveDrawingBuffer:false});
 if(!gl)throw Error('この端末でWebGLを初期化できません');
-const VERT='precision mediump float;attribute vec3 aPos;attribute vec3 aNormal;attribute vec3 aColor;uniform mat4 uMVP;uniform vec3 uSun;uniform float uLight;varying vec3 vColor;varying float vFog;void main(){vec4 clip=uMVP*vec4(aPos,1.0);gl_Position=clip;float lam=max(dot(normalize(aNormal),normalize(uSun)),0.0);vColor=aColor*(0.58+0.42*lam)*uLight;vFog=clamp((clip.w-65.0)/185.0,0.0,0.78);}';
-const FRAG='precision mediump float;varying vec3 vColor;varying float vFog;uniform vec3 uFog;void main(){vec3 c=mix(vColor,uFog,vFog);gl_FragColor=vec4(pow(max(c,vec3(0.0)),vec3(0.95)),1.0);}';
+const VERT='precision mediump float;attribute vec3 aPos;attribute vec3 aNormal;attribute vec3 aColor;uniform mat4 uMVP;uniform vec3 uSun;uniform float uLight;varying vec3 vColor;varying float vFog;varying vec3 vWorld;void main(){vec4 clip=uMVP*vec4(aPos,1.0);gl_Position=clip;float lam=max(dot(normalize(aNormal),normalize(uSun)),0.0);vColor=aColor*(0.52+0.48*lam)*uLight;vFog=clamp((clip.w-65.0)/185.0,0.0,0.78);vWorld=aPos;}';
+const FRAG='precision mediump float;varying vec3 vColor;varying float vFog;varying vec3 vWorld;uniform vec3 uFog;void main(){float grain=fract(sin(dot(floor(vWorld.xz*1.6),vec2(127.1,311.7)))*43758.5453);float detail=mix(.89,1.11,grain);vec3 c=mix(vColor*detail,uFog,vFog);gl_FragColor=vec4(pow(max(c,vec3(0.0)),vec3(0.95)),1.0);}';
 function shader(type,source){const s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s}
 const program=gl.createProgram();gl.attachShader(program,shader(gl.VERTEX_SHADER,VERT));gl.attachShader(program,shader(gl.FRAGMENT_SHADER,FRAG));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program));gl.useProgram(program);
 const loc={pos:gl.getAttribLocation(program,'aPos'),norm:gl.getAttribLocation(program,'aNormal'),col:gl.getAttribLocation(program,'aColor'),mvp:gl.getUniformLocation(program,'uMVP'),sun:gl.getUniformLocation(program,'uSun'),fog:gl.getUniformLocation(program,'uFog'),light:gl.getUniformLocation(program,'uLight')};
@@ -69,17 +69,18 @@ function triangle(m,a,b,c,co){const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=c[
 function quad(m,a,b,c,d,co){triangle(m,a,b,c,co);triangle(m,a,c,d,co)}
 function cylinder(m,x,y,z,r0,r1,h,co,sides=6){for(let i=0;i<sides;i++){const a=i*TAU/sides,b=(i+1)*TAU/sides,ca=Math.cos(a),sa=Math.sin(a),cb=Math.cos(b),sb=Math.sin(b);quad(m,[x+r0*ca,y,z+r0*sa],[x+r0*cb,y,z+r0*sb],[x+r1*cb,y+h,z+r1*sb],[x+r1*ca,y+h,z+r1*sa],co)}}
 function cone(m,x,y,z,r,h,co,sides=7){const tip=[x,y+h,z];for(let i=0;i<sides;i++){const a=i*TAU/sides,b=(i+1)*TAU/sides;triangle(m,[x+r*Math.cos(a),y,z+r*Math.sin(a)],[x+r*Math.cos(b),y,z+r*Math.sin(b)],tip,co)}}
-function leafball(m,x,y,z,r,co){const a=[x,y+r,z],b=[x,y-r*.58,z],d=[[r,0,0],[0,0,r],[-r,0,0],[0,0,-r]];for(let i=0;i<4;i++){const p=d[i],q=d[(i+1)%4];triangle(m,[x+p[0],y,z+p[2]],[x+q[0],y,z+q[2]],a,co);triangle(m,[x+q[0],y,z+q[2]],[x+p[0],y,z+p[2]],b,co)}}
+function leafball(m,x,y,z,r,co){const sides=8,top=[x,y+r*.95,z],bottom=[x,y-r*.72,z];for(let i=0;i<sides;i++){const a=i*TAU/sides,b=(i+1)*TAU/sides;const p=[x+Math.cos(a)*r,y,z+Math.sin(a)*r],q=[x+Math.cos(b)*r,y,z+Math.sin(b)*r];const shade=i%3===0?1.10:i%3===1?.92:1.02;const c=co.map(v=>Math.min(1,v*shade));triangle(m,p,q,top,c);triangle(m,q,p,bottom,c)}}
 const ground=mesh(),details=mesh();const N=SIZE/2;
+function shadow(x,y,z,r){const yy=y+.055,shade=[.12,.22,.13];for(let i=0;i<8;i++){const a=i*TAU/8,b=(i+1)*TAU/8;triangle(details,[x,yy,z],[x+Math.cos(a)*r,yy,z+Math.sin(a)*r*.55],[x+Math.cos(b)*r,yy,z+Math.sin(b)*r*.55],shade)}}
 for(let iz=-N;iz<N;iz++)for(let ix=-N;ix<N;ix++){const x=ix*STEP,z=iz*STEP,x2=x+STEP,z2=z+STEP,co=color(x+STEP*.5,z+STEP*.5);const A=[x,height(x,z),z],B=[x,height(x,z2),z2],C=[x2,height(x2,z2),z2],D=[x2,height(x2,z),z];quad(ground,A,B,C,D,co)}
 for(let iz=-N;iz<N;iz++)for(let ix=-N;ix<N;ix++){
 const x=(ix+.5)*STEP,z=(iz+.5)*STEP,r=rand(ix,iz,4);if(lake(x,z)||Math.abs(x)<14&&Math.abs(z)<15)continue;
 const h=height(x,z),nr=noise(x*.04,z*.04,6),isPath=path(x,z);
 if(!isPath&&r<(nr>.52?.13:.075)){
 const size=3+rand(ix,iz,5)*3.1,thin=rand(ix,iz,6)<.42;
-cylinder(details,x,h,z,.32,.23,size*.87,[.29,.20,.12],6);
+shadow(x+1.6,h,z+1.3,size*.78);cylinder(details,x,h,z,.34,.22,size*.87,[.29,.22,.15],8);
 if(thin){const c=[.14+rand(ix,iz,8)*.06,.37+rand(ix,iz,9)*.18,.22+rand(ix,iz,7)*.07];cone(details,x,h+size*.37,z,size*.40,size*1.17,c,7);cone(details,x,h+size*.78,z,size*.31,size*.88,[c[0]+.03,c[1]+.05,c[2]+.02],7)}
-else{const c=[.17+rand(ix,iz,11)*.09,.38+rand(ix,iz,12)*.18,.17+rand(ix,iz,13)*.08];leafball(details,x,h+size,z,size*.58,c);leafball(details,x+size*.25,h+size*.76,z,size*.46,[c[0]+.05,c[1]+.07,c[2]+.03]);leafball(details,x-size*.27,h+size*.82,z-size*.18,size*.40,c)}
+else{const c=[.19+rand(ix,iz,11)*.10,.36+rand(ix,iz,12)*.19,.14+rand(ix,iz,13)*.09];leafball(details,x,h+size,z,size*.58,c);leafball(details,x+size*.25,h+size*.76,z,size*.46,[c[0]+.05,c[1]+.07,c[2]+.03]);leafball(details,x-size*.27,h+size*.82,z-size*.18,size*.40,c);leafball(details,x+size*.08,h+size*1.23,z-size*.12,size*.32,[c[0]+.08,c[1]+.08,c[2]+.04])}
 }
 else if(r>.95){const rad=.6+rand(ix,iz,16)*1.5;leafball(details,x,h+.3,z,rad,[.40,.44,.39])}
 else if(r>.88&&!isPath){const rad=.6+rand(ix,iz,17)*1.2;leafball(details,x,h+.5,z,rad,[.18,.40,.20])}
@@ -98,7 +99,7 @@ const avatarBatch=upload(avatar);
 function draw(batch,matrix){gl.bindBuffer(gl.ARRAY_BUFFER,batch.buffer);for(const [attr,offset] of [[loc.pos,0],[loc.norm,12],[loc.col,24]]){gl.enableVertexAttribArray(attr);gl.vertexAttribPointer(attr,3,gl.FLOAT,false,36,offset)}gl.uniformMatrix4fv(loc.mvp,false,matrix);gl.drawArrays(gl.TRIANGLES,0,batch.count)}
 function multiply(a,b){const c=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++)for(let k=0;k<4;k++)c[j*4+i]+=a[k*4+i]*b[j*4+k];return c}
 function projection(fov,aspect,near,far){const f=1/Math.tan(fov/2);return new Float32Array([f/aspect,0,0,0,0,f,0,0,0,0,(far+near)/(near-far),-1,0,0,2*far*near/(near-far),0])}
-function lookAt(eye,at){const forward=[eye[0]-at[0],eye[1]-at[1],eye[2]-at[2]];let l=Math.hypot(...forward);for(let i=0;i<3;i++)forward[i]/=l;let right=[forward[2],0,-forward[0]];l=Math.hypot(...right);for(let i=0;i<3;i++)right[i]/=l;const up=[right[1]*forward[2]-right[2]*forward[1],right[2]*forward[0]-right[0]*forward[2],right[0]*forward[1]-right[1]*forward[0]];return new Float32Array([right[0],up[0],forward[0],0,right[1],up[1],forward[1],0,right[2],up[2],forward[2],0,-right[0]*eye[0]-right[1]*eye[1]-right[2]*eye[2],-up[0]*eye[0]-up[1]*eye[1]-up[2]*eye[2],-forward[0]*eye[0]-forward[1]*eye[1]-forward[2]*eye[2],1])}
+function lookAt(eye,at){const forward=[eye[0]-at[0],eye[1]-at[1],eye[2]-at[2]];let l=Math.hypot(...forward);for(let i=0;i<3;i++)forward[i]/=l;let right=[forward[2],0,-forward[0]];l=Math.hypot(...right);for(let i=0;i<3;i++)right[i]/=l;const up=[forward[1]*right[2]-forward[2]*right[1],forward[2]*right[0]-forward[0]*right[2],forward[0]*right[1]-forward[1]*right[0]];return new Float32Array([right[0],up[0],forward[0],0,right[1],up[1],forward[1],0,right[2],up[2],forward[2],0,-right[0]*eye[0]-right[1]*eye[1]-right[2]*eye[2],-up[0]*eye[0]-up[1]*eye[1]-up[2]*eye[2],-forward[0]*eye[0]-forward[1]*eye[1]-forward[2]*eye[2],1])}
 function translate(x,y,z){return new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,x,y,z,1])}
 let px=0,pz=0,angle=Math.PI,camX=0,camZ=0,playing=true,last=0,elapsed=0,fast=false,viewMode=0;let lastDraw=-1000;const down=new Set();
 const keyboard={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',w:'up',a:'left',s:'down',d:'right'};
@@ -110,7 +111,7 @@ document.getElementById('camera').addEventListener('click',()=>{viewMode=(viewMo
 function resize(){const scale=Math.min(window.devicePixelRatio||1,1.2);const cw=Math.max(1,Math.floor(innerWidth*scale)),ch=Math.max(1,Math.floor(innerHeight*scale));if(canvas.width!==cw||canvas.height!==ch){canvas.width=cw;canvas.height=ch;gl.viewport(0,0,cw,ch)}}
 function frame(now){requestAnimationFrame(frame);if(now-lastDraw<32)return;lastDraw=now;const dt=Math.min(.05,(now-last)/1000||0);last=now;elapsed+=dt;if(playing){let dx=Number(down.has('right'))-Number(down.has('left')),dz=Number(down.has('down'))-Number(down.has('up'));let l=Math.hypot(dx,dz);if(l){dx/=l;dz/=l;const spd=fast?18:9.5,nx=px+dx*spd*dt,nz=pz+dz*spd*dt;if(nx>-SIZE*STEP*.48&&nx<SIZE*STEP*.48&&!lake(nx,pz))px=nx;if(nz>-SIZE*STEP*.48&&nz<SIZE*STEP*.48&&!lake(px,nz))pz=nz;angle=Math.atan2(dx,dz)}}camX=mix(camX,px,Math.min(1,dt*4));camZ=mix(camZ,pz,Math.min(1,dt*4));
 resize();gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-const h=height(camX,camZ),aspect=canvas.width/canvas.height;const dist=[30,21,39][viewMode],elev=[21,34,49][viewMode];const eye=[camX+dist*.34,h+elev,camZ+dist],at=[camX,h+2,camZ-4];const vp=multiply(projection(Math.PI/3,aspect,.3,400),lookAt(eye,at));
+const h=height(camX,camZ),aspect=canvas.width/canvas.height;const dist=[25,20,32][viewMode],elev=[17,29,38][viewMode];const eye=[camX+dist*.34,h+elev,camZ+dist],at=[camX,h+2,camZ-4];const vp=multiply(projection(Math.PI/3,aspect,.3,400),lookAt(eye,at));
 for(const b of batches)draw(b,vp);draw(avatarBatch,multiply(vp,translate(px,height(px,pz),pz)));
 document.getElementById('pos').textContent='X '+Math.round(px)+' / Z '+Math.round(pz);
 document.getElementById('area').textContent=path(px,pz)?'森林の小径':lake(px+7,pz)?'湖畔の森':'緑の丘と木立';
