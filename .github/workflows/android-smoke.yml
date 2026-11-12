@@ -1,0 +1,65 @@
+name: Android WebView launch smoke test
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'app/**'
+      - 'tests/**'
+      - '.github/workflows/android-smoke.yml'
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build APK with embedded HTML
+        run: |
+          mkdir -p app/src/main/assets
+          cp index.html app/src/main/assets/starter.html
+          gradle :app:assembleDebug --no-daemon
+      - name: Start Android emulator, tap start, and compare screenshots
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            adb shell am start -n jp.tsukacchi.moonruins/jp.tsukacchi.htmlplayer.MainActivity
+            sleep 12
+            adb shell screencap -p /sdcard/before.png
+            adb pull /sdcard/before.png android-before.png
+            adb shell wm size
+            adb shell input tap 530 1300
+            sleep 12
+            adb shell screencap -p /sdcard/after.png
+            adb pull /sdcard/after.png android-after.png
+            python3 - <<'PY'
+            from PIL import Image, ImageChops, ImageStat
+            a=Image.open('android-before.png').convert('RGB')
+            b=Image.open('android-after.png').convert('RGB')
+            import numpy as np
+            x=np.asarray(a).astype(np.int16)
+            y=np.asarray(b).astype(np.int16)
+            diff=np.abs(x-y).mean()
+            print('Android screenshot pixel difference:',diff,'size:',a.size)
+            if diff < 5: raise SystemExit('FAIL: start tap did not change the game screen sufficiently')
+            print('PASS: tapping game start changed screen')
+            PY
+            adb logcat -d -s MoonRuins:E TsukacchiHTML:E chromium:E | tail -n 70
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-webview-screen-test
+          path: android-*.png
