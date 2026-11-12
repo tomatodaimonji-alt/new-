@@ -1,0 +1,32 @@
+import { chromium } from 'playwright';
+import { createServer } from 'node:http';
+import { readFileSync } from 'node:fs';
+const html=readFileSync('index.html');
+const server=createServer((req,res)=>{res.writeHead(200,{'content-type':'text/html; charset=utf-8'});res.end(html)});
+await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+const port=server.address().port;
+let browser;
+try{
+ browser=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
+ const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
+ const errors=[];
+ page.on('pageerror',e=>errors.push(e.message));
+ page.on('console',m=>{if(m.type()==='error')errors.push('console: '+m.text())});
+ await page.goto('http://127.0.0.1:'+port,{waitUntil:'load'});
+ await page.waitForTimeout(1500);
+ console.log('WebGL supported?',await page.locator('canvas').evaluate(c=>!!c.getContext('webgl')));
+ console.log('Before:',await page.locator('#pos').textContent());
+ await page.getByText('森に入る',{exact:true}).click({timeout:10000});
+ await page.waitForTimeout(1500);
+ const hidden=await page.locator('#startLayer').evaluate(e=>getComputedStyle(e).display==='none');
+ if(!hidden)throw Error('Intro did not disappear after tap');
+ await page.keyboard.down('ArrowUp');await page.waitForTimeout(700);await page.keyboard.up('ArrowUp');
+ const moved=await page.locator('#pos').textContent();
+ console.log('After:',moved);
+ if(moved.includes('X 0 / Z 0'))throw Error('Character did not move');
+ await page.getByText('視点 1',{exact:true}).click();
+ await page.getByText('歩く',{exact:true}).click();
+ await page.screenshot({path:'smoke-test.png'});
+ if(errors.length)throw Error('JavaScript error: '+errors.join(' ; '));
+ console.log('SMOKE TEST PASSED');
+}finally{await browser?.close();server.close()}
