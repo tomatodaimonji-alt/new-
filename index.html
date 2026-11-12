@@ -34,14 +34,14 @@ function shader(type,source){const s=gl.createShader(type);gl.shaderSource(s,sou
 const program=gl.createProgram();gl.attachShader(program,shader(gl.VERTEX_SHADER,VERT));gl.attachShader(program,shader(gl.FRAGMENT_SHADER,FRAG));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program));gl.useProgram(program);
 const loc={pos:gl.getAttribLocation(program,'aPos'),norm:gl.getAttribLocation(program,'aNormal'),col:gl.getAttribLocation(program,'aColor'),mvp:gl.getUniformLocation(program,'uMVP'),sun:gl.getUniformLocation(program,'uSun'),fog:gl.getUniformLocation(program,'uFog'),light:gl.getUniformLocation(program,'uLight')};
 gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.clearColor(.64,.79,.82,1);gl.uniform3f(loc.sun,-.45,1,.25);gl.uniform3f(loc.fog,.64,.79,.82);gl.uniform1f(loc.light,1);
-const SIZE=104,STEP=3.6,TAU=Math.PI*2,SEED=1291;
+const SIZE=56,STEP=3.6,TAU=Math.PI*2,SEED=1291;
 const rand=(x,z,s=0)=>{let t=Math.sin(x*127.1+z*311.7+s*61.31+SEED)*43758.5453;return t-Math.floor(t)};
 const mix=(a,b,t)=>a+(b-a)*t;
 const smooth=t=>t*t*(3-2*t);
 function noise(x,z,s=0){const ix=Math.floor(x),iz=Math.floor(z),u=smooth(x-ix),v=smooth(z-iz);return mix(mix(rand(ix,iz,s),rand(ix+1,iz,s),u),mix(rand(ix,iz+1,s),rand(ix+1,iz+1,s),u),v)}
 function hill(x,z){return (noise(x*.028,z*.028,1)-.5)*8+(noise(x*.075,z*.075,2)-.5)*2.4}
 function path(x,z){return Math.abs(z-(9+8*Math.sin(x*.026)+3.5*Math.sin(x*.073)))<5}
-function lake(x,z){const dx=(x-116)/1.08,dz=z+92;return dx*dx+dz*dz<44*44}
+function lake(x,z){const dx=(x-48)/1.08,dz=z+43;return dx*dx+dz*dz<25*25}
 function height(x,z){if(lake(x,z))return Math.min(-1.3,hill(x,z));return hill(x,z)}
 function color(x,z){const n=noise(x*.08,z*.08,8);if(lake(x,z))return [.30,.54,.57];if(path(x,z))return [.48+n*.12,.39+n*.11,.27+n*.08];return [.20+n*.11,.35+n*.13,.19+n*.07]}
 function normal(x,z){const e=.7,dx=height(x-e,z)-height(x+e,z),dz=height(x,z-e)-height(x,z+e);let l=Math.hypot(dx,2*e,dz);return [dx/l,2*e/l,dz/l]}
@@ -56,8 +56,8 @@ for(let iz=-N;iz<N;iz++)for(let ix=-N;ix<N;ix++){const x=ix*STEP,z=iz*STEP,x2=x+
 for(let iz=-N;iz<N;iz++)for(let ix=-N;ix<N;ix++){
 const x=(ix+.5)*STEP,z=(iz+.5)*STEP,r=rand(ix,iz,4);if(lake(x,z)||Math.abs(x)<14&&Math.abs(z)<15)continue;
 const h=height(x,z),nr=noise(x*.04,z*.04,6),isPath=path(x,z);
-if(!isPath&&r<(nr>.52?.24:.12)){
-const size=3+rand(ix,iz,5)*4,thin=rand(ix,iz,6)<.42;
+if(!isPath&&r<(nr>.52?.13:.075)){
+const size=3+rand(ix,iz,5)*3.1,thin=rand(ix,iz,6)<.42;
 cylinder(details,x,h,z,.32,.23,size*.87,[.29,.20,.12],6);
 if(thin){const c=[.13+rand(ix,iz,8)*.07,.32+rand(ix,iz,9)*.18,.20+rand(ix,iz,7)*.07];cone(details,x,h+size*.37,z,size*.40,size*1.17,c,7);cone(details,x,h+size*.78,z,size*.31,size*.88,[c[0]+.03,c[1]+.05,c[2]+.02],7)}
 else{const c=[.15+rand(ix,iz,11)*.08,.33+rand(ix,iz,12)*.17,.16+rand(ix,iz,13)*.09];leafball(details,x,h+size,z,size*.58,c);leafball(details,x+size*.25,h+size*.76,z,size*.46,[c[0]+.05,c[1]+.07,c[2]+.03]);leafball(details,x-size*.27,h+size*.82,z-size*.18,size*.40,c)}
@@ -68,9 +68,10 @@ else if(r>.88&&!isPath){const rad=.6+rand(ix,iz,17)*1.2;leafball(details,x,h+.5,
 // A few fallen logs, rocks, and clearer woodland landmarks around the start.
 for(const [x,z] of [[-16,-7],[11,-24],[20,12],[-28,28],[40,-12]]){
 const h=height(x,z);cylinder(details,x,h,z,1.1,.8,2,[.43,.42,.38],6)}
-const WATER=mesh();quad(WATER,[72,-1.08,-136],[158,-1.08,-136],[158,-1.08,-48],[72,-1.08,-48],[.35,.59,.61]);
+const WATER=mesh();quad(WATER,[20,-1.08,-69],[76,-1.08,-69],[76,-1.08,-17],[20,-1.08,-17],[.35,.59,.61]);
 function upload(m){const len=m.p.length/3;const data=new Float32Array(len*9);for(let i=0;i<len;i++){let a=i*9,b=i*3;data.set(m.p.slice(b,b+3),a);data.set(m.n.slice(b,b+3),a+3);data.set(m.c.slice(b,b+3),a+6)}const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,data,gl.STATIC_DRAW);return{buffer,count:len}}
 const batches=[upload(ground),upload(details),upload(WATER)];
+// Static geometry is bounded to avoid GPU freezes on mobile WebView.
 // Small 3D character is a separate mesh; translated to the terrain at render time.
 const avatar=mesh();cylinder(avatar,0,.2,0,.52,.45,1.5,[.30,.34,.37],7);cylinder(avatar,0,1.62,0,.40,.37,.7,[.71,.57,.42],8);cone(avatar,0,2.17,0,.59,.25,[.26,.23,.18],8);cylinder(avatar,-.39,.05,0,.20,.20,.72,[.23,.26,.25],6);cylinder(avatar,.39,.05,0,.20,.20,.72,[.23,.26,.25],6);cylinder(avatar,-.73,.7,0,.16,.16,.75,[.45,.45,.33],6);cylinder(avatar,.73,.7,0,.16,.16,.75,[.45,.45,.33],6);
 const avatarBatch=upload(avatar);
@@ -79,21 +80,21 @@ function multiply(a,b){const c=new Float32Array(16);for(let i=0;i<4;i++)for(let 
 function projection(fov,aspect,near,far){const f=1/Math.tan(fov/2);return new Float32Array([f/aspect,0,0,0,0,f,0,0,0,0,(far+near)/(near-far),-1,0,0,2*far*near/(near-far),0])}
 function lookAt(eye,at){const forward=[eye[0]-at[0],eye[1]-at[1],eye[2]-at[2]];let l=Math.hypot(...forward);for(let i=0;i<3;i++)forward[i]/=l;let right=[forward[2],0,-forward[0]];l=Math.hypot(...right);for(let i=0;i<3;i++)right[i]/=l;const up=[right[1]*forward[2]-right[2]*forward[1],right[2]*forward[0]-right[0]*forward[2],right[0]*forward[1]-right[1]*forward[0]];return new Float32Array([right[0],up[0],forward[0],0,right[1],up[1],forward[1],0,right[2],up[2],forward[2],0,-right[0]*eye[0]-right[1]*eye[1]-right[2]*eye[2],-up[0]*eye[0]-up[1]*eye[1]-up[2]*eye[2],-forward[0]*eye[0]-forward[1]*eye[1]-forward[2]*eye[2],1])}
 function translate(x,y,z){return new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,x,y,z,1])}
-let px=0,pz=0,angle=Math.PI,camX=0,camZ=0,playing=false,last=0,elapsed=0,fast=false,viewMode=0;const down=new Set();
+let px=0,pz=0,angle=Math.PI,camX=0,camZ=0,playing=false,last=0,elapsed=0,fast=false,viewMode=0;let lastDraw=-1000;const down=new Set();
 const keyboard={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',w:'up',a:'left',s:'down',d:'right'};
 document.querySelectorAll('[data-dir]').forEach(el=>{const d=el.dataset.dir;el.addEventListener('pointerdown',e=>{e.preventDefault();el.setPointerCapture(e.pointerId);down.add(d);el.classList.add('active')});for(const ev of ['pointerup','pointercancel','lostpointercapture'])el.addEventListener(ev,()=>{down.delete(d);el.classList.remove('active')})});
 addEventListener('keydown',e=>{if(keyboard[e.key]){e.preventDefault();down.add(keyboard[e.key])}});addEventListener('keyup',e=>{if(keyboard[e.key])down.delete(keyboard[e.key])});
 document.getElementById('run').addEventListener('click',()=>{fast=!fast;document.getElementById('run').textContent=fast?'走る':'歩く'});
 document.getElementById('camera').addEventListener('click',()=>{viewMode=(viewMode+1)%3;document.getElementById('camera').textContent='視点 '+(viewMode+1)});
 document.getElementById('start').addEventListener('click',()=>{playing=true;document.getElementById('startLayer').style.display='none'});
-function resize(){const scale=Math.min(window.devicePixelRatio||1,1.7);const cw=Math.max(1,Math.floor(innerWidth*scale)),ch=Math.max(1,Math.floor(innerHeight*scale));if(canvas.width!==cw||canvas.height!==ch){canvas.width=cw;canvas.height=ch;gl.viewport(0,0,cw,ch)}}
-function frame(now){const dt=Math.min(.05,(now-last)/1000||0);last=now;elapsed+=dt;if(playing){let dx=Number(down.has('right'))-Number(down.has('left')),dz=Number(down.has('down'))-Number(down.has('up'));let l=Math.hypot(dx,dz);if(l){dx/=l;dz/=l;const spd=fast?18:9.5,nx=px+dx*spd*dt,nz=pz+dz*spd*dt;if(nx>-SIZE*STEP*.48&&nx<SIZE*STEP*.48&&!lake(nx,pz))px=nx;if(nz>-SIZE*STEP*.48&&nz<SIZE*STEP*.48&&!lake(px,nz))pz=nz;angle=Math.atan2(dx,dz)}}camX=mix(camX,px,Math.min(1,dt*4));camZ=mix(camZ,pz,Math.min(1,dt*4));
+function resize(){const scale=Math.min(window.devicePixelRatio||1,1.2);const cw=Math.max(1,Math.floor(innerWidth*scale)),ch=Math.max(1,Math.floor(innerHeight*scale));if(canvas.width!==cw||canvas.height!==ch){canvas.width=cw;canvas.height=ch;gl.viewport(0,0,cw,ch)}}
+function frame(now){requestAnimationFrame(frame);if(now-lastDraw<32)return;lastDraw=now;const dt=Math.min(.05,(now-last)/1000||0);last=now;elapsed+=dt;if(playing){let dx=Number(down.has('right'))-Number(down.has('left')),dz=Number(down.has('down'))-Number(down.has('up'));let l=Math.hypot(dx,dz);if(l){dx/=l;dz/=l;const spd=fast?18:9.5,nx=px+dx*spd*dt,nz=pz+dz*spd*dt;if(nx>-SIZE*STEP*.48&&nx<SIZE*STEP*.48&&!lake(nx,pz))px=nx;if(nz>-SIZE*STEP*.48&&nz<SIZE*STEP*.48&&!lake(px,nz))pz=nz;angle=Math.atan2(dx,dz)}}camX=mix(camX,px,Math.min(1,dt*4));camZ=mix(camZ,pz,Math.min(1,dt*4));
 resize();gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
 const h=height(camX,camZ),aspect=canvas.width/canvas.height;const dist=[30,21,39][viewMode],elev=[21,34,49][viewMode];const eye=[camX+dist*.34,h+elev,camZ+dist],at=[camX,h+2,camZ-4];const vp=multiply(projection(Math.PI/3,aspect,.3,400),lookAt(eye,at));
 for(const b of batches)draw(b,vp);draw(avatarBatch,multiply(vp,translate(px,height(px,pz),pz)));
 document.getElementById('pos').textContent='X '+Math.round(px)+' / Z '+Math.round(pz);
 document.getElementById('area').textContent=path(px,pz)?'森林の小径':lake(px+7,pz)?'湖畔の森':'緑の丘と木立';
-requestAnimationFrame(frame)}
+}
 requestAnimationFrame(frame);
 })();
 </script></body></html>
