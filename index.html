@@ -2,7 +2,7 @@
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><meta name="theme-color" content="#a7c7cc"><title>木漏れ日の大地 3D</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{width:100%;height:100%;margin:0;overflow:hidden;touch-action:none;background:#a7c7cc;font-family:system-ui,sans-serif;color:#fff}
-#screen{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;background:linear-gradient(180deg,#91c5dc 0%,#c2dde0 46%,#dee5ca 85%,#e9e9d0 100%)}
+#screen{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;background:radial-gradient(circle at 74% 19%,#fff7d8 0%,#f7efce80 8%,transparent 28%),linear-gradient(180deg,#91c6de 0%,#bfd9df 47%,#dee5ca 82%,#e7e8d5 100%)}
 #hud{position:fixed;top:max(14px,env(safe-area-inset-top));left:14px;right:14px;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;pointer-events:none;text-shadow:0 1px 5px #112b28b9}
 .panel{background:#1938328c;border:1px solid #ffffff58;backdrop-filter:blur(9px);border-radius:15px;padding:9px 13px;box-shadow:0 3px 18px #1d342740}
 #title{font-weight:700;letter-spacing:.09em;font-size:15px}#area{font-size:11px;opacity:.94;margin-top:3px}#time{font-size:12px;text-align:right;white-space:nowrap}
@@ -137,12 +137,19 @@ const batches=[upload(ground),upload(details),upload(flora),upload(WATER)];
 // Static geometry is bounded to avoid GPU freezes on mobile WebView.
 // Small 3D character is a separate mesh; translated to the terrain at render time.
 const avatar=mesh();cylinder(avatar,0,.2,0,.52,.45,1.5,[.30,.34,.37],7);cylinder(avatar,0,1.62,0,.40,.37,.7,[.71,.57,.42],8);cone(avatar,0,2.17,0,.59,.25,[.26,.23,.18],8);cylinder(avatar,-.39,.05,0,.20,.20,.72,[.23,.26,.25],6);cylinder(avatar,.39,.05,0,.20,.20,.72,[.23,.26,.25],6);cylinder(avatar,-.73,.7,0,.16,.16,.75,[.45,.45,.33],6);cylinder(avatar,.73,.7,0,.16,.16,.75,[.45,.45,.33],6);
+// Walking traveller: cloak, pack, belt and a brimmed field hat.
+leafball(avatar,0,1.02,.56,.62,[.42,.30,.20]);
+cylinder(avatar,0,1.15,0,.58,.62,.14,[.40,.29,.19],9);
+cylinder(avatar,0,2.24,0,.77,.72,.10,[.33,.27,.19],10);
+cylinder(avatar,0,2.14,0,.44,.44,.20,[.30,.25,.18],10);
+leafball(avatar,0,1.35,-.32,.21,[.76,.60,.44]);
 const avatarBatch=upload(avatar);
 function draw(batch,matrix){gl.bindBuffer(gl.ARRAY_BUFFER,batch.buffer);for(const [attr,offset] of [[loc.pos,0],[loc.norm,12],[loc.col,24]]){gl.enableVertexAttribArray(attr);gl.vertexAttribPointer(attr,3,gl.FLOAT,false,36,offset)}gl.uniformMatrix4fv(loc.mvp,false,matrix);gl.drawArrays(gl.TRIANGLES,0,batch.count)}
 function multiply(a,b){const c=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++)for(let k=0;k<4;k++)c[j*4+i]+=a[k*4+i]*b[j*4+k];return c}
 function projection(fov,aspect,near,far){const f=1/Math.tan(fov/2);return new Float32Array([f/aspect,0,0,0,0,f,0,0,0,0,(far+near)/(near-far),-1,0,0,2*far*near/(near-far),0])}
 function lookAt(eye,at){const forward=[eye[0]-at[0],eye[1]-at[1],eye[2]-at[2]];let l=Math.hypot(...forward);for(let i=0;i<3;i++)forward[i]/=l;let right=[forward[2],0,-forward[0]];l=Math.hypot(...right);for(let i=0;i<3;i++)right[i]/=l;const up=[forward[1]*right[2]-forward[2]*right[1],forward[2]*right[0]-forward[0]*right[2],forward[0]*right[1]-forward[1]*right[0]];return new Float32Array([right[0],up[0],forward[0],0,right[1],up[1],forward[1],0,right[2],up[2],forward[2],0,-right[0]*eye[0]-right[1]*eye[1]-right[2]*eye[2],-up[0]*eye[0]-up[1]*eye[1]-up[2]*eye[2],-forward[0]*eye[0]-forward[1]*eye[1]-forward[2]*eye[2],1])}
 function translate(x,y,z){return new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,x,y,z,1])}
+function rotateY(a){const c=Math.cos(a),s=Math.sin(a);return new Float32Array([c,0,-s,0,0,1,0,0,s,0,c,0,0,0,0,1])}
 let px=0,pz=0,angle=Math.PI,camX=0,camZ=0,playing=true,last=0,elapsed=0,fast=false,viewMode=0;let lastDraw=-1000;const down=new Set();
 const keyboard={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',w:'up',a:'left',s:'down',d:'right'};
 document.querySelectorAll('[data-dir]').forEach(el=>{const d=el.dataset.dir;el.addEventListener('pointerdown',e=>{e.preventDefault();el.setPointerCapture(e.pointerId);down.add(d);el.classList.add('active')});for(const ev of ['pointerup','pointercancel','lostpointercapture'])el.addEventListener(ev,()=>{down.delete(d);el.classList.remove('active')})});
@@ -154,9 +161,12 @@ function resize(){const scale=Math.min(window.devicePixelRatio||1,1.2);const cw=
 function frame(now){requestAnimationFrame(frame);if(now-lastDraw<32)return;lastDraw=now;const dt=Math.min(.05,(now-last)/1000||0);last=now;elapsed+=dt;if(playing){let dx=Number(down.has('right'))-Number(down.has('left')),dz=Number(down.has('down'))-Number(down.has('up'));let l=Math.hypot(dx,dz);if(l){dx/=l;dz/=l;const spd=fast?18:9.5,nx=px+dx*spd*dt,nz=pz+dz*spd*dt;if(nx>-SIZE*STEP*.48&&nx<SIZE*STEP*.48&&!lake(nx,pz))px=nx;if(nz>-SIZE*STEP*.48&&nz<SIZE*STEP*.48&&!lake(px,nz))pz=nz;angle=Math.atan2(dx,dz)}}camX=mix(camX,px,Math.min(1,dt*4));camZ=mix(camZ,pz,Math.min(1,dt*4));
 resize();gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
 const h=height(camX,camZ),aspect=canvas.width/canvas.height;const dist=[28,21,34][viewMode],elev=[10,22,34][viewMode];const eye=[camX+dist*.34,h+elev,camZ+dist],at=[camX,h+2,camZ-4];const vp=multiply(projection(Math.PI/3,aspect,.3,400),lookAt(eye,at));
-for(const b of batches)draw(b,vp);draw(avatarBatch,multiply(vp,translate(px,height(px,pz),pz)));
+for(const b of batches)draw(b,vp);draw(avatarBatch,multiply(multiply(vp,translate(px,height(px,pz),pz)),rotateY(angle)));
 document.getElementById('pos').textContent='X '+Math.round(px)+' / Z '+Math.round(pz);
-document.getElementById('area').textContent=path(px,pz)?'森林の小径':lake(px+7,pz)?'湖畔の森':'緑の丘と木立';
+document.getElementById('area').textContent=path(px,pz)?'木漏れ日の小径':lake(px+12,pz)?'湖畔の森':noise(px*.04,pz*.04,6)>.58?'深緑の古木林':height(px,pz)>2?'風の吹く丘':'草花の森';
+const hour=7+Math.floor((elapsed/85)%11);
+document.getElementById('time').firstChild.textContent=(hour<11?'☀ 朝の散策':hour<15?'☀ 昼の散策':'☀ 夕方の散策');
+
 }
 document.getElementById('message').textContent='敵なし · 自由散策 · オフライン';
 requestAnimationFrame(frame);
