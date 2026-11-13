@@ -14,6 +14,10 @@ await page.goto('http://127.0.0.1:'+server.address().port+'/?test=1',{waitUntil:
 const initial=await page.evaluate(()=>window.__gameTest?.state());
 if(!initial)throw Error('3D game failed to initialize: '+(await page.locator('#intro').innerText()));
 if(!initial.glLink)throw Error('WebGL shader link failed');
+for(const family of [0,1,2])if((initial.groundCounts[family]||0)<10)throw Error('Missing blended ground family '+family+': '+JSON.stringify(initial.groundCounts));
+for(const kind of [0,1])if((initial.treeKinds[kind]||0)<1)throw Error('Missing broadleaf tree variant '+kind+': '+JSON.stringify(initial.treeKinds));
+if(initial.worldVertices<17000)throw Error('Expected richer 3D geometry: '+initial.worldVertices);
+
 if(initial.house.w!==9||initial.house.h!==8||initial.walls.length!==29)throw Error('One house or perimeter geometry wrong '+JSON.stringify(initial));
 const wallSet=new Set(initial.walls);
 for(const [x,z] of [[7,7],[15,7],[7,14],[15,14]])if(!wallSet.has(x+','+z))throw Error('Missing corner '+x+','+z);
@@ -36,5 +40,5 @@ await page.locator('#inspect').click();await page.locator('#camera').click();
 await page.locator('#volume').fill('94');const changed=await page.evaluate(()=>window.__gameTest.audio());if(changed.volume!==94)throw Error('Volume UI not responsive');
 await page.locator('#audioToggle').click();if((await page.evaluate(()=>window.__gameTest.audio())).music)throw Error('Music toggle failed');
 if(errors.length)throw Error('Browser runtime errors: '+errors.join(' ; '));
-console.log('PASS WebGL link, 24x24 map, single house, four solid corners, door, tile movement, direction, audio and volume');
+console.log('PASS blended meadow/woodland/moss, both broadleaf trees, WebGL link, 24x24 map, single house, four solid corners, door, tile movement, direction, audio and volume');
 }finally{await browser?.close();server.close()}
