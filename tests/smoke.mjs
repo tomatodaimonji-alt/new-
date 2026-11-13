@@ -41,6 +41,16 @@ try{
  const moved=await page.locator('#pos').textContent();
  console.log('After:',moved);
  if(moved.includes('X 0 / Z 0'))throw Error('Character did not move');
+ const beforePad=await page.locator('#pos').textContent();
+ const up=await page.locator('[data-dir="up"]').boundingBox();
+ if(!up||up.width<50||up.height<50)throw Error('Portrait d-pad is too small or missing');
+ await page.mouse.move(up.x+up.width/2,up.y+up.height/2);
+ await page.mouse.down();
+ await page.waitForTimeout(580);
+ await page.mouse.up();
+ const afterPad=await page.locator('#pos').textContent();
+ console.log('Dpad test',beforePad,afterPad,'button dimensions',up.width,up.height);
+ if(beforePad===afterPad)throw Error('Holding the on-screen D-pad did not move the character');
  await page.getByText('視点 1',{exact:true}).click();
  await page.getByText('歩く',{exact:true}).click();
  await page.screenshot({path:'smoke-test.png'});
