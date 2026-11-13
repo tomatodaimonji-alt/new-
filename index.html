@@ -2,7 +2,7 @@
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><meta name="theme-color" content="#a7c7cc"><title>木漏れ日の大地 3D</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{width:100%;height:100%;margin:0;overflow:hidden;touch-action:none;background:#a7c7cc;font-family:system-ui,sans-serif;color:#fff}
-#screen{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#screen{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;background:linear-gradient(180deg,#91c5dc 0%,#c2dde0 46%,#dee5ca 85%,#e9e9d0 100%)}
 #hud{position:fixed;top:max(14px,env(safe-area-inset-top));left:14px;right:14px;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;pointer-events:none;text-shadow:0 1px 5px #112b28b9}
 .panel{background:#1938328c;border:1px solid #ffffff58;backdrop-filter:blur(9px);border-radius:15px;padding:9px 13px;box-shadow:0 3px 18px #1d342740}
 #title{font-weight:700;letter-spacing:.09em;font-size:15px}#area{font-size:11px;opacity:.94;margin-top:3px}#time{font-size:12px;text-align:right;white-space:nowrap}
@@ -45,24 +45,28 @@ startButton.addEventListener('click',()=>{
  },30);
 });
 function boot3d(){
-gl=canvas.getContext('webgl',{antialias:false,alpha:false,powerPreference:'low-power',preserveDrawingBuffer:false});
+gl=canvas.getContext('webgl',{antialias:false,alpha:true,powerPreference:'low-power',preserveDrawingBuffer:false});
 if(!gl)throw Error('この端末でWebGLを初期化できません');
 const VERT='precision mediump float;attribute vec3 aPos;attribute vec3 aNormal;attribute vec3 aColor;uniform mat4 uMVP;uniform vec3 uSun;uniform float uLight;varying vec3 vColor;varying float vFog;varying vec3 vWorld;void main(){vec4 clip=uMVP*vec4(aPos,1.0);gl_Position=clip;float lam=max(dot(normalize(aNormal),normalize(uSun)),0.0);vColor=aColor*(0.52+0.48*lam)*uLight;vFog=clamp((clip.w-65.0)/185.0,0.0,0.78);vWorld=aPos;}';
 const FRAG='precision mediump float;varying vec3 vColor;varying float vFog;varying vec3 vWorld;uniform vec3 uFog;void main(){float grain=fract(sin(dot(floor(vWorld.xz*1.6),vec2(127.1,311.7)))*43758.5453);float detail=mix(.89,1.11,grain);vec3 c=mix(vColor*detail,uFog,vFog);gl_FragColor=vec4(pow(max(c,vec3(0.0)),vec3(0.95)),1.0);}';
 function shader(type,source){const s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s}
 const program=gl.createProgram();gl.attachShader(program,shader(gl.VERTEX_SHADER,VERT));gl.attachShader(program,shader(gl.FRAGMENT_SHADER,FRAG));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program));gl.useProgram(program);
 const loc={pos:gl.getAttribLocation(program,'aPos'),norm:gl.getAttribLocation(program,'aNormal'),col:gl.getAttribLocation(program,'aColor'),mvp:gl.getUniformLocation(program,'uMVP'),sun:gl.getUniformLocation(program,'uSun'),fog:gl.getUniformLocation(program,'uFog'),light:gl.getUniformLocation(program,'uLight')};
-gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.clearColor(.64,.79,.82,1);gl.uniform3f(loc.sun,-.45,1,.25);gl.uniform3f(loc.fog,.64,.79,.82);gl.uniform1f(loc.light,1);
+gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.clearColor(0,0,0,0);gl.uniform3f(loc.sun,-.52,1,.35);gl.uniform3f(loc.fog,.73,.83,.78);gl.uniform1f(loc.light,1.05);
 const SIZE=56,STEP=3.6,TAU=Math.PI*2,SEED=1291;
 const rand=(x,z,s=0)=>{let t=Math.sin(x*127.1+z*311.7+s*61.31+SEED)*43758.5453;return t-Math.floor(t)};
 const mix=(a,b,t)=>a+(b-a)*t;
 const smooth=t=>t*t*(3-2*t);
 function noise(x,z,s=0){const ix=Math.floor(x),iz=Math.floor(z),u=smooth(x-ix),v=smooth(z-iz);return mix(mix(rand(ix,iz,s),rand(ix+1,iz,s),u),mix(rand(ix,iz+1,s),rand(ix+1,iz+1,s),u),v)}
-function hill(x,z){return (noise(x*.028,z*.028,1)-.5)*8+(noise(x*.075,z*.075,2)-.5)*2.4}
-function path(x,z){return Math.abs(z-(9+8*Math.sin(x*.026)+3.5*Math.sin(x*.073)))<5}
+function hill(x,z){return (noise(x*.021,z*.021,1)-.5)*10+(noise(x*.064,z*.064,2)-.5)*3.3+(noise(x*.15,z*.15,17)-.5)*.48}
+function trailDistance(x,z){return Math.abs(z-(9+8*Math.sin(x*.026)+3.5*Math.sin(x*.073)))}
+function path(x,z){return trailDistance(x,z)<4.2}
 function lake(x,z){const dx=(x-48)/1.08,dz=z+43;return dx*dx+dz*dz<25*25}
 function height(x,z){if(lake(x,z))return Math.min(-1.3,hill(x,z));return hill(x,z)}
-function color(x,z){const n=noise(x*.08,z*.08,8);if(lake(x,z))return [.30,.54,.57];if(path(x,z))return [.48+n*.12,.39+n*.11,.27+n*.08];return [.20+n*.11,.35+n*.13,.19+n*.07]}
+function color(x,z){const n=noise(x*.08,z*.08,8),m=noise(x*.22,z*.22,21),wet=noise(x*.035,z*.035,14);
+if(lake(x,z))return [.19+n*.05,.39+n*.06,.43+n*.07];
+const edge=trailDistance(x,z);if(edge<5.8){const t=Math.min(1,Math.max(0,(edge-3.1)/2.7));return [(.42+n*.11)*(1-t)+(.24+m*.07)*t,(.34+n*.10)*(1-t)+(.38+m*.08)*t,(.24+n*.07)*(1-t)+(.19+m*.05)*t]}
+return [.15+n*.10+m*.05,.30+n*.16+wet*.08,.13+n*.07+m*.035]}
 function normal(x,z){const e=.7,dx=height(x-e,z)-height(x+e,z),dz=height(x,z-e)-height(x,z+e);let l=Math.hypot(dx,2*e,dz);return [dx/l,2*e/l,dz/l]}
 const mesh=()=>({p:[],n:[],c:[]});
 function triangle(m,a,b,c,co){const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=c[0]-a[0],vy=c[1]-a[1],vz=c[2]-a[2];let nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx,L=Math.hypot(nx,ny,nz)||1;nx/=L;ny/=L;nz/=L;for(const q of [a,b,c]){m.p.push(q[0],q[1],q[2]);m.n.push(nx,ny,nz);m.c.push(...co)}}
@@ -70,8 +74,14 @@ function quad(m,a,b,c,d,co){triangle(m,a,b,c,co);triangle(m,a,c,d,co)}
 function cylinder(m,x,y,z,r0,r1,h,co,sides=6){for(let i=0;i<sides;i++){const a=i*TAU/sides,b=(i+1)*TAU/sides,ca=Math.cos(a),sa=Math.sin(a),cb=Math.cos(b),sb=Math.sin(b);quad(m,[x+r0*ca,y,z+r0*sa],[x+r0*cb,y,z+r0*sb],[x+r1*cb,y+h,z+r1*sb],[x+r1*ca,y+h,z+r1*sa],co)}}
 function cone(m,x,y,z,r,h,co,sides=7){const tip=[x,y+h,z];for(let i=0;i<sides;i++){const a=i*TAU/sides,b=(i+1)*TAU/sides;triangle(m,[x+r*Math.cos(a),y,z+r*Math.sin(a)],[x+r*Math.cos(b),y,z+r*Math.sin(b)],tip,co)}}
 function leafball(m,x,y,z,r,co){const sides=8,top=[x,y+r*.95,z],bottom=[x,y-r*.72,z];for(let i=0;i<sides;i++){const a=i*TAU/sides,b=(i+1)*TAU/sides;const p=[x+Math.cos(a)*r,y,z+Math.sin(a)*r],q=[x+Math.cos(b)*r,y,z+Math.sin(b)*r];const shade=i%3===0?1.10:i%3===1?.92:1.02;const c=co.map(v=>Math.min(1,v*shade));triangle(m,p,q,top,c);triangle(m,q,p,bottom,c)}}
-const ground=mesh(),details=mesh();const N=SIZE/2;
-function shadow(x,y,z,r){const yy=y+.055,shade=[.12,.22,.13];for(let i=0;i<8;i++){const a=i*TAU/8,b=(i+1)*TAU/8;triangle(details,[x,yy,z],[x+Math.cos(a)*r,yy,z+Math.sin(a)*r*.55],[x+Math.cos(b)*r,yy,z+Math.sin(b)*r*.55],shade)}}
+const ground=mesh(),details=mesh(),flora=mesh();const N=SIZE/2;
+function shadow(x,y,z,r){const shade=[.13,.23,.14];for(let i=0;i<8;i++){const a=i*TAU/8,b=(i+1)*TAU/8;triangle(details,[x,y+.06,z],[x+Math.cos(a)*r,height(x+Math.cos(a)*r,z+Math.sin(a)*r*.6)+.055,z+Math.sin(a)*r*.6],[x+Math.cos(b)*r,height(x+Math.cos(b)*r,z+Math.sin(b)*r*.6)+.055,z+Math.sin(b)*r*.6],shade)}}
+function grass(x,z,h,seed){const size=.25+rand(seed,31,1)*.85;const green=[.22+rand(seed,4,1)*.13,.39+rand(seed,5,1)*.19,.18+rand(seed,6,1)*.08];
+for(let i=0;i<3;i++){const a=rand(seed,i,22)*TAU,dx=Math.cos(a)*size*.33,dz=Math.sin(a)*size*.33;triangle(flora,[x+dx,h+.02,z+dz],[x-dz*.4,h+.02,z+dx*.4],[x+dx*.3,h+size*(.85+rand(seed,i,23)*.3),z+dz*.3],green)}}
+function boulder(x,y,z,r,seed){const c=.42+rand(seed,81,1)*.16,co=[c*.95,c,c*.92];const v=[[x,y+r*.8,z],[x+r,y,z],[x,y,z+r*.7],[x-r*.85,y,z],[x,y,z-r*.8],[x,y-r*.08,z]];
+for(let i=1;i<=4;i++){const j=i===4?1:i+1;triangle(details,v[0],v[i],v[j],co.map(a=>a*(i%2?.95:1.08)));triangle(details,v[5],v[j],v[i],co.map(a=>a*.72))}}
+function branch(x,y,z,dx,dy,dz,thick,c){const l=Math.hypot(dx,dy,dz);const ax=x+dx*.5,az=z+dz*.5;const basis=[-dz/l*thick,0,dx/l*thick];quad(details,[x-basis[0],y,z-basis[2]],[x+basis[0],y,z+basis[2]],[x+dx+basis[0]*.35,y+dy,z+dz+basis[2]*.35],[x+dx-basis[0]*.35,y+dy,z+dz-basis[2]*.35],c)}
+
 for(let iz=-N;iz<N;iz++)for(let ix=-N;ix<N;ix++){const x=ix*STEP,z=iz*STEP,x2=x+STEP,z2=z+STEP,co=color(x+STEP*.5,z+STEP*.5);const A=[x,height(x,z),z],B=[x,height(x,z2),z2],C=[x2,height(x2,z2),z2],D=[x2,height(x2,z),z];quad(ground,A,B,C,D,co)}
 for(let iz=-N;iz<N;iz++)for(let ix=-N;ix<N;ix++){
 const x=(ix+.5)*STEP,z=(iz+.5)*STEP,r=rand(ix,iz,4);if(lake(x,z)||Math.abs(x)<14&&Math.abs(z)<15)continue;
