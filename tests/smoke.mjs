@@ -1,74 +1,50 @@
 import { chromium } from 'playwright';
-import { createServer } from 'node:http';
-import { readFileSync } from 'node:fs';
-import { PNG } from 'pngjs';
-
-const html = readFileSync('index.html','utf8');
-if (!html.includes('灰緑の境界') || !html.includes('drawBuilding')) throw Error('Wrong game build');
-const server = createServer((req,res)=>{res.writeHead(200,{'content-type':'text/html; charset=utf-8'});res.end(html)});
+import {createServer} from 'node:http';
+import {readFileSync} from 'node:fs';
+import {PNG} from 'pngjs';
+const html=readFileSync('index.html','utf8');
+if(!html.includes('森の遺跡')||!html.includes('function drawWall'))throw Error('Wrong rebuild source');
+const server=createServer((req,res)=>{res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(html)});
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 let browser;
 try{
  browser=await chromium.launch({headless:true,args:['--disable-dev-shm-usage']});
- const page=await browser.newPage({viewport:{width:926,height:428},deviceScaleFactor:1,isMobile:true,hasTouch:true});
- const errors=[];
- page.on('pageerror',e=>errors.push(e.message));
- page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
+ const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',msg=>{if(msg.type()==='error')errors.push(msg.text())});
  await page.goto('http://127.0.0.1:'+server.address().port+'/?test=1',{waitUntil:'load'});
- await page.waitForTimeout(200);
- const canvas=page.locator('#view');
- const ctx=await canvas.evaluate(c=>({valid:!!c.getContext('2d'),w:c.width,h:c.height}));
- if(!ctx.valid||!ctx.w||!ctx.h)throw Error('No Canvas rendering context');
- await page.locator('#start').click();
- if(await page.locator('#panel').isVisible())throw Error('Start screen still shown');
- const startPlace=await page.locator('#place').textContent();
- const before=await page.screenshot({path:'smoke-before.png'});
- // Verify LDOE-style analogue joystick: drag, sustained movement and release.
- const pad=page.locator('#pad'),box=await pad.boundingBox();
- if(!box||box.width<125||box.height<125)throw Error('Analog stick too small or missing');
- const pBefore=await page.evaluate(()=>window.__gameTest.state());
- const centerX=box.x+box.width/2,centerY=box.y+box.height/2;
- await page.mouse.move(centerX,centerY);
- await page.mouse.down();
- await page.mouse.move(centerX,centerY-45,{steps:8});
- await page.waitForTimeout(1100);
- const held=await page.evaluate(()=>window.__gameTest.state());
- if(!held.joystick.active||held.joystick.y>-.4)throw Error('Joystick drag did not engage: '+JSON.stringify(held));
- await page.mouse.up();
- await page.waitForTimeout(180);
- const released=await page.evaluate(()=>window.__gameTest.state());
- if(released.joystick.active||Math.abs(released.joystick.y)>.001)throw Error('Joystick did not recenter');
- console.log('Analog stick movement:',pBefore,held,released);
- if(Math.hypot(held.x-pBefore.x,held.y-pBefore.y)<.5)throw Error('Holding joystick did not move player');
- const moved=await page.screenshot({path:'smoke-after.png'});
- const a=PNG.sync.read(before),b=PNG.sync.read(moved);
- let delta=0,samples=0;
- for(let y=75;y<a.height-80;y+=11)for(let x=200;x<a.width-170;x+=11){
-   const i=(y*a.width+x)*4;
-   for(let k=0;k<3;k++)delta+=Math.abs(a.data[i+k]-b.data[i+k]);
-   samples+=3;
+ await page.waitForTimeout(350);
+ const valid=await page.locator('#scene').evaluate(c=>!!c.getContext('2d')&&c.width>100&&c.height>100);
+ if(!valid)throw Error('Canvas is not drawing');
+ const world=await page.evaluate(()=>window.__test.state());
+ if(world.buildings.length<5)throw Error('Expected multiple buildings');
+ // Four wall corners must remain solid and be present in the collision map.
+ const walls=new Set(world.walls),doors=new Set(world.doors);
+ for(const b of world.buildings){
+  const corners=[[b.x,b.y],[b.x+b.w-1,b.y],[b.x,b.y+b.h-1],[b.x+b.w-1,b.y+b.h-1]];
+  for(const [x,y] of corners){if(!walls.has(x+','+y))throw Error('Missing building corner at '+x+','+y)}
+  if(!doors.has(b.door.x+','+b.door.y))throw Error('Missing door');
+  if(walls.has(b.door.x+','+b.door.y))throw Error('Door was blocked');
  }
- const avg=delta/samples;
- console.log('Gameplay pixel change after D-pad hold:',avg,'starting area:',startPlace);
- if(avg<4)throw Error('Movement not reflected in rendered world');
- const map=page.locator('#map');
- await map.click();
- await page.waitForTimeout(150);
- await page.screenshot({path:'smoke-map.png'});
- await map.click();
+ console.log('PASS',world.buildings.length,'buildings, four solid wall corners and accessible door');
+ await page.screenshot({path:'smoke-before.png'});
+ const up=page.locator('[data-dir="up"]'),box=await up.boundingBox();
+ if(!box||box.height<60||box.width<60)throw Error('Large portrait controls not found');
+ const before=await page.evaluate(()=>window.__test.state());
+ await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.waitForTimeout(900);await page.mouse.up();
+ const after=await page.evaluate(()=>window.__test.state());
+ if(Math.hypot(after.x-before.x,after.y-before.y)<1)throw Error('Held movement did not move: '+JSON.stringify([before,after]));
+ console.log('PASS held portrait direction',before.x,before.y,'→',after.x,after.y);
+ await page.screenshot({path:'smoke-after.png'});
+ const a=PNG.sync.read(readFileSync('smoke-before.png')),b=PNG.sync.read(readFileSync('smoke-after.png'));let d=0,n=0;
+ for(let y=190;y<a.height-270;y+=13)for(let x=16;x<a.width-16;x+=13){const i=(y*a.width+x)*4;d+=Math.abs(a.data[i]-b.data[i])+Math.abs(a.data[i+1]-b.data[i+1]);n+=2}
+ if(d/n<2)throw Error('World did not visually change');
+ await page.locator('#inventory').click();
+ if(!(await page.locator('#items').isVisible()))throw Error('Inventory did not open');
+ await page.locator('#closeItems').click();
  await page.locator('#action').click();
- const note=await page.locator('#note').textContent();
- if(!note)throw Error('Action button did not produce feedback');
- await page.evaluate(()=>window.__gameTest.moveTo(14.5,17.6));
- await page.locator('#action').click();
- await page.waitForTimeout(140);
- const inside=await page.evaluate(()=>window.__gameTest.state());
- if(inside.inside!=='watch')throw Error('Building entry failed: '+JSON.stringify(inside));
- await page.locator('#action').click();
- const looted=await page.evaluate(()=>window.__gameTest.state());
- if(looted.items<1)throw Error('No loot collected inside building');
- console.log('PASS building entry + item pickup:',looted);
-
- if(errors.length)throw Error('Browser errors: '+errors.join(' | '));
- console.log('PASS: start, landscape Canvas, analog joystick walk/run, discovered map, building entry, item collection');
+ await page.locator('#newWorld').click();
+ const regenerated=await page.evaluate(()=>window.__test.state());
+ if(regenerated.buildings.length!==world.buildings.length)throw Error('World regeneration lost buildings');
+ if(errors.length)throw Error('Javascript browser errors: '+errors.join(' | '));
+ console.log('PASS new-world regeneration, inventory, action and Canvas. All smoke tests completed.');
 }finally{await browser?.close();server.close()}
