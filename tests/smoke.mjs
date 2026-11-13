@@ -23,14 +23,23 @@ try{
  if(await page.locator('#panel').isVisible())throw Error('Start screen still shown');
  const startPlace=await page.locator('#place').textContent();
  const before=await page.screenshot({path:'smoke-before.png'});
- // Validate on-screen d-pad press-and-hold actually moves the game.
- const up=page.locator('[data-d="up"]'),box=await up.boundingBox();
- if(!box||box.width<48||box.height<48)throw Error('D-pad too small for Android');
- await page.mouse.move(box.x+box.width/2,box.y+box.height/2);
+ // Verify LDOE-style analogue joystick: drag, sustained movement and release.
+ const pad=page.locator('#pad'),box=await pad.boundingBox();
+ if(!box||box.width<125||box.height<125)throw Error('Analog stick too small or missing');
+ const pBefore=await page.evaluate(()=>window.__gameTest.state());
+ const centerX=box.x+box.width/2,centerY=box.y+box.height/2;
+ await page.mouse.move(centerX,centerY);
  await page.mouse.down();
+ await page.mouse.move(centerX,centerY-45,{steps:8});
  await page.waitForTimeout(1100);
+ const held=await page.evaluate(()=>window.__gameTest.state());
+ if(!held.joystick.active||held.joystick.y>-.4)throw Error('Joystick drag did not engage: '+JSON.stringify(held));
  await page.mouse.up();
- await page.waitForTimeout(200);
+ await page.waitForTimeout(180);
+ const released=await page.evaluate(()=>window.__gameTest.state());
+ if(released.joystick.active||Math.abs(released.joystick.y)>.001)throw Error('Joystick did not recenter');
+ console.log('Analog stick movement:',pBefore,held,released);
+ if(Math.hypot(held.x-pBefore.x,held.y-pBefore.y)<.5)throw Error('Holding joystick did not move player');
  const moved=await page.screenshot({path:'smoke-after.png'});
  const a=PNG.sync.read(before),b=PNG.sync.read(moved);
  let delta=0,samples=0;
@@ -61,5 +70,5 @@ try{
  console.log('PASS building entry + item pickup:',looted);
 
  if(errors.length)throw Error('Browser errors: '+errors.join(' | '));
- console.log('PASS: start, landscape Canvas, touch D-pad, map, interaction, no exceptions');
+ console.log('PASS: start, landscape Canvas, analog joystick walk/run, discovered map, building entry, item collection');
 }finally{await browser?.close();server.close()}
