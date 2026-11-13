@@ -1,4 +1,4 @@
-name: Android WebView launch smoke test
+name: Android portrait gameplay smoke test
 on:
   workflow_dispatch:
   push:
@@ -26,7 +26,7 @@ jobs:
           mkdir -p app/src/main/assets
           cp index.html app/src/main/assets/starter.html
           gradle :app:assembleDebug --no-daemon
-      - name: Start Android emulator, tap start, and compare screenshots
+      - name: Start Android emulator, hold D-pad, and compare screenshots
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -47,10 +47,10 @@ jobs:
             img=Image.open('android-before.png')
             w,h=img.size
             print('Device screenshot:',w,h)
-            with open('/tmp/tapcoords','w') as f:f.write(str(w//2)+' '+str(int(h*.69)))
+            with open('/tmp/tapcoords','w') as f:f.write(str(w//2)+' '+str(int(h*.70)))
             PY
             read TAPX TAPY < /tmp/tapcoords
-            adb shell input tap "$TAPX" "$TAPY"
+            adb shell input swipe "$TAPX" "$TAPY" "$TAPX" "$TAPY" 1600
             sleep 12
             adb shell screencap -p /sdcard/after.png
             adb pull /sdcard/after.png android-after.png
@@ -63,8 +63,8 @@ jobs:
             y=np.asarray(b).astype(np.int16)
             diff=np.abs(x-y).mean()
             print('Android screenshot pixel difference:',diff,'size:',a.size)
-            if diff < 5: raise SystemExit('FAIL: start tap did not change the game screen sufficiently')
-            print('PASS: tapping game start changed screen')
+            if diff < 2: raise SystemExit('FAIL: held D-pad did not visibly move the forest')
+            print('PASS: holding D-pad visibly moved landscape')
             PY
             adb logcat -d -s MoonRuins:E TsukacchiHTML:E chromium:E | tail -n 70
       - uses: actions/upload-artifact@v4
