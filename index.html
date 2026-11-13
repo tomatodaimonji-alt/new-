@@ -8,13 +8,13 @@
 @media(orientation:landscape){#pad{--key:min(18vh,76px);left:15%;bottom:12px}#side{bottom:14px}#volumeBox{left:53%;bottom:10px}#intro article{max-width:520px}#footnote{bottom:5px}}
 @media(max-width:370px){#side{right:7px}.control{min-width:72px;padding:9px 8px;font-size:11px}#volumeBox{width:86px;left:6px}#pad{--key:20vw}}
 </style></head><body><canvas id="view"></canvas>
-<div id="hud"><div class="glass" id="title"><b>森の遺跡 3D</b><small>24×24 · 立体タイル / 一歩ずつ探索</small></div><div class="glass" id="data">1日目 08:00<small id="position">X 12 · Y 18 · 南向き</small></div></div>
+<div id="hud"><div class="glass" id="title"><b>森の遺跡 3D</b><small>24×24 · 草原 / 森の土 / 苔と石</small></div><div class="glass" id="data">1日目 08:00<small id="position">X 12 · Y 18 · 南向き</small></div></div>
 <div id="notice"></div>
 <div id="pad"><span class="key blank"></span><button class="key" data-dir="up" aria-label="上に進む">▲</button><span class="key blank"></span><button class="key" data-dir="left" aria-label="左に進む">◀</button><button class="key center" id="inspect">調べる</button><button class="key" data-dir="right" aria-label="右に進む">▶</button><span class="key blank"></span><button class="key" data-dir="down" aria-label="下に進む">▼</button><span class="key blank"></span></div>
 <div id="side"><button class="control" id="camera">視点切替</button><button class="control" id="audioToggle">音楽 ON</button></div>
 <div id="volumeBox" class="glass"><label for="volume">BGM・SE音量 <b id="volumeNumber">85%</b></label><input id="volume" type="range" min="0" max="100" step="1" value="85"><div id="soundState">タップして音を開始</div></div>
 <div id="footnote">オフライン · 敵なし · 音楽はオリジナルの自動演奏</div>
-<div id="intro"><article><h1>小さな森の遺跡</h1><p>24×24マスの立体的な森と家を歩く試作。<br>十字キーは1マスずつ移動。<br>四角い旅人は進行方向を向いて、手足を動かして歩きます。<br>静かなピアノと森の音が流れます。</p><button id="start">探索を始める ♪</button></article></div>
+<div id="intro"><article><h1>小さな森の遺跡</h1><p>24×24マスの立体的な森と家を歩く試作。<br>十字キーは1マスずつ移動。<br>四角い旅人は進行方向を向いて、手足を動かして歩きます。<br>草原・落葉の森・苔むす石の地面と、2種類の広葉樹を探索。静かなピアノと森の音が流れます。</p><button id="start">探索を始める ♪</button></article></div>
 <script>
 (()=>{'use strict';
 const cvs=document.getElementById('view'),gl=cvs.getContext('webgl',{antialias:false,alpha:true,preserveDrawingBuffer:false,powerPreference:'low-power'});
@@ -30,12 +30,14 @@ let pr;try{pr=program()}catch(e){overlay.innerHTML='<article><h1>3Dの起動エ�
 gl.useProgram(pr);gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.clearColor(0,0,0,0);
 const attr={pos:gl.getAttribLocation(pr,'aPosition'),normal:gl.getAttribLocation(pr,'aNormal'),color:gl.getAttribLocation(pr,'aColor')},uMVP=gl.getUniformLocation(pr,'uMVP');
 const hash=(x,z,s=0)=>{const n=Math.sin(x*127.1+z*311.7+s*74.1)*43758.5453;return n-Math.floor(n)};
-const tileKinds=Array.from({length:N},(_,z)=>Array.from({length:N},(_,x)=>{const r=hash(x,z,3);return x>=7&&x<=15&&z>=7&&z<=14?2:Math.abs(x-12)<2||Math.abs(z-17)<1?1:r>.78?3:0}));
+// Three blended terrain families: A bright meadow, B leaf-litter woodland, C mossy stone.
+const groundFamily=(x,z)=>{const wet=hash(Math.floor(x/3),Math.floor(z/3),41)*.58+hash(Math.floor(x/6),Math.floor(z/6),42)*.42;const nearHome=Math.max(Math.abs(x-11),Math.abs(z-11));if(nearHome<=6&&wet>.24)return 2;if(wet>.57)return 1;return 0};
+const tileKinds=Array.from({length:N},(_,z)=>Array.from({length:N},(_,x)=>{const r=hash(x,z,3);return x>=7&&x<=15&&z>=7&&z<=14?3:Math.abs(x-12)<2||Math.abs(z-17)<1?4:groundFamily(x,z)}));
 const house={x:7,z:7,w:9,h:8,doorX:11,doorZ:14},walls=new Set(),trees=[],rocks=[],shrubs=[];
 for(let z=7;z<=14;z++)for(let x=7;x<=15;x++)if(x===7||x===15||z===7||z===14)if(!(x===11&&z===14))walls.add(x+','+z);
 for(let z=1;z<N-1;z++)for(let x=1;x<N-1;x++){
- if(tileKinds[z][x]===2||Math.abs(x-12)<2&&z>=14||Math.abs(x-12)+Math.abs(z-18)<4)continue;
- const r=hash(x,z,8);if(r<.055)trees.push({x,z,t:hash(x,z,9)>.45?1:0});
+ if(tileKinds[z][x]===3||Math.abs(x-12)<2&&z>=14||Math.abs(x-12)+Math.abs(z-18)<4)continue;
+ const r=hash(x,z,8);if(r<.067)trees.push({x,z,t:hash(x,z,9)>.45?1:0});
  else if(r>.94)rocks.push({x,z});else if(r>.85)shrubs.push({x,z});
 }
 const blocked=(x,z)=>x<0||z<0||x>=N||z>=N||walls.has(x+','+z)||trees.some(t=>t.x===x&&t.z===z);
@@ -51,13 +53,51 @@ quad(m,[x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0],side);
 quad(m,[x1,y0,z1],[x1,y0,z0],[x1,y1,z0],[x1,y1,z1],front);
 }
 function diamond(m,x,y,z,r,co){const v=[[x,y+r,z],[x-r,y,z],[x,y,z+r],[x+r,y,z],[x,y,z-r],[x,y-r*.62,z]];for(let i=1;i<=4;i++){let j=i===4?1:i+1;triangle(m,v[0],v[i],v[j],co);triangle(m,v[5],v[j],v[i],co.map(a=>a*.78))}}
-function tree(m,t){const x=t.x+.5,z=t.z+.5,h=1.3+hash(t.x,t.z,11)*.6;cuboid(m,x,.05,z,.18,h,.18,[.42,.29,.19]);if(t.t){for(let k=0;k<3;k++)diamond(m,x,.7+k*.39,z,.59-k*.10,[.22+k*.035,.42+k*.025,.27+k*.014])}else{diamond(m,x,h,z,.79,[.34,.56,.34]);diamond(m,x-.22,h+.12,z+.17,.50,[.39,.63,.39]);diamond(m,x+.21,h+.18,z-.12,.46,[.28,.51,.33])}}
+function branch(m,a,b,r,col){const mid=[(a[0]+b[0])/2,(a[1]+b[1])/2,(a[2]+b[2])/2],len=Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);cuboid(m,mid[0],Math.min(a[1],b[1]),mid[2],r,len,r,col);}
+// Two broadleaf varieties: ① rounded clustered crowns, ③ articulated trunk with visible branches.
+function tree(m,t){
+const x=t.x+.5,z=t.z+.5,v=hash(t.x,t.z,12),h=1.16+v*.42,wood=[.43,.32,.23],leaf=t.t?[.28,.51,.30]:[.36,.57,.34];
+cuboid(m,x,.04,z,.19,h,.19,wood);
+if(t.t===0){
+ const crowns=[[-.25,.01,.16,.46],[.20,.09,-.12,.49],[0,.27,0,.51],[-.05,.43,.11,.35]];
+ for(let j=0;j<crowns.length;j++){const [dx,dy,dz,r]=crowns[j];diamond(m,x+dx,h+dy,z+dz,r,leaf.map((a,k)=>a+(j%2?-.025:.035)))}
+}else{
+ const branches=[[-.47,.16,-.13], [.42,.29,.23],[-.14,.47,.46],[.18,.56,-.40]];
+ for(let j=0;j<branches.length;j++){
+ const [dx,dy,dz]=branches[j];const end=[x+dx,h+dy,z+dz];
+ branch(m,[x,h-.24,z],end,.09,wood);
+ diamond(m,end[0],end[1]+.10,end[2],.37+(j%2)*.07,leaf.map(a=>a+(j%2)*.055));
+ }
+ diamond(m,x,h+.64,z,.42,[.40,.62,.37]);
+}
+}
+function groundPatch(m,x,z,base,family){
+ const r=hash(x,z,4),brightness=(r-.5)*.08;
+ const col=base.map(v=>Math.min(.96,Math.max(.10,v+brightness)));
+ cuboid(m,x+.5,-.13,z+.5,1,.13,1,col);
+ if(family===3||family===4)return;
+ // Staggered small ground decals, grass blades, leaf litter and moss on stone.
+ for(let j=0;j<6;j++){
+ const px=x+.08+hash(x,z,15+j)*.84,pz=z+.08+hash(x,z,25+j)*.84,rr=hash(x,z,35+j);
+ if(family===0){
+  const grass=rr>.4?[.39,.61,.34]:[.50,.70,.41];
+  cuboid(m,px,.002,pz,.035,.025+rr*.075,.035,grass);
+  if(j===0&&r>.76)diamond(m,px,.032,pz,.038,[.91,.81,.56]);
+ }else if(family===1){
+  if(j%3===0){cuboid(m,px,.002,pz,.14,.008,.095,[.46,.36,.25]);}
+  else if(rr>.46){quad(m,[px-.075,.011,pz-.04],[px+.06,.011,pz-.055],[px+.035,.011,pz+.06],[px-.055,.011,pz+.045],rr>.72?[.58,.39,.23]:[.66,.51,.29]);}
+  else cuboid(m,px,.002,pz,.038,.046,.036,[.40,.59,.32]);
+ }else{
+  if(j%3===0)diamond(m,px,.034,pz,.11+rr*.07,[.55,.60,.52]);
+  else cuboid(m,px,.002,pz,.10,.012,.09,rr>.4?[.34,.57,.32]:[.44,.65,.37]);
+ }
+ }
+}
 const world=make();
+const groundPalette=[[.58,.74,.51],[.52,.57,.39],[.49,.64,.42],[.75,.70,.58],[.72,.68,.54]];
 for(let z=0;z<N;z++)for(let x=0;x<N;x++){
-const type=tileKinds[z][x],r=hash(x,z,4);
-const base=type===2?[.75,.70,.58]:type===1?[.73,.70,.56]:type===3?[.44,.63,.46]:[.57,.73,.51];const col=base.map((v,i)=>Math.min(.97,v+(r-.5)*.08));cuboid(world,x+.5,-.13,z+.5,1,.13,1,col);
-if(type===0||type===3){for(let j=0;j<2;j++){const ax=x+hash(x,z,10+j),az=z+hash(x,z,20+j);cuboid(world,ax,.005,az,.04,.035+hash(x,z,32+j)*.07,.04,[.38,.59,.32])}}
-if(type===1&&r>.75)diamond(world,x+.24,.03,z+.75,.07,[.62,.64,.51]);
+ const family=tileKinds[z][x];groundPatch(world,x,z,groundPalette[family],family);
+ if(family===4&&hash(x,z,4)>.75)diamond(world,x+.24,.03,z+.75,.07,[.62,.64,.51]);
 }
 for(const t of trees)tree(world,t);
 for(const t of rocks)diamond(world,t.x+.5,.15,t.z+.5,.30,[.57,.62,.59]);
@@ -133,6 +173,6 @@ document.getElementById('data').firstChild.textContent='1日目 '+String(8+Math.
 scheduleAudio();
 }
 requestAnimationFrame(frame);
-if(location.search.includes('test=1'))window.__gameTest={state:()=>({x:player.x,z:player.z,face:player.face,stepping,house,walls:[...walls],trees:trees.length,glLink:gl.getProgramParameter(pr,gl.LINK_STATUS),playing}),step:(dir,ms)=>moveStep(dir,ms),audio:()=>({created:!!audio,music,volume:Number(volume.value)})};
+if(location.search.includes('test=1'))window.__gameTest={state:()=>({x:player.x,z:player.z,face:player.face,stepping,house,walls:[...walls],trees:trees.length,groundCounts:tileKinds.flat().reduce((a,v)=>(a[v]=(a[v]||0)+1,a),{}),treeKinds:trees.reduce((a,v)=>(a[v.t]=(a[v.t]||0)+1,a),{}),worldVertices:world.p.length/3,glLink:gl.getProgramParameter(pr,gl.LINK_STATUS),playing}),step:(dir,ms)=>moveStep(dir,ms),audio:()=>({created:!!audio,music,volume:Number(volume.value)})};
 })();
 </script></body></html>
