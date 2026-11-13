@@ -1,0 +1,23 @@
+import {chromium} from 'playwright';import {createServer} from 'node:http';import {readFileSync} from 'node:fs';
+const html=readFileSync('world-editor.html','utf8');const server=createServer((req,res)=>{res.writeHead(200,{'content-type':'text/html; charset=utf-8'});res.end(html)});
+await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));let browser;
+try{browser=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
+const page=await browser.newPage({viewport:{width:1200,height:760},deviceScaleFactor:1});const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
+await page.goto('http://127.0.0.1:'+server.address().port+'/?test=1',{waitUntil:'load'});await page.waitForTimeout(550);
+const state=await page.evaluate(()=>window.__editorTest?.state());if(!state?.glLink)throw Error('WebGL editor unavailable: '+(await page.locator('#canvasTip').innerText()));
+if(state.world.length<30||!state.world.some(o=>o.type==='wall'&&o.y===0))throw Error('Initial house missing ground-level walls');
+await page.screenshot({path:'editor-before.png'});
+await page.locator('[data-brush="treeRound"]').click();await page.evaluate(()=>window.__editorTest.place(3,3));
+let s=await page.evaluate(()=>window.__editorTest.state());if(!s.world.some(o=>o.x===3&&o.z===3&&o.type==='treeRound'))throw Error('Place failed');
+await page.locator('#undo').click();s=await page.evaluate(()=>window.__editorTest.state());if(s.world.some(o=>o.x===3&&o.z===3&&o.type==='treeRound'))throw Error('Undo failed');
+await page.locator('#redo').click();s=await page.evaluate(()=>window.__editorTest.state());if(!s.world.some(o=>o.x===3&&o.z===3&&o.type==='treeRound'))throw Error('Redo failed');
+await page.locator('#makeModel').click();await page.locator('#modelName').fill('自作の石像');await page.locator('#addPart').click();await page.locator('#partY').fill('0.6');await page.locator('#partColor').fill('#b8c9af');await page.locator('#addPart').click();await page.locator('#saveModel').click();
+s=await page.evaluate(()=>window.__editorTest.state());if(s.models.length!==1||s.models[0].parts.length!==2)throw Error('Custom model creation failed');
+await page.locator('#save').click();const json=JSON.parse(await page.locator('#jsonText').inputValue());if(json.format!=='forest-world-v1'||json.models.length!==1)throw Error('Export invalid');
+await page.locator('#importJson').click();if((await page.evaluate(()=>window.__editorTest.state())).models.length!==1)throw Error('Import failed');
+await page.screenshot({path:'editor-after.png'});if(errors.length)throw Error(errors.join(' | '));console.log('DESKTOP PASS: WebGL, walls, catalog, undo/redo, custom 3D model, JSON roundtrip');
+await page.close();const mobile=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});mobile.on('pageerror',e=>errors.push(e.message));
+await mobile.goto('http://127.0.0.1:'+server.address().port+'/?test=1',{waitUntil:'load'});await mobile.locator('#showPalette').click();if(!(await mobile.locator('#palette').isVisible()))throw Error('Mobile catalog hidden');
+await mobile.locator('[data-brush="treeBranch"]').click();if((await mobile.evaluate(()=>window.__editorTest.state())).selected!=='treeBranch')throw Error('Mobile selection failed');
+await mobile.screenshot({path:'editor-mobile.png'});if(errors.length)throw Error(errors.join(' | '));console.log('MOBILE PASS: editor loads and catalog selects');
+}finally{await browser?.close();server.close()}
