@@ -14,7 +14,7 @@ try{
  const errors=[];
  page.on('pageerror',e=>errors.push(e.message));
  page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
- await page.goto('http://127.0.0.1:'+server.address().port,{waitUntil:'load'});
+ await page.goto('http://127.0.0.1:'+server.address().port+'/?test=1',{waitUntil:'load'});
  await page.waitForTimeout(200);
  const canvas=page.locator('#view');
  const ctx=await canvas.evaluate(c=>({valid:!!c.getContext('2d'),w:c.width,h:c.height}));
@@ -50,6 +50,16 @@ try{
  await page.locator('#action').click();
  const note=await page.locator('#note').textContent();
  if(!note)throw Error('Action button did not produce feedback');
+ await page.evaluate(()=>window.__gameTest.moveTo(14.5,17.6));
+ await page.locator('#action').click();
+ await page.waitForTimeout(140);
+ const inside=await page.evaluate(()=>window.__gameTest.state());
+ if(inside.inside!=='watch')throw Error('Building entry failed: '+JSON.stringify(inside));
+ await page.locator('#action').click();
+ const looted=await page.evaluate(()=>window.__gameTest.state());
+ if(looted.items<1)throw Error('No loot collected inside building');
+ console.log('PASS building entry + item pickup:',looted);
+
  if(errors.length)throw Error('Browser errors: '+errors.join(' | '));
  console.log('PASS: start, landscape Canvas, touch D-pad, map, interaction, no exceptions');
 }finally{await browser?.close();server.close()}
