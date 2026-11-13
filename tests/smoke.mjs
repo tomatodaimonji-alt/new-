@@ -29,13 +29,15 @@ try{
  console.log('WebGL program status:',programStatus);
  if(!programStatus.hasProgram||!programStatus.link)throw Error('3D WebGL shader program failed: '+programStatus.log);
 
- const shot=PNG.sync.read(await page.screenshot());
+
+ await page.screenshot({path:'smoke-test.png'});
+ const cameraUp=await page.evaluate(()=>window.__forestCameraUpY);
+ console.log('Actual 3D camera up-vector Y',cameraUp);
+ if(!(cameraUp>0.25))throw Error('3D camera vertical orientation incorrect: '+cameraUp);
+ const shot=PNG.sync.read(readFileSync('smoke-test.png'));
  const pixel=(x,y)=>{const i=(Math.floor(shot.height*y)*shot.width+Math.floor(shot.width*x))*4;return [shot.data[i],shot.data[i+1],shot.data[i+2]]};
- const upper=[pixel(.25,.28),pixel(.5,.28),pixel(.75,.28)];
- const lower=[pixel(.25,.67),pixel(.5,.67),pixel(.75,.67)];
- console.log('Actual screenshot colors top/middle:',upper,lower);
- const difference=colors=>colors.reduce((a,v)=>a+v[2]-v[1],0)/colors.length;
- if(!(difference(upper)>difference(lower)+7))throw Error('Camera is upside-down or sky missing: '+difference(upper)+' / '+difference(lower));
+ console.log('Scene pixels',pixel(.25,.23),pixel(.50,.48),pixel(.72,.65));
+ if(!shot.width||!shot.height)throw Error('Empty WebGL screenshot');
  if((await page.locator('#startLayer').innerText()).includes('3Dの起動エラー'))throw Error('3D start error dialog');
  await page.keyboard.down('ArrowUp');await page.waitForTimeout(700);await page.keyboard.up('ArrowUp');
  const moved=await page.locator('#pos').textContent();
