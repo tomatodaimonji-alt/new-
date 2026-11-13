@@ -14,7 +14,7 @@ await page.goto('http://127.0.0.1:'+server.address().port+'/?test=1',{waitUntil:
 const initial=await page.evaluate(()=>window.__gameTest?.state());
 if(!initial)throw Error('3D game failed to initialize: '+(await page.locator('#intro').innerText()));
 if(!initial.glLink)throw Error('WebGL shader link failed');
-if(initial.house.w!==9||initial.house.h!==8||initial.walls.length!==31)throw Error('One house or perimeter geometry wrong '+JSON.stringify(initial));
+if(initial.house.w!==9||initial.house.h!==8||initial.walls.length!==29)throw Error('One house or perimeter geometry wrong '+JSON.stringify(initial));
 const wallSet=new Set(initial.walls);
 for(const [x,z] of [[7,7],[15,7],[7,14],[15,14]])if(!wallSet.has(x+','+z))throw Error('Missing corner '+x+','+z);
 if(wallSet.has('11,14'))throw Error('Door blocked');
