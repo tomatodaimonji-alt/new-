@@ -40,7 +40,7 @@ const buildings=[
 {id:'shed',x:10,y:30,w:5,h:5,name:'古い物置',roof:'#777369',wall:'#a29a83',loot:[['ロープ','🪢'],['救急箱','🩹']]}
 ];
 const world=Array.from({length:ih},(_,y)=>Array.from({length:iw},(_,x)=>({kind:'grass',v:hash(x,y,1)})));
-const props=[],drops=[];
+const props=[],drops=[],furniture=[];
 const player={x:21.5,y:22.5,inside:null,items:[],steps:0,face:0};
 let running=false,last=0,seconds=0,camX=0,camY=0,zoom=1,dpr=1,W=0,H=0,noteUntil=0,mapOpen=false,interactFlash=0;let joystick={x:0,y:0,active:false,pointer:null},seen=new Set();
 const controls=new Set(),keymap={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',w:'up',s:'down',a:'left',d:'right'};
@@ -57,7 +57,11 @@ else if(r>.92)props.push({x:x+.5,y:y+.5,k:'rock',h:12+hash(x,y,17)*9,seed:hash(x
 else if(r>.78)props.push({x:x+.5,y:y+.5,k:'bush',h:9+hash(x,y,17)*8,seed:hash(x,y,13)});
 }
 }
-buildings.forEach(b=>b.loot.forEach((item,i)=>drops.push({x:b.x+1.7+(i%2)*2.3,y:b.y+1.8+Math.floor(i/2)*1.7,name:item[0],icon:item[1],building:b.id,taken:false})));
+buildings.forEach(b=>{
+ b.loot.forEach((item,i)=>drops.push({x:b.x+1.7+(i%2)*2.3,y:b.y+1.8+Math.floor(i/2)*1.7,name:item[0],icon:item[1],building:b.id,taken:false}));
+ furniture.push({x:b.x+1.35,y:b.y+1.5,kind:b.id==='store'?'shelf':'table',building:b.id});
+ furniture.push({x:b.x+b.w-1.35,y:b.y+2.8,kind:b.id==='house'?'bed':b.id==='shed'?'crate':'shelf',building:b.id});
+});
 for(const d of [{x:21,y:20,name:'色褪せた手帳',icon:'📓'},{x:37,y:22,name:'コンパス',icon:'🧭'}])drops.push({...d,taken:false,building:null});
 function resize(){W=innerWidth;H=innerHeight;dpr=Math.min(devicePixelRatio||1,1.8);canvas.width=Math.max(1,Math.round(W*dpr));canvas.height=Math.max(1,Math.round(H*dpr));ctx.setTransform(dpr,0,0,dpr,0,0)}
 addEventListener('resize',resize);resize();
@@ -88,6 +92,14 @@ polygon([[x-h*.45,y-h*.7],[x+h*.12,y-h],[x+h*.75,y-h*.15],[x+.1*h,y-h*.3]],'#99a
 }
 function bush(o){const [x,y]=iso(o.x,o.y),r=o.h;for(let i=0;i<3;i++){ctx.fillStyle=['#315b41','#4f8152','#608e54'][i];ctx.beginPath();ctx.ellipse(x+(i-1)*r*.52,y-r*.48-(i%2)*3,r*.67,r*.53,0,0,TAU);ctx.fill()}}
 function wall(a,b,h,fill){const c=[b[0],b[1]-h],d=[a[0],a[1]-h];polygon([a,b,c,d],fill,'#34443c88')}
+function drawFurniture(f){
+const [x,y]=iso(f.x,f.y),h=f.kind==='shelf'?28:f.kind==='bed'?11:19,w=f.kind==='bed'?30:23;
+polygon([[x-w,y-3],[x,y+6],[x+w,y-3],[x,y-12]],f.kind==='bed'?'#777f71':f.kind==='crate'?'#987a52':'#88755c','#282d25');
+polygon([[x-w,y-3],[x,y+6],[x,y+6+h],[x-w,y-3+h]],'#514a3d');
+polygon([[x,y+6],[x+w,y-3],[x+w,y-3+h],[x,y+6+h]],'#6d5c49');
+if(f.kind==='bed'){ctx.fillStyle='#9faca0';ctx.fillRect(x-10,y-7,19,7)}
+if(f.kind==='shelf'){ctx.strokeStyle='#c4b99a';for(let i=0;i<2;i++){ctx.beginPath();ctx.moveTo(x-13,y+i*8+8);ctx.lineTo(x+12,y+i*8+8);ctx.stroke()}}
+}
 function drawBuilding(b){const x=b.x,y=b.y,w=b.w,h=b.h;
 const A=iso(x,y),B=iso(x+w,y),C=iso(x+w,y+h),D=iso(x,y+h),ht=65;
 const inside=player.inside===b.id;
@@ -104,6 +116,7 @@ polygon([rA,rB,ridge1],b.roof);polygon([rA,ridge1,ridge2,rD],b.roof,'#2a3735');p
 ctx.strokeStyle='#d9e0c01e';for(let i=1;i<5;i++){const p=iso(x,y+i*h/5,ht+18);const q=iso(x+w*.5,y+i*h/5,ht+43);ctx.beginPath();ctx.moveTo(p[0],p[1]);ctx.lineTo(q[0],q[1]);ctx.stroke()}
 }else{
 wall(A,B,ht*.28,b.wall);wall(A,D,ht*.28,'#807a67');
+for(const f of furniture.filter(f=>f.building===b.id))drawFurniture(f);
 const entries=drops.filter(p=>p.building===b.id&&!p.taken);
 for(const item of entries){const p=iso(item.x,item.y);ctx.fillStyle='#ead28e';ctx.beginPath();ctx.arc(p[0],p[1]-9,8,0,TAU);ctx.fill();ctx.fillStyle='#5b5035';ctx.font='16px sans-serif';ctx.textAlign='center';ctx.fillText(item.icon,p[0],p[1]-4)}
 }}
@@ -139,11 +152,11 @@ if(mapOpen)drawMap();
 }
 function drawMap(){const sz=Math.min(H*.64,250),left=W*.5-sz*.5,top=H*.49-sz*.5;
 ctx.fillStyle='#102823ed';ctx.fillRect(left-10,top-10,sz+20,sz+20);
-const sq=sz/iw;for(let y=0;y<ih;y++)for(let x=0;x<iw;x++){const k=world[y][x].kind;ctx.fillStyle=k==='road'?'#a49b78':k==='floor'?'#d1b98f':k==='deep'?'#315842':'#4c7960';ctx.fillRect(left+x*sq,top+y*sq,sq+1,sq+1)}
+const sq=sz/iw;for(let y=0;y<ih;y++)for(let x=0;x<iw;x++){const k=world[y][x].kind;ctx.fillStyle=!seen.has(x+','+y)?'#122521':k==='road'?'#a49b78':k==='floor'?'#d1b98f':k==='deep'?'#315842':'#4c7960';ctx.fillRect(left+x*sq,top+y*sq,sq+1,sq+1)}
 ctx.fillStyle='#f8e39c';ctx.beginPath();ctx.arc(left+player.x*sq,top+player.y*sq,4,0,TAU);ctx.fill();ctx.strokeStyle='#e6e4c9';ctx.strokeRect(left-1,top-1,sz+2,sz+2)}
 function blocking(x,y){if(x<1||y<1||x>iw-2||y>ih-2)return true;const b=bAt(x,y);return b&&player.inside!==b.id}
 function notify(t,d=2.5){const n=document.getElementById('note');n.textContent=t;n.classList.add('show');noteUntil=seconds+d}
-function refreshInventory(){const node=document.getElementById('inventory');node.textContent='';for(let i=0;i<6;i++){const e=document.createElement('div');e.className='slot'+(player.items[i]?' filled':'');const item=player.items[i];if(item){const a=document.createElement('span');a.textContent=item.icon;e.appendChild(a);const b=document.createElement('small');b.textContent=item.name;e.appendChild(b)}else{e.textContent='·'}node.appendChild(e)}}
+function refreshInventory(){const node=document.getElementById('inventory');node.textContent='';for(let i=0;i<6;i++){const e=document.createElement('div');e.className='slot'+(player.items[i]?' filled':'');e.dataset.num=String(i+1);const item=player.items[i];if(item){const a=document.createElement('span');a.textContent=item.icon;e.appendChild(a);const b=document.createElement('small');b.textContent=item.name;e.appendChild(b)}else{e.textContent='·'}node.appendChild(e)}}
 function nearDoor(b){const dx=player.x-(b.x+b.w*.5),dy=player.y-(b.y+b.h+.5);return Math.hypot(dx,dy)<2.6}
 function interact(){
 if(player.inside){const b=buildings.find(v=>v.id===player.inside);let candidates=drops.filter(d=>d.building===b.id&&!d.taken&&Math.hypot(d.x-player.x,d.y-player.y)<2.4);
@@ -162,8 +175,12 @@ const dx=(ix+iy)*.7071,dy=(iy-ix)*.7071,speed=(magnitude>.78?5.65:3.35)*magnitud
 if(player.inside){const b=buildings.find(v=>v.id===player.inside);player.x=clamp(nx,b.x+.6,b.x+b.w-.6);player.y=clamp(ny,b.y+.6,b.y+b.h-.6)}
 else{if(!blocking(nx,player.y))player.x=nx;if(!blocking(player.x,ny))player.y=ny}
 player.steps+=dt*(magnitude>.78?5.2:3.3)*magnitude;player.face=Math.atan2(dy,dx)}
-function update(dt){seconds+=dt;movement(dt);if(seconds>noteUntil)document.getElementById('note').classList.remove('show');
+function update(dt){seconds+=dt;movement(dt);const xx=Math.floor(player.x),yy=Math.floor(player.y);for(let dy=-6;dy<=6;dy++)for(let dx=-6;dx<=6;dx++){if(dx*dx+dy*dy<=42)seen.add((xx+dx)+','+(yy+dy))}
+if(seconds>noteUntil)document.getElementById('note').classList.remove('show');
 const b=player.inside&&buildings.find(v=>v.id===player.inside);document.getElementById('place').textContent=b?b.name:road(player.x,player.y)?'ひび割れた林道':'霧の深い森';
+const near=drops.find(d=>!d.taken&&(!d.building||d.building===player.inside)&&Math.hypot(d.x-player.x,d.y-player.y)<2.3);
+const door=!player.inside&&buildings.find(nearDoor);
+document.getElementById('context').textContent=near?'近くに「'+near.name+'」':b?'屋内：物資と家具を調べる':door?'「'+door.name+'」に入れる':'森を歩き、廃屋で物資を探す';
 const m=Math.floor(seconds*1.7),hh=8+Math.floor((20+m)/60);document.getElementById('clock').textContent='DAY 1 · '+String(hh).padStart(2,'0')+':'+String((20+m)%60).padStart(2,'0');
 }
 function frame(t){requestAnimationFrame(frame);const dt=Math.min(.045,(t-last)/1000||0);last=t;if(!running)return;update(dt);drawWorld()}
@@ -193,6 +210,6 @@ window.__gameTest={
  state:()=>({x:player.x,y:player.y,inside:player.inside,items:player.items.length,joystick:{x:joystick.x,y:joystick.y,active:joystick.active}})
 };
 }
-refreshInventory();drawWorld();
+refreshInventory();seen.add(Math.floor(player.x)+','+Math.floor(player.y));drawWorld();
 })();
 </script></body></html>
