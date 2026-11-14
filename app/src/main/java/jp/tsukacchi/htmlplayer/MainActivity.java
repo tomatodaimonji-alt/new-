@@ -83,6 +83,22 @@ public class MainActivity extends Activity {
         checkForUpdate();
     }
 
+    // An Android app may return from the home screen without running onCreate
+    // again. Apply a queued HTML update on every return to the foreground.
+    @Override protected void onResume() {
+        super.onResume();
+        if (web == null || current == null || pending == null) return;
+        if (pending.isFile()) {
+            try {
+                activatePending();
+                web.loadUrl(GAME_URL);
+            } catch (Exception ex) {
+                android.util.Log.w("MoonRuins", "Could not activate pending editor: " + ex.getMessage());
+            }
+        }
+        checkForUpdate();
+    }
+
     private void createWeb() {
         web = new WebView(this);
         web.setBackgroundColor(Color.rgb(8, 20, 26));
