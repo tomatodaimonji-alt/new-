@@ -35,15 +35,15 @@ import java.util.Arrays;
 import java.util.Collections;
 
 /**
- * Lightweight offline game launcher.
+ * Lightweight auto-updating 3D editor launcher.
  * No AI service, JavaScript bridge, local HTML picker, or visible update toolbar.
- * The app only fetches the game HTML from its pinned public HTTPS endpoint.
+ * The app downloads editor HTML from its pinned public HTTPS endpoint at launch.
  */
 public class MainActivity extends Activity {
     private static final String GAME_URL = "https://game.tsukacchi.local/index.html";
     private static final String LOCAL_HOST = "game.tsukacchi.local";
     private static final String UPDATE_URL =
-        "https://raw.githubusercontent.com/tomatodaimonji-alt/new-/main/index.html";
+        "https://raw.githubusercontent.com/tomatodaimonji-alt/new-/main/world-editor.html";
     private static final long MAX_HTML_BYTES = 12L * 1024 * 1024;
     private File current;
     private File previous;
@@ -61,7 +61,7 @@ public class MainActivity extends Activity {
             ensureInitial();
             activatePending();
         } catch (Exception e) {
-            Toast.makeText(this, "ゲームを準備できません: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "3D工房を準備できません: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
         // Render the game edge-to-edge, without any native toolbar/status strip.
         if (Build.VERSION.SDK_INT >= 30) {
@@ -148,6 +148,23 @@ public class MainActivity extends Activity {
     }
 
     private void ensureInitial() throws IOException {
+        // One-time migration: replace the old game HTML with the bundled editor.
+        // Clear queued game updates before they can be activated.
+        if (!getPreferences(MODE_PRIVATE).getBoolean("editor_migrated_v1", false)) {
+            File starter = new File(getFilesDir(), "editor-starter.tmp");
+            try (InputStream input = getAssets().open("starter.html")) {
+                copyLimited(input, starter);
+            }
+            validateHtml(starter);
+            if (pending.exists() && !pending.delete())
+                throw new IOException("Cannot remove old queued game update");
+            if (current.exists() && !current.delete())
+                throw new IOException("Cannot replace old game");
+            if (!starter.renameTo(current))
+                throw new IOException("Cannot activate editor starter");
+            getPreferences(MODE_PRIVATE).edit().putBoolean("editor_migrated_v1", true).apply();
+            return;
+        }
         if (current.isFile() && current.length() > 0) return;
         try (InputStream input = getAssets().open("starter.html")) {
             copyLimited(input, current);
@@ -215,10 +232,10 @@ public class MainActivity extends Activity {
                     throw new IOException("Cannot replace queued update");
                 if (!downloading.renameTo(pending))
                     throw new IOException("Cannot queue update");
-                // Never interrupt an active game. Updated HTML loads on the next launch.
+                // Never interrupt active modeling. Updated HTML loads on the next launch.
             } catch (Exception ex) {
                 // Offline, Private/404, or bad update: current game remains available.
-                android.util.Log.i("MoonRuins", "Update skipped: " + ex.getMessage());
+                android.util.Log.i("MoonRuins", "Editor update skipped: " + ex.getMessage());
             } finally {
                 if (connection != null) connection.disconnect();
                 if (downloading.exists()) downloading.delete();
@@ -271,7 +288,7 @@ public class MainActivity extends Activity {
 
     @Override public void onBackPressed() {
         new AlertDialog.Builder(this)
-            .setTitle("月影の遺跡を終了")
+            .setTitle("3Dワールド工房を終了")
             .setMessage("アプリを閉じますか？")
             .setNegativeButton("キャンセル", null)
             .setPositiveButton("終了", (dialog, which) -> finish())
