@@ -196,24 +196,19 @@ const blocks=o.prefabs||[];if(!Array.isArray(blocks)||blocks.length>100)throw Er
 if(!o.models.every(validModel))throw Error('モデルの内容が不正です');const names=new Set([...palette.map(p=>p.id),...o.models.map(m=>m.id)]);
 if(!blocks.every(f=>f&&/^prefab-[a-z0-9-]{1,32}$/.test(f.id)&&typeof f.name==='string'&&f.name.length<41&&Number.isInteger(f.w)&&Number.isInteger(f.h)&&f.w>0&&f.h>0&&f.w<=MAX_MAP&&f.h<=MAX_MAP&&Array.isArray(f.tiles)&&f.tiles.length<=650&&f.tiles.every(t=>t&&Number.isInteger(t.x)&&t.x>=0&&t.x<f.w&&Number.isInteger(t.z)&&t.z>=0&&t.z<f.h&&Number.isInteger(t.y)&&t.y>=0&&t.y<=3&&names.has(t.type)&&Number.isInteger(t.rot)&&t.rot>=0&&t.rot<4)))throw Error('設計図の内容が不正です');if(!o.world.every(p=>p&&p.x>=0&&p.z>=0&&Number.isInteger(p.x)&&Number.isInteger(p.z)&&p.x<newW&&p.z<newH&&Number.isInteger(p.y)&&p.y>=0&&p.y<=3&&typeof p.type==='string'&&names.has(p.type)&&Number.isInteger(p.rot)&&p.rot>=0&&p.rot<=3))throw Error('配置の内容が不正です');MAP_W=newW;MAP_H=newH;world=o.world.map(p=>({...p}));models=o.models.map(m=>({...m,parts:m.parts.map(p=>({...p}))}));prefabs=blocks.map(f=>({...f,tiles:f.tiles.map(t=>({...t}))}));selected='wall';rotation=0;mode='place';$('mapWidth').value=MAP_W;$('mapHeight').value=MAP_H;for(const id of ['rangeX1','rangeX2'])$(id).max=MAP_W-1;for(const id of ['rangeZ1','rangeZ2'])$(id).max=MAP_H-1;cursorDirty=true;refreshPalette();}
 function displayJSON(){$('jsonText').value=JSON.stringify(data(),null,2)}
-function makeDemo(){snapshot();world=[];for(let z=5;z<=11;z++)for(let x=5;x<=11;x++)world.push({x,z,y:0,type:'woodfloor',rot:0});for(let z=5;z<=11;z++)for(let x=5;x<=11;x++)if(x===5||x===11||z===5||z===11){const type=(x===8&&z===11)?'door':(z===5&&x===8)?'window':(x===5||x===11)&&(z===5||z===11)?'corner':'wall';world.push({x,z,y:0,type,rot:0})}world.push({x:7,z:7,y:0,type:'table',rot:0},{x:10,z:8,y:0,type:'bed',rot:1},{x:7,z:9,y:0,type:'chest',rot:0},{x:3,z:6,y:0,type:'treeRound',rot:0},{x:13,z:9,y:0,type:'treeBranch',rot:0});for(let z=3;z<=Math.min(12,MAP_H-1);z++){if(4<MAP_W)world.push({x:4,z,y:0,type:'earth',rot:0});if(12<MAP_W)world.push({x:12,z,y:0,type:'moss',rot:0})}commit();toast('家1軒と森を配置した')}
-
-function setMapSize(){
- const width=Number($('mapWidth').value),height=Number($('mapHeight').value);
- if(!Number.isInteger(width)||!Number.isInteger(height)||width<MIN_MAP||height<MIN_MAP||width>MAX_MAP||height>MAX_MAP){toast('縦横は12〜64の整数で指定してください');return}
- if(width===MAP_W&&height===MAP_H)return toast('現在の広さと同じです');
- const removed=world.filter(p=>p.x>=width||p.z>=height);
- if(removed.length&&!confirm('範囲外の建材 '+removed.length+' 個が消えます。縮小しますか？'))return;
- snapshot();world=world.filter(p=>p.x<width&&p.z<height);MAP_W=width;MAP_H=height;
- $('rangeX1').max=$('rangeX2').max=width-1;$('rangeZ1').max=$('rangeZ2').max=height-1;
- $('rangeX2').value=Math.min(width-1,Number($('rangeX2').value));$('rangeZ2').value=Math.min(height-1,Number($('rangeZ2').value));
- panX=panZ=0;zoom=Math.max(.45,Math.min(2.6,16/Math.max(width,height)));
- cursorDirty=true;commit();toast(width+'×'+height+' マスに変更しました');
+function makeDemo(){
+ snapshot();world=[];
+ const ox=Math.floor((MAP_W-7)/2),oz=Math.floor((MAP_H-7)/2);
+ for(let z=0;z<7;z++)for(let x=0;x<7;x++)world.push({x:ox+x,z:oz+z,y:0,type:'woodfloor',rot:0});
+ for(let z=0;z<7;z++)for(let x=0;x<7;x++)if(x===0||x===6||z===0||z===6){
+  const type=(x===3&&z===6)?'door':(z===0&&x===3)?'window':(x===0||x===6)&&(z===0||z===6)?'corner':'wall';
+  world.push({x:ox+x,z:oz+z,y:0,type,rot:0});
+ }
+ for(const [x,z,type,rot] of [[ox+2,oz+2,'table',0],[ox+5,oz+3,'bed',1],[ox+2,oz+4,'chest',0],[ox-1,oz+2,'treeRound',0],[ox+7,oz+4,'treeBranch',0]]){
+  if(validPos(x,z))world.push({x,z,y:0,type,rot});
+ }
+ commit();toast('サンプルの家を配置しました');
 }
-$('applyMapSize').addEventListener('click',setMapSize);
-$('quickPlace').addEventListener('click',()=>{mode='place';updateSelected()});
-$('quickErase').addEventListener('click',()=>{mode='erase';updateSelected()});
-$('quickMove').addEventListener('click',()=>{mode='move';dragPainting=false;updateSelected()});
 // Controls
 let activePointer=null,lastTouch=null,touchPositions=new Map(),lastPinch=0;
 function updateHover(e){const next=cursorAt(e.clientX,e.clientY);if(!hover||next.x!==hover.x||next.z!==hover.z){hover=next;cursorDirty=true;updateStats()}}
