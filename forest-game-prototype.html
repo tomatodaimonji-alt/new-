@@ -5493,15 +5493,23 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
   panZ+=((targetZ-panZ)*(force?1:.16));
  }
  function gameAvatarMesh(){
-  const m=mesh(),x=gameX,z=gameZ,y=terrainY(Math.floor(gameX),Math.floor(gameZ))+gameLevel*1.4+.03;
-  const skin=[.78,.59,.43],coat=[.27,.37,.50],hair=[.27,.20,.15],shoe=[.24,.22,.21];
-  cube(m,x,y+.01,z,.23,.25,.25,shoe);
-  cube(m,x,y+.25,z,.38,.50,.30,coat);
-  cube(m,x,y+.75,z,.27,.28,.27,skin);
-  cube(m,x,y+.96,z-.025,.30,.09,.30,hair);
-  for(const side of [-1,1])cube(m,x+side*.26,y+.37,z,.10,.40,.12,skin);
-  const face=[[0,-.18],[.18,0],[0,.18],[-.18,0]][gameFacing]||[0,-.18];
-  cube(m,x+face[0],y+.82,z+face[1],.075,.045,.075,[.19,.20,.18]);
+  // Reuse exactly the editor's humanBare model instead of a clothed placeholder.
+  // The base human model looks toward +Z (south); rotate the entire local mesh.
+  const m=mesh(),body=mesh();
+  characterHuman(body,0,0,0,false);
+  const x=gameX,z=gameZ,y=terrainY(Math.floor(gameX),Math.floor(gameZ))+gameLevel*1.4+.03;
+  const rotation=[2,3,0,1][gameFacing]??0;
+  for(let i=0;i<body.p.length;i+=3){
+   const [rx,rz]=rot2(body.p[i],body.p[i+2],rotation);
+   m.p.push(x+rx,y+body.p[i+1],z+rz);
+   const [nx,nz]=rot2(body.n[i],body.n[i+2],rotation);
+   m.n.push(nx,body.n[i+1],nz);
+   m.c.push(body.c[i],body.c[i+1],body.c[i+2]);
+  }
+  // Low, small directional chevron: visible even from a top-down camera.
+  const [dx,dz]=[[0,-1],[1,0],[0,1],[-1,0]][gameFacing];
+  const fx=x+dx*.30,fz=z+dz*.30,sideX=-dz,sideZ=dx,ay=y+.035;
+  tri(m,[fx+dx*.22,ay,fz+dz*.22],[fx-dx*.05+sideX*.13,ay,fz-dz*.05+sideZ*.13],[fx-dx*.05-sideX*.13,ay,fz-dz*.05-sideZ*.13],[.98,.80,.35]);
   return upload(m);
  }
  function gameTick(){
