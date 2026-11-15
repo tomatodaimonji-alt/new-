@@ -5371,18 +5371,21 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
  let gameAvatar=null,gameLast=performance.now(),gameX=32.5,gameZ=32.5,gameFacing=2;
  // Tile-by-tile travel: the avatar smoothly approaches the center of each legal cell.
  const gameDirs=new Set(),gameBlock=new Set(),gameDoors=new Map(),gameFloor=new Map();
- const gameRoofTiles=new Map(),gameRoofGroups=new Map();
+ const gameRoofTiles=new Map(),gameRoofGroups=new Map(),gameRoofsByCell=new Map(),gameBridge=new Set();
  let gameRoofHidden=null,gameMove=null,gameNextStep=0,gameLastDir=null;
  const gameDirSteps={n:[0,-1,0],e:[1,0,1],s:[0,1,2],w:[-1,0,3]};
  const gameTileKey=(x,z)=>x+','+z;
  const gameRoofKey=(x,z,y)=>x+','+z+','+y;
  function gameRebuildBlock(){
-  gameBlock.clear();gameDoors.clear();gameFloor.clear();gameRoofTiles.clear();gameRoofGroups.clear();
+  gameBlock.clear();gameDoors.clear();gameFloor.clear();gameRoofTiles.clear();gameRoofGroups.clear();gameRoofsByCell.clear();gameBridge.clear();
   const groupedRoofs=new Map();
   for(const o of world){
+   if(o.y===0&&/^bridge/.test(o.type))gameBridge.add(gameTileKey(o.x,o.z));
    if(o.y>0&&(RESIDENTIAL_ROOFS.has(o.type)||AUTO_ROOFS.has(o.type))){
     const key=gameRoofKey(o.x,o.z,o.y);
     gameRoofTiles.set(key,o);
+    const ck=gameTileKey(o.x,o.z);
+    if(!gameRoofsByCell.has(ck)||gameRoofsByCell.get(ck).y>o.y)gameRoofsByCell.set(ck,o);
     const groupKey=o.type+','+o.y+','+(o.rot||0);
     if(!groupedRoofs.has(groupKey))groupedRoofs.set(groupKey,[]);
     groupedRoofs.get(groupKey).push(o);
@@ -5422,10 +5425,8 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
   if(!validPos(x,z))return false;
   const key=gameTileKey(x,z),floor=gameFloor.get(key);
   if(gameBlock.has(key))return false;
-  if(['water','river','sea','lake'].includes(floor))return false;
-  // Bridge pieces are walkable even if the river tile remains beneath.
-  if(!floor&&!world.some(o=>o.x===x&&o.z===z&&/^bridge/.test(o.type)))return true;
-  return !(['water','river','sea','lake'].includes(floor)&&!world.some(o=>o.x===x&&o.z===z&&/^bridge/.test(o.type)));
+  // Bridge pieces allow passage across underlying water; open water blocks travel.
+  return !(['water','river','sea','lake'].includes(floor)&&!gameBridge.has(key));
  }
  function gameWalkable(x,z){return gameWalkableTile(Math.floor(x),Math.floor(z))}
  function gameCanStep(x,z,nx,nz){
@@ -5439,12 +5440,8 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
   return terrainPassable(x,z,nx,nz);
  }
  function gameRoofAt(x,z){
-  let chosen=null,bestHeight=Infinity;
-  for(const o of gameRoofTiles.values()){
-   if(o.x!==x||o.z!==z)continue;
-   if(o.y<bestHeight){bestHeight=o.y;chosen=gameRoofGroups.get(gameRoofKey(x,z,o.y))}
-  }
-  return chosen;
+  const o=gameRoofsByCell.get(gameTileKey(x,z));
+  return o?gameRoofGroups.get(gameRoofKey(x,z,o.y))||null:null;
  }
  function gameShouldHideRoof(o){
   return !!(gameRoofHidden&&o.y>0&&(RESIDENTIAL_ROOFS.has(o.type)||AUTO_ROOFS.has(o.type))&&gameRoofGroups.get(gameRoofKey(o.x,o.z,o.y))===gameRoofHidden);
