@@ -431,6 +431,19 @@ function characterHuman(m,x,y,z,villager){
 // Expansion assets: each identifier is a self-contained model. Local-world
 // coordinates rotate through deco() just like the existing furniture pieces.
 const EXPANSION_IDS=new Set(["roofTile","roofThatch","roofPlank","roofTileRidge","roofThatchRidge","roofPlankRidge","roofTileEnd","roofThatchEnd","roofPlankEnd","roofCorner","chimney","archStone","timberWall","balcony","roofRuin","fallenLog","exposedRoots","mushroomPatch","giantMushroom","vineWall","watersideRock","flowerField","tallGrass","bedLuxury","chairWood","chairClassic","stoolRound","benchWood","bookshelf","wardrobe","fireplace","lantern","candleStand","barrel","crate","sack","displayShelf","brokenPillar","crackedWall","ironGate","gravestone","sarcophagus","stairDown","ancientAltar","rubble"]);
+// Faceted ring loft: rounded silhouettes built from light-weight triangle meshes.
+function roundStack(m,x,y,z,levels,sides,baseColor,capTop=true){
+ const rings=levels.map(([h,rx,rz])=>Array.from({length:sides},(_,i)=>{const a=2*Math.PI*i/sides;return [x+Math.cos(a)*rx,y+h,z+Math.sin(a)*rz]}));
+ for(let k=0;k<rings.length-1;k++)for(let i=0;i<sides;i++){
+  const j=(i+1)%sides,shade=.83+.045*(i%4)+.027*(k%2),color=baseColor.map(v=>Math.min(1,v*shade));
+  quad(m,rings[k][i],rings[k][j],rings[k+1][j],rings[k+1][i],color);
+ }
+ if(capTop){const top=rings[rings.length-1],cy=y+levels[levels.length-1][0];for(let i=0;i<sides;i++)tri(m,[x,cy,z],top[i],top[(i+1)%sides],baseColor.map(v=>Math.min(1,v*1.07)));}
+}
+function roundBand(m,x,y,z,radius,thick,sides,color){
+ const lo=[],hi=[];for(let i=0;i<sides;i++){const a=2*Math.PI*i/sides;lo.push([x+radius*Math.cos(a),y,z+radius*Math.sin(a)]);hi.push([x+radius*Math.cos(a),y+thick,z+radius*Math.sin(a)]);}
+ for(let i=0;i<sides;i++){const j=(i+1)%sides;quad(m,lo[i],lo[j],hi[j],hi[i],color);}
+}
 function expansionGeometry(m,id,x,y,z){
  const wood=[.47,.30,.17],dark=[.29,.20,.12],stone=[.55,.58,.55],light=[.76,.73,.63],iron=[.33,.39,.42],green=[.30,.50,.28],brick=[.54,.29,.24];
  const B=(dx,dy,dz,w,h,d,col)=>cube(m,x+dx,y+dy,z+dz,w,h,d,col);
@@ -565,17 +578,29 @@ function expansionGeometry(m,id,x,y,z){
   B(0,0,0,.35,.08,.34,iron);B(0,.08,0,.07,.73,.07,iron);
   B(0,.78,0,.21,.06,.21,iron);B(0,.84,0,.10,.29,.10,light);
   D(0,1.20,0,.11,[.97,.72,.26]);break;
- case 'barrel':
-  B(0,.03,0,.65,.76,.65,wood);
-  for(let yy of [.15,.45,.69])B(0,yy,0,.70,.06,.70,iron);
-  B(0,.80,0,.58,.06,.58,[.59,.40,.24]);break;
+ case 'barrel':{
+  // Twelve-sided stave body with a generous middle bulge, flat round lid and curved iron hoops.
+  const n=12;
+  roundStack(m,x,y,z,[[.025,.285,.285],[.12,.34,.34],[.33,.405,.405],[.52,.405,.405],[.72,.335,.335],[.80,.29,.29]],n,wood);
+  for(let yy of [.115,.39,.70])roundBand(m,x,y+yy,z,yy===.39?.417:.35,.055,n,iron);
+  roundStack(m,x,y,z,[[.807,.292,.292],[.835,.292,.292]],n,[.60,.42,.25]);
+  roundBand(m,x,y+.807,z,.305,.033,n,dark);
+  for(let i=0;i<n;i++){const a=(i+.5)*Math.PI*2/n;naturalBranch(m,x+Math.cos(a)*.33,y+.13,z+Math.sin(a)*.33,x+Math.cos(a)*.305,y+.70,z+Math.sin(a)*.305,.009,.009,dark);}
+  break;}
  case 'crate':
   B(0,.04,0,.76,.73,.77,wood);
   for(let xx of [-.35,.35])B(xx,.10,.40,.09,.65,.04,dark);
   for(let yy of [.10,.70])B(0,yy,.41,.79,.07,.05,dark);break;
- case 'sack':
-  D(0,.31,0,.38,[.64,.55,.39]);B(0,.58,0,.22,.17,.23,[.73,.65,.48]);
-  B(0,.61,.14,.27,.05,.07,dark);break;
+ case 'sack':{
+  // Soft gathered fabric: wide swollen base, pinched neck and tied mouth.
+  const burlap=[.66,.57,.40],fold=[.76,.67,.48],twine=[.42,.30,.17],n=12;
+  roundStack(m,x,y,z,[[.01,.23,.25],[.09,.345,.35],[.25,.415,.39],[.43,.38,.355],[.56,.28,.27],[.65,.17,.17],[.70,.14,.14]],n,burlap);
+  roundBand(m,x,y+.615,z,.185,.055,n,twine);
+  roundStack(m,x,y,z,[[.71,.145,.15],[.78,.20,.195],[.825,.15,.14]],n,fold);
+  naturalBranch(m,x+.18,y+.66,z,x+.32,y+.58,z+.07,.025,.015,twine);
+  naturalBranch(m,x+.18,y+.66,z,x+.29,y+.61,z-.12,.025,.014,twine);
+  for(let i=0;i<6;i++){const a=i*Math.PI/3;naturalBranch(m,x+Math.cos(a)*.23,y+.12,z+Math.sin(a)*.23,x+Math.cos(a)*.17,y+.60,z+Math.sin(a)*.17,.010,.008,fold);}
+  break;}
  case 'displayShelf':
   for(let s of [-1,1])B(s*.44,0,0,.09,1.36,.47,dark);
   for(let yy of [.12,.58,1.08])B(0,yy,0,.95,.09,.55,wood);
