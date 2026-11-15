@@ -1,0 +1,43 @@
+name: Build Forest Ruins Game APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'forest-game-prototype.html'
+      - '.github/workflows/build-game-apk.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Install Android SDK
+        run: |
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+          yes | sdkmanager --licenses || true
+          sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+      - name: Create independent game app from shared WebView host
+        run: |
+          cp -a app gameapp
+          sed -i "s/jp.tsukacchi.moonruins/jp.tsukacchi.forestgame/g" gameapp/build.gradle
+          sed -i "s/versionCode 7/versionCode 1/;s/versionName '4.1'/versionName '0.1'/" gameapp/build.gradle
+          sed -i 's/3Dワールド工房/森の遺跡 ゲーム/g;s/android:screenOrientation="portrait"/android:screenOrientation="landscape"/' gameapp/src/main/AndroidManifest.xml
+          sed -i 's@/main/world-editor.html@/main/forest-game-prototype.html@g' gameapp/src/main/java/jp/tsukacchi/htmlplayer/MainActivity.java
+          mkdir -p gameapp/src/main/assets
+          cp forest-game-prototype.html gameapp/src/main/assets/starter.html
+          printf "\ninclude ':gameapp'\n" >> settings.gradle
+      - name: Build separately installable game APK
+        run: gradle :gameapp:assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forest-game-v0.1-apk
+          path: gameapp/build/outputs/apk/debug/gameapp-debug.apk
+          retention-days: 30
