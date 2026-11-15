@@ -5968,8 +5968,19 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
   const {x,z}=portal.destination;
   if(!gameWalkableTile(x,z,portal.to))return false;
   const oldLevel=gameLevel;
-  gameLevel=portal.to;gameX=x+.5;gameZ=z+.5;
-  gameStairArrivalLock=gameLevel+':'+gameTileKey(x,z);
+  gameLevel=portal.to;
+  // Prefer a normal landing tile next to the staircase, leaving the up/down
+  // tiles visibly accessible and avoiding the need to step off and back on.
+  let arrival={x,z};
+  for(const [dx,dz] of [[0,1],[-1,0],[1,0],[0,-1],[1,1],[-1,1]]){
+   const nx=x+dx,nz=z+dz,nkey=gameLevel+':'+gameTileKey(nx,nz);
+   if(!gameWalkableTile(nx,nz,gameLevel)||gameRoofAt(nx,nz)!==gameRoofAt(x,z))continue;
+   if(gameUpPortals.has(nkey)||gameDownPortals.has(nkey))continue;
+   if(Math.abs(dx)+Math.abs(dz)>1)continue;
+   arrival={x:nx,z:nz};break;
+  }
+  gameX=arrival.x+.5;gameZ=arrival.z+.5;
+  gameStairArrivalLock=gameLevel+':'+gameTileKey(arrival.x,arrival.z);
   gameNextStep=performance.now()+210;
   gameUpdateRoof();gameSyncCamera(true);
   if(gameAvatar)gl.deleteBuffer(gameAvatar.buf);
