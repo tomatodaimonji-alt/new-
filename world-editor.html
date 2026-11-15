@@ -3534,6 +3534,7 @@ function auditWorld(){
    if(!structures.has(k))structures.set(k,[]);
    structures.get(k).push(p);
    if(p.type==='terrainStairs')stairways.push(p);
+   if(p.y===0&&BRIDGE_IDS.has(p.type))road.add(p.x+','+p.z);
   }
  }
  const at=(x,z,y)=>structures.get(key(x,z,y))||[];
@@ -3723,9 +3724,24 @@ function makeCityNature64Demo(){
   // A front walk links detached homes to streets, without overwriting houses.
   if(!h.oldTown){
    const px=door;
-   for(let z=front+1;z<Math.min(63,front+4);z++){
-    if(water.has(P(px,z))||occupied.has(P(px,z)))break;
-    floor(px,z,'roadDirtFull');
+   const start=[px,front+1],queue=[start],seen=new Set([P(...start)]),prev=new Map();
+   let found=null;
+   for(let qi=0;qi<queue.length&&qi<700;qi++){
+    const [x,z]=queue[qi],k=P(x,z);
+    if(roads.has(k)){found=k;break;}
+    for(const [dx,dz] of [[0,1],[1,0],[-1,0],[0,-1]]){
+     const xx=x+dx,zz=z+dz,nk=P(xx,zz);
+     if(!valid(xx,zz)||water.has(nk)||occupied.has(nk)||seen.has(nk))continue;
+     if(Math.abs(xx-px)+Math.abs(zz-front)>18)continue;
+     seen.add(nk);prev.set(nk,k);queue.push([xx,zz]);
+    }
+   }
+   if(found){
+    let k=found;
+    while(prev.has(k)){
+     k=prev.get(k);const [xx,zz]=k.split(',').map(Number);
+     floor(xx,zz,'roadDirtFull');roads.add(k);
+    }
    }
   }
   if(h.oldTown){
