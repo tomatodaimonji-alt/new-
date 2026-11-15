@@ -351,6 +351,13 @@ function terrainSide(m,x,z,h,neighbor,face){
   // Neighboring faces share exactly the same corner vertices.
   quad(m,p(0,bottom),p(1,bottom),p(1,top),p(0,top),color);
  }
+ // Staggered earthy seams soften tall cliffs, offset to avoid Z-fighting.
+ if(high-low>.65){
+  const v=low+Math.min((high-low)*.38,.46),u=.12+tone*.31,u2=Math.min(.91,u+.23);
+  const off=face===0?[0,0,-.003]:face===1?[.003,0,0]:face===2?[0,0,.003]:[-.003,0,0];
+  const q=(u,h)=>p(u,h).map((n,i)=>n+off[i]);
+  quad(m,q(u,v),q(u2,v+.025),q(u2-.045,v+.12),q(u+.018,v+.09),[.48+tone*.055,.44+tone*.045,.37+tone*.035]);
+ }
  // Occasional subtle stone patches stay flush with the rock, never protrude.
  if(high-low>1.2&&tone>.67){
   const c=[.51,.51,.47],yb=low+.24,yt=Math.min(high-.72,yb+.22);
@@ -2356,6 +2363,16 @@ function roadTile(m,x,z,id,mask,area){
  const full=id.endsWith('Full'),base=baseRoad(id),idx=ROAD_BASES.indexOf(base);
  const [grout,color]=ROAD_COLORS[idx],grass=(base==='roadMoss'||base==='roadAncient')?[.35,.48,.34]:[.43,.57,.39];
  roadRect(m,x,z,0,0,1,1,0,grass);
+ // Small irregular grass and earth flecks break up the straight verge.
+ if(!full&&['roadDirt','roadGravel','roadMoss','roadMud','roadBroken'].includes(base)){
+  for(let i=0;i<4;i++){
+   const noise=surfaceNoise(x*13+i*7,z*19-i*11);
+   if(noise<.37)continue;
+   const a=.07+(i%2)*.79,b=.07+Math.floor(i/2)*.79;
+   roadRect(m,x,z,a,b,a+.075+noise*.07,b+.035,.021,
+     noise>.7?[.46,.43,.31]:[.37,.51,.32]);
+  }
+ }
  // Disjoint subcells prevent Z-fighting at corners and intersections.
  const cuts=full?[0,1]:[0,.34,.66,1],cnt=cuts.length-1;
  const on=(i,j)=>full||(i===1&&j===1)||(i===1&&j===0&&!!(mask&1))||
