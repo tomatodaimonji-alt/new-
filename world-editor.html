@@ -3512,6 +3512,86 @@ function displayJSON(){$('jsonText').value=JSON.stringify(data(),null,2)}
 
 
 
+
+function auditWorld(){
+ const problems=[],warnings=[],key=(x,z,y)=>x+','+z+','+y;
+ const floors=new Map(),structures=new Map(),stairways=[],road=new Set();
+ const isRoof=t=>RESIDENTIAL_ROOFS.has(t)||AUTO_ROOFS.has(t);
+ const isWallPart=t=>/^(?:oldTown(?:Cream|Ochre|Rose|Mint|Blue|Sand)(?:Wall|Window|Door|Shop)|(?:plasterwall|woodwall|stonewall|brickwall)(?:Plain|Window|Door))$/.test(t);
+ for(const p of world){
+  if(!Number.isInteger(p.x)||!Number.isInteger(p.z)||!Number.isInteger(p.y)||
+     p.x<0||p.z<0||p.x>=MAP_W||p.z>=MAP_H||p.y<0||p.y>MAX_LEVEL){
+   problems.push('マップ外の配置 '+JSON.stringify([p.x,p.z,p.y]));continue;
+  }
+  const k=key(p.x,p.z,p.y);
+  if(isFloor(p.type)){
+   floors.set(k,p);
+   if(p.y===0&&ROAD_IDS.has(p.type))road.add(p.x+','+p.z);
+  }else{
+   if(!structures.has(k))structures.set(k,[]);
+   structures.get(k).push(p);
+   if(p.type==='terrainStairs')stairways.push(p);
+  }
+ }
+ const at=(x,z,y)=>structures.get(key(x,z,y))||[];
+ const townFloor=p=>['woodfloor','woodfloorLight','woodfloorDark','plasterfloor','brickfloor'].includes(p?.type);
+ let checkedWalls=0,checkedRoofs=0;
+ const dirs=[[0,-1],[1,0],[0,1],[-1,0]];
+ for(const p of floors.values()){
+  if(!townFloor(p))continue;
+  const layer=at(p.x,p.z,p.y);
+  // Only test occupied building floors; the outer shell must be a wall
+  // on each exposed face. Same-tile shop signs remain valid decoration.
+  const external=dirs.some(([dx,dz])=>!townFloor(floors.get(key(p.x+dx,p.z+dz,p.y))));
+  if(external){
+   checkedWalls++;
+   if(!layer.some(o=>isWallPart(o.type)))problems.push('外壁の欠け '+key(p.x,p.z,p.y));
+  }
+  if(!townFloor(floors.get(key(p.x,p.z,p.y+1)))){
+   checkedRoofs++;
+   if(!at(p.x,p.z,p.y+1).some(o=>isRoof(o.type)))
+    problems.push('屋根の欠け '+key(p.x,p.z,p.y+1));
+  }
+ }
+ const stairsOK=[];
+ for(const o of stairways){
+  const [dx,dz]=STAIR_DIRECTIONS[o.rot||0]||[0,-1];
+  const target=terrainLevel(o.x+dx,o.z+dz),base=terrainLevel(o.x,o.z);
+  const valid=target===base+1;
+  stairsOK.push(valid);
+  if(!valid)problems.push('段差に接続しない階段 '+key(o.x,o.z,o.y));
+ }
+ // Road network components: informational only, since isolated private lanes
+ // can be intentional. Walkable lanes must connect along cardinal tile edges.
+ let components=0;const unseen=new Set(road);
+ while(unseen.size){
+  components++;
+  const first=unseen.values().next().value,queue=[first];
+  unseen.delete(first);
+  for(let n=0;n<queue.length;n++){
+   const [x,z]=queue[n].split(',').map(Number);
+   for(const [dx,dz] of dirs){const next=(x+dx)+','+(z+dz);
+    if(unseen.delete(next))queue.push(next);
+   }
+  }
+ }
+ if(components>1)warnings.push('道路が'+components+'つの領域に分かれています（橋・私道は別扱い）');
+ return {problems,warnings,checkedWalls,checkedRoofs,checkedStairs:stairsOK.length,
+  objects:world.length,roadComponents:components};
+}
+function showWorldAudit(){
+ const report=auditWorld(),num=report.problems.length;
+ const lines=[
+  '配置チェック結果',
+  '外壁 '+report.checkedWalls+'面 / 屋根 '+report.checkedRoofs+'マス / 階段 '+report.checkedStairs+'か所を確認',
+  num?'問題 '+num+'件':'重大な配置エラーは検出されませんでした',
+  ...report.problems.slice(0,12),
+  ...report.warnings
+ ];
+ if(num>12)lines.push('ほか '+(num-12)+'件');
+ alert(lines.join('\n'));toast('配置チェック：'+num+'件の問題');
+}
+
 function makeOldTownV2Demo(){makeOldTownRiverDemo(true)}
 function makeOldTownRiverDemo(upgraded=false){
  if(world.length&&!confirm('現在の配置を川沿い旧市街に置き換えますか？先にJSON保存してください。'))return;
@@ -4944,6 +5024,7 @@ $('residentialRoofDemo').addEventListener('click',makeResidentialRoofDemo);
 $('livedInTownDemo').addEventListener('click',makeLivedInTownDemo);
 $('oldTownRiverDemo').addEventListener('click',()=>makeOldTownRiverDemo(false));
 $('oldTownV2Demo').addEventListener('click',makeOldTownV2Demo);
+$('worldAudit').addEventListener('click',showWorldAudit);
 $('house3Demo').addEventListener('click',()=>makeHighBuilding('house'));
 $('tower7Demo').addEventListener('click',()=>makeHighBuilding('tower'));
 $('clear').addEventListener('click',()=>{if(!confirm('配置したすべての部材を消去しますか？'))return;snapshot();world=[];commit();toast('マップを空にしました')});$('demo').addEventListener('click',makeDemo);
