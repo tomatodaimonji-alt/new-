@@ -3257,6 +3257,25 @@ function makeScene(){
   cube(target,x,base+.013,z,.50,.008,.62,[.70,.60,.42]);
   cube(target,x,base+.022,z,.43,.008,.55,tones[rug.palette]);
  }
+ // Wall-mounted trim uses a shallow profile and never blocks stairs or passage.
+ for(const accent of gameInteriorWallDetails){
+  if(hideUpper&&accent.y>level)continue;
+  const dst=pick(accent),x=accent.x+.5,z=accent.z+.5,yy=accent.y*1.4+terrainY(accent.x,accent.z);
+  const wood=[.45,.29,.19],brass=[.78,.59,.31],paper=[.75,.65,.47];
+  cube(dst,x-.39,yy+.69,z,.09,.07,.55,wood);
+  cube(dst,x-.39,yy+.72,z-.20,.08,.27,.045,wood);
+  cube(dst,x-.39,yy+.72,z+.20,.08,.27,.045,wood);
+  if(accent.variant===0){
+   cube(dst,x-.38,yy+.77,z-.12,.055,.18,.08,[.36,.40,.29]);
+   cube(dst,x-.38,yy+.77,z+.08,.055,.15,.10,[.54,.39,.28]);
+  }else if(accent.variant===1){
+   cube(dst,x-.38,yy+.78,z,.11,.08,.14,brass);
+   cube(dst,x-.38,yy+.87,z,.05,.11,.075,[.92,.69,.34]);
+  }else{
+   cube(dst,x-.38,yy+.80,z,.07,.16,.17,paper);
+   cube(dst,x-.38,yy+.82,z+.13,.07,.11,.025,[.36,.27,.23]);
+  }
+ }
  // Virtual down stair landings belong to the same prebuilt building story.
  for(const stair of gameLandingMarkers){
   if(gameSolidByLayer.get(stair.y)?.has(gameTileKey(stair.x,stair.z)))continue;
@@ -5559,12 +5578,12 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
  const GAME_PROGRESS_KEY='forest-ruins-game-progress-v1';
  const gameRoofTiles=new Map(),gameRoofGroups=new Map(),gameRoofsByCell=new Map(),gameBridge=new Set(),gameHouseCells=new Map(),gameIndoorByCell=new Map(),gameLandingMarkers=[];
  let gameRoofHidden=null,gameMove=null,gameNextStep=0,gameLastDir=null;
- const gameOccludedGroups=new Set(),gameHouseBoxes=new Map(),gameInteriorProps=[],gameInteriorRugs=[];
+ const gameOccludedGroups=new Set(),gameHouseBoxes=new Map(),gameInteriorProps=[],gameInteriorRugs=[],gameInteriorWallDetails=[];
  const gameDirSteps={n:[0,-1,0],e:[1,0,1],s:[0,1,2],w:[-1,0,3]};
  const gameTileKey=(x,z)=>x+','+z;
  const gameRoofKey=(x,z,y)=>x+','+z+','+y;
  function gameRebuildBlock(){
-  gameBlock.clear();gameDoors.clear();gameFloor.clear();gameRoofTiles.clear();gameRoofGroups.clear();gameRoofsByCell.clear();gameBridge.clear();gameHouseCells.clear();gameIndoorByCell.clear();gameLandingMarkers.length=0;gameInteriorProps.length=0;gameInteriorRugs.length=0;gameHouseBoxes.clear();gameOccludedGroups.clear();gameSolidByLayer.clear();gameDoorByLayer.clear();gameFloorsByLayer.clear();gameStairsByLayer.clear();
+  gameBlock.clear();gameDoors.clear();gameFloor.clear();gameRoofTiles.clear();gameRoofGroups.clear();gameRoofsByCell.clear();gameBridge.clear();gameHouseCells.clear();gameIndoorByCell.clear();gameLandingMarkers.length=0;gameInteriorProps.length=0;gameInteriorRugs.length=0;gameInteriorWallDetails.length=0;gameInteriorWallDetails.length=0;gameHouseBoxes.clear();gameOccludedGroups.clear();gameSolidByLayer.clear();gameDoorByLayer.clear();gameFloorsByLayer.clear();gameStairsByLayer.clear();
   const groupedRoofs=new Map();
   for(const o of world){
    if(o.y===0&&/^bridge/.test(o.type))gameBridge.add(gameTileKey(o.x,o.z));
@@ -5711,6 +5730,14 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
     // A rug supplies lived-in detail even when a narrow house has no spare tiles.
     const rx=Math.max(minX+1,Math.min(maxX-1,centerX)),rz=Math.max(minZ+1,Math.min(maxZ-1,centerZ+1));
     if(checked(rx,rz,h,id))gameInteriorRugs.push({x:rx,z:rz,y:h,palette:(seed+h)%4});
+    // Wall shelves and tiny lanterns decorate narrow row houses without
+    // occupying a walkable tile or altering the passage collision map.
+    if(w>=3&&d>=4){
+     const ax=Math.min(maxX-1,minX+1),az=Math.min(maxZ-1,minZ+2);
+     if(checked(ax,az,h,id)){
+      gameInteriorWallDetails.push({x:ax,z:az,y:h,variant:(seed+h)%3,side:0});
+     }
+    }
     const targets=[];
     for(const k of cells){
      const [x,z]=k.split(',').map(Number);
