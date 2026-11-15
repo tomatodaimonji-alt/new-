@@ -302,6 +302,7 @@ palette.push({id:'chairClassic',name:'椅子',icon:'▣',cat:'decor'},{id:'stool
 palette.push(...[["fenceWood","木柵・直線"],["fenceWoodCorner","木柵・角"],["fenceWoodEnd","木柵・端"],["fenceWoodGate","木の門扉"],["fenceStone","石柵・直線"],["fenceStoneCorner","石柵・角"],["fenceStoneEnd","石柵・端"],["fenceStoneGate","石の門扉"],["fenceIron","鉄柵・直線"],["fenceIronCorner","鉄柵・角"],["fenceIronEnd","鉄柵・端"],["fenceIronGate","鉄の門扉"],["frameWoodPost","木製の柱"],["frameWoodBeam","木製の梁"],["frameWoodBrace","斜め補強材"]].map(([id,name])=>({id,name,cat:'decor',icon:'▥'})));
 palette.push(...[["wellStone","石造りの井戸"],["wellWood","木造りの井戸"],["marketStallCloth","布屋根の露店"],["marketStallWood","木屋根の屋台"],["handcartEmpty","木製の荷車"],["handcartLoaded","荷積みの荷車"]].map(([id,name])=>({id,name,cat:'decor',icon:'▣'})));
 palette.push(...[["roundTableWood","木の丸テーブル"],["roundTableStone","石の丸テーブル"],["roundTableSet","食器付き丸テーブル"],["plateWood","木皿"],["plateCeramic","陶器皿"],["bowlClay","土焼きの器"],["cupWood","木のコップ"],["mugCeramic","陶器のマグ"],["jugClay","水差し"],["basketProduce","野菜かご"],["breadBoard","パンとまな板"],["smallFlowerVase","小さな花瓶"]].map(([id,name])=>({id,name,cat:'decor',icon:'◉'})));
+palette.push(...[["slopeGrass","草地の斜面"],["slopeStone","岩の斜面"],["terrainStep","土の段差"],["cliffEdge","崖の端"],["cliffFace","崖の壁面"],["streamBank","小川の岸"],["streamBend","曲がった岸"],["streamShallow","浅瀬"],["streamFord","渡りやすい浅瀬"],["bridgeWood","木橋・中央"],["bridgeWoodEnd","木橋・端"],["bridgeStone","石橋・中央"],["bridgeStoneEnd","石橋・端"]].map(([id,name])=>({id,name,cat:'decor',icon:'▰'})));
 const catalog=new Map(palette.map(p=>[p.id,p]));let selected='wall',mode='place',rotation=0,level=0,hideUpper=false,worldMaxLevel=0,world=[],models=[],prefabs=[],undoStack=[],redoStack=[],hover=null,dragPainting=false,yaw=Math.PI/4,zoom=1,panX=0,panZ=0,dirty=true,sceneMesh=null,cursorMesh=null,cursorDirty=true,modelParts=[],activeModelId=null;
 const byId=id=>catalog.get(id)||models.find(m=>m.id===id)||prefabs.find(p=>p.id===id);
 const cellKey=(x,z,y=0)=>x+','+z+','+y;
@@ -715,6 +716,93 @@ function towerPartGeometry(m,id,x,y,z){
 // Priority 3: circular tables, tableware, and small lived-in objects.
 // Individual tableware is one-tile floor decoration; the prepared table keeps
 // its dishes above the tabletop without requiring overlapping tile placements.
+// Priority 4 tile-sized modular terrain. The editor uses a fixed base plane:
+// ramps/cliffs are visual mesh pieces (not a change to world elevation).
+const TERRAIN_PART_IDS=new Set(['slopeGrass','slopeStone','terrainStep','cliffEdge','cliffFace','streamBank','streamBend','streamShallow','streamFord','bridgeWood','bridgeWoodEnd','bridgeStone','bridgeStoneEnd']);
+function terrainPartGeometry(m,id,x,y,z){
+ const grass=[.36,.50,.29],grassHi=[.49,.61,.35],soil=[.43,.34,.24],soilDark=[.34,.26,.19],rock=[.54,.56,.51],rockHi=[.68,.69,.61],wood=[.49,.33,.19],woodHi=[.64,.45,.25],dark=[.29,.23,.18],iron=[.30,.36,.38],water=[.18,.47,.58],waterHi=[.39,.67,.71],sand=[.68,.59,.41];
+ const B=(dx,dy,dz,w,h,d,c)=>cube(m,x+dx,y+dy,z+dz,w,h,d,c);
+ const face=(a,b,c,d,color)=>quad(m,...[a,b,c,d].map(p=>[x+p[0],y+p[1],z+p[2]]),color);
+ const line=(a,b,w,c)=>naturalBranch(m,x+a[0],y+a[1],z+a[2],x+b[0],y+b[1],z+b[2],w,w,c);
+ if(id==='slopeGrass'||id==='slopeStone'){
+  const upper=id==='slopeGrass'?grassHi:rockHi,side=id==='slopeGrass'?soil:rock;
+  // Front (-Z) low, back (+Z) high. Rotate 90 degrees to align adjacent edges.
+  face([-.49,.055,-.49],[.49,.055,-.49],[.49,.63,.49],[-.49,.63,.49],upper);
+  face([-.49,.02,-.49],[-.49,.02,.49],[-.49,.63,.49],[-.49,.055,-.49],side);
+  face([.49,.02,-.49],[.49,.055,-.49],[.49,.63,.49],[.49,.02,.49],side);
+  B(0,.02,.47,.98,.60,.055,side);
+  for(let i=0;i<4;i++){const px=-.37+i*.23;line([px,.12,-.30],[px+.06,.43,.24],.012,id==='slopeGrass'?grass:rock);}
+  return;
+ }
+ if(id==='terrainStep'||id==='cliffEdge'||id==='cliffFace'){
+  const cliff=id!=='terrainStep',height=id==='cliffFace'?1.28:id==='cliffEdge'?.80:.43;
+  B(0,.01,0,.98,height,.98,cliff?rock:soil);
+  B(0,height-.05,0,.99,.095,.99,cliff?rockHi:grassHi);
+  // Irregular strata on front vertical face.
+  for(let i=0;i<4;i++){
+   const h=.13+i*(height-.19)/4;
+   B(-.19+(i%2)*.12,h,-.497,.56,.026,.025,cliff?(i%2?soilDark:rockHi):soilDark);
+  }
+  if(id==='cliffEdge'){
+   for(const dx of [-.37,.13,.34])B(dx,height-.02,-.34,.13,.08,.12,grass);
+  }
+  return;
+ }
+ if(['streamBank','streamBend','streamShallow','streamFord'].includes(id)){
+  // Water plane is inset, never z-fights with the ground plane.
+  B(0,.025,0,.99,.036,.99,id==='streamFord'?sand:soil);
+  B(0,.061,0,.98,.016,.97,water);
+  if(id==='streamBank'){
+   B(0,.082,.34,.99,.22,.30,soil);
+   B(0,.294,.35,.99,.07,.29,grass);
+   for(const dx of [-.35,.10,.37])B(dx,.11,-.32,.13,.09,.17,rock);
+  }else if(id==='streamBend'){
+   B(-.34,.075,0,.30,.20,.98,soil);B(0,.075,.34,.98,.20,.30,soil);
+   B(-.34,.28,0,.30,.06,.98,grass);B(0,.28,.34,.98,.06,.30,grass);
+  }else{
+   // Shallow and ford tiles read as visible stones and sediment.
+   for(const [dx,dz,w] of [[-.29,-.21,.23],[.16,.17,.29],[.32,-.28,.18],[-.14,.30,.19]]){
+    B(dx,.08,dz,w,.09,w*.75,id==='streamFord'?sand:rockHi);
+   }
+   if(id==='streamFord'){B(0,.084,0,.72,.037,.79,sand);}
+  }
+  for(let i=0;i<3;i++)B(-.33+i*.32,.092,-.06+i*.13,.19,.008,.023,waterHi);
+  return;
+ }
+ if(id.startsWith('bridgeWood')){
+  const end=id.endsWith('End');
+  // Bridge direction is Z; repeated center pieces connect seamlessly.
+  for(const dx of [-.39,.39])B(dx,.10,0,.12,.24,.99,dark);
+  for(let j=0;j<5;j++){
+   const zz=-.40+j*.20;
+   B(0,.29,zz,.97,.11,.175,j%2?wood:woodHi);
+   B(0,.395,zz,.98,.018,.015,dark);
+  }
+  for(const dx of [-.43,.43]){
+   for(const zz of (end?[-.37]:[-.37,.37]))B(dx,.40,zz,.105,.56,.10,wood);
+   B(dx,.91,0,.105,.12,.99,woodHi);
+  }
+  if(end){B(0,.21,-.49,.99,.12,.075,woodHi);}
+  return;
+ }
+ if(id.startsWith('bridgeStone')){
+  const end=id.endsWith('End');
+  B(0,.04,0,.98,.30,.99,rock);
+  B(0,.35,0,.98,.09,.99,rockHi);
+  for(let j=0;j<4;j++){
+   const zz=-.38+j*.25;
+   B(0,.45,zz,.95,.015,.018,soilDark);
+   B(0,.12,zz,.95,.022,.015,rockHi);
+  }
+  for(const dx of [-.45,.45]){
+   B(dx,.38,0,.115,.42,.99,rock);
+   B(dx,.81,0,.16,.07,.99,rockHi);
+   if(end)B(dx,.78,-.39,.20,.14,.18,rockHi);
+  }
+  if(end)B(0,.36,-.47,.98,.12,.07,rock);
+ }
+}
+
 const TABLEWARE_IDS=new Set(['roundTableWood','roundTableStone','roundTableSet','plateWood','plateCeramic','bowlClay','cupWood','mugCeramic','jugClay','basketProduce','breadBoard','smallFlowerVase']);
 function tablewareGeometry(m,id,x,y,z){
  const wood=[.49,.33,.20],woodTop=[.65,.46,.29],dark=[.31,.22,.15],stone=[.58,.61,.57],
@@ -912,7 +1000,7 @@ function fenceGeometry(m,id,x,y,z){
  if(end)B(.42,.10,0,.095,.75,.14,post);
 }
 
-function decoBase(m,id,x,y,z,r=0){if(TABLEWARE_IDS.has(id)){tablewareGeometry(m,id,x,y,z);return;}if(VILLAGE_LIFE_IDS.has(id)){villageLifeGeometry(m,id,x,y,z);return;}if(FENCE_IDS.has(id)){fenceGeometry(m,id,x,y,z);return;}if(TOWER_PARTS.has(id)){towerPartGeometry(m,id,x,y,z);return;}if(EXPANSION_IDS.has(id)){expansionGeometry(m,id,x,y,z);return;}const wood=[.42,.30,.19],darkWood=[.29,.19,.12],leaf=[.29,.53,.31];
+function decoBase(m,id,x,y,z,r=0){if(TERRAIN_PART_IDS.has(id)){terrainPartGeometry(m,id,x,y,z);return;}if(TABLEWARE_IDS.has(id)){tablewareGeometry(m,id,x,y,z);return;}if(VILLAGE_LIFE_IDS.has(id)){villageLifeGeometry(m,id,x,y,z);return;}if(FENCE_IDS.has(id)){fenceGeometry(m,id,x,y,z);return;}if(TOWER_PARTS.has(id)){towerPartGeometry(m,id,x,y,z);return;}if(EXPANSION_IDS.has(id)){expansionGeometry(m,id,x,y,z);return;}const wood=[.42,.30,.19],darkWood=[.29,.19,.12],leaf=[.29,.53,.31];
 switch(id){
 case 'grass':break;
 case 'earth':break;
@@ -2348,6 +2436,12 @@ const OBJECT_GROUPS=[
   {id:'shrubs',label:'低木・草花',icon:'bushFlower',items:['bush','bushFlower','bushFern']},
   {id:'rocks',label:'岩石',icon:'rockGranite',items:['rock','rockGranite','rockSandstone','rockBasalt','rockMossy','rockCluster','rockCliff','watersideRock']},
   {id:'wild',label:'倒木・草花・菌類',icon:'giantMushroom',items:['fallenLog','exposedRoots','mushroomPatch','giantMushroom','vineWall','flowerField','tallGrass']}
+ ]},
+ {id:'terrainParts',label:'斜面・崖・橋',icon:'slopeGrass',subgroups:[
+  {id:'ramps',label:'斜面・段差',icon:'slopeGrass',items:['slopeGrass','slopeStone','terrainStep']},
+  {id:'cliffs',label:'崖',icon:'cliffEdge',items:['cliffEdge','cliffFace']},
+  {id:'streams',label:'小川・岸・浅瀬',icon:'streamBank',items:['streamBank','streamBend','streamShallow','streamFord']},
+  {id:'bridges',label:'木橋・石橋',icon:'bridgeWood',items:['bridgeWood','bridgeWoodEnd','bridgeStone','bridgeStoneEnd']}
  ]},
  {id:'multistory',label:'多階建て・塔',icon:'towerSpire',subgroups:[
   {id:'stairs',label:'階段',icon:'stairStraight',items:['stairStraight','stairSwitchback','stairSpiral']},
