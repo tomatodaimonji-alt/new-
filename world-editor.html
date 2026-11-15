@@ -303,6 +303,7 @@ palette.push(...[["fenceWood","木柵・直線"],["fenceWoodCorner","木柵・�
 palette.push(...[["wellStone","石造りの井戸"],["wellWood","木造りの井戸"],["marketStallCloth","布屋根の露店"],["marketStallWood","木屋根の屋台"],["handcartEmpty","木製の荷車"],["handcartLoaded","荷積みの荷車"]].map(([id,name])=>({id,name,cat:'decor',icon:'▣'})));
 palette.push(...[["roundTableWood","木の丸テーブル"],["roundTableStone","石の丸テーブル"],["roundTableSet","食器付き丸テーブル"],["plateWood","木皿"],["plateCeramic","陶器皿"],["bowlClay","土焼きの器"],["cupWood","木のコップ"],["mugCeramic","陶器のマグ"],["jugClay","水差し"],["basketProduce","野菜かご"],["breadBoard","パンとまな板"],["smallFlowerVase","小さな花瓶"]].map(([id,name])=>({id,name,cat:'decor',icon:'◉'})));
 palette.push(...[["slopeGrass","草地の斜面"],["slopeStone","岩の斜面"],["terrainStep","土の段差"],["cliffEdge","崖の端"],["cliffFace","崖の壁面"],["streamBank","小川の岸"],["streamBend","曲がった岸"],["streamShallow","浅瀬"],["streamFord","渡りやすい浅瀬"],["bridgeWood","木橋・中央"],["bridgeWoodEnd","木橋・端"],["bridgeStone","石橋・中央"],["bridgeStoneEnd","石橋・端"]].map(([id,name])=>({id,name,cat:'decor',icon:'▰'})));
+palette.push(...[["ruinWallLow","崩れた壁・低"],["ruinWallJagged","崩れた壁・半壊"],["ruinRoofHole","穴の開いた屋根"],["ruinRoofCollapse","崩れ落ちた屋根"],["ruinWoodPost","折れた木柱"],["ruinStonePost","折れた石柱"],["ruinFloorCrack","ひび割れた床"],["ruinFloorHole","穴のある床"],["ruinDoorHanging","外れかけた木扉"],["ruinDoorBroken","壊れた扉"],["ruinWindowEmpty","枠だけ残った窓"],["ruinWindowShattered","割れた窓"]].map(([id,name])=>({id,name,cat:'decor',icon:'▥'})));
 const catalog=new Map(palette.map(p=>[p.id,p]));let selected='wall',mode='place',rotation=0,level=0,hideUpper=false,worldMaxLevel=0,world=[],models=[],prefabs=[],undoStack=[],redoStack=[],hover=null,dragPainting=false,yaw=Math.PI/4,zoom=1,panX=0,panZ=0,dirty=true,sceneMesh=null,cursorMesh=null,cursorDirty=true,modelParts=[],activeModelId=null;
 const byId=id=>catalog.get(id)||models.find(m=>m.id===id)||prefabs.find(p=>p.id===id);
 const cellKey=(x,z,y=0)=>x+','+z+','+y;
@@ -718,6 +719,123 @@ function towerPartGeometry(m,id,x,y,z){
 // its dishes above the tabletop without requiring overlapping tile placements.
 // Priority 4 tile-sized modular terrain. The editor uses a fixed base plane:
 // ramps/cliffs are visual mesh pieces (not a change to world elevation).
+
+// Priority 5: modular ruined building material. Each piece fits in one tile,
+// respects standard 90-degree object rotation, and uses existing save-format IDs.
+const RUIN_PART_IDS=new Set(['ruinWallLow','ruinWallJagged','ruinRoofHole','ruinRoofCollapse','ruinWoodPost','ruinStonePost','ruinFloorCrack','ruinFloorHole','ruinDoorHanging','ruinDoorBroken','ruinWindowEmpty','ruinWindowShattered']);
+function ruinPartGeometry(m,id,x,y,z){
+ const stone=[.58,.60,.55],light=[.74,.74,.66],darkStone=[.35,.38,.36],
+ wood=[.49,.33,.20],woodHi=[.66,.46,.28],woodDark=[.30,.21,.14],
+ plaster=[.77,.76,.66],brick=[.58,.31,.26],iron=[.29,.34,.36],glass=[.45,.65,.67];
+ const B=(dx,dy,dz,w,h,d,c)=>cube(m,x+dx,y+dy,z+dz,w,h,d,c);
+ const D=(dx,dy,dz,r,c)=>diamond(m,x+dx,y+dy,z+dz,r,c);
+ const beam=(a,b,r,c)=>naturalBranch(m,x+a[0],y+a[1],z+a[2],x+b[0],y+b[1],z+b[2],r,r,c);
+ // Broken walls are thin wall strips, rather than solid tile cubes.
+ if(id==='ruinWallLow'||id==='ruinWallJagged'){
+  const half=id==='ruinWallLow';
+  const pieces=half?[[-.38,.56,.22],[ -.10,.70,.31],[.18,.49,.25],[.39,.37,.17]]:
+   [[-.38,1.25,.22],[-.12,.91,.30],[.12,.60,.22],[.33,1.10,.32]];
+  B(0,.02,0,.99,.13,.31,darkStone);
+  for(const [dx,h,w] of pieces){
+   B(dx,.09,0,w,h,.29,stone);
+   B(dx,.09+h,0,w*.92,.075,.30,light);
+   B(dx,.19+h*.48,.157,w*.75,.026,.015,darkStone);
+  }
+  for(const [dx,dz,r] of [[-.34,.27,.12],[.31,-.21,.18],[.12,.23,.09]])D(dx,.06,dz,r,stone);
+  return;
+ }
+ if(id==='ruinRoofHole'||id==='ruinRoofCollapse'){
+  const collapsed=id==='ruinRoofCollapse';
+  // Split roof into perimeter sections; hole is physically open, not drawn black.
+  const roof=collapsed?wood:[.53,.29,.24];
+  B(0,0,-.40,.98,.14,.20,roof);
+  B(0,0,.40,.98,.14,.20,roof);
+  B(-.40,0,0,.20,.14,.65,roof);
+  if(!collapsed)B(.40,0,0,.20,.14,.65,roof);
+  else{
+   B(.33,-.10,-.02,.17,.10,.62,woodDark);
+   B(.21,-.23,.26,.37,.09,.34,wood);
+  }
+  for(const dx of [-.34,.32]){
+   if(collapsed&&dx>0)continue;
+   beam([dx,-.02,-.47],[dx,.17,.47],.042,woodDark);
+  }
+  B(-.36,.145,-.36,.18,.05,.16,woodHi);
+  D(.12,-.10,.12,.12,brick);
+  return;
+ }
+ if(id==='ruinWoodPost'||id==='ruinStonePost'){
+  const timber=id==='ruinWoodPost',c=timber?wood:stone,h=timber?.86:1.00;
+  B(0,.0,0,timber?.27:.43,h,timber?.27:.42,c);
+  // Irregular splintered break, with fallen pieces at the base.
+  for(let i=0;i<3;i++){
+   const dx=(i-1)*.085;
+   if(timber)beam([dx,h-.14,0],[dx+(i-1)*.05,h+.10+(i%2)*.12,.02],.035,woodHi);
+   else D(dx,h-.04,.01,.15,light);
+  }
+  if(timber){beam([.14,.04,.26],[.46,.07,.30],.095,woodDark);B(-.26,.03,.24,.22,.09,.11,wood);}
+  else{D(-.33,.08,.27,.20,stone);D(.27,.04,-.30,.16,darkStone);}
+  return;
+ }
+ if(id==='ruinFloorCrack'||id==='ruinFloorHole'){
+  const hole=id==='ruinFloorHole';
+  const floor=hole?wood:stone;
+  // Visual cutaway: four separate rim planks/tiles preserve a dark center.
+  B(0,.012,0,.99,.015,.99,woodDark);
+  if(hole){
+   B(0,.03,-.40,.98,.10,.18,floor);
+   B(0,.03,.40,.98,.10,.18,floor);
+   B(-.40,.03,0,.18,.10,.64,floor);
+   B(.40,.03,0,.18,.10,.64,floor);
+   B(.10,.045,.15,.14,.10,.42,woodHi);
+   B(-.19,.045,-.22,.09,.11,.27,woodHi);
+  }else{
+   B(0,.03,0,.98,.11,.98,floor);
+   for(const [a,b] of [
+    [[-.41,.145,-.39],[-.14,.148,-.07]],[[-.14,.148,-.07],[.11,.151,-.13]],
+    [[.11,.151,-.13],[.34,.153,.25]],[[-.14,.149,-.07],[-.29,.152,.34]]
+   ])beam(a,b,.015,darkStone);
+   D(.28,.10,-.27,.095,light);
+  }
+  return;
+ }
+ if(id==='ruinDoorHanging'||id==='ruinDoorBroken'){
+  const hanging=id==='ruinDoorHanging';
+  B(-.43,0,0,.12,1.45,.19,woodDark);B(.43,0,0,.12,1.46,.19,woodDark);
+  B(0,1.39,0,.99,.15,.20,wood);
+  if(hanging){
+   // A skewed door made from stepped plank strips, one hinge still attached.
+   for(let i=0;i<4;i++)B(-.29+i*.19,.06+i*.05,.07+i*.06,.17,1.13-i*.10,.12,i%2?wood:woodHi);
+   B(-.39,1.20,.07,.08,.11,.09,iron);
+   B(.19,.64,.30,.07,.07,.07,iron);
+  }else{
+   B(-.23,0,.10,.39,.77,.14,wood);
+   B(.19,0,.20,.38,.48,.14,woodHi);
+   beam([-.33,.73,.13],[.16,.88,.28],.07,woodDark);
+   beam([.09,.08,.15],[.44,.16,.38],.07,woodDark);
+   B(0,.10,.43,.29,.08,.14,wood);
+  }
+  return;
+ }
+ if(id==='ruinWindowEmpty'||id==='ruinWindowShattered'){
+  const shattered=id==='ruinWindowShattered';
+  // No opaque wall in the center: open frame remains legible on existing walls.
+  for(const xx of [-.38,.38])B(xx,.36,0,.13,.93,.17,woodDark);
+  B(0,.34,0,.89,.12,.20,wood);
+  B(0,1.21,0,.89,.12,.20,woodHi);
+  if(shattered){
+   B(0,.43,0,.055,.77,.08,wood);
+   B(0,.78,0,.77,.065,.08,wood);
+   D(-.18,.96,.045,.15,glass);
+   D(.19,.50,.045,.12,glass);
+   for(const [dx,dy] of [[-.25,.42],[.31,1.03]])D(dx,dy,.16,.07,glass);
+  }else{
+   B(-.18,.36,.08,.075,.29,.10,woodHi);
+   beam([.37,.40,.12],[.19,.57,.22],.04,wood);
+  }
+ }
+}
+
 const TERRAIN_PART_IDS=new Set(['slopeGrass','slopeStone','terrainStep','cliffEdge','cliffFace','streamBank','streamBend','streamShallow','streamFord','bridgeWood','bridgeWoodEnd','bridgeStone','bridgeStoneEnd']);
 function terrainPartGeometry(m,id,x,y,z){
  const grass=[.36,.50,.29],grassHi=[.49,.61,.35],soil=[.43,.34,.24],soilDark=[.34,.26,.19],rock=[.54,.56,.51],rockHi=[.68,.69,.61],wood=[.49,.33,.19],woodHi=[.64,.45,.25],dark=[.29,.23,.18],iron=[.30,.36,.38],water=[.18,.47,.58],waterHi=[.39,.67,.71],sand=[.68,.59,.41];
@@ -1000,7 +1118,7 @@ function fenceGeometry(m,id,x,y,z){
  if(end)B(.42,.10,0,.095,.75,.14,post);
 }
 
-function decoBase(m,id,x,y,z,r=0){if(TERRAIN_PART_IDS.has(id)){terrainPartGeometry(m,id,x,y,z);return;}if(TABLEWARE_IDS.has(id)){tablewareGeometry(m,id,x,y,z);return;}if(VILLAGE_LIFE_IDS.has(id)){villageLifeGeometry(m,id,x,y,z);return;}if(FENCE_IDS.has(id)){fenceGeometry(m,id,x,y,z);return;}if(TOWER_PARTS.has(id)){towerPartGeometry(m,id,x,y,z);return;}if(EXPANSION_IDS.has(id)){expansionGeometry(m,id,x,y,z);return;}const wood=[.42,.30,.19],darkWood=[.29,.19,.12],leaf=[.29,.53,.31];
+function decoBase(m,id,x,y,z,r=0){if(RUIN_PART_IDS.has(id)){ruinPartGeometry(m,id,x,y,z);return;}if(TERRAIN_PART_IDS.has(id)){terrainPartGeometry(m,id,x,y,z);return;}if(TABLEWARE_IDS.has(id)){tablewareGeometry(m,id,x,y,z);return;}if(VILLAGE_LIFE_IDS.has(id)){villageLifeGeometry(m,id,x,y,z);return;}if(FENCE_IDS.has(id)){fenceGeometry(m,id,x,y,z);return;}if(TOWER_PARTS.has(id)){towerPartGeometry(m,id,x,y,z);return;}if(EXPANSION_IDS.has(id)){expansionGeometry(m,id,x,y,z);return;}const wood=[.42,.30,.19],darkWood=[.29,.19,.12],leaf=[.29,.53,.31];
 switch(id){
 case 'grass':break;
 case 'earth':break;
@@ -2470,6 +2588,14 @@ const OBJECT_GROUPS=[
   {id:'furnishing',label:'家具',icon:'bed',items:['table','bed','bedLuxury','chairWood','chairClassic','stoolRound','benchWood','bookshelf','wardrobe']},
   {id:'lightheat',label:'照明・暖房',icon:'fireplace',items:['fireplace','lantern','candleStand']},
   {id:'goods',label:'生活・商店',icon:'barrel',items:['barrel','crate','sack','displayShelf']}
+ ]},
+ {id:'ruinBuilding',label:'破損した建材',icon:'ruinWallJagged',subgroups:[
+  {id:'ruinWalls',label:'崩れた壁',icon:'ruinWallLow',items:['ruinWallLow','ruinWallJagged']},
+  {id:'ruinRoofs',label:'破損した屋根',icon:'ruinRoofHole',items:['ruinRoofHole','ruinRoofCollapse']},
+  {id:'ruinPosts',label:'折れた柱',icon:'ruinWoodPost',items:['ruinWoodPost','ruinStonePost']},
+  {id:'ruinFloors',label:'破損した床',icon:'ruinFloorCrack',items:['ruinFloorCrack','ruinFloorHole']},
+  {id:'ruinDoors',label:'壊れた扉',icon:'ruinDoorHanging',items:['ruinDoorHanging','ruinDoorBroken']},
+  {id:'ruinWindows',label:'壊れた窓',icon:'ruinWindowEmpty',items:['ruinWindowEmpty','ruinWindowShattered']}
  ]},
  {id:'ruins',label:'廃墟・ダンジョン',icon:'ancientAltar',items:['brokenPillar','crackedWall','ironGate','gravestone','sarcophagus','stairDown','ancientAltar','rubble']},
  {id:'kitchens',label:'キッチン',icon:'kitchenStove',items:['kitchenStove','kitchenCounter','kitchenSink']},
