@@ -301,6 +301,7 @@ palette.push(...[["stairStraight","直線階段"],["stairSwitchback","折り返�
 palette.push({id:'chairClassic',name:'椅子',icon:'▣',cat:'decor'},{id:'stoolRound',name:'丸椅子',icon:'◉',cat:'decor'});
 palette.push(...[["fenceWood","木柵・直線"],["fenceWoodCorner","木柵・角"],["fenceWoodEnd","木柵・端"],["fenceWoodGate","木の門扉"],["fenceStone","石柵・直線"],["fenceStoneCorner","石柵・角"],["fenceStoneEnd","石柵・端"],["fenceStoneGate","石の門扉"],["fenceIron","鉄柵・直線"],["fenceIronCorner","鉄柵・角"],["fenceIronEnd","鉄柵・端"],["fenceIronGate","鉄の門扉"],["frameWoodPost","木製の柱"],["frameWoodBeam","木製の梁"],["frameWoodBrace","斜め補強材"]].map(([id,name])=>({id,name,cat:'decor',icon:'▥'})));
 palette.push(...[["wellStone","石造りの井戸"],["wellWood","木造りの井戸"],["marketStallCloth","布屋根の露店"],["marketStallWood","木屋根の屋台"],["handcartEmpty","木製の荷車"],["handcartLoaded","荷積みの荷車"]].map(([id,name])=>({id,name,cat:'decor',icon:'▣'})));
+palette.push(...[["roundTableWood","木の丸テーブル"],["roundTableStone","石の丸テーブル"],["roundTableSet","食器付き丸テーブル"],["plateWood","木皿"],["plateCeramic","陶器皿"],["bowlClay","土焼きの器"],["cupWood","木のコップ"],["mugCeramic","陶器のマグ"],["jugClay","水差し"],["basketProduce","野菜かご"],["breadBoard","パンとまな板"],["smallFlowerVase","小さな花瓶"]].map(([id,name])=>({id,name,cat:'decor',icon:'◉'})));
 const catalog=new Map(palette.map(p=>[p.id,p]));let selected='wall',mode='place',rotation=0,level=0,hideUpper=false,worldMaxLevel=0,world=[],models=[],prefabs=[],undoStack=[],redoStack=[],hover=null,dragPainting=false,yaw=Math.PI/4,zoom=1,panX=0,panZ=0,dirty=true,sceneMesh=null,cursorMesh=null,cursorDirty=true,modelParts=[],activeModelId=null;
 const byId=id=>catalog.get(id)||models.find(m=>m.id===id)||prefabs.find(p=>p.id===id);
 const cellKey=(x,z,y=0)=>x+','+z+','+y;
@@ -711,6 +712,57 @@ function towerPartGeometry(m,id,x,y,z){
 
 
 // Village-life objects. Geometry is local to a single tile and is rotated by deco().
+// Priority 3: circular tables, tableware, and small lived-in objects.
+// Individual tableware is one-tile floor decoration; the prepared table keeps
+// its dishes above the tabletop without requiring overlapping tile placements.
+const TABLEWARE_IDS=new Set(['roundTableWood','roundTableStone','roundTableSet','plateWood','plateCeramic','bowlClay','cupWood','mugCeramic','jugClay','basketProduce','breadBoard','smallFlowerVase']);
+function tablewareGeometry(m,id,x,y,z){
+ const wood=[.49,.33,.20],woodTop=[.65,.46,.29],dark=[.31,.22,.15],stone=[.58,.61,.57],
+ pale=[.83,.78,.66],ceramic=[.82,.78,.64],clay=[.60,.36,.27],lip=[.40,.26,.19],
+ green=[.36,.52,.25],gold=[.83,.64,.28],red=[.70,.29,.21];
+ const B=(dx,dy,dz,w,h,d,c)=>cube(m,x+dx,y+dy,z+dz,w,h,d,c);
+ const R=(dx,dy,dz,r1,r2,h,c,n=12)=>roundStack(m,x+dx,y+dy,z+dz,[[0,r1,r1],[h,r2,r2]],n,c);
+ const plate=(dx,dy,dz,c)=>{roundStack(m,x+dx,y+dy,z+dz,[[0,.22,.22],[.035,.25,.25],[.075,.22,.22]],12,c);roundBand(m,x+dx,y+dy+.062,z+dz,.225,.02,12,lip)};
+ const bowl=(dx,dy,dz,c)=>{roundStack(m,x+dx,y+dy,z+dz,[[0,.12,.12],[.045,.19,.19],[.15,.23,.23]],12,c,false);roundBand(m,x+dx,y+dy+.145,z+dz,.225,.035,12,lip);R(dx,dy+.065,dz,.15,.19,.018,[.29,.24,.18]);};
+ const mug=(dx,dy,dz,c)=>{R(dx,dy,dz,.13,.15,.28,c);roundBand(m,x+dx,y+dy+.26,z+dz,.151,.032,12,pale);B(dx+.20,dy+.10,dz,.08,.13,.07,c);B(dx+.245,dy+.13,dz,.035,.11,.075,c)};
+ const jug=(dx,dy,dz)=>{roundStack(m,x+dx,y+dy,z+dz,[[0,.17,.17],[.06,.245,.245],[.27,.25,.25],[.43,.16,.16],[.58,.135,.135]],12,clay);roundBand(m,x+dx,y+dy+.56,z+dz,.145,.05,12,lip);B(dx+.29,dy+.27,dz,.10,.22,.10,clay);B(dx+.33,dy+.40,dz,.08,.09,.10,clay)};
+ const table=(c,top)=>{R(0,.08,0,.25,.29,.07,c);R(0,.13,0,.17,.16,.60,c);roundStack(m,x,y,z,[[.70,.44,.44],[.80,.46,.46]],16,top);roundBand(m,x,y+.71,z,.462,.075,16,c);};
+ if(id==='roundTableWood'||id==='roundTableStone'||id==='roundTableSet'){
+  const rocky=id==='roundTableStone';table(rocky?stone:dark,rocky?[.72,.72,.65]:woodTop);
+  if(id==='roundTableSet'){
+   plate(-.19,.803,-.12,ceramic);plate(.20,.803,.10,pale);
+   mug(-.13,.812,.23,clay);bowl(.13,.807,-.20,wood);
+   B(.01,.835,.01,.16,.06,.12,[.76,.54,.26]);
+  }
+  return;
+ }
+ if(id==='plateWood'){plate(0,.02,0,woodTop);return}
+ if(id==='plateCeramic'){plate(0,.02,0,ceramic);return}
+ if(id==='bowlClay'){bowl(0,.02,0,clay);return}
+ if(id==='cupWood'){R(0,.015,0,.135,.155,.25,wood);roundBand(m,x,y+.24,z,.159,.024,12,dark);return}
+ if(id==='mugCeramic'){mug(0,.015,0,ceramic);return}
+ if(id==='jugClay'){jug(0,.015,0);return}
+ if(id==='basketProduce'){
+  roundStack(m,x,y,z,[[.01,.27,.22],[.13,.34,.28],[.37,.35,.29]],12,wood,false);
+  roundBand(m,x,y+.36,z,.34,.065,12,dark);
+  for(const [dx,dz,col] of [[-.13,-.07,green],[.16,-.04,red],[0,.14,gold],[-.13,.16,red],[.1,-.16,green]])roundStack(m,x+dx,y+.30,z+dz,[[0,.11,.11],[.15,.095,.095],[.19,.04,.04]],8,col);
+  return;
+ }
+ if(id==='breadBoard'){
+  B(0,.02,0,.79,.08,.57,wood);B(.38,.05,0,.21,.06,.18,dark);
+  for(const [dx,dz,w] of [[-.20,-.07,.28],[.08,.10,.33]]){roundStack(m,x+dx,y+.11,z+dz,[[0,w*.70,.145],[.10,w*.75,.16],[.20,w*.50,.12]],10,[.76,.51,.27]);}
+  return;
+ }
+ if(id==='smallFlowerVase'){
+  roundStack(m,x,y,z,[[.01,.13,.13],[.08,.19,.19],[.23,.18,.18],[.38,.10,.10],[.50,.095,.095]],10,clay);
+  roundBand(m,x,y+.48,z,.11,.045,10,lip);
+  for(const [dx,dz,c] of [[-.12,0,red],[.10,.02,gold],[0,-.12,pale]]){
+   naturalBranch(m,x,y+.47,z,x+dx,y+.77,z+dz,.014,.007,green);
+   diamond(m,x+dx,y+.78,z+dz,.075,c);
+  }
+ }
+}
+
 const VILLAGE_LIFE_IDS=new Set(['wellStone','wellWood','marketStallCloth','marketStallWood','handcartEmpty','handcartLoaded']);
 function villageLifeGeometry(m,id,x,y,z){
  const wood=[.47,.30,.17],bright=[.65,.44,.26],dark=[.29,.20,.12],stone=[.58,.60,.57],stoneHi=[.72,.73,.67],iron=[.28,.34,.36],cloth=[.70,.35,.24],clothLite=[.83,.70,.44],rope=[.70,.61,.43];
@@ -860,7 +912,7 @@ function fenceGeometry(m,id,x,y,z){
  if(end)B(.42,.10,0,.095,.75,.14,post);
 }
 
-function decoBase(m,id,x,y,z,r=0){if(VILLAGE_LIFE_IDS.has(id)){villageLifeGeometry(m,id,x,y,z);return;}if(FENCE_IDS.has(id)){fenceGeometry(m,id,x,y,z);return;}if(TOWER_PARTS.has(id)){towerPartGeometry(m,id,x,y,z);return;}if(EXPANSION_IDS.has(id)){expansionGeometry(m,id,x,y,z);return;}const wood=[.42,.30,.19],darkWood=[.29,.19,.12],leaf=[.29,.53,.31];
+function decoBase(m,id,x,y,z,r=0){if(TABLEWARE_IDS.has(id)){tablewareGeometry(m,id,x,y,z);return;}if(VILLAGE_LIFE_IDS.has(id)){villageLifeGeometry(m,id,x,y,z);return;}if(FENCE_IDS.has(id)){fenceGeometry(m,id,x,y,z);return;}if(TOWER_PARTS.has(id)){towerPartGeometry(m,id,x,y,z);return;}if(EXPANSION_IDS.has(id)){expansionGeometry(m,id,x,y,z);return;}const wood=[.42,.30,.19],darkWood=[.29,.19,.12],leaf=[.29,.53,.31];
 switch(id){
 case 'grass':break;
 case 'earth':break;
@@ -2318,6 +2370,9 @@ const OBJECT_GROUPS=[
   {id:'architecture',label:'外装・建具',icon:'chimney',items:['chimney','archStone','timberWall','balcony','roofRuin']}
  ]},
  {id:'furniture',label:'家具・室内',icon:'bed',subgroups:[
+  {id:'roundTables',label:'丸テーブル',icon:'roundTableWood',items:['roundTableWood','roundTableStone','roundTableSet']},
+  {id:'tableware',label:'食器',icon:'plateCeramic',items:['plateWood','plateCeramic','bowlClay','cupWood','mugCeramic','jugClay']},
+  {id:'tabletopSmall',label:'食べ物・小物',icon:'basketProduce',items:['basketProduce','breadBoard','smallFlowerVase']},
   {id:'furnishing',label:'家具',icon:'bed',items:['table','bed','bedLuxury','chairWood','chairClassic','stoolRound','benchWood','bookshelf','wardrobe']},
   {id:'lightheat',label:'照明・暖房',icon:'fireplace',items:['fireplace','lantern','candleStand']},
   {id:'goods',label:'生活・商店',icon:'barrel',items:['barrel','crate','sack','displayShelf']}
