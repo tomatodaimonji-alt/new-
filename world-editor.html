@@ -300,6 +300,7 @@ palette.push(...palette.filter(p=>p.id.startsWith('road')).map(p=>({...p,id:p.id
 palette.push(...[["stairStraight","直線階段"],["stairSwitchback","折り返し階段"],["stairSpiral","螺旋階段"],["towerWall","塔の円弧石壁"],["towerWindow","塔の小窓"],["towerBattlement","塔の胸壁"],["towerSpire","尖塔屋根"],["towerPillar","塔の石柱"]].map(([id,name])=>({id,name,cat:'decor',icon:'▣'})));
 palette.push({id:'chairClassic',name:'椅子',icon:'▣',cat:'decor'},{id:'stoolRound',name:'丸椅子',icon:'◉',cat:'decor'});
 palette.push(...[["fenceWood","木柵・直線"],["fenceWoodCorner","木柵・角"],["fenceWoodEnd","木柵・端"],["fenceWoodGate","木の門扉"],["fenceStone","石柵・直線"],["fenceStoneCorner","石柵・角"],["fenceStoneEnd","石柵・端"],["fenceStoneGate","石の門扉"],["fenceIron","鉄柵・直線"],["fenceIronCorner","鉄柵・角"],["fenceIronEnd","鉄柵・端"],["fenceIronGate","鉄の門扉"],["frameWoodPost","木製の柱"],["frameWoodBeam","木製の梁"],["frameWoodBrace","斜め補強材"]].map(([id,name])=>({id,name,cat:'decor',icon:'▥'})));
+palette.push(...[["wellStone","石造りの井戸"],["wellWood","木造りの井戸"],["marketStallCloth","布屋根の露店"],["marketStallWood","木屋根の屋台"],["handcartEmpty","木製の荷車"],["handcartLoaded","荷積みの荷車"]].map(([id,name])=>({id,name,cat:'decor',icon:'▣'})));
 const catalog=new Map(palette.map(p=>[p.id,p]));let selected='wall',mode='place',rotation=0,level=0,hideUpper=false,worldMaxLevel=0,world=[],models=[],prefabs=[],undoStack=[],redoStack=[],hover=null,dragPainting=false,yaw=Math.PI/4,zoom=1,panX=0,panZ=0,dirty=true,sceneMesh=null,cursorMesh=null,cursorDirty=true,modelParts=[],activeModelId=null;
 const byId=id=>catalog.get(id)||models.find(m=>m.id===id)||prefabs.find(p=>p.id===id);
 const cellKey=(x,z,y=0)=>x+','+z+','+y;
@@ -683,6 +684,76 @@ function towerPartGeometry(m,id,x,y,z){
 }
 
 
+
+// Village-life objects. Geometry is local to a single tile and is rotated by deco().
+const VILLAGE_LIFE_IDS=new Set(['wellStone','wellWood','marketStallCloth','marketStallWood','handcartEmpty','handcartLoaded']);
+function villageLifeGeometry(m,id,x,y,z){
+ const wood=[.47,.30,.17],bright=[.65,.44,.26],dark=[.29,.20,.12],stone=[.58,.60,.57],stoneHi=[.72,.73,.67],iron=[.28,.34,.36],cloth=[.70,.35,.24],clothLite=[.83,.70,.44],rope=[.70,.61,.43];
+ const B=(dx,dy,dz,w,h,d,c)=>cube(m,x+dx,y+dy,z+dz,w,h,d,c);
+ const beam=(a,b,r,c)=>naturalBranch(m,x+a[0],y+a[1],z+a[2],x+b[0],y+b[1],z+b[2],r,r,c);
+ if(id==='wellStone'||id==='wellWood'){
+  const masonry=id==='wellStone';
+  // Open square shaft with distinct rim and dark water below the opening.
+  B(0,.08,0,.72,.11,.72,[.12,.21,.22]);
+  for(const side of [-1,1]){
+   B(side*.39,.07,0,.19,.73,.96,masonry?stone:wood);
+   B(0,.07,side*.39,.96,.73,.19,masonry?stone:wood);
+   B(side*.39,.76,0,.21,.13,1.01,masonry?stoneHi:bright);
+   B(0,.76,side*.39,1.01,.13,.21,masonry?stoneHi:bright);
+   B(side*.40,.79,0,.10,1.02,.11,wood);
+  }
+  B(0,1.72,0,.96,.12,.25,dark);
+  for(const sx of [-1,1])B(sx*.26,1.83,0,.50,.07,.76,masonry?[.51,.32,.23]:bright);
+  B(0,1.26,0,.075,.45,.075,rope);
+  B(0,.99,0,.24,.28,.23,wood);
+  B(0,1.03,.135,.32,.08,.07,iron);
+  return;
+ }
+ if(id==='marketStallCloth'||id==='marketStallWood'){
+  const clothRoof=id==='marketStallCloth';
+  for(const sx of [-1,1])for(const sz of [-1,1]){
+   B(sx*.43,0,sz*.39,.11,1.76,.12,wood);
+   B(sx*.43,.06,sz*.39,.19,.12,.20,dark);
+  }
+  B(0,.72,-.05,.93,.16,.76,wood);
+  B(0,.87,-.05,.88,.035,.71,bright);
+  B(0,.66,.36,.92,.075,.10,dark);
+  for(const sx of [-1,1])B(sx*.37,.79,-.02,.06,.12,.66,dark);
+  // Roof is separated above the counter; alternating bands for a textile awning.
+  B(0,1.69,0,1.07,.10,.94,clothRoof?cloth:wood);
+  for(let i=0;i<5;i++)B(-.42+i*.21,1.80,0,.17,.045,.97,clothRoof?(i%2?cloth:clothLite):(i%2?bright:wood));
+  B(0,1.60,.46,1.12,.20,.07,clothRoof?clothLite:dark);
+  for(const sx of [-1,0,1])B(sx*.25,.90,-.04,.16,.12,.18,sx===0?[.45,.54,.25]:[.73,.52,.28]);
+  return;
+ }
+ if(id==='handcartEmpty'||id==='handcartLoaded'){
+  // Axle and two polygonal wheel silhouettes support the shallow tray.
+  B(0,.21,0,.91,.13,.66,dark);
+  B(0,.40,0,.90,.14,.65,wood);
+  B(0,.53,-.28,.94,.19,.11,bright);
+  B(0,.53,.28,.94,.19,.11,bright);
+  B(-.40,.53,0,.11,.19,.64,wood);
+  B(.40,.53,0,.11,.19,.64,wood);
+  for(const sx of [-1,1]){
+   // Eight spokes/rim sections on either wheel.
+   for(let i=0;i<8;i++){
+    const a=i*Math.PI/4,b=(i+1)*Math.PI/4;
+    beam([sx*.51,.30+Math.sin(a)*.22,Math.cos(a)*.22],
+         [sx*.51,.30+Math.sin(b)*.22,Math.cos(b)*.22],.045,dark);
+    beam([sx*.51,.30,0],[sx*.51,.30+Math.sin(a)*.20,Math.cos(a)*.20],.027,bright);
+   }
+   B(sx*.525,.26,0,.065,.14,.14,iron);
+  }
+  for(const sx of [-1,1])B(sx*.30,.20,.66,.10,.13,.80,wood);
+  B(0,.18,.97,.66,.11,.12,bright);
+  if(id==='handcartLoaded'){
+   for(const p of [[-.19,.57,-.13],[.18,.57,-.10],[0,.69,.14]])
+    B(p[0],p[1],p[2],.34,.29,.28,[.67,.56,.36]);
+   B(.12,.86,.06,.25,.12,.22,[.48,.59,.29]);
+  }
+ }
+}
+
 const FENCE_IDS=new Set(["fenceWood","fenceWoodCorner","fenceWoodEnd","fenceWoodGate","fenceStone","fenceStoneCorner","fenceStoneEnd","fenceStoneGate","fenceIron","fenceIronCorner","fenceIronEnd","fenceIronGate","frameWoodPost","frameWoodBeam","frameWoodBrace"]);
 function fenceGeometry(m,id,x,y,z){
  const stone=[.57,.60,.57],pale=[.70,.72,.67],wood=[.48,.31,.18],woodLight=[.61,.42,.25],dark=[.29,.20,.14],iron=[.31,.38,.43],ironLight=[.54,.60,.63],bronze=[.76,.59,.31];
@@ -764,7 +835,7 @@ function fenceGeometry(m,id,x,y,z){
  if(end)B(.42,.10,0,.095,.75,.14,post);
 }
 
-function decoBase(m,id,x,y,z,r=0){if(FENCE_IDS.has(id)){fenceGeometry(m,id,x,y,z);return;}if(TOWER_PARTS.has(id)){towerPartGeometry(m,id,x,y,z);return;}if(EXPANSION_IDS.has(id)){expansionGeometry(m,id,x,y,z);return;}const wood=[.42,.30,.19],darkWood=[.29,.19,.12],leaf=[.29,.53,.31];
+function decoBase(m,id,x,y,z,r=0){if(VILLAGE_LIFE_IDS.has(id)){villageLifeGeometry(m,id,x,y,z);return;}if(FENCE_IDS.has(id)){fenceGeometry(m,id,x,y,z);return;}if(TOWER_PARTS.has(id)){towerPartGeometry(m,id,x,y,z);return;}if(EXPANSION_IDS.has(id)){expansionGeometry(m,id,x,y,z);return;}const wood=[.42,.30,.19],darkWood=[.29,.19,.12],leaf=[.29,.53,.31];
 switch(id){
 case 'grass':break;
 case 'earth':break;
@@ -2210,6 +2281,11 @@ const OBJECT_GROUPS=[
   {id:'fenceStoneSet',label:'石柵',icon:'fenceStone',items:['fenceStone','fenceStoneCorner','fenceStoneEnd','fenceStoneGate']},
   {id:'fenceIronSet',label:'鉄柵',icon:'fenceIron',items:['fenceIron','fenceIronCorner','fenceIronEnd','fenceIronGate']},
   {id:'woodFrameSet',label:'柱・梁・斜材',icon:'frameWoodPost',items:['frameWoodPost','frameWoodBeam','frameWoodBrace']}
+ ]},
+ {id:'villageLife',label:'村の屋外設備',icon:'wellStone',subgroups:[
+  {id:'wells',label:'井戸',icon:'wellStone',items:['wellStone','wellWood']},
+  {id:'marketStalls',label:'露店・屋台',icon:'marketStallCloth',items:['marketStallCloth','marketStallWood']},
+  {id:'handcarts',label:'荷車',icon:'handcartEmpty',items:['handcartEmpty','handcartLoaded']}
  ]},
  {id:'roofs',label:'家屋・屋根',icon:'roofTile',subgroups:[
   {id:'roofMaterial',label:'屋根3素材・自動接続',icon:'roofTile',items:['roofTile','roofThatch','roofPlank']},
