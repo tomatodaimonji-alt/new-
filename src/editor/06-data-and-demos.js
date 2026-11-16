@@ -1722,22 +1722,25 @@ function pineSupermarketPOI(style='standard',condition='normal',force=false){
  for(let y=0;y<levels;y++)for(let z=north;z<=south;z++)for(let x=west;x<west+w;x++){
   const side=x===west||x===west+w-1,isBack=z===north,isFront=z===south;
   if(!side&&!isBack&&!isFront)continue;
-  const entry=y===0&&isFront&&Math.abs(x-cx)<=1;
-  const shutter=y===0&&isBack&&x>=west+w-7&&x<=west+w-6;
+  const entry=y===0&&isFront&&x===cx;
+  const shutter=y===0&&isBack&&x===west+w-5;
   const staff=y===0&&isBack&&x===west+2;
   const glazing=isFront&&x>west+2&&x<west+w-3&&y===0;
   let type=entry?'pineSuperDoor':shutter?'pineSuperShutter':staff?'plasterwallDoor':glazing?'pineSuperGlass':'pineSuperWall';
   if(y===0&&isFront&&!entry&&!glazing&&x>west+2&&x<west+w-3)type='pineSuperAccent';
-  if(condition==='converted'&&entry&&x!==cx)type='ironwall';
+  if((x===west||x===west+w-1)&&(z===north||z===south))type='pineSuperCorner';
+  if(condition==='converted'&&isFront&&x===cx+1)type='ironwall';
   if(condition==='damaged'&&y===0&&!entry&&!staff&&!shutter&&t(x,z)<3)continue;
   put(x,z,type,y);
  }
  // Back-of-house partitions, access points and storage racks.
  for(let x=west+1;x<west+w-1;x++)
-  put(x,backZ,x===west+3||x===west+w-5?'plasterwallDoor':'plasterwall');
+  put(x,backZ,x===west+w-5?'plasterwallDoor':'plasterwall');
  for(let x=west+Math.floor(w*.34);x<west+w-1;x+=Math.max(4,Math.floor(w*.21)))
   for(let z=north+1;z<backZ;z++)put(x,z,z===backZ-1?'plasterwallDoor':'plasterwall');
  for(let x=west+2;x<west+w-2;x+=Math.max(3,Math.floor(w*.22)))put(x,north+2,'pineSuperRack');
+ // Staff kitchenette/office side, clear route to loading bay.
+ if(w>=18)put(west+2,north+2,'table');
  // Main accessible aisle, shelf rows, perimeter chillers.
  const aisleStart=backZ+2,aisleEnd=south-5;
  const shelfStep=style==='wholesale'?4:3;
@@ -1745,21 +1748,33 @@ function pineSupermarketPOI(style='standard',condition='normal',force=false){
   if(Math.abs(x-cx)<=2)continue;
   for(let z=aisleStart;z<=aisleEnd;z++)
    if(condition!=='damaged'||t(x,z)>2)put(x,z,'pineSuperShelf');
+  if(aisleStart<=aisleEnd)put(x,aisleEnd+1,'pineSuperShelfEnd');
  }
  for(let z=aisleStart;z<=aisleEnd;z++)for(const x of [west+1,west+w-2])put(x,z,'pineSuperCooler');
  if(w>=20)for(const x of [cx-3,cx+3])for(let z=aisleStart;z<=Math.min(aisleEnd,aisleStart+2);z++)put(x,z,'pineSuperFreezer');
+ // Dedicated produce and deli/butcher sections are grouped rather than scattered.
+ for(let x=west+2;x<=west+Math.min(w-3,8);x+=2){
+  if(x!==cx&&aisleStart+1<=aisleEnd)put(x,aisleStart+1,'pineSuperProduceSlope');
+ }
+ if(aisleEnd>=aisleStart+3)for(let x=west+w-7;x<west+w-2;x+=2)
+  if(x!==cx&&x>west+1)put(x,aisleEnd-1,'pineSuperFreshCase');
  for(let x=west+2;x<=west+4;x+=2)if(x<west+w-2)put(x,aisleStart,'pineSuperProduce');
  const registers=Math.max(1,Math.min(6,Math.round(w/7)));
  for(let i=0;i<registers;i++){
   const x=west+3+Math.floor(i*(w-7)/Math.max(1,registers-1));
-  if(Math.abs(x-cx)>1)put(x,south-2,'pineSuperCheckout');
+  if(Math.abs(x-cx)>1){
+   put(x,south-2,'pineSuperCheckout');
+   if(south-3>aisleEnd+1)put(x,south-3,'pineSuperPacking');
+   if(x+1<west+w-1)put(x+1,south-2,'pineSuperRegisterGate');
+  }
  }
  // A fictional, locally rendered brand sign spans the shopfront.
  put(cx,south,'pineSuperLogo');
  // A few unattended cars, with a clear pedestrian route into the entrance.
- const cars=style==='compact'?1:style==='hyper'||style==='wholesale'?4:2;
+ const cars=style==='compact'?2:style==='hyper'||style==='wholesale'?6:4;
  for(let i=0;i<cars;i++){
-  const x=west+3+(i%2)*(w-6),z=south+8+Math.floor(i/2)*7;
+  const side=i%2===0?-1:1,offset=3+((i>>1)%3)*2;
+  const x=side<0?west+offset:west+w-1-offset,z=south+7+Math.floor(i/2)*4;
   if(x>2&&x<siteW-3&&z<siteH-3&&Math.abs(x-cx)>2)put(x,z,'pineSuperCar');
  }
  put(west+1,south+1,'pineSuperCart');put(west+2,south+1,'pineSuperCart');
@@ -1774,7 +1789,7 @@ function pineSupermarketPOI(style='standard',condition='normal',force=false){
  for(const x of [west+4,west+w-5])put(x,north+3,'pineSuperAC',levels);
  if(levels===2)put(west+2,north+2,'stairSwitchback',0);
  if(condition==='converted'){
-  for(let x=west+3;x<west+w-3;x+=2)put(x,south+2,'pineSuperBollard');
+  for(let x=west+3;x<west+w-3;x+=2)if(Math.abs(x-cx)>2)put(x,south+2,'pineSuperBollard');
  }
  for(const [id,v] of [['mapWidth',siteW],['mapHeight',siteH],['rangeX1',west],['rangeZ1',north],['rangeX2',west+w-1],['rangeZ2',south]]){
   const el=$(id);if(el)el.value=v;
