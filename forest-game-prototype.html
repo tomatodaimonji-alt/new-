@@ -6342,16 +6342,25 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
   const generator=ctx.createOscillator(),hum=ctx.createGain();
   generator.type='sine';generator.frequency.value=52;
   hum.gain.value=0;generator.connect(hum);hum.connect(ctx.destination);generator.start();
-  gameAmbientMix={ctx,sea,wind,hum};
+  // Slow sub-audible modulation gives the sea a swell rather than white hiss.
+  const wave=ctx.createOscillator(),waveDepth=ctx.createGain();
+  wave.frequency.value=.13;waveDepth.gain.value=.008;
+  wave.connect(waveDepth);waveDepth.connect(sea.gain);wave.start();
+  const breeze=ctx.createOscillator(),breezeDepth=ctx.createGain();
+  breeze.frequency.value=.083;breezeDepth.gain.value=.004;
+  breeze.connect(breezeDepth);breezeDepth.connect(wind.gain);breeze.start();
+  gameAmbientMix={ctx,sea,wind,hum,waveDepth,breezeDepth};
  }
  function gameAdjustAmbience(){
   if(!gameAmbientMix)return;
-  const {ctx,sea,wind,hum}=gameAmbientMix,t=ctx.currentTime;
+  const {ctx,sea,wind,hum,waveDepth,breezeDepth}=gameAmbientMix,t=ctx.currentTime;
   const px=Math.floor(gameX),pz=Math.floor(gameZ),
    closeToSea=[[-3,0],[3,0],[0,-3],[0,3]].some(([dx,dz])=>
     ['sea','water','lake','river'].includes(gameFloor.get(gameTileKey(px+dx,pz+dz))));
   const zone=gameZoneFor(px,pz),active=gameAmbientOn&&!document.hidden;
   const target=(v)=>active?v:0;
+  waveDepth.gain.setTargetAtTime(target(closeToSea?.008:.004),t,.5);
+  breezeDepth.gain.setTargetAtTime(target(.004),t,.5);
   sea.gain.setTargetAtTime(target(closeToSea?.037:.013),t,.45);
   wind.gain.setTargetAtTime(target(zone.includes('松林')?.030:.018),t,.55);
   hum.gain.setTargetAtTime(target(zone.includes('軍')?.009:.002),t,.5);
