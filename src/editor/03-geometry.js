@@ -2552,6 +2552,7 @@ function roofFamily(id){
 }
 
 /*__PINE_SHARED_HARBOR_GEOMETRY__*/
+/*__PINE_SHARED_LANDING_CRAFT_GEOMETRY__*/
 function bridgeConnectedGeometry(m,o,lookup){
  const r=bridgeDirection(o.rot),wood=o.type.startsWith('bridgeWood'),end=o.type.endsWith('End');
  const axis=r%2===0,side=axis?[[1,0],[-1,0]]:[[0,1],[0,-1]];
