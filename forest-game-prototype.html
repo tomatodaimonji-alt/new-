@@ -5781,21 +5781,77 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
  // PINE v2: concrete naval base, headquarters, airfield and traversable quay.
  // These are runtime props, so existing authored houses and editor JSON are untouched.
  function pineAddBaseExpansion(props,paths){
-  const add=(x,z,type)=>props.push({x,z,y:0,type,rot:0});
-  for(let z=83;z<=94;z++)for(let x=65;x<=81;x++){
-   add(x,z,'pineConcreteDock');
+  // Preserve original farmland, buildings, crops and their collision data.
+  // Never replace an authored world tile just to draw military facilities.
+  const ground=new Map(world.filter(o=>o.y===0&&isFloor(o.type)).map(o=>[gameTileKey(o.x,o.z),o.type]));
+  const occupied=new Set(world.filter(o=>!isFloor(o.type)&&!/^tree|grass|flower|bush|rockPebble|rockSmall/i.test(o.type)).map(o=>gameTileKey(o.x,o.z)));
+  const protectedFloor=t=>!t||/^(?:sea|river|water|lake)$/i.test(t)||/farm|field|crop|soil|tilled|plant|wheat|potato|carrot|vegetable|orchard|garden/i.test(t);
+  const allocated=new Set();
+  const good=(x,z)=>validPos(x,z)&&!protectedFloor(ground.get(gameTileKey(x,z)))&&!occupied.has(gameTileKey(x,z))&&!allocated.has(gameTileKey(x,z));
+  const add=(x,z,type,y=0)=>props.push({x,z,y,type,rot:0});
+  // A real room: separate per-tile walls, one south-facing door, roof and indoor floor.
+  function buildRoom(name,w,d,preferredX,preferredZ){
+   const candidates=[];
+   for(let z=57;z<=80-d;z++)for(let x=61;x<=84-w;x++)
+    candidates.push([x,z,Math.abs(x-preferredX)+Math.abs(z-preferredZ)]);
+   candidates.sort((a,b)=>a[2]-b[2]);
+   for(const [x,z] of candidates){
+    let valid=true;
+    const h=terrainLevel(x,z);
+    for(let dz=-1;dz<=d;dz++)for(let dx=-1;dx<=w;dx++){
+     const xx=x+dx,zz=z+dz;
+     if(!good(xx,zz)||(dx>=0&&dx<w&&dz>=0&&dz<d&&terrainLevel(xx,zz)!==h)){valid=false;break}
+    }
+    if(!valid)continue;
+    // Retire temporary tents inside this footprint, never user-authored items.
+    const footprint=new Set();
+    for(let dz=0;dz<d;dz++)for(let dx=0;dx<w;dx++)
+     footprint.add(gameTileKey(x+dx,z+dz));
+    for(let i=props.length-1;i>=0;i--)if(footprint.has(gameTileKey(props[i].x,props[i].z)))props.splice(i,1);
+    const doorX=x+Math.floor(w/2);
+    for(let dz=0;dz<d;dz++)for(let dx=0;dx<w;dx++){
+     const xx=x+dx,zz=z+dz,k=gameTileKey(xx,zz);
+     allocated.add(k);
+     add(xx,zz,'pineRoomFloor');
+     const edge=dx===0||dx===w-1||dz===0||dz===d-1;
+     if(edge){
+      if(zz===z+d-1&&xx===doorX)add(xx,zz,'plasterwallDoor');
+      else add(xx,zz,(dx>0&&dx<w-1&&(dz===0||dz===d-1))?'plasterwallWindow':'plasterwall');
+     }
+     add(xx,zz,'roofHip',1);
+    }
+    // Accessible meeting table with aisles.
+    if(name==='作戦会議室'&&w>=5&&d>=5)add(x+2,z+2,'table');
+    // A recognizable sign stands beside the entrance.
+    add(doorX,z+d,'pineRoomSign:'+name);
+    return true;
+   }
+   return false;
   }
-  // A runway is deliberately placed inland, away from the original housing.
-  for(let z=23;z<=27;z++)for(let x=28;x<=69;x++)
-   add(x,z,'pineRunway');
-  for(let z=29;z<=35;z++)for(let x=67;x<=75;x++)
-   add(x,z,'pineHelipad');
-  add(68,62,'pineHeadquarters');add(77,61,'pineMeetingRoom');
-  add(68,72,'pineBarracks');add(80,76,'pineWarehouse');
-  add(75,88,'pineTransportShip');add(71,32,'pineHelicopter');
-  add(40,25,'pineTransportPlane');add(67,86,'pineDockCrane');
-  add(80,88,'pineDockCrane');
-  // This central route connects headquarters to the concrete pier.
+  // Concrete deck is independent of residential and agricultural areas.
+  for(let z=83;z<=94;z++)for(let x=65;x<=81;x++)
+   add(x,z,'pineConcreteDock');
+  buildRoom('軍司令部',7,6,66,58);
+  buildRoom('作戦会議室',6,5,77,60);
+  buildRoom('兵舎',7,5,64,71);
+  buildRoom('物資倉庫',6,5,78,72);
+  // The island only gets a heliport on verified empty land. The runway is
+  // relocated to the mainland, so the original island fields remain intact.
+  let heli=false;
+  for(let z=9;z<=33&&!heli;z++)for(let x=24;x<=76&&!heli;x++){
+   if(x>52&&z>21)continue;
+   let clear=true,h=terrainLevel(x,z);
+   for(let dz=0;dz<7;dz++)for(let dx=0;dx<7;dx++){
+    if(!good(x+dx,z+dz)||terrainLevel(x+dx,z+dz)!==h)clear=false;
+   }
+   if(!clear)continue;
+   for(let dz=0;dz<7;dz++)for(let dx=0;dx<7;dx++){
+    add(x+dx,z+dz,'pineHelipad');allocated.add(gameTileKey(x+dx,z+dz));
+   }
+   add(x+3,z+3,'pineHelicopter');heli=true;
+  }
+  add(75,88,'pineTransportShip');
+  add(67,86,'pineDockCrane');add(80,88,'pineDockCrane');
   for(let z=67;z<=86;z++)for(let x=72;x<=74;x++)
    paths.push({x,z,kind:'military'});
  }
@@ -5926,7 +5982,13 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
     B(sx,0,sz,.045,.40,.045,metal);
   };
 
-  if(o.type==='pineConcreteDock'){
+  if(o.type==='pineRoomFloor'){
+   B(0,.035,0,.96,.07,.96,[.59,.61,.57]);
+  }else if(o.type.startsWith('pineRoomSign:')){
+   B(0,.0,0,.12,1.25,.12,metal);
+   B(0,1.0,0,.86,.38,.12,oliveDark);
+   B(0,1.03,.075,.65,.065,.02,canvas);
+  }else if(o.type==='pineConcreteDock'){
    // Entire quay remains walkable, including over sea tiles.
    B(0,.12,0,1,.27,1,[.58,.61,.62]);
    B(0,.26,0,.94,.03,.94,[.67,.69,.68]);
