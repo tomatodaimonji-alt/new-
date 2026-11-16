@@ -48,3 +48,9 @@ node scripts/build.mjs
 [屋根](src/shared/roof-geometry.fragment.js) / [外壁アクセント](src/shared/wall-facade.fragment.js) / [柵](src/shared/fence-geometry.fragment.js) / [橋の種類と向き](src/shared/bridge-types.fragment.js) を共通ライブラリ化済み。ゲームとワールドエディターの表示に反映されます。
 
 石橋の床の高さ・欄干の表示と、ゲームの歩行判定は**共通化対象外**。差分を調べずに一括置換しないこと。
+
+
+## ビジュアル・建材品質の必須ルール
+新しいアセットを作成・改修する場合、実際の構造物の写真や設計資料、参考になるゲームの画面を**先に調べてから**設計し、見た目・部材のつながり・サイズ・素材・自然な配置を重視する。適当な箱型モデルだけで済ませない。Androidで重くならない形に最適化し、既存島の建築や歩行判定を守る。
+
+必読：[アセット品質基準](docs/ASSET_QUALITY_STANDARD.md) / [参考資料と観察ログ](docs/ASSET_REFERENCE_LOG.md)。画像の無断複製は禁止し、確認できなかった参考資料について「調査済み」と記載しない。
