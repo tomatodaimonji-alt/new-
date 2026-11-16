@@ -5631,9 +5631,8 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
    land.add(k);
    const kind=oldFloor|| (edge?'grassDry':surfaceNoise(x*12+2,z*17+5)<.42?'grassPatch':'grassWild');
    next.push({x,z,y:0,type:kind,rot:0});
-   if(!oldFloor&&edge)terrainHeights.delete(terrainKey(x,z));
-   if(!oldFloor&&!edge&&surfaceNoise(x*7,z*11)<.08&&x>=11&&x<=86)
-    next.push({x,z,y:0,type:'grassFlowers',rot:0}); // Ground overlay harmless.
+   if(!oldFloor)terrainHeights.set(terrainKey(x,z),1);
+   // New shoreline stays above the water but is flat and walkable.
   }
   // Keep original structures and decorations on the same relative cells.
   for(const o of old){
@@ -5656,8 +5655,16 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
    }
    if(n>1)for(let h=0;h<n-1;h++)next.push({x:x0+2,z:z0+2,y:h,type:'stairSwitchback',rot:0});
   };
-  building(9,45,8,9,3,'hotel');
-  building(80,46,8,9,1,'market');
+  building(13,45,8,9,3,'hotel');
+  building(78,45,8,9,1,'market');
+  // Functional interior props: hotel rooms and grocery aisles with a clear centre path.
+  for(const [x,z,h,t] of [
+   [15,47,0,'bed'],[18,47,0,'bed'],[15,50,1,'bed'],[18,50,1,'bed'],
+   [15,47,2,'bedLuxury'],[18,47,2,'bedLuxury'],[19,51,0,'chairClassic'],
+   [80,47,0,'displayShelf'],[83,47,0,'displayShelf'],
+   [80,50,0,'displayShelf'],[83,50,0,'displayShelf'],
+   [79,52,0,'counterWood'],[84,52,0,'crate']
+  ])next.push({x,z,y:h,type:t,rot:0});
   world=next;
   const dims=[['mapWidth',96],['mapHeight',96],['rangeX2',95],['rangeZ2',95]];
   for(const [id,v] of dims){const el=$(id);if(el)el.value=v}
@@ -5674,6 +5681,7 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
    !/^(?:tree|bush|flower|fern|grass|rockPebble|rockSmall|mushroom)/i.test(o.type))
    .map(o=>gameTileKey(o.x,o.z)));
   const placed=new Set(),reserved=new Set();
+  const buildingCells=new Set(world.filter(o=>o.y>0&&/^roof/.test(o.type)).map(o=>gameTileKey(o.x,o.z)));
   const dry=(x,z)=>{const t=floor.get(gameTileKey(x,z));return !!t&&!/^(?:sea|river|water|lake)$/.test(t)};
   const reserve=(x,z)=>{if(dry(x,z))reserved.add(gameTileKey(x,z))};
   const trail=(points,kind='main',width=1)=>{
@@ -5694,9 +5702,9 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
   trail([[40,78],[41,85],[41,91]],'oldPort',2);
   trail([[73,75],[73,85],[73,91]],'militaryPort',2);
   trail([[76,62],[82,62],[82,69],[76,69]],'inspection',2);
-  trail([[21,52],[18,52]],'hotel');
+  trail([[22,55],[17,55],[17,53]],'hotel');
   // These areas must never be blocked, even if an object would be legal there.
-  const safe=(x,z)=>dry(x,z)&&!objects.has(gameTileKey(x,z))&&!placed.has(gameTileKey(x,z))&&!reserved.has(gameTileKey(x,z));
+  const safe=(x,z)=>dry(x,z)&&!buildingCells.has(gameTileKey(x,z))&&!objects.has(gameTileKey(x,z))&&!placed.has(gameTileKey(x,z))&&!reserved.has(gameTileKey(x,z));
   const put=(x,z,type,rot=0)=>{
    if(!validPos(x,z)||!safe(x,z))return false;
    placed.add(gameTileKey(x,z));gameZoneProps.push({x,z,y:0,type,rot});return true;
@@ -5743,8 +5751,8 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
   for(const [x,z,t] of [[59,7,'pineLighthouse'],[68,25,'pineScenicPine'],
     [61,21,'pineScenicPine'],[76,22,'pineScenicPine'],[60,30,'pineScenicPine']])put(x,z,t);
   // Hand-painted signage and waterfront vessels serve as visual landmarks.
-  put(15,55,'pineHotelSign');
-  put(84,55,'pineMarketSign');
+  put(18,55,'pineHotelSign');
+  put(82,55,'pineMarketSign');
   put(42,85,'pineFishingNet');
   put(74,85,'pineCargo');
   // Place two boats on the water beside their respective piers.
@@ -5912,7 +5920,7 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
   for(const o of candidates){
    const key=gameTileKey(o.x,o.z);
    if(landmarks.has(key))continue;
-   if(o.x>=46&&o.z>=20&&o.z<=49){gameNatureHiddenTrees.add(o);continue;}
+   if(o.x>=62&&o.x<=85&&o.z>=34&&o.z<=82){gameNatureHiddenTrees.add(o);continue;}
    const byRoad=near(roads,o.x,o.z,2);
    const byHouse=near(buildings,o.x,o.z,2);
    const nearBridge=Math.abs(o.x-23)<=4&&(Math.abs(o.z-50)<=5||Math.abs(o.z-58)<=5);
