@@ -38,3 +38,13 @@ node scripts/build.mjs
 6. `docs/CHANGELOG.md` と `docs/HANDOFF.md` を更新する。
 
 重要: 静的テストはブラウザの実動作、GPU負荷、船の着岸や歩行の全経路を保証しません。
+
+
+## 共通建材ソース（2026-11-17 以降）
+- `src/shared/block-catalog.fragment.js` — ゲーム/エディター両方が使う**全ブロックカタログ**
+- `src/shared/harbor-palette.fragment.js` — カタログ内に展開される港湾7ブロック
+- `src/shared/harbor-geometry.fragment.js` — 港湾7ブロックの共通3D形状
+
+`scripts/build.mjs` は3種類の参照マーカーを展開して、従来と同じ完全オフライン単一HTMLを生成します。**新しいブロックIDはまず共通カタログへ追加**してください。描画や当たり判定に新しい実装が必要なら、それらも整合させてください。
+
+現在、全ブロックの**定義**は一元化できていますが、港湾以外の3D**形状・判定処理**はまだ各アプリ側にあります。見た目だけを共有したと誤解しないこと。今回の共通化によって現行完成HTMLの内容は変更していません。
