@@ -16,7 +16,7 @@ required(game,[
  'function pineBoatAction(){','function pineAddHarbors(props){',
  'function gameBridgeCanStep(','function bridgeSpanElevation(',
  'function gameRestoreProgress(){','function gameRebuildBlock(){',
- 'function gamePersistProgress(','PINE · v3.2'
+ 'function gamePersistProgress(','PINE · v3.3'
 ],'game');
 required(editor,['function makePineHarborDemo(){','PINE・港湾と船着場'],'editor');
 assert.ok(!game.includes('function pineTravel('),'Map swapping must remain removed');
