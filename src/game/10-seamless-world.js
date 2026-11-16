@@ -85,6 +85,7 @@ function pineExtendWorld(){
  // A 20-person complement: logical 5x4 standing slots on the open deck.
  // The 3D hull and each soldier's mesh are compiled once; draw uses transforms.
  let pineTroopMesh=null,pineTroopCount=0,pineTroopMode='ready',pineTroopStarted=0;
+ let pineGangwayMesh=null;
  const PINE_ISLAND_BERTH=110.5,PINE_MAINLAND_BERTH=142.5,PINE_BERTH_Z=67.5;
  const pineTroopSlot=i=>[-3+(i%5)*1.5,-1.9+Math.floor(i/5)*1.3];
  const pineTroopQueue=i=>[100.5+(i%5)*1.1,57+Math.floor(i/5)*1.1];
@@ -160,6 +161,16 @@ function pineExtendWorld(){
   if(!pineShipMesh){
    const m=mesh();pineLandingCraftGeometry(m,0,0);pineShipMesh=upload(m);
   }
+  if(!pineGangwayMesh){
+   const m=mesh(),steel=[.50,.54,.53],yellow=[.75,.67,.40];
+   // The side boarding gangway reaches a real quay; it is stowed underway.
+   cube(m,0,.73,-4.18,1.9,.15,2.0,steel);
+   for(const x of [-.87,.87]){
+    cube(m,x,.90,-4.16,.08,.35,2.00,yellow);
+    cube(m,x,1.26,-4.16,.07,.07,2.00,steel);
+   }
+   pineGangwayMesh=upload(m);
+  }
   if(!pineTroopMesh){
    const m=mesh(),cloth=[.30,.39,.31],face=[.74,.61,.47],helmet=[.22,.29,.24];
    cube(m,0,0,0,.31,.39,.30,cloth);
@@ -202,6 +213,7 @@ function pineExtendWorld(){
   if(!pineShipMesh||!pineWorldEnabled)return;
   if(Math.abs(gameX-pineBoatX)>65||Math.abs(gameZ-pineBoatZ)>65)return;
   draw(pineShipMesh,pineMVP(vp,pineBoatX,0,pineBoatZ));
+  if(pineGangwayMesh&&pineBoatDock())draw(pineGangwayMesh,pineMVP(vp,pineBoatX,0,pineBoatZ));
   if(!pineTroopMesh)return;
   const now=performance.now(),pitch=.85;
   for(let i=0;i<20;i++){
