@@ -350,7 +350,7 @@ function gameRebuildBlock(){
   panZ+=((targetZ-panZ)*(force?1:.16));
  }
  function gameSurfaceY(x,z){
-  if(pineSailing)return .64;
+  if(pineSailing)return .92;
   const tx=Math.floor(x),tz=Math.floor(z);
   if(gameLevel===0&&gameBridge.has(gameTileKey(tx,tz))){
    // Match the visual deck height, not the riverbed underneath it.
