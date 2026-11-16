@@ -1,11 +1,5 @@
 const palette=[
-{id:'pineHarborPier',name:'港・木造歩行桟橋',icon:'▥',cat:'build'},
-{id:'pineHarborQuay',name:'港・コンクリート岸壁',icon:'▣',cat:'build'},
-{id:'pineHarborBollard',name:'港・係船柱',icon:'●',cat:'decor'},
-{id:'pineHarborFender',name:'港・防舷材',icon:'◖',cat:'decor'},
-{id:'pineHarborLamp',name:'港・照明灯',icon:'♧',cat:'decor'},
-{id:'pineHarborPallet',name:'港・荷役パレット',icon:'▥',cat:'decor'},
-{id:'pineHarborSign',name:'港・航路標識',icon:'⚑',cat:'decor'},
+/*__PINE_SHARED_HARBOR_PALETTE__*/
 {id:'water',name:'水',icon:'≈',cat:'floor'},{id:'river',name:'川',icon:'≈',cat:'floor'},
 {id:'lake',name:'湖',icon:'≈',cat:'floor'},{id:'sea',name:'海',icon:'≈',cat:'floor'},
 {id:'grass',name:'草原',icon:'🌱',cat:'floor'},{id:'earth',name:'森の土',icon:'🍂',cat:'floor'},{id:'moss',name:'苔と石',icon:'🪨',cat:'floor'},{id:'stone',name:'石床',icon:'▫️',cat:'floor'},{id:'woodfloor',name:'木の床（標準）',icon:'🟫',cat:'floor'},
