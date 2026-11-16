@@ -6372,11 +6372,16 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
  function gameBridgeCanStep(x,z,nx,nz){
   if(gameLevel!==0)return false;
   const a=gameTileKey(x,z),b=gameTileKey(nx,nz);
-  if(!gameBridge.has(a)&&!gameBridge.has(b))return false;
-  const dry=(k)=>!['river','water','lake','sea'].includes(gameFloor.get(k));
-  // Bridge-to-bridge movement and direct connection to either dry bank.
-  if(!gameBridge.has(a)&&!dry(a))return false;
-  if(!gameBridge.has(b)&&!dry(b))return false;
+  const onA=gameBridge.has(a),onB=gameBridge.has(b);
+  if(!onA&&!onB)return false;
+  const dry=k=>!['river','water','sea','lake'].includes(gameFloor.get(k));
+  if(onA&&onB)return true; // Connected bridge deck overrides waterbed height.
+  if((!onA&&!dry(a))||(!onB&&!dry(b)))return false;
+  const bridge=[...world,...gameZoneProps].find(o=>o.y===0&&o.x===(onA?x:nx)&&o.z===(onA?z:nz)&&/^bridge/.test(o.type));
+  if(bridge){
+   const lookup=new Map([...world,...gameZoneProps].filter(o=>o.y===0&&/^bridge/.test(o.type)).map(o=>[gameTileKey(o.x,o.z),o]));
+   return Math.abs(bridgeSpanElevation(bridge,lookup)/TERRAIN_STEP-terrainLevel(onA?nx:x,onA?nz:z))<=1.05;
+  }
   return Math.abs(terrainLevel(nx,nz)-terrainLevel(x,z))<=1;
  }
  function gameCanStep(x,z,nx,nz){
@@ -6460,9 +6465,9 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
   const tx=Math.floor(x),tz=Math.floor(z);
   if(gameLevel===0&&gameBridge.has(gameTileKey(tx,tz))){
    // Match the visual deck height, not the riverbed underneath it.
-   const o=world.find(o=>o.x===tx&&o.z===tz&&o.y===0&&BRIDGE_IDS.has(o.type));
+   const o=[...world,...gameZoneProps].find(o=>o.x===tx&&o.z===tz&&o.y===0&&BRIDGE_IDS.has(o.type));
    if(o){
-    const lookup=new Map(world.filter(p=>p.y===0&&BRIDGE_IDS.has(p.type)).map(p=>[gameTileKey(p.x,p.z),p]));
+    const lookup=new Map([...world,...gameZoneProps].filter(p=>p.y===0&&BRIDGE_IDS.has(p.type)).map(p=>[gameTileKey(p.x,p.z),p]));
     return bridgeSpanElevation(o,lookup)+.11;
    }
   }
