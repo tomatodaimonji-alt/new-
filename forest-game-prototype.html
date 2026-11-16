@@ -3295,9 +3295,28 @@ function gameLandingGeometry(m,x,y,z,r=0){
   m.c.push(tmp.c[i],tmp.c[i+1],tmp.c[i+2]);
  }
 }
+// Spatial index: only process objects in the visible 16x16 chunks.
+let pineSceneIndex=null,pineSceneIndexSignature='';
+function pineNearby(bounds){
+ const sig=world.length+':'+gameZoneProps.length+':'+gameInteriorProps.length;
+ if(!pineSceneIndex||sig!==pineSceneIndexSignature){
+  pineSceneIndexSignature=sig;pineSceneIndex=new Map();
+  for(const o of [...world,...gameZoneProps,...gameInteriorProps]){
+   const k=Math.floor(o.x/PINE_CHUNK)+':'+Math.floor(o.z/PINE_CHUNK);
+   if(!pineSceneIndex.has(k))pineSceneIndex.set(k,[]);
+   pineSceneIndex.get(k).push(o);
+  }
+ }
+ const output=[];
+ for(let cz=Math.floor(bounds.z0/PINE_CHUNK);cz<Math.ceil(bounds.z1/PINE_CHUNK);cz++)
+  for(let cx=Math.floor(bounds.x0/PINE_CHUNK);cx<Math.ceil(bounds.x1/PINE_CHUNK);cx++)
+   for(const o of pineSceneIndex.get(cx+':'+cz)||[])
+    if(o.x>=bounds.x0&&o.x<bounds.x1&&o.z>=bounds.z0&&o.z<bounds.z1&&!gameNatureHiddenTrees.has(o)&&(!hideUpper||o.y<=level))output.push(o);
+ return output;
+}
 function makeScene(){
  const bounds=pineChunkWindow();
- const m=mesh(),visible=[...world,...gameZoneProps,...gameInteriorProps].filter(o=>o.x>=bounds.x0&&o.x<bounds.x1&&o.z>=bounds.z0&&o.z<bounds.z1&&(!hideUpper||o.y<=level)&&!gameNatureHiddenTrees.has(o));
+ const m=mesh(),visible=pineNearby(bounds);
  // All buildings are cached independently by house and story.
  // Entering/exiting or changing camera visibility only changes which buffers are drawn.
  const buildingGroups=new Map();
@@ -3310,12 +3329,16 @@ function makeScene(){
   return floors.get(o.y);
  };
  // Only build floor lookups for visible chunks and their one-tile edge neighbors.
- const floors=new Map(world.filter(o=>o.y===0&&isFloor(o.type)&&o.x>=bounds.x0-1&&o.x<=bounds.x1&&o.z>=bounds.z0-1&&o.z<=bounds.z1).map(o=>[o.x+','+o.z,o.type]));
+ const floors=new Map(pineNearby({x0:Math.max(0,bounds.x0-PINE_CHUNK),z0:Math.max(0,bounds.z0-PINE_CHUNK),x1:Math.min(MAP_W,bounds.x1+PINE_CHUNK),z1:Math.min(MAP_H,bounds.z1+PINE_CHUNK)}).filter(o=>o.y===0&&isFloor(o.type)).map(o=>[o.x+','+o.z,o.type]));
  for(let z=bounds.z0;z<bounds.z1;z++)for(let x=bounds.x0;x<bounds.x1;x++){
   const kind=floors.get(x+','+z)||pineGroundKind(x,z);
   const tmp=mesh();
   addFloorTile(tmp,x,z,kind,pineWorldEnabled?96*96:MAP_W*MAP_H,ROAD_DIAGONALS.has(kind)?roadDiagonalConnections(floors,x,z,kind):ROAD_IDS.has(kind)&&!kind.endsWith('Full')?roadConnections(floors,x,z,kind):0);
   if(floors.has(x+','+z))shoreline(tmp,x,z,floors);
+  if(pineWorldEnabled&&x>=156&&x<pineMainlandCoast(z)+3&&pineMainlandLand(x,z)){
+   const n=pineChunkRecord(Math.floor(x/PINE_CHUNK),Math.floor(z/PINE_CHUNK)).variation;
+   if((x*13+z*7)%5===0)cube(m,x+.5,terrainY(x,z)+.025,z+.5,.14,.018,.21,[.44+n*.09,.43+n*.06,.37]);
+  }
   shiftMesh(m,tmp,terrainY(x,z));
   const isWater=['river','water','lake','sea'].includes(kind);
   if(isWater){
@@ -3521,7 +3544,7 @@ function data(){
   prefabs:prefabs.map(p=>({id:p.id,name:p.name,w:p.w,h:p.h,tiles:p.tiles.map(t=>({...t}))}))}
 }
 function snapshot(){undoStack.push(JSON.stringify(data()));if(undoStack.length>45)undoStack.shift();redoStack.length=0}
-function commit(){worldMaxLevel=world.reduce((top,o)=>Math.max(top,o.y),0);dirty=true;saveLocal();updateStats()}
+function commit(){pineSceneIndex=null;pineSceneIndexSignature='';worldMaxLevel=world.reduce((top,o)=>Math.max(top,o.y),0);dirty=true;saveLocal();updateStats()}
 function restore(json){loadData(JSON.parse(json));commit()}
 function isFloor(t){return ROAD_IDS.has(t)||['grass','grassTuft','grassFlowers','grassPebbles','grassPatch','grassWeeds','grassTrampled','grassMeadow','grassWild','grassForest','grassDry','earth','moss','water','river','lake','sea','stone','woodfloor','woodfloorLight','woodfloorDark','brickfloor','basicfloor','plasterfloor','mossfloor','ironfloor'].includes(t)}
 function changeCell(x,z){
@@ -6029,12 +6052,13 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
   if(pineChunkRecords.size>96)pineChunkRecords.delete(pineChunkRecords.keys().next().value);
   return v;
  }
+ function pineMainlandCoast(z){return 157+Math.max(0,Math.floor((surfaceNoise(z*.19+3,11)-.45)*5))}
  function pineMainlandLand(x,z){
-  return x>=156&&z>=9&&z<151&&x>=157+Math.max(0,Math.floor((surfaceNoise(z*.19+3,11)-.45)*5));
+  return x>=156&&z>=9&&z<151&&x>=pineMainlandCoast(z);
  }
  function pineGroundKind(x,z){
   if(pineWorldEnabled&&(x>=96||z>=96))
-   return pineMainlandLand(x,z)?(x%15<3||z%15<3?'roadStoneFull':'stone'):'sea';
+   return !pineMainlandLand(x,z)?'sea':x<pineMainlandCoast(z)+2?'earth':(x%15<3||z%15<3?'roadStoneFull':'stone');
   return 'grass';
  }
  function pineExtendWorld(){
@@ -6634,7 +6658,7 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
    if(score>=chance)gameNatureHiddenTrees.add(o);
   }
  }
- function gameRebuildBlock(){
+ function gameRebuildBlock(){pineSceneIndex=null;pineSceneIndexSignature='';
   gameBuildIslandZones();
   gameConfigureNaturalScenery();
   gameBlock.clear();gameDoors.clear();gameFloor.clear();gameRoofTiles.clear();gameRoofGroups.clear();gameRoofsByCell.clear();gameBridge.clear();gameBridgeTiles.clear();gameHarborDeck.clear();bridgeDeckLevels.clear();gameHouseCells.clear();gameIndoorByCell.clear();gameLandingMarkers.length=0;gameInteriorProps.length=0;gameInteriorRugs.length=0;gameInteriorWallDetails.length=0;gameInteriorWallDetails.length=0;gameHouseBoxes.clear();gameOccludedGroups.clear();gameSolidByLayer.clear();gameDoorByLayer.clear();gameFloorsByLayer.clear();gameStairsByLayer.clear();gameUpPortals.clear();gameDownPortals.clear();gameStairArrivalLock=null;
