@@ -2538,85 +2538,7 @@ function roofFamily(id){
  return null;
 }
 // Roof joins are calculated from the current map, not stored in saved tiles.
-function connectedRoofGeometry(m,o,lookup){
- const x=o.x+.5,z=o.z+.5,y=(o.y-1)*1.4,r=((o.rot||0)%4+4)%4;
- const mat=roofFamily(o.type),thatch=mat==='roofThatch',plank=mat==='roofPlank';
- const top=thatch?[.64,.54,.29]:plank?[.46,.30,.19]:[.59,.27,.23];
- const edge=thatch?[.42,.36,.19]:plank?[.29,.20,.13]:[.36,.23,.22];
- const has=(dx,dz)=>{const [xx,zz]=rot2(dx,dz,r),n=lookup.get((o.x+xx)+','+(o.z+zz)+','+o.y);return !!n&&roofFamily(n.type)===mat&&(((n.rot||0)%4+4)%4)===r};
- const north=has(0,-1),south=has(0,1),west=has(-1,0),east=has(1,0),t=mesh();
- const p=(dx,h,dz)=>[x+dx,y+h,z+dz];
- const a=p(-.5,1.45,-.5),b=p(-.5,1.45,.5),c=p(0,1.88,-.5),d=p(0,1.88,.5),e=p(.5,1.45,-.5),f=p(.5,1.45,.5);
- quad(t,a,b,d,c,top);quad(t,c,d,f,e,top.map(v=>v*.91));
- if(!north)tri(t,a,c,e,edge);
- if(!south)tri(t,f,d,b,edge);
- cube(t,x,y+1.87,z,.095,.085,1,edge);
- for(const dz of [-.25,0,.25]){
-  naturalBranch(t,x-.49,y+1.46,z+dz,x,y+1.88,z+dz,.011,.011,edge);
-  naturalBranch(t,x,y+1.88,z+dz,x+.49,y+1.46,z+dz,.011,.011,edge);
- }
- if(!west)cube(t,x-.484,y+1.42,z,.065,.065,1,edge);
- if(!east)cube(t,x+.484,y+1.42,z,.065,.065,1,edge);
- if(!north)cube(t,x,y+1.43,z-.483,.98,.07,.07,edge);
- if(!south)cube(t,x,y+1.43,z+.483,.98,.07,.07,edge);
- for(const [sx,sz,openX,openZ] of [[-1,-1,!west,!north],[1,-1,!east,!north],[-1,1,!west,!south],[1,1,!east,!south]]){
-  if(openX&&openZ)cube(t,x+sx*.452,y+1.415,z+sz*.452,.10,.10,.10,edge);
- }
- for(let i=0;i<t.p.length;i+=3){
-  const [dx,dz]=rot2(t.p[i]-x,t.p[i+2]-z,r),[nx,nz]=rot2(t.n[i],t.n[i+2],r);
-  m.p.push(x+dx,t.p[i+1],z+dz);m.n.push(nx,t.n[i+1],nz);m.c.push(t.c[i],t.c[i+1],t.c[i+2]);
- }
-}
-
-// Discrete architectural accents placed only along exterior wall faces.
-// Walls themselves are unchanged so legacy houses and saved files stay intact.
-function houseFacadeDetails(m,visible){
- const walls=visible.filter(o=>/^(?:plasterwall|woodwall|stonewall|brickwall)(?:Plain|Door|Window)$/.test(o.type));
- const all=new Map(visible.filter(o=>o.y>=0&&!isFloor(o.type)).map(o=>[o.x+','+o.z+','+o.y,o]));
- for(const o of walls){
-  const type=o.type,material=type.startsWith('stone')?[.61,.60,.54]:
-   type.startsWith('brick')?[.58,.38,.30]:[.43,.30,.20];
-  const light=[.73,.66,.55],x=o.x+.5,z=o.z+.5,y=o.y*1.4+terrainY(o.x,o.z);
-  const r=o.rot||0;
-  // All trim is local to front (+Z) prior to rotation.
-  const scratch=mesh();
-  const front=.506;
-  if(type.endsWith('Plain')||type.endsWith('Window')){
-   for(const xx of [-.43,.43])cube(scratch,xx,y,.0+front,.055,1.30,.035,material);
-   cube(scratch,0,y+.08,front,.91,.07,.04,material);
-   cube(scratch,0,y+1.22,front,.92,.085,.04,light);
-  }
-  if(type.endsWith('Door')){
-   cube(scratch,0,y+1.20,front+.01,.73,.095,.07,light);
-   for(const xx of [-.40,.40])cube(scratch,xx,y,front,.07,1.26,.06,material);
-   // Short threshold flush with ground, not a high doorstep.
-   cube(scratch,0,y+.006,.61,.72,.055,.24,[.56,.56,.50]);
-  }
-  if(type.endsWith('Window')){
-   cube(scratch,0,y+.44,front+.045,.64,.10,.12,light);
-   cube(scratch,0,y+1.04,front+.04,.62,.07,.09,material);
-  }
-  // On upper floors, a shared horizontal beam reads as domestic construction.
-  if(o.y>0)cube(scratch,0,y+.05,front,.90,.06,.05,material);
-  for(let i=0;i<scratch.p.length;i+=3){
-   const [dx,dz]=rot2(scratch.p[i],scratch.p[i+2],r);
-   const [nx,nz]=rot2(scratch.n[i],scratch.n[i+2],r);
-   m.p.push(x+dx,scratch.p[i+1],z+dz);
-   m.n.push(nx,scratch.n[i+1],nz);m.c.push(...scratch.c.slice(i,i+3));
-  }
- }
-}
-
-
-// Bridge orientation convention (identical for wood and stone):
-// 0: north-south, 1: east-west, 2: south-north, 3: west-east.
-// Bridge handrails are only on the outside edges of the complete bridge width.
-const BRIDGE_IDS=new Set(['bridgeWood','bridgeWoodEnd','bridgeStone','bridgeStoneEnd']);
-function bridgeDirection(rot){return ((rot||0)%4+4)%4;}
-function bridgeAligned(a,b){return a&&b&&BRIDGE_IDS.has(a.type)&&BRIDGE_IDS.has(b.type)&&
- a.type.startsWith('bridgeWood')===b.type.startsWith('bridgeWood')&&
- bridgeDirection(a.rot)%2===bridgeDirection(b.rot)%2;}
-function bridgeSpanElevation(o,lookup){
+/*__PINE_SHARED_ROOF_GEOMETRY__*//*__PINE_SHARED_WALL_FACADE__*//*__PINE_SHARED_BRIDGE_TYPES__*/function bridgeSpanElevation(o,lookup){
  const r=bridgeDirection(o.rot),dx=r%2?1:0,dz=r%2?0:1;
  // Find the approach bank along the bridge axis (not the sides).
  let h=terrainLevel(o.x,o.z);
@@ -2672,31 +2594,4 @@ function bridgeConnectedGeometry(m,o,lookup){
  }
 }
 
-function connectedFenceGeometry(m,o,lookup){
- const kind=o.type.startsWith('fenceWood')?'Wood':o.type.startsWith('fenceStone')?'Stone':'Iron';
- if(o.type.endsWith('Gate'))return false;
- const nbrs=[[0,-1],[1,0],[0,1],[-1,0]].filter(([dx,dz])=>{
-  const n=lookup.get((o.x+dx)+','+(o.z+dz)+','+o.y);
-  return n&&n.type.startsWith('fence'+kind);
- });
- if(!nbrs.length)return false;
- const x=o.x+.5,z=o.z+.5,y=o.y*1.4+terrainY(o.x,o.z),wood=kind==='Wood',stone=kind==='Stone';
- const post=wood?[.48,.31,.18]:stone?[.57,.60,.57]:[.31,.38,.43];
- const cap=wood?[.61,.42,.25]:stone?[.70,.72,.67]:[.54,.60,.63];
- const h=stone?.98:1.12,w=stone?.235:.145;
- cube(m,x,y,z,w,h,w,post);cube(m,x,y+h-.07,z,w+.05,.12,w+.05,cap);
- for(const [dx,dz] of nbrs){
-  const horizontal=dx!==0,span=.51;
-  if(wood){
-   for(const yy of [.36,.83])cube(m,x+dx*.25,y+yy,z+dz*.25,horizontal?span:.11,.11,horizontal?.11:span,cap);
-   for(const t of [.18,.36])cube(m,x+dx*t,y+.13,z+dz*t,.10,.94,.10,post);
-  }else if(stone){
-   cube(m,x+dx*.25,y+.06,z+dz*.25,horizontal?span:.18,.52,horizontal?.18:span,post);
-   cube(m,x+dx*.25,y+.59,z+dz*.25,horizontal?span:.22,.12,horizontal?.22:span,cap);
-  }else{
-   for(const yy of [.28,.86])cube(m,x+dx*.25,y+yy,z+dz*.25,horizontal?span:.068,.06,horizontal?.068:span,cap);
-   for(const t of [.13,.27,.41])cube(m,x+dx*t,y+.09,z+dz*t,.05,1.02,.05,post);
-  }
- }
- return true;
-}
+/*__PINE_SHARED_FENCE_GEOMETRY__*/
