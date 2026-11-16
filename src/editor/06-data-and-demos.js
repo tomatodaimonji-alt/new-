@@ -1730,7 +1730,7 @@ function pineSupermarketPOI(style='standard',condition='normal',force=false){
   if(y===0&&isFront&&!entry&&!glazing&&x>west+2&&x<west+w-3)type='pineSuperAccent';
   if((x===west||x===west+w-1)&&(z===north||z===south))type='pineSuperCorner';
   if(condition==='converted'&&isFront&&x===cx+1)type='ironwall';
-  if(condition==='damaged'&&y===0&&!entry&&!staff&&!shutter&&t(x,z)<3)continue;
+  if(condition==='damaged'&&y===0&&!entry&&!staff&&!shutter&&!(side&&isBack)&&!(side&&isFront)&&t(x,z)<3)continue;
   put(x,z,type,y);
  }
  // Back-of-house partitions, access points and storage racks.
