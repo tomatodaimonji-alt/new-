@@ -232,15 +232,29 @@ function pineExtendWorld(){
    else if(pineTroopMode==='landed'){[x,z]=land;y=1.3}
    else if(pineTroopMode==='boarding'){
     const t=Math.max(0,Math.min(1,(now-pineTroopStarted-i*380)/1400));
-    if(t===0){[x,z]=src;y=1.3}
-    else if(t<.7){x=pineLerp(src[0],pineBoatX+slot[0],t/.7);
-     z=pineLerp(src[1],63.1,t/.7);y=1.3}
-    else{x=pineBoatX+slot[0];z=pineLerp(63.1,pineBoatZ+slot[1],(t-.7)/.3);y=pitch}
+    // Every soldier crosses the same physical gangway at the vessel center.
+    if(t<=.48){
+     x=pineLerp(src[0],pineBoatX,t/.48);
+     z=pineLerp(src[1],62.25,t/.48);y=1.3;
+    }else if(t<=.77){
+     const u=(t-.48)/.29;x=pineBoatX;
+     z=pineLerp(62.25,pineBoatZ-3.05,u);y=pineLerp(1.3,pitch,u);
+    }else{
+     const u=(t-.77)/.23;x=pineLerp(pineBoatX,pineBoatX+slot[0],u);
+     z=pineLerp(pineBoatZ-3.05,pineBoatZ+slot[1],u);y=pitch;
+    }
    }else if(pineTroopMode==='unloading'){
     const t=Math.max(0,Math.min(1,(now-pineTroopStarted-i*380)/1400));
-    if(t<.3){x=pineBoatX+slot[0];z=pineLerp(pineBoatZ+slot[1],63.1,t/.3);y=pitch}
-    else{x=pineLerp(pineBoatX+slot[0],land[0],(t-.3)/.7);
-      z=pineLerp(63.1,land[1],(t-.3)/.7);y=1.3}
+    if(t<=.23){
+     x=pineLerp(pineBoatX+slot[0],pineBoatX,t/.23);
+     z=pineLerp(pineBoatZ+slot[1],pineBoatZ-3.05,t/.23);y=pitch;
+    }else if(t<=.52){
+     const u=(t-.23)/.29;x=pineBoatX;
+     z=pineLerp(pineBoatZ-3.05,62.25,u);y=pineLerp(pitch,1.3,u);
+    }else{
+     const u=(t-.52)/.48;x=pineLerp(pineBoatX,land[0],u);
+     z=pineLerp(62.25,land[1],u);y=1.3;
+    }
    }else{ x=pineBoatX+slot[0];z=pineBoatZ+slot[1] }
    const moving=(pineTroopMode==='boarding'||pineTroopMode==='unloading')&&
     now-pineTroopStarted>=i*380&&now-pineTroopStarted<i*380+1400;
