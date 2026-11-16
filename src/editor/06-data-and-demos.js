@@ -100,43 +100,55 @@ function showWorldAudit(){
 
 
 function makePineHarborDemo(){
- if(world.length&&!confirm('現在の配置を「PINE港湾モデル」に置き換えますか？先にJSON保存してください。'))return;
- snapshot();MAP_W=32;MAP_H=32;world=[];terrainHeights=new Map();
- const add=(x,z,type,y=0,rot=0)=>{if(x>=0&&z>=0&&x<32&&z<32)world.push({x,z,y,type,rot})};
- // Flat coast lies one level above the water.
- for(let z=0;z<32;z++)for(let x=0;x<32;x++){
-  const water=z>=16;
-  add(x,z,water?'sea':z>=13?'roadCutStoneFull':
-   (x%6===0?'roadCobbleFull':'grassWild'));
+ if(world.length&&!confirm('現在の配置を48×40のPINE上陸艇・軍港見本に置き換えますか？先にJSONを保存してください。'))return;
+ snapshot();MAP_W=48;MAP_H=40;world=[];terrainHeights=new Map();
+ const add=(x,z,type,y=0,rot=0)=>{
+  if(x>=0&&z>=0&&x<48&&z<40)world.push({x,z,y,type,rot});
+ };
+ // 1m tiles: a paved operations apron, a concrete quay and deep-water berth.
+ for(let z=0;z<40;z++)for(let x=0;x<48;x++){
+  const water=z>=19,ground=z>=14?'roadCutStoneFull':
+    x%7===0?'roadCobbleFull':'grassWild';
+  add(x,z,water?'sea':ground);
   if(!water)terrainHeights.set(terrainKey(x,z),1);
  }
- for(let z=13;z<=26;z++)for(let x=11;x<=13;x++)
-  add(x,z,z<18?'pineHarborQuay':'pineHarborPier');
- for(let z=23;z<=26;z++)for(let x=14;x<=16;x++)add(x,z,'pineHarborPier');
- for(const [x,z,type] of [
-  [11,17,'pineHarborLamp'],[13,20,'pineHarborBollard'],
-  [11,24,'pineHarborFender'],[16,26,'pineHarborBollard'],
-  [13,26,'pineHarborSign'],[12,15,'pineHarborPallet'],
-  [19,13,'pineHarborPallet'],[21,13,'pineHarborLamp'],
-  [26,15,'pineHarborBollard']
- ])add(x,z,type);
- // Real office with separate walkable interior, walls, door and roof.
- const bx=19,bz=5,w=7,d=6,door=bx+3;
- for(let z=bz;z<bz+d;z++)for(let x=bx;x<bx+w;x++){
-  add(x,z,'woodfloor');
-  if(x===bx||x===bx+w-1||z===bz||z===bz+d-1)
-   add(x,z,z===bz+d-1&&x===door?'plasterwallDoor':
-    x>bx&&x<bx+w&&(z===bz||z===bz+d-1)?'plasterwallWindow':'plasterwall',
-    0,z===bz+d-1?0:z===bz?2:x===bx?3:1);
-  add(x,z,'roofHip',1);
+ for(let z=17;z<=23;z++)for(let x=10;x<=40;x++)add(x,z,'pineHarborQuay',1);
+ // 20-person assembly zone: a 5x4 group stays on the land apron.
+ for(let z=11;z<=14;z++)for(let x=12;x<=16;x++)
+  add(x,z,'roadCutStoneFull');
+ // Two independently enterable service buildings with the proper roof/walls.
+ for(const [bx,bz,w,d] of [[30,6,8,7],[8,5,7,6]]){
+  const door=bx+Math.floor(w/2),front=bz+d-1;
+  for(let z=bz;z<=front;z++)for(let x=bx;x<bx+w;x++){
+   add(x,z,'woodfloor');
+   const edge=x===bx||x===bx+w-1||z===bz||z===front;
+   if(edge)add(x,z,z===front&&x===door?'plasterwallDoor':
+    (z===bz||z===front)&&x>bx&&x<bx+w-1?'plasterwallWindow':'plasterwall',
+    0,z===front?0:z===bz?2:x===bx?3:1);
+   add(x,z,'roofHip',1);
+  }
  }
- add(21,7,'table');
- $('mapWidth').value=32;$('mapHeight').value=32;
- for(const id of ['rangeX1','rangeX2','rangeZ1','rangeZ2'])$(id).max=31;
- $('rangeX2').value=31;$('rangeZ2').value=31;
+ // Standalone ship entity using the exact in-game shared mesh.
+ add(25,28,'pineLandingCraft');
+ // Crew slots: five ranks of four to validate the usable deck dimensions.
+ for(let row=0;row<4;row++)for(let col=0;col<5;col++)
+  add(22+Math.round(col*1.5),26+Math.round(row*1.3),'humanKnight');
+ // Dockside gear at quay edge rather than in the center lane.
+ for(const [x,z,type] of [
+  [11,18,'pineHarborLamp'],[39,18,'pineHarborLamp'],
+  [16,23,'pineHarborBollard'],[24,23,'pineHarborBollard'],
+  [30,23,'pineHarborBollard'],[36,23,'pineHarborBollard'],
+  [19,23,'pineHarborFender'],[28,23,'pineHarborFender'],
+  [14,17,'pineHarborPallet'],[34,17,'pineHarborPallet'],
+  [30,14,'pineHarborSign'],[39,17,'pineHarborPallet']
+ ])add(x,z,type);
+ $('mapWidth').value=48;$('mapHeight').value=40;
+ for(const id of ['rangeX1','rangeX2'])$(id).max=47;
+ for(const id of ['rangeZ1','rangeZ2'])$(id).max=39;
+ $('rangeX2').value=47;$('rangeZ2').value=39;
  level=0;$('level').value='0';hideUpper=false;$('hideUpper').checked=false;
  mode='move';yaw=Math.PI/4;showEntireMap();refreshPalette();commit();cursorDirty=true;
- toast('PINE港湾見本：岸壁・桟橋・船着場・係船柱・倉庫・照明');
+ toast('48×40：18×8上陸艇・20人分の甲板・軍港の岸壁と施設を生成');
 }
 function makeCityNature64Demo(){
  if(world.length&&!confirm('現在の配置を64×64の「川と丘の旧市街」に置き換えますか？先にJSON保存してください。'))return;
