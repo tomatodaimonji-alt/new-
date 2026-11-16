@@ -1,5 +1,13 @@
 /*__PINE_SHARED_BLOCK_CATALOG__*/palette.push(...[["pineSuperGlass","ガラス正面壁","wall"],["pineSuperDoor","自動ガラス入口","wall"],["pineSuperShutter","荷受けシャッター","wall"],["pineSuperShelf","ゴンドラ棚","decor"],["pineSuperCooler","壁面冷蔵ケース","decor"],["pineSuperFreezer","冷凍平ケース","decor"],["pineSuperCheckout","レジ台","decor"],["pineSuperProduce","青果平台","decor"],["pineSuperCart","カート置場","decor"],["pineSuperStripe","駐車区画線","decor"],["pineSuperCurb","縁石","decor"],["pineSuperSign","看板","decor"],["pineSuperAC","空調室外機","decor"],["pineSuperBollard","車止め","decor"],["pineSuperRack","業務用棚","decor"]].map(([id,name,cat])=>({id,name,cat,icon:'▣'})));
 palette.push(...[['pineSuperWall','スーパー彩色外壁','wall'],['pineSuperAccent','スーパー緑色アクセント壁','wall'],['pineSuperRoof','スーパー平屋フラット屋根','decor'],['pineSuperLogo','PINE MART 大型看板','decor'],['pineSuperCar','放置車両','decor']].map(([id,name,cat])=>({id,name,cat,icon:'▣'})));
+palette.push(...[
+ ['pineSuperCorner','スーパー外壁コーナー','wall'],
+ ['pineSuperProduceSlope','青果・傾斜陳列台','decor'],
+ ['pineSuperFreshCase','精肉・鮮魚対面ケース','decor'],
+ ['pineSuperShelfEnd','売り場棚の端末','decor'],
+ ['pineSuperPacking','レジ横サッカー台','decor'],
+ ['pineSuperRegisterGate','レジ通路ゲート','decor']
+].map(([id,name,cat])=>({id,name,cat,icon:'▣'})));
 const catalog=new Map(palette.map(p=>[p.id,p]));let selected='wall',mode='place',rotation=0,level=0,hideUpper=false,worldMaxLevel=0,world=[],models=[],prefabs=[],undoStack=[],redoStack=[],hover=null,dragPainting=false,yaw=Math.PI/4,zoom=1,panX=0,panZ=0,dirty=true,sceneMesh=null,cursorMesh=null,cursorDirty=true,modelParts=[],activeModelId=null;
 const byId=id=>catalog.get(id)||models.find(m=>m.id===id)||prefabs.find(p=>p.id===id);
 const cellKey=(x,z,y=0)=>x+','+z+','+y;
