@@ -42,3 +42,9 @@ node scripts/build.mjs
 - [港湾の共通3D形状](src/shared/harbor-geometry.fragment.js) — ゲームとエディターが利用
 - `scripts/build.mjs` で各HTMLに埋め込むため、ランタイムに外部JavaScriptの読み込みは発生しません。
 - 港湾以外の3D形状/当たり判定はまだ分離途上。新たな建材を追加するときは既存表示と移動判定の確認が必要。
+
+
+## 共通化した建築・景観3D
+[屋根](src/shared/roof-geometry.fragment.js) / [外壁アクセント](src/shared/wall-facade.fragment.js) / [柵](src/shared/fence-geometry.fragment.js) / [橋の種類と向き](src/shared/bridge-types.fragment.js) を共通ライブラリ化済み。ゲームとワールドエディターの表示に反映されます。
+
+石橋の床の高さ・欄干の表示と、ゲームの歩行判定は**共通化対象外**。差分を調べずに一括置換しないこと。
