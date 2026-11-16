@@ -70,8 +70,8 @@ function pineAddBaseExpansion(props,paths){
    }
    add(x+2,z+2,'pineHelicopter');break;
   }
-  // Ship and cranes are non-interactive scenery until real vehicle movement exists.
-  add(85,89,'pineTransportShip');
+  // Remove the obsolete fake 15-cell static ship: a real navigable carrier exists.
+  // The military supply pier retains its working loading crane.
   add(82,82,'pineDockCrane');
  }
 
