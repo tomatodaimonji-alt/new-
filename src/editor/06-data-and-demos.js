@@ -1676,19 +1676,139 @@ function makeHighBuilding(kind){
  toast(tower?'7階建ての塔を試作しました':'3階建ての家を試作しました');
 }
 
-function makeDemo(){
- snapshot();world=[];terrainHeights=new Map();
- const ox=Math.floor((MAP_W-7)/2),oz=Math.floor((MAP_H-7)/2);
- for(let z=0;z<7;z++)for(let x=0;x<7;x++)world.push({x:ox+x,z:oz+z,y:0,type:'woodfloor',rot:0});
- for(let z=0;z<7;z++)for(let x=0;x<7;x++)if(x===0||x===6||z===0||z===6){
-  const type=(x===3&&z===6)?'door':(z===0&&x===3)?'window':(x===0||x===6)&&(z===0||z===6)?'corner':'wall';
-  world.push({x:ox+x,z:oz+z,y:0,type,rot:0});
+// POI sample catalog: six building typologies, three architectural states.
+const PINE_SUPER_VARIANTS=[
+ ['compact','小型スーパー',16,12,1,'住宅街の小型食料品店'],
+ ['standard','標準スーパー',24,16,1,'郊外型の標準店舗'],
+ ['hyper','大型スーパー',40,28,1,'広い売り場・複数レジ'],
+ ['urban','都市型スーパー',18,16,2,'2階のある都市部店舗'],
+ ['rural','地方スーパー',20,14,1,'地方道沿いの古い店舗'],
+ ['wholesale','倉庫型スーパー',36,24,1,'高い棚列と荷役施設']
+];
+const PINE_SUPER_STATES=[
+ ['normal','通常の廃墟','構造を維持した店舗'],
+ ['damaged','荒廃した廃墟','壁・屋根が部分破損'],
+ ['converted','封鎖・転用','一部入口を封鎖した店舗']
+];
+function pineSupermarketPOI(style='standard',condition='normal',force=false){
+ const spec=PINE_SUPER_VARIANTS.find(v=>v[0]===style)||PINE_SUPER_VARIANTS[1];
+ if(!force&&world.length&&!confirm('現在のエディター配置をスーパーのPOIサンプルで置き換えますか？ JSON保存をおすすめします。'))return;
+ const [,label,w,d,levels]=spec;
+ snapshot();world=[];models=[];prefabs=[];terrainHeights=new Map();
+ const sx=Math.ceil((w+21)/2),sz=9,siteW=Math.max(48,w+24),siteH=Math.max(46,d+30);
+ MAP_W=siteW;MAP_H=siteH;
+ const put=(x,z,type,y=0,rot=0)=>{if(x>=0&&z>=0&&x<siteW&&z<siteH)world.push({x,z,y,type,rot})};
+ const west=Math.floor((siteW-w)/2),north=8,south=north+d-1,cx=west+Math.floor(w/2);
+ const t=(x,z)=>((x*17+z*29+w*13+d*7)%23+23)%23;
+ // Full site baseline, pavement, service ramp and parking aisle.
+ for(let z=2;z<siteH-2;z++)for(let x=2;x<siteW-2;x++)
+  put(x,z,x>=west-5&&x<=west+w+5?'stone':'grass');
+ for(let z=2;z<north;z++)for(let x=west+Math.floor(w*.45);x<Math.min(siteW-2,west+w+8);x++)put(x,z,'ironfloor');
+ for(let z=south+3;z<siteH-3;z++)for(let x=west-3;x<west+w+3;x++)put(x,z,'stone');
+ for(let x=west;x<west+w;x++){put(x,south+1,'plasterfloor');if(x%2===0)put(x,south+2,'pineSuperCurb')}
+ // Parking bay markings deliberately avoid the pedestrian path.
+ for(const z of [south+5,south+12])for(let x=west-2;x<=west+w+1;x+=3){
+  if(Math.abs(x-cx)<=2)continue;
+  put(x,z,'pineSuperStripe');put(x+2,z,'pineSuperStripe');
  }
- for(const [x,z,type,rot] of [[ox+2,oz+2,'table',0],[ox+5,oz+3,'bed',1],[ox+2,oz+4,'chest',0],[ox-1,oz+2,'treeRound',0],[ox+7,oz+4,'treeBranch',0]]){
-  if(validPos(x,z))world.push({x,z,y:0,type,rot});
+ for(let z=south+3;z<siteH-3;z++)put(cx,z,'plasterfloor');
+ // Floorplates including second-story urban storage.
+ for(let y=0;y<levels;y++)for(let z=north;z<=south;z++)for(let x=west;x<west+w;x++){
+  const back=z<north+Math.max(3,Math.floor(d*.27));
+  put(x,z,y>0?'woodfloorLight':back?'ironfloor':z>=south-3?'plasterfloor':'basicfloor',y);
  }
- commit();toast('サンプルの家を配置しました');
+ const backZ=north+Math.max(3,Math.floor(d*.27));
+ // Perimeter with selective glazing and a 2/3-tile automated glass entrance.
+ for(let y=0;y<levels;y++)for(let z=north;z<=south;z++)for(let x=west;x<west+w;x++){
+  const side=x===west||x===west+w-1,isBack=z===north,isFront=z===south;
+  if(!side&&!isBack&&!isFront)continue;
+  const entry=y===0&&isFront&&Math.abs(x-cx)<=1;
+  const shutter=y===0&&isBack&&x>=west+w-7&&x<=west+w-6;
+  const staff=y===0&&isBack&&x===west+2;
+  const glazing=isFront&&x>west+2&&x<west+w-3&&y===0;
+  let type=entry?'pineSuperDoor':shutter?'pineSuperShutter':staff?'plasterwallDoor':glazing?'pineSuperGlass':'plasterwall';
+  if(condition==='converted'&&entry&&x!==cx)type='ironwall';
+  if(condition==='damaged'&&y===0&&!entry&&!staff&&!shutter&&t(x,z)<3)continue;
+  put(x,z,type,y);
+ }
+ // Back-of-house partitions, access points and storage racks.
+ for(let x=west+1;x<west+w-1;x++)
+  put(x,backZ,x===west+3||x===west+w-5?'plasterwallDoor':'plasterwall');
+ for(let x=west+Math.floor(w*.34);x<west+w-1;x+=Math.max(4,Math.floor(w*.21)))
+  for(let z=north+1;z<backZ;z++)put(x,z,z===backZ-1?'plasterwallDoor':'plasterwall');
+ for(let x=west+2;x<west+w-2;x+=Math.max(3,Math.floor(w*.22)))put(x,north+2,'pineSuperRack');
+ // Main accessible aisle, shelf rows, perimeter chillers.
+ const aisleStart=backZ+2,aisleEnd=south-5;
+ const shelfStep=style==='wholesale'?4:3;
+ for(let x=west+3;x<west+w-3;x+=shelfStep){
+  if(Math.abs(x-cx)<=2)continue;
+  for(let z=aisleStart;z<=aisleEnd;z++)
+   if(condition!=='damaged'||t(x,z)>2)put(x,z,'pineSuperShelf');
+ }
+ for(let z=aisleStart;z<=aisleEnd;z++)for(const x of [west+1,west+w-2])put(x,z,'pineSuperCooler');
+ if(w>=20)for(const x of [cx-3,cx+3])for(let z=aisleStart;z<=Math.min(aisleEnd,aisleStart+2);z++)put(x,z,'pineSuperFreezer');
+ for(let x=west+2;x<=west+4;x+=2)if(x<west+w-2)put(x,aisleStart,'pineSuperProduce');
+ const registers=Math.max(1,Math.min(6,Math.round(w/7)));
+ for(let i=0;i<registers;i++){
+  const x=west+3+Math.floor(i*(w-7)/Math.max(1,registers-1));
+  if(Math.abs(x-cx)>1)put(x,south-2,'pineSuperCheckout');
+ }
+ put(west+1,south+1,'pineSuperCart');put(west+2,south+1,'pineSuperCart');
+ put(west+Math.floor(w*.25),south+1,'pineSuperSign');
+ put(west+Math.floor(w*.72),south+1,'pineSuperSign');
+ for(const z of [north+1,north+4])put(Math.min(siteW-3,west+w+4),z,'pineSuperBollard');
+ // Roof is an independent hideable story, not a collision-bearing floor.
+ for(let z=north;z<=south;z++)for(let x=west;x<west+w;x++){
+  if(condition==='damaged'&&t(x,z)<4)continue;
+  put(x,z,'roofPlank',levels+1);
+ }
+ for(const x of [west+4,west+w-5])put(x,north+3,'pineSuperAC',levels);
+ if(levels===2)put(west+2,north+2,'stairSwitchback',0);
+ if(condition==='converted'){
+  for(let x=west+3;x<west+w-3;x+=2)put(x,south+2,'pineSuperBollard');
+ }
+ for(const [id,v] of [['mapWidth',siteW],['mapHeight',siteH],['rangeX1',west],['rangeZ1',north],['rangeX2',west+w-1],['rangeZ2',south]]){
+  const el=$(id);if(el)el.value=v;
+ }
+ for(const id of ['rangeX1','rangeX2'])$(id).max=siteW-1;
+ for(const id of ['rangeZ1','rangeZ2'])$(id).max=siteH-1;
+ level=0;$('level').value='0';hideUpper=true;$('hideUpper').checked=true;
+ selected='pineSuperShelf';mode='move';rotation=0;
+ commit();refreshPalette();updateSelected();showEntireMap();
+ toast(label+'・'+PINE_SUPER_STATES.find(v=>v[0]===condition)?.[1]+' を配置した');
 }
+function pineSwitchEditor(open){
+ const url=new URL(location.href);
+ if(open)url.searchParams.set('editor','1');
+ else url.searchParams.delete('editor');
+ location.href=url.toString();
+}
+function pineBuildPOICategories(){
+ const host=$('poiSampleCategories');if(!host)return;
+ host.replaceChildren();
+ for(const [key,label,w,d,levels,description] of PINE_SUPER_VARIANTS){
+  const group=document.createElement('details');
+  if(key==='standard')group.open=true;
+  const summary=document.createElement('summary');
+  summary.textContent=label+'　'+w+'×'+d+(levels>1?'・'+levels+'階':'');
+  group.append(summary);
+  for(const [state,stateLabel,stateDesc] of PINE_SUPER_STATES){
+   const button=document.createElement('button');
+   button.className='poiSampleEntry';
+   button.type='button';
+   button.textContent=stateLabel;
+   const small=document.createElement('small');
+   small.textContent=description+' ／ '+stateDesc;
+   button.append(small);
+   button.addEventListener('click',()=>{pineSupermarketPOI(key,state);$('palette').classList.remove('mobileOpen')});
+   group.append(button);
+  }
+  host.append(group);
+ }
+}
+
+
+function makeDemo(){pineSupermarketPOI('standard','normal',true)}
 function setMapSize(){
  const width=Number($('mapWidth').value),height=Number($('mapHeight').value);
  if(!Number.isInteger(width)||!Number.isInteger(height)||width<MIN_MAP||height<MIN_MAP||width>MAX_MAP||height>MAX_MAP){toast('縦横は12〜128の整数で指定してください');return}
@@ -1827,6 +1947,6 @@ $('addPart').addEventListener('click',()=>{if(modelParts.length>=100){toast('パ
 $('saveModel').addEventListener('click',()=>{if(!modelParts.length){toast('パーツを1個以上追加してください');return}const name=$('modelName').value.trim()||'自作モデル';const id='custom-'+Date.now().toString(36),m={id,name,parts:modelParts.map(p=>({...p}))};if(!validModel(m)){toast('モデルが不正です');return}snapshot();models.push(m);commit();refreshPalette();selected=id;mode='place';updateSelected();$('modelModal').classList.remove('open');toast('「'+name+'」を登録した')});
 $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mobileOpen');$('inspector').classList.remove('mobileOpen')});$('showInspector').addEventListener('click',()=>{$('inspector').classList.toggle('mobileOpen');$('palette').classList.remove('mobileOpen')});
 try{const saved=localStorage.getItem(SAVE_KEY);if(saved)loadData(JSON.parse(saved));else makeDemo()}catch(e){MAP_W=16;MAP_H=16;world=[];models=[];prefabs=[];makeDemo()}
-refreshPalette();updateStats();updateSelected();showEntireMap();render();
+pineBuildPOICategories();refreshPalette();updateStats();updateSelected();showEntireMap();render();
 if(location.search.includes('test=1'))window.__editorTest={state:()=>({world:world.map(p=>({...p})),models:models.map(m=>({...m})),prefabs:prefabs.map(p=>({...p})),selected,mode,rotation,level,glLink:gl.getProgramParameter(program,gl.LINK_STATUS)}),place:(x,z)=>changeCell(x,z),data};
 })();
