@@ -130,6 +130,12 @@ assert.ok(game.includes('id="pineTroopButton"')&&game.includes("$('pineTroopButt
  'Troop boarding button is missing');
 assert.ok(editor.includes('48×40・大型輸送艇と軍港'),'Editor lacks ship-scale sample');
 assert.ok(editor.includes('pineLandingCraftGeometry(m,o.x+.5'),'Editor must share the ship mesh');
+assert.ok(boatRuntime.includes('pinePlayerTransfer={start:now'),
+ 'Player must walk across gangway rather than teleport');
+assert.ok(boatRuntime.includes('const quayZ=62.25,gateZ=pineBoatZ-3.05'),
+ 'Transfer route must cross the physical quay gangway');
+assert.ok(game.includes('!pineSailing&&!pinePlayerTransfer&&!gameMove'),
+ 'Player movement must be locked during embarkation');
 assert.ok(game.includes('troopCount:pineTroopCount,troopMode:pineTroopMode'),
  'Troop count must persist with save');
 assert.ok(readFileSync(join(root,'PINE_WORLD_RULES.md'),'utf8').includes('マップ切り替えは禁止'));
