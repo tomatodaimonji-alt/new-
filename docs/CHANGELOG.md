@@ -1,5 +1,12 @@
 # PINE 更新履歴
 
+## 2026-11-17 — 共通ブロックライブラリ化（機能変更なし）
+- ゲーム本体・ワールドエディターで重複していた全ブロックカタログを `src/shared/block-catalog.fragment.js` に一元化。
+- 港湾7種の定義を `src/shared/harbor-palette.fragment.js`、港湾3D形状を `src/shared/harbor-geometry.fragment.js` に一元化。
+- `scripts/build.mjs` が両方のHTMLへ同じカタログ/形状を埋め込み、`scripts/test-build.mjs` が重複・参照漏れを検出。
+- 実際にGitHubのソース断片を読み直して結合し、ゲーム `398299` 文字、エディター `310652` 文字ともに前回の完成HTMLと**1文字も違わない**こと、JS構文を確認。
+- 他の3D部品・衝突判定の共通化、実機動作、FPS測定は未実施。
+
 ## 2026-11-17 — 開発基盤の整理（機能変更なし）
 - `forest-game-prototype.html`（v3.2）と `world-editor.html` の原文を切り出し、`src/game/` と `src/editor/` へ配置。
 - 既存のHTMLはそのまま保持。分割を結合すると元HTMLと完全一致する設計。
