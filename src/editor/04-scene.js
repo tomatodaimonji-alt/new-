@@ -1,3 +1,27 @@
+let poiWalkActive=false,poiWalkX=0,poiWalkZ=0,poiWalkMesh=null,poiWalkOldRoof=false;
+function poiWalkAvatar(){
+ if(poiWalkMesh){gl.deleteBuffer(poiWalkMesh.buf);poiWalkMesh=null}
+ if(!poiWalkActive)return;
+ const m=mesh();characterHuman(m,poiWalkX+.5,terrainY(poiWalkX,poiWalkZ),poiWalkZ+.5,true);poiWalkMesh=upload(m);
+}
+function poiWalkCanStep(x,z){
+ if(!validPos(x,z))return false;
+ return !world.some(o=>o.y===0&&o.x===x&&o.z===z&&!isFloor(o.type)&&!['pineSuperDoor','plasterwallDoor','woodwallDoor','brickwallDoor','pineSuperLogo','pineSuperStripe','pineSuperCurb','pineSuperBollard','pineSuperSign'].includes(o.type));
+}
+function poiWalkCamera(){panX=poiWalkX+.5-MAP_W/2;panZ=poiWalkZ+.5-MAP_H/2;zoom=Math.max(zoom,.82);cursorDirty=true}
+function poiWalkStatus(){const e=$('poiWalkCoords');if(e)e.textContent='位置 '+(poiWalkX+1)+','+(poiWalkZ+1)}
+function poiWalkStep(dx,dz){if(!poiWalkActive||!poiWalkCanStep(poiWalkX+dx,poiWalkZ+dz))return;poiWalkX+=dx;poiWalkZ+=dz;poiWalkAvatar();poiWalkCamera();poiWalkStatus()}
+function poiWalkReset(x,z){poiWalkX=x;poiWalkZ=z;if(poiWalkActive){poiWalkAvatar();poiWalkCamera();poiWalkStatus()}}
+function poiWalkSet(active){
+ if(active===poiWalkActive)return;
+ poiWalkActive=active;
+ if(active){poiWalkOldRoof=hideUpper;hideUpper=true;$('hideUpper').checked=true;level=0;$('level').value='0';mode='move';poiWalkCamera()}
+ else{hideUpper=poiWalkOldRoof;$('hideUpper').checked=hideUpper;showEntireMap()}
+ $('poiWalkPad').classList.toggle('active',active);
+ $('poiWalkToggle').textContent=active?'歩行中':'人型で歩く';
+ $('poiRoofToggle').textContent=hideUpper?'屋根を表示':'屋根を隠す';
+ poiWalkAvatar();poiWalkStatus();dirty=true;cursorDirty=true;updateSelected();
+}
 function makeScene(){
  const m=mesh(),visible=world.filter(o=>!hideUpper||o.y<=level);
  const floors=new Map(world.filter(o=>o.y===0&&isFloor(o.type)).map(o=>[o.x+','+o.z,o.type]));
