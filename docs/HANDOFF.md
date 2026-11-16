@@ -4,7 +4,7 @@
 
 ## プロジェクト本体
 GitHub: `tomatodaimonji-alt/new-` / main
-- プレイ用: `forest-game-prototype.html`（PINE v3.2）
+- プレイ用: `forest-game-prototype.html`（PINE v3.3）
 - エディター: `world-editor.html`
 - 分割ソース: `src/game/`、`src/editor/`
 - 生成・チェック: `scripts/build.mjs`、`scripts/test-build.mjs`
@@ -64,3 +64,13 @@ v3.2: 旧漁港は3マス幅の木造桟橋、軍港はコンクリート岸壁�
 必読：`docs/ASSET_QUALITY_STANDARD.md`。資料や制作上の判断を `docs/ASSET_REFERENCE_LOG.md` に記録する。写真やゲームのアセットをそのままコピーしない。**リサーチ未実施・実機未検証の場合は未実施と明記**する。
 
 なお、ゲームの目的は**崩壊した世界を一人の生存者として探索し、危険な場所へ挑戦し、価値あるものを発見すること**。ワールドエディターはその舞台を制作するための道具であり、見た目と探索体験をセットで改善する。
+
+## 2026-11-17 追加：v3.3 実物参考の20人用輸送艇・軍港
+- 参考資料: `docs/ASSET_REFERENCE_LOG.md` 参照。現実のLCU、米海兵隊/陸軍の写真、Arma 3とProject Zomboidの港湾表現を調べた。
+- 共通船体: `src/shared/landing-craft-geometry.fragment.js` に全長18×幅8、海面下3マス、20人用甲板、船橋・舷側・船首ランプの簡易3D。ゲーム/エディターとも同じメッシュを利用。
+- ゲーム: `src/game/10-seamless-world.js`。旅客・兵員用の2港を18×8船体に合わせ再配置。船は1回メッシュ化してGPU位置変換で操船、兵員20名は時間差の乗船・下船アニメーション（完全AIではない）。
+- UI: `pineBoatButton` と `pineTroopButton`。船の乗り降りと「兵員20名を乗船／下船指示」。乗降中は操船を禁止。
+- エディター: 「48×40・大型輸送艇と軍港」見本。船体・20名分の配置、岸壁、倉庫・詰所をまとめて確認できる。
+- 島の拡張は今回なし。旧住民街・畑・白い石橋を維持し、東側海上の岸壁を延ばした。
+- **未完成:** 自律AI経路探索、プレイヤーの船内自由歩行、実際の上陸後戦闘、船首ランプの操作、船の旋回・複数船、実機FPS検証。移動演出の実機動作を完了と断言しない。
+- 前の見た目だけの巨大な固定船 `pineTransportShip` は軍港の追加配置から外した。クレーンや小物は維持。
