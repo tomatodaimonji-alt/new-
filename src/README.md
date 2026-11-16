@@ -48,3 +48,15 @@ node scripts/build.mjs
 `scripts/build.mjs` は3種類の参照マーカーを展開して、従来と同じ完全オフライン単一HTMLを生成します。**新しいブロックIDはまず共通カタログへ追加**してください。描画や当たり判定に新しい実装が必要なら、それらも整合させてください。
 
 現在、全ブロックの**定義**は一元化できていますが、港湾以外の3D**形状・判定処理**はまだ各アプリ側にあります。見た目だけを共有したと誤解しないこと。今回の共通化によって現行完成HTMLの内容は変更していません。
+
+
+## 共通3D形状（2026-11-17 更新）
+追加した唯一の編集元：
+- `src/shared/roof-geometry.fragment.js` — 接続式屋根
+- `src/shared/wall-facade.fragment.js` — 壁面の外装アクセント
+- `src/shared/fence-geometry.fragment.js` — 柵
+- `src/shared/bridge-types.fragment.js` — 橋ID・向き・同種橋の接続規則
+
+`scripts/build.mjs` が両方の `03-geometry.js` へ挿入するため、ゲームとエディターで描画ロジックが乖離しにくくなっています。
+
+**除外したもの：** `bridgeSpanElevation`、`bridgeConnectedGeometry`、`gameBridgeCanStep` はゲーム／エディター間で差異があります。特に白い石橋の高さと歩行に関係するため、差分の仕様化と実機検証をするまで統合しないでください。
