@@ -262,6 +262,13 @@ const $=id=>document.getElementById(id);
 function toast(message){toastEl.textContent=message;toastEl.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>toastEl.classList.remove('show'),2200)}
 if(!gl){$('canvasTip').textContent='この端末はWebGLに対応していません。3D編集を開始できません。';return}
 const palette=[
+{id:'pineHarborPier',name:'港・木造歩行桟橋',icon:'▥',cat:'build'},
+{id:'pineHarborQuay',name:'港・コンクリート岸壁',icon:'▣',cat:'build'},
+{id:'pineHarborBollard',name:'港・係船柱',icon:'●',cat:'deco'},
+{id:'pineHarborFender',name:'港・防舷材',icon:'◖',cat:'deco'},
+{id:'pineHarborLamp',name:'港・照明灯',icon:'♧',cat:'deco'},
+{id:'pineHarborPallet',name:'港・荷役パレット',icon:'▥',cat:'deco'},
+{id:'pineHarborSign',name:'港・航路標識',icon:'⚑',cat:'deco'},
 {id:'water',name:'水',icon:'≈',cat:'floor'},{id:'river',name:'川',icon:'≈',cat:'floor'},
 {id:'lake',name:'湖',icon:'≈',cat:'floor'},{id:'sea',name:'海',icon:'≈',cat:'floor'},
 {id:'grass',name:'草原',icon:'🌱',cat:'floor'},{id:'earth',name:'森の土',icon:'🍂',cat:'floor'},{id:'moss',name:'苔と石',icon:'🪨',cat:'floor'},{id:'stone',name:'石床',icon:'▫️',cat:'floor'},{id:'woodfloor',name:'木の床（標準）',icon:'🟫',cat:'floor'},
@@ -3085,6 +3092,36 @@ function bridgeSpanElevation(o,lookup){
  for(const tile of group)bridgeDeckLevels.set(tile.x+','+tile.z,height);
  return height*TERRAIN_STEP;
 }
+
+function pineHarborGeometry(m,o){
+ const x=o.x+.5,z=o.z+.5,deck=Math.max(1,terrainY(o.x,o.z));
+ const B=(dx,dy,dz,w,h,d,c)=>cube(m,x+dx,dy,z+dz,w,h,d,c);
+ const metal=[.43,.49,.49],dark=[.23,.27,.29],wood=[.58,.49,.38],pale=[.66,.69,.66],rust=[.47,.31,.23];
+ if(o.type==='pineHarborPier'||o.type==='pineHarborQuay'){
+  const cement=o.type==='pineHarborQuay';
+  B(0,deck+.01,0,.992,.28,.992,cement?[.49,.52,.53]:[.41,.34,.28]);
+  B(0,deck+.16,0,.982,.045,.982,cement?pale:wood);
+  if(!cement)for(const dx of [-.31,-.01,.29])B(dx,deck+.187,0,.015,.008,.93,[.37,.31,.25]);
+  else if((o.x+o.z)%7===0)B(0,deck+.193,-.40,.43,.012,.035,[.79,.72,.47]);
+ }else if(o.type==='pineHarborBollard'){
+  B(0,deck+.20,0,.30,.24,.31,dark);B(0,deck+.41,0,.48,.08,.34,metal);
+ }else if(o.type==='pineHarborFender'){
+  B(0,deck-.15,0,.40,.72,.27,dark);
+  for(const h of [-.25,.04])B(0,deck+h,.16,.32,.05,.06,metal);
+ }else if(o.type==='pineHarborLamp'){
+  B(0,deck+.68,0,.10,1.40,.10,metal);
+  B(0,deck+1.46,0,.42,.14,.42,dark);
+  B(0,deck+1.38,0,.38,.05,.38,[.84,.75,.51]);
+ }else if(o.type==='pineHarborPallet'){
+  B(0,deck+.10,0,.78,.12,.78,rust);
+  for(const dx of [-.25,.25])B(dx,deck+.30,0,.29,.32,.59,metal);
+  B(0,deck+.49,0,.80,.06,.76,pale);
+ }else if(o.type==='pineHarborSign'){
+  B(0,deck+.65,0,.10,1.3,.12,dark);
+  B(0,deck+1.35,0,.76,.35,.11,[.30,.42,.42]);
+  B(0,deck+1.36,.06,.53,.035,.02,[.85,.77,.48]);
+ }
+}
 function bridgeConnectedGeometry(m,o,lookup){
  const r=bridgeDirection(o.rot),wood=o.type.startsWith('bridgeWood');
  const axis=r%2===0,side=axis?[[1,0],[-1,0]]:[[0,1],[0,-1]];
@@ -3263,6 +3300,7 @@ function makeScene(){
   const destination=pick(o);
   if(AUTO_ROOFS.has(o.type)){const temp=mesh();connectedRoofGeometry(temp,o,roofs);shiftMesh(destination,temp,terrainY(o.x,o.z))}
   else if(BRIDGE_IDS.has(o.type))bridgeConnectedGeometry(destination,o,bridgeLookup);
+  else if(o.type.startsWith('pineHarbor'))pineHarborGeometry(destination,o);
   else if(o.type.startsWith('pine'))pineZoneGeometry(destination,o);
   else if(o.type==='terrainStairs')elevationStairGeometry(destination,o.x,o.z,o.y*1.4+terrainY(o.x,o.z),o.rot||0);
   else if(/^fence(Wood|Stone|Iron)/.test(o.type)&&connectedFenceGeometry(destination,o,fenceLookup)){}
