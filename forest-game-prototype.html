@@ -5966,6 +5966,7 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
   for(const k of reserved){const [x,z]=k.split(',').map(Number);gameZonePaths.push({x,z,kind:'main'})}
   pineAddBaseExpansion(gameZoneProps,gameZonePaths);
   pineAddHarbors(gameZoneProps);
+  pineBuildMainlandScenery(gameZoneProps);
  }
 
  // PINE v2: concrete naval base, headquarters, airfield and traversable quay.
@@ -6115,6 +6116,41 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
    }
    // A terminal beside the western coast; its actual door is accessible.
   dirty=true;
+ }
+ // Deterministic roadside set dressing. No persistent world edits or road closures.
+ // City blocks are 15 tiles apart, with spare shoulder space at x+10, z+4.
+ function pineBuildMainlandScenery(props){
+  if(!pineWorldEnabled)return;
+  const used=new Set(world.filter(o=>o.y===0&&!isFloor(o.type)).map(o=>gameTileKey(o.x,o.z)));
+  for(const p of props)if(p.y===0)used.add(gameTileKey(p.x,p.z));
+  const place=(x,z,type,rot=0,solid=true)=>{
+   const k=gameTileKey(x,z);
+   if(!pineMainlandLand(x,z)||!validPos(x,z)||used.has(k))return false;
+   // Leave procedurally defined road lanes and all authored building interiors open.
+   if(x%15<3||z%15<3)return false;
+   used.add(k);props.push({x,z,y:0,type,rot});
+   return true;
+  };
+  for(let z=19;z<=137;z+=15)for(let x=169;x<=304;x+=15){
+   const n=pineChunkRecord(Math.floor(x/PINE_CHUNK),Math.floor(z/PINE_CHUNK)).variation;
+   const a=surfaceNoise(x*7+3,z*11+5),b=surfaceNoise(x*13+9,z*17+4);
+   const suburb=x>=244,industrial=x<214&&z<80,remote=x>=274&&z>=79;
+   // Parked, weathered cars stand on the shoulder, not in intersections.
+   if(a>.73&&!remote){
+    if(place(x+10,z+4,'pineWreckedCar',0)){
+     const k=gameTileKey(x+10,z+5);
+     if(!used.has(k)&&pineMainlandLand(x+10,z+5)){
+      used.add(k);props.push({x:x+10,z:z+5,y:0,type:'pineWreckFootprint',rot:0});
+     }
+    }
+   }else if(a>.40)place(x+10,z+4,remote?'pineRoadsideShrub':'pineUtilityPole');
+   else place(x+10,z+4,industrial?'pineWasteDrum':'pineRoadsideShrub');
+   if(b>.63)place(x+10,z+9,remote?'pineRoadsideShrub':'pineRoadSign');
+   else if(b<.33)place(x+10,z+9,suburb?'pineRoadsideShrub':'pineRubblePile');
+   if(industrial&&n>.55)place(x+11,z+7,'pineWasteDrum');
+   // Debris occupies yards, never the building's entrance.
+   if(b>.82)place(x+2,z+10,'pineRubblePile');
+  }
  }
  function pineAddHarbors(props){
   if(!pineWorldEnabled)return;
@@ -6661,6 +6697,43 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
     for(let i=0;i<5;i++)B(-.32+i*.16,.09+Math.sin(i*.75)*.05,0,.19,.045,.045,canvas);
    }else if(o.type==='pineQuaySteps'){
     for(let i=0;i<3;i++)B(0,.04+i*.12,-.30+i*.20,.85,.12,.28,stone);
+   }else if(o.type==='pineWreckedCar'){
+    const body=surfaceNoise(o.x*3,o.z*7)>.5?[.39,.45,.43]:[.57,.43,.32];
+    // Compact two-tile abandoned car: bonnet, cabin, glazing, four tires.
+    B(0,.25,.15,.84,.37,1.66,body);
+    B(0,.58,-.13,.72,.32,.82,body);
+    B(0,.63,-.54,.59,.19,.035,[.25,.36,.39]);
+    B(0,.63,.29,.59,.17,.035,[.29,.35,.35]);
+    for(const dx of [-.43,.43])for(const dz of [-.40,.67])
+     B(dx,.12,dz,.13,.23,.23,oliveDark);
+    B(0,.35,.96,.49,.12,.055,rust);
+    B(.28,.36,-.69,.12,.075,.04,canvas);
+   }else if(o.type==='pineWreckFootprint'){
+    // Second collision cell of the long car, deliberately no extra geometry.
+   }else if(o.type==='pineUtilityPole'){
+    B(0,.01,0,.17,3.4,.16,[.48,.48,.45]);
+    B(0,3.2,0,.95,.10,.10,wood);
+    for(const dx of [-.35,.35])B(dx,3.25,0,.09,.15,.10,canvas);
+    B(0,1.12,.10,.25,.30,.07,metal);
+   }else if(o.type==='pineRoadSign'){
+    B(0,.02,0,.09,1.75,.09,metal);
+    B(0,1.65,0,.65,.41,.07,[.30,.43,.46]);
+    B(0,1.66,.044,.48,.07,.018,canvas);
+   }else if(o.type==='pineRubblePile'){
+    const colors=[stone,rust,wood,metal];
+    for(let i=0;i<5;i++){
+     const dx=(surfaceNoise(o.x*5+i,o.z*3)-.5)*.65;
+     const dz=(surfaceNoise(o.x*9,o.z*7+i)-.5)*.66;
+     B(dx,.02, dz,.18+(i%3)*.09,.10+(i%2)*.07,.21,colors[i%4]);
+    }
+   }else if(o.type==='pineRoadsideShrub'){
+    B(0,.01,0,.10,.25,.11,wood);
+    for(const [dx,dz,r] of [[-.16,0,.30],[.13,.13,.33],[.04,-.16,.26]])
+     diamond(m,x+dx,y+.26,z+dz,r,[.26,.36+surfaceNoise(o.x*4,o.z*5)*.12,.25]);
+   }else if(o.type==='pineWasteDrum'){
+    B(0,.04,0,.49,.73,.47,[.34,.39,.38]);
+    for(const h of [.13,.36,.69])B(0,h,0,.52,.07,.50,metal);
+    B(0,.78,0,.51,.055,.49,rust);
    }else if(o.type==='pineScenicPine'){
    B(0,0,0,.15,1.42,.16,wood);
    for(let i=0;i<3;i++)diamond(m,x,y+.86+i*.30,z,.62-i*.11,
@@ -6725,7 +6798,7 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
    const wall=/wall|window|pillar|oldTown.*(?:Plain)|roofSupport|ironGate/i.test(t);
    // Pebbles, ground plants, flowers, mushrooms, and small vegetation remain passable.
    const decorative=/^(?:rockPebble|rockSmall|rockMossy|pebbles|gravel|bush(?:$|Fern|Flower|Berry|Small)|bushFern|bushFlower|flower|grass|tallGrass|fern|moss|mushroom|crop|herb|smallFlower|fallenLeaves|rubble|plant|reed|weed|waterPlant)/i.test(t);
-   const solid=/^(?:tree|rock|bush|fence|gate|barrel|crate|chest|bed|table|counter|shelf|statue|well|altar|ruin|fireplace|handcart|bench|wardrobe|displayShelf|anvil|stove|oven|waterWheel|human|monster|pine(?:Tent|Military|Command|Medical|Ration|Supply|Supplies|Generator|Watchtower|Radio|Lighthouse|ScenicPine|Latrine|CookingStation|WaterPoint|WashBasin|Barrier|CityBarrier|Harbor(?:Bollard|Lamp|Pallet|Sign)))/i;
+   const solid=/^(?:tree|rock|bush|fence|gate|barrel|crate|chest|bed|table|counter|shelf|statue|well|altar|ruin|fireplace|handcart|bench|wardrobe|displayShelf|anvil|stove|oven|waterWheel|human|monster|pine(?:Tent|Military|Command|Medical|Ration|Supply|Supplies|Generator|Watchtower|Radio|Lighthouse|ScenicPine|Latrine|CookingStation|WaterPoint|WashBasin|WreckedCar|WreckFootprint|UtilityPole|RoadSign|WasteDrum|Barrier|CityBarrier|Harbor(?:Bollard|Lamp|Pallet|Sign)))/i;
    if(wall||(!decorative&&solid.test(t))){fetchLayer(gameSolidByLayer).set(key,o);if(h===0)gameBlock.add(key)}
   }
   // Group contiguous roofs, so only the house the player enters disappears.
@@ -7384,7 +7457,7 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
   function gamePrimaryAction(){
    const obj=contextualTarget();
    if(!obj){gameStartSwordAttack('miss');return}
-   const names={pineLatrine:'仮設トイレ',pineCookingStation:'共同炊事場',pineWaterPoint:'給水所',pineBedroll:'簡易寝具',pineWashBasin:'洗面場',pineMooringRope:'係留索',pineQuaySteps:'岸壁の段差',pineTentTan:'避難民のテント',pineTentBlue:'避難民のテント',pineMilitaryTent:'軍用テント',pineCommand:'臨時司令部',pineMedical:'野戦診療所',pineRation:'配給所',pineSupplyCrate:'軍の物資箱',pineSupplies:'生活物資',pineGenerator:'発電設備',pineBarrier:'軍の検問柵',pineRadio:'通信設備',pineWatchtower:'監視塔',pineLighthouse:'古い灯台',pineScenicPine:'島の松'};
+   const names={pineWreckedCar:'放置された車',pineUtilityPole:'電柱',pineRoadSign:'道路標識',pineRubblePile:'散乱した廃材',pineRoadsideShrub:'路肩の低木',pineWasteDrum:'錆びたドラム缶',pineLatrine:'仮設トイレ',pineCookingStation:'共同炊事場',pineWaterPoint:'給水所',pineBedroll:'簡易寝具',pineWashBasin:'洗面場',pineMooringRope:'係留索',pineQuaySteps:'岸壁の段差',pineTentTan:'避難民のテント',pineTentBlue:'避難民のテント',pineMilitaryTent:'軍用テント',pineCommand:'臨時司令部',pineMedical:'野戦診療所',pineRation:'配給所',pineSupplyCrate:'軍の物資箱',pineSupplies:'生活物資',pineGenerator:'発電設備',pineBarrier:'軍の検問柵',pineRadio:'通信設備',pineWatchtower:'監視塔',pineLighthouse:'古い灯台',pineScenicPine:'島の松'};
    const name=names[obj.type]||catalog.get(obj.type)?.name||obj.type;
    if(obj.type.startsWith('monster')){
     const hard=/skeleton|golem|armor|knight|metal|stone|rock/i.test(obj.type);
