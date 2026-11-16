@@ -191,7 +191,8 @@ const OBJECT_GROUPS=[
  ]},
  {id:'pineHarbor',label:'PINE・港湾と船着場',icon:'pineHarborPier',subgroups:[
   {id:'harborDecks',label:'桟橋・岸壁',icon:'pineHarborQuay',items:['pineHarborPier','pineHarborQuay']},
-  {id:'harborFittings',label:'係留・荷役・照明',icon:'pineHarborBollard',items:['pineHarborBollard','pineHarborFender','pineHarborLamp','pineHarborPallet','pineHarborSign']}
+  {id:'harborFittings',label:'係留・荷役・照明',icon:'pineHarborBollard',items:['pineHarborBollard','pineHarborFender','pineHarborLamp','pineHarborPallet','pineHarborSign']},
+  {id:'harborVessels',label:'大型輸送艇',icon:'pineLandingCraft',items:['pineLandingCraft']}
  ]},
  {id:'multistory',label:'多階建て・塔',icon:'towerSpire',subgroups:[
   {id:'stairs',label:'階段',icon:'stairStraight',items:['stairStraight','stairSwitchback','stairSpiral']},
