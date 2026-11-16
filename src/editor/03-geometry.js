@@ -2551,6 +2551,69 @@ function roofFamily(id){
  return h*TERRAIN_STEP;
 }
 
+function pineSupermarketGeometry(m,o){
+ const x=o.x+.5,z=o.z+.5,y=o.y*1.4+terrainY(o.x,o.z);
+ const B=(dx,dy,dz,w,h,d,c)=>cube(m,x+dx,y+dy,z+dz,w,h,d,c);
+ 
+  if(o.type.startsWith('pineSuper')){
+   const ivory=[.84,.85,.81],glass=[.41,.63,.67],steel=[.32,.40,.42],
+         pale=[.84,.86,.82],metal=[.55,.59,.59],wooden=[.47,.37,.28],dark=[.20,.25,.27];
+   if(o.type==='pineSuperGlass'||o.type==='pineSuperDoor'){
+    B(0,.04,0,.97,.12,.92,ivory);
+    for(const xx of [-.45,.45])B(xx,.14,0,.07,1.28,.08,steel);
+    B(0,1.38,0,.97,.12,.09,steel);
+    if(o.type==='pineSuperGlass'){
+     B(0,.75,0,.83,1.13,.06,glass);B(0,.74,.04,.025,1.1,.018,pale);
+    }else{
+     for(const xx of [-.22,.22])B(xx,.74,0,.40,1.12,.06,glass);
+     for(const xx of [-.035,.035])B(xx,.77,.05,.022,.30,.02,metal);
+    }
+   }else if(o.type==='pineSuperShutter'){
+    B(0,.65,0,.96,1.28,.12,metal);
+    for(let i=0;i<9;i++)B(0,.13+i*.145,.076,.96,.025,.035,steel);
+    B(0,1.39,0,.98,.15,.20,dark);
+   }else if(o.type==='pineSuperShelf'){
+    for(const h of [.17,.54,.92])B(0,h,0,.79,.07,.91,metal);
+    for(const xx of [-.37,.37])B(xx,.04,0,.055,1.06,.92,steel);
+    B(0,1.10,0,.81,.045,.94,wooden);
+   }else if(o.type==='pineSuperCooler'){
+    B(0,.04,0,.87,.81,.79,pale);
+    B(0,.61,.36,.80,.28,.035,glass);
+    B(0,.89,0,.91,.09,.81,steel);
+   }else if(o.type==='pineSuperFreezer'){
+    B(0,.05,0,.87,.61,.86,pale);
+    B(0,.70,0,.84,.055,.82,glass);
+    B(0,.74,0,.085,.025,.82,steel);
+   }else if(o.type==='pineSuperCheckout'){
+    B(0,.09,0,.91,.65,.53,steel);B(0,.76,0,.96,.065,.59,metal);
+    B(-.30,.86,.05,.21,.17,.18,dark);B(.29,.84,-.13,.17,.13,.17,wooden);
+   }else if(o.type==='pineSuperProduce'){
+    B(0,.03,0,.81,.48,.78,wooden);
+    B(0,.54,0,.87,.07,.84,steel);
+   }else if(o.type==='pineSuperCart'){
+    B(0,.40,0,.67,.29,.58,metal);B(0,.61,-.32,.72,.045,.07,steel);
+    for(const xx of [-.27,.27])for(const zz of [-.22,.22])B(xx,.05,zz,.11,.12,.11,dark);
+   }else if(o.type==='pineSuperStripe'){
+    B(.39,.012,0,.053,.016,.96,pale);
+   }else if(o.type==='pineSuperCurb'){
+    B(0,.035,0,.98,.17,.30,[.69,.69,.64]);
+   }else if(o.type==='pineSuperSign'){
+    B(0,1.55,0,.96,.48,.12,[.31,.51,.39]);
+    for(const h of [1.50,1.66])B(0,h,.065,.72,.055,.02,pale);
+   }else if(o.type==='pineSuperAC'){
+    B(0,2.05,0,.84,.60,.79,metal);
+    for(let i=-2;i<=2;i++)B(i*.14,2.37,.40,.05,.43,.02,dark);
+   }else if(o.type==='pineSuperBollard'){
+    for(const xx of [-.29,.29])B(xx,.03,0,.13,.39,.13,[.72,.65,.34]);
+   }else if(o.type==='pineSuperRack'){
+    for(const xx of [-.38,.38])for(const zz of [-.36,.36])B(xx,.05,zz,.06,1.24,.06,steel);
+    for(const h of [.15,.58,1.11])B(0,h,0,.83,.06,.81,metal);
+   }
+   return;
+  }
+
+}
+
 /*__PINE_SHARED_HARBOR_GEOMETRY__*/
 /*__PINE_SHARED_LANDING_CRAFT_GEOMETRY__*/
 function bridgeConnectedGeometry(m,o,lookup){
