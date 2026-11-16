@@ -2238,14 +2238,22 @@ if(kind==='woodfloor'||kind==='woodfloorLight'||kind==='woodfloorDark'){
 }
 }
 
-const SIGN_TYPES=['innSign','shopHerbSign','shopChestSign','shopBagSign'];
+const SIGN_TYPES=['innSign','shopHerbSign','shopChestSign','shopBagSign','pineSuperLogo'];
 const signTextures=new Map();
 function makeSignArtwork(id){
- const c=document.createElement('canvas');c.width=256;c.height=160;
+ const c=document.createElement('canvas');c.width=id==='pineSuperLogo'?768:256;c.height=160;
  const a=c.getContext('2d');
  a.clearRect(0,0,256,160);
  a.textAlign='center';a.textBaseline='middle';
- if(id==='innSign'){
+ if(id==='pineSuperLogo'){
+  a.fillStyle='#1d503f';a.fillRect(0,0,768,160);
+  a.fillStyle='#e8ce8e';a.beginPath();a.arc(84,80,55,0,Math.PI*2);a.fill();
+  a.strokeStyle='#1a4e40';a.lineWidth=9;a.lineCap='round';
+  a.beginPath();a.moveTo(84,122);a.lineTo(84,46);a.stroke();
+  for(let i=0;i<3;i++){const y=50+i*22;a.beginPath();a.moveTo(84,y+21);a.lineTo(61,y-1);a.moveTo(84,y+21);a.lineTo(108,y-1);a.stroke()}
+  a.textAlign='left';a.font='900 88px system-ui,sans-serif';a.fillStyle='#fff6d9';a.fillText('PINE MART',157,87);
+  a.font='bold 24px system-ui,sans-serif';a.fillStyle='#d9e0be';a.fillText('SUPERMARKET',169,137);
+ }else if(id==='innSign'){
   // Real 2D text drawn once by Canvas2D; no triangulated/voxel letters.
   a.font='900 93px Georgia, serif';a.lineJoin='round';a.lineWidth=5;
   a.strokeStyle='#402515';a.strokeText('INN',128,78);
@@ -2295,10 +2303,10 @@ function buildSignOverlay(){
  for(const o of world){
   if((hideUpper&&o.y>level)||!groups.has(o.type))continue;
   const data=groups.get(o.type),x=o.x+.5,z=o.z+.5,y=o.y*1.4+terrainY(o.x,o.z);
-  for(const side of [-1,1]){
+  for(const side of (o.type==='pineSuperLogo'?[1]:[-1,1])){
    const zz=side*.075;
    // Two-sided, readable from either face. Rotate quad around its board center.
-   const corners=[[-.087,1.205,zz],[.453,1.205,zz],[.453,1.585,zz],[-.087,1.585,zz]];
+   const corners=o.type==='pineSuperLogo'?[[-3.54,1.42,.583],[3.54,1.42,.583],[3.54,2.15,.583],[-3.54,2.15,.583]]:[[-.087,1.205,zz],[.453,1.205,zz],[.453,1.585,zz],[-.087,1.585,zz]];
    const vs=corners.map(([xx,yy,zz])=>{const [dx,dz]=rot2(xx,zz,o.rot||0);return[x+dx,y+yy,z+dz]});
    const uv=side>0?[[0,0],[1,0],[1,1],[0,1]]:[[1,0],[0,0],[0,1],[1,1]];
    for(const i of [0,1,2,0,2,3])data.push(...vs[i],...uv[i]);
@@ -2558,7 +2566,24 @@ function pineSupermarketGeometry(m,o){
   if(o.type.startsWith('pineSuper')){
    const ivory=[.84,.85,.81],glass=[.41,.63,.67],steel=[.32,.40,.42],
          pale=[.84,.86,.82],metal=[.55,.59,.59],wooden=[.47,.37,.28],dark=[.20,.25,.27];
-   if(o.type==='pineSuperGlass'||o.type==='pineSuperDoor'){
+   if(o.type==='pineSuperWall'||o.type==='pineSuperAccent'){
+    const c=o.type==='pineSuperAccent'?[.25,.46,.37]:[.82,.82,.75];
+    B(0,0,0,1,1.39,1,c);
+    B(0,1.31,.42,.99,.12,.13,[.34,.51,.42]);
+   }else if(o.type==='pineSuperRoof'){
+    B(0,-.04,0,1,.17,1,[.37,.40,.41]);
+    B(0,.105,0,.94,.04,.94,[.49,.50,.51]);
+   }else if(o.type==='pineSuperLogo'){
+    B(0,1.42,.52,7.4,.82,.10,[.17,.37,.30]);
+    B(0,1.38,.581,7.30,.055,.025,[.83,.70,.41]);
+   }else if(o.type==='pineSuperCar'){
+    const body=(o.x+o.z)%3===0?[.53,.34,.26]:[.35,.43,.46],wheel=[.14,.15,.15];
+    B(0,.27,0,1.55,.48,2.42,body);
+    B(0,.71,-.10,1.31,.41,1.26,[.33,.37,.38]);
+    B(0,.75,.55,1.11,.17,.06,[.25,.30,.31]);
+    for(const xx of [-.72,.72])for(const zz of [-.76,.80])B(xx,.06,zz,.18,.35,.34,wheel);
+    B(0,.34,1.24,1.28,.10,.06,[.68,.66,.57]);
+   }else if(o.type==='pineSuperGlass'||o.type==='pineSuperDoor'){
     B(0,.04,0,.97,.12,.92,ivory);
     for(const xx of [-.45,.45])B(xx,.14,0,.07,1.28,.08,steel);
     B(0,1.38,0,.97,.12,.09,steel);
@@ -2601,8 +2626,8 @@ function pineSupermarketGeometry(m,o){
     B(0,1.55,0,.96,.48,.12,[.31,.51,.39]);
     for(const h of [1.50,1.66])B(0,h,.065,.72,.055,.02,pale);
    }else if(o.type==='pineSuperAC'){
-    B(0,2.05,0,.84,.60,.79,metal);
-    for(let i=-2;i<=2;i++)B(i*.14,2.37,.40,.05,.43,.02,dark);
+    B(0,.08,0,.84,.60,.79,metal);
+    for(let i=-2;i<=2;i++)B(i*.14,.39,.40,.05,.43,.02,dark);
    }else if(o.type==='pineSuperBollard'){
     for(const xx of [-.29,.29])B(xx,.03,0,.13,.39,.13,[.72,.65,.34]);
    }else if(o.type==='pineSuperRack'){
