@@ -1792,7 +1792,7 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
  const gameUpPortals=new Map(),gameDownPortals=new Map();
  // Runtime-only thinning: saved world geometry and editor export stay untouched.
  const gameNatureHiddenTrees=new Set(),gameZoneProps=[],gameZonePaths=[];
- let pineWorldEnabled=false,pineOldSignature='',pineSailing=false,pineBoatX=99.5,pineBoatZ=60.5,pineShipMesh=null,pineShipMeshAt=0,pineShipMeshX=NaN,pineShipMeshZ=NaN,pineLastChunk='',pineSailingSaved=0;
+ let pineWorldEnabled=false,pineOldSignature='',pineSailing=false,pineBoatX=110.5,pineBoatZ=67.5,pineShipMesh=null,pineShipMeshAt=0,pineShipMeshX=NaN,pineShipMeshZ=NaN,pineLastChunk='',pineSailingSaved=0;
  let gameMapMigrated=false;
  let gameLastZone='';
  let gameStairArrivalLock=null;
