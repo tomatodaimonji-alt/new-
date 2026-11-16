@@ -238,6 +238,7 @@ function pineExtendWorld(){
    }
    if(t>=1){
     gameX=tr.x1;gameZ=tr.z1;pinePlayerTransfer=null;
+    if(gameAvatar)gl.deleteBuffer(gameAvatar.buf);gameAvatar=gameAvatarMesh();
     gameUpdateRoof();gamePersistProgress(true);pineBoatButtonRefresh();
    }
   }
