@@ -82,72 +82,147 @@ function pineExtendWorld(){
    [79,91,'pineHarborFender'],[78,88,'pineHarborPallet']
   ]){if(!occupied.has(key(x,z)))add(x,z,type)}
  }
- function pineBoatNearPier(){
-  const x=gameX,z=gameZ;
-  return (Math.abs(x-99.5)<=3.3&&Math.abs(z-58.5)<=2.3&&Math.abs(pineBoatX-99.5)<=3.2)||
-   (Math.abs(x-151.5)<=3.3&&Math.abs(z-58.5)<=2.3&&Math.abs(pineBoatX-151.5)<=3.2);
- }
+ // A 20-person complement: logical 5x4 standing slots on the open deck.
+ // The 3D hull and each soldier's mesh are compiled once; draw uses transforms.
+ let pineTroopMesh=null,pineTroopCount=0,pineTroopMode='ready',pineTroopStarted=0;
+ const PINE_ISLAND_BERTH=110.5,PINE_MAINLAND_BERTH=142.5,PINE_BERTH_Z=67.5;
+ const pineTroopSlot=i=>[-3+(i%5)*1.5,-1.9+Math.floor(i/5)*1.3];
+ const pineTroopQueue=i=>[100.5+(i%5)*1.1,57+Math.floor(i/5)*1.1];
+ const pineTroopLand=i=>[137.5+(i%5)*1.45,56.5+Math.floor(i/5)*1.35];
+ const pineLerp=(a,b,t)=>a+(b-a)*Math.max(0,Math.min(1,t));
+ const pineMVP=(vp,x,y,z)=>mult(vp,new Float32Array([
+  1,0,0,0, 0,1,0,0, 0,0,1,0, x,y,z,1
+ ]));
  function pineBoatDock(){
-  return Math.abs(pineBoatZ-60.5)<=1.1&&
-   (Math.abs(pineBoatX-99.5)<=2.5?'island':
-    Math.abs(pineBoatX-151.5)<=2.5?'mainland':null);
+  if(Math.abs(pineBoatZ-PINE_BERTH_Z)>1.1)return null;
+  if(Math.abs(pineBoatX-PINE_ISLAND_BERTH)<.65)return 'island';
+  if(Math.abs(pineBoatX-PINE_MAINLAND_BERTH)<.65)return 'mainland';
+  return null;
+ }
+ function pineBoatNearPier(){
+  const b=pineBoatDock();
+  if(!b)return false;
+  const bx=b==='island'?PINE_ISLAND_BERTH:PINE_MAINLAND_BERTH;
+  return Math.abs(gameX-bx)<8.5&&gameZ>=55&&gameZ<=63;
+ }
+ function pineCrewAction(){
+  if(pineTroopMode==='boarding'||pineTroopMode==='unloading')return;
+  const dock=pineBoatDock();
+  if(pineTroopMode==='ready'&&dock==='island'){
+   pineTroopCount=0;pineTroopMode='boarding';pineTroopStarted=performance.now();
+   toast('兵員20名が岸壁から乗船を開始'); 
+  }else if(pineTroopMode==='aboard'&&dock==='mainland'){
+   pineTroopMode='unloading';pineTroopStarted=performance.now();
+   toast('本島の岸壁へ兵員20名の下船開始');
+  }else toast('兵員の乗降には所定の港への接岸が必要です');
+  pineBoatButtonRefresh();
  }
  function pineBoatButtonRefresh(){
-  const b=$('pineBoatButton');
-  if(!b)return;
-  b.hidden=!pineWorldEnabled||(!pineSailing&&!pineBoatNearPier());
-  if(pineSailing)b.textContent=pineBoatDock()?'下船する':'航行中';
-  else b.textContent='船に乗る';
+  const b=$('pineBoatButton'),c=$('pineTroopButton');
+  if(b){
+   b.hidden=!pineWorldEnabled||(!pineSailing&&!pineBoatNearPier());
+   b.textContent=pineSailing?(pineBoatDock()?'下船する':'航行中'):'船に乗る';
+  }
+  if(c){
+   const dock=pineBoatDock(),near=pineSailing||pineBoatNearPier();
+   c.hidden=!pineWorldEnabled||!near||
+    !(pineTroopMode==='boarding'||pineTroopMode==='unloading'||
+     pineTroopMode==='ready'&&dock==='island'||
+     pineTroopMode==='aboard'&&dock==='mainland');
+   c.disabled=pineTroopMode==='boarding'||pineTroopMode==='unloading';
+   c.textContent=pineTroopMode==='unloading'?'兵員が下船中':
+    pineTroopMode==='boarding'?'乗船中 '+pineTroopCount+'/20':
+    pineTroopMode==='ready'?'兵員20名を乗船':'兵員20名に下船指示';
+  }
  }
  function pineBoatAction(){
   if(!pineWorldEnabled)return;
+  if(pineTroopMode==='boarding'||pineTroopMode==='unloading'){
+   toast('兵員の乗降が終わるまで接岸してください');return;
+  }
   if(!pineSailing){
-   if(!pineBoatNearPier()){toast('船が近くの桟橋にありません');return}
+   if(!pineBoatNearPier()){toast('船が近くの岸壁に接岸していません');return}
    pineSailing=true;gameMove=null;gameDirs.clear();gameLevel=0;
    gameX=pineBoatX;gameZ=pineBoatZ;gameUpdateRoof();gameSyncCamera(true);
-   toast('乗船した。十字キーで海を進み、港へ接岸しよう');
+   toast('乗船。十字キーで航行。離岸後は本島港へ接岸してください');
   }else{
    const dock=pineBoatDock();
-   if(!dock){toast('下船には桟橋へ接岸してください');return}
+   if(!dock){toast('下船には船を岸壁へ正確に接岸させてください');return}
    pineSailing=false;gameDirs.clear();gameMove=null;
-   gameX=dock==='island'?99.5:151.5;gameZ=58.5;
+   gameX=dock==='island'?110.5:142.5;gameZ=61.5;
    gameUpdateRoof();gameSyncCamera(true);
-   toast(dock==='island'?'PINE島の港に下船':'本島の港に下船');
+   toast(dock==='island'?'PINE島の岸壁に下船':'本島の岸壁に下船');
   }
   pineBoatButtonRefresh();gamePersistProgress(true);
  }
  function pineBoatTick(dt,now){
   if(!pineWorldEnabled)return;
+  if(!pineShipMesh){
+   const m=mesh();pineLandingCraftGeometry(m,0,0);pineShipMesh=upload(m);
+  }
+  if(!pineTroopMesh){
+   const m=mesh(),cloth=[.30,.39,.31],face=[.74,.61,.47],helmet=[.22,.29,.24];
+   cube(m,0,0,0,.31,.39,.30,cloth);
+   cube(m,0,.39,0,.37,.45,.28,cloth);
+   cube(m,0,.84,0,.31,.25,.31,face);
+   cube(m,0,1.05,0,.36,.13,.36,helmet);
+   for(const x of [-.13,.13])cube(m,x,-.31,0,.13,.34,.15,cloth);
+   pineTroopMesh=upload(m);
+  }
   if(pineSailing){
    const d=gameLastDir&&gameDirs.has(gameLastDir)?gameLastDir:[...gameDirs].at(-1);
    const vec={e:[1,0],w:[-1,0],n:[0,-1],s:[0,1]}[d];
    if(vec){
-    const velocity=5.5*dt,nx=pineBoatX+vec[0]*velocity,nz=pineBoatZ+vec[1]*velocity;
-    // Continuous, manually steered ship in the common ocean, with docking bays.
-    if(nx>=99.5&&nx<=151.5&&nz>=39.5&&nz<=73.5){
-     pineBoatX=nx;pineBoatZ=nz;
-     gameX=nx;gameZ=nz;
-     if(gameAvatar)gl.deleteBuffer(gameAvatar.buf);
-     gameAvatar=gameAvatarMesh();
+    const nx=pineBoatX+vec[0]*3.8*dt,nz=pineBoatZ+vec[1]*3.8*dt;
+    // Ship body must never clip through island or mainland ground.
+    if(nx>=PINE_ISLAND_BERTH&&nx<=PINE_MAINLAND_BERTH&&nz>=65.8&&nz<=76.5){
+     pineBoatX=nx;pineBoatZ=nz;gameX=nx;gameZ=nz;
+     // Avatar mesh uses world-relative y only; update pose lazily on coarse intervals.
+     if(now-pineShipMeshAt>120){
+      pineShipMeshAt=now;if(gameAvatar)gl.deleteBuffer(gameAvatar.buf);
+      gameAvatar=gameAvatarMesh();
+     }
     }
    }
    if(now-pineSailingSaved>1500){pineSailingSaved=now;gamePersistProgress(true)}
   }
-  if(!pineShipMesh||((pineBoatX!==pineShipMeshX||pineBoatZ!==pineShipMeshZ)&&now-pineShipMeshAt>90)){
-   pineShipMeshAt=now;pineShipMeshX=pineBoatX;pineShipMeshZ=pineBoatZ;
-   if(pineShipMesh)gl.deleteBuffer(pineShipMesh.buf);
-   const m=mesh(),x=pineBoatX,z=pineBoatZ;
-   const B=(dx,dy,dz,w,h,d,c)=>cube(m,x+dz,dy,z+dx,d,h,w,c);
-   B(0,.24,0,2.6,.42,5.2,[.28,.37,.31]);
-   B(0,.50,0,2.3,.13,4.9,[.51,.55,.50]);
-   B(0,.93,1.1,1.35,.74,1.8,[.68,.72,.69]);
-   B(0,1.37,1.1,1.35,.12,1.9,[.38,.46,.41]);
-   B(0,1.08,2.06,.83,.25,.03,[.34,.53,.62]);
-   B(0,.80,-1.25,1.4,.22,1.2,[.45,.49,.41]);
-   for(const dx of [-1.05,1.05])B(dx,.58,-1.0,.07,.32,2.7,[.74,.70,.46]);
-   pineShipMesh=upload(m);
+  if(pineTroopMode==='boarding'){
+   pineTroopCount=Math.min(20,Math.floor((now-pineTroopStarted)/380));
+   if(now-pineTroopStarted>=20*380+1200){
+    pineTroopCount=20;pineTroopMode='aboard';gamePersistProgress(true);
+    toast('20名全員の乗船を確認');
+   }
+  }else if(pineTroopMode==='unloading'&&now-pineTroopStarted>=20*380+1200){
+   pineTroopCount=0;pineTroopMode='landed';gamePersistProgress(true);
+   toast('兵員20名が本島へ上陸');
   }
   if(now%450<65)pineBoatButtonRefresh();
+ }
+ function pineDrawLandingCraft(vp){
+  if(!pineShipMesh||!pineWorldEnabled)return;
+  if(Math.abs(gameX-pineBoatX)>65||Math.abs(gameZ-pineBoatZ)>65)return;
+  draw(pineShipMesh,pineMVP(vp,pineBoatX,0,pineBoatZ));
+  if(!pineTroopMesh)return;
+  const now=performance.now(),pitch=.85;
+  for(let i=0;i<20;i++){
+   const slot=pineTroopSlot(i),src=pineTroopQueue(i),land=pineTroopLand(i);
+   let x,z,y=.9,visible=true;
+   if(pineTroopMode==='ready'){[x,z]=src;y=1.3}
+   else if(pineTroopMode==='landed'){[x,z]=land;y=1.3}
+   else if(pineTroopMode==='boarding'){
+    const t=Math.max(0,Math.min(1,(now-pineTroopStarted-i*380)/1400));
+    if(t===0){[x,z]=src;y=1.3}
+    else if(t<.7){x=pineLerp(src[0],pineBoatX+slot[0],t/.7);
+     z=pineLerp(src[1],63.1,t/.7);y=1.3}
+    else{x=pineBoatX+slot[0];z=pineLerp(63.1,pineBoatZ+slot[1],(t-.7)/.3);y=pitch}
+   }else if(pineTroopMode==='unloading'){
+    const t=Math.max(0,Math.min(1,(now-pineTroopStarted-i*380)/1400));
+    if(t<.3){x=pineBoatX+slot[0];z=pineLerp(pineBoatZ+slot[1],63.1,t/.3);y=pitch}
+    else{x=pineLerp(pineBoatX+slot[0],land[0],(t-.3)/.7);
+      z=pineLerp(63.1,land[1],(t-.3)/.7);y=1.3}
+   }else{ x=pineBoatX+slot[0];z=pineBoatZ+slot[1] }
+   if(visible)draw(pineTroopMesh,pineMVP(vp,x,y,z));
+  }
  }
  function pineChunkWindow(){
   if(!pineWorldEnabled)return {x0:0,z0:0,x1:MAP_W,z1:MAP_H,id:'legacy'};
