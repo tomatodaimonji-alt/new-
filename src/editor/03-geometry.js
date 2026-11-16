@@ -2566,7 +2566,29 @@ function pineSupermarketGeometry(m,o){
   if(o.type.startsWith('pineSuper')){
    const ivory=[.84,.85,.81],glass=[.41,.63,.67],steel=[.32,.40,.42],
          pale=[.84,.86,.82],metal=[.55,.59,.59],wooden=[.47,.37,.28],dark=[.20,.25,.27];
-   if(o.type==='pineSuperWall'||o.type==='pineSuperAccent'){
+   if(o.type==='pineSuperCorner'){
+    B(0,0,0,.99,1.39,.99,ivory);
+    for(const side of [-.34,.34])B(side,0,.43,.14,1.39,.14,[.38,.51,.45]);
+    B(0,1.31,.42,.99,.11,.14,[.29,.47,.39]);
+   }else if(o.type==='pineSuperProduceSlope'){
+    B(0,.02,0,.85,.49,.80,wooden);
+    for(let i=0;i<3;i++)B(0,.43+i*.10,-.24+i*.22,.83,.055,.21,[.37,.55,.38]);
+    for(const xx of [-.40,.40])B(xx,.32,0,.04,.32,.78,steel);
+   }else if(o.type==='pineSuperFreshCase'){
+    B(0,.08,0,.95,.64,.77,pale);
+    B(0,.67,.16,.94,.22,.52,glass);
+    B(0,.86,-.20,.95,.08,.36,steel);
+    B(0,.32,.42,.90,.11,.05,[.31,.50,.47]);
+   }else if(o.type==='pineSuperShelfEnd'){
+    B(0,.07,0,.89,.88,.47,steel);
+    for(const h of [.26,.55,.91])B(0,h,.04,.86,.06,.45,wooden);
+   }else if(o.type==='pineSuperPacking'){
+    B(0,.73,0,.90,.08,.70,[.67,.66,.58]);
+    for(const xx of [-.36,.36])B(xx,.08,0,.07,.65,.50,steel);
+   }else if(o.type==='pineSuperRegisterGate'){
+    B(-.34,.04,0,.10,.93,.10,steel);B(.34,.04,0,.10,.93,.10,steel);
+    B(0,.92,0,.77,.10,.09,[.38,.54,.46]);
+   }else if(o.type==='pineSuperWall'||o.type==='pineSuperAccent'){
     const c=o.type==='pineSuperAccent'?[.25,.46,.37]:[.82,.82,.75];
     B(0,0,0,1,1.39,1,c);
     B(0,1.31,.42,.99,.12,.13,[.34,.51,.42]);
