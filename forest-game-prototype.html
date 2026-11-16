@@ -5667,66 +5667,86 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
  // 64x64 settlement. Original world JSON and saved positions remain unchanged.
  function gameBuildIslandZones(){
   gameZoneProps.length=0;gameZonePaths.length=0;
-  const sample=MAP_W===64&&MAP_H===64&&
-   world.some(o=>o.x===23&&o.z===54&&o.type.startsWith('bridge'))&&
-   world.some(o=>o.type.startsWith('oldTown')&&o.x>=6&&o.x<=43);
-  if(!sample)return;
-  const key=(x,z)=>gameTileKey(x,z);
+  if(MAP_W!==96||MAP_H!==96||!gameMapMigrated)return;
+  const floor=new Map(world.filter(o=>o.y===0&&isFloor(o.type)).map(o=>[gameTileKey(o.x,o.z),o.type]));
   const objects=new Set(world.filter(o=>o.y===0&&!isFloor(o.type)&&
    !/^(?:tree|bush|flower|fern|grass|rockPebble|rockSmall|mushroom)/i.test(o.type))
-   .map(o=>key(o.x,o.z)));
-  const placed=new Set();
-  const put=(x,z,type,rot=0)=>{
-   const k=key(x,z),ground=world.find(o=>o.x===x&&o.z===z&&o.y===0&&isFloor(o.type));
-   if(!validPos(x,z)||objects.has(k)||placed.has(k)||!ground||
-    /^(?:water|river|lake|sea)$/.test(ground.type))return;
-   placed.add(k);gameZoneProps.push({x,z,y:0,type,rot});
-  };
-  // Open, navigable walkways connecting the old town to both new districts.
-  const path=(x0,z0,x1,z1,kind)=>{
-   const dx=Math.sign(x1-x0),dz=Math.sign(z1-z0);
-   let x=x0,z=z0;
-   while(true){
-    const k=key(x,z);
-    if(validPos(x,z)&&!objects.has(k))gameZonePaths.push({x,z,kind});
-    if(x===x1&&z===z1)break;
-    if(x!==x1)x+=dx;else z+=dz;
+   .map(o=>gameTileKey(o.x,o.z)));
+  const placed=new Set(),reserved=new Set();
+  const dry=(x,z)=>{const t=floor.get(gameTileKey(x,z));return !!t&&!/^(?:sea|river|water|lake)$/.test(t)};
+  const reserve=(x,z)=>{if(dry(x,z))reserved.add(gameTileKey(x,z))};
+  const trail=(points,kind='main',width=1)=>{
+   for(let j=0;j<points.length-1;j++){
+    let [x,z]=points[j];const [tx,tz]=points[j+1];
+    while(true){
+     for(let w=0;w<width;w++)reserve(x+(x===tx?w:0),z+(x===tx?0:w));
+     if(x===tx&&z===tz)break;
+     if(x!==tx)x+=Math.sign(tx-x);else z+=Math.sign(tz-z);
+    }
    }
   };
-  path(44,32,53,32,'camp');
-  path(53,22,53,49,'main');
-  path(44,39,53,39,'military');
-  path(47,45,60,45,'military');
-  // Refugees occupy an uneven grid of tarpaulin tents, preserving alleys.
-  for(const z of [23,26,29,33])for(const x of [47,50,56,59]){
-   if((x+z)%7===0)continue;
-   put(x,z,(x+z)%5===0?'pineTentTan':'pineTentBlue',(x+z)%2);
+  // The old town is in the centre. Clear and connected walks branch east.
+  trail([[59,48],[69,48],[76,48],[76,60]],'camp');
+  trail([[69,39],[69,64],[74,66],[74,78]],'main',2);
+  trail([[60,55],[72,55],[80,57]],'market');
+  trail([[59,62],[72,62],[75,75]],'base');
+  trail([[40,78],[41,85],[41,91]],'oldPort',2);
+  trail([[73,75],[73,85],[73,91]],'militaryPort',2);
+  trail([[76,62],[82,62],[82,69],[76,69]],'inspection',2);
+  trail([[21,52],[18,52]],'hotel');
+  // These areas must never be blocked, even if an object would be legal there.
+  const safe=(x,z)=>dry(x,z)&&!objects.has(gameTileKey(x,z))&&!placed.has(gameTileKey(x,z))&&!reserved.has(gameTileKey(x,z));
+  const put=(x,z,type,rot=0)=>{
+   if(!validPos(x,z)||!safe(x,z))return false;
+   placed.add(gameTileKey(x,z));gameZoneProps.push({x,z,y:0,type,rot});return true;
+  };
+  const colors=['pineTentTan','pineTentBlue','pineTentGrey','pineTentWhite','pineTentOlive','pineTentOrange'];
+  const tents=['small','family','lean','patched'];
+  // Clustered staggered refugee rows. Deliberate gaps, but no exact grid.
+  for(let z=37;z<=54;z+=2)for(let x=63;x<=78;x+=2){
+   const noise=surfaceNoise(x*4+7,z*5+19);
+   if(noise<.21||x===69||x===76)continue;
+   const jx=noise>.7?1:0,jz=noise<.35?1:0;
+   const nx=x+jx,nz=z+jz;
+   const style=tents[Math.floor(surfaceNoise(x*11,z*13)*tents.length)];
+   const color=colors[Math.floor(surfaceNoise(x*7+2,z*3+6)*colors.length)];
+   put(nx,nz,color+':'+style,Math.floor(surfaceNoise(x+19,z+11)*4));
   }
-  put(48,31,'pineRation');put(59,31,'pineMedical');
-  for(const [x,z] of [[47,28],[50,34],[58,28],[61,33]])put(x,z,'pineSupplies');
-  // Mobile command post, supply yard, lookout and backup power.
-  put(55,39,'pineCommand');
-  put(48,40,'pineMilitaryTent');
-  put(59,39,'pineMilitaryTent');
-  put(48,43,'pineSupplyCrate');
-  put(58,43,'pineSupplyCrate');
-  put(59,47,'pineGenerator');
-  put(47,47,'pineWatchtower');
-  put(58,48,'pineRadio');
-  // Military boundary hints at access restrictions, but no blocked roads.
-  for(const [x,z,rot] of [[46,41,0],[46,42,0],[46,44,0],[61,41,0],[61,42,0],[61,44,0]])
-   put(x,z,'pineBarrier',rot);
-  // Pine-covered high ground and an old lighthouse above the sea.
-  put(59,7,'pineLighthouse');
-  for(const [x,z] of [[51,14],[53,10],[61,14],[62,17],[47,13],[49,7]])
-   put(x,z,'pineScenicPine');
+  put(64,51,'pineRation');put(77,51,'pineMedical');
+  for(const [x,z,t] of [[64,43,'pineLaundry'],[66,50,'pineSupplies'],[74,50,'pineFireBarrel'],
+   [77,43,'pineSupplies'],[65,54,'pineWaterTank'],[75,53,'pineLaundry'],
+   [63,45,'pineSupplies'],[78,47,'pineFireBarrel'],[66,53,'pineSupplyCrate']])put(x,z,t);
+  // Military relocation: tents, command post, field power, surveillance.
+  for(const [x,z,t] of [[63,58,'pineMilitaryTent'],[66,58,'pineMilitaryTent'],
+    [78,60,'pineCommand'],[65,65,'pineGenerator'],[62,68,'pineWatchtower'],
+    [79,65,'pineRadio'],[66,68,'pineSupplyCrate'],[77,72,'pineSupplyCrate'],
+    [80,72,'pineMilitaryTent'],[67,72,'pineSupplies'],[81,73,'pineBarrier']])put(x,z,t);
+  // Incoming refugees arrive at the inspection/control gate before camp.
+  for(const [x,z,t] of [[80,66,'pineInspection'],[85,68,'pineMedical'],
+    [79,70,'pineBarrier'],[84,70,'pineBarrier'],[80,71,'pineSupplies'],
+    [83,65,'pineWatchtower']])put(x,z,t);
+  // Old fishing quay & separate military supply dock.
+  for(const [x,z,t] of [[40,83,'pineFishingNet'],[44,84,'pineSupplyCrate'],
+    [39,85,'pineFishingBoat'],[43,85,'pineFishingBoat'],
+    [69,83,'pineCargo'],[76,83,'pineCargo'],[78,80,'pineGenerator'],
+    [69,78,'pineBarrier']])put(x,z,t);
+  for(const [x,z,t] of [[59,7,'pineLighthouse'],[68,25,'pineScenicPine'],
+    [61,21,'pineScenicPine'],[76,22,'pineScenicPine'],[60,30,'pineScenicPine']])put(x,z,t);
+  // Existing map's lighthouse now lies at the new northwest highland.
+  put(75,23,'pineLighthouse');
+  for(const k of reserved){const [x,z]=k.split(',').map(Number);gameZonePaths.push({x,z,kind:'main'})}
  }
  function gameZoneFor(x,z){
-  if(MAP_W!==64||MAP_H!==64||!gameZoneProps.length)return '';
-  if(x>=46&&z>=35&&z<=50)return '軍本部・補給区域';
-  if(x>=46&&z>=20&&z<35)return '避難民キャンプ';
-  if(x>=46&&z<20)return '松林・灯台の高台';
-  if(x>=6&&x<=44&&z>=33&&z<=50)return '旧住民地区';
+  if(MAP_W!==96||!gameMapMigrated)return '';
+  if(x>=77&&z>=62&&z<=75)return '入場検査区域';
+  if(x>=61&&x<=84&&z>=56&&z<=81)return '軍臨時基地・補給港';
+  if(x>=61&&x<=80&&z>=35&&z<56)return '避難民キャンプ';
+  if(x>=20&&x<=60&&z>=46&&z<=68)return '旧住民区域';
+  if(x>=8&&x<=18&&z>=44&&z<=57)return 'ホテル区域';
+  if(x>=79&&z>=44&&z<=56)return '商業区域';
+  if(z>=81&&x>=32&&x<=48)return '旧漁港';
+  if(z>=82&&x>=63&&x<=81)return '軍補給港';
+  if(z<35||x<20)return '松林・自然区域';
   return '';
  }
  function pineZoneGeometry(m,o){
