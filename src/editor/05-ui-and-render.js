@@ -48,7 +48,7 @@ const WALL_CHOICES=[
 function drawWallThumbnail(cv,id){
  const g=cv.getContext('2d');if(!g)return;
  const w=cv.width,h=cv.height;g.fillStyle='#263c32';g.fillRect(0,0,w,h);
- const m=mesh();if(isFloor(id))addFloorTile(m,-.5,-.5,id,256,ROAD_IDS.has(id)&&!id.endsWith('Full')?5:0);else if(id.startsWith('pineHarbor'))pineHarborGeometry(m,{x:0,z:0,y:0,type:id,rot:0});else deco(m,id,0,0,0,rotation);
+ const m=mesh();if(isFloor(id))addFloorTile(m,-.5,-.5,id,256,ROAD_IDS.has(id)&&!id.endsWith('Full')?5:0);else if(id==='pineLandingCraft')pineLandingCraftGeometry(m,0,0);else if(id.startsWith('pineHarbor'))pineHarborGeometry(m,{x:0,z:0,y:0,type:id,rot:0});else deco(m,id,0,0,0,rotation);
  const faces=[];
  const project=(x,y,z)=>[w/2+(x-z)*w*.30,(isFloor(id)?h*.51:h*.83)+(x+z)*h*.16-y*h*.38];
  for(let i=0;i<m.p.length;i+=9){
