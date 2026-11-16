@@ -90,7 +90,7 @@ function gameTick(){
   if(!force&&now-gameLastSavedAt<700)return;
   gameLastSavedAt=now;
   try{
-   const payload={version:1,world:gameWorldSignature(),x:Math.floor(gameX),z:Math.floor(gameZ),floor:gameLevel,facing:gameFacing,zoom,yaw,sailing:pineSailing,boatX:pineBoatX,boatZ:pineBoatZ};
+   const payload={version:1,world:gameWorldSignature(),x:Math.floor(gameX),z:Math.floor(gameZ),floor:gameLevel,facing:gameFacing,zoom,yaw,sailing:pineSailing,boatX:pineBoatX,boatZ:pineBoatZ,troopCount:pineTroopCount,troopMode:pineTroopMode};
    localStorage.setItem(GAME_PROGRESS_KEY,JSON.stringify(payload));
    const status=$('gameSaveStatus');if(status)status.textContent='自動セーブ済み';
   }catch(e){const status=$('gameSaveStatus');if(status)status.textContent='セーブ不可（保存領域を確認）'}
@@ -106,8 +106,11 @@ function gameTick(){
    const x=save.x+(legacy64?16:0),z=save.z+(legacy64?16:0);
    if(!Number.isInteger(x)||!Number.isInteger(z)||!Number.isInteger(floor)||floor<0||floor>MAX_LEVEL)return false;
    if(save.sailing&&pineWorldEnabled&&Number.isFinite(save.boatX)&&Number.isFinite(save.boatZ)){
-    pineBoatX=Math.max(99.5,Math.min(151.5,save.boatX));pineBoatZ=Math.max(39.5,Math.min(73.5,save.boatZ));pineSailing=true;
+    pineBoatX=Math.max(110.5,Math.min(142.5,save.boatX));pineBoatZ=Math.max(65.8,Math.min(76.5,save.boatZ));pineSailing=true;
    }else if(!gameWalkableTile(x,z,floor))return false;
+   if(Number.isInteger(save.troopCount))pineTroopCount=Math.max(0,Math.min(20,save.troopCount));
+   if(['ready','aboard','landed'].includes(save.troopMode))pineTroopMode=save.troopMode;
+   else if(pineTroopCount===20)pineTroopMode='aboard';
    gameX=pineSailing?pineBoatX:x+.5;gameZ=pineSailing?pineBoatZ:z+.5;gameLevel=floor;gameFacing=[0,1,2,3].includes(facing)?facing:2;
    if(Number.isFinite(save.zoom))zoom=Math.max(.2,Math.min(3,save.zoom));
    if(Number.isFinite(save.yaw))yaw=save.yaw;
