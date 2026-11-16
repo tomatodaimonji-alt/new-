@@ -22,23 +22,26 @@ required(editor,['function makePineHarborDemo(){','PINE・港湾と船着場'],'
 assert.ok(!game.includes('function pineTravel('),'Map swapping must remain removed');
 assert.ok(!game.includes('function pineMakeMainland('),'Separate mainland world must remain removed');
 assert.ok(!game.includes('[[73,66,93],[41,82,92]]'),'Old unrealistic piers must remain removed');
-// Verify sources reference the one shared harbor library, not copied blocks.
+// Verify the entire block catalog and harbor geometry come from shared sources.
+const sharedCatalog=readFileSync(join(root,'src/shared/block-catalog.fragment.js'),'utf8').trimEnd();
 const sharedPalette=readFileSync(join(root,'src/shared/harbor-palette.fragment.js'),'utf8').trimEnd();
 const sharedGeometry=readFileSync(join(root,'src/shared/harbor-geometry.fragment.js'),'utf8').trimEnd();
+assert.equal(sharedCatalog.split('/*__PINE_SHARED_HARBOR_PALETTE__*/').length-1,1,
+ 'Shared block catalog must reference harbor palette exactly once');
 for(const g of Object.values(groups)){
  const rawPalette=readFileSync(join(root,g.directory,'02-palette.js'),'utf8');
  const rawGeometry=readFileSync(join(root,g.directory,'03-geometry.js'),'utf8');
- assert.equal(rawPalette.split('/*__PINE_SHARED_HARBOR_PALETTE__*/').length-1,1,
-  g.output+' must use one shared palette marker');
+ assert.equal(rawPalette.split('/*__PINE_SHARED_BLOCK_CATALOG__*/').length-1,1,
+  g.output+' must reference one shared block catalog');
  assert.equal(rawGeometry.split('/*__PINE_SHARED_HARBOR_GEOMETRY__*/').length-1,1,
-  g.output+' must use one shared geometry marker');
- assert.ok(!rawPalette.includes("id:'pineHarborPier'"),g.output+' duplicated harbor catalog');
+  g.output+' must reference one shared harbor 3D geometry');
+ assert.ok(!rawPalette.includes("id:'bridgeStone'"),g.output+' copied the shared catalog');
  assert.ok(!rawGeometry.includes('function pineHarborGeometry('),g.output+' duplicated harbor geometry');
 }
 for(const output of [game,editor]){
- assert.ok(output.includes(sharedPalette),'Built HTML missing shared block catalog');
- assert.ok(output.includes(sharedGeometry),'Built HTML missing shared 3D geometry');
- assert.ok(!output.includes('__PINE_SHARED_HARBOR_'),'Unresolved shared source marker');
+ assert.ok(output.includes(sharedPalette),'Built HTML missing shared harbor entries');
+ assert.ok(output.includes(sharedGeometry),'Built HTML missing shared harbor geometry');
+ assert.ok(!output.includes('__PINE_SHARED_'),'Unresolved shared source marker');
 }
 const harborNames=['pineHarborPier','pineHarborQuay','pineHarborBollard',
  'pineHarborFender','pineHarborLamp','pineHarborPallet','pineHarborSign'];
