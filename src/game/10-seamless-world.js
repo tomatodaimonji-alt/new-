@@ -29,50 +29,59 @@ function pineExtendWorld(){
   dirty=true;
  }
  function pineAddHarbors(props){
- if(!pineWorldEnabled)return;
- const key=(x,z)=>gameTileKey(x,z);
- const authored=new Set(world.filter(o=>o.y===0&&!isFloor(o.type)).map(o=>key(o.x,o.z)));
- const placed=new Set(props.filter(o=>o.y===0&&!isFloor(o.type)).map(o=>key(o.x,o.z)));
- const add=(x,z,type,rot=0)=>{if(!validPos(x,z))return false;
-  if(x<96&&authored.has(key(x,z)))return false;
-  props.push({x,z,y:0,type,rot});return true;
- };
- const deck=(x,z,type,rot=0)=>{const k=key(x,z);if(placed.has(k)||x<96&&authored.has(k))return false;
-  if(add(x,z,type,rot)){placed.add(k);return true}return false;
- };
- // Island passenger pier: 3-cell approach, wider berth at the seaward end.
- for(let x=86;x<=100;x++)for(let z=55;z<=57;z++)deck(x,z,'pineHarborPier',1);
- for(let x=97;x<=100;x++)for(let z=58;z<=59;z++)deck(x,z,'pineHarborPier',1);
- // Mainland terminal: the approach continues all the way onto dry land.
- for(let x=145;x<=164;x++)for(let z=55;z<=57;z++)deck(x,z,'pineHarborQuay');
- for(let x=149;x<=153;x++)for(let z=58;z<=59;z++)deck(x,z,'pineHarborQuay');
- // Historic supply port: a narrow working quay, NOT a giant concrete carpet.
- for(let z=75;z<=92;z++)for(let x=78;x<=80;x++)deck(x,z,'pineHarborQuay');
- // A proper, enterable port office on the mainland. Built from the same
- // individual wall / door / roof blocks as the old town.
- const tx=162,tz=46,tw=6,td=7,front=tz+td-1,door=tx+Math.floor(tw/2);
- for(let z=tz;z<tz+td;z++)for(let x=tx;x<tx+tw;x++){
-  add(x,z,'woodfloor');
-  const edge=x===tx||x===tx+tw-1||z===tz||z===front;
-  if(edge)add(x,z,z===front&&x===door?'plasterwallDoor':
-   x>tx&&x<tx+tw&&(z===tz||z===front)?'plasterwallWindow':'plasterwall');
-  props.push({x,z,y:1,type:'roofHip',rot:0});
+  if(!pineWorldEnabled)return;
+  const key=(x,z)=>gameTileKey(x,z);
+  const authored=new Set(world.filter(o=>!isFloor(o.type)).map(o=>key(o.x,o.z)));
+  const occupied=new Set(props.filter(o=>!isFloor(o.type)).map(o=>key(o.x,o.z)));
+  const decked=new Set();
+  const add=(x,z,type,rot=0)=>{if(!validPos(x,z))return false;
+   if(x<96&&authored.has(key(x,z)))return false;
+   props.push({x,z,y:0,type,rot});return true;
+  };
+  const deck=(x,z,type,rot=0)=>{
+   const k=key(x,z);if(decked.has(k)||occupied.has(k)||x<96&&authored.has(k))return false;
+   if(add(x,z,type,rot)){decked.add(k);return true}return false;
+  };
+  // Real berth for an 18 x 8 LCU-style small landing craft, aligned east-west.
+  // Quay runs adjacent to the north side of the boat; no overlap with its hull.
+  // Passenger waiting apron: 7-cell width at island end, retained old town clear.
+  for(let x=86;x<=116;x++)for(let z=56;z<=62;z++){
+   if(x<97&&z>58)continue; // existing town/coast facilities have priority
+   deck(x,z,'pineHarborQuay',1);
+  }
+  // Concrete apron behind the island embarkation bay; troops can queue here.
+  for(let x=98;x<=107;x++)for(let z=53;z<=55;z++)deck(x,z,'pineHarborQuay',1);
+  // Mainland quay: reinforced concrete with road connection inland.
+  for(let x=132;x<=160;x++)for(let z=56;z<=62;z++)deck(x,z,'pineHarborQuay',1);
+  for(let x=151;x<=162;x++)for(let z=53;z<=55;z++)deck(x,z,'pineHarborQuay',1);
+  // A separate service pier and original fishing dock.
+  for(let z=75;z<=92;z++)for(let x=78;x<=80;x++)deck(x,z,'pineHarborQuay');
+  // Enterable island office does not remove houses; keep original shops.
+  // Mainland terminal office: separate walls, an actual door, roof and a floor.
+  const tx=162,tz=46,tw=6,td=7,front=tz+td-1,door=tx+Math.floor(tw/2);
+  for(let z=tz;z<tz+td;z++)for(let x=tx;x<tx+tw;x++){
+   add(x,z,'woodfloor');
+   const edge=x===tx||x===tx+tw-1||z===tz||z===front;
+   if(edge)add(x,z,z===front&&x===door?'plasterwallDoor':
+    x>tx&&x<tx+tw&&(z===tz||z===front)?'plasterwallWindow':'plasterwall');
+   props.push({x,z,y:1,type:'roofHip',rot:0});
+  }
+  add(tx+2,tz+2,'table');
+  for(let z=front+1;z<=56;z++)deck(door,z,'pineHarborQuay',1);
+  // Fenders, bollards and floodlights are located at the edge, not in the walking lane.
+  for(const [x,z,type] of [
+   [98,56,'pineHarborPallet'],[102,56,'pineHarborLamp'],
+   [104,62,'pineHarborBollard'],[115,62,'pineHarborBollard'],
+   [100,62,'pineHarborFender'],[113,62,'pineHarborFender'],
+   [100,55,'pineHarborSign'],[95,56,'pineHarborLamp'],
+   [133,62,'pineHarborBollard'],[148,62,'pineHarborBollard'],
+   [138,62,'pineHarborFender'],[151,62,'pineHarborFender'],
+   [158,56,'pineHarborPallet'],[159,55,'pineHarborLamp'],
+   [154,55,'pineHarborSign'],[150,56,'pineHarborPallet'],
+   [79,85,'pineHarborLamp'],[80,90,'pineHarborBollard'],
+   [79,91,'pineHarborFender'],[78,88,'pineHarborPallet']
+  ]){if(!occupied.has(key(x,z)))add(x,z,type)}
  }
- add(tx+2,tz+2,'table');
- // Keep a paved entrance route to the ferry approach at z=55.
- for(let z=front+1;z<=57;z++)deck(door,z,'pineHarborQuay');
- // Clutter stays on outside edges, never down the central walking lane.
- for(const [x,z,type] of [
-  [91,55,'pineHarborBollard'],[95,55,'pineHarborLamp'],
-  [99,59,'pineHarborBollard'],[98,59,'pineHarborFender'],
-  [88,55,'pineHarborPallet'],[94,57,'pineHarborSign'],
-  [148,55,'pineHarborLamp'],[152,59,'pineHarborBollard'],
-  [150,59,'pineHarborFender'],[159,55,'pineHarborPallet'],
-  [161,57,'pineHarborSign'],
-  [80,85,'pineHarborLamp'],[80,90,'pineHarborBollard'],
-  [79,91,'pineHarborFender'],[78,88,'pineHarborPallet']
- ])add(x,z,type);
-}
  function pineBoatNearPier(){
   const x=gameX,z=gameZ;
   return (Math.abs(x-99.5)<=3.3&&Math.abs(z-58.5)<=2.3&&Math.abs(pineBoatX-99.5)<=3.2)||
