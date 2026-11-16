@@ -3226,7 +3226,7 @@ function makeScene(){
   addFloorTile(tmp,o.x,o.z,kind,MAP_W*MAP_H,ROAD_IDS.has(kind)&&!kind.endsWith('Full')?roadConnections(layer,o.x,o.z,kind):0);
   shiftMesh(pick(o),tmp,o.y*1.4+terrainY(o.x,o.z));
  }
- const bridgeLookup=new Map(visible.filter(o=>BRIDGE_IDS.has(o.type)).map(o=>[o.x+','+o.z,o]));
+ const bridgeLookup=gameBridgeTiles;
  const fenceLookup=new Map(visible.filter(o=>/^fence(Wood|Stone|Iron)/.test(o.type)).map(o=>[o.x+','+o.z+','+o.y,o]));
  const roofs=new Map(visible.filter(o=>roofFamily(o.type)).map(o=>[o.x+','+o.z+','+o.y,o]));
  // Facade trims must follow the same house and floor as their wall objects.
@@ -5598,7 +5598,7 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
  const gameDirs=new Set(),gameBlock=new Set(),gameDoors=new Map(),gameFloor=new Map(),gameSolidByLayer=new Map(),gameDoorByLayer=new Map(),gameFloorsByLayer=new Map(),gameStairsByLayer=new Map();
  let gameLevel=0,gameStairArrivedFrom=0,gameLastSavedAt=0,gameSessionReady=false;
  const GAME_PROGRESS_KEY='forest-ruins-game-progress-v1';
- const gameRoofTiles=new Map(),gameRoofGroups=new Map(),gameRoofsByCell=new Map(),gameBridge=new Set(),gameHouseCells=new Map(),gameIndoorByCell=new Map(),gameLandingMarkers=[];
+ const gameRoofTiles=new Map(),gameRoofGroups=new Map(),gameRoofsByCell=new Map(),gameBridge=new Set(),gameBridgeTiles=new Map(),gameHouseCells=new Map(),gameIndoorByCell=new Map(),gameLandingMarkers=[];
  let gameRoofHidden=null,gameMove=null,gameNextStep=0,gameLastDir=null;
  const gameOccludedGroups=new Set(),gameHouseBoxes=new Map(),gameInteriorProps=[],gameInteriorRugs=[],gameInteriorWallDetails=[];
  const gameUpPortals=new Map(),gameDownPortals=new Map();
@@ -5991,7 +5991,7 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
    pineShipMeshAt=now;
    if(pineShipMesh)gl.deleteBuffer(pineShipMesh.buf);
    const m=mesh(),x=pineBoatX,z=pineBoatZ;
-   const B=(dx,dy,dz,w,h,d,c)=>cube(m,x+dx,dy,z+dz,w,h,d,c);
+   const B=(dx,dy,dz,w,h,d,c)=>cube(m,x+dz,dy,z+dx,d,h,w,c);
    B(0,.24,0,2.6,.42,5.2,[.28,.37,.31]);
    B(0,.50,0,2.3,.13,4.9,[.51,.55,.50]);
    B(0,.93,1.1,1.35,.74,1.8,[.68,.72,.69]);
@@ -6006,7 +6006,7 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
  function pineChunkWindow(){
   if(!pineWorldEnabled)return {x0:0,z0:0,x1:MAP_W,z1:MAP_H,id:'legacy'};
   const cx=Math.floor(gameX/PINE_CHUNK),cz=Math.floor(gameZ/PINE_CHUNK);
-  const radius=Math.min(5,Math.max(2,Math.ceil(18/Math.max(.28,zoom)/PINE_CHUNK)+1));
+  const radius=Math.min(5,Math.max(2,Math.ceil(18/Math.max(.28,zoom)/PINE_CHUNK)));
   return {x0:Math.max(0,(cx-radius)*PINE_CHUNK),z0:Math.max(0,(cz-radius)*PINE_CHUNK),
    x1:Math.min(MAP_W,(cx+radius+1)*PINE_CHUNK),z1:Math.min(MAP_H,(cz+radius+1)*PINE_CHUNK),
    id:cx+':'+cz+':'+radius};
@@ -6266,11 +6266,11 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
  function gameRebuildBlock(){
   gameBuildIslandZones();
   gameConfigureNaturalScenery();
-  gameBlock.clear();gameDoors.clear();gameFloor.clear();gameRoofTiles.clear();gameRoofGroups.clear();gameRoofsByCell.clear();gameBridge.clear();gameHouseCells.clear();gameIndoorByCell.clear();gameLandingMarkers.length=0;gameInteriorProps.length=0;gameInteriorRugs.length=0;gameInteriorWallDetails.length=0;gameInteriorWallDetails.length=0;gameHouseBoxes.clear();gameOccludedGroups.clear();gameSolidByLayer.clear();gameDoorByLayer.clear();gameFloorsByLayer.clear();gameStairsByLayer.clear();gameUpPortals.clear();gameDownPortals.clear();gameStairArrivalLock=null;
+  gameBlock.clear();gameDoors.clear();gameFloor.clear();gameRoofTiles.clear();gameRoofGroups.clear();gameRoofsByCell.clear();gameBridge.clear();gameBridgeTiles.clear();gameHouseCells.clear();gameIndoorByCell.clear();gameLandingMarkers.length=0;gameInteriorProps.length=0;gameInteriorRugs.length=0;gameInteriorWallDetails.length=0;gameInteriorWallDetails.length=0;gameHouseBoxes.clear();gameOccludedGroups.clear();gameSolidByLayer.clear();gameDoorByLayer.clear();gameFloorsByLayer.clear();gameStairsByLayer.clear();gameUpPortals.clear();gameDownPortals.clear();gameStairArrivalLock=null;
   const groupedRoofs=new Map();
   for(const o of [...world,...gameZoneProps]){
    if(gameNatureHiddenTrees.has(o))continue;
-   if(o.y===0&&(/^(?:bridge|pineConcreteDock)$/.test(o.type)))gameBridge.add(gameTileKey(o.x,o.z));
+   if(o.y===0&&(/^(?:bridge|pineConcreteDock)$/.test(o.type))){gameBridge.add(gameTileKey(o.x,o.z));if(/^bridge/.test(o.type))gameBridgeTiles.set(gameTileKey(o.x,o.z),o)}
    if(o.y>0&&(RESIDENTIAL_ROOFS.has(o.type)||AUTO_ROOFS.has(o.type))){
     const key=gameRoofKey(o.x,o.z,o.y);
     gameRoofTiles.set(key,o);
@@ -6514,10 +6514,9 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
   const dry=k=>{const [x,z]=k.split(',').map(Number);return !['river','water','sea','lake'].includes(gameFloor.get(k)||pineGroundKind(x,z))};
   if(onA&&onB)return true; // Connected bridge deck overrides waterbed height.
   if((!onA&&!dry(a))||(!onB&&!dry(b)))return false;
-  const bridge=[...world,...gameZoneProps].find(o=>o.y===0&&o.x===(onA?x:nx)&&o.z===(onA?z:nz)&&/^bridge/.test(o.type));
+  const bridge=gameBridgeTiles.get(onA?a:b);
   if(bridge){
-   const lookup=new Map([...world,...gameZoneProps].filter(o=>o.y===0&&/^bridge/.test(o.type)).map(o=>[gameTileKey(o.x,o.z),o]));
-   return Math.abs(bridgeSpanElevation(bridge,lookup)/TERRAIN_STEP-terrainLevel(onA?nx:x,onA?nz:z))<=1.05;
+   return Math.abs(bridgeSpanElevation(bridge,gameBridgeTiles)/TERRAIN_STEP-terrainLevel(onA?nx:x,onA?nz:z))<=1.05;
   }
   return Math.abs(terrainLevel(nx,nz)-terrainLevel(x,z))<=1;
  }
@@ -6604,11 +6603,8 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
   const tx=Math.floor(x),tz=Math.floor(z);
   if(gameLevel===0&&gameBridge.has(gameTileKey(tx,tz))){
    // Match the visual deck height, not the riverbed underneath it.
-   const o=[...world,...gameZoneProps].find(o=>o.x===tx&&o.z===tz&&o.y===0&&BRIDGE_IDS.has(o.type));
-   if(o){
-    const lookup=new Map([...world,...gameZoneProps].filter(p=>p.y===0&&BRIDGE_IDS.has(p.type)).map(p=>[gameTileKey(p.x,p.z),p]));
-    return bridgeSpanElevation(o,lookup)+.11;
-   }
+   const o=gameBridgeTiles.get(gameTileKey(tx,tz));
+   if(o)return bridgeSpanElevation(o,gameBridgeTiles)+.11;
   }
   return terrainY(tx,tz)+gameLevel*1.4;
  }
