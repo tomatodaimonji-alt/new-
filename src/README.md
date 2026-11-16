@@ -60,3 +60,7 @@ node scripts/build.mjs
 `scripts/build.mjs` が両方の `03-geometry.js` へ挿入するため、ゲームとエディターで描画ロジックが乖離しにくくなっています。
 
 **除外したもの：** `bridgeSpanElevation`、`bridgeConnectedGeometry`、`gameBridgeCanStep` はゲーム／エディター間で差異があります。特に白い石橋の高さと歩行に関係するため、差分の仕様化と実機検証をするまで統合しないでください。
+
+## v3.3 大型船の共有3Dモデル
+`src/shared/landing-craft-geometry.fragment.js` は18×8の船体・甲板・操舵室などを描画する共通コード。ゲームとワールドエディターに同じメッシュ生成関数を埋め込む。港・操船・20名の乗降ロジックは `src/game/10-seamless-world.js`。エディターの見本は `src/editor/06-data-and-demos.js`。
+参考資料は `docs/ASSET_REFERENCE_LOG.md`。別の船を増やす場合は、港の接岸寸法と当たり判定をセットで設計する。
