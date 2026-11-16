@@ -164,7 +164,9 @@ function pineExtendWorld(){
   if(!pineGangwayMesh){
    const m=mesh(),steel=[.50,.54,.53],yellow=[.75,.67,.40];
    // The side boarding gangway reaches a real quay; it is stowed underway.
-   cube(m,0,.73,-4.18,1.9,.15,2.0,steel);
+   // Inclined aluminum gangway from the ship's cargo deck to the high quay.
+   quad(m,[-.95,1.18,-5.18],[-.95,.83,-3.18],[.95,.83,-3.18],[.95,1.18,-5.18],steel);
+   cube(m,0,.69,-4.15,1.9,.08,2.0,steel);
    for(const x of [-.87,.87]){
     cube(m,x,.90,-4.16,.08,.35,2.00,yellow);
     cube(m,x,1.26,-4.16,.07,.07,2.00,steel);
@@ -181,7 +183,8 @@ function pineExtendWorld(){
    pineTroopMesh=upload(m);
   }
   if(pineSailing){
-   const d=gameLastDir&&gameDirs.has(gameLastDir)?gameLastDir:[...gameDirs].at(-1);
+   const d=(pineTroopMode==='boarding'||pineTroopMode==='unloading')?null:
+    (gameLastDir&&gameDirs.has(gameLastDir)?gameLastDir:[...gameDirs].at(-1));
    const vec={e:[1,0],w:[-1,0],n:[0,-1],s:[0,1]}[d];
    if(vec){
     const nx=pineBoatX+vec[0]*3.8*dt,nz=pineBoatZ+vec[1]*3.8*dt;
