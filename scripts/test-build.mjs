@@ -84,5 +84,53 @@ function commonGeometry(s){
 }
 assert.equal(commonGeometry(game),commonGeometry(editor),
  'Harbor block 3D geometry diverged between game and editor');
+// v3.3: validate the 18x8 landing craft, 20 standing slots and both berths.
+const carrierSource=readFileSync(join(root,'src/shared/landing-craft-geometry.fragment.js'),'utf8');
+const carrier=new Function(`
+ const shapes=[],cube=(m,x,y,z,w,h,d)=>shapes.push({x,y,z,w,h,d});
+ ${carrierSource}
+ pineLandingCraftGeometry({},0,0);
+ return {length:PINE_SHIP_LENGTH,beam:PINE_SHIP_BEAM,capacity:PINE_SHIP_CAPACITY,
+  minY:Math.min(...shapes.map(v=>v.y)),
+  maxY:Math.max(...shapes.map(v=>v.y+v.h)),
+  minX:Math.min(...shapes.map(v=>v.x-v.w/2)),
+  maxX:Math.max(...shapes.map(v=>v.x+v.w/2)),
+  minZ:Math.min(...shapes.map(v=>v.z-v.d/2)),
+  maxZ:Math.max(...shapes.map(v=>v.z+v.d/2)),
+  primitives:shapes.length};
+`)();
+assert.equal(carrier.length,18);
+assert.equal(carrier.beam,8);
+assert.equal(carrier.capacity,20);
+assert.ok(carrier.minY<=-2.9,'Three-cell submerged hull missing');
+assert.ok(carrier.maxY>3,'Wheelhouse above freeboard missing');
+assert.ok(carrier.minX<=-8.9&&carrier.maxX>=8.9,'Bow and stern incomplete');
+assert.ok(carrier.minZ<-3.5&&carrier.maxZ>3.5,'Hull too narrow');
+const boatRuntime=readFileSync(join(root,'src/game/10-seamless-world.js'),'utf8');
+const slotLine=boatRuntime.split('\n').find(l=>l.includes('const pineTroopSlot=i=>'));
+assert.ok(slotLine,'Troop deck slot table missing');
+const slot=new Function(slotLine+' return pineTroopSlot;')();
+const slots=Array.from({length:20},(_,i)=>slot(i));
+assert.equal(new Set(slots.map(x=>x.join(','))).size,20,'Overlapping troop slots');
+for(const [x,z] of slots)assert.ok(x>-4&&x<4&&z>-3&&z<3,'Troop outside usable deck');
+const dockStart=boatRuntime.indexOf('function pineBoatDock(){');
+const dockEnd=boatRuntime.indexOf('function pineBoatNearPier(){',dockStart);
+assert.ok(dockStart>=0&&dockEnd>dockStart,'Docking logic missing');
+const dockSource=boatRuntime.slice(dockStart,dockEnd);
+const where=new Function('pineBoatX','pineBoatZ',
+ 'const PINE_ISLAND_BERTH=110.5,PINE_MAINLAND_BERTH=142.5,PINE_BERTH_Z=67.5;'
+ +dockSource+'return pineBoatDock();');
+assert.equal(where(110.5,67.5),'island');
+assert.equal(where(142.5,67.5),'mainland');
+assert.equal(where(125,67.5),null,'No open sea disembark');
+assert.equal(where(142.5,70),null,'No off-quay disembark');
+assert.ok(boatRuntime.includes('if(pineGangwayMesh&&pineBoatDock())'),
+ 'Boarding gangway only appears while docked');
+assert.ok(game.includes('id="pineTroopButton"')&&game.includes("$('pineTroopButton').addEventListener"),
+ 'Troop boarding button is missing');
+assert.ok(editor.includes('48×40・大型輸送艇と軍港'),'Editor lacks ship-scale sample');
+assert.ok(editor.includes('pineLandingCraftGeometry(m,o.x+.5'),'Editor must share the ship mesh');
+assert.ok(game.includes('troopCount:pineTroopCount,troopMode:pineTroopMode'),
+ 'Troop count must persist with save');
 assert.ok(readFileSync(join(root,'PINE_WORLD_RULES.md'),'utf8').includes('マップ切り替えは禁止'));
 process.stdout.write('PINE source & core regression checks: PASS\n');
