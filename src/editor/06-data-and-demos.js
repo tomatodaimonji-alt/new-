@@ -1977,6 +1977,10 @@ $('addPart').addEventListener('click',()=>{if(modelParts.length>=100){toast('パ
 $('saveModel').addEventListener('click',()=>{if(!modelParts.length){toast('パーツを1個以上追加してください');return}const name=$('modelName').value.trim()||'自作モデル';const id='custom-'+Date.now().toString(36),m={id,name,parts:modelParts.map(p=>({...p}))};if(!validModel(m)){toast('モデルが不正です');return}snapshot();models.push(m);commit();refreshPalette();selected=id;mode='place';updateSelected();$('modelModal').classList.remove('open');toast('「'+name+'」を登録した')});
 $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mobileOpen');$('inspector').classList.remove('mobileOpen')});$('showInspector').addEventListener('click',()=>{$('inspector').classList.toggle('mobileOpen');$('palette').classList.remove('mobileOpen')});
 try{const saved=localStorage.getItem(SAVE_KEY);if(saved)loadData(JSON.parse(saved));else makeDemo()}catch(e){MAP_W=16;MAP_H=16;world=[];models=[];prefabs=[];makeDemo()}
-pineBuildPOICategories();refreshPalette();updateStats();updateSelected();showEntireMap();render();
+pineBuildPOICategories();
+const poiEntrance=world.find(o=>o.type==='pineSuperDoor');
+if(poiEntrance)poiWalkReset(poiEntrance.x,Math.min(MAP_H-2,poiEntrance.z+2));
+$('poiRoofToggle').textContent=hideUpper?'屋根を表示':'屋根を隠す';
+refreshPalette();updateStats();updateSelected();showEntireMap();render();
 if(location.search.includes('test=1'))window.__editorTest={state:()=>({world:world.map(p=>({...p})),models:models.map(m=>({...m})),prefabs:prefabs.map(p=>({...p})),selected,mode,rotation,level,glLink:gl.getProgramParameter(program,gl.LINK_STATUS)}),place:(x,z)=>changeCell(x,z),data};
 })();
