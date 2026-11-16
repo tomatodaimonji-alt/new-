@@ -9,7 +9,7 @@ import {dirname,join,resolve} from 'node:path';
 import {Script} from 'node:vm';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
-const groups={
+export const groups={
  game:{
   directory:'src/game',output:'forest-game-prototype.html',
   sections:[
