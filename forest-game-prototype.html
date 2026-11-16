@@ -6088,11 +6088,22 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
   const stories=kind==='warehouse'||kind==='cottage'||kind==='residence'?1:kind==='shop'?2:n>.77?3:n>.36?2:1;
   return {kind,w,d,stories,x:bx+(roll>.67?1:0),z:bz+(n>.64?1:0)};
  }
+ // Short turning side roads exist only inside unbuilt lots.
+ function pineSideRoad(x,z){
+  if(!pineWorldEnabled||!pineMainlandLand(x,z)||x<169||z<19||z>149)return false;
+  const bx=169+Math.floor((x-169)/15)*15,bz=19+Math.floor((z-19)/15)*15;
+  if(bx>304||bz>137||pineLotPlan(bx,bz).kind!=='vacant')return false;
+  const c=bx+5;
+  // Joins the continuous z-grid road on the north; bends east at the end.
+  return z>=bz&&z<=bz+5&&x>=c&&x<=c+1 ||
+   z>=bz+5&&z<=bz+7&&x>=c&&x<=c+2 ||
+   z>=bz+7&&z<=bz+10&&x>=c+1&&x<=c+3;
+ }
  function pineGroundKind(x,z){
   if(!pineWorldEnabled||x<96&&z<96)return 'grass';
   if(!pineMainlandLand(x,z))return 'sea';
   if(x<pineMainlandCoast(z)+2)return 'earth';
-  if(x%15<3||z%15<3)return 'roadStoneFull';
+  if(x%15<3||z%15<3||pineSideRoad(x,z))return 'roadStoneFull';
   if(x>=169&&z>=19){
    const bx=169+Math.floor((x-169)/15)*15,bz=19+Math.floor((z-19)/15)*15;
    const lot=pineLotPlan(bx,bz);
@@ -6159,7 +6170,7 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
    const k=gameTileKey(x,z);
    if(!pineMainlandLand(x,z)||!validPos(x,z)||used.has(k))return false;
    // Leave procedurally defined road lanes and all authored building interiors open.
-   if(x%15<3||z%15<3)return false;
+   if(x%15<3||z%15<3||pineSideRoad(x,z))return false;
    used.add(k);props.push({x,z,y:0,type,rot});
    return true;
   };
@@ -6186,9 +6197,16 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
    if(lot.kind==='parking'){
     place(x+8,z+7,'pineRoadSign');
     if(a>.61)place(x+9,z+5,'pineWreckedCar');
-   }else if(lot.kind==='vacant'&&a>.55){
-    place(x+6,z+6,'pineRoadsideShrub');
-    if(b>.78)place(x+8,z+7,'pineRubblePile');
+   }else if(lot.kind==='vacant'){
+    place(x+10,z+10,'pineRoadEndMarker');
+    if(a>.55)place(x+3,z+7,'pineRoadsideShrub');
+    if(b>.78)place(x+9,z+4,'pineRubblePile');
+   }
+   if(remote&&a>.28){
+    for(const [dx,dz] of [[4,4],[7,11],[11,6]]){
+     const r=surfaceNoise((x+dx)*.31,(z+dz)*.27);
+     if(r>.42)place(x+dx,z+dz,r>.74?'pineScenicPine':'pineRoadsideShrub');
+    }
    }
   }
  }
@@ -6759,6 +6777,10 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
     B(0,3.2,0,.95,.10,.10,wood);
     for(const dx of [-.35,.35])B(dx,3.25,0,.09,.15,.10,canvas);
     B(0,1.12,.10,.25,.30,.07,metal);
+   }else if(o.type==='pineRoadEndMarker'){
+    B(0,.01,0,.09,1.05,.10,wood);
+    B(0,.83,0,.73,.29,.08,[.69,.65,.53]);
+    for(const dx of [-.19,.19])B(dx,.84,.052,.13,.20,.017,[.62,.33,.22]);
    }else if(o.type==='pineRoadSign'){
     B(0,.02,0,.09,1.75,.09,metal);
     B(0,1.65,0,.65,.41,.07,[.30,.43,.46]);
@@ -6842,7 +6864,7 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
    const wall=/wall|window|pillar|oldTown.*(?:Plain)|roofSupport|ironGate/i.test(t);
    // Pebbles, ground plants, flowers, mushrooms, and small vegetation remain passable.
    const decorative=/^(?:rockPebble|rockSmall|rockMossy|pebbles|gravel|bush(?:$|Fern|Flower|Berry|Small)|bushFern|bushFlower|flower|grass|tallGrass|fern|moss|mushroom|crop|herb|smallFlower|fallenLeaves|rubble|plant|reed|weed|waterPlant)/i.test(t);
-   const solid=/^(?:tree|rock|bush|fence|gate|barrel|crate|chest|bed|table|counter|shelf|statue|well|altar|ruin|fireplace|handcart|bench|wardrobe|displayShelf|anvil|stove|oven|waterWheel|human|monster|pine(?:Tent|Military|Command|Medical|Ration|Supply|Supplies|Generator|Watchtower|Radio|Lighthouse|ScenicPine|Latrine|CookingStation|WaterPoint|WashBasin|WreckedCar|WreckFootprint|UtilityPole|RoadSign|WasteDrum|Barrier|CityBarrier|Harbor(?:Bollard|Lamp|Pallet|Sign)))/i;
+   const solid=/^(?:tree|rock|bush|fence|gate|barrel|crate|chest|bed|table|counter|shelf|statue|well|altar|ruin|fireplace|handcart|bench|wardrobe|displayShelf|anvil|stove|oven|waterWheel|human|monster|pine(?:Tent|Military|Command|Medical|Ration|Supply|Supplies|Generator|Watchtower|Radio|Lighthouse|ScenicPine|Latrine|CookingStation|WaterPoint|WashBasin|WreckedCar|WreckFootprint|UtilityPole|RoadSign|RoadEndMarker|WasteDrum|Barrier|CityBarrier|Harbor(?:Bollard|Lamp|Pallet|Sign)))/i;
    if(wall||(!decorative&&solid.test(t))){fetchLayer(gameSolidByLayer).set(key,o);if(h===0)gameBlock.add(key)}
   }
   // Group contiguous roofs, so only the house the player enters disappears.
@@ -7505,7 +7527,7 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
   function gamePrimaryAction(){
    const obj=contextualTarget();
    if(!obj){gameStartSwordAttack('miss');return}
-   const names={pineWreckedCar:'放置された車',pineUtilityPole:'電柱',pineRoadSign:'道路標識',pineRubblePile:'散乱した廃材',pineRoadsideShrub:'路肩の低木',pineWasteDrum:'錆びたドラム缶',pineLatrine:'仮設トイレ',pineCookingStation:'共同炊事場',pineWaterPoint:'給水所',pineBedroll:'簡易寝具',pineWashBasin:'洗面場',pineMooringRope:'係留索',pineQuaySteps:'岸壁の段差',pineTentTan:'避難民のテント',pineTentBlue:'避難民のテント',pineMilitaryTent:'軍用テント',pineCommand:'臨時司令部',pineMedical:'野戦診療所',pineRation:'配給所',pineSupplyCrate:'軍の物資箱',pineSupplies:'生活物資',pineGenerator:'発電設備',pineBarrier:'軍の検問柵',pineRadio:'通信設備',pineWatchtower:'監視塔',pineLighthouse:'古い灯台',pineScenicPine:'島の松'};
+   const names={pineWreckedCar:'放置された車',pineUtilityPole:'電柱',pineRoadSign:'道路標識',pineRoadEndMarker:'行き止まり標識',pineRubblePile:'散乱した廃材',pineRoadsideShrub:'路肩の低木',pineWasteDrum:'錆びたドラム缶',pineLatrine:'仮設トイレ',pineCookingStation:'共同炊事場',pineWaterPoint:'給水所',pineBedroll:'簡易寝具',pineWashBasin:'洗面場',pineMooringRope:'係留索',pineQuaySteps:'岸壁の段差',pineTentTan:'避難民のテント',pineTentBlue:'避難民のテント',pineMilitaryTent:'軍用テント',pineCommand:'臨時司令部',pineMedical:'野戦診療所',pineRation:'配給所',pineSupplyCrate:'軍の物資箱',pineSupplies:'生活物資',pineGenerator:'発電設備',pineBarrier:'軍の検問柵',pineRadio:'通信設備',pineWatchtower:'監視塔',pineLighthouse:'古い灯台',pineScenicPine:'島の松'};
    const name=names[obj.type]||catalog.get(obj.type)?.name||obj.type;
    if(obj.type.startsWith('monster')){
     const hard=/skeleton|golem|armor|knight|metal|stone|rock/i.test(obj.type);
