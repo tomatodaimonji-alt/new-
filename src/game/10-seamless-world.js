@@ -78,6 +78,8 @@ function pineExtendWorld(){
    [138,62,'pineHarborFender'],[151,62,'pineHarborFender'],
    [158,56,'pineHarborPallet'],[159,55,'pineHarborLamp'],
    [154,55,'pineHarborSign'],[150,56,'pineHarborPallet'],
+   [153,53,'pineDockCrane'],[151,53,'pineCargo'],[156,53,'pineCargo'],
+   [159,53,'pineGenerator'],[134,55,'pineBarrier'],
    [79,85,'pineHarborLamp'],[80,90,'pineHarborBollard'],
    [79,91,'pineHarborFender'],[78,88,'pineHarborPallet']
   ]){if(!occupied.has(key(x,z)))add(x,z,type)}
