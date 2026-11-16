@@ -6076,16 +6076,31 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
  function pineMainlandLand(x,z){
   return x>=156&&z>=9&&z<151&&x>=pineMainlandCoast(z);
  }
+ // Deterministic mixed-use lot plan with a shared 15-tile road network.
+ function pineLotPlan(bx,bz){
+  const n=surfaceNoise(bx*3+2,bz*5+9);
+  const roll=surfaceNoise(bx*11+37,bz*17+3);
+  const suburban=bx>=244,fringe=bx>=274&&bz>=79,industrial=bx<214&&bz<80;
+  const empty=fringe?roll<.55:industrial?roll<.22:suburban?roll<.34:roll<.16;
+  const kind=empty?(roll<.16?'parking':'vacant'):industrial?'warehouse':fringe?'cottage':suburban?'residence':n>.7?'shop':'house';
+  const w=kind==='warehouse'||kind==='shop'?8:kind==='cottage'?5:kind==='residence'?6:7;
+  const d=kind==='warehouse'?8:kind==='cottage'?5:kind==='residence'?6:7;
+  const stories=kind==='warehouse'||kind==='cottage'||kind==='residence'?1:kind==='shop'?2:n>.77?3:n>.36?2:1;
+  return {kind,w,d,stories,x:bx+(roll>.67?1:0),z:bz+(n>.64?1:0)};
+ }
  function pineGroundKind(x,z){
-  if(pineWorldEnabled&&(x>=96||z>=96))
-   if(!pineMainlandLand(x,z))return 'sea';
-   if(x<pineMainlandCoast(z)+2)return 'earth';
-   if(x%15<3||z%15<3)return 'roadStoneFull';
-   // Dense coastal blocks become residential verges and then open, grassy outskirts.
-   if(x>=274&&z>=79)return surfaceNoise(x*.14+5,z*.16+9)>.48?'grassDry':'grassForest';
-   if(x>=244)return surfaceNoise(x*.11+7,z*.13+2)>.53?'grassTrampled':'grass';
-   return 'stone';
-  return 'grass';
+  if(!pineWorldEnabled||x<96&&z<96)return 'grass';
+  if(!pineMainlandLand(x,z))return 'sea';
+  if(x<pineMainlandCoast(z)+2)return 'earth';
+  if(x%15<3||z%15<3)return 'roadStoneFull';
+  if(x>=169&&z>=19){
+   const bx=169+Math.floor((x-169)/15)*15,bz=19+Math.floor((z-19)/15)*15;
+   const lot=pineLotPlan(bx,bz);
+   if(lot.kind==='parking'&&x>=bx&&x<bx+11&&z>=bz&&z<bz+10)return 'stone';
+  }
+  if(x>=274&&z>=79)return surfaceNoise(x*.14+5,z*.16+9)>.48?'grassDry':'grassForest';
+  if(x>=244)return surfaceNoise(x*.11+7,z*.13+2)>.53?'grassTrampled':'grass';
+  return 'stone';
  }
  function pineExtendWorld(){
   if(!gameMapMigrated||MAP_W!==96||MAP_H!==96)return;
@@ -6095,24 +6110,26 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
   // Mainland streets are generated as chunk ground, not tens of thousands of
   // persistent water/road blocks. Store only real, accessible buildings.
   const add=(x,z,type,y=0,rot=0)=>world.push({x,z,y,type,rot});
-  for(let z=19;z<=137;z+=15)for(let x=169;x<=304;x+=15){
-   const n=surfaceNoise(x*3+2,z*5+9);
-   const w=n<.5?7:9,d=n<.35?7:9;
-   const storeys=n>.74?3:n>.42?2:1;
-   const doorX=x+Math.floor(w/2),front=z+d-1;
-   for(let floor=0;floor<storeys;floor++)for(let dz=0;dz<d;dz++)for(let dx=0;dx<w;dx++){
+  // Irregular occupied/vacant lots, retaining through roads and historic port.
+  for(let bz=19;bz<=137;bz+=15)for(let bx=169;bx<=304;bx+=15){
+   const lot=pineLotPlan(bx,bz);
+   if(lot.kind==='vacant'||lot.kind==='parking')continue;
+   const {x,z,w,d,stories}=lot,doorX=x+Math.floor(w/2),front=z+d-1;
+   const wall=lot.kind==='warehouse'?'brickwall':lot.kind==='cottage'?'woodwall':'plasterwall';
+   const floorType=lot.kind==='warehouse'?'ironfloor':lot.kind==='shop'?'brickfloor':'woodfloor';
+   for(let floor=0;floor<stories;floor++)for(let dz=0;dz<d;dz++)for(let dx=0;dx<w;dx++){
     const xx=x+dx,zz=z+dz,edge=dx===0||dz===0||dx===w-1||dz===d-1;
-    add(xx,zz,floor===0?'woodfloor': 'woodfloorLight',floor);
+    add(xx,zz,floor===0?floorType:'woodfloorLight',floor);
     if(edge){
      const entry=floor===0&&xx===doorX&&zz===front;
-     const facade=entry?'plasterwallDoor':
-      (zz===front||zz===z)&&dx>0&&dx<w-1&&(dx+floor)%2===0?'plasterwallWindow':'plasterwall';
-     add(xx,zz,facade,floor,zz===front?0:zz===z?2:xx===x?3:1);
+     const win=lot.kind!=='warehouse'&&(zz===front||zz===z)&&dx>0&&dx<w-1&&(dx+floor)%2===0;
+     add(xx,zz,entry?'plasterwallDoor':win?'plasterwallWindow':wall,floor,zz===front?0:zz===z?2:xx===x?3:1);
     }
    }
-   for(let dz=0;dz<d;dz++)for(let dx=0;dx<w;dx++)add(x+dx,z+dz,'roofHip',storeys);
-   for(let floor=0;floor<storeys-1;floor++)add(x+1,z+1,'stairSwitchback',floor);
-   // Clear front approaches connect each actual doorway to the street.
+   for(let dz=0;dz<d;dz++)for(let dx=0;dx<w;dx++)add(x+dx,z+dz,'roofHip',stories);
+   for(let floor=0;floor<stories-1;floor++)add(x+1,z+1,'stairSwitchback',floor);
+   if(lot.kind==='warehouse')add(x+2,z+2,'crate');
+   else if(lot.kind==='shop')add(x+2,z+2,'displayShelf');
   }
   // Three exploreable coastal buildings north of the procedural city blocks.
    for(const b of [{x:178,z:10,w:8,d:7,f:'ironfloor',wall:'brickwall',furn:'crate'},
@@ -6150,6 +6167,7 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
    const n=pineChunkRecord(Math.floor(x/PINE_CHUNK),Math.floor(z/PINE_CHUNK)).variation;
    const a=surfaceNoise(x*7+3,z*11+5),b=surfaceNoise(x*13+9,z*17+4);
    const suburb=x>=244,industrial=x<214&&z<80,remote=x>=274&&z>=79;
+   const lot=pineLotPlan(x,z);
    // Parked, weathered cars stand on the shoulder, not in intersections.
    if(a>.73&&!remote){
     if(place(x+10,z+4,'pineWreckedCar',0)){
@@ -6165,6 +6183,13 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
    if(industrial&&n>.55)place(x+11,z+7,'pineWasteDrum');
    // Debris occupies yards, never the building's entrance.
    if(b>.82)place(x+2,z+10,'pineRubblePile');
+   if(lot.kind==='parking'){
+    place(x+8,z+7,'pineRoadSign');
+    if(a>.61)place(x+9,z+5,'pineWreckedCar');
+   }else if(lot.kind==='vacant'&&a>.55){
+    place(x+6,z+6,'pineRoadsideShrub');
+    if(b>.78)place(x+8,z+7,'pineRubblePile');
+   }
   }
  }
  function pineAddHarbors(props){
