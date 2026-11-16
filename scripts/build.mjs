@@ -29,7 +29,17 @@ export const groups={
 export function bundle(group){
  const d=join(root,group.directory);
  const pre=readFileSync(join(d,'shell-before-script.html'),'utf8');
- const code=group.sections.map(p=>readFileSync(join(d,p),'utf8')).join('');
+ const shared={
+  '/*__PINE_SHARED_HARBOR_PALETTE__*/':readFileSync(join(root,'src/shared/harbor-palette.fragment.js'),'utf8').trimEnd(),
+  '/*__PINE_SHARED_HARBOR_GEOMETRY__*/':readFileSync(join(root,'src/shared/harbor-geometry.fragment.js'),'utf8').trimEnd()
+ };
+ let code=group.sections.map(p=>readFileSync(join(d,p),'utf8')).join('');
+ for(const [token,fragment] of Object.entries(shared)){
+  const n=code.split(token).length-1;
+  if(n!==1)throw Error(group.output+': expected exactly one '+token+', found '+n);
+  code=code.replace(token,fragment);
+ }
+ if(code.includes('__PINE_SHARED_HARBOR_'))throw Error(group.output+': unresolved shared-source marker');
  const post=readFileSync(join(d,'shell-after-script.html'),'utf8');
  if(!pre.endsWith('<script>')||!post.startsWith('</script>'))
   throw Error(group.output+': HTML shell does not bracket the script');
