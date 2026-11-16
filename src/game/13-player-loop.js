@@ -14,7 +14,7 @@ function gameTick(){
    if(gameAvatar)gl.deleteBuffer(gameAvatar.buf);
    gameAvatar=gameAvatarMesh();
   }
-  if(!pineSailing&&!gameMove&&now>=gameNextStep&&gameDirs.size){
+  if(!pineSailing&&!pinePlayerTransfer&&!gameMove&&now>=gameNextStep&&gameDirs.size){
    // Last pressed direction takes priority; no accidental diagonal movement.
    const direction=gameLastDir&&gameDirs.has(gameLastDir)?gameLastDir:[...gameDirs].at(-1);
    const [dx,dz,facing]=gameDirSteps[direction]||gameDirSteps.s;
