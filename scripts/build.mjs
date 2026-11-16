@@ -30,6 +30,7 @@ export function bundle(group){
  const d=join(root,group.directory);
  const pre=readFileSync(join(d,'shell-before-script.html'),'utf8');
  const shared={
+  '/*__PINE_SHARED_BLOCK_CATALOG__*/':readFileSync(join(root,'src/shared/block-catalog.fragment.js'),'utf8').trimEnd(),
   '/*__PINE_SHARED_HARBOR_PALETTE__*/':readFileSync(join(root,'src/shared/harbor-palette.fragment.js'),'utf8').trimEnd(),
   '/*__PINE_SHARED_HARBOR_GEOMETRY__*/':readFileSync(join(root,'src/shared/harbor-geometry.fragment.js'),'utf8').trimEnd()
  };
