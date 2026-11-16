@@ -5581,7 +5581,7 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
  // Lightweight game layer reuses the full editor mesh generator, but never enters edit mode.
  let gameAvatar=null,gameLast=performance.now(),gameX=32.5,gameZ=32.5,gameFacing=2;
  let gameAttackStarted=-1000,gameAttackVariant="miss",gameAttackLast=-1000,gameAudio=null,gameAudioNoise=null,gameSfxStep=0;
- let gameAmbientOn=false,gameAmbientMix=null,gameAmbientLast=0,gameStepIndex=0;
+ let gameAmbientOn=false,gameAmbientTouched=false,gameAmbientMix=null,gameAmbientLast=0,gameStepIndex=0,gameLastFootstep=-1000;
  // Tile-by-tile travel: the avatar smoothly approaches the center of each legal cell.
  const gameDirs=new Set(),gameBlock=new Set(),gameDoors=new Map(),gameFloor=new Map(),gameSolidByLayer=new Map(),gameDoorByLayer=new Map(),gameFloorsByLayer=new Map(),gameStairsByLayer=new Map();
  let gameLevel=0,gameStairArrivedFrom=0,gameLastSavedAt=0,gameSessionReady=false;
@@ -6369,6 +6369,8 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
  }
  function gameFootstepSE(){
   const ctx=gameEnsureAudio();if(!ctx)return;
+  if(ctx.currentTime-gameLastFootstep<.235)return;
+  gameLastFootstep=ctx.currentTime;
   const t=ctx.currentTime+.003,pitch=(gameStepIndex++%2?1.16:.91);
   const surf=gameFloor.get(gameTileKey(Math.floor(gameX),Math.floor(gameZ)))||'grass';
   const wood=/wood|bridge/i.test(surf)||gameBridge.has(gameTileKey(Math.floor(gameX),Math.floor(gameZ)));
@@ -6574,7 +6576,7 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
   gameMigratePineIsland();gameRetrofitSampleStairs();gameSpawn();gameRestoreProgress();gameCheckOcclusion();gameResize();gameSessionReady=true;gamePersistProgress(true);gameAvatar=gameAvatarMesh();
   document.querySelectorAll('[data-game-dir]').forEach(b=>{
    const d=b.dataset.gameDir;
-   b.addEventListener('pointerdown',e=>{e.preventDefault();if(!gameAmbientOn){gameAmbientOn=true;gameInitAmbience();$('gameAmbienceToggle').textContent='環境音：ON'}b.setPointerCapture(e.pointerId);gameDirs.add(d);gameLastDir=d;gameNextStep=0;b.classList.add('gameActive')});
+   b.addEventListener('pointerdown',e=>{e.preventDefault();if(!gameAmbientTouched){gameAmbientTouched=true;gameAmbientOn=true;gameInitAmbience();$('gameAmbienceToggle').textContent='環境音：ON'}b.setPointerCapture(e.pointerId);gameDirs.add(d);gameLastDir=d;gameNextStep=0;b.classList.add('gameActive')});
    const stop=()=>{gameDirs.delete(d);b.classList.remove('gameActive')};
    b.addEventListener('pointerup',stop);b.addEventListener('pointercancel',stop);b.addEventListener('lostpointercapture',stop);
   });
@@ -6610,7 +6612,7 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
   }
   $('gameAct').addEventListener('click',gamePrimaryAction);
   $('gameAmbienceToggle').addEventListener('click',()=>{
-   gameAmbientOn=!gameAmbientOn;
+   gameAmbientTouched=true;gameAmbientOn=!gameAmbientOn;
    if(gameAmbientOn)gameInitAmbience();
    $('gameAmbienceToggle').textContent='環境音：'+(gameAmbientOn?'ON':'OFF');
    gameAdjustAmbience();
