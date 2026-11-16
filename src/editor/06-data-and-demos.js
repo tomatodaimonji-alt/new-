@@ -1965,6 +1965,7 @@ $('clear').addEventListener('click',()=>{if(!confirm('配置したすべての�
 $('poiWalkToggle').addEventListener('click',()=>poiWalkSet(!poiWalkActive));
 $('poiWalkExit').addEventListener('click',()=>poiWalkSet(false));
 $('poiRoofToggle').addEventListener('click',()=>{
+ if(poiWalkActive){toast('歩行中の屋根は入退店に応じて自動切替します');return}
  hideUpper=!hideUpper;$('hideUpper').checked=hideUpper;dirty=true;cursorDirty=true;
  $('poiRoofToggle').textContent=hideUpper?'屋根を表示':'屋根を隠す';
 });
