@@ -1,4 +1,5 @@
 const palette=[
+{id:'pineLandingCraft',name:'兵員輸送艇・20人乗り（18×8）',icon:'▰',cat:'decor'},
 /*__PINE_SHARED_HARBOR_PALETTE__*/
 {id:'water',name:'水',icon:'≈',cat:'floor'},{id:'river',name:'川',icon:'≈',cat:'floor'},
 {id:'lake',name:'湖',icon:'≈',cat:'floor'},{id:'sea',name:'海',icon:'≈',cat:'floor'},
