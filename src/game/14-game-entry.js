@@ -40,6 +40,7 @@ function startGame(){
   }
   $('gameAct').addEventListener('click',gamePrimaryAction);
   $('pineBoatButton').addEventListener('click',pineBoatAction);
+  $('pineTroopButton').addEventListener('click',pineCrewAction);
   $('gameAmbienceToggle').addEventListener('click',()=>{
    gameAmbientTouched=true;gameAmbientOn=!gameAmbientOn;
    if(gameAmbientOn)gameInitAmbience();
