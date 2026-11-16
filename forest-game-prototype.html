@@ -6110,7 +6110,7 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
  }
  // A 20-person complement: logical 5x4 standing slots on the open deck.
  // The 3D hull and each soldier's mesh are compiled once; draw uses transforms.
- let pineTroopMesh=null,pineTroopCount=0,pineTroopMode='ready',pineTroopStarted=0;
+ let pineTroopMesh=null,pineTroopWalkMeshes=null,pineTroopCount=0,pineTroopMode='ready',pineTroopStarted=0;
  let pineGangwayMesh=null;
  const PINE_ISLAND_BERTH=110.5,PINE_MAINLAND_BERTH=142.5,PINE_BERTH_Z=67.5;
  const pineTroopSlot=i=>[-3+(i%5)*1.5,-1.9+Math.floor(i/5)*1.3];
@@ -6200,13 +6200,17 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
    pineGangwayMesh=upload(m);
   }
   if(!pineTroopMesh){
-   const m=mesh(),cloth=[.30,.39,.31],face=[.74,.61,.47],helmet=[.22,.29,.24];
-   cube(m,0,0,0,.31,.39,.30,cloth);
-   cube(m,0,.39,0,.37,.45,.28,cloth);
-   cube(m,0,.84,0,.31,.25,.31,face);
-   cube(m,0,1.05,0,.36,.13,.36,helmet);
-   for(const x of [-.13,.13])cube(m,x,-.31,0,.13,.34,.15,cloth);
-   pineTroopMesh=upload(m);
+   const model=(stride=0)=>{
+    const m=mesh(),cloth=[.30,.39,.31],face=[.74,.61,.47],helmet=[.22,.29,.24];
+    cube(m,0,0,0,.31,.39,.30,cloth);
+    cube(m,0,.39,0,.37,.45,.28,cloth);
+    cube(m,0,.84,0,.31,.25,.31,face);
+    cube(m,0,1.05,0,.36,.13,.36,helmet);
+    for(const x of [-.13,.13])cube(m,x,-.31,x<0?stride:-stride,.13,.34,.15,cloth);
+    return upload(m);
+   };
+   pineTroopMesh=model();
+   pineTroopWalkMeshes=[model(.13),model(-.13)];
   }
   if(pineSailing){
    const d=(pineTroopMode==='boarding'||pineTroopMode==='unloading')?null:
@@ -6262,7 +6266,10 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
     else{x=pineLerp(pineBoatX+slot[0],land[0],(t-.3)/.7);
       z=pineLerp(63.1,land[1],(t-.3)/.7);y=1.3}
    }else{ x=pineBoatX+slot[0];z=pineBoatZ+slot[1] }
-   if(visible)draw(pineTroopMesh,pineMVP(vp,x,y,z));
+   const moving=(pineTroopMode==='boarding'||pineTroopMode==='unloading')&&
+    now-pineTroopStarted>=i*380&&now-pineTroopStarted<i*380+1400;
+   const troopModel=moving?pineTroopWalkMeshes[Math.floor(now/165+i)%2]:pineTroopMesh;
+   if(visible)draw(troopModel,pineMVP(vp,x,y,z));
   }
  }
  function pineChunkWindow(){
