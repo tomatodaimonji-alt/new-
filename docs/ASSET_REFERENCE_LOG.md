@@ -33,3 +33,27 @@
 - 本島市街地：住宅・店舗・道路・ホテル等の現実的な構成
 
 **上の候補は調査を済ませた記録ではない。実際の調査時に資料と観察結果を追記する。**
+
+
+## 2026-11-17 — 20人乗り輸送艇と軍港 v3.3（実際に資料を確認）
+
+- **制作対象:** `pineLandingCraft`（全長18マス×全幅8マス）、PINE島東岸・本島の兵員用岸壁、ドック専用側面ギャングウェイ
+- **世界観・用途:** 都市機能停止後、PINE島の臨時軍司令部から本島へ20名規模の兵員を運ぶ小型上陸輸送艇。実物LCUを**そのまま縮小・複製したモデルではない**。
+- **現実の参考資料（確認日 2026-11-17）:**
+  - [Austal USA / Landing Craft Utility](https://www.austalusa.com/ships/surface-ships/landing-craft-utility-lcu) — 実物LCUは全長42.4m、幅9.4m、船首ランプ・船尾ゲートを備える。これは大型船の参考値で、PINEの18×8マスの厳密な実尺度ではない。
+  - [U.S. Marine Corps / LCU 写真](https://www.marines.mil/Photos/igphoto/162188/) — 開放された貨物甲板、舷側の防護、昇降用船首ランプ、操舵室の位置関係を観察。
+  - [U.S. Army / Port operations](https://www.army.mil/article/120329/port_operations_during_pulse_w) — 荷役と岸に伸びるランプ、喫水と陸地の接続を観察。
+  - [DVIDS / Tacoma vessel embarks on Alaskan mission](https://www.dvidshub.net/news/91286/tacoma-vessel-embarks-alaskan-mission) — 船の係留ロープと岸壁、防護・照明などの桟橋機能を観察。
+- **ゲームの参考資料（確認日 2026-11-17）:**
+  - [Project Zomboid公式 / Clear Cove紹介](https://projectzomboid.com/blog/news/2023/05/mod-spotlight-clear-cove/) — 見下ろし視点での岸壁と荷役クレーンの読みやすいシルエット、舗装・水際の色分け。
+  - [Bohemia Interactive Community / Arma 3 Editor Previews](https://community.bohemia.net/wiki/Category:Arma_3:_Editor_Previews?useskin=vector) — 岸壁・木造桟橋・梯子・石造護岸など、港湾部品を分けたモジュラー設計を参考。
+  - [Arma 3のMk10 LCUコミュニティMOD紹介](https://classicarma.blogspot.com/2016/08/arma3-mk10-lcu-mod-wip1.html) — ゲームでの甲板、船橋、手すり、岸壁と係留設備の見せ方。非公式MODであり実物資料とは区別。
+- **学んだ構造:** 水面下の船体（船底）、船体外板、開放された甲板、舷側の防護壁、船橋・窓、アンテナ・灯火、船首ゲート、係留柱、防舷材、岸壁上の荷役設備と広場、港への道路動線。
+- **PINEで採用した寸法:** 船体18×8マス、船体下部は海面下約3マス、船橋等は海面上3マス強。20人用に5列×4列の重複しない立ち位置を設定。1人1マス以上の離隔を取った。
+- **簡略化した部分:** 実船の曲面船底、機械室、居住区、エンジン機関、複雑な索具や錨機の大部分は低ポリゴン化。船首ランプは外観中心。現時点では船内各階への自由移動なし。
+- **港湾レイアウト:** PINE島東岸の岸壁おおむねx=86..116 / z=56..62、本島の岸壁x=132..160 / z=56..62。船の接岸中心は(110.5,67.5)、(142.5,67.5)。船の北舷側面へ接岸して傾斜式の乗降橋を表示する。
+- **乗員・イベント:** 岸壁上の20名の整列位置から時間差で船の甲板へ歩く簡易演出、船の航行と本島での下船演出。船は一つのGPUメッシュで描画し、位置変換だけで移動させる。
+- **導入箇所:** `src/shared/landing-craft-geometry.fragment.js`、`src/game/10-seamless-world.js`、`src/editor/06-data-and-demos.js`、港湾既存部品。単一HTMLはゲーム `forest-game-prototype.html`、エディター `world-editor.html`。
+- **静的確認:** 船体の寸法・海面下深さ・20箇所の配置・両港の接岸判定を確認。ゲーム/エディターのJS構文と分割ソース/生成HTMLの一致を確認。
+- **未確認・課題:** Android実機でのFPSやビジュアル、水面と岸壁の重なり、桟橋の全歩行ルート、船内の自由歩行、兵士の本格AI経路探索や戦闘、船の旋回アニメーションは未検証/未実装。兵士の乗下船は経路探索AIではなく時間差の移動演出。
+- **著作権・画像:** 写真やゲーム画像の素材を埋め込んでいない。構造のみ学び、PINE独自のWebGL形状で制作。
