@@ -34,3 +34,11 @@ node scripts/build.mjs
 
 ## 新しいチャットでの依頼の仕方
 「GitHub `tomatodaimonji-alt/new-` の `PINE_START_HERE.md` と `docs/HANDOFF.md` を最初に読み、`src/` の分割コードを編集して2つのHTMLをビルド・検証して。既存の島の構造は保護して。」で作業を継続できます。
+
+
+## 共通ライブラリ（引き継ぎで重要）
+- [全ブロック定義](src/shared/block-catalog.fragment.js) — 最優先の編集元
+- [港湾ブロック定義](src/shared/harbor-palette.fragment.js) — 全ブロック定義から参照
+- [港湾の共通3D形状](src/shared/harbor-geometry.fragment.js) — ゲームとエディターが利用
+- `scripts/build.mjs` で各HTMLに埋め込むため、ランタイムに外部JavaScriptの読み込みは発生しません。
+- 港湾以外の3D形状/当たり判定はまだ分離途上。新たな建材を追加するときは既存表示と移動判定の確認が必要。
