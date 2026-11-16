@@ -43,6 +43,33 @@ for(const output of [game,editor]){
  assert.ok(output.includes(sharedGeometry),'Built HTML missing shared harbor geometry');
  assert.ok(!output.includes('__PINE_SHARED_'),'Unresolved shared source marker');
 }
+// Shared architectural meshes must be defined in one source and embedded once.
+const sharedArchitecture=[
+ ['/*__PINE_SHARED_ROOF_GEOMETRY__*/','src/shared/roof-geometry.fragment.js','function connectedRoofGeometry('],
+ ['/*__PINE_SHARED_WALL_FACADE__*/','src/shared/wall-facade.fragment.js','function houseFacadeDetails('],
+ ['/*__PINE_SHARED_BRIDGE_TYPES__*/','src/shared/bridge-types.fragment.js','const BRIDGE_IDS='],
+ ['/*__PINE_SHARED_FENCE_GEOMETRY__*/','src/shared/fence-geometry.fragment.js','function connectedFenceGeometry(']
+];
+for(const [marker,path,symbol] of sharedArchitecture){
+ const content=readFileSync(join(root,path),'utf8');
+ assert.ok(content.includes(symbol),path+' missing expected definition');
+ for(const g of Object.values(groups)){
+  const raw=readFileSync(join(root,g.directory,'03-geometry.js'),'utf8');
+  assert.equal(raw.split(marker).length-1,1,g.output+' must reference exactly one '+path);
+  assert.ok(!raw.includes(symbol),g.output+' still contains duplicated '+symbol);
+ }
+ for(const html of [game,editor]){
+  assert.ok(html.includes(content),path+' is not embedded unchanged');
+  assert.ok(!html.includes(marker),'Shared marker left unresolved: '+marker);
+ }
+}
+// Important: bridge elevation/rendering differ intentionally; do not unify blindly.
+const rawGameGeometry=readFileSync(join(root,'src/game/03-geometry.js'),'utf8');
+const rawEditorGeometry=readFileSync(join(root,'src/editor/03-geometry.js'),'utf8');
+assert.ok(rawGameGeometry.includes('const bridgeDeckLevels=new Map()'),'Game bridge height cache was lost');
+assert.ok(!rawEditorGeometry.includes('const bridgeDeckLevels=new Map()'),'Editor unexpectedly inherited game bridge cache');
+assert.ok(rawGameGeometry.includes('function bridgeSpanElevation('));
+assert.ok(rawEditorGeometry.includes('function bridgeSpanElevation('));
 const harborNames=['pineHarborPier','pineHarborQuay','pineHarborBollard',
  'pineHarborFender','pineHarborLamp','pineHarborPallet','pineHarborSign'];
 for(const id of harborNames){
