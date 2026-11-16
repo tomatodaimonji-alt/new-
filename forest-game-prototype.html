@@ -3374,7 +3374,15 @@ function render(){
 }
 
 function saveLocal(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(data()))}catch(e){}}
-function data(){return{format:'forest-world-v1',version:1,size:MAP_W,width:MAP_W,height:MAP_H,terrainHeights:[...terrainHeights.entries()].map(([key,h])=>{const [x,z]=key.split(',').map(Number);return{x,z,h}}),world:world.map(o=>({...o})),models:models.map(m=>({id:m.id,name:m.name,parts:m.parts.map(p=>({...p}))})),prefabs:prefabs.map(p=>({id:p.id,name:p.name,w:p.w,h:p.h,tiles:p.tiles.map(t=>({...t}))}))}}
+function data(){
+ const authoredW=pineWorldEnabled?96:MAP_W,authoredH=pineWorldEnabled?96:MAP_H;
+ return{format:'forest-world-v1',version:1,size:authoredW,width:authoredW,height:authoredH,
+  pineSeamless:pineWorldEnabled,
+  terrainHeights:[...terrainHeights.entries()].map(([key,h])=>{const [x,z]=key.split(',').map(Number);return{x,z,h}}).filter(p=>p.x<authoredW&&p.z<authoredH),
+  world:world.filter(o=>o.x<authoredW&&o.z<authoredH).map(o=>({...o})),
+  models:models.map(m=>({id:m.id,name:m.name,parts:m.parts.map(p=>({...p}))})),
+  prefabs:prefabs.map(p=>({id:p.id,name:p.name,w:p.w,h:p.h,tiles:p.tiles.map(t=>({...t}))}))}
+}
 function snapshot(){undoStack.push(JSON.stringify(data()));if(undoStack.length>45)undoStack.shift();redoStack.length=0}
 function commit(){worldMaxLevel=world.reduce((top,o)=>Math.max(top,o.y),0);dirty=true;saveLocal();updateStats()}
 function restore(json){loadData(JSON.parse(json));commit()}
@@ -5610,6 +5618,10 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
  // editor JSON. All authored buildings shift consistently by 16 tiles.
  function gameMigratePineIsland(){
   gameMapMigrated=false;
+  if(MAP_W===96&&MAP_H===96&&world.some(o=>o.type.startsWith('bridge')&&o.x>=38&&o.x<=41&&o.z>=66&&o.z<=74)&&
+     world.some(o=>o.type.startsWith('oldTown')&&o.x>=20&&o.x<=60)){
+    gameMapMigrated=true;return;
+  }
   const isOld=MAP_W===64&&MAP_H===64&&
    world.some(o=>o.x===23&&o.z===54&&o.type.startsWith('bridge'))&&
    world.some(o=>o.x>=6&&o.x<=43&&o.type.startsWith('oldTown'));
