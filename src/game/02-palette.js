@@ -1,0 +1,145 @@
+const palette=[
+{id:'pineHarborPier',name:'港・木造歩行桟橋',icon:'▥',cat:'build'},
+{id:'pineHarborQuay',name:'港・コンクリート岸壁',icon:'▣',cat:'build'},
+{id:'pineHarborBollard',name:'港・係船柱',icon:'●',cat:'decor'},
+{id:'pineHarborFender',name:'港・防舷材',icon:'◖',cat:'decor'},
+{id:'pineHarborLamp',name:'港・照明灯',icon:'♧',cat:'decor'},
+{id:'pineHarborPallet',name:'港・荷役パレット',icon:'▥',cat:'decor'},
+{id:'pineHarborSign',name:'港・航路標識',icon:'⚑',cat:'decor'},
+{id:'water',name:'水',icon:'≈',cat:'floor'},{id:'river',name:'川',icon:'≈',cat:'floor'},
+{id:'lake',name:'湖',icon:'≈',cat:'floor'},{id:'sea',name:'海',icon:'≈',cat:'floor'},
+{id:'grass',name:'草原',icon:'🌱',cat:'floor'},{id:'earth',name:'森の土',icon:'🍂',cat:'floor'},{id:'moss',name:'苔と石',icon:'🪨',cat:'floor'},{id:'stone',name:'石床',icon:'▫️',cat:'floor'},{id:'woodfloor',name:'木の床（標準）',icon:'🟫',cat:'floor'},
+{id:'woodfloorLight',name:'木の床（明るい木）',icon:'🟨',cat:'floor'},{id:'woodfloorDark',name:'木の床（濃い木）',icon:'🟫',cat:'floor'},{id:'brickfloor',name:'レンガの床',icon:'▦',cat:'floor'},
+{id:'basicfloor',name:'基本の床',icon:'▫',cat:'floor'},
+{id:'plasterfloor',name:'漆喰の床',icon:'□',cat:'floor'},
+{id:'mossfloor',name:'苔むした石の床',icon:'▦',cat:'floor'},
+{id:'ironfloor',name:'鉄板の床',icon:'▣',cat:'floor'},
+{id:'wall',name:'壁',icon:'🧱',cat:'build'},
+{id:'stonewall',name:'石積みの壁',icon:'▤',cat:'wall'},{id:'woodwall',name:'木の板壁',icon:'▥',cat:'wall'},
+{id:'brickwall',name:'レンガの壁',icon:'▦',cat:'wall'},{id:'plasterwall',name:'白い漆喰壁',icon:'□',cat:'wall'},
+{id:'mosswall',name:'苔むした石壁',icon:'🌿',cat:'wall'},{id:'ironwall',name:'鉄板の壁',icon:'▣',cat:'wall'},
+{id:'wallcorner',name:'基本の壁・角',icon:'◩',cat:'wall'},
+{id:'stonewallcorner',name:'石積みの壁・角',icon:'◩',cat:'wall'},
+{id:'woodwallcorner',name:'木の板壁・角',icon:'◩',cat:'wall'},
+{id:'brickwallcorner',name:'レンガの壁・角',icon:'◩',cat:'wall'},
+{id:'plasterwallcorner',name:'漆喰の壁・角',icon:'◩',cat:'wall'},
+{id:'mosswallcorner',name:'苔むした壁・角',icon:'◩',cat:'wall'},
+{id:'ironwallcorner',name:'鉄板の壁・角',icon:'◩',cat:'wall'},{id:'wallWindow',name:'基本の壁・窓',icon:'▣',cat:'wall'},
+{id:'wallDoor',name:'基本の壁・扉',icon:'🚪',cat:'wall'},
+{id:'stonewallWindow',name:'石積みの壁・窓',icon:'▣',cat:'wall'},
+{id:'stonewallDoor',name:'石積みの壁・扉',icon:'🚪',cat:'wall'},
+{id:'woodwallWindow',name:'木の板壁・窓',icon:'▣',cat:'wall'},
+{id:'woodwallDoor',name:'木の板壁・扉',icon:'🚪',cat:'wall'},
+{id:'brickwallWindow',name:'レンガの壁・窓',icon:'▣',cat:'wall'},
+{id:'brickwallDoor',name:'レンガの壁・扉',icon:'🚪',cat:'wall'},
+{id:'plasterwallWindow',name:'漆喰の壁・窓',icon:'▣',cat:'wall'},
+{id:'plasterwallDoor',name:'漆喰の壁・扉',icon:'🚪',cat:'wall'},
+{id:'mosswallWindow',name:'苔むした壁・窓',icon:'▣',cat:'wall'},
+{id:'mosswallDoor',name:'苔むした壁・扉',icon:'🚪',cat:'wall'},
+{id:'ironwallWindow',name:'鉄板の壁・窓',icon:'▣',cat:'wall'},
+{id:'ironwallDoor',name:'鉄板の壁・扉',icon:'🚪',cat:'wall'},
+{id:'wallCounter',name:'基本の壁・店カウンター',icon:'▰',cat:'wall'},
+{id:'stonewallCounter',name:'石積みの壁・店カウンター',icon:'▰',cat:'wall'},
+{id:'woodwallCounter',name:'木の板壁・店カウンター',icon:'▰',cat:'wall'},
+{id:'brickwallCounter',name:'レンガの壁・店カウンター',icon:'▰',cat:'wall'},
+{id:'plasterwallCounter',name:'漆喰の壁・店カウンター',icon:'▰',cat:'wall'},
+{id:'mosswallCounter',name:'苔むした壁・店カウンター',icon:'▰',cat:'wall'},
+{id:'ironwallCounter',name:'鉄板の壁・店カウンター',icon:'▰',cat:'wall'},
+{id:'wallPlain',name:'基本素材・装飾なし',icon:'□',cat:'wall'},
+{id:'wallDouble',name:'基本素材・両面',icon:'▥',cat:'wall'},
+{id:'wallAll',name:'基本素材・全面',icon:'▦',cat:'wall'},
+{id:'stonewallPlain',name:'石積み・装飾なし',icon:'□',cat:'wall'},
+{id:'stonewallDouble',name:'石積み・両面',icon:'▥',cat:'wall'},
+{id:'stonewallAll',name:'石積み・全面',icon:'▦',cat:'wall'},
+{id:'woodwallPlain',name:'木材・装飾なし',icon:'□',cat:'wall'},
+{id:'woodwallDouble',name:'木材・両面',icon:'▥',cat:'wall'},
+{id:'woodwallAll',name:'木材・全面',icon:'▦',cat:'wall'},
+{id:'brickwallPlain',name:'レンガ・装飾なし',icon:'□',cat:'wall'},
+{id:'brickwallDouble',name:'レンガ・両面',icon:'▥',cat:'wall'},
+{id:'brickwallAll',name:'レンガ・全面',icon:'▦',cat:'wall'},
+{id:'plasterwallPlain',name:'漆喰・装飾なし',icon:'□',cat:'wall'},
+{id:'plasterwallDouble',name:'漆喰・両面',icon:'▥',cat:'wall'},
+{id:'plasterwallAll',name:'漆喰・全面',icon:'▦',cat:'wall'},
+{id:'mosswallPlain',name:'苔むした石・装飾なし',icon:'□',cat:'wall'},
+{id:'mosswallDouble',name:'苔むした石・両面',icon:'▥',cat:'wall'},
+{id:'mosswallAll',name:'苔むした石・全面',icon:'▦',cat:'wall'},
+{id:'ironwallPlain',name:'鉄板・装飾なし',icon:'□',cat:'wall'},
+{id:'ironwallDouble',name:'鉄板・両面',icon:'▥',cat:'wall'},
+{id:'ironwallAll',name:'鉄板・全面',icon:'▦',cat:'wall'},
+{id:'corner',name:'角の壁',icon:'◩',cat:'legacy'},{id:'door',name:'ドア枠',icon:'🚪',cat:'build'},{id:'window',name:'窓壁',icon:'▣',cat:'build'},{id:'pillar',name:'柱',icon:'▥',cat:'build'},{id:'shopCounter',name:'店カウンター',icon:'▰',cat:'build'},{id:'roof',name:'屋根',icon:'⌂',cat:'build'},{id:'stairs',name:'階段',icon:'▤',cat:'build'},
+{id:'windowWood',name:'木枠の窓',icon:'▣',cat:'build'},{id:'windowStone',name:'石枠の窓',icon:'▣',cat:'build'},{id:'windowBrick',name:'レンガ枠の窓',icon:'▣',cat:'build'},
+{id:'doorWood',name:'木の扉',icon:'🚪',cat:'build'},{id:'doorIron',name:'鉄の扉',icon:'🚪',cat:'build'},{id:'doorStone',name:'石造りの扉枠',icon:'🚪',cat:'build'},
+{id:'counterWood',name:'木製カウンター',icon:'▰',cat:'build'},{id:'counterStone',name:'石製カウンター',icon:'▰',cat:'build'},{id:'counterLuxury',name:'高級木製カウンター',icon:'▰',cat:'build'},
+{id:'treeRound',name:'丸い広葉樹 ①',icon:'🌳',cat:'decor'},{id:'treeBranch',name:'枝のある木 ③',icon:'🌲',cat:'decor'},{id:'rock',name:'大岩',icon:'🪨',cat:'decor'},{id:'bush',name:'低木',icon:'🌿',cat:'decor'},{id:'table',name:'木の机',icon:'▦',cat:'decor'},{id:'chest',name:'宝箱',icon:'📦',cat:'decor'},{id:'rewardChest',name:'ダンジョン報酬の豪華宝箱',icon:'🎁',cat:'decor'},{id:'bed',name:'ベッド',icon:'🛏️',cat:'decor'},
+{id:'kitchenStove',name:'キッチン・石のかまど',icon:'♨',cat:'decor'},
+{id:'kitchenCounter',name:'キッチン・調理台',icon:'▤',cat:'decor'},
+{id:'kitchenSink',name:'キッチン・流し台',icon:'▣',cat:'decor'},
+{id:'bathWood',name:'風呂・木製浴槽',icon:'♨',cat:'decor'},
+{id:'bathStone',name:'風呂・石造り浴槽',icon:'♨',cat:'decor'},
+{id:'bathLuxury',name:'風呂・豪華な浴槽',icon:'♨',cat:'decor'},
+{id:'humanBare',name:'裸の人間',icon:'♙',cat:'character'},
+{id:'humanVillager',name:'村人',icon:'♟',cat:'character'},
+{id:'humanMerchant',name:'商人',icon:'♙',cat:'character'},
+{id:'humanKnight',name:'騎士',icon:'♜',cat:'character'},
+{id:'monsterSlime',name:'スライム',icon:'●',cat:'character'},
+{id:'monsterGoblin',name:'ゴブリン',icon:'♟',cat:'character'},
+{id:'monsterSkeleton',name:'ガイコツ',icon:'☠',cat:'character'},
+{id:'monsterDragon',name:'ドラゴン',icon:'◆',cat:'character'},
+{id:'equipStick',name:'木の棒',icon:'│',cat:'equipment'},
+{id:'equipClub',name:'棍棒',icon:'♣',cat:'equipment'},
+{id:'equipWoodSword',name:'木の剣',icon:'⚔',cat:'equipment'},
+{id:'equipStoneSword',name:'石の剣',icon:'⚔',cat:'equipment'},
+{id:'equipIronSword',name:'鉄の剣',icon:'⚔',cat:'equipment'},
+{id:'treePine',name:'針葉樹',icon:'🌲',cat:'decor'},
+{id:'treeBirch',name:'白樺',icon:'🌳',cat:'decor'},
+{id:'treeOak',name:'大きな広葉樹',icon:'🌳',cat:'decor'},
+{id:'treeDead',name:'枯れ木',icon:'♧',cat:'decor'},
+{id:'treeStump',name:'切り株',icon:'◉',cat:'decor'},
+{id:'innSign',name:'宿屋の看板（INN）',icon:'▣',cat:'decor'},
+{id:'shopHerbSign',name:'道具屋の看板・薬草',icon:'🌿',cat:'decor'},
+{id:'shopChestSign',name:'道具屋の看板・宝箱',icon:'▣',cat:'decor'},
+{id:'shopBagSign',name:'道具屋の看板・袋',icon:'▣',cat:'decor'},
+{id:'treeMaple',name:'カエデ',icon:'🌳',cat:'decor'},
+{id:'treeCherry',name:'桜',icon:'🌸',cat:'decor'},
+{id:'treeWillow',name:'柳',icon:'🌳',cat:'decor'},
+{id:'treeCedar',name:'杉',icon:'🌲',cat:'decor'},
+{id:'treeBamboo',name:'竹',icon:'🎋',cat:'decor'},
+{id:'treeAutumn',name:'紅葉した木',icon:'🍁',cat:'decor'},
+{id:'rockGranite',name:'花崗岩',icon:'🪨',cat:'decor'},
+{id:'rockSandstone',name:'砂岩',icon:'🪨',cat:'decor'},
+{id:'rockBasalt',name:'玄武岩',icon:'🪨',cat:'decor'},
+{id:'rockMossy',name:'苔むした岩',icon:'🪨',cat:'decor'},
+{id:'rockCluster',name:'岩の集まり',icon:'🪨',cat:'decor'},
+{id:'rockCliff',name:'大きな岩塊',icon:'🪨',cat:'decor'},
+{id:'bushFlower',name:'花の低木',icon:'🌺',cat:'decor'},
+{id:'bushFern',name:'シダ',icon:'🌿',cat:'decor'}];
+palette.push({id:'roadDirt',name:'土道',cat:'floor',icon:'▦'},{id:'roadGravel',name:'砂利道',cat:'floor',icon:'▦'},{id:'roadMoss',name:'苔道',cat:'floor',icon:'▦'},{id:'roadMud',name:'ぬかるみ',cat:'floor',icon:'▦'},{id:'roadCobble',name:'丸石の石畳',cat:'floor',icon:'▦'},{id:'roadCutStone',name:'切り石舗装',cat:'floor',icon:'▦'},{id:'roadBrick',name:'レンガ道',cat:'floor',icon:'▦'},{id:'roadPlank',name:'木板道',cat:'floor',icon:'▦'},{id:'roadBroken',name:'崩れた石畳',cat:'floor',icon:'▦'},{id:'roadAncient',name:'遺跡の道',cat:'floor',icon:'▦'},{id:'roadBasalt',name:'黒石道',cat:'floor',icon:'▦'},{id:'roadRoyal',name:'装飾石道',cat:'floor',icon:'▦'});
+palette.push(...[["roofTile","瓦屋根"],["roofThatch","茅葺き屋根"],["roofPlank","木板屋根"],["roofTileRidge","瓦屋根・棟"],["roofThatchRidge","茅葺き屋根・棟"],["roofPlankRidge","木板屋根・棟"],["roofTileEnd","瓦屋根・端"],["roofThatchEnd","茅葺き屋根・端"],["roofPlankEnd","木板屋根・端"],["roofCorner","屋根・角"],["chimney","レンガの煙突"],["archStone","石造りアーチ"],["timberWall","木骨組み漆喰壁"],["balcony","木製ベランダ"],["roofRuin","崩れた屋根"],["fallenLog","倒木"],["exposedRoots","木の根"],["mushroomPatch","キノコ群"],["giantMushroom","巨大キノコ"],["vineWall","つる植物"],["watersideRock","水辺の岩"],["flowerField","花畑"],["tallGrass","背の高い草"],["bedLuxury","豪華なベッド"],["chairWood","木製椅子"],["benchWood","木製長椅子"],["bookshelf","本棚"],["wardrobe","タンス"],["fireplace","暖炉"],["lantern","ランタン"],["candleStand","燭台"],["barrel","樽"],["crate","木箱"],["sack","麻袋"],["displayShelf","商品陳列棚"],["brokenPillar","崩壊した石柱"],["crackedWall","ひび割れた石壁"],["ironGate","鉄格子"],["gravestone","墓石"],["sarcophagus","石棺"],["stairDown","地下への階段"],["ancientAltar","古い祭壇"],["rubble","瓦礫"]].map(([id,name])=>({id,name,cat:'decor',icon:'▣'})));
+palette.push(...palette.filter(p=>p.id.startsWith('road')).map(p=>({...p,id:p.id+'Full',name:p.name+'・1マス全面'})));
+palette.push(...[["stairStraight","直線階段"],["stairSwitchback","折り返し階段"],["stairSpiral","螺旋階段"],["towerWall","塔の円弧石壁"],["towerWindow","塔の小窓"],["towerBattlement","塔の胸壁"],["towerSpire","尖塔屋根"],["towerPillar","塔の石柱"]].map(([id,name])=>({id,name,cat:'decor',icon:'▣'})));
+palette.push({id:'chairClassic',name:'椅子',icon:'▣',cat:'decor'},{id:'stoolRound',name:'丸椅子',icon:'◉',cat:'decor'});
+palette.push(...[["fenceWood","木柵・直線"],["fenceWoodCorner","木柵・角"],["fenceWoodEnd","木柵・端"],["fenceWoodGate","木の門扉"],["fenceStone","石柵・直線"],["fenceStoneCorner","石柵・角"],["fenceStoneEnd","石柵・端"],["fenceStoneGate","石の門扉"],["fenceIron","鉄柵・直線"],["fenceIronCorner","鉄柵・角"],["fenceIronEnd","鉄柵・端"],["fenceIronGate","鉄の門扉"],["frameWoodPost","木製の柱"],["frameWoodBeam","木製の梁"],["frameWoodBrace","斜め補強材"]].map(([id,name])=>({id,name,cat:'decor',icon:'▥'})));
+palette.push(...[["wellStone","石造りの井戸"],["wellWood","木造りの井戸"],["marketStallCloth","布屋根の露店"],["marketStallWood","木屋根の屋台"],["handcartEmpty","木製の荷車"],["handcartLoaded","荷積みの荷車"]].map(([id,name])=>({id,name,cat:'decor',icon:'▣'})));
+palette.push(...[["roundTableWood","木の丸テーブル"],["roundTableStone","石の丸テーブル"],["roundTableSet","食器付き丸テーブル"],["plateWood","木皿"],["plateCeramic","陶器皿"],["bowlClay","土焼きの器"],["cupWood","木のコップ"],["mugCeramic","陶器のマグ"],["jugClay","水差し"],["basketProduce","野菜かご"],["breadBoard","パンとまな板"],["smallFlowerVase","小さな花瓶"]].map(([id,name])=>({id,name,cat:'decor',icon:'◉'})));
+palette.push(...[["slopeGrass","草地の斜面"],["slopeStone","岩の斜面"],["terrainStep","土の段差"],["cliffEdge","崖の端"],["cliffFace","崖の壁面"],["streamBank","小川の岸"],["streamBend","曲がった岸"],["streamShallow","浅瀬"],["streamFord","渡りやすい浅瀬"],["bridgeWood","木橋・中央"],["bridgeWoodEnd","木橋・端"],["bridgeStone","石橋・中央"],["bridgeStoneEnd","石橋・端"]].map(([id,name])=>({id,name,cat:'decor',icon:'▰'})));
+palette.push(...[["ruinWallLow","崩れた壁・低"],["ruinWallJagged","崩れた壁・半壊"],["ruinRoofHole","穴の開いた屋根"],["ruinRoofCollapse","崩れ落ちた屋根"],["ruinWoodPost","折れた木柱"],["ruinStonePost","折れた石柱"],["ruinFloorCrack","ひび割れた床"],["ruinFloorHole","穴のある床"],["ruinDoorHanging","外れかけた木扉"],["ruinDoorBroken","壊れた扉"],["ruinWindowEmpty","枠だけ残った窓"],["ruinWindowShattered","割れた窓"]].map(([id,name])=>({id,name,cat:'decor',icon:'▥'})));
+palette.push(...[['grassMeadow','草地・明るい'],['grassWild','草地・野草'],['grassForest','森の下草'],['grassDry','乾いた草地']].map(([id,name])=>({id,name,cat:'floor',icon:'▦'})));
+palette.push(...[['roadDirtDiagA','斜め土道 ／'],['roadDirtDiagB','斜め土道 ＼'],['roadGravelDiagA','斜め砂利道 ／'],['roadGravelDiagB','斜め砂利道 ＼']].map(([id,name])=>({id,name,cat:'floor',icon:'▦'})));
+palette.push({id:'terrainStairs',name:'段差を上る石段',cat:'decor',icon:'▤'});
+palette.push(...[['cropWheat','麦の畑'],['cropVegetable','野菜の畑'],['sheepWool','羊']].map(([id,name])=>({id,name,cat:'decor',icon:'▣'})));
+palette.push(...[
+ ['grassTuft','小草のある草地'],['grassFlowers','花のある草地'],
+ ['grassPebbles','小石のある草地'],['grassPatch','土混じりの草地'],
+ ['grassWeeds','雑草のある草地'],['grassTrampled','踏まれた草地']
+ ].map(([id,name])=>({id,name,cat:'floor',icon:'▦'})));
+palette.push(...[
+ ['roofSteep','住宅・急勾配切妻屋根'],['roofHip','住宅・寄棟屋根'],
+ ['roofCross','住宅・交差切妻屋根'],['roofDormer','住宅・屋根窓付き'],
+ ['roofLean','住宅・片流れ屋根'],['roofThatchThick','住宅・厚い茅葺き']
+ ].map(([id,name])=>({id,name,cat:'decor',icon:'⌂'})));
+palette.push(...[{id:'oldTownCreamWall',name:'旧市街・クリーム壁',cat:'decor',icon:'▤'},{id:'oldTownCreamWindow',name:'旧市街・クリーム窓付き外壁',cat:'decor',icon:'▤'},{id:'oldTownCreamDoor',name:'旧市街・クリーム店舗入口',cat:'decor',icon:'▤'},{id:'oldTownOchreWall',name:'旧市街・黄壁',cat:'decor',icon:'▤'},{id:'oldTownOchreWindow',name:'旧市街・黄窓付き外壁',cat:'decor',icon:'▤'},{id:'oldTownOchreDoor',name:'旧市街・黄店舗入口',cat:'decor',icon:'▤'},{id:'oldTownRoseWall',name:'旧市街・赤桃壁',cat:'decor',icon:'▤'},{id:'oldTownRoseWindow',name:'旧市街・赤桃窓付き外壁',cat:'decor',icon:'▤'},{id:'oldTownRoseDoor',name:'旧市街・赤桃店舗入口',cat:'decor',icon:'▤'},{id:'oldTownMintWall',name:'旧市街・薄緑壁',cat:'decor',icon:'▤'},{id:'oldTownMintWindow',name:'旧市街・薄緑窓付き外壁',cat:'decor',icon:'▤'},{id:'oldTownMintDoor',name:'旧市街・薄緑店舗入口',cat:'decor',icon:'▤'},{id:'oldTownBlueWall',name:'旧市街・淡青壁',cat:'decor',icon:'▤'},{id:'oldTownBlueWindow',name:'旧市街・淡青窓付き外壁',cat:'decor',icon:'▤'},{id:'oldTownBlueDoor',name:'旧市街・淡青店舗入口',cat:'decor',icon:'▤'},{id:'oldTownSandWall',name:'旧市街・砂色壁',cat:'decor',icon:'▤'},{id:'oldTownSandWindow',name:'旧市街・砂色窓付き外壁',cat:'decor',icon:'▤'},{id:'oldTownSandDoor',name:'旧市街・砂色店舗入口',cat:'decor',icon:'▤'}]);palette.push(...[{id:'oldTownShop',name:'旧市街・店舗ショーウィンドウ',cat:'decor',icon:'▤'},{id:'oldTownSign',name:'旧市街・吊り看板',cat:'decor',icon:'▤'},{id:'oldTownAwning',name:'旧市街・布の庇',cat:'decor',icon:'▤'},{id:'oldTownFlowerBox',name:'旧市街・窓辺の花箱',cat:'decor',icon:'▤'},{id:'oldTownShutters',name:'旧市街・開いた雨戸',cat:'decor',icon:'▤'},{id:'oldTownStreetLamp',name:'旧市街・壁付街灯',cat:'decor',icon:'▤'}]);palette.push(...[{id:'oldTownCreamShop',name:'旧市街・Creamの店先',cat:'decor',icon:'▤'},{id:'oldTownOchreShop',name:'旧市街・Ochreの店先',cat:'decor',icon:'▤'},{id:'oldTownRoseShop',name:'旧市街・Roseの店先',cat:'decor',icon:'▤'},{id:'oldTownMintShop',name:'旧市街・Mintの店先',cat:'decor',icon:'▤'},{id:'oldTownBlueShop',name:'旧市街・Blueの店先',cat:'decor',icon:'▤'},{id:'oldTownSandShop',name:'旧市街・Sandの店先',cat:'decor',icon:'▤'}]);palette.push({id:'oldTownTower',name:'旧市街・小塔',cat:'decor',icon:'♜'},{id:'oldTownQuay',name:'旧市街・連続する石の護岸',cat:'decor',icon:'▤'});const catalog=new Map(palette.map(p=>[p.id,p]));let selected='wall',mode='place',rotation=0,level=0,hideUpper=false,worldMaxLevel=0,world=[],models=[],prefabs=[],undoStack=[],redoStack=[],hover=null,dragPainting=false,yaw=Math.PI/4,zoom=1,panX=0,panZ=0,dirty=true,sceneMesh=null,sceneGhostMesh=null,sceneBuildingMeshes=new Map(),cursorMesh=null,cursorDirty=true,modelParts=[],activeModelId=null;
+const byId=id=>catalog.get(id)||models.find(m=>m.id===id)||prefabs.find(p=>p.id===id);
+const cellKey=(x,z,y=0)=>x+','+z+','+y;
+const validPos=(x,z)=>Number.isInteger(x)&&Number.isInteger(z)&&x>=0&&z>=0&&x<MAP_W&&z<MAP_H;
+const safeColor=s=>/^#[0-9a-f]{6}$/i.test(s);
+const hexRGB=s=>[1,3,5].map(i=>parseInt(s.slice(i,i+2),16)/255);
