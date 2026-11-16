@@ -83,6 +83,7 @@ function makeScene(){
   const destination=pick(o);
   if(AUTO_ROOFS.has(o.type)){const temp=mesh();connectedRoofGeometry(temp,o,roofs);shiftMesh(destination,temp,terrainY(o.x,o.z))}
   else if(BRIDGE_IDS.has(o.type))bridgeConnectedGeometry(destination,o,bridgeLookup);
+  else if(o.type==='pineLandingCraft')pineLandingCraftGeometry(destination,o.x+.5,o.z+.5);
   else if(o.type.startsWith('pineHarbor'))pineHarborGeometry(destination,o);
   else if(o.type.startsWith('pine'))pineZoneGeometry(destination,o);
   else if(o.type==='terrainStairs')elevationStairGeometry(destination,o.x,o.z,o.y*1.4+terrainY(o.x,o.z),o.rot||0);
