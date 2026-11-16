@@ -62,6 +62,7 @@ function makeScene(){
   if(isFloor(o.type)||RESIDENTIAL_ROOFS.has(o.type))continue;
   if(AUTO_ROOFS.has(o.type)){const temp=mesh();connectedRoofGeometry(temp,o,roofs);shiftMesh(m,temp,terrainY(o.x,o.z))}
   else if(BRIDGE_IDS.has(o.type))bridgeConnectedGeometry(m,o,bridgeLookup);
+  else if(o.type==='pineLandingCraft')pineLandingCraftGeometry(m,o.x+.5,o.z+.5);
   else if(o.type.startsWith('pineHarbor'))pineHarborGeometry(m,o);
   else if(o.type==='terrainStairs')elevationStairGeometry(m,o.x,o.z,o.y*1.4+terrainY(o.x,o.z),o.rot||0);
   else if(/^fence(Wood|Stone|Iron)/.test(o.type)&&connectedFenceGeometry(m,o,fenceLookup)){} 
