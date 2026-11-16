@@ -5654,7 +5654,7 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
  const gameDirs=new Set(),gameBlock=new Set(),gameDoors=new Map(),gameFloor=new Map(),gameSolidByLayer=new Map(),gameDoorByLayer=new Map(),gameFloorsByLayer=new Map(),gameStairsByLayer=new Map();
  let gameLevel=0,gameStairArrivedFrom=0,gameLastSavedAt=0,gameSessionReady=false;
  const GAME_PROGRESS_KEY='forest-ruins-game-progress-v1';
- const gameRoofTiles=new Map(),gameRoofGroups=new Map(),gameRoofsByCell=new Map(),gameBridge=new Set(),gameBridgeTiles=new Map(),gameHouseCells=new Map(),gameIndoorByCell=new Map(),gameLandingMarkers=[];
+ const gameRoofTiles=new Map(),gameRoofGroups=new Map(),gameRoofsByCell=new Map(),gameBridge=new Set(),gameBridgeTiles=new Map(),gameHarborDeck=new Set(),gameHouseCells=new Map(),gameIndoorByCell=new Map(),gameLandingMarkers=[];
  let gameRoofHidden=null,gameMove=null,gameNextStep=0,gameLastDir=null;
  const gameOccludedGroups=new Set(),gameHouseBoxes=new Map(),gameInteriorProps=[],gameInteriorRugs=[],gameInteriorWallDetails=[];
  const gameUpPortals=new Map(),gameDownPortals=new Map();
@@ -5817,16 +5817,17 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
   for(const [x,z,t] of [[80,66,'pineInspection'],[85,68,'pineMedical'],
     [77,67,'pineBarrier'],[84,66,'pineBarrier'],[80,71,'pineSupplies'],
     [77,65,'pineWatchtower']])put(x,z,t);
-  // A temporary military footbridge crosses the old river; two piers serve
-  // the fishing quay and military supply dock farther south.
-  for(const [x,first,last] of [[73,66,93],[41,82,92]]){
-   for(let z=first;z<=last;z++){
-    const k=gameTileKey(x,z);
-    if(objects.has(k)||placed.has(k))continue;
-    gameZoneProps.push({x,z,y:0,type:'bridgeWood',rot:0});
-    placed.add(k);
-   }
+  // Replace the earlier unrealistic one-tile bridges with a proper
+  // three-tile-wide fishing pier. The original white stone bridge is authored
+  // in world data and is NEVER touched here.
+  for(let z=80;z<=92;z++)for(let x=40;x<=42;x++){
+   const k=gameTileKey(x,z);
+   if(objects.has(k)||placed.has(k))continue;
+   gameZoneProps.push({x,z,y:0,type:'pineHarborPier',rot:0});
+   placed.add(k);
   }
+  // The military dock receives its own constructed quay (below), instead
+  // of a long wooden footbridge cutting straight through the military base.
   // Old fishing quay & separate military supply dock.
   for(const [x,z,t] of [[40,83,'pineFishingNet'],[44,84,'pineSupplyCrate'],
     [39,85,'pineFishingBoat'],[43,85,'pineFishingBoat'],
@@ -5840,7 +5841,7 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
   put(42,85,'pineFishingNet');
   put(74,85,'pineCargo');
   // Place two boats on the water beside their respective piers.
-  for(const [x,z,t] of [[39,89,'pineFishingBoat'],[75,90,'pineSupplyBoat']]){
+  for(const [x,z,t] of [[38,90,'pineFishingBoat'],[76,90,'pineSupplyBoat']]){
    const k=gameTileKey(x,z);
    if(!objects.has(k)&&!placed.has(k)){gameZoneProps.push({x,z,y:0,type:t,rot:0});placed.add(k)}
   }
@@ -6332,11 +6333,15 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
  function gameRebuildBlock(){
   gameBuildIslandZones();
   gameConfigureNaturalScenery();
-  gameBlock.clear();gameDoors.clear();gameFloor.clear();gameRoofTiles.clear();gameRoofGroups.clear();gameRoofsByCell.clear();gameBridge.clear();gameBridgeTiles.clear();bridgeDeckLevels.clear();gameHouseCells.clear();gameIndoorByCell.clear();gameLandingMarkers.length=0;gameInteriorProps.length=0;gameInteriorRugs.length=0;gameInteriorWallDetails.length=0;gameInteriorWallDetails.length=0;gameHouseBoxes.clear();gameOccludedGroups.clear();gameSolidByLayer.clear();gameDoorByLayer.clear();gameFloorsByLayer.clear();gameStairsByLayer.clear();gameUpPortals.clear();gameDownPortals.clear();gameStairArrivalLock=null;
+  gameBlock.clear();gameDoors.clear();gameFloor.clear();gameRoofTiles.clear();gameRoofGroups.clear();gameRoofsByCell.clear();gameBridge.clear();gameBridgeTiles.clear();gameHarborDeck.clear();bridgeDeckLevels.clear();gameHouseCells.clear();gameIndoorByCell.clear();gameLandingMarkers.length=0;gameInteriorProps.length=0;gameInteriorRugs.length=0;gameInteriorWallDetails.length=0;gameInteriorWallDetails.length=0;gameHouseBoxes.clear();gameOccludedGroups.clear();gameSolidByLayer.clear();gameDoorByLayer.clear();gameFloorsByLayer.clear();gameStairsByLayer.clear();gameUpPortals.clear();gameDownPortals.clear();gameStairArrivalLock=null;
   const groupedRoofs=new Map();
   for(const o of [...world,...gameZoneProps]){
    if(gameNatureHiddenTrees.has(o))continue;
-   if(o.y===0&&(/^(?:bridge|pineConcreteDock|pineHarborPier|pineHarborQuay)$/.test(o.type))){gameBridge.add(gameTileKey(o.x,o.z));if(/^bridge/.test(o.type))gameBridgeTiles.set(gameTileKey(o.x,o.z),o)}
+   if(o.y===0&&(/^(?:bridge|pineConcreteDock|pineHarborPier|pineHarborQuay)$/.test(o.type))){
+    gameBridge.add(gameTileKey(o.x,o.z));
+    if(/^bridge/.test(o.type))gameBridgeTiles.set(gameTileKey(o.x,o.z),o);
+    if(/^pineHarbor(?:Pier|Quay)$/.test(o.type))gameHarborDeck.add(gameTileKey(o.x,o.z));
+   }
    if(o.y>0&&(RESIDENTIAL_ROOFS.has(o.type)||AUTO_ROOFS.has(o.type))){
     const key=gameRoofKey(o.x,o.z,o.y);
     gameRoofTiles.set(key,o);
@@ -6357,7 +6362,7 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
    const wall=/wall|window|pillar|oldTown.*(?:Plain)|roofSupport|ironGate/i.test(t);
    // Pebbles, ground plants, flowers, mushrooms, and small vegetation remain passable.
    const decorative=/^(?:rockPebble|rockSmall|rockMossy|pebbles|gravel|bush(?:$|Fern|Flower|Berry|Small)|bushFern|bushFlower|flower|grass|tallGrass|fern|moss|mushroom|crop|herb|smallFlower|fallenLeaves|rubble|plant|reed|weed|waterPlant)/i.test(t);
-   const solid=/^(?:tree|rock|bush|fence|gate|barrel|crate|chest|bed|table|counter|shelf|statue|well|altar|ruin|fireplace|handcart|bench|wardrobe|displayShelf|anvil|stove|oven|waterWheel|human|monster|pine(?:Tent|Military|Command|Medical|Ration|Supply|Supplies|Generator|Watchtower|Radio|Lighthouse|ScenicPine|Barrier|CityBarrier))/i;
+   const solid=/^(?:tree|rock|bush|fence|gate|barrel|crate|chest|bed|table|counter|shelf|statue|well|altar|ruin|fireplace|handcart|bench|wardrobe|displayShelf|anvil|stove|oven|waterWheel|human|monster|pine(?:Tent|Military|Command|Medical|Ration|Supply|Supplies|Generator|Watchtower|Radio|Lighthouse|ScenicPine|Barrier|CityBarrier|Harbor(?:Bollard|Lamp|Pallet|Sign)))/i;
    if(wall||(!decorative&&solid.test(t))){fetchLayer(gameSolidByLayer).set(key,o);if(h===0)gameBlock.add(key)}
   }
   // Group contiguous roofs, so only the house the player enters disappears.
@@ -6683,7 +6688,7 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
    // Match the visual deck height, not the riverbed underneath it.
    const o=gameBridgeTiles.get(gameTileKey(tx,tz));
    if(o)return bridgeSpanElevation(o,gameBridgeTiles)+.11;
-   if(gameZoneProps.some(p=>p.x===tx&&p.z===tz&&/^pineHarbor(?:Pier|Quay)$/.test(p.type)))
+   if(gameHarborDeck.has(gameTileKey(tx,tz)))
     return Math.max(1,terrainY(tx,tz))+.19;
   }
   return terrainY(tx,tz)+gameLevel*1.4;
