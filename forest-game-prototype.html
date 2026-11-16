@@ -3340,6 +3340,16 @@ function makeScene(){
    if((x*13+z*7)%5===0)cube(m,x+.5,terrainY(x,z)+.025,z+.5,.14,.018,.21,[.44+n*.09,.43+n*.06,.37]);
   }
   shiftMesh(m,tmp,terrainY(x,z));
+  // Deterministic coastal wash, stone and a sandy shore seam.
+  if(pineWorldEnabled&&x>=155&&z>=9&&z<151){
+   const coast=pineMainlandCoast(z);
+   if(x===coast){
+    cube(m,x+.055,terrainY(x,z)+.017,z+.5,.11,.025,.94,[.66,.62,.50]);
+    if((x+z*3)%7===0)cube(m,x+.20,terrainY(x,z)+.038,z+.20,.24,.052,.15,[.46,.47,.43]);
+   }else if(x===coast-1&&(x*13+z*7)%4===0){
+    cube(m,x+.67,terrainY(x,z)+.019,z+.5,.23,.008,.58,[.64,.75,.75]);
+   }
+  }
   const isWater=['river','water','lake','sea'].includes(kind);
   if(isWater){
    for(const [dx,dz] of [[0,-1],[1,0],[0,1],[-1,0]]){
@@ -5909,7 +5919,7 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
    put(nx,nz,color+':'+style,Math.floor(surfaceNoise(x+19,z+11)*4));
   }
   put(64,51,'pineRation');put(77,51,'pineMedical');
-   // Low-cost, passable camp details placed outside reserved lanes.
+   // Camp services: sanitation on the edge, water closer to shelters, shared cooking toward open paths.
    for(const [x,z,t] of [[62,42,'pineLatrine'],[62,46,'pineLatrine'],[73,54,'pineCookingStation'],
     [72,41,'pineWaterPoint'],[66,42,'pineBedroll'],[72,47,'pineBedroll'],[79,49,'pineWashBasin']])put(x,z,t);
   for(const [x,z,t] of [[64,43,'pineLaundry'],[66,50,'pineSupplies'],[74,50,'pineFireBarrel'],
@@ -6108,6 +6118,25 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
  }
  function pineAddHarbors(props){
   if(!pineWorldEnabled)return;
+  // Keep clear walking routes between boarding aprons, terminal and town.
+  // Markings are render-only and never overwrite the player's authored world.
+  const walks=[[[110,61],[110,56],[104,56],[104,53]],
+               [[143,61],[143,56],[165,56],[165,53]],
+               [[165,53],[165,65],[180,65]]];
+  const paths=new Set();
+  for(const way of walks)for(let j=0;j<way.length-1;j++){
+   let [x,z]=way[j];const [ex,ez]=way[j+1];
+   while(true){
+    if(x>=96&&x<MAP_W&&z>=0&&z<MAP_H)paths.add(x+','+z);
+    if(x===ex&&z===ez)break;
+    if(x!==ex)x+=Math.sign(ex-x);else z+=Math.sign(ez-z);
+   }
+  }
+  for(const pos of paths){
+   const [x,z]=pos.split(',').map(Number);
+   if(pineMainlandLand(x,z)||x>=96&&x<156&&z>=53&&z<=62)
+    gameZonePaths.push({x,z,kind:'main'});
+  }
   const key=(x,z)=>gameTileKey(x,z);
   const authored=new Set(world.filter(o=>!isFloor(o.type)).map(o=>key(o.x,o.z)));
   const occupied=new Set(props.filter(o=>!isFloor(o.type)).map(o=>key(o.x,o.z)));
@@ -6927,7 +6956,7 @@ $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mo
    return Math.abs(bridgeSpanElevation(bridge,gameBridgeTiles)/TERRAIN_STEP-terrainLevel(onA?nx:x,onA?nz:z))<=1.05;
   }
   // Shore-to-quay steps are allowed when the quay deck matches the land.
-  const pier=gameZoneProps.find(p=>p.y===0&&p.x===(onA?x:nx)&&p.z===(onA?z:nz)&&/^pineHarbor(?:Pier|Quay)$/.test(p.type));
+  const pier=gameHarborDeck.has(gameTileKey(onA?x:nx,onA?z:nz));
   if(pier)return Math.abs(1-terrainLevel(onA?nx:x,onA?nz:z))<=1;
   return Math.abs(terrainLevel(nx,nz)-terrainLevel(x,z))<=1;
  }
