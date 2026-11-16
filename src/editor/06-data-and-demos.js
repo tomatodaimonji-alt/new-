@@ -1695,7 +1695,7 @@ function pineSupermarketPOI(style='standard',condition='normal',force=false){
  if(!force&&world.length&&!confirm('現在のエディター配置をスーパーのPOIサンプルで置き換えますか？ JSON保存をおすすめします。'))return;
  const [,label,w,d,levels]=spec;
  snapshot();world=[];models=[];prefabs=[];terrainHeights=new Map();
- const sx=Math.ceil((w+21)/2),sz=9,siteW=Math.max(48,w+24),siteH=Math.max(46,d+30);
+ const siteW=Math.max(48,w+24),siteH=Math.max(46,d+30);
  MAP_W=siteW;MAP_H=siteH;
  const put=(x,z,type,y=0,rot=0)=>{if(x>=0&&z>=0&&x<siteW&&z<siteH)world.push({x,z,y,type,rot})};
  const west=Math.floor((siteW-w)/2),north=8,south=north+d-1,cx=west+Math.floor(w/2);
@@ -1726,7 +1726,8 @@ function pineSupermarketPOI(style='standard',condition='normal',force=false){
   const shutter=y===0&&isBack&&x>=west+w-7&&x<=west+w-6;
   const staff=y===0&&isBack&&x===west+2;
   const glazing=isFront&&x>west+2&&x<west+w-3&&y===0;
-  let type=entry?'pineSuperDoor':shutter?'pineSuperShutter':staff?'plasterwallDoor':glazing?'pineSuperGlass':'plasterwall';
+  let type=entry?'pineSuperDoor':shutter?'pineSuperShutter':staff?'plasterwallDoor':glazing?'pineSuperGlass':'pineSuperWall';
+  if(y===0&&isFront&&!entry&&!glazing&&x>west+2&&x<west+w-3)type='pineSuperAccent';
   if(condition==='converted'&&entry&&x!==cx)type='ironwall';
   if(condition==='damaged'&&y===0&&!entry&&!staff&&!shutter&&t(x,z)<3)continue;
   put(x,z,type,y);
@@ -1753,6 +1754,14 @@ function pineSupermarketPOI(style='standard',condition='normal',force=false){
   const x=west+3+Math.floor(i*(w-7)/Math.max(1,registers-1));
   if(Math.abs(x-cx)>1)put(x,south-2,'pineSuperCheckout');
  }
+ // A fictional, locally rendered brand sign spans the shopfront.
+ put(cx,south,'pineSuperLogo');
+ // A few unattended cars, with a clear pedestrian route into the entrance.
+ const cars=style==='compact'?1:style==='hyper'||style==='wholesale'?4:2;
+ for(let i=0;i<cars;i++){
+  const x=west+3+(i%2)*(w-6),z=south+8+Math.floor(i/2)*7;
+  if(x>2&&x<siteW-3&&z<siteH-3&&Math.abs(x-cx)>2)put(x,z,'pineSuperCar');
+ }
  put(west+1,south+1,'pineSuperCart');put(west+2,south+1,'pineSuperCart');
  put(west+Math.floor(w*.25),south+1,'pineSuperSign');
  put(west+Math.floor(w*.72),south+1,'pineSuperSign');
@@ -1760,7 +1769,7 @@ function pineSupermarketPOI(style='standard',condition='normal',force=false){
  // Roof is an independent hideable story, not a collision-bearing floor.
  for(let z=north;z<=south;z++)for(let x=west;x<west+w;x++){
   if(condition==='damaged'&&t(x,z)<4)continue;
-  put(x,z,'roofPlank',levels+1);
+  put(x,z,'pineSuperRoof',levels);
  }
  for(const x of [west+4,west+w-5])put(x,north+3,'pineSuperAC',levels);
  if(levels===2)put(west+2,north+2,'stairSwitchback',0);
@@ -1772,7 +1781,9 @@ function pineSupermarketPOI(style='standard',condition='normal',force=false){
  }
  for(const id of ['rangeX1','rangeX2'])$(id).max=siteW-1;
  for(const id of ['rangeZ1','rangeZ2'])$(id).max=siteH-1;
- level=0;$('level').value='0';hideUpper=true;$('hideUpper').checked=true;
+ level=0;$('level').value='0';hideUpper=false;$('hideUpper').checked=false;
+ $('poiRoofToggle').textContent='屋根を隠す';
+ poiWalkReset(cx,south+3);
  selected='pineSuperShelf';mode='move';rotation=0;
  commit();refreshPalette();updateSelected();showEntireMap();
  toast(label+'・'+PINE_SUPER_STATES.find(v=>v[0]===condition)?.[1]+' を配置した');
@@ -1808,7 +1819,7 @@ function pineBuildPOICategories(){
 }
 
 
-function makeDemo(){pineSupermarketPOI('standard','normal',true)}
+function makeDemo(){pineSupermarketPOI('standard','normal',false)}
 function setMapSize(){
  const width=Number($('mapWidth').value),height=Number($('mapHeight').value);
  if(!Number.isInteger(width)||!Number.isInteger(height)||width<MIN_MAP||height<MIN_MAP||width>MAX_MAP||height>MAX_MAP){toast('縦横は12〜128の整数で指定してください');return}
@@ -1914,7 +1925,7 @@ for(const ev of ['pointercancel','lostpointercapture'])canvas.addEventListener(e
 canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.025,Math.min(4,zoom*(e.deltaY>0?.92:1.08)))},{passive:false});
 $('rotatePlacement').addEventListener('click',()=>{rotation=(rotation+1)%4;updateStats();toast('次に置く部材の向き：'+rotation*90+'°')});
 $('fitMap').addEventListener('click',showEntireMap);$('turn').addEventListener('click',()=>{yaw+=Math.PI/2;cursorDirty=true});$('zoomIn').addEventListener('click',()=>zoom=Math.min(4,zoom*1.2));$('zoomOut').addEventListener('click',()=>zoom=Math.max(.025,zoom/1.2));$('resetCamera').addEventListener('click',()=>{yaw=Math.PI/4;showEntireMap()});$('rotatePart').addEventListener('click',()=>{rotation=(rotation+1)%4;updateStats()});$('level').addEventListener('change',e=>{level=Math.max(0,Math.min(MAX_LEVEL,Number(e.target.value)||0));dirty=true;cursorDirty=true;updateStats()});
-$('hideUpper').addEventListener('change',e=>{hideUpper=e.target.checked;dirty=true;cursorDirty=true;toast(hideUpper?'上階を隠して編集中':'全階層を表示中')});
+$('hideUpper').addEventListener('change',e=>{hideUpper=e.target.checked;dirty=true;cursorDirty=true;$('poiRoofToggle').textContent=hideUpper?'屋根を表示':'屋根を隠す';toast(hideUpper?'上階を隠して編集中':'全階層を表示中')});
 $('eyedrop').addEventListener('click',()=>{mode='pick';updateSelected();toast('配置済み部材をタップすると選べます')});for(const b of document.querySelectorAll('[data-mode]'))b.addEventListener('click',()=>{mode=b.dataset.mode;updateSelected()});
 $('undo').addEventListener('click',()=>{if(!undoStack.length)return;redoStack.push(JSON.stringify(data()));restore(undoStack.pop())});$('redo').addEventListener('click',()=>{if(!redoStack.length)return;undoStack.push(JSON.stringify(data()));restore(redoStack.pop())});
 $('savePrefab').addEventListener('click',savePrefab);
@@ -1936,6 +1947,25 @@ $('worldAudit').addEventListener('click',showWorldAudit);
 $('house3Demo').addEventListener('click',()=>makeHighBuilding('house'));
 $('tower7Demo').addEventListener('click',()=>makeHighBuilding('tower'));
 $('clear').addEventListener('click',()=>{if(!confirm('配置したすべての部材を消去しますか？'))return;snapshot();world=[];commit();toast('マップを空にしました')});$('demo').addEventListener('click',makeDemo);
+$('poiWalkToggle').addEventListener('click',()=>poiWalkSet(!poiWalkActive));
+$('poiWalkExit').addEventListener('click',()=>poiWalkSet(false));
+$('poiRoofToggle').addEventListener('click',()=>{
+ hideUpper=!hideUpper;$('hideUpper').checked=hideUpper;dirty=true;cursorDirty=true;
+ $('poiRoofToggle').textContent=hideUpper?'屋根を表示':'屋根を隠す';
+});
+let poiWalkRepeat=null;
+function poiStopRepeat(){if(poiWalkRepeat!==null){clearInterval(poiWalkRepeat);poiWalkRepeat=null}}
+for(const button of document.querySelectorAll('[data-poi-dir]')){
+ const dirs={n:[0,-1],s:[0,1],w:[-1,0],e:[1,0]};
+ const step=()=>poiWalkStep(...dirs[button.dataset.poiDir]);
+ button.addEventListener('pointerdown',e=>{e.preventDefault();poiStopRepeat();step();poiWalkRepeat=setInterval(step,145);button.setPointerCapture(e.pointerId)});
+ for(const name of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(name,poiStopRepeat);
+}
+document.addEventListener('keydown',e=>{
+ if(!poiWalkActive||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
+ const k=e.key.toLowerCase(),d={arrowup:[0,-1],w:[0,-1],arrowdown:[0,1],s:[0,1],arrowleft:[-1,0],a:[-1,0],arrowright:[1,0],d:[1,0]}[k];
+ if(d){e.preventDefault();poiWalkStep(...d)}
+});
 $('openJson').addEventListener('click',()=>{$('jsonModal').classList.add('open');displayJSON()});$('save').addEventListener('click',()=>{$('jsonModal').classList.add('open');displayJSON()});$('closeJson').addEventListener('click',()=>$('jsonModal').classList.remove('open'));
 $('exportJson').addEventListener('click',displayJSON);$('copyJson').addEventListener('click',async()=>{const str=$('jsonText').value;try{await navigator.clipboard.writeText(str);toast('JSONをコピーした')}catch(e){$('jsonText').select();document.execCommand('copy');toast('JSONをコピーしました')}});
 $('downloadJson').addEventListener('click',()=>{const blob=new Blob([JSON.stringify(data(),null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='my-forest-world.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)});
