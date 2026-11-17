@@ -236,6 +236,20 @@ function renderDetailedPlayer(px,pz,heading,phase,effort,running,style=PLAYER_ST
   playerLimb(elbow,hand,.061,.068,C.skin);
   playerOval(...hand,.061,.088,.045,C.skin,10,7);
   playerOval(hand[0]-side*.034,hand[1]-.01,hand[2]-.043,.022,.037,.031,C.shadowSkin,8,5);
+  // Three short curved grip segments close toward a carried can or bottle.
+  // They are local limb geometry and follow the same body rotation/pose blend.
+  if(side===1&&reach>.08){
+   for(let finger=0;finger<3;finger++){
+    const fx=hand[0]-.030+finger*.030;
+    const base=[fx,hand[1]-.015,hand[2]-.031];
+    const tip=[fx+.008,hand[1]-.046*reach,hand[2]-.071*reach];
+    playerLimb(base,tip,.013,.014,C.skin);
+   }
+   // Thumb opposes the fingers; fade its curl as the arm relaxes.
+   playerLimb([hand[0]-.052,hand[1]+.015,hand[2]],
+    [hand[0]-.030,hand[1]-.022*reach,hand[2]-.052*reach],
+    .017,.015,C.skin);
+  }
  }
  // Very small whole-body counter-twist: shoulders turn against pelvic stride.
  // Rotate locally sculpted vertices toward the gameplay heading once.
