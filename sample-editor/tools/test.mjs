@@ -30,6 +30,11 @@ const requirements = [
  ['building edit controls', 'function editShop('],
  ['saved scene edits', 'function saveSceneEdits('],
  ['scene edit UI', 'id="editPanel"'],
+ ['camera shot registry', 'const shootState='],
+ ['shot playback', 'function updateShots('],
+ ['portrait preview', 'id="portraitGuide"'],
+ ['frame crop', 'gl.scissor(viewX,0,viewWidth,h)'],
+ ['shooting UI', 'id="shootPanel"'],
 ];
 for (const [name, token] of requirements) {
  if (!html.includes(token)) throw new Error('Missing feature: ' + name);
