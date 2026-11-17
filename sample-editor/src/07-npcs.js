@@ -24,7 +24,7 @@ const npcs=[
   state:'walking',wait:0,carrying:false,action:'idle',shoppingCycles:0,paymentDone:false,itemPlaced:false,motion:0,pose:{pick:0,carry:0,pay:0},route:[
    {x:1.08,z:77.15,lookX:3.15,lookZ:77.2,wait:3.5,activity:'pick'},
    {x:1.08,z:82.90,lookX:3.15,lookZ:83.1,wait:3.0,activity:'browse'},
-   {x:-.9,z:74.15,lookX:-5.6,lookZ:72.35,wait:.25},
+   {x:1.08,z:72.20,lookX:-5.6,lookZ:72.35,wait:.25},
    {x:-3.45,z:73.55,lookX:-5.6,lookZ:72.35,wait:3.5,activity:'pay'},
    {x:1.08,z:74.3,lookX:0,lookZ:70,wait:.7}
   ],routeIndex:0,effort:0},
