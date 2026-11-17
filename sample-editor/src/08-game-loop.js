@@ -34,6 +34,8 @@ function frame(now){
  // Blend to an idle pose when the stick is released or movement is blocked.
  characterMovementBlend+=((movedDistance>.0001?tilt:0)-characterMovementBlend)*Math.min(1,dt*9);
  vertices.length=0;
+ // A transparent contact shadow anchors the feet without requiring a shadow map.
+ const shadowVertices=renderPlayerShadow(player.x,player.z,player.heading,characterMovementBlend,walk);
  // Character geometry is owned by a dedicated, reusable character module.
  renderDetailedPlayer(player.x,player.z,player.heading,walk,characterMovementBlend,running);
  // Identify the selected building in editor mode without changing the building itself.
@@ -58,7 +60,13 @@ function frame(now){
  gl.uniformMatrix4fv(locVP,false,vp);
  bind(staticBuffer);gl.drawArrays(gl.TRIANGLES,0,staticArray.length/6);
  for(const b of townBuildings){bind(b.buffer);gl.drawArrays(gl.TRIANGLES,0,b.count)}
- bind(avatarBuffer);gl.drawArrays(gl.TRIANGLES,0,arr.length/6);
+ bind(avatarBuffer);
+ // Alpha blend only the ground decal, and keep it out of the depth buffer.
+ gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+ gl.depthMask(false);gl.uniform1f(locOpacity,.30);
+ gl.drawArrays(gl.TRIANGLES,0,shadowVertices);
+ gl.uniform1f(locOpacity,1);gl.depthMask(true);gl.disable(gl.BLEND);
+ gl.drawArrays(gl.TRIANGLES,shadowVertices,arr.length/6-shadowVertices);
  requestAnimationFrame(frame);
 }
 resetStick();requestAnimationFrame(frame);
