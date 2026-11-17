@@ -6,11 +6,13 @@ import { Script } from 'node:vm';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const names = [
   '01-renderer.js',
+  '02-scene-registry.js',
   '02-yanaka-town.js',
   '03-math.js',
   '04-camera-gestures.js',
   '05-audio.js',
   '06-joystick.js',
+  '07-scene-editor.js',
   '07-collision.js',
   '08-game-loop.js',
 ];
