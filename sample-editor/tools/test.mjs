@@ -35,7 +35,7 @@ const requirements = [
  ['NPC player collision', 'function npcBlocks('],
  ['variable-sized cat', 'const cat='],
  ['cat geometry', 'function renderCat('],
- ['cat punch', 'cat.punchTime=0.001'],
+ ['cat punch', 'function startCatPunch('],
  ['cat purr synthesis', 'function updateCatAudio('],
  ['cat collision', 'function catBlocks('],
  ['cat scale control', 'id="catScale"'],
