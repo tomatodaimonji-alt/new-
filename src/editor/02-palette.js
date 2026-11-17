@@ -13,6 +13,14 @@ palette.push(...[
  ['pineSuperShelfSparse','スーパー・残りわずかな棚','decor'],
  ['pineSuperShelfStocked','スーパー・食品が残る棚','decor']
 ].map(([id,name,cat])=>({id,name,cat,icon:'▤'})));
+// Reuse the existing supermarket car renderer; variant IDs select a distinct body shape.
+palette.push(...[
+ ['pineSuperCarMini','放置車・軽ハッチ','decor'],
+ ['pineSuperCarVan','放置車・ワンボックス','decor'],
+ ['pineSuperCarSUV','放置車・SUV','decor'],
+ ['pineSuperCarPickup','放置車・荷台付き','decor'],
+ ['pineSuperBayEnd','駐車枠・奥の白線','decor']
+].map(([id,name,cat])=>({id,name,cat,icon:'▣'})));
 const catalog=new Map(palette.map(p=>[p.id,p]));let selected='wall',mode='place',rotation=0,level=0,hideUpper=false,worldMaxLevel=0,world=[],models=[],prefabs=[],undoStack=[],redoStack=[],hover=null,dragPainting=false,yaw=Math.PI/4,zoom=1,panX=0,panZ=0,dirty=true,sceneMesh=null,cursorMesh=null,cursorDirty=true,modelParts=[],activeModelId=null;
 const byId=id=>catalog.get(id)||models.find(m=>m.id===id)||prefabs.find(p=>p.id===id);
 const cellKey=(x,z,y=0)=>x+','+z+','+y;
