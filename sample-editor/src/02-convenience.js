@@ -63,8 +63,20 @@ function storeShell(){
   box(x,.52,front-1,.82,.06,.07,0x838f91);
  }
 }
+// All equipment is modeled at local origin then rotated and placed as one object.
 function renderStoreFixture(o){
+ const start=vertices.length;
+ renderStoreFixtureLocal({...o,x:0,z:0});
+ const yaw=o.yaw||0,cs=Math.cos(yaw),sn=Math.sin(yaw);
+ for(let i=start;i<vertices.length;i+=6){
+  const x=vertices[i],z=vertices[i+2];
+  vertices[i]=o.x+x*cs+z*sn;
+  vertices[i+2]=o.z-x*sn+z*cs;
+ }
+}
+function renderStoreFixtureLocal(o){
  const {type,x,z,width:w,depth:d,height:h}=o;
+ if(type==='magazine-shelf'){renderMagazineShelf(o);return;}
  if(type==='floor-mat'){
   box(x,-.009,z,w,.012,d,0x52605f);
   for(let i=-1;i<=1;i++)box(x+i*.48,.005,z,.09,.012,d*.72,0x677471);
@@ -76,6 +88,13 @@ function renderStoreFixture(o){
   box(x,1.05,z-.16,.39,.32,.09,0x263944);
   box(x,1.08,z-.215,.28,.22,.017,0x6c98a9);
   box(x+.3,1.01,z+.16,.23,.13,.24,0xddddce);
+  // Second operator screen, cash drawer, and receipt printer.
+  box(x+.12,1.05,z+.17,.30,.32,.075,0x454c4d);
+  box(x+.12,1.09,z+.13,.24,.23,.012,0x86afbd);
+  box(x+.12,1.34,z+.18,.29,.055,.18,0x4c5050);
+  box(x-.10,.92,z+.1,.34,.08,.27,0x989b93);
+  box(x-.12,1.0,z+.15,.19,.14,.14,0xe2e2d6);
+  box(x-.12,1.13,z+.15,.12,.04,.09,0xffffff);
   // Barcode scanner and card/QR payment reader.
   box(x-.27,.99,z+.15,.14,.12,.19,0x343a3a);
   box(x-.27,1.10,z+.15,.11,.035,.14,0x7da8ad);
@@ -89,6 +108,14 @@ function renderStoreFixture(o){
   box(x,0,z,w,.9,d,0xa58d72);
   box(x,.90,z,w+.12,.12,d+.14,0x5d6261);
   box(x,.13,z-d/2,.12,.75,d*.48,0x877b66);
+  // Structural fascia, kick plate and a narrow customer-facing payment lane.
+  box(x,0,z-d/2-.009,w,.08,.025,0x626865);
+  box(x,0,z+d/2+.009,w,.08,.025,0x737e7f);
+  box(x-w/2+.16,0,z,.12,.90,d-.10,0x7e887f);
+  box(x+w/2-.16,0,z,.12,.90,d-.10,0x7e887f);
+  // Low counter on the customer side, leaving space for walking around it.
+  box(x+w*.30,.94,z-d*.30,.33,.04,.23,0xb3b8aa);
+  box(x+w*.30,.99,z-d*.30,.18,.10,.16,0x65787d);
   // Checkout basket and divider; product-facing counter stays uncluttered.
   box(x-w*.34,1.027,z+.24,.36,.09,.30,0x4f7272);
   box(x-w*.34,1.05,z+.24,.29,.045,.24,0x879c91);
@@ -103,6 +130,9 @@ function renderStoreFixture(o){
    box(x,y,z-d/2-.11,w-.22,.055,.15,0xc2d0ce);
    populateColdCase(o,y,shelf);
   }
+  // A light-colored cabinet fascia and lower kickplate.
+  box(x,0,z-d/2-.075,w,.15,.12,0xa2abaa);
+  box(x,h-.10,z-d/2-.055,w,.15,.12,0xe0e4da);
   // Narrow divisions and refrigerator handles.
   box(x,0,z-d/2-.20,.045,h-.14,.06,0xced4d4);
   for(const side of [-1,1])
@@ -116,7 +146,7 @@ function renderStoreFixture(o){
   for(let i=0;i<3;i++)box(x-w*.3+i*w*.3,.82,z-d/2-.12,.17,.12,.12,0xc7a36e);
   return;
  }
- // Gondola and side racks: open shelves and repeated product silhouettes.
+ // Category-specific aisle gondolas: food/daily essentials vs drinks.
  box(x,0,z,w,.14,d,0x747a76);
  for(const side of [-1,1]){
   box(x+side*(w/2-.05),0,z,.07,h,d,0x858e8b);
@@ -128,10 +158,15 @@ function renderStoreFixture(o){
  }
  box(x,h-.07,z,w+.04,.13,d+.03,0x999e96);
 }
+function rebuildStoreFixture(o){
+ const old=convenienceBuffers.find(item=>item.id===o.id);
+ if(old){gl.deleteBuffer(old.buffer);convenienceBuffers.splice(convenienceBuffers.indexOf(old),1)}
+ makeConvenienceMesh(o.id,()=>renderStoreFixture(o));
+}
 function buildConvenience(){
  makeConvenienceMesh(convenience.id,storeShell);
  for(const o of scene.objects.filter(o=>o.poiId===convenience.poiId))
-  makeConvenienceMesh(o.id,()=>renderStoreFixture(o));
+  rebuildStoreFixture(o);
 }
 buildConvenience();
 // Small navigation shortcut makes the new study area accessible from the 100+ m street.
@@ -143,6 +178,12 @@ storeJump.addEventListener('click',()=>{
  resetStick();
 });
 // Walkable store: explicit perimeter walls and individual fixture colliders.
+function fixtureAtPoint(o,x,z,margin=0){
+ const a=o.yaw||0,cs=Math.cos(a),sn=Math.sin(a);
+ const dx=x-o.x,dz=z-o.z;
+ const localX=dx*cs-dz*sn,localZ=dx*sn+dz*cs;
+ return Math.abs(localX)<o.width/2+margin&&Math.abs(localZ)<o.depth/2+margin;
+}
 function convenienceBlocked(x,z){
  const b=convenience,front=b.z-b.depth/2,back=b.z+b.depth/2;
  const margin=.23;
@@ -153,7 +194,7 @@ function convenienceBlocked(x,z){
  // Only registered fixture volumes can block walking, not drawn decorations.
  for(const o of scene.objects){
   if(o.poiId!=='convenience-study'||o.type==='floor-mat'||o.type==='register')continue;
-  if(Math.abs(x-o.x)<o.width/2+margin&&Math.abs(z-o.z)<o.depth/2+margin)return true;
+  if(fixtureAtPoint(o,x,z,margin))return true;
  }
  return false;
 }
