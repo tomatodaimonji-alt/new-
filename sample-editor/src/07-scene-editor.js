@@ -5,17 +5,18 @@ const editPanel=document.getElementById('editPanel');
 const editInfo=document.getElementById('editInfo');
 const editNotice=document.getElementById('editNotice');
 let editorOpen=false,selectedIndex=0;
-function selectedShop(){return scene.buildings[selectedIndex]}
+const editableShops=scene.buildings.filter(b=>b.type==='shop');
+function selectedShop(){return editableShops[selectedIndex]}
 function refreshEditor(){
  const b=selectedShop();
  scene.selectedBuildingId=b.id;
- editInfo.textContent=(selectedIndex+1)+' / '+scene.buildings.length+'  '+b.id+
+ editInfo.textContent=(selectedIndex+1)+' / '+editableShops.length+'  '+b.id+
   '  X:'+b.x.toFixed(1)+'  Z:'+b.z.toFixed(1)+'  H:'+b.height.toFixed(1);
 }
 function editShop(action){
  const b=selectedShop();
  if(action==='prev'||action==='next'){
-  selectedIndex=(selectedIndex+(action==='prev'?-1:1)+scene.buildings.length)%scene.buildings.length;
+  selectedIndex=(selectedIndex+(action==='prev'?-1:1)+editableShops.length)%editableShops.length;
   editNotice.textContent='建物を選択';
   refreshEditor();return;
  }
@@ -37,7 +38,7 @@ function editShop(action){
   }
   // Do not overlap other building footprints when moving a shop.
   const candidate={...b,[key]:next};
-  if(scene.buildings.some(other=>other!==b&&
+  if(editableShops.some(other=>other!==b&&
    Math.abs(other.x-candidate.x)<(other.depth+candidate.depth)*.5+.10&&
    Math.abs(other.z-candidate.z)<(other.width+candidate.width)*.5+.10)){
    editNotice.textContent='他の建物と重なります';return;
