@@ -40,6 +40,10 @@ const requirements = [
  ['walkable convenience entrance', 'function convenienceBlocked('],
  ['store render', 'for(const item of convenienceBuffers)'],
  ['store navigation', 'id="storeJump"'],
+ ['camera segment collision', 'function cameraSegmentBox('],
+ ['camera obstacle range', 'function cameraAllowedFactor('],
+ ['smooth camera recovery', 'function resolveExplorationCamera('],
+ ['no camera adjustment during shooting', 'shootState.enabled?idealEye:resolveExplorationCamera('],
 ];
 for (const [name, token] of requirements) {
  if (!html.includes(token)) throw new Error('Missing feature: ' + name);
