@@ -74,87 +74,125 @@ function playerTorso(hip,lean,skinny=1){
    playerShade(tone,Math.cos(mid),.15,Math.sin(mid)));
  }
 }
-// Produces one avatar with natural forward direction; translation and heading happen once.
+// Locomotion timing uses a planted stance, short toe-off and lifted swing.
+// One full 2*PI phase is one stride per foot; the two feet are half a cycle apart.
+function footCycle(phase,amount,running){
+ const f=((phase/(Math.PI*2))%1+1)%1;
+ const stance=running?.48:.62;
+ const step=running?.33:.235;
+ if(f<stance){
+  const t=f/stance; // heel strike -> flat foot -> toe off
+  return {z:-step+2*step*t,lift:0,
+   heel:Math.max(0,(.12-t)*.16)*amount,
+   toe:Math.max(0,(t-.82)/.18)*.064*amount};
+ }
+ const t=(f-stance)/(1-stance);
+ const easing=t*t*(3-2*t);
+ return {z:step-2*step*easing,
+  lift:Math.sin(Math.PI*t)*(running?.165:.092)*amount,
+  heel:0,toe:Math.max(0,1-t)*.020*amount};
+}
+// Knee bends toward the front of the body while retaining two bone lengths.
+function solveWalkingKnee(hip,ankle){
+ const dy=ankle[1]-hip[1],dz=ankle[2]-hip[2];
+ const d=Math.max(.001,Math.hypot(dy,dz));
+ const upper=.402,lower=.419,limited=Math.min(d,upper+lower-.001);
+ const along=(upper*upper-lower*lower+limited*limited)/(2*limited);
+ const normal=Math.sqrt(Math.max(0,upper*upper-along*along));
+ const uy=dy/d,uz=dz/d;
+ return [hip[0]*.51+ankle[0]*.49,
+  hip[1]+uy*along-uz*normal,
+  hip[2]+uz*along+uy*normal];
+}
+// Procedural skinned-like pose: separate meshes share moving anatomical joints.
+// Rendering is built each frame without external models, Web APIs or textures.
 function renderDetailedPlayer(px,pz,heading,phase,effort,running){
  const start=vertices.length;
- const moving=effort>.12;
- const gait=moving?Math.sin(phase):0;
- const cadence=moving?Math.cos(phase):0;
- const stride=moving?(running?.30:.19)*Math.min(1,effort*1.15):0;
- const sway=moving?Math.sin(phase*.5)*.015:0;
- const bob=moving?Math.abs(cadence)*(running?.046:.024):0;
- const yOff=bob;
+ const amount=clamp((effort-.08)/.62,0,1);
+ const moving=amount>.015;
+ const stridePhase=phase;
+ const weight=Math.cos(stridePhase)*amount;
+ const hipShift=Math.sin(stridePhase)*.038*amount;
+ const hipHeight=moving?(running?.021:.013)*(1-Math.cos(stridePhase*2)) : 0;
+ const torsoLean=(running?-.065:-.018)*amount;
+ const headCounter=Math.sin(stridePhase)*.016*amount;
  const C=PLAYER_STYLE;
- // Pelvis and waist: the torso is a little narrower than the shoulders.
- playerOval(0,.885+yOff,.0,.25,.16,.165,C.trousers,12,7);
- playerTorso(yOff,sway);
- playerOval(0,1.41+yOff,-.004,.22,.095,.153,C.shirt,12,6);
- // Clothing details: collar, shirt placket, seams, pocket, dark waistline.
- playerOval(0,1.414+yOff,-.158,.099,.033,.027,C.shirtHighlight,8,5);
- playerOval(0,1.27+yOff,-.192,.010,.13,.010,C.shirtDark,6,4);
- playerOval(-.17,1.16+yOff,-.175,.054,.036,.013,C.shirtHighlight,7,4);
- playerOval(0,.842+yOff,-.004,.24,.026,.165,C.trouserShadow,10,5);
- // Neck and organic head: overall ~1.77m, face forward in local -Z.
- playerLimb([0,1.40+yOff,0],[0,1.56+yOff,-.006],.079,.075,C.skin);
- playerOval(0,1.615+yOff,-.006,.185,.235,.178,C.skin,16,12);
- // Lower jaw and cheek contours, separate ears.
- playerOval(0,1.505+yOff,-.054,.148,.077,.137,C.shadowSkin,11,6);
- playerOval(0,1.53+yOff,-.091,.140,.078,.095,C.skin,11,6);
+ // Waist moves over the planted foot while shoulders counter-sway.
+ playerOval(hipShift,.884+hipHeight,.008,.244,.153,.164,C.trousers,12,7);
+ playerTorso(hipHeight,torsoLean);
+ playerOval(0,1.408+hipHeight,torsoLean-.009,.218,.088,.151,C.shirt,12,6);
+ playerOval(0,1.413+hipHeight,torsoLean-.164,.099,.031,.026,C.shirtHighlight,8,5);
+ playerOval(0,1.267+hipHeight,torsoLean-.192,.010,.125,.010,C.shirtDark,6,4);
+ playerOval(-.168,1.157+hipHeight,torsoLean-.172,.054,.032,.012,C.shirtHighlight,7,4);
+ playerOval(hipShift,.845+hipHeight,0,.241,.024,.164,C.trouserShadow,10,5);
+ // Natural neck and head with mild counter-motion, rather than bobbing identically.
+ const headX=-headCounter,headY=hipHeight*.55;
+ const faceZ=torsoLean*.48;
+ playerLimb([0,1.40+hipHeight,torsoLean*.35],[headX,1.56+headY,faceZ],.075,.074,C.skin);
+ playerOval(headX,1.615+headY,faceZ-.006,.181,.232,.173,C.skin,16,12);
+ playerOval(headX,1.505+headY,faceZ-.054,.146,.074,.133,C.shadowSkin,11,6);
+ playerOval(headX,1.529+headY,faceZ-.091,.138,.077,.094,C.skin,11,6);
  for(const side of [-1,1]){
-  playerOval(side*.188,1.606+yOff,-.008,.038,.071,.038,C.shadowSkin,8,6);
-  playerOval(side*.196,1.615+yOff,-.022,.022,.042,.025,C.skin,8,5);
-  playerOval(side*.071,1.642+yOff,-.175,.027,.021,.015,0xf0ebdd,8,5);
-  playerOval(side*.071,1.64+yOff,-.186,.013,.016,.008,C.eye,8,5);
-  playerOval(side*.071,1.681+yOff,-.182,.047,.012,.011,C.hair,8,4);
+  playerOval(headX+side*.187,1.604+headY,faceZ-.008,.036,.067,.038,C.shadowSkin,8,6);
+  playerOval(headX+side*.194,1.611+headY,faceZ-.022,.023,.041,.025,C.skin,8,5);
+  playerOval(headX+side*.071,1.642+headY,faceZ-.174,.027,.021,.015,0xf0ebdd,8,5);
+  playerOval(headX+side*.071,1.641+headY,faceZ-.185,.013,.015,.009,C.eye,8,5);
+  playerOval(headX+side*.071,1.681+headY,faceZ-.181,.045,.011,.011,C.hair,8,4);
  }
- // Nose is an actual protruding bridge and tip; mouth is a subtle flat arc.
- playerOval(0,1.596+yOff,-.185,.031,.069,.037,C.skin,10,8);
- playerOval(0,1.558+yOff,-.207,.041,.026,.037,C.shadowSkin,9,7);
- playerOval(0,1.509+yOff,-.183,.057,.008,.009,0x905e57,9,4);
- // Hair: scalp and irregular fringe rather than a spherical helmet.
- playerOval(0,1.771+yOff,.011,.192,.108,.180,C.hair,14,9);
+ playerOval(headX,1.596+headY,faceZ-.184,.030,.068,.035,C.skin,10,8);
+ playerOval(headX,1.557+headY,faceZ-.205,.040,.025,.035,C.shadowSkin,9,7);
+ playerOval(headX,1.508+headY,faceZ-.180,.054,.008,.008,0x905e57,9,4);
+ playerOval(headX,1.770+headY,faceZ+.011,.188,.107,.177,C.hair,14,9);
  for(const side of [-1,1]){
-  playerOval(side*.145,1.698+yOff,.045,.047,.110,.104,C.hair,9,6);
-  playerOval(side*.09,1.718+yOff,-.143,.085,.050,.046,C.hair,8,5);
+  playerOval(headX+side*.144,1.695+headY,faceZ+.046,.046,.108,.103,C.hair,9,6);
+  playerOval(headX+side*.089,1.717+headY,faceZ-.141,.085,.047,.045,C.hair,8,5);
  }
- playerOval(.02,1.747+yOff,-.133,.130,.032,.053,0x3e3430,10,5);
- // Two jointed legs: hip-knee-ankle with contrasting knee flex and toe lifts.
+ playerOval(headX+.02,1.744+headY,faceZ-.129,.125,.031,.051,0x3e3430,10,5);
+ // Each foot has independent stance/swing and a small heel/toe roll.
  for(const side of [-1,1]){
-  const footPhase=side*gait;
-  const hip=[side*.132,.830+yOff,.006];
-  const knee=[side*.138,.49+yOff,-footPhase*stride*.50+(running?.025:0)];
-  const lifted=Math.max(0,side*cadence)*(running?.14:.058)*(moving?1:0);
-  const ankle=[side*.135,.117+lifted+yOff,footPhase*stride];
-  playerLimb(hip,knee,.122,.129,C.trousers);
-  playerOval(...knee,.117,.127,.119,C.trousers,10,6);
-  playerLimb(knee,ankle,.091,.104,C.trouserShadow);
-  playerOval(side*.135,.14+lifted+yOff,footPhase*stride,.092,.093,.104,C.trousers,10,6);
-  const shoeZ=footPhase*stride-.075;
-  playerOval(side*.136,.072+lifted+yOff,shoeZ,.114,.071,.210,C.shoes,12,7);
-  playerOval(side*.136,.037+lifted+yOff,shoeZ-.026,.116,.023,.210,C.sole,12,5);
-  // Small lacing stripe (no texture or external image required).
+  const foot=footCycle(stridePhase+(side===1?Math.PI:0),amount,running);
+  const ankleZ=moving?foot.z:0;
+  const footRise=foot.lift;
+  const h=[hipShift+side*.133,.823+hipHeight,.012];
+  const a=[side*.137,.121+footRise,ankleZ];
+  const k=moving?solveWalkingKnee(h,a):[side*.136,.458,0];
+  playerLimb(h,k,.118,.126,C.trousers);
+  playerOval(...k,.112,.116,.113,C.trousers,10,6);
+  playerLimb(k,a,.090,.105,C.trouserShadow);
+  playerOval(side*.137,.151+footRise,ankleZ,.091,.089,.099,C.trousers,10,6);
+  // Sole stays close to the ground in stance, and clears it in swing.
+  const heelZ=ankleZ+.064,toeZ=ankleZ-.112;
+  playerOval(side*.137,.069+footRise+foot.heel,heelZ,.112,.066,.118,C.shoes,11,6);
+  playerOval(side*.137,.061+footRise+foot.toe,toeZ,.112,.057,.133,C.shoes,11,6);
+  playerOval(side*.137,.026+footRise+foot.heel,heelZ,.114,.022,.119,C.sole,10,5);
+  playerOval(side*.137,.023+footRise+foot.toe,toeZ,.115,.021,.132,C.sole,10,5);
   for(let lace=0;lace<2;lace++)
-   playerOval(side*.136,.13+lifted+yOff,shoeZ-.06+lace*.046,.055,.009,.018,0xa7a9a6,7,4);
-  // Arm swing opposes leg swing; shoulders, elbows and hands are jointed.
-  const shoulder=[side*.317,1.336+yOff,.008];
-  const elbow=[side*.385,1.080+yOff,-footPhase*stride*.78-.012];
-  const hand=[side*.398,.865+yOff,-footPhase*stride*1.25-.044];
-  playerOval(...shoulder,.126,.128,.127,C.shirt,10,7);
-  playerLimb(shoulder,elbow,.113,.119,C.shirt);
-  playerOval(...elbow,.094,.096,.093,C.shirt,9,6);
-  playerLimb(elbow,hand,.076,.085,C.skin);
-  playerOval(...hand,.079,.111,.057,C.skin,10,7);
-  // Knuckle contour and thumb.
-  playerOval(side*.347,.858+yOff,-footPhase*stride*1.25-.097,.029,.049,.041,C.shadowSkin,8,5);
-  // Sleeve cuff.
-  playerOval(...elbow,.099,.038,.101,C.shirtHighlight,9,5);
+   playerOval(side*.137,.123+footRise+foot.toe*.6,ankleZ-.079+lace*.042,
+    .050,.009,.015,0xa7a9a6,7,4);
+  // Elbow follows but slightly lags shoulder; swing is opposite the same-side leg.
+  const armSwing=moving?Math.sin(stridePhase+(side===1?Math.PI:0))*.155*amount:0;
+  const shoulder=[side*.313,1.331+hipHeight,torsoLean*.50];
+  const elbow=[side*.366,1.079+hipHeight,armSwing*.78+.006];
+  const hand=[side*.391,.859+hipHeight,armSwing*1.28-.018];
+  playerOval(...shoulder,.119,.126,.122,C.shirt,10,7);
+  playerLimb(shoulder,elbow,.110,.116,C.shirt);
+  playerOval(...elbow,.086,.088,.092,C.shirt,9,6);
+  playerLimb(elbow,hand,.075,.082,C.skin);
+  playerOval(...hand,.077,.106,.057,C.skin,10,7);
+  playerOval(side*.348,.856+hipHeight,hand[2]-.052,.028,.048,.040,C.shadowSkin,8,5);
+  playerOval(...elbow,.099,.037,.097,C.shirtHighlight,9,5);
  }
- // Rotate locally sculpted vertices toward movement before world translation.
+ // Very small whole-body counter-twist: shoulders turn against pelvic stride.
+ // Rotate locally sculpted vertices toward the gameplay heading once.
  const rotation=heading-Math.PI,cs=Math.cos(rotation),sn=Math.sin(rotation);
  for(let i=start;i<vertices.length;i+=6){
   const x=vertices[i],z=vertices[i+2];
-  vertices[i]=px+x*cs+z*sn;
-  vertices[i+2]=pz-x*sn+z*cs;
+  const height=vertices[i+1],upper=clamp((height-.86)/.62,0,1);
+  const twist=weight*.035*(upper-.35);
+  const cx=Math.cos(twist),sx=Math.sin(twist);
+  const tx=x*cx+z*sx,tz=-x*sx+z*cx;
+  vertices[i]=px+tx*cs+tz*sn;
+  vertices[i+2]=pz-tx*sn+tz*cs;
  }
  return (vertices.length-start)/6;
 }
