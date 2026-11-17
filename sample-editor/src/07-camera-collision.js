@@ -39,7 +39,8 @@ function cameraObstacles(){
  objects.push({x:0,y:3.08,z:front,w:3.78,d:.24,h:1.2});
  for(const f of scene.objects){
   if(f.poiId!=='convenience-study'||f.type==='floor-mat'||f.type==='register')continue;
-  objects.push({x:f.x,y:0,z:f.z,w:f.width,d:f.depth,h:f.height});
+  const bounds=fixtureWorldBounds(f,f.yaw||0);
+  objects.push({x:f.x,y:0,z:f.z,w:bounds.w,d:bounds.d,h:f.height});
  }
  return objects;
 }
