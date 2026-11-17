@@ -1,9 +1,10 @@
+let characterMovementBlend=0;
 function frame(now){
  const dt=Math.min(.05,(now-last)/1000||0);last=now;
  let mx=padX+(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),
  my=padY+(keys.s||keys.arrowdown?1:0)-(keys.w||keys.arrowup?1:0);
  const tilt=Math.min(1,Math.hypot(mx,my)),active=tilt>.12;
- let running=false;
+ let running=false,movedDistance=0;
  if(active){
   const length=Math.hypot(mx,my);
   mx/=length;my/=length;
@@ -19,18 +20,22 @@ function frame(now){
   if(!blocked(nx,player.z))player.x=nx;
   if(!blocked(player.x,nz))player.z=nz;
   const moved=Math.hypot(player.x-beforeX,player.z-beforeZ);
+  movedDistance=moved;
   if(moved>.0001){
    player.heading=Math.atan2(vx,vz);
-   walk+=dt*(running?14:8.5);
+   // Advance one half-stride for each physical footstep, matching the footfall SE.
+   walk+=moved*Math.PI/(running?1.12:.78);
    stepDistance+=moved;
    const stride=running?1.12:.78;
    if(stepDistance>=stride){stepDistance%=stride;footstep(running)}
   }
  }
 
+ // Blend to an idle pose when the stick is released or movement is blocked.
+ characterMovementBlend+=((movedDistance>.0001?tilt:0)-characterMovementBlend)*Math.min(1,dt*9);
  vertices.length=0;
  // Character geometry is owned by a dedicated, reusable character module.
- renderDetailedPlayer(player.x,player.z,player.heading,walk,tilt,running);
+ renderDetailedPlayer(player.x,player.z,player.heading,walk,characterMovementBlend,running);
  // Identify the selected building in editor mode without changing the building itself.
  if(editorOpen){
   const picked=selectedShop();
