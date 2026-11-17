@@ -14,6 +14,7 @@ const names = [
   '06-joystick.js',
   '07-scene-editor.js',
   '07-collision.js',
+  '07-character.js',
   '08-game-loop.js',
 ];
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
