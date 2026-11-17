@@ -82,9 +82,9 @@ function renderStreetShop(shop){
  Object.assign(shop,{cx:x,cz:z,front,buffer,count:geometry.length/6});
  return shop;
 }
-for(const shop of scene.buildings)townBuildings.push(renderStreetShop(shop));
+for(const shop of scene.buildings.filter(b=>b.type==='shop'))townBuildings.push(renderStreetShop(shop));
 // Lanterns, utility poles, overhead cables and drainage add a credible lived-in streetscape.
-for(const object of scene.objects){
+for(const object of scene.objects.filter(o=>o.type==='utility-pole')){
  const z=object.z;
  const side=Math.sign(object.x),px=object.x;
  {
