@@ -1704,14 +1704,19 @@ function pineSupermarketPOI(style='standard',condition='normal',force=false){
  for(let z=2;z<siteH-2;z++)for(let x=2;x<siteW-2;x++)
   put(x,z,x>=west-5&&x<=west+w+5?'stone':'grass');
  for(let z=2;z<north;z++)for(let x=west+Math.floor(w*.45);x<Math.min(siteW-2,west+w+8);x++)put(x,z,'ironfloor');
- for(let z=south+3;z<siteH-3;z++)for(let x=west-3;x<west+w+3;x++)put(x,z,'stone');
+ for(let z=south+3;z<siteH-3;z++)for(let x=west-3;x<west+w+3;x++)put(x,z,'roadBasaltFull');
  for(let x=west;x<west+w;x++){put(x,south+1,'plasterfloor');if(x%2===0)put(x,south+2,'pineSuperCurb')}
- // Parking bay markings deliberately avoid the pedestrian path.
- for(const z of [south+5,south+12])for(let x=west-2;x<=west+w+1;x+=3){
-  if(Math.abs(x-cx)<=2)continue;
-  put(x,z,'pineSuperStripe');put(x+2,z,'pineSuperStripe');
+ // Two rows of parked-car bays: continuous long white side lines and closing end lines.
+ // Keep a separate unobstructed pedestrian strip aligned with the single main door.
+ for(const startZ of [south+5,south+13]){
+  if(startZ+4>=siteH-3)continue;
+  for(let x=west-2;x<=west+w+1;x+=3){
+   if(Math.abs(x-cx)<=3)continue;
+   for(let z=startZ;z<=startZ+4;z++)put(x,z,'pineSuperStripe');
+   if(x+2<siteW-2)put(x+1,startZ+4,'pineSuperBayEnd');
+  }
  }
- for(let z=south+3;z<siteH-3;z++)put(cx,z,'plasterfloor');
+ for(let z=south+3;z<siteH-3;z++)for(const x of [cx-1,cx,cx+1])put(x,z,'plasterfloor');
  // Floorplates including second-story urban storage.
  for(let y=0;y<levels;y++)for(let z=north;z<=south;z++)for(let x=west;x<west+w;x++){
   const back=z<north+Math.max(3,Math.floor(d*.27));
@@ -1777,12 +1782,14 @@ function pineSupermarketPOI(style='standard',condition='normal',force=false){
  }
  // A fictional, locally rendered brand sign spans the shopfront.
  put(cx,south,'pineSuperLogo');
- // A few unattended cars, with a clear pedestrian route into the entrance.
+ // Park in the marked bays, with different silhouettes, orientations and abandoned states.
  const cars=style==='compact'?2:style==='hyper'||style==='wholesale'?6:4;
+ const carTypes=['pineSuperCar','pineSuperCarMini','pineSuperCarVan','pineSuperCarSUV','pineSuperCarPickup'];
  for(let i=0;i<cars;i++){
-  const side=i%2===0?-1:1,offset=3+((i>>1)%3)*2;
-  const x=side<0?west+offset:west+w-1-offset,z=south+7+Math.floor(i/2)*4;
-  if(x>2&&x<siteW-3&&z<siteH-3&&Math.abs(x-cx)>2)put(x,z,'pineSuperCar',0,(i%3===0?1:i%4===0?3:0));
+  const side=i%2===0?-1:1,slot=Math.floor(i/2),x=side<0?west+3+(slot%2)*3:west+w-4-(slot%2)*3;
+  const z=south+(slot>=2?15:7);
+  if(x>2&&x<siteW-3&&z<siteH-3&&Math.abs(x-cx)>2)
+    put(x,z,carTypes[(i+Math.floor(w/8))%carTypes.length],0,(i%3===0?1:i%4===0?3:0));
  }
  put(west+1,south+1,'pineSuperCart');put(west+2,south+1,'pineSuperCart');
  put(west+Math.floor(w*.25),south+1,'pineSuperSign');
