@@ -15,6 +15,7 @@ const names = [
   '05-audio.js',
   '06-joystick.js',
   '07-scene-editor.js',
+  '07-fixture-editor.js',
   '07-shots.js',
   '07-collision.js',
   '07-camera-collision.js',
