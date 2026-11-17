@@ -65,6 +65,17 @@ function renderOriginalProduct(id,x,y,z,scale=1){
   box(x,y+.29*scale,z,.186*scale,.025*scale,.162*scale,accent);
  }
 }
+// Orient all product labels toward the aisle; model front is local -Z.
+function renderProductFacing(id,x,y,z,scale,yaw){
+ const start=vertices.length;
+ renderOriginalProduct(id,x,y,z,scale);
+ const sn=Math.sin(yaw),cs=Math.cos(yaw);
+ for(let i=start;i<vertices.length;i+=6){
+  const dx=vertices[i]-x,dz=vertices[i+2]-z;
+  vertices[i]=x+dx*cs+dz*sn;
+  vertices[i+2]=z-dx*sn+dz*cs;
+ }
+}
 // Shelf faces show identifiable silhouettes rather than uniform colored blocks.
 function populateStoreShelf(o,tier,face,shelfY){
  const beverage=o.type==='drink-shelf';
@@ -90,7 +101,7 @@ function populateStoreShelf(o,tier,face,shelfY){
  for(let i=0;i<count;i++){
   const zz=o.z-o.depth*.43+(i+.5)*o.depth*.86/count;
   const kind=kinds[(i+o.id.length)%kinds.length];
-  renderOriginalProduct(kind,frontX+face*.028,shelfY+.055,zz,.79);
+  renderProductFacing(kind,frontX+face*.028,shelfY+.055,zz,.79,-face*Math.PI/2);
  }
  box(frontX,shelfY-.022,o.z,.035,.046,o.depth*.91,0xe4e0d3);
  for(let i=0;i<4;i++)
