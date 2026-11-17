@@ -77,6 +77,37 @@ function playerTorso(hip,lean,skinny=1){
    playerShade(tone,Math.cos(mid),.15,Math.sin(mid)));
  }
 }
+// Soft oval ground contact shadow built from small rings. The shared shader blends
+// the shaded triangles with the street; no textures or additional draw buffers.
+// World surface ranges from -0.055 (lane) to -0.005 (sidewalk), so -0.002 sits above it.
+function renderPlayerShadow(x,z,heading,effort,phase){
+ const start=vertices.length;
+ const step=clamp(effort,0,1);
+ const radiusX=.34+step*.08,radiusZ=.22+step*.10;
+ const cs=Math.cos(heading),sn=Math.sin(heading);
+ const rings=[{rx:1,rz:1,tint:0x55544d},{rx:.73,rz:.71,tint:0x35342e},
+  {rx:.39,rz:.40,tint:0x20221f}];
+ const segments=16,y=-.002;
+ const point=(rx,rz,a)=>[x+(Math.cos(a)*rx)*cs+(Math.sin(a)*rz)*sn,
+  y,z-(Math.cos(a)*rx)*sn+(Math.sin(a)*rz)*cs];
+ for(let band=0;band<rings.length;band++){
+  const outer=rings[band],inner=rings[band+1];
+  const colorRing=color(outer.tint);
+  for(let i=0;i<segments;i++){
+   const a=i*2*Math.PI/segments,b=(i+1)*2*Math.PI/segments;
+   const p=point(radiusX*outer.rx,radiusZ*outer.rz,a);
+   const q=point(radiusX*outer.rx,radiusZ*outer.rz,b);
+   if(inner){
+    const r=point(radiusX*inner.rx,radiusZ*inner.rz,b);
+    const t=point(radiusX*inner.rx,radiusZ*inner.rz,a);
+    quad(p,q,r,t,colorRing);
+   }else{
+    tri([x,y,z],p,q,colorRing);
+   }
+  }
+ }
+ return (vertices.length-start)/6;
+}
 // Locomotion timing uses a planted stance, short toe-off and lifted swing.
 // One full 2*PI phase is one stride per foot; the two feet are half a cycle apart.
 function footCycle(phase,amount,running){
