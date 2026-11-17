@@ -14,6 +14,9 @@ function playerShade(hex,nx,ny,nz){
  return base.map(v=>Math.min(1,v*f));
 }
 function playerOval(x,y,z,rx,ry,rz,tint,longitude=10,latitude=7){
+ // Use intentionally limited tessellation for Android WebView.
+ longitude=Math.max(6,Math.round(longitude*.67));
+ latitude=Math.max(4,Math.round(latitude*.70));
  const start=vertices.length;
  for(let v=0;v<latitude;v++){
   const a=v*Math.PI/latitude,b=(v+1)*Math.PI/latitude;
@@ -38,7 +41,7 @@ function playerLimb(a,b,rx,rz,tint){
  if(l<.001){e1=[1,0,0];l=1}
  e1=e1.map(v=>v/l);
  const e2=[uy*e1[2]-uz*e1[1],uz*e1[0]-ux*e1[2],ux*e1[1]-uy*e1[0]];
- const rings=[0,.18,.55,.88,1],n=10;
+ const rings=[0,.23,.72,1],n=7;
  const point=(t,angle,mult)=>{
   const c=Math.cos(angle),s=Math.sin(angle);
   return [a[0]+dx*t+(e1[0]*rx*c+e2[0]*rz*s)*mult,
@@ -60,7 +63,7 @@ function playerTorso(hip,lean,skinny=1){
   [.84,.246,.165],[.95,.255,.176],[1.14,.285,.194],
   [1.34,.335,.205],[1.43,.235,.158]
  ];
- const n=14;
+ const n=10;
  for(let i=0;i<rings.length-1;i++)for(let j=0;j<n;j++){
   const a=rings[i],b=rings[i+1],p=j*2*Math.PI/n,q=(j+1)*2*Math.PI/n;
   const point=(r,angle)=>[Math.cos(angle)*r[1]*skinny,
