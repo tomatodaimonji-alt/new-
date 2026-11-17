@@ -35,6 +35,7 @@ const npcs=[
    {x:-1.06,z:77.15,lookX:-3.15,lookZ:77.2,wait:4.2,activity:'browse'},
    {x:-1.06,z:74.00,lookX:-5.6,lookZ:72.35,wait:.25},
    {x:-3.20,z:74.45,lookX:-5.6,lookZ:72.35,wait:3.5,activity:'pay'},
+   {x:-1.06,z:74.0,lookX:0,lookZ:79,wait:.2},
    {x:-1.06,z:84.45,lookX:0,lookZ:88,wait:.8}
   ],routeIndex:0,effort:0}
  ];
