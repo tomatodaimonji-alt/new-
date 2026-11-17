@@ -1,7 +1,7 @@
 # サンプルエディター 引き継ぎ（2026-11-17）
 
 ## 現況
-- 現在の表示/Androidバージョン **v12**。v12で主人公の遮蔽時に手前の建物を自動非表示にする処理を削除。建物は常に不透明描画。
+- 現在の表示/Androidバージョン **v13**。v13で左右の指を使ったピンチを、通常の左移動＋右視点から判別する処理を追加。建物は常に不透明描画。
 - GitHub: `tomatodaimonji-alt/new-`
 - 実行用: `sample-editor/index.html`（生成済み、WebView/ブラウザで直接起動）
 - Android: `sample-editor/app/`、Actions: `.github/workflows/build-sample-editor-apk.yml`
