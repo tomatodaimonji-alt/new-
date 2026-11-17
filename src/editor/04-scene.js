@@ -1,6 +1,7 @@
 // Editor walk-through uses the same bare avatar and stride/facing rules as PINE gameplay.
 let poiWalkActive=false,poiWalkX=0,poiWalkZ=0,poiWalkMesh=null,poiWalkOldRoof=false;
 let poiWalkFacing=2,poiWalkStarted=-10000,poiWalkFromX=0,poiWalkFromZ=0;
+let poiWalkViewX=0,poiWalkViewZ=0,poiWalkNextReady=0;
 const POI_WALK_MS=160;
 function poiWalkIndoor(){
  const a=world.filter(o=>o.type==='pineSuperRoof');if(!a.length)return false;
@@ -20,8 +21,8 @@ function poiWalkAvatar(now=performance.now()){
  const m=mesh(),body=mesh();
  characterHuman(body,0,0,0,false);
  const t=Math.max(0,Math.min(1,(now-poiWalkStarted)/POI_WALK_MS)),smooth=t*t*(3-2*t);
- const x=poiWalkFromX+(poiWalkX-poiWalkFromX)*smooth+.5;
- const z=poiWalkFromZ+(poiWalkZ-poiWalkFromZ)*smooth+.5;
+ const x=poiWalkViewX+.5;
+ const z=poiWalkViewZ+.5;
  const y=terrainY(poiWalkX,poiWalkZ)+.03;
  const walking=t<1&&(poiWalkFromX!==poiWalkX||poiWalkFromZ!==poiWalkZ);
  const stride=walking?Math.sin(t*Math.PI*2)*.18:0;
@@ -39,7 +40,13 @@ function poiWalkAvatar(now=performance.now()){
  poiWalkMesh=upload(m);
 }
 function poiWalkFrame(now){
- if(poiWalkActive&&now-poiWalkStarted<=POI_WALK_MS+25)poiWalkAvatar(now);
+ if(!poiWalkActive)return;
+ const t=Math.max(0,Math.min(1,(now-poiWalkStarted)/POI_WALK_MS)),smooth=t*t*(3-2*t);
+ poiWalkViewX=poiWalkFromX+(poiWalkX-poiWalkFromX)*smooth;
+ poiWalkViewZ=poiWalkFromZ+(poiWalkZ-poiWalkFromZ)*smooth;
+ panX=poiWalkViewX+.5-MAP_W/2;panZ=poiWalkViewZ+.5-MAP_H/2;
+ if(t<1)poiWalkAvatar(now);
+ cursorDirty=true;
 }
 function poiWalkCanStep(x,z){
  if(!validPos(x,z))return false;
@@ -49,18 +56,20 @@ function poiWalkCanStep(x,z){
  !['pineSuperDoor','plasterwallDoor','woodwallDoor','brickwallDoor','pineSuperLogo','pineSuperStripe','pineSuperCurb','pineSuperBollard','pineSuperSign'].includes(o.type));
  return !blocking;
 }
-function poiWalkCamera(){panX=poiWalkX+.5-MAP_W/2;panZ=poiWalkZ+.5-MAP_H/2;zoom=Math.max(zoom,.82);cursorDirty=true}
+function poiWalkCamera(){panX=poiWalkViewX+.5-MAP_W/2;panZ=poiWalkViewZ+.5-MAP_H/2;zoom=Math.max(zoom,.82);cursorDirty=true}
 function poiWalkStatus(){const e=$('poiWalkCoords');if(e)e.textContent='位置 '+(poiWalkX+1)+','+(poiWalkZ+1)+(poiWalkIndoor()?'・店内':'・屋外')}
 function poiWalkStep(dx,dz){
  if(!poiWalkActive)return;
+ const now=performance.now();
+ if(now<poiWalkNextReady)return;
  poiWalkFacing=dx===1?1:dx===-1?3:dz===-1?0:2;
  if(!poiWalkCanStep(poiWalkX+dx,poiWalkZ+dz)){poiWalkAvatar();return}
  poiWalkFromX=poiWalkX;poiWalkFromZ=poiWalkZ;poiWalkX+=dx;poiWalkZ+=dz;
- poiWalkStarted=performance.now();
- poiWalkRoof();poiWalkAvatar(poiWalkStarted);poiWalkCamera();poiWalkStatus();
+ poiWalkStarted=now;poiWalkNextReady=now+POI_WALK_MS;
+ poiWalkRoof();poiWalkAvatar(poiWalkStarted);poiWalkStatus();
 }
 function poiWalkReset(x,z){
- poiWalkX=x;poiWalkZ=z;poiWalkFromX=x;poiWalkFromZ=z;poiWalkStarted=-10000;
+ poiWalkX=x;poiWalkZ=z;poiWalkFromX=x;poiWalkFromZ=z;poiWalkViewX=x;poiWalkViewZ=z;poiWalkStarted=-10000;poiWalkNextReady=0;
  if(poiWalkActive){poiWalkRoof();poiWalkAvatar();poiWalkCamera();poiWalkStatus()}
 }
 function poiWalkSet(active){
@@ -70,7 +79,7 @@ function poiWalkSet(active){
   poiWalkOldRoof=hideUpper;
   hideUpper=false;$('hideUpper').checked=false;
   level=0;$('level').value='0';mode='move';
-  poiWalkFromX=poiWalkX;poiWalkFromZ=poiWalkZ;
+  poiWalkFromX=poiWalkX;poiWalkFromZ=poiWalkZ;poiWalkViewX=poiWalkX;poiWalkViewZ=poiWalkZ;
   poiWalkRoof();poiWalkCamera();
  }else{
   hideUpper=poiWalkOldRoof;$('hideUpper').checked=hideUpper;
@@ -175,7 +184,7 @@ function zoomForFullMap(){
  const height=world.reduce((top,o)=>Math.max(top,o.y),0)*1.4+Math.max(0,...terrainHeights.values())*TERRAIN_STEP;return Math.max(.025,Math.min(4,9/(Math.max(horizontal,vertical)+height*.38)*1.18));
 }
 function showEntireMap(){panX=panZ=0;zoom=zoomForFullMap();cursorDirty=true}
-function parameters(){const q=layout(),halfH=9/zoom,halfW=halfH*q.aspect;const centerX=MAP_W/2+panX,centerZ=MAP_H/2+panZ,elev=.86,targetY=hideUpper?level*1.4:Math.min(8.5,worldMaxLevel*.7+Math.max(0,...terrainHeights.values())*TERRAIN_STEP*.5);const eye=[centerX+24*Math.sin(yaw)*Math.cos(elev),targetY+24*Math.sin(elev),centerZ+24*Math.cos(yaw)*Math.cos(elev)];return{...q,halfH,halfW,centerX,centerZ,elev,targetY,vp:mult(ortho(-halfW,halfW,-halfH,halfH,.1,100),look(eye,[centerX,targetY,centerZ]))}}
+function parameters(){const q=layout(),halfH=9/zoom,halfW=halfH*q.aspect;const centerX=MAP_W/2+panX,centerZ=MAP_H/2+panZ,elev=.86,targetY=poiWalkActive?0:hideUpper?level*1.4:Math.min(8.5,worldMaxLevel*.7+Math.max(0,...terrainHeights.values())*TERRAIN_STEP*.5);const eye=[centerX+24*Math.sin(yaw)*Math.cos(elev),targetY+24*Math.sin(elev),centerZ+24*Math.cos(yaw)*Math.cos(elev)];return{...q,halfH,halfW,centerX,centerZ,elev,targetY,vp:mult(ortho(-halfW,halfW,-halfH,halfH,.1,100),look(eye,[centerX,targetY,centerZ]))}}
 function cursorAt(clientX,clientY){
  const b=canvas.getBoundingClientRect(),p=parameters(),nx=(clientX-b.left)/b.width*2-1,ny=1-(clientY-b.top)/b.height*2,a=nx*p.halfW;
  let x=0,z=0,height=0;
