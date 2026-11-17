@@ -65,9 +65,13 @@ function frame(now){
  // Upward pitch does not drag the camera below the ground or underneath buildings.
  const focusX=shootState.enabled?shootState.focusX:player.x;
  const focusZ=shootState.enabled?shootState.focusZ:player.z;
- const eye=[focusX+Math.sin(cameraYaw)*cameraDistance*.84,
+ const idealEye=[focusX+Math.sin(cameraYaw)*cameraDistance*.84,
  1.35+cameraDistance*.25,
  focusZ+Math.cos(cameraYaw)*cameraDistance*.84];
+ // v21: exploration alone resolves walls and shelving between player and camera.
+ // Shot mode uses the exact stored composition, with no automatic repositioning.
+ const eye=shootState.enabled?idealEye:resolveExplorationCamera(
+  [player.x,1.35,player.z],idealEye,dt);
  const dir=[-Math.sin(cameraYaw)*Math.cos(cameraPitch),
  Math.sin(cameraPitch),
  -Math.cos(cameraYaw)*Math.cos(cameraPitch)];
