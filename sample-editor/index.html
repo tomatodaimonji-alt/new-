@@ -16,7 +16,7 @@ body.shooting #storeJump,body.shooting #catFind{display:none}
 body.shooting #pad,body.shooting #editToggle,body.shooting #editPanel,body.shooting #v,body.shooting #hint{display:none}
 body.shooting #shootToggle{right:12px;top:39px}
 @media(max-height:420px){#pad{width:120px;height:120px}#stick{left:37px;top:37px;width:46px;height:46px}}
-</style></head><body><canvas id="scene"></canvas><div id="v">v31</div><div id="hint">サンプルエディター</div>
+</style></head><body><canvas id="scene"></canvas><div id="v">v33</div><div id="hint">サンプルエディター</div>
 <button id="editToggle" type="button">編集</button>
 <div id="editPanel" hidden>
 <strong>POI：谷中銀座・再現研究区画</strong>
@@ -46,7 +46,7 @@ body.shooting #shootToggle{right:12px;top:39px}
 <small>構図は端末内に保存。動画録画は未対応。</small>
 </div>
 <div id="portraitGuide" hidden></div>
-<div id="catPanel"><div class="catRow"><strong>巨大猫</strong><span id="catSizeText">1.5倍</span></div><input id="catScale" aria-label="猫の大きさ" type="range" min="0.5" max="12" step="0.5" value="1.5"><div class="catRow"><button type="button" id="catPurr">ゴロゴロ ON</button><button type="button" id="catPunch">猫パンチ</button><button type="button" id="catFind">猫へ</button></div><div class="catRow"><button type="button" id="catControl">猫を操作</button></div></div><button type="button" id="catAction" hidden>猫パンチ</button><div id="pad"><div id="stick"></div></div><script>
+<div id="catPanel"><div class="catRow"><strong>巨大猫</strong><span id="catSizeText">1.5倍</span></div><input id="catScale" aria-label="猫の大きさ" type="range" min="0.5" max="12" step="0.5" value="1.5"><div class="catRow"><button type="button" id="catPurr">ゴロゴロ ON</button><button type="button" id="catPunch">猫パンチ</button><button type="button" id="catFind">猫へ</button></div><div class="catRow"><button type="button" id="catControl">猫を操作</button><button type="button" id="catClose">近距離視点</button></div></div><button type="button" id="catAction" hidden>猫パンチ</button><div id="pad"><div id="stick"></div></div><script>
 'use strict';
 const canvas=document.getElementById('scene'),gl=canvas.getContext('webgl',{antialias:true,alpha:false,powerPreference:'high-performance'});
 if(!gl){document.body.textContent='この端末ではWebGLを使用できません';throw Error('WebGL unavailable')}
@@ -683,7 +683,7 @@ canvas.addEventListener('pointermove',e=>{
  cameraTouches.set(e.pointerId,{x:e.clientX,y:e.clientY});
  if(cameraTouches.size>=2){
   const distance=cameraPinchDistance();
-  if(pinchDistance>0)cameraDistance=clamp(cameraDistance*pinchDistance/Math.max(1,distance),4.5,26);
+  if(pinchDistance>0)cameraDistance=clamp(cameraDistance*pinchDistance/Math.max(1,distance),cat.controlled?Math.max(1.6,cat.scale*.75):4.5,34);
   pinchDistance=distance;
  }else{
   // Both thumbs can move concurrently; only this right-hand pointer rotates the camera.
@@ -698,7 +698,7 @@ for(const name of ['pointerup','pointercancel','lostpointercapture'])
   if(cameraTouches.size<2){pinchActive=false;pinchDistance=0;}
  });
 canvas.addEventListener('wheel',e=>{
- e.preventDefault();cameraDistance=clamp(cameraDistance*Math.exp(e.deltaY*.001),4.5,26);
+ e.preventDefault();cameraDistance=clamp(cameraDistance*Math.exp(e.deltaY*.001),cat.controlled?Math.max(1.6,cat.scale*.75):4.5,34);
 },{passive:false});
 // All sound is generated locally; no copyrighted samples or network resources.
 let audio=null,windSource=null;
@@ -1621,6 +1621,8 @@ const catPurrButton=document.getElementById('catPurr');
 const catPunchButton=document.getElementById('catPunch');
 const catFindButton=document.getElementById('catFind');
 const catControlButton=document.getElementById('catControl');
+const catCloseButton=document.getElementById('catClose');
+let previousHumanDistance=12,previousHumanYaw=0;
 const catActionButton=document.getElementById('catAction');
 catScaleInput.addEventListener('input',()=>{
  cat.scale=Math.max(.5,Math.min(12,Number(catScaleInput.value)||1));
@@ -1634,22 +1636,30 @@ catControlButton.addEventListener('click',()=>{
  if(shootState.enabled)return;
  cat.controlled=!cat.controlled;
  resetStick();
- if(cat.controlled){cameraDistance=Math.max(cameraDistance,cat.scale*2+4);cameraYaw=cat.heading+Math.PI;}
+ if(cat.controlled){previousHumanDistance=cameraDistance;previousHumanYaw=cameraYaw;cameraDistance=Math.max(2.2,cat.scale*1.65+1.7);cameraYaw=cat.heading+Math.PI;cameraPitch=-.23;}else{cameraDistance=previousHumanDistance;cameraYaw=previousHumanYaw;}
  catControlButton.textContent=cat.controlled?'人間に戻る':'猫を操作';
  catActionButton.hidden=!cat.controlled;
- catFindButton.hidden=cat.controlled;
+ catFindButton.hidden=cat.controlled;catCloseButton.textContent='近距離視点';
+});
+catCloseButton.addEventListener('click',()=>{
+ if(shootState.enabled)return;
+ if(!cat.controlled){cat.controlled=true;previousHumanDistance=cameraDistance;previousHumanYaw=cameraYaw;resetStick();catControlButton.textContent='人間に戻る';catActionButton.hidden=false;catFindButton.hidden=true;}
+ const close=Math.max(1.6,cat.scale*.90),wide=Math.max(2.2,cat.scale*2.1+3);
+ cameraDistance=cameraDistance>(close+wide)*.5?close:wide;
+ cameraYaw=cat.heading+Math.PI;cameraPitch=-.20;
+ catCloseButton.textContent=cameraDistance===close?'通常視点':'近距離視点';
 });
 catActionButton.addEventListener('click',()=>{unlockAudio();startCatPunch()});
 window.addEventListener('keydown',e=>{if((e.code==='Space'||e.key===' ')&&cat.controlled&&!e.repeat){e.preventDefault();unlockAudio();startCatPunch()}});
 function startCatPunch(){
  if(shootState.enabled||cat.punchTime)return false;
- cat.punchTime=.001;cat.punch=0;cat.impactDone=false;
+ cat.punchTime=.001;cat.punch=0;cat.impactDone=false;catWhooshSound();
  return true;
 }
 catPurrButton.addEventListener('click',()=>{
  unlockAudio();
  cat.purr=!cat.purr;
- catPurrButton.textContent=cat.purr?'ゴロゴロ ON':'ゴロゴロ OFF';
+ catPurrButton.textContent=cat.purr?'ゴロゴロ ON':'ゴロゴロ OFF';catPurrPulse=0;
 });
 catFindButton.addEventListener('click',()=>{
  if(shootState.enabled)return;
@@ -1687,6 +1697,10 @@ function updateCat(dt){
   if(q>=1)cat.punchTime=0;
  }
  cat.purrIntensity+=((cat.purr?1:0)-cat.purrIntensity)*Math.min(1,t*3);
+  catPurrPulse=(catPurrPulse+t*(.48+cat.scale*.035))%1;
+  if(cat.purr&&cat.scale>=3){for(const car of catCars){
+   if(Math.hypot(car.x-cat.x,car.z-cat.z)<cat.scale*1.55+2&&car.y<.1)car.angle+=Math.sin(cat.time*23+car.z)*t*.008*cat.scale;
+  }}
  updateCatAudio();
 }
 function catTriangle(a,b,c,tint){tri(a,b,c,color(tint));tri(c,b,a,color(tint))}
@@ -1764,7 +1778,7 @@ function renderCatShadow(){
  }
 }
 // AudioContext only starts after user taps a cat control.
-let catPurrOsc=null,catPurrGain=null,catPurrLfo=null;
+let catPurrOsc=null,catPurrGain=null,catPurrTone=null,catPurrToneGain=null,catPurrPulse=0;
 function updateCatAudio(){
  if(!audio||audio.state!=='running')return;
  if(!catPurrOsc){
@@ -1775,6 +1789,9 @@ function updateCatAudio(){
   catPurrGain=audio.createGain();catPurrGain.gain.value=0;
   catPurrOsc.connect(filter);filter.connect(catPurrGain);catPurrGain.connect(audio.destination);
   catPurrOsc.start();
+   catPurrTone=audio.createOscillator();catPurrTone.type='triangle';catPurrToneGain=audio.createGain();catPurrToneGain.gain.value=0;
+   const toneFilter=audio.createBiquadFilter();toneFilter.type='lowpass';toneFilter.frequency.value=240;
+   catPurrTone.connect(toneFilter);toneFilter.connect(catPurrToneGain);catPurrToneGain.connect(audio.destination);catPurrTone.start();
  }
  // A sub-bass rumble that grows with scale; bounded to avoid clipping.
  const scalePower=Math.min(1,(cat.scale/12)**1.3);
@@ -1782,11 +1799,13 @@ function updateCatAudio(){
  const amplitude=cat.purrIntensity*(.008+.11*scalePower)*rhythmic;
  catPurrGain.gain.setTargetAtTime(amplitude,audio.currentTime,.055);
  catPurrOsc.frequency.setTargetAtTime(27+14/Math.sqrt(cat.scale),audio.currentTime,.07);
+  catPurrTone.frequency.setTargetAtTime(83+38/Math.sqrt(cat.scale),audio.currentTime,.10);
+  catPurrToneGain.gain.setTargetAtTime(cat.purrIntensity*(.017+.030*scalePower)*(.72+.28*Math.sin(cat.time*18)),audio.currentTime,.09);
 }
 function catCameraShake(dt){
  // Visual-only micro shake; giant purr and active punch shake the view.
- const magnitude=Math.min(.095,Math.max(0,cat.scale-2)/10*.075)*
-  (cat.purrIntensity*.30+cat.punch*.95);
+ const magnitude=Math.min(.24,Math.max(0,cat.scale-1)/11*.18)*
+  (cat.purrIntensity*.55+cat.punch*.95);
  return Math.sin(cat.time*57)*magnitude;
 }
 // v32: ballistic physics and separate NPC mesh parts.
@@ -1798,6 +1817,14 @@ const catCars=[
  {x:2.8,z:27,y:0,vx:0,vy:0,vz:0,angle:0,spin:0,hit:false,body:0xe8d7b1}
 ];
 const catDebris=[];
+function renderCatPurrRings(){
+ if(!cat.purr||cat.purrIntensity<.04)return;
+ const r0=cat.scale*(.65+catPurrPulse*.95),r1=r0+.026*cat.scale,c=color(0x99978b),h=.026;
+ for(let j=0;j<36;j++){const a=j*Math.PI/18,b=(j+1)*Math.PI/18;
+  quad([cat.x+Math.cos(a)*r0,h,cat.z+Math.sin(a)*r0],[cat.x+Math.cos(b)*r0,h,cat.z+Math.sin(b)*r0],
+   [cat.x+Math.cos(b)*r1,h,cat.z+Math.sin(b)*r1],[cat.x+Math.cos(a)*r1,h,cat.z+Math.sin(a)*r1],c);
+ }
+}
 const detachedNpcParts=[];
 const PART_LIMIT=20;
 function detachNpcPart(npc,name,ux,uz,power){
@@ -1927,6 +1954,18 @@ function updateCatImpacts(dt){
   if(d.y===0&&d.vy<0){d.vy=0;d.vx*=.8;d.vz*=.8}
  }
 }
+let catWhooshNoise=null;
+function catWhooshSound(){
+ if(!audio||audio.state!=='running')return;
+ const now=audio.currentTime;
+ if(!catWhooshNoise){const len=Math.ceil(audio.sampleRate*.19);catWhooshNoise=audio.createBuffer(1,len,audio.sampleRate);
+ const data=catWhooshNoise.getChannelData(0);for(let i=0;i<len;i++)data[i]=Math.random()*2-1;}
+ const source=audio.createBufferSource();source.buffer=catWhooshNoise;
+ const filter=audio.createBiquadFilter();filter.type='bandpass';
+ filter.frequency.setValueAtTime(420,now);filter.frequency.exponentialRampToValueAtTime(1350,now+.10);filter.Q.value=.6;
+ const gain=audio.createGain();gain.gain.setValueAtTime(.0001,now);gain.gain.linearRampToValueAtTime(.14,now+.035);gain.gain.exponentialRampToValueAtTime(.0001,now+.16);
+ source.connect(filter);filter.connect(gain);gain.connect(audio.destination);source.start(now);source.stop(now+.18);
+}
 function catImpactSound(power){
  if(!audio||audio.state!=='running')return;
  const now=audio.currentTime;
@@ -1982,7 +2021,7 @@ function catStrike(){
    break;
   }
  }
- if(hits)catImpactSound(power);
+ catImpactSound(hits?power:Math.max(2,power*.35));
  return hits;
 }
 function renderCatDebris(){
@@ -2054,6 +2093,7 @@ function frame(now){
  renderDetailedPlayer(player.x,player.z,player.heading,walk,characterMovementBlend,running);
  renderNPCs();
  renderCat();
+  renderCatPurrRings();
  for(const car of catCars)renderCatCar(car);
  renderCatDebris();
  // Identify the selected building in editor mode without changing the building itself.
@@ -2088,9 +2128,9 @@ function frame(now){
  const focusX=shootState.enabled?shootState.focusX:cat.controlled?cat.x:player.x;
  const focusZ=shootState.enabled?shootState.focusZ:cat.controlled?cat.z:player.z;
  const cameraFocusHeight=cat.controlled&&!shootState.enabled?Math.max(1.35,cat.scale*.73):1.35;
- const cameraRange=cat.controlled&&!shootState.enabled?Math.max(cameraDistance,cat.scale*2.4+4):cameraDistance;
+ const cameraRange=cameraDistance;
  const idealEye=[focusX+Math.sin(cameraYaw)*cameraRange*.84,
- cameraFocusHeight+cameraRange*.25,
+ cameraFocusHeight+cameraRange*(cat.controlled&&!shootState.enabled?.12:.25),
  focusZ+Math.cos(cameraYaw)*cameraRange*.84];
  // v21: exploration alone resolves walls and shelving between player and camera.
  // Shot mode uses the exact stored composition, with no automatic repositioning.
