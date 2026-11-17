@@ -13,7 +13,8 @@ function cameraPinchDistance(){
 canvas.addEventListener('pointerdown',e=>{
  if(e.pointerType==='mouse'&&e.button!==0)return;
  canvas.setPointerCapture(e.pointerId);
- const isLeft=e.pointerType==='touch'&&e.clientX<window.innerWidth/2;
+ if(shootState.enabled&&shootState.playing)return;
+ const isLeft=e.pointerType==='touch'&&e.clientX<window.innerWidth/2&&!shootState.enabled;
  if(isLeft){
   if(pointer===null){
    pointer=e.pointerId;
@@ -30,6 +31,7 @@ canvas.addEventListener('pointerdown',e=>{
  unlockAudio();
 });
 canvas.addEventListener('pointermove',e=>{
+ if(shootState.enabled&&shootState.playing)return;
  if(e.pointerId===pointer&&floatingOrigin){
   const radius=Math.max(36,pad.clientWidth*.32);
   const dx=e.clientX-floatingOrigin.x,dy=e.clientY-floatingOrigin.y;
