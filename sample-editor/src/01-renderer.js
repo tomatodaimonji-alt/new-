@@ -17,17 +17,4 @@ function box(x,y,z,w,h,d,hex){
  quad([X,y,V],[U,y,V],[U,T,V],[X,T,V],c);quad([U,y,Z],[X,y,Z],[X,T,Z],[U,T,Z],side);
  quad([U,y,V],[U,y,Z],[U,T,Z],[U,T,V],dark);quad([X,y,Z],[X,y,V],[X,T,V],[X,T,Z],side);
 }
-// Ellipsoid meshes for rounded shoulders, head, limbs and soft body silhouette.
-function ellipsoid(cx,cy,cz,rx,ry,rz,hex,longitude=12,latitude=8){
- const c=color(hex);
- for(let v=0;v<latitude;v++){
-  const a=Math.PI*v/latitude,b=Math.PI*(v+1)/latitude;
-  for(let u=0;u<longitude;u++){
-   const p=Math.PI*2*u/longitude,q=Math.PI*2*(u+1)/longitude;
-   const point=(th,ph)=>[cx+rx*Math.sin(th)*Math.cos(ph),cy+ry*Math.cos(th),cz+rz*Math.sin(th)*Math.sin(ph)];
-   const x=point(a,p),y=point(b,p),z=point(b,q),w=point(a,q);
-   quad(x,y,z,w,c.map(k=>k*(.76+.24*Math.max(0,Math.sin(a)*Math.cos(p)*.5+.5))));
-  }
- }
-}
 function seeded(a,b){let t=Math.sin(a*127.1+b*311.7)*43758.5453;return t-Math.floor(t)}
