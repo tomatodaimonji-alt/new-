@@ -8,17 +8,14 @@ for(const side of [-1,1]){
  box(side*5.37,-.055,0,.24,.055,132,0x858784);
  box(side*5.87,-.045,0,.78,.08,132,0x9a9690);
 }
-// Individual building buffers are used for automatic near-camera occlusion.
+// The scene registry drives individual building buffers and their collision footprints.
 const townBuildings=[];
 const storePalettes=[0x9b8f7d,0xc1ad94,0xc4c2b5,0x998a79,0xa7b0a9,0x877c70,0xb6a48c];
 const awnings=[0x467269,0x824d49,0xc1ab79,0x425d73,0x76674a,0x865f40,0x537b83];
 const signage=[0x554a3d,0x3d5c51,0x755843,0x7b4842,0x4b5861,0x746340];
-function addStreetShop(side,k){
- const z=-51+k*7.25+(seeded(k,side)*.55-.275);
- const x=side*(8.65+seeded(k*17,side)*.52);
- const width=6.75+seeded(k,side*9)*.35;
- const depth=5.2+seeded(k*8,side)*1.3;
- const height=4.8+Math.floor(seeded(k*5,side)*3)*2.65;
+function renderStreetShop(shop){
+ const {side,k}=shop;
+ const x=shop.x,z=shop.z,width=shop.width,depth=shop.depth,height=shop.height;
  const wall=storePalettes[(k+(side>0?3:0))%storePalettes.length];
  const accent=awnings[(k*3+(side>0?1:0))%awnings.length];
  const front=x-side*depth*.5;
@@ -79,16 +76,18 @@ function addStreetShop(side,k){
   box(edge-side*.39,1.33,z+2.20,.08,.06,.53,0xd5c7a5);
  }
  const geometry=new Float32Array(vertices.splice(start));
+ if(shop.buffer)gl.deleteBuffer(shop.buffer);
  const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
  gl.bufferData(gl.ARRAY_BUFFER,geometry,gl.STATIC_DRAW);
- townBuildings.push({cx:x,cz:z,front,side,depth,width,buffer,count:geometry.length/6});
+ Object.assign(shop,{cx:x,cz:z,front,buffer,count:geometry.length/6});
+ return shop;
 }
-for(const side of [-1,1])for(let k=0;k<15;k++)addStreetShop(side,k);
+for(const shop of scene.buildings)townBuildings.push(renderStreetShop(shop));
 // Lanterns, utility poles, overhead cables and drainage add a credible lived-in streetscape.
-for(let k=0;k<8;k++){
- const z=-48+k*14.2;
- for(const side of [-1,1]){
-  const px=side*5.95;
+for(const object of scene.objects){
+ const z=object.z;
+ const side=Math.sign(object.x),px=object.x;
+ {
   box(px,0,z,.18,7.1,.18,0x676765);
   box(px,5.45,z,.36,.23,.40,0x8d8d86);
   box(px-side*.26,4.4,z+.46,.035,.12,1.12,0x565b56);
