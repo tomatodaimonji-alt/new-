@@ -7,6 +7,8 @@ const PLAYER_STYLE=Object.freeze({
  trousers:0x424c5b,trouserShadow:0x303a46,
  shoes:0x383d41,sole:0xc1c2bb,eye:0x292b30
 });
+// NPCs share the same geometry, gait and pose with lightweight palette overrides.
+let currentCharacterStyle=PLAYER_STYLE;
 function playerShade(hex,nx,ny,nz){
  const base=color(hex);
  const diffuse=Math.max(0,nx*-.48+ny*.75+nz*-.46);
@@ -72,7 +74,7 @@ function playerTorso(hip,lean,skinny=1){
   const point=(r,angle)=>[Math.cos(angle)*r[1]*skinny,
    r[0]+hip,Math.sin(angle)*r[2]+lean+(r[0]-1)*-.025];
   const mid=(p+q)*.5;
-  const tone=j%6===0?PLAYER_STYLE.shirtDark:PLAYER_STYLE.shirt;
+  const tone=j%6===0?currentCharacterStyle.shirtDark:currentCharacterStyle.shirt;
   quad(point(a,p),point(b,p),point(b,q),point(a,q),
    playerShade(tone,Math.cos(mid),.15,Math.sin(mid)));
  }
@@ -140,7 +142,8 @@ function solveWalkingKnee(hip,ankle){
 }
 // Procedural skinned-like pose: separate meshes share moving anatomical joints.
 // Rendering is built each frame without external models, Web APIs or textures.
-function renderDetailedPlayer(px,pz,heading,phase,effort,running){
+function renderDetailedPlayer(px,pz,heading,phase,effort,running,style=PLAYER_STYLE){
+ currentCharacterStyle=style;
  const start=vertices.length;
  const amount=clamp((effort-.08)/.62,0,1);
  const moving=amount>.015;
@@ -150,7 +153,7 @@ function renderDetailedPlayer(px,pz,heading,phase,effort,running){
  const hipHeight=moving?(running?.021:.013)*(1-Math.cos(stridePhase*2)) : 0;
  const torsoLean=(running?-.065:-.018)*amount;
  const headCounter=Math.sin(stridePhase)*.016*amount;
- const C=PLAYER_STYLE;
+ const C=style;
  // Waist moves over the planted foot while shoulders counter-sway.
  playerOval(hipShift,.880+hipHeight,.008,.217,.115,.148,C.trousers,12,7);
  playerTorso(hipHeight,torsoLean);
