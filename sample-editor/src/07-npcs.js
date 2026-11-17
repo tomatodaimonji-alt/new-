@@ -38,6 +38,15 @@ const npcs=[
    {x:-1.06,z:74.0,lookX:0,lookZ:79,wait:.2},
    {x:-1.06,z:84.45,lookX:0,lookZ:88,wait:.8}
   ],routeIndex:0,effort:0}
+ ,
+ {id:'npc-street-01',poiId:'yanaka-ginza-study',role:'bystander',style:'visitorA',
+  x:.40,z:9.0,heading:Math.PI,phase:0,speed:0,state:'idle',wait:0,
+  carrying:false,itemPlaced:false,action:'idle',motion:0,route:[],routeIndex:0,
+  effort:0,pose:{pick:0,carry:0,pay:0}},
+ {id:'npc-street-02',poiId:'yanaka-ginza-study',role:'bystander',style:'visitorB',
+  x:-2.5,z:15,heading:1.5,phase:1,speed:0,state:'idle',wait:0,
+  carrying:false,itemPlaced:false,action:'idle',motion:0,route:[],routeIndex:0,
+  effort:0,pose:{pick:0,carry:0,pay:0}}
  ];
 function updateNpcPose(npc,dt){
  const gain=1-Math.exp(-Math.min(.05,Math.max(0,dt))*6);
@@ -52,6 +61,8 @@ function updateNpcPose(npc,dt){
 function updateNPCs(dt){
  const time=Math.min(.05,Math.max(0,dt));
  for(const npc of npcs){
+  if(npc.knock){npc.effort=0;continue;}
+  if(npc.role==='bystander'){npc.phase+=time*.32;updateNpcPose(npc,time);continue;}
   if(npc.role==='clerk'){
    npc.heading=Math.PI+.12*Math.sin((npc.phase+=time*.32));
    const active=npcs.some(other=>other.role==='shopper'&&other.action==='pay');
@@ -114,18 +125,29 @@ function updateNPCs(dt){
 }
 // One small circular player collider per person; existing shelf/wall rules remain.
 function npcBlocks(x,z){
- return npcs.some(npc=>Math.hypot(x-npc.x,z-npc.z)<.43);
+ return npcs.some(npc=>!npc.knock&&Math.hypot(x-npc.x,z-npc.z)<.43);
 }
 function renderNpcShadows(){
  for(const npc of npcs){
-  renderPlayerShadow(npc.x,npc.z,npc.heading,npc.motion,npc.phase);
+  if(!npc.knock||npc.knock.y<.15)renderPlayerShadow(npc.x,npc.z,npc.heading,npc.motion,npc.phase);
  }
 }
 function renderNPCs(){
  for(const npc of npcs){
+  const start=vertices.length;
   renderDetailedPlayer(npc.x,npc.z,npc.heading,npc.phase,npc.motion,false,
     NPC_STYLES[npc.style],npc.pose);
-  if(npc.carrying||npc.pose.pick>.03||npc.itemPlaced)renderNpcCarriedProduct(npc);
+  // Whole-body tumble: tilt around the pelvis while airborne, not gore/dismemberment.
+  if(npc.knock){
+   const k=npc.knock,c=Math.cos(k.tilt),s=Math.sin(k.tilt);
+   for(let i=start;i<vertices.length;i+=6){
+    const dx=vertices[i]-npc.x,dy=vertices[i+1]-.80;
+    vertices[i]=npc.x+dx*c-dy*s;
+    vertices[i+1]=Math.max(.03,.80+k.y+dx*s+dy*c);
+   }
+  }
+  if(!npc.knock&&(npc.carrying||npc.pose.pick>.03||npc.itemPlaced))
+   renderNpcCarriedProduct(npc);
  }
  // Reset shared character palette for consistency with any later player effects.
  currentCharacterStyle=PLAYER_STYLE;
