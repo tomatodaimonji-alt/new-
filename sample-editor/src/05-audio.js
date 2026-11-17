@@ -20,13 +20,31 @@ function unlockAudio(){
   if(audio.state==='suspended')audio.resume();
  }catch(e){console.warn('Audio unavailable',e)}
 }
+// Short noise-based footfalls: heel impact followed by a quiet sole scuff.
+// No pitched oscillator notes. Reuse a noise buffer to avoid reallocating audio every step.
+let footNoise=null,footNumber=0;
 function footstep(running){
  if(!audio||audio.state!=='running')return;
- const t=audio.currentTime,osc=audio.createOscillator(),gain=audio.createGain();
- osc.type='triangle';osc.frequency.setValueAtTime(running?112:93,t);
- osc.frequency.exponentialRampToValueAtTime(48,t+.11);
- gain.gain.setValueAtTime(.0001,t);
- gain.gain.exponentialRampToValueAtTime(running?.11:.075,t+.009);
- gain.gain.exponentialRampToValueAtTime(.0001,t+.12);
- osc.connect(gain);gain.connect(audio.destination);osc.start(t);osc.stop(t+.13);
+ if(!footNoise){
+  const length=Math.ceil(audio.sampleRate*.22);
+  footNoise=audio.createBuffer(1,length,audio.sampleRate);
+  const samples=footNoise.getChannelData(0);
+  for(let i=0;i<length;i++)samples[i]=Math.random()*2-1;
+ }
+ const now=audio.currentTime;
+ const alternating=footNumber++%2===0;
+ const start=now,amp=(running?.065:.043)*(alternating?1:.87);
+ const source=audio.createBufferSource();
+ source.buffer=footNoise;
+ source.playbackRate.value=(running?1.15:.90)*(alternating?1.02:.97);
+ const filter=audio.createBiquadFilter();
+ filter.type='lowpass';
+ filter.frequency.value=running?920:670;
+ const envelope=audio.createGain();
+ envelope.gain.setValueAtTime(.0001,start);
+ envelope.gain.linearRampToValueAtTime(amp,start+.012);
+ envelope.gain.exponentialRampToValueAtTime(amp*.27,start+.055);
+ envelope.gain.exponentialRampToValueAtTime(.0001,start+(running?.135:.18));
+ source.connect(filter);filter.connect(envelope);envelope.connect(audio.destination);
+ source.start(start);source.stop(start+.20);
 }
