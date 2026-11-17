@@ -2675,7 +2675,6 @@ function pineSupermarketGeometry(m,o){
       B(xx,h,zz,.17,.12+(i%3)*.014,.13,c);
       if(i%2===0)B(xx,h+.095,zz,.17,.016,.13,[.73,.71,.62]);
     }
-   }
    }else if(o.type==='pineSuperCooler'){
     B(0,.04,0,.87,.81,.79,pale);
     B(0,.61,.36,.80,.28,.035,glass);
