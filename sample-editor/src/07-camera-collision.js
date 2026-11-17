@@ -25,6 +25,7 @@ function cameraSegmentBox(origin,target,b,inflate=.13){
 function cameraObstacles(){
  const objects=[];
  for(const b of townBuildings){
+  if(b.catDestroyed)continue;
   objects.push({x:b.cx,y:0,z:b.cz,w:b.depth,d:b.width,h:b.height});
  }
  const b=convenience,front=b.z-b.depth/2,back=b.z+b.depth/2;
