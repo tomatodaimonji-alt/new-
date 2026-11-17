@@ -18,21 +18,21 @@ const NPC_STYLES={
 const npcs=[
  {id:'npc-clerk-01',poiId:'convenience-study',role:'clerk',style:'clerk',
   x:-5.45,z:73.55,heading:Math.PI,phase:0,speed:0,
-  state:'checkout',wait:0,route:[],routeIndex:0,effort:0},
+  state:'checkout',wait:0,route:[],routeIndex:0,effort:0,transaction:0,action:'idle'},
  {id:'npc-shopper-01',poiId:'convenience-study',role:'shopper',style:'visitorA',
   x:1.08,z:74.3,heading:0,phase:1.3,speed:.69,
-  state:'walking',wait:0,route:[
-   {x:1.08,z:77.15,lookX:3.15,lookZ:77.2,wait:3.5},
-   {x:1.08,z:82.90,lookX:3.15,lookZ:83.1,wait:3.0},
-   {x:.32,z:75.25,lookX:-5.6,lookZ:72.35,wait:2.2},
+  state:'walking',wait:0,carrying:false,action:'idle',shoppingCycles:0,route:[
+   {x:1.08,z:77.15,lookX:3.15,lookZ:77.2,wait:3.5,activity:'pick'},
+   {x:1.08,z:82.90,lookX:3.15,lookZ:83.1,wait:3.0,activity:'browse'},
+   {x:.32,z:74.00,lookX:-5.6,lookZ:72.35,wait:2.5,activity:'pay'},
    {x:1.08,z:74.3,lookX:0,lookZ:70,wait:.7}
   ],routeIndex:0,effort:0},
  {id:'npc-shopper-02',poiId:'convenience-study',role:'shopper',style:'visitorB',
   x:-1.06,z:84.45,heading:Math.PI,phase:3,speed:.62,
   state:'walking',wait:0,route:[
-   {x:-1.06,z:83.15,lookX:-3.15,lookZ:83.1,wait:2.8},
-   {x:-1.06,z:77.15,lookX:-3.15,lookZ:77.2,wait:4.2},
-   {x:-1.06,z:81.8,lookX:3.15,lookZ:83.1,wait:1.4},
+   {x:-1.06,z:83.15,lookX:-3.15,lookZ:83.1,wait:2.8,activity:'pick'},
+   {x:-1.06,z:77.15,lookX:-3.15,lookZ:77.2,wait:4.2,activity:'browse'},
+   {x:-1.06,z:74.65,lookX:-5.6,lookZ:72.35,wait:2.4,activity:'pay'},
    {x:-1.06,z:84.45,lookX:0,lookZ:88,wait:.8}
   ],routeIndex:0,effort:0}
  ];
@@ -43,6 +43,9 @@ function updateNPCs(dt){
  for(const npc of npcs){
   if(npc.role==='clerk'){
    npc.heading=Math.PI+.12*Math.sin((npc.phase+=time*.32));
+   const active=npcs.some(other=>other.role==='shopper'&&other.action==='pay');
+   npc.action=active?'pay':'idle';
+   npc.transaction=active?Math.min(1,(npc.transaction||0)+time*3):0;
    npc.effort=0;
    continue;
   }
@@ -53,7 +56,19 @@ function updateNPCs(dt){
    const diff=Math.atan2(Math.sin(face-npc.heading),Math.cos(face-npc.heading));
    npc.heading+=diff*Math.min(1,time*4);
    npc.effort=0;
-   if(npc.wait<=0){npc.state='walking';npc.routeIndex=(npc.routeIndex+1)%npc.route.length}
+   const elapsed=waypoint.wait-npc.wait;
+   if(waypoint.activity==='pick'){
+    npc.action=elapsed<1.15?'pick':npc.carrying?'carry':'idle';
+    if(elapsed>=1.15)npc.carrying=true;
+   }else if(waypoint.activity==='pay'){
+    npc.action='pay';
+    // The purchased product is transferred at the end of the checkout.
+    if(npc.wait<=.45){npc.carrying=false;npc.shoppingCycles++}
+   }else npc.action=npc.carrying?'carry':'idle';
+   if(npc.wait<=0){
+    npc.state='walking';npc.routeIndex=(npc.routeIndex+1)%npc.route.length;
+    npc.action=npc.carrying?'carry':'idle';
+   }
    continue;
   }
   const dx=waypoint.x-npc.x,dz=waypoint.z-npc.z;
@@ -73,6 +88,7 @@ function updateNPCs(dt){
   npc.x=nextX;npc.z=nextZ;
   npc.heading=Math.atan2(ux,uz);
   npc.phase+=move*Math.PI/.78;
+  npc.action=npc.carrying?'carry':'idle';
   npc.effort=Math.min(1,npc.effort+time*7);
  }
 }
@@ -88,8 +104,22 @@ function renderNpcShadows(){
 function renderNPCs(){
  for(const npc of npcs){
   renderDetailedPlayer(npc.x,npc.z,npc.heading,npc.phase,npc.effort,false,
-    NPC_STYLES[npc.style]);
+    NPC_STYLES[npc.style],npc.action);
+  if(npc.carrying||npc.action==='pick')renderNpcCarriedProduct(npc);
  }
  // Reset shared character palette for consistency with any later player effects.
  currentCharacterStyle=PLAYER_STYLE;
+}
+
+// An unbranded product is positioned relative to the raised right hand.
+// This is an animation prop only; shelf inventory is not yet simulated.
+function renderNpcCarriedProduct(npc){
+ const isPick=npc.action==='pick',isPay=npc.action==='pay';
+ const z=- (isPick?.58:isPay?.45:.22);
+ const localX=.35,localZ=z;
+ const angle=npc.heading-Math.PI,cs=Math.cos(angle),sn=Math.sin(angle);
+ const x=npc.x+localX*cs+localZ*sn;
+ const zz=npc.z-localX*sn+localZ*cs;
+ const kind=npc.style==='visitorA'?'canned-coffee':'green-tea';
+ renderOriginalProduct(kind,x,isPick?1.04:1.00,zz,.8);
 }
