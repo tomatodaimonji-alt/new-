@@ -21,10 +21,10 @@ const npcs=[
   state:'checkout',wait:0,route:[],routeIndex:0,effort:0,transaction:0,action:'idle',motion:0,pose:{pick:0,carry:0,pay:0}},
  {id:'npc-shopper-01',poiId:'convenience-study',role:'shopper',style:'visitorA',
   x:1.08,z:74.3,heading:0,phase:1.3,speed:.69,
-  state:'walking',wait:0,carrying:false,action:'idle',shoppingCycles:0,paymentDone:false,motion:0,pose:{pick:0,carry:0,pay:0},route:[
+  state:'walking',wait:0,carrying:false,action:'idle',shoppingCycles:0,paymentDone:false,itemPlaced:false,motion:0,pose:{pick:0,carry:0,pay:0},route:[
    {x:1.08,z:77.15,lookX:3.15,lookZ:77.2,wait:3.5,activity:'pick'},
    {x:1.08,z:82.90,lookX:3.15,lookZ:83.1,wait:3.0,activity:'browse'},
-   {x:.32,z:74.00,lookX:-5.6,lookZ:72.35,wait:2.5,activity:'pay'},
+   {x:-3.45,z:73.55,lookX:-5.6,lookZ:72.35,wait:3.5,activity:'pay'},
    {x:1.08,z:74.3,lookX:0,lookZ:70,wait:.7}
   ],routeIndex:0,effort:0},
  {id:'npc-shopper-02',poiId:'convenience-study',role:'shopper',style:'visitorB',
@@ -32,7 +32,7 @@ const npcs=[
   state:'walking',wait:0,carrying:false,action:'idle',shoppingCycles:0,paymentDone:false,motion:0,pose:{pick:0,carry:0,pay:0},route:[
    {x:-1.06,z:83.15,lookX:-3.15,lookZ:83.1,wait:2.8,activity:'pick'},
    {x:-1.06,z:77.15,lookX:-3.15,lookZ:77.2,wait:4.2,activity:'browse'},
-   {x:-1.06,z:74.65,lookX:-5.6,lookZ:72.35,wait:2.4,activity:'pay'},
+   {x:-3.20,z:74.45,lookX:-5.6,lookZ:72.35,wait:3.5,activity:'pay'},
    {x:-1.06,z:84.45,lookX:0,lookZ:88,wait:.8}
   ],routeIndex:0,effort:0}
  ];
@@ -71,13 +71,15 @@ function updateNPCs(dt){
     if(elapsed>=1.15)npc.carrying=true;
    }else if(waypoint.activity==='pay'){
     npc.action='pay';
-    // The purchased product is transferred at the end of the checkout.
+    // Release one item onto the counter, then finish a single payment.
+    if(npc.wait<=waypoint.wait-1.35)npc.itemPlaced=true;
     if(npc.wait<=.45&&!npc.paymentDone){npc.carrying=false;npc.shoppingCycles++;npc.paymentDone=true}
    }else npc.action=npc.carrying?'carry':'idle';
    if(npc.wait<=0){
     npc.state='walking';npc.routeIndex=(npc.routeIndex+1)%npc.route.length;
     npc.action=npc.carrying?'carry':'idle';
     npc.paymentDone=false;
+    npc.itemPlaced=false;
    }
    updateNpcPose(npc,time);
    continue;
@@ -120,21 +122,37 @@ function renderNPCs(){
  for(const npc of npcs){
   renderDetailedPlayer(npc.x,npc.z,npc.heading,npc.phase,npc.motion,false,
     NPC_STYLES[npc.style],npc.pose);
-  if(npc.carrying||npc.pose.pick>.03)renderNpcCarriedProduct(npc);
+  if(npc.carrying||npc.pose.pick>.03||npc.itemPlaced)renderNpcCarriedProduct(npc);
  }
  // Reset shared character palette for consistency with any later player effects.
  currentCharacterStyle=PLAYER_STYLE;
 }
 
+// Reuse the arm's local grip position for the item. The checkout target is a
+// fixed empty section of the actual counter and never enters the walking lane.
+function npcGripWorld(npc){
+ const pick=npc.pose.pick,pay=npc.pose.pay,carry=npc.pose.carry;
+ const weight=Math.min(1,pick+pay+carry);
+ const localX=.376*(1-weight)+.35*weight;
+ const localZ=-.018*(1-weight)-(.58*pick+.45*pay+.22*carry);
+ const angle=npc.heading-Math.PI,cs=Math.cos(angle),sn=Math.sin(angle);
+ return [npc.x+localX*cs+localZ*sn, .871*(1-weight)+1.00*weight+.06*pick,
+  npc.z-localX*sn+localZ*cs];
+}
+const CHECKOUT_ITEM_POINT=Object.freeze({x:-4.39,y:1.035,z:72.35});
 // An unbranded product is positioned relative to the raised right hand.
 // This is an animation prop only; shelf inventory is not yet simulated.
 function renderNpcCarriedProduct(npc){
- const pick=npc.pose.pick,pay=npc.pose.pay,carry=npc.pose.carry;
- const z=-(pick*.58+pay*.45+carry*.22);
- const localX=.35,localZ=z;
- const angle=npc.heading-Math.PI,cs=Math.cos(angle),sn=Math.sin(angle);
- const x=npc.x+localX*cs+localZ*sn;
- const zz=npc.z-localX*sn+localZ*cs;
+ const hand=npcGripWorld(npc);
+ const isPay=npc.state==='looking'&&npc.route[npc.routeIndex].activity==='pay';
+ const remaining=isPay?npc.wait:4;
+ const transition=isPay?Math.min(1,Math.max(0,(2.65-remaining)/1.30)):0;
+ const eased=transition*transition*(3-2*transition);
+ const x=hand[0]+(CHECKOUT_ITEM_POINT.x-hand[0])*eased;
+ const y=hand[1]+(CHECKOUT_ITEM_POINT.y-hand[1])*eased;
+ const z=hand[2]+(CHECKOUT_ITEM_POINT.z-hand[2])*eased;
  const kind=npc.style==='visitorA'?'canned-coffee':'green-tea';
- renderOriginalProduct(kind,x,1.00+.06*pick,zz,.8);
+ // Before pickup finishes, scale the presentation prop up near the grip.
+ const visibility=npc.carrying||npc.itemPlaced?1:Math.min(1,npc.pose.pick);
+ if(visibility>.02)renderOriginalProduct(kind,x,y,z,.76*visibility);
 }
