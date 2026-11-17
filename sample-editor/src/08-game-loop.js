@@ -73,7 +73,7 @@ function frame(now){
  const vp=mat4.mul(mat4.perspective(1.05,w/h,.1,350),mat4.look(eye,look));
  gl.uniformMatrix4fv(locVP,false,vp);
  bind(staticBuffer);gl.drawArrays(gl.TRIANGLES,0,staticArray.length/6);
- for(const b of townBuildings){if(obscuresPlayer(b,eye))continue;bind(b.buffer);gl.drawArrays(gl.TRIANGLES,0,b.count)}
+ for(const b of townBuildings){bind(b.buffer);gl.drawArrays(gl.TRIANGLES,0,b.count)}
  bind(avatarBuffer);gl.drawArrays(gl.TRIANGLES,0,arr.length/6);
  requestAnimationFrame(frame);
 }
