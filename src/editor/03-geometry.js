@@ -2559,6 +2559,7 @@ function roofFamily(id){
  return h*TERRAIN_STEP;
 }
 
+function pineSuperVehicleType(t){return /^pineSuperCar(?:Mini|Van|SUV|Pickup)?$/.test(t)}
 function pineSupermarketGeometry(m,o){
  const x=o.x+.5,z=o.z+.5,y=o.y*1.4+terrainY(o.x,o.z);
  const B=(dx,dy,dz,w,h,d,c)=>cube(m,x+dx,y+dy,z+dz,w,h,d,c);
@@ -2598,7 +2599,7 @@ function pineSupermarketGeometry(m,o){
    }else if(o.type==='pineSuperLogo'){
     B(0,1.42,.52,7.4,.82,.10,[.17,.37,.30]);
     B(0,1.38,.581,7.30,.055,.025,[.83,.70,.41]);
-   }else if(o.type.startsWith('pineSuperCar')){
+   }else if(pineSuperVehicleType(o.type)){
     // All vehicle variants share the same base mesh and materials, avoiding duplicate renderers.
     const cm=mesh(),C=(dx,dy,dz,w,h,d,c)=>cube(cm,dx,dy,dz,w,h,d,c);
     const mini=o.type==='pineSuperCarMini',van=o.type==='pineSuperCarVan',
