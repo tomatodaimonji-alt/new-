@@ -2598,10 +2598,12 @@ function pineSupermarketGeometry(m,o){
    }else if(o.type==='pineSuperLogo'){
     B(0,1.42,.52,7.4,.82,.10,[.17,.37,.30]);
     B(0,1.38,.581,7.30,.055,.025,[.83,.70,.41]);
-   }else if(o.type==='pineSuperCar'){
-    // Two silhouettes: hatchback and sedan; rotate as one mesh for parking variation.
+   }else if(o.type.startsWith('pineSuperCar')){
+    // All vehicle variants share the same base mesh and materials, avoiding duplicate renderers.
     const cm=mesh(),C=(dx,dy,dz,w,h,d,c)=>cube(cm,dx,dy,dz,w,h,d,c);
-    const hatch=((o.x*7+o.z*11)&1)===0,aged=(o.x+o.z)%3===0;
+    const mini=o.type==='pineSuperCarMini',van=o.type==='pineSuperCarVan',
+      suv=o.type==='pineSuperCarSUV',pickup=o.type==='pineSuperCarPickup';
+    const hatch=mini||van||((o.x*7+o.z*11)&1)===0,aged=(o.x+o.z)%3===0;
     const paint=aged?[.41,.48,.46]:[.55,.36,.27],shadow=[.26,.28,.28],
       tyre=[.13,.14,.15],rim=[.44,.45,.42],window=[.19,.29,.31],
       bumper=[.32,.35,.34],light=[.78,.75,.62],red=[.57,.22,.18];
@@ -2636,11 +2638,24 @@ function pineSupermarketGeometry(m,o){
       C(-.35,.47,.98,.31,.009,.17,[.47,.28,.20]);
       C(.45,.43,-.93,.24,.009,.15,[.35,.28,.23]);
     }
+    if(van){
+      C(0,.58,-.28,1.60,.57,1.83,paint);
+      C(0,1.13,-.30,1.58,.12,1.82,paint);
+      for(const side of [-1,1])C(side*.81,.83,-.28,.025,.37,1.50,window);
+    }else if(pickup){
+      C(0,.51,-.86,1.56,.13,1.16,shadow);
+      for(const side of [-1,1])C(side*.79,.48,-.86,.10,.24,1.15,paint);
+      C(0,.51,-1.39,1.60,.26,.10,paint);
+    }else if(suv){
+      C(0,1.10,-.18,1.33,.12,1.15,paint);
+      for(const side of [-1,1])C(side*.59,1.22,-.20,.055,.07,1.13,shadow);
+    }
+    const scaleX=mini?.82:van?1.0:1,scaleZ=mini?.84:van?1.05:pickup?1.05:1,scaleY=mini?.91:van?1.07:suv?1.12:1;
     const r=((o.rot||0)%4+4)%4;
     for(let i=0;i<cm.p.length;i+=3){
-      const [dx,dz]=rot2(cm.p[i],cm.p[i+2],r);
+      const [dx,dz]=rot2(cm.p[i]*scaleX,cm.p[i+2]*scaleZ,r);
       const [nx,nz]=rot2(cm.n[i],cm.n[i+2],r);
-      m.p.push(x+dx,y+cm.p[i+1],z+dz);
+      m.p.push(x+dx,y+cm.p[i+1]*scaleY,z+dz);
       m.n.push(nx,cm.n[i+1],nz);
       m.c.push(cm.c[i],cm.c[i+1],cm.c[i+2]);
     }
@@ -2649,8 +2664,13 @@ function pineSupermarketGeometry(m,o){
     for(const xx of [-.45,.45])B(xx,.14,0,.07,1.28,.08,steel);
     B(0,1.38,0,.97,.12,.09,steel);
     if(o.type==='pineSuperGlass'){
-     B(0,.75,0,.83,1.13,.06,glass);B(0,.74,.04,.025,1.1,.018,pale);
+     // Stationary storefront glazing: no handles or moving leaf.
+     B(0,.75,0,.83,1.13,.06,glass);
+     B(0,.76,.04,.83,.034,.03,steel);
+     B(0,.74,.04,.025,1.1,.018,pale);
     }else{
+     // Only the center tile is walkable; teal canopy marks the sole public entrance.
+     B(0,1.44,.07,1.78,.18,.42,[.22,.43,.37]);
      for(const xx of [-.22,.22])B(xx,.74,0,.40,1.12,.06,glass);
      for(const xx of [-.035,.035])B(xx,.77,.05,.022,.30,.02,metal);
     }
@@ -2693,7 +2713,9 @@ function pineSupermarketGeometry(m,o){
     B(0,.40,0,.67,.29,.58,metal);B(0,.61,-.32,.72,.045,.07,steel);
     for(const xx of [-.27,.27])for(const zz of [-.22,.22])B(xx,.05,zz,.11,.12,.11,dark);
    }else if(o.type==='pineSuperStripe'){
-    B(.39,.012,0,.053,.016,.96,pale);
+    B(.43,.028,0,.075,.015,.99,[.86,.86,.80]);
+   }else if(o.type==='pineSuperBayEnd'){
+    B(0,.029,.43,.98,.015,.075,[.86,.86,.80]);
    }else if(o.type==='pineSuperCurb'){
     B(0,.035,0,.98,.17,.30,[.69,.69,.64]);
    }else if(o.type==='pineSuperSign'){
