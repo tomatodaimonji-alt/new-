@@ -16,6 +16,12 @@ window.addEventListener('pointerdown',e=>{
   x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY,
   side:e.clientX<innerWidth/2?'left':'right'
  });
+ if(gestureContacts.size===2){
+  // Start measuring only once the second finger arrives, not from earlier walking.
+  for(const contact of gestureContacts.values()){
+   contact.startX=contact.x;contact.startY=contact.y;
+  }
+ }
 },true);
 window.addEventListener('pointermove',e=>{
  if(e.pointerType!=='touch'||!gestureContacts.has(e.pointerId))return;
