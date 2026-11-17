@@ -2,8 +2,9 @@ let characterMovementBlend=0;
 function frame(now){
  const dt=Math.min(.05,(now-last)/1000||0);last=now;
  updateShots(dt);
- updateNPCs(dt);
  updateCat(dt);
+ updateCatImpacts(dt);
+ updateNPCs(dt);
  let mx=padX+(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),
  my=padY+(keys.s||keys.arrowdown?1:0)-(keys.w||keys.arrowup?1:0);
  const tilt=Math.min(1,Math.hypot(mx,my)),active=tilt>.12;
@@ -18,19 +19,30 @@ function frame(now){
   running=tilt>.72;
   const metersPerSecond=running?3.15+(tilt-.72)/.28*2.25:1.15+tilt*2.85;
   const dx=vx*dt*metersPerSecond,dz=vz*dt*metersPerSecond;
-  const beforeX=player.x,beforeZ=player.z;
-  const nx=clamp(player.x+dx,-112,112),nz=clamp(player.z+dz,-112,112);
-  if(!blocked(nx,player.z)&&!npcBlocks(nx,player.z)&&!catBlocks(nx,player.z))player.x=nx;
-  if(!blocked(player.x,nz)&&!npcBlocks(player.x,nz)&&!catBlocks(player.x,nz))player.z=nz;
-  const moved=Math.hypot(player.x-beforeX,player.z-beforeZ);
+  const entity=cat.controlled?cat:player;
+  const beforeX=entity.x,beforeZ=entity.z;
+  const speed=cat.controlled?(.65+Math.min(2.2,Math.sqrt(cat.scale)*.32)):1;
+  const nx=clamp(entity.x+dx*speed,-112,112),nz=clamp(entity.z+dz*speed,-112,112);
+  if(cat.controlled){
+   const radius=Math.min(2.4,.25+cat.scale*.30);
+   if(!catBlockedAt(nx,entity.z,radius))entity.x=nx;
+   if(!catBlockedAt(entity.x,nz,radius))entity.z=nz;
+  }else{
+   if(!blocked(nx,entity.z)&&!npcBlocks(nx,entity.z)&&!catBlocks(nx,entity.z))entity.x=nx;
+   if(!blocked(entity.x,nz)&&!npcBlocks(entity.x,nz)&&!catBlocks(entity.x,nz))entity.z=nz;
+  }
+  const moved=Math.hypot(entity.x-beforeX,entity.z-beforeZ);
   movedDistance=moved;
   if(moved>.0001){
-   player.heading=Math.atan2(vx,vz);
+   entity.heading=Math.atan2(vx,vz);
+   if(cat.controlled){cat.walkPhase+=moved*Math.PI/Math.max(.7,cat.scale*.9);}
+   else {
    // Advance one half-stride for each physical footstep, matching the footfall SE.
    walk+=moved*Math.PI/(running?1.12:.78);
    stepDistance+=moved;
    const stride=running?1.12:.78;
    if(stepDistance>=stride){stepDistance%=stride;footstep(running)}
+   }
   }
  }
 
@@ -46,6 +58,8 @@ function frame(now){
  renderDetailedPlayer(player.x,player.z,player.heading,walk,characterMovementBlend,running);
  renderNPCs();
  renderCat();
+ for(const car of catCars)renderCatCar(car);
+ renderCatDebris();
  // Identify the selected building in editor mode without changing the building itself.
  if(editorOpen&&!shootState.enabled){
   if(fixtureEditMode){
@@ -75,15 +89,17 @@ function frame(now){
 
  // Free-look pitch: remain above the street while allowing an upward view of the sky.
  // Upward pitch does not drag the camera below the ground or underneath buildings.
- const focusX=shootState.enabled?shootState.focusX:player.x;
- const focusZ=shootState.enabled?shootState.focusZ:player.z;
- const idealEye=[focusX+Math.sin(cameraYaw)*cameraDistance*.84,
- 1.35+cameraDistance*.25,
- focusZ+Math.cos(cameraYaw)*cameraDistance*.84];
+ const focusX=shootState.enabled?shootState.focusX:cat.controlled?cat.x:player.x;
+ const focusZ=shootState.enabled?shootState.focusZ:cat.controlled?cat.z:player.z;
+ const cameraFocusHeight=cat.controlled&&!shootState.enabled?Math.max(1.35,cat.scale*.73):1.35;
+ const cameraRange=cat.controlled&&!shootState.enabled?Math.max(cameraDistance,cat.scale*2.4+4):cameraDistance;
+ const idealEye=[focusX+Math.sin(cameraYaw)*cameraRange*.84,
+ cameraFocusHeight+cameraRange*.25,
+ focusZ+Math.cos(cameraYaw)*cameraRange*.84];
  // v21: exploration alone resolves walls and shelving between player and camera.
  // Shot mode uses the exact stored composition, with no automatic repositioning.
  const eye=shootState.enabled?idealEye:resolveExplorationCamera(
-  [player.x,1.35,player.z],idealEye,dt);
+  [focusX,cameraFocusHeight,focusZ],idealEye,dt);
  // The shake does not change the player's position or saved camera framing.
  if(!shootState.enabled){eye[0]+=catCameraShake(dt)}
  const dir=[-Math.sin(cameraYaw)*Math.cos(cameraPitch),
@@ -94,7 +110,7 @@ function frame(now){
  const vp=mat4.mul(mat4.perspective(1.05,viewWidth/h,.1,350),mat4.look(eye,look));
  gl.uniformMatrix4fv(locVP,false,vp);
  bind(staticBuffer);gl.drawArrays(gl.TRIANGLES,0,staticArray.length/6);
- for(const b of townBuildings){bind(b.buffer);gl.drawArrays(gl.TRIANGLES,0,b.count)}
+ for(const b of townBuildings){if(b.catDestroyed)continue;bind(b.buffer);gl.drawArrays(gl.TRIANGLES,0,b.count)}
  for(const item of convenienceBuffers){bind(item.buffer);gl.drawArrays(gl.TRIANGLES,0,item.count)}
  bind(avatarBuffer);
  // Alpha blend only the ground decal, and keep it out of the depth buffer.
