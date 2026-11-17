@@ -3,10 +3,11 @@
 const canvas=document.getElementById('scene'),gl=canvas.getContext('webgl',{antialias:true,alpha:false,powerPreference:'high-performance'});
 if(!gl){document.body.textContent='この端末ではWebGLを使用できません';throw Error('WebGL unavailable')}
 const vs='attribute vec3 p;attribute vec3 color;uniform mat4 vp;varying vec3 c;void main(){gl_Position=vp*vec4(p,1.);c=color;}';
-const fs='precision mediump float;varying vec3 c;void main(){gl_FragColor=vec4(c,1.);}';
+const fs='precision mediump float;varying vec3 c;uniform float opacity;void main(){gl_FragColor=vec4(c,opacity);}';
 function shader(type,source){const s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s}
 const prog=gl.createProgram();gl.attachShader(prog,shader(gl.VERTEX_SHADER,vs));gl.attachShader(prog,shader(gl.FRAGMENT_SHADER,fs));gl.linkProgram(prog);gl.useProgram(prog);
-const locP=gl.getAttribLocation(prog,'p'),locC=gl.getAttribLocation(prog,'color'),locVP=gl.getUniformLocation(prog,'vp');
+const locP=gl.getAttribLocation(prog,'p'),locC=gl.getAttribLocation(prog,'color'),locVP=gl.getUniformLocation(prog,'vp'),locOpacity=gl.getUniformLocation(prog,'opacity');
+gl.uniform1f(locOpacity,1);
 const vertices=[];
 function color(hex){return [(hex>>16&255)/255,(hex>>8&255)/255,(hex&255)/255]}
 function tri(a,b,c,col){for(const v of [a,b,c])vertices.push(...v,...col)}
