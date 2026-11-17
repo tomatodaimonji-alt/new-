@@ -1749,9 +1749,10 @@ function pineSupermarketPOI(style='standard',condition='normal',force=false){
   for(let z=aisleStart;z<=aisleEnd;z++){
    const retained=x===west+3&&z===aisleStart;
    const keptEmpty=x===west+3&&z===aisleEnd;
-   if(condition==='damaged'&&!retained&&!keptEmpty&&t(x,z)<=2)continue;
+   const keptSparse=w<=18&&x>cx&&z===aisleStart;
+   if(condition==='damaged'&&!retained&&!keptEmpty&&!keptSparse&&t(x,z)<=2)continue;
    const k=t(x,z);
-   const shelf=retained?'pineSuperShelfStocked':keptEmpty?'pineSuperShelfEmpty':k<7?'pineSuperShelfEmpty':k<14?'pineSuperShelfSparse':k<20?'pineSuperShelf':'pineSuperShelfStocked';
+   const shelf=retained?'pineSuperShelfStocked':keptEmpty?'pineSuperShelfEmpty':keptSparse?'pineSuperShelfSparse':k<7?'pineSuperShelfEmpty':k<14?'pineSuperShelfSparse':k<20?'pineSuperShelf':'pineSuperShelfStocked';
    put(x,z,shelf);
   }
   if(aisleStart<=aisleEnd)put(x,aisleEnd+1,'pineSuperShelfEnd');
