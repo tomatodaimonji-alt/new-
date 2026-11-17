@@ -57,6 +57,11 @@ function frame(now){
   vertices[i]=px+dx*cs+dz*sn;
   vertices[i+2]=pz-dx*sn+dz*cs;
  }
+ // Identify the selected building in editor mode without changing the building itself.
+ if(editorOpen){
+  const picked=selectedShop();
+  box(picked.x,picked.height+.28,picked.z,.52,.38,.52,0xffd65c);
+ }
  const arr=new Float32Array(vertices);gl.bindBuffer(gl.ARRAY_BUFFER,avatarBuffer);gl.bufferData(gl.ARRAY_BUFFER,arr,gl.DYNAMIC_DRAW);
  const dpr=Math.min(2,window.devicePixelRatio||1),w=Math.round(canvas.clientWidth*dpr),h=Math.round(canvas.clientHeight*dpr);
  if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}gl.viewport(0,0,w,h);gl.enable(gl.DEPTH_TEST);gl.clearColor(.56,.73,.83,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
