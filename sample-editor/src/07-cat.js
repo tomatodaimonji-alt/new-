@@ -1,20 +1,37 @@
-// v30: a single scalable, original low-poly cat; offline WebGL geometry.
+// v31: a single scalable, original low-poly cat; offline WebGL geometry.
 const cat={x:0,z:12,scale:1.5,time:0,heading:Math.PI,walkPhase:0,
- punch:0,punchTime:0,purr:true,purrIntensity:0,step:0};
+ punch:0,punchTime:0,purr:true,purrIntensity:0,step:0,controlled:false,impactDone:false,impactCount:0};
 const catScaleInput=document.getElementById('catScale');
 const catSizeText=document.getElementById('catSizeText');
 const catPurrButton=document.getElementById('catPurr');
 const catPunchButton=document.getElementById('catPunch');
 const catFindButton=document.getElementById('catFind');
+const catControlButton=document.getElementById('catControl');
+const catActionButton=document.getElementById('catAction');
 catScaleInput.addEventListener('input',()=>{
  cat.scale=Math.max(.5,Math.min(12,Number(catScaleInput.value)||1));
  catSizeText.textContent=cat.scale.toFixed(1)+'倍';
 });
 catPunchButton.addEventListener('click',()=>{
  unlockAudio();
- cat.punchTime=0.001;
- cat.punch=0;
+ startCatPunch();
 });
+catControlButton.addEventListener('click',()=>{
+ if(shootState.enabled)return;
+ cat.controlled=!cat.controlled;
+ resetStick();
+ if(cat.controlled){cameraDistance=Math.max(cameraDistance,cat.scale*2+4);cameraYaw=cat.heading+Math.PI;}
+ catControlButton.textContent=cat.controlled?'人間に戻る':'猫を操作';
+ catActionButton.hidden=!cat.controlled;
+ catFindButton.hidden=cat.controlled;
+});
+catActionButton.addEventListener('click',()=>{unlockAudio();startCatPunch()});
+window.addEventListener('keydown',e=>{if((e.code==='Space'||e.key===' ')&&cat.controlled&&!e.repeat){e.preventDefault();unlockAudio();startCatPunch()}});
+function startCatPunch(){
+ if(shootState.enabled||cat.punchTime)return false;
+ cat.punchTime=.001;cat.punch=0;cat.impactDone=false;
+ return true;
+}
 catPurrButton.addEventListener('click',()=>{
  unlockAudio();
  cat.purr=!cat.purr;
@@ -33,15 +50,19 @@ function catBlocks(x,z){
 function updateCat(dt){
  const t=Math.max(0,Math.min(.05,dt));
  cat.time+=t;
- // Slow idle pacing stays in the road; the animal is not free-ranging AI.
- cat.walkPhase+=t*(cat.punchTime?0:.85);
- cat.x=Math.sin(cat.time*.12)*1.8;
- cat.z=12+Math.sin(cat.time*.17)*1.5;
- cat.heading=Math.PI+Math.sin(cat.time*.12)*.4;
+ // Keep a stationary idle cat when human-controlled mode is selected.
+ if(!cat.controlled){
+  cat.walkPhase+=t*(cat.punchTime?0:.85);
+  cat.x=Math.sin(cat.time*.12)*1.8;
+  cat.z=12+Math.sin(cat.time*.17)*1.5;
+  cat.heading=Math.PI+Math.sin(cat.time*.12)*.4;
+ }
  if(cat.punchTime){
   cat.punchTime+=t;
-  const q=cat.punchTime/1.25;
-  cat.punch=q<1?Math.pow(Math.sin(Math.PI*q),2):0;
+  const q=cat.punchTime/.36;
+  // Snappy acceleration: 0.12 seconds to contact, fast recoil.
+  cat.punch=q<1?Math.pow(Math.sin(Math.PI*Math.min(1,q)),.67):0;
+  if(q>=.32&&!cat.impactDone){cat.impactDone=true;cat.impactCount=catStrike()}
   if(q>=1)cat.punchTime=0;
  }
  cat.purrIntensity+=((cat.purr?1:0)-cat.purrIntensity)*Math.min(1,t*3);
@@ -50,7 +71,7 @@ function updateCat(dt){
 function catTriangle(a,b,c,tint){tri(a,b,c,color(tint));tri(c,b,a,color(tint))}
 function renderCat(){
  const start=vertices.length;
- const pace=cat.punchTime?0:Math.sin(cat.walkPhase*2)*.045;
+ const pace=cat.punchTime?0:Math.sin(cat.walkPhase*2)*.075;
  // Local cat faces -Z; all geometry is scaled/rotated as one unit.
  const fur=0xb9a490,highlight=0xd5c4ad,dark=0x6d635b;
  playerOval(0,.64,.07,.35,.36,.64,fur,14,10); // trunk
