@@ -30,7 +30,9 @@ function editShop(action){
   const next=+(b[key]+delta).toFixed(2);
   if(key==='height'&&next<3){editNotice.textContent='高さの下限';return}
   if(key==='x'&&Math.abs(next)<5.4+b.depth*.5){editNotice.textContent='歩行者通路のため移動不可';return}
-  if(key==='x'&&Math.abs(next)>90||key==='z'&&Math.abs(next)>110){
+  const area=scene.pois[0].bounds;
+  if((key==='x'&&(next<area.minX||next>area.maxX))||
+     (key==='z'&&(next<area.minZ||next>area.maxZ))){
    editNotice.textContent='区画の外には移動できません';return;
   }
   // Do not overlap other building footprints when moving a shop.
