@@ -35,6 +35,11 @@ const requirements = [
  ['portrait preview', 'id="portraitGuide"'],
  ['frame crop', 'gl.scissor(viewX,0,viewWidth,h)'],
  ['shooting UI', 'id="shootPanel"'],
+ ['convenience POI', "id:'convenience-study'"],
+ ['independent fixtures', 'function renderStoreFixture('],
+ ['walkable convenience entrance', 'function convenienceBlocked('],
+ ['store render', 'for(const item of convenienceBuffers)'],
+ ['store navigation', 'id="storeJump"'],
 ];
 for (const [name, token] of requirements) {
  if (!html.includes(token)) throw new Error('Missing feature: ' + name);
