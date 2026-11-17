@@ -76,12 +76,23 @@ function renderStoreFixture(o){
   box(x,1.05,z-.16,.39,.32,.09,0x263944);
   box(x,1.08,z-.215,.28,.22,.017,0x6c98a9);
   box(x+.3,1.01,z+.16,.23,.13,.24,0xddddce);
+  // Barcode scanner and card/QR payment reader.
+  box(x-.27,.99,z+.15,.14,.12,.19,0x343a3a);
+  box(x-.27,1.10,z+.15,.11,.035,.14,0x7da8ad);
+  box(x+.30,1.16,z+.18,.17,.025,.13,0x425b61);
+  // Small receipt and counter keypad.
+  box(x+.08,1.00,z+.17,.15,.028,.13,0xbcc2b6);
+  for(let i=0;i<3;i++)box(x+.01+i*.065,1.027,z+.17,.03,.006,.07,0x7c8685);
   return;
  }
  if(type==='checkout'){
   box(x,0,z,w,.9,d,0xa58d72);
   box(x,.90,z,w+.12,.12,d+.14,0x5d6261);
   box(x,.13,z-d/2,.12,.75,d*.48,0x877b66);
+  // Checkout basket and divider; product-facing counter stays uncluttered.
+  box(x-w*.34,1.027,z+.24,.36,.09,.30,0x4f7272);
+  box(x-w*.34,1.05,z+.24,.29,.045,.24,0x879c91);
+  box(x+.8,.99,z+.15,.035,.10,.45,0x8b9b96);
   return;
  }
  if(type==='fridge'){
@@ -90,11 +101,7 @@ function renderStoreFixture(o){
   for(let shelf=0;shelf<4;shelf++){
    const y=.47+shelf*.47;
    box(x,y,z-d/2-.11,w-.22,.055,.15,0xc2d0ce);
-   for(let k=0;k<8;k++){
-    const xx=x-w*.43+(k+.5)*(w*.86/8);
-    box(xx,y+.06,z-d/2-.17,.18,.23,.10,
-      [0x66a4b9,0xbd8b5c,0x67916f,0xe4d2ae,0xb6695f][(shelf+k)%5]);
-   }
+   populateColdCase(o,y,shelf);
   }
   // Narrow divisions and refrigerator handles.
   box(x,0,z-d/2-.20,.045,h-.14,.06,0xced4d4);
@@ -117,14 +124,7 @@ function renderStoreFixture(o){
  for(let tier=0;tier<4;tier++){
   const y=.28+tier*(h-.35)/4;
   box(x,y,z,w,.05,d,0xb6bab4);
-  for(const face of [-1,1]){
-   const px=x+face*(w/2+.035);
-   for(let i=0;i<9;i++){
-    const zz=z-d*.45+(i+.5)*d*.9/9;
-    const col=[0xbc8b53,0xb85f4e,0x7c9970,0xd7b65d,0x738ea1,0xc4a3a2][(i+2*tier+(face+1))%6];
-    box(px,y+.045,zz,.14,.19+.025*(i%3),d*.075,col);
-   }
-  }
+  for(const face of [-1,1])populateStoreShelf(o,tier,face,y);
  }
  box(x,h-.07,z,w+.04,.13,d+.03,0x999e96);
 }
