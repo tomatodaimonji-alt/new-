@@ -1,11 +1,12 @@
 let characterMovementBlend=0;
 function frame(now){
  const dt=Math.min(.05,(now-last)/1000||0);last=now;
+ updateShots(dt);
  let mx=padX+(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),
  my=padY+(keys.s||keys.arrowdown?1:0)-(keys.w||keys.arrowup?1:0);
  const tilt=Math.min(1,Math.hypot(mx,my)),active=tilt>.12;
  let running=false,movedDistance=0;
- if(active){
+ if(active&&!shootState.enabled){
   const length=Math.hypot(mx,my);
   mx/=length;my/=length;
   // Use camera-relative movement so the stick always matches screen direction.
@@ -39,24 +40,40 @@ function frame(now){
  // Character geometry is owned by a dedicated, reusable character module.
  renderDetailedPlayer(player.x,player.z,player.heading,walk,characterMovementBlend,running);
  // Identify the selected building in editor mode without changing the building itself.
- if(editorOpen){
+ if(editorOpen&&!shootState.enabled){
   const picked=selectedShop();
   box(picked.x,picked.height+.28,picked.z,.52,.38,.52,0xffd65c);
  }
  const arr=new Float32Array(vertices);gl.bindBuffer(gl.ARRAY_BUFFER,avatarBuffer);gl.bufferData(gl.ARRAY_BUFFER,arr,gl.DYNAMIC_DRAW);
  const dpr=Math.min(2,window.devicePixelRatio||1),w=Math.round(canvas.clientWidth*dpr),h=Math.round(canvas.clientHeight*dpr);
- if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}gl.viewport(0,0,w,h);gl.enable(gl.DEPTH_TEST);gl.clearColor(.56,.73,.83,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+ if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}
+ const portrait=shootState.enabled&&shootState.portrait;
+ const viewWidth=portrait?Math.min(w,Math.round(h*9/16)):w;
+ const viewX=portrait?Math.floor((w-viewWidth)/2):0;
+ gl.viewport(0,0,w,h);
+ gl.enable(gl.DEPTH_TEST);
+ gl.clearColor(portrait?.075:.56,portrait?.087:.73,portrait?.105:.83,1);
+ gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+ gl.viewport(viewX,0,viewWidth,h);
+ if(portrait){
+  gl.enable(gl.SCISSOR_TEST);gl.scissor(viewX,0,viewWidth,h);
+  gl.clearColor(.56,.73,.83,1);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+ }
+
  // Free-look pitch: remain above the street while allowing an upward view of the sky.
  // Upward pitch does not drag the camera below the ground or underneath buildings.
- const eye=[player.x+Math.sin(cameraYaw)*cameraDistance*.84,
+ const focusX=shootState.enabled?shootState.focusX:player.x;
+ const focusZ=shootState.enabled?shootState.focusZ:player.z;
+ const eye=[focusX+Math.sin(cameraYaw)*cameraDistance*.84,
  1.35+cameraDistance*.25,
- player.z+Math.cos(cameraYaw)*cameraDistance*.84];
+ focusZ+Math.cos(cameraYaw)*cameraDistance*.84];
  const dir=[-Math.sin(cameraYaw)*Math.cos(cameraPitch),
  Math.sin(cameraPitch),
  -Math.cos(cameraYaw)*Math.cos(cameraPitch)];
  const look=[eye[0]+dir[0]*cameraDistance,eye[1]+dir[1]*cameraDistance,
  eye[2]+dir[2]*cameraDistance];
- const vp=mat4.mul(mat4.perspective(1.05,w/h,.1,350),mat4.look(eye,look));
+ const vp=mat4.mul(mat4.perspective(1.05,viewWidth/h,.1,350),mat4.look(eye,look));
  gl.uniformMatrix4fv(locVP,false,vp);
  bind(staticBuffer);gl.drawArrays(gl.TRIANGLES,0,staticArray.length/6);
  for(const b of townBuildings){bind(b.buffer);gl.drawArrays(gl.TRIANGLES,0,b.count)}
@@ -67,6 +84,7 @@ function frame(now){
  gl.drawArrays(gl.TRIANGLES,0,shadowVertices);
  gl.uniform1f(locOpacity,1);gl.depthMask(true);gl.disable(gl.BLEND);
  gl.drawArrays(gl.TRIANGLES,shadowVertices,arr.length/6-shadowVertices);
+ if(portrait)gl.disable(gl.SCISSOR_TEST);
  requestAnimationFrame(frame);
 }
 resetStick();requestAnimationFrame(frame);
