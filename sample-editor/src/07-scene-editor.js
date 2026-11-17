@@ -29,7 +29,7 @@ function editShop(action){
   const [key,delta]=operation;
   const next=+(b[key]+delta).toFixed(2);
   if(key==='height'&&next<3){editNotice.textContent='高さの下限';return}
-  if(key==='x'&&Math.abs(next)<5.3){editNotice.textContent='歩行者通路のため移動不可';return}
+  if(key==='x'&&Math.abs(next)<5.4+b.depth*.5){editNotice.textContent='歩行者通路のため移動不可';return}
   if(key==='x'&&Math.abs(next)>90||key==='z'&&Math.abs(next)>110){
    editNotice.textContent='区画の外には移動できません';return;
   }
