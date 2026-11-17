@@ -1788,6 +1788,56 @@ function pineSupermarketPOI(style='standard',condition='normal',force=false){
  put(west+Math.floor(w*.25),south+1,'pineSuperSign');
  put(west+Math.floor(w*.72),south+1,'pineSuperSign');
  for(const z of [north+1,north+4])put(Math.min(siteW-3,west+w+4),z,'pineSuperBollard');
+ // Preserve one customer entrance while ensuring every accessible interior tile connects.
+ // 0-1 BFS chooses the fewest wall/fixture edits; no unbounded brute-force room drilling.
+ const accessClear=new Set(['pineSuperDoor','plasterwallDoor','woodwallDoor','brickwallDoor','pineSuperLogo','pineSuperStripe','pineSuperCurb','pineSuperSign']);
+ const inside=(x,z)=>x>west&&x<west+w-1&&z>north&&z<south;
+ const kOf=(x,z)=>x+','+z,blockers=new Map();
+ for(const o of world)if(o.y===0&&inside(o.x,o.z)&&!isFloor(o.type)&&!accessClear.has(o.type))blockers.set(kOf(o.x,o.z),o);
+ const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+ const flood=()=>{
+  const seen=new Set(),queue=[[cx,south-1]];seen.add(kOf(cx,south-1));
+  for(let j=0;j<queue.length;j++)for(const [dx,dz] of dirs){
+   const nx=queue[j][0]+dx,nz=queue[j][1]+dz,k=kOf(nx,nz);
+   if(!inside(nx,nz)||seen.has(k)||blockers.has(k))continue;
+   seen.add(k);queue.push([nx,nz]);
+  }
+  return seen;
+ };
+ let accessRepairs=0;
+ for(let check=0;check<w*d;check++){
+  const reached=flood(),remaining=[];
+  for(let z=north+1;z<south;z++)for(let x=west+1;x<west+w-1;x++){
+   const k=kOf(x,z);if(!blockers.has(k)&&!reached.has(k))remaining.push(k);
+  }
+  if(!remaining.length)break;
+  const dist=new Map(),prev=new Map(),queue=[...reached],remainingSet=new Set(remaining);
+  for(const k of reached)dist.set(k,0);
+  let goal=null;
+  for(let qi=0;qi<queue.length;qi++){
+   const k=queue[qi],here=dist.get(k),[x,z]=k.split(',').map(Number);
+   if(remainingSet.has(k)){goal=k;break}
+   for(const [dx,dz] of dirs){
+    const nx=x+dx,nz=z+dz,nk=kOf(nx,nz);if(!inside(nx,nz))continue;
+    const cost=blockers.has(nk)?1:0,next=here+cost;
+    if(next>=(dist.get(nk)??Infinity))continue;
+    dist.set(nk,next);prev.set(nk,k);
+    if(cost)queue.push(nk);else queue.splice(qi+1,0,nk);
+   }
+  }
+  if(!goal)break;
+  let removed=0;
+  for(let k=goal;prev.has(k);k=prev.get(k)){
+   const wall=blockers.get(k);if(!wall)continue;
+   // Turn one partition wall into a door; do not alter outer walls or user assets.
+   if(/wall/i.test(wall.type)||wall.type==='ironwall')wall.type='plasterwallDoor';
+   else world.splice(world.indexOf(wall),1);
+   blockers.delete(k);removed++;
+  }
+  if(!removed)break;
+  accessRepairs+=removed;
+ }
+ // Internal repairs never affect the perimeter or main facade.
  // Roof is an independent hideable story, not a collision-bearing floor.
  for(let z=north;z<=south;z++)for(let x=west;x<west+w;x++){
   if(condition==='damaged'&&t(x,z)<4)continue;
