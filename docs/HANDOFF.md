@@ -14,7 +14,7 @@ GitHub: `tomatodaimonji-alt/new-` / main
 既存の2つの巨大なHTMLを**一文字も変更せず**、順番が固定された複数ファイルへ切り出した。ソースは連結断片であり、まだ独立ES Modulesではない。単一HTMLの完成物とエディターは残す。以降の編集は `src/` が基本。
 
 ## 変更する前に
-1. 本書・`docs/PROJECT_RULES.md`・`docs/GAME_SPEC.md`・`docs/WORLD_SPEC.md` を読む。
+1. 本書・`docs/PROJECT_RULES.md`・**`docs/QUALITY_ISSUES.md`**・`docs/GAME_SPEC.md`・`docs/WORLD_SPEC.md` を読む。過去の失敗と再発防止策を確認し、同種問題は重複登録せず既存記録に統合する。
 2. 最新GitHubの完成HTMLと分割ソースの一致を確認する（`node scripts/build.mjs --check`）。
 3. 対象の実装と関連するエディター/ゲームの両方を読む。断片境界をまたぐ変数に注意。
 4. 変更は最小限にし、`node scripts/build.mjs` → `node scripts/test-build.mjs`。
