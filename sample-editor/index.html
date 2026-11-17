@@ -15,7 +15,7 @@ body.shooting #storeJump{display:none}
 body.shooting #pad,body.shooting #editToggle,body.shooting #editPanel,body.shooting #v,body.shooting #hint{display:none}
 body.shooting #shootToggle{right:12px;top:39px}
 @media(max-height:420px){#pad{width:120px;height:120px}#stick{left:37px;top:37px;width:46px;height:46px}}
-</style></head><body><canvas id="scene"></canvas><div id="v">v21</div><div id="hint">サンプルエディター</div>
+</style></head><body><canvas id="scene"></canvas><div id="v">v22</div><div id="hint">サンプルエディター</div>
 <button id="editToggle" type="button">編集</button>
 <div id="editPanel" hidden>
 <strong>POI：谷中銀座・再現研究区画</strong>
@@ -253,6 +253,101 @@ for(const object of scene.objects.filter(o=>o.type==='utility-pole')){
 // Street crosses small paved courts at each end so the scene is explorable.
 box(0,-.155,-62,20,.1,14,0xa99983);
 box(0,-.155,62,20,.1,14,0xa99983);
+// v22: original, unbranded procedural convenience products.
+// Each SKU is reusable; the display instances are generated deterministically.
+// No image textures, external model fetches or arbitrary per-frame allocations.
+const STORE_PRODUCTS=[
+ {id:'green-tea',kind:'bottle',body:0x69845b,label:0xc9d0ab,accent:0x3f684b},
+ {id:'mineral-water',kind:'bottle',body:0x8aafb7,label:0xd9e6df,accent:0x4c8095},
+ {id:'canned-coffee',kind:'can',body:0x876247,label:0xd9be87,accent:0x4a352a},
+ {id:'fruit-juice',kind:'carton',body:0xddae6c,label:0xf5d8a5,accent:0xc96b45},
+ {id:'rice-ball',kind:'riceball',body:0xf0eee3,label:0xc7c3b5,accent:0x344a40},
+ {id:'snack-bag',kind:'pouch',body:0xbb695e,label:0xe6bd77,accent:0x8b3e42},
+ {id:'cup-noodles',kind:'cup',body:0xe0d6b9,label:0xa45b48,accent:0x754b3b},
+ {id:'bread',kind:'pouch',body:0xcbb284,label:0xe5d2ab,accent:0x927652},
+ {id:'boxed-food',kind:'carton',body:0x6e9576,label:0xe0d7b3,accent:0xb4a060}
+];
+const skuById=Object.fromEntries(STORE_PRODUCTS.map(s=>[s.id,s]));
+function storeCylinder(x,y,z,rx,rz,height,hex,segments=9,topHex=hex){
+ const bottom=y,top=y+height,shade=color(hex),topColor=color(topHex);
+ for(let i=0;i<segments;i++){
+  const a=i*2*Math.PI/segments,b=(i+1)*2*Math.PI/segments;
+  const pa=[x+Math.cos(a)*rx,bottom,z+Math.sin(a)*rz];
+  const pb=[x+Math.cos(b)*rx,bottom,z+Math.sin(b)*rz];
+  const pc=[pb[0],top,pb[2]],pd=[pa[0],top,pa[2]];
+  quad(pa,pb,pc,pd,shade.map(v=>v*(.79+.15*Math.cos((a+b)/2))));
+  tri([x,top,z],pd,pc,topColor);
+ }
+}
+function renderOriginalProduct(id,x,y,z,scale=1){
+ const sku=skuById[id];if(!sku)return;
+ const {kind,body,label,accent}=sku;
+ if(kind==='bottle'){
+  storeCylinder(x,y,z,.075*scale,.077*scale,.265*scale,body,9);
+  storeCylinder(x,y+.261*scale,z,.048*scale,.047*scale,.082*scale,body,8);
+  storeCylinder(x,y+.338*scale,z,.047*scale,.047*scale,.038*scale,accent,8);
+  storeCylinder(x,y+.105*scale,z,.079*scale,.080*scale,.100*scale,label,9);
+  box(x,y+.127*scale,z-.084*scale,.074*scale,.029*scale,.009*scale,accent);
+ }else if(kind==='can'){
+  storeCylinder(x,y,z,.082*scale,.082*scale,.275*scale,body,10);
+  storeCylinder(x,y+.274*scale,z,.080*scale,.080*scale,.009*scale,0xc5c4bc,10);
+  storeCylinder(x,y+.069*scale,z,.084*scale,.084*scale,.150*scale,label,10);
+  box(x,y+.147*scale,z-.087*scale,.080*scale,.053*scale,.012*scale,accent);
+ }else if(kind==='riceball'){
+  // triangular rice silhouette approximated by a small triangular prism.
+  const a=[x-.13*scale,y,z-.055*scale],b=[x+.13*scale,y,z-.055*scale],c=[x,y+.24*scale,z-.055*scale];
+  const aa=[a[0],a[1],z+.055*scale],bb=[b[0],b[1],z+.055*scale],cc=[c[0],c[1],z+.055*scale];
+  tri(a,b,c,color(body));tri(bb,aa,cc,color(body));
+  quad(a,aa,bb,b,color(0xd2d0c6));quad(b,bb,cc,c,color(0xe2dfd1));
+  box(x,y+.025*scale,z-.063*scale,.092*scale,.105*scale,.018*scale,accent);
+  box(x,y+.065*scale,z-.075*scale,.072*scale,.025*scale,.01*scale,label);
+ }else if(kind==='cup'){
+  storeCylinder(x,y,z,.091*scale,.091*scale,.245*scale,body,10);
+  storeCylinder(x,y+.24*scale,z,.103*scale,.103*scale,.025*scale,0xe9e2cf,10);
+  box(x,y+.084*scale,z-.092*scale,.095*scale,.08*scale,.014*scale,label);
+  box(x,y+.142*scale,z-.098*scale,.062*scale,.027*scale,.014*scale,accent);
+ }else if(kind==='pouch'){
+  box(x,y,z,.22*scale,.285*scale,.10*scale,body);
+  box(x,y+.06*scale,z-.058*scale,.16*scale,.15*scale,.009*scale,label);
+  box(x,y+.085*scale,z-.066*scale,.11*scale,.034*scale,.01*scale,accent);
+  box(x,y+.268*scale,z,.23*scale,.021*scale,.109*scale,accent);
+ }else{
+  box(x,y,z,.185*scale,.305*scale,.16*scale,body);
+  box(x,y+.050*scale,z-.086*scale,.128*scale,.160*scale,.009*scale,label);
+  box(x,y+.135*scale,z-.092*scale,.084*scale,.036*scale,.01*scale,accent);
+  box(x,y+.29*scale,z,.186*scale,.025*scale,.162*scale,accent);
+ }
+}
+// Shelf faces show identifiable silhouettes rather than uniform colored blocks.
+function populateStoreShelf(o,tier,face,shelfY){
+ const count=o.type==='side-rack'?7:8;
+ const kindSet=tier===0?['rice-ball','bread','boxed-food']:
+  tier===1?['cup-noodles','snack-bag','boxed-food']:
+  tier===2?['fruit-juice','canned-coffee','green-tea']:
+  ['snack-bag','cup-noodles','mineral-water'];
+ const frontX=o.x+face*(o.width/2+.03);
+ for(let i=0;i<count;i++){
+  const zz=o.z-o.depth*.43+(i+.5)*o.depth*.86/count;
+  const kind=kindSet[(i+o.id.length)%kindSet.length];
+  const xx=frontX+face*.025;
+  // Rows of objects stay above shelves, with no additional collision volumes.
+  renderOriginalProduct(kind,xx,shelfY+.053,zz,.79);
+ }
+ // Shelf-edge label strip and short price-card blocks.
+ box(frontX,shelfY-.022,o.z,.035,.046,o.depth*.91,0xe2dfce);
+ for(let i=0;i<4;i++){
+  const zz=o.z-o.depth*.36+i*o.depth*.24;
+  box(frontX+face*.022,shelfY-.016,zz,.012,.019,o.depth*.105,0x856e56);
+ }
+}
+function populateColdCase(o,shelfY,tier){
+ const kinds=['green-tea','mineral-water','canned-coffee','fruit-juice'];
+ for(let i=0;i<8;i++){
+  const xx=o.x-o.width*.42+(i+.5)*o.width*.84/8;
+  const kind=kinds[(i+tier+o.id.length)%kinds.length];
+  renderOriginalProduct(kind,xx,shelfY+.055,o.z-o.depth*.5-.15,.65);
+ }
+}
 // v20: independent, walkable convenience-store study. 1 unit approximately 1 m.
 // Store modeled without a central roof sheet so the interior stays visible from
 // the existing third-person camera. Perimeter eaves and ceiling fixtures remain.
@@ -331,12 +426,23 @@ function renderStoreFixture(o){
   box(x,1.05,z-.16,.39,.32,.09,0x263944);
   box(x,1.08,z-.215,.28,.22,.017,0x6c98a9);
   box(x+.3,1.01,z+.16,.23,.13,.24,0xddddce);
+  // Barcode scanner and card/QR payment reader.
+  box(x-.27,.99,z+.15,.14,.12,.19,0x343a3a);
+  box(x-.27,1.10,z+.15,.11,.035,.14,0x7da8ad);
+  box(x+.30,1.16,z+.18,.17,.025,.13,0x425b61);
+  // Small receipt and counter keypad.
+  box(x+.08,1.00,z+.17,.15,.028,.13,0xbcc2b6);
+  for(let i=0;i<3;i++)box(x+.01+i*.065,1.027,z+.17,.03,.006,.07,0x7c8685);
   return;
  }
  if(type==='checkout'){
   box(x,0,z,w,.9,d,0xa58d72);
   box(x,.90,z,w+.12,.12,d+.14,0x5d6261);
   box(x,.13,z-d/2,.12,.75,d*.48,0x877b66);
+  // Checkout basket and divider; product-facing counter stays uncluttered.
+  box(x-w*.34,1.027,z+.24,.36,.09,.30,0x4f7272);
+  box(x-w*.34,1.05,z+.24,.29,.045,.24,0x879c91);
+  box(x+.8,.99,z+.15,.035,.10,.45,0x8b9b96);
   return;
  }
  if(type==='fridge'){
@@ -345,11 +451,7 @@ function renderStoreFixture(o){
   for(let shelf=0;shelf<4;shelf++){
    const y=.47+shelf*.47;
    box(x,y,z-d/2-.11,w-.22,.055,.15,0xc2d0ce);
-   for(let k=0;k<8;k++){
-    const xx=x-w*.43+(k+.5)*(w*.86/8);
-    box(xx,y+.06,z-d/2-.17,.18,.23,.10,
-      [0x66a4b9,0xbd8b5c,0x67916f,0xe4d2ae,0xb6695f][(shelf+k)%5]);
-   }
+   populateColdCase(o,y,shelf);
   }
   // Narrow divisions and refrigerator handles.
   box(x,0,z-d/2-.20,.045,h-.14,.06,0xced4d4);
@@ -372,14 +474,7 @@ function renderStoreFixture(o){
  for(let tier=0;tier<4;tier++){
   const y=.28+tier*(h-.35)/4;
   box(x,y,z,w,.05,d,0xb6bab4);
-  for(const face of [-1,1]){
-   const px=x+face*(w/2+.035);
-   for(let i=0;i<9;i++){
-    const zz=z-d*.45+(i+.5)*d*.9/9;
-    const col=[0xbc8b53,0xb85f4e,0x7c9970,0xd7b65d,0x738ea1,0xc4a3a2][(i+2*tier+(face+1))%6];
-    box(px,y+.045,zz,.14,.19+.025*(i%3),d*.075,col);
-   }
-  }
+  for(const face of [-1,1])populateStoreShelf(o,tier,face,y);
  }
  box(x,h-.07,z,w+.04,.13,d+.03,0x999e96);
 }
