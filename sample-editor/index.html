@@ -16,7 +16,7 @@ body.shooting #storeJump{display:none}
 body.shooting #pad,body.shooting #editToggle,body.shooting #editPanel,body.shooting #v,body.shooting #hint{display:none}
 body.shooting #shootToggle{right:12px;top:39px}
 @media(max-height:420px){#pad{width:120px;height:120px}#stick{left:37px;top:37px;width:46px;height:46px}}
-</style></head><body><canvas id="scene"></canvas><div id="v">v23</div><div id="hint">サンプルエディター</div>
+</style></head><body><canvas id="scene"></canvas><div id="v">v24</div><div id="hint">サンプルエディター</div>
 <button id="editToggle" type="button">編集</button>
 <div id="editPanel" hidden>
 <strong>POI：谷中銀座・再現研究区画</strong>
@@ -958,6 +958,8 @@ const PLAYER_STYLE=Object.freeze({
  trousers:0x424c5b,trouserShadow:0x303a46,
  shoes:0x383d41,sole:0xc1c2bb,eye:0x292b30
 });
+// NPCs share the same geometry, gait and pose with lightweight palette overrides.
+let currentCharacterStyle=PLAYER_STYLE;
 function playerShade(hex,nx,ny,nz){
  const base=color(hex);
  const diffuse=Math.max(0,nx*-.48+ny*.75+nz*-.46);
@@ -1023,7 +1025,7 @@ function playerTorso(hip,lean,skinny=1){
   const point=(r,angle)=>[Math.cos(angle)*r[1]*skinny,
    r[0]+hip,Math.sin(angle)*r[2]+lean+(r[0]-1)*-.025];
   const mid=(p+q)*.5;
-  const tone=j%6===0?PLAYER_STYLE.shirtDark:PLAYER_STYLE.shirt;
+  const tone=j%6===0?currentCharacterStyle.shirtDark:currentCharacterStyle.shirt;
   quad(point(a,p),point(b,p),point(b,q),point(a,q),
    playerShade(tone,Math.cos(mid),.15,Math.sin(mid)));
  }
@@ -1091,7 +1093,8 @@ function solveWalkingKnee(hip,ankle){
 }
 // Procedural skinned-like pose: separate meshes share moving anatomical joints.
 // Rendering is built each frame without external models, Web APIs or textures.
-function renderDetailedPlayer(px,pz,heading,phase,effort,running){
+function renderDetailedPlayer(px,pz,heading,phase,effort,running,style=PLAYER_STYLE){
+ currentCharacterStyle=style;
  const start=vertices.length;
  const amount=clamp((effort-.08)/.62,0,1);
  const moving=amount>.015;
@@ -1101,7 +1104,7 @@ function renderDetailedPlayer(px,pz,heading,phase,effort,running){
  const hipHeight=moving?(running?.021:.013)*(1-Math.cos(stridePhase*2)) : 0;
  const torsoLean=(running?-.065:-.018)*amount;
  const headCounter=Math.sin(stridePhase)*.016*amount;
- const C=PLAYER_STYLE;
+ const C=style;
  // Waist moves over the planted foot while shoulders counter-sway.
  playerOval(hipShift,.880+hipHeight,.008,.217,.115,.148,C.trousers,12,7);
  playerTorso(hipHeight,torsoLean);
@@ -1187,10 +1190,106 @@ function renderDetailedPlayer(px,pz,heading,phase,effort,running){
  }
  return (vertices.length-start)/6;
 }
+// v24: a small deterministic cast for short-form scenes.
+// The same registered NPC instances serve exploration and shooting; no duplicate
+// meshes or town generators. All coordinates are authored for the convenience POI.
+const NPC_STYLES={
+ clerk:Object.freeze({...PLAYER_STYLE,
+  skin:0xd3a88a,shadowSkin:0xb88d72,hair:0x38302c,
+  shirt:0x4c775e,shirtDark:0x365a45,shirtHighlight:0xb7bc88,
+  trousers:0x323a43,trouserShadow:0x252c34,shoes:0x292b30}),
+ visitorA:Object.freeze({...PLAYER_STYLE,
+  skin:0xc69a79,shadowSkin:0x9e725c,hair:0x302d30,
+  shirt:0xad7767,shirtDark:0x86554d,shirtHighlight:0xc49b7f,
+  trousers:0x52647a,trouserShadow:0x384b5c}),
+ visitorB:Object.freeze({...PLAYER_STYLE,
+  skin:0xd3ac91,shadowSkin:0xb58d72,hair:0x594337,
+  shirt:0xb5b6a8,shirtDark:0x929485,shirtHighlight:0xe0d6bc,
+  trousers:0x4a5860,trouserShadow:0x353f46})
+};
+const npcs=[
+ {id:'npc-clerk-01',poiId:'convenience-study',role:'clerk',style:'clerk',
+  x:-5.45,z:73.55,heading:Math.PI,phase:0,speed:0,
+  state:'checkout',wait:0,route:[],routeIndex:0,effort:0},
+ {id:'npc-shopper-01',poiId:'convenience-study',role:'shopper',style:'visitorA',
+  x:1.08,z:74.3,heading:0,phase:1.3,speed:.69,
+  state:'walking',wait:0,route:[
+   {x:1.08,z:77.15,lookX:3.15,lookZ:77.2,wait:3.5},
+   {x:1.08,z:82.90,lookX:3.15,lookZ:83.1,wait:3.0},
+   {x:.32,z:75.25,lookX:-5.6,lookZ:72.35,wait:2.2},
+   {x:1.08,z:74.3,lookX:0,lookZ:70,wait:.7}
+  ],routeIndex:0,effort:0},
+ {id:'npc-shopper-02',poiId:'convenience-study',role:'shopper',style:'visitorB',
+  x:-1.06,z:84.45,heading:Math.PI,phase:3,speed:.62,
+  state:'walking',wait:0,route:[
+   {x:-1.06,z:83.15,lookX:-3.15,lookZ:83.1,wait:2.8},
+   {x:-1.06,z:77.15,lookX:-3.15,lookZ:77.2,wait:4.2},
+   {x:-1.06,z:81.8,lookX:3.15,lookZ:83.1,wait:1.4},
+   {x:-1.06,z:84.45,lookX:0,lookZ:88,wait:.8}
+  ],routeIndex:0,effort:0}
+ ];
+// NPC motion is time-based and only advances when an unobstructed route exists.
+// Bystanders stop for merchandise; the clerk remains behind the checkout.
+function updateNPCs(dt){
+ const time=Math.min(.05,Math.max(0,dt));
+ for(const npc of npcs){
+  if(npc.role==='clerk'){
+   npc.heading=Math.PI+.12*Math.sin((npc.phase+=time*.32));
+   npc.effort=0;
+   continue;
+  }
+  const waypoint=npc.route[npc.routeIndex];
+  if(npc.state==='looking'){
+   npc.wait-=time;
+   const face=Math.atan2(waypoint.lookX-npc.x,waypoint.lookZ-npc.z);
+   const diff=Math.atan2(Math.sin(face-npc.heading),Math.cos(face-npc.heading));
+   npc.heading+=diff*Math.min(1,time*4);
+   npc.effort=0;
+   if(npc.wait<=0){npc.state='walking';npc.routeIndex=(npc.routeIndex+1)%npc.route.length}
+   continue;
+  }
+  const dx=waypoint.x-npc.x,dz=waypoint.z-npc.z;
+  const distance=Math.hypot(dx,dz);
+  if(distance<.12){
+   npc.x=waypoint.x;npc.z=waypoint.z;
+   npc.state='looking';npc.wait=waypoint.wait;npc.effort=0;
+   continue;
+  }
+  const move=Math.min(distance,npc.speed*time),ux=dx/distance,uz=dz/distance;
+  const nextX=npc.x+ux*move,nextZ=npc.z+uz*move;
+  // Shared wall/fixture collision and player clearance.
+  if(blocked(nextX,nextZ)||Math.hypot(nextX-player.x,nextZ-player.z)<.48){
+   npc.effort=0;
+   continue;
+  }
+  npc.x=nextX;npc.z=nextZ;
+  npc.heading=Math.atan2(ux,uz);
+  npc.phase+=move*Math.PI/.78;
+  npc.effort=Math.min(1,npc.effort+time*7);
+ }
+}
+// One small circular player collider per person; existing shelf/wall rules remain.
+function npcBlocks(x,z){
+ return npcs.some(npc=>Math.hypot(x-npc.x,z-npc.z)<.43);
+}
+function renderNpcShadows(){
+ for(const npc of npcs){
+  renderPlayerShadow(npc.x,npc.z,npc.heading,npc.effort,npc.phase);
+ }
+}
+function renderNPCs(){
+ for(const npc of npcs){
+  renderDetailedPlayer(npc.x,npc.z,npc.heading,npc.phase,npc.effort,false,
+    NPC_STYLES[npc.style]);
+ }
+ // Reset shared character palette for consistency with any later player effects.
+ currentCharacterStyle=PLAYER_STYLE;
+}
 let characterMovementBlend=0;
 function frame(now){
  const dt=Math.min(.05,(now-last)/1000||0);last=now;
  updateShots(dt);
+ updateNPCs(dt);
  let mx=padX+(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),
  my=padY+(keys.s||keys.arrowdown?1:0)-(keys.w||keys.arrowup?1:0);
  const tilt=Math.min(1,Math.hypot(mx,my)),active=tilt>.12;
@@ -1207,8 +1306,8 @@ function frame(now){
   const dx=vx*dt*metersPerSecond,dz=vz*dt*metersPerSecond;
   const beforeX=player.x,beforeZ=player.z;
   const nx=clamp(player.x+dx,-112,112),nz=clamp(player.z+dz,-112,112);
-  if(!blocked(nx,player.z))player.x=nx;
-  if(!blocked(player.x,nz))player.z=nz;
+  if(!blocked(nx,player.z)&&!npcBlocks(nx,player.z))player.x=nx;
+  if(!blocked(player.x,nz)&&!npcBlocks(player.x,nz))player.z=nz;
   const moved=Math.hypot(player.x-beforeX,player.z-beforeZ);
   movedDistance=moved;
   if(moved>.0001){
@@ -1225,9 +1324,12 @@ function frame(now){
  characterMovementBlend+=((movedDistance>.0001?tilt:0)-characterMovementBlend)*Math.min(1,dt*9);
  vertices.length=0;
  // A transparent contact shadow anchors the feet without requiring a shadow map.
- const shadowVertices=renderPlayerShadow(player.x,player.z,player.heading,characterMovementBlend,walk);
- // Character geometry is owned by a dedicated, reusable character module.
+ renderPlayerShadow(player.x,player.z,player.heading,characterMovementBlend,walk);
+ renderNpcShadows();
+ const shadowVertices=vertices.length/6;
+ // Reuse the same body, clothes and gait implementation for the player and NPCs.
  renderDetailedPlayer(player.x,player.z,player.heading,walk,characterMovementBlend,running);
+ renderNPCs();
  // Identify the selected building in editor mode without changing the building itself.
  if(editorOpen&&!shootState.enabled){
   const picked=selectedShop();
