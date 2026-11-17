@@ -1746,8 +1746,12 @@ function pineSupermarketPOI(style='standard',condition='normal',force=false){
  const shelfStep=style==='wholesale'?4:3;
  for(let x=west+3;x<west+w-3;x+=shelfStep){
   if(Math.abs(x-cx)<=2)continue;
-  for(let z=aisleStart;z<=aisleEnd;z++)
-   if(condition!=='damaged'||t(x,z)>2)put(x,z,'pineSuperShelf');
+  for(let z=aisleStart;z<=aisleEnd;z++){
+   if(condition==='damaged'&&t(x,z)<=2)continue;
+   const k=t(x,z);
+   const shelf=k<7?'pineSuperShelfEmpty':k<14?'pineSuperShelfSparse':k<20?'pineSuperShelf': 'pineSuperShelfStocked';
+   put(x,z,shelf);
+  }
   if(aisleStart<=aisleEnd)put(x,aisleEnd+1,'pineSuperShelfEnd');
  }
  for(let z=aisleStart;z<=aisleEnd;z++)for(const x of [west+1,west+w-2])put(x,z,'pineSuperCooler');
@@ -1775,7 +1779,7 @@ function pineSupermarketPOI(style='standard',condition='normal',force=false){
  for(let i=0;i<cars;i++){
   const side=i%2===0?-1:1,offset=3+((i>>1)%3)*2;
   const x=side<0?west+offset:west+w-1-offset,z=south+7+Math.floor(i/2)*4;
-  if(x>2&&x<siteW-3&&z<siteH-3&&Math.abs(x-cx)>2)put(x,z,'pineSuperCar');
+  if(x>2&&x<siteW-3&&z<siteH-3&&Math.abs(x-cx)>2)put(x,z,'pineSuperCar',0,(i%3===0?1:i%4===0?3:0));
  }
  put(west+1,south+1,'pineSuperCart');put(west+2,south+1,'pineSuperCart');
  put(west+Math.floor(w*.25),south+1,'pineSuperSign');
