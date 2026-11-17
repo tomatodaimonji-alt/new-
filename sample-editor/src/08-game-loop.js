@@ -3,6 +3,7 @@ function frame(now){
  const dt=Math.min(.05,(now-last)/1000||0);last=now;
  updateShots(dt);
  updateNPCs(dt);
+ updateCat(dt);
  let mx=padX+(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),
  my=padY+(keys.s||keys.arrowdown?1:0)-(keys.w||keys.arrowup?1:0);
  const tilt=Math.min(1,Math.hypot(mx,my)),active=tilt>.12;
@@ -19,8 +20,8 @@ function frame(now){
   const dx=vx*dt*metersPerSecond,dz=vz*dt*metersPerSecond;
   const beforeX=player.x,beforeZ=player.z;
   const nx=clamp(player.x+dx,-112,112),nz=clamp(player.z+dz,-112,112);
-  if(!blocked(nx,player.z)&&!npcBlocks(nx,player.z))player.x=nx;
-  if(!blocked(player.x,nz)&&!npcBlocks(player.x,nz))player.z=nz;
+  if(!blocked(nx,player.z)&&!npcBlocks(nx,player.z)&&!catBlocks(nx,player.z))player.x=nx;
+  if(!blocked(player.x,nz)&&!npcBlocks(player.x,nz)&&!catBlocks(player.x,nz))player.z=nz;
   const moved=Math.hypot(player.x-beforeX,player.z-beforeZ);
   movedDistance=moved;
   if(moved>.0001){
@@ -39,10 +40,12 @@ function frame(now){
  // A transparent contact shadow anchors the feet without requiring a shadow map.
  renderPlayerShadow(player.x,player.z,player.heading,characterMovementBlend,walk);
  renderNpcShadows();
+ renderCatShadow();
  const shadowVertices=vertices.length/6;
  // Reuse the same body, clothes and gait implementation for the player and NPCs.
  renderDetailedPlayer(player.x,player.z,player.heading,walk,characterMovementBlend,running);
  renderNPCs();
+ renderCat();
  // Identify the selected building in editor mode without changing the building itself.
  if(editorOpen&&!shootState.enabled){
   if(fixtureEditMode){
@@ -81,6 +84,8 @@ function frame(now){
  // Shot mode uses the exact stored composition, with no automatic repositioning.
  const eye=shootState.enabled?idealEye:resolveExplorationCamera(
   [player.x,1.35,player.z],idealEye,dt);
+ // The shake does not change the player's position or saved camera framing.
+ if(!shootState.enabled){eye[0]+=catCameraShake(dt)}
  const dir=[-Math.sin(cameraYaw)*Math.cos(cameraPitch),
  Math.sin(cameraPitch),
  -Math.cos(cameraYaw)*Math.cos(cameraPitch)];
