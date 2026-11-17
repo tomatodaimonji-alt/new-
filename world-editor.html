@@ -356,6 +356,11 @@ palette.push(...[
  ['pineSuperPacking','レジ横サッカー台','decor'],
  ['pineSuperRegisterGate','レジ通路ゲート','decor']
 ].map(([id,name,cat])=>({id,name,cat,icon:'▣'})));
+palette.push(...[
+ ['pineSuperShelfEmpty','スーパー・空の棚','decor'],
+ ['pineSuperShelfSparse','スーパー・残りわずかな棚','decor'],
+ ['pineSuperShelfStocked','スーパー・食品が残る棚','decor']
+].map(([id,name,cat])=>({id,name,cat,icon:'▤'})));
 const catalog=new Map(palette.map(p=>[p.id,p]));let selected='wall',mode='place',rotation=0,level=0,hideUpper=false,worldMaxLevel=0,world=[],models=[],prefabs=[],undoStack=[],redoStack=[],hover=null,dragPainting=false,yaw=Math.PI/4,zoom=1,panX=0,panZ=0,dirty=true,sceneMesh=null,cursorMesh=null,cursorDirty=true,modelParts=[],activeModelId=null;
 const byId=id=>catalog.get(id)||models.find(m=>m.id===id)||prefabs.find(p=>p.id===id);
 const cellKey=(x,z,y=0)=>x+','+z+','+y;
@@ -3035,18 +3040,57 @@ function pineSupermarketGeometry(m,o){
     B(0,0,0,1,1.39,1,c);
     B(0,1.31,.42,.99,.12,.13,[.34,.51,.42]);
    }else if(o.type==='pineSuperRoof'){
-    B(0,-.04,0,1,.17,1,[.37,.40,.41]);
-    B(0,.105,0,.94,.04,.94,[.49,.50,.51]);
+    // Single watertight roof slab: avoids coplanar top surfaces / z-fighting.
+    B(0,-.015,0,.998,.155,.998,[.43,.46,.47]);
    }else if(o.type==='pineSuperLogo'){
     B(0,1.42,.52,7.4,.82,.10,[.17,.37,.30]);
     B(0,1.38,.581,7.30,.055,.025,[.83,.70,.41]);
    }else if(o.type==='pineSuperCar'){
-    const body=(o.x+o.z)%3===0?[.53,.34,.26]:[.35,.43,.46],wheel=[.14,.15,.15];
-    B(0,.27,0,1.55,.48,2.42,body);
-    B(0,.71,-.10,1.31,.41,1.26,[.33,.37,.38]);
-    B(0,.75,.55,1.11,.17,.06,[.25,.30,.31]);
-    for(const xx of [-.72,.72])for(const zz of [-.76,.80])B(xx,.06,zz,.18,.35,.34,wheel);
-    B(0,.34,1.24,1.28,.10,.06,[.68,.66,.57]);
+    // Two silhouettes: hatchback and sedan; rotate as one mesh for parking variation.
+    const cm=mesh(),C=(dx,dy,dz,w,h,d,c)=>cube(cm,dx,dy,dz,w,h,d,c);
+    const hatch=((o.x*7+o.z*11)&1)===0,aged=(o.x+o.z)%3===0;
+    const paint=aged?[.41,.48,.46]:[.55,.36,.27],shadow=[.26,.28,.28],
+      tyre=[.13,.14,.15],rim=[.44,.45,.42],window=[.19,.29,.31],
+      bumper=[.32,.35,.34],light=[.78,.75,.62],red=[.57,.22,.18];
+    C(0,.24,0,1.78,.44,2.76,paint); // steel body and low wheel arch
+    C(0,.20,0,1.79,.22,2.62,shadow);
+    C(0,.43,-.02,1.69,.31,2.47,paint);
+    const back=hatch?-.92:-.72;
+    C(0,.70,(back+.46)/2,1.49,.16,1.20,paint);
+    // Raked windshield and rear glass (angled strips rather than square cab).
+    const glassQuad=(zNear,zFar,bottom,top)=>{
+      quad(cm,[-.68,bottom,zNear],[.68,bottom,zNear],[.60,top,zFar],[-.60,top,zFar],window);
+    };
+    glassQuad(.53,.29,.66,1.04);
+    glassQuad(back-.12,back+.18,.65,1.03);
+    C(0,1.01,(back+.30)/2,1.22,.095,hatch?1.09:.84,paint);
+    for(const side of [-1,1]){
+      // Side door windows, pillar separation and mirrors.
+      C(side*.746,.80,-.14,.027,.31,.85,window);
+      C(side*.78,.68,.59,.14,.09,.14,bumper);
+      C(side*.71,.50,.15,.045,.015,.66,[.70,.63,.48]);
+      for(const zWheel of [-.90,.90]){
+        C(side*.83,.06,zWheel,.24,.37,.48,tyre);
+        C(side*.96,.11,zWheel,.045,.17,.24,rim);
+      }
+      C(side*.65,.47,1.36,.30,.115,.056,light);
+      C(side*.65,.43,-1.36,.30,.12,.056,red);
+    }
+    C(0,.38,1.40,1.61,.14,.12,bumper);
+    C(0,.36,-1.40,1.61,.14,.12,bumper);
+    C(0,.44,1.46,.43,.105,.015,[.63,.65,.61]); // license plate
+    if(aged){
+      C(-.35,.47,.98,.31,.009,.17,[.47,.28,.20]);
+      C(.45,.43,-.93,.24,.009,.15,[.35,.28,.23]);
+    }
+    const r=((o.rot||0)%4+4)%4;
+    for(let i=0;i<cm.p.length;i+=3){
+      const [dx,dz]=rot2(cm.p[i],cm.p[i+2],r);
+      const [nx,nz]=rot2(cm.n[i],cm.n[i+2],r);
+      m.p.push(x+dx,y+cm.p[i+1],z+dz);
+      m.n.push(nx,cm.n[i+1],nz);
+      m.c.push(cm.c[i],cm.c[i+1],cm.c[i+2]);
+    }
    }else if(o.type==='pineSuperGlass'||o.type==='pineSuperDoor'){
     B(0,.04,0,.97,.12,.92,ivory);
     for(const xx of [-.45,.45])B(xx,.14,0,.07,1.28,.08,steel);
@@ -3061,10 +3105,23 @@ function pineSupermarketGeometry(m,o){
     B(0,.65,0,.96,1.28,.12,metal);
     for(let i=0;i<9;i++)B(0,.13+i*.145,.076,.96,.025,.035,steel);
     B(0,1.39,0,.98,.15,.20,dark);
-   }else if(o.type==='pineSuperShelf'){
-    for(const h of [.17,.54,.92])B(0,h,0,.79,.07,.91,metal);
-    for(const xx of [-.37,.37])B(xx,.04,0,.055,1.06,.92,steel);
-    B(0,1.10,0,.81,.045,.94,wooden);
+   }else if(['pineSuperShelf','pineSuperShelfEmpty','pineSuperShelfSparse','pineSuperShelfStocked'].includes(o.type)){
+    const bare=o.type==='pineSuperShelfEmpty',sparse=o.type==='pineSuperShelfSparse',
+      stocked=o.type==='pineSuperShelfStocked',hash=(o.x*37+o.z*91+o.y*13)>>>0;
+    for(const h of [.19,.53,.87])B(0,h,0,.79,.065,.91,metal);
+    for(const xx of [-.37,.37])B(xx,.04,0,.055,1.08,.91,steel);
+    B(0,1.12,0,.81,.045,.94,wooden);
+    // Cosmetic shelf contents only: no inventory items or interactions yet.
+    const items=bare?0:sparse?2:stocked?9:o.type==='pineSuperShelf'?4:0;
+    const colors=[[.69,.51,.32],[.44,.56,.37],[.71,.70,.55],[.52,.48,.66],[.68,.36,.30]];
+    for(let i=0;i<items;i++){
+      const h=[.255,.592,.925][i%3];
+      const side=Math.floor(i/3)%3;
+      const xx=[-.24,0,.24][side],zz=((hash+i*17)%3-1)*.21;
+      const c=colors[(hash+i*7)%colors.length];
+      B(xx,h,zz,.17,.12+(i%3)*.014,.13,c);
+      if(i%2===0)B(xx,h+.095,zz,.17,.016,.13,[.73,.71,.62]);
+    }
    }else if(o.type==='pineSuperCooler'){
     B(0,.04,0,.87,.81,.79,pale);
     B(0,.61,.36,.80,.28,.035,glass);
@@ -3284,6 +3341,7 @@ function connectedFenceGeometry(m,o,lookup){
 // Editor walk-through uses the same bare avatar and stride/facing rules as PINE gameplay.
 let poiWalkActive=false,poiWalkX=0,poiWalkZ=0,poiWalkMesh=null,poiWalkOldRoof=false;
 let poiWalkFacing=2,poiWalkStarted=-10000,poiWalkFromX=0,poiWalkFromZ=0;
+let poiWalkViewX=0,poiWalkViewZ=0,poiWalkNextReady=0;
 const POI_WALK_MS=160;
 function poiWalkIndoor(){
  const a=world.filter(o=>o.type==='pineSuperRoof');if(!a.length)return false;
@@ -3303,8 +3361,8 @@ function poiWalkAvatar(now=performance.now()){
  const m=mesh(),body=mesh();
  characterHuman(body,0,0,0,false);
  const t=Math.max(0,Math.min(1,(now-poiWalkStarted)/POI_WALK_MS)),smooth=t*t*(3-2*t);
- const x=poiWalkFromX+(poiWalkX-poiWalkFromX)*smooth+.5;
- const z=poiWalkFromZ+(poiWalkZ-poiWalkFromZ)*smooth+.5;
+ const x=poiWalkViewX+.5;
+ const z=poiWalkViewZ+.5;
  const y=terrainY(poiWalkX,poiWalkZ)+.03;
  const walking=t<1&&(poiWalkFromX!==poiWalkX||poiWalkFromZ!==poiWalkZ);
  const stride=walking?Math.sin(t*Math.PI*2)*.18:0;
@@ -3322,7 +3380,13 @@ function poiWalkAvatar(now=performance.now()){
  poiWalkMesh=upload(m);
 }
 function poiWalkFrame(now){
- if(poiWalkActive&&now-poiWalkStarted<=POI_WALK_MS+25)poiWalkAvatar(now);
+ if(!poiWalkActive)return;
+ const t=Math.max(0,Math.min(1,(now-poiWalkStarted)/POI_WALK_MS)),smooth=t*t*(3-2*t);
+ poiWalkViewX=poiWalkFromX+(poiWalkX-poiWalkFromX)*smooth;
+ poiWalkViewZ=poiWalkFromZ+(poiWalkZ-poiWalkFromZ)*smooth;
+ panX=poiWalkViewX+.5-MAP_W/2;panZ=poiWalkViewZ+.5-MAP_H/2;
+ if(now-poiWalkStarted<=POI_WALK_MS+32)poiWalkAvatar(now);
+ cursorDirty=true;
 }
 function poiWalkCanStep(x,z){
  if(!validPos(x,z))return false;
@@ -3332,18 +3396,20 @@ function poiWalkCanStep(x,z){
  !['pineSuperDoor','plasterwallDoor','woodwallDoor','brickwallDoor','pineSuperLogo','pineSuperStripe','pineSuperCurb','pineSuperBollard','pineSuperSign'].includes(o.type));
  return !blocking;
 }
-function poiWalkCamera(){panX=poiWalkX+.5-MAP_W/2;panZ=poiWalkZ+.5-MAP_H/2;zoom=Math.max(zoom,.82);cursorDirty=true}
+function poiWalkCamera(){panX=poiWalkViewX+.5-MAP_W/2;panZ=poiWalkViewZ+.5-MAP_H/2;zoom=Math.max(zoom,.82);cursorDirty=true}
 function poiWalkStatus(){const e=$('poiWalkCoords');if(e)e.textContent='位置 '+(poiWalkX+1)+','+(poiWalkZ+1)+(poiWalkIndoor()?'・店内':'・屋外')}
 function poiWalkStep(dx,dz){
  if(!poiWalkActive)return;
+ const now=performance.now();
+ if(now<poiWalkNextReady)return;
  poiWalkFacing=dx===1?1:dx===-1?3:dz===-1?0:2;
  if(!poiWalkCanStep(poiWalkX+dx,poiWalkZ+dz)){poiWalkAvatar();return}
  poiWalkFromX=poiWalkX;poiWalkFromZ=poiWalkZ;poiWalkX+=dx;poiWalkZ+=dz;
- poiWalkStarted=performance.now();
- poiWalkRoof();poiWalkAvatar(poiWalkStarted);poiWalkCamera();poiWalkStatus();
+ poiWalkStarted=now;poiWalkNextReady=now+POI_WALK_MS;
+ poiWalkRoof();poiWalkAvatar(poiWalkStarted);poiWalkStatus();
 }
 function poiWalkReset(x,z){
- poiWalkX=x;poiWalkZ=z;poiWalkFromX=x;poiWalkFromZ=z;poiWalkStarted=-10000;
+ poiWalkX=x;poiWalkZ=z;poiWalkFromX=x;poiWalkFromZ=z;poiWalkViewX=x;poiWalkViewZ=z;poiWalkStarted=-10000;poiWalkNextReady=0;
  if(poiWalkActive){poiWalkRoof();poiWalkAvatar();poiWalkCamera();poiWalkStatus()}
 }
 function poiWalkSet(active){
@@ -3353,7 +3419,7 @@ function poiWalkSet(active){
   poiWalkOldRoof=hideUpper;
   hideUpper=false;$('hideUpper').checked=false;
   level=0;$('level').value='0';mode='move';
-  poiWalkFromX=poiWalkX;poiWalkFromZ=poiWalkZ;
+  poiWalkFromX=poiWalkX;poiWalkFromZ=poiWalkZ;poiWalkViewX=poiWalkX;poiWalkViewZ=poiWalkZ;
   poiWalkRoof();poiWalkCamera();
  }else{
   hideUpper=poiWalkOldRoof;$('hideUpper').checked=hideUpper;
@@ -3458,7 +3524,7 @@ function zoomForFullMap(){
  const height=world.reduce((top,o)=>Math.max(top,o.y),0)*1.4+Math.max(0,...terrainHeights.values())*TERRAIN_STEP;return Math.max(.025,Math.min(4,9/(Math.max(horizontal,vertical)+height*.38)*1.18));
 }
 function showEntireMap(){panX=panZ=0;zoom=zoomForFullMap();cursorDirty=true}
-function parameters(){const q=layout(),halfH=9/zoom,halfW=halfH*q.aspect;const centerX=MAP_W/2+panX,centerZ=MAP_H/2+panZ,elev=.86,targetY=hideUpper?level*1.4:Math.min(8.5,worldMaxLevel*.7+Math.max(0,...terrainHeights.values())*TERRAIN_STEP*.5);const eye=[centerX+24*Math.sin(yaw)*Math.cos(elev),targetY+24*Math.sin(elev),centerZ+24*Math.cos(yaw)*Math.cos(elev)];return{...q,halfH,halfW,centerX,centerZ,elev,targetY,vp:mult(ortho(-halfW,halfW,-halfH,halfH,.1,100),look(eye,[centerX,targetY,centerZ]))}}
+function parameters(){const q=layout(),halfH=9/zoom,halfW=halfH*q.aspect;const centerX=MAP_W/2+panX,centerZ=MAP_H/2+panZ,elev=.86,targetY=poiWalkActive?0:hideUpper?level*1.4:Math.min(8.5,worldMaxLevel*.7+Math.max(0,...terrainHeights.values())*TERRAIN_STEP*.5);const eye=[centerX+24*Math.sin(yaw)*Math.cos(elev),targetY+24*Math.sin(elev),centerZ+24*Math.cos(yaw)*Math.cos(elev)];return{...q,halfH,halfW,centerX,centerZ,elev,targetY,vp:mult(ortho(-halfW,halfW,-halfH,halfH,.1,100),look(eye,[centerX,targetY,centerZ]))}}
 function cursorAt(clientX,clientY){
  const b=canvas.getBoundingClientRect(),p=parameters(),nx=(clientX-b.left)/b.width*2-1,ny=1-(clientY-b.top)/b.height*2,a=nx*p.halfW;
  let x=0,z=0,height=0;
@@ -5657,8 +5723,12 @@ function pineSupermarketPOI(style='standard',condition='normal',force=false){
  const shelfStep=style==='wholesale'?4:3;
  for(let x=west+3;x<west+w-3;x+=shelfStep){
   if(Math.abs(x-cx)<=2)continue;
-  for(let z=aisleStart;z<=aisleEnd;z++)
-   if(condition!=='damaged'||t(x,z)>2)put(x,z,'pineSuperShelf');
+  for(let z=aisleStart;z<=aisleEnd;z++){
+   if(condition==='damaged'&&t(x,z)<=2)continue;
+   const k=t(x,z);
+   const shelf=k<7?'pineSuperShelfEmpty':k<14?'pineSuperShelfSparse':k<20?'pineSuperShelf': 'pineSuperShelfStocked';
+   put(x,z,shelf);
+  }
   if(aisleStart<=aisleEnd)put(x,aisleEnd+1,'pineSuperShelfEnd');
  }
  for(let z=aisleStart;z<=aisleEnd;z++)for(const x of [west+1,west+w-2])put(x,z,'pineSuperCooler');
@@ -5686,7 +5756,7 @@ function pineSupermarketPOI(style='standard',condition='normal',force=false){
  for(let i=0;i<cars;i++){
   const side=i%2===0?-1:1,offset=3+((i>>1)%3)*2;
   const x=side<0?west+offset:west+w-1-offset,z=south+7+Math.floor(i/2)*4;
-  if(x>2&&x<siteW-3&&z<siteH-3&&Math.abs(x-cx)>2)put(x,z,'pineSuperCar');
+  if(x>2&&x<siteW-3&&z<siteH-3&&Math.abs(x-cx)>2)put(x,z,'pineSuperCar',0,(i%3===0?1:i%4===0?3:0));
  }
  put(west+1,south+1,'pineSuperCart');put(west+2,south+1,'pineSuperCart');
  put(west+Math.floor(w*.25),south+1,'pineSuperSign');
@@ -5885,7 +5955,7 @@ function poiStopRepeat(){if(poiWalkRepeat!==null){clearInterval(poiWalkRepeat);p
 for(const button of document.querySelectorAll('[data-poi-dir]')){
  const dirs={n:[0,-1],s:[0,1],w:[-1,0],e:[1,0]};
  const step=()=>poiWalkStep(...dirs[button.dataset.poiDir]);
- button.addEventListener('pointerdown',e=>{e.preventDefault();poiStopRepeat();step();poiWalkRepeat=setInterval(step,145);button.setPointerCapture(e.pointerId)});
+ button.addEventListener('pointerdown',e=>{e.preventDefault();poiStopRepeat();step();poiWalkRepeat=setInterval(step,175);button.setPointerCapture(e.pointerId)});
  for(const name of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(name,poiStopRepeat);
 }
 document.addEventListener('keydown',e=>{
