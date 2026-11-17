@@ -142,7 +142,7 @@ function solveWalkingKnee(hip,ankle){
 }
 // Procedural skinned-like pose: separate meshes share moving anatomical joints.
 // Rendering is built each frame without external models, Web APIs or textures.
-function renderDetailedPlayer(px,pz,heading,phase,effort,running,style=PLAYER_STYLE){
+function renderDetailedPlayer(px,pz,heading,phase,effort,running,style=PLAYER_STYLE,action='idle'){
  currentCharacterStyle=style;
  const start=vertices.length;
  const amount=clamp((effort-.08)/.62,0,1);
@@ -215,15 +215,18 @@ function renderDetailedPlayer(px,pz,heading,phase,effort,running,style=PLAYER_ST
   // The sleeve begins inside the shoulder line, joining the tapered chest.
   const shoulder=[side*.274,1.337+hipHeight,torsoLean*.50];
   const sleeveEnd=[side*.350,1.150+hipHeight,armSwing*.48+.004];
-  const elbow=[side*.363,1.047+hipHeight,armSwing*.76+.006];
-  const hand=[side*.376,.871+hipHeight,armSwing*1.18-.018];
+  const reaching=(side===1&&(action==='pick'||action==='carry'||action==='pay'));
+  const outward=action==='pick'?.58:action==='pay'?.45:.22;
+  const elbow=reaching?[side*.32,1.10+hipHeight,-.16]:[side*.363,1.047+hipHeight,armSwing*.76+.006];
+  const hand=reaching?[side*.35,action==='pick'?1.06+hipHeight:1.00+hipHeight,-outward]:
+    [side*.376,.871+hipHeight,armSwing*1.18-.018];
   playerLimb(shoulder,sleeveEnd,.106,.109,C.shirt);
   playerOval(...sleeveEnd,.101,.037,.103,C.shirtDark,9,5);
   playerLimb(sleeveEnd,elbow,.077,.083,C.skin);
   playerOval(...elbow,.070,.057,.076,C.skin,9,5);
   playerLimb(elbow,hand,.061,.068,C.skin);
   playerOval(...hand,.061,.088,.045,C.skin,10,7);
-  playerOval(side*.342,.874+hipHeight,hand[2]-.043,.022,.037,.031,C.shadowSkin,8,5);
+  playerOval(hand[0]-side*.034,hand[1]-.01,hand[2]-.043,.022,.037,.031,C.shadowSkin,8,5);
  }
  // Very small whole-body counter-twist: shoulders turn against pelvic stride.
  // Rotate locally sculpted vertices toward the gameplay heading once.
