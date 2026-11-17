@@ -1,6 +1,21 @@
 <!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover"><title>サンプルエディター</title><style>
-*{box-sizing:border-box;touch-action:none}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#92b8ce;font-family:sans-serif}canvas{display:block;width:100%;height:100%}#v{position:absolute;top:max(10px,env(safe-area-inset-top));left:20px;color:#fff;text-shadow:0 2px 4px #222;font:bold 15px sans-serif}#pad{position:absolute;left:max(25px,env(safe-area-inset-left));bottom:max(18px,env(safe-area-inset-bottom));width:150px;height:150px;border:2px solid #ffffff70;border-radius:50%;background:#13293755;box-shadow:0 0 15px #0003;touch-action:none}#stick{position:absolute;left:47px;top:47px;width:56px;height:56px;background:#e2e7e9ad;border:2px solid white;border-radius:50%;pointer-events:none}#hint{position:absolute;right:12px;top:12px;color:#fff;background:#1b2c3970;padding:5px 9px;border-radius:7px;font-size:12px}@media(max-height:420px){#pad{width:120px;height:120px}#stick{left:37px;top:37px;width:46px;height:46px}}
-</style></head><body><canvas id="scene"></canvas><div id="v">v13</div><div id="hint">サンプルエディター</div><div id="pad"><div id="stick"></div></div><script>
+*{box-sizing:border-box;touch-action:none}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#92b8ce;font-family:sans-serif}canvas{display:block;width:100%;height:100%}#v{position:absolute;top:max(10px,env(safe-area-inset-top));left:20px;color:#fff;text-shadow:0 2px 4px #222;font:bold 15px sans-serif}#pad{position:absolute;left:max(25px,env(safe-area-inset-left));bottom:max(18px,env(safe-area-inset-bottom));width:150px;height:150px;border:2px solid #ffffff70;border-radius:50%;background:#13293755;box-shadow:0 0 15px #0003;touch-action:none}#stick{position:absolute;left:47px;top:47px;width:56px;height:56px;background:#e2e7e9ad;border:2px solid white;border-radius:50%;pointer-events:none}#hint{position:absolute;right:12px;top:12px;color:#fff;background:#1b2c3970;padding:5px 9px;border-radius:7px;font-size:12px}#editToggle{position:absolute;right:12px;top:41px;z-index:6;background:#182733ca;color:#fff;border:1px solid #ffffff77;border-radius:8px;padding:6px 13px;font-size:13px}
+#editPanel{position:absolute;right:12px;top:80px;z-index:7;width:min(300px,48vw);padding:9px;background:#14232be8;color:#fff;border:1px solid #ffffff55;border-radius:9px;display:grid;gap:5px;font-size:12px}
+#editPanel[hidden]{display:none}#editInfo{font-size:11px;overflow-wrap:anywhere}#editNotice{color:#d4e8ae;min-height:14px;font-size:11px}
+#editPanel .editorRow{display:flex;gap:5px}#editPanel button{background:#435762;color:white;border:1px solid #ffffff55;border-radius:5px;padding:5px 7px;flex:1;font-size:12px}
+#editPanel button:active,#editToggle:active{background:#617c89}
+@media(max-height:420px){#pad{width:120px;height:120px}#stick{left:37px;top:37px;width:46px;height:46px}}
+</style></head><body><canvas id="scene"></canvas><div id="v">v14</div><div id="hint">サンプルエディター</div>
+<button id="editToggle" type="button">編集</button>
+<div id="editPanel" hidden>
+<strong>POI：谷中銀座・再現研究区画</strong>
+<div id="editInfo"></div>
+<div class="editorRow"><button data-edit="prev">前の建物</button><button data-edit="next">次の建物</button></div>
+<div class="editorRow"><button data-edit="xMinus">X −</button><button data-edit="xPlus">X ＋</button><button data-edit="zMinus">Z −</button><button data-edit="zPlus">Z ＋</button></div>
+<div class="editorRow"><button data-edit="hMinus">高さ −</button><button data-edit="hPlus">高さ ＋</button><button data-edit="reset">初期値に戻す</button></div>
+<div id="editNotice">変更はこの端末に自動保存</div>
+</div>
+<div id="pad"><div id="stick"></div></div><script>
 'use strict';
 const canvas=document.getElementById('scene'),gl=canvas.getContext('webgl',{antialias:true,alpha:false,powerPreference:'high-performance'});
 if(!gl){document.body.textContent='この端末ではWebGLを使用できません';throw Error('WebGL unavailable')}
@@ -33,6 +48,61 @@ function ellipsoid(cx,cy,cz,rx,ry,rz,hex,longitude=12,latitude=8){
  }
 }
 function seeded(a,b){let t=Math.sin(a*127.1+b*311.7)*43758.5453;return t-Math.floor(t)}
+// v14 scene registry: one POI owns independently addressable building and prop instances.
+// Values here are an authored starting layout, not surveyed real-world dimensions.
+const SCENE_STORAGE_KEY='sample-editor-scene-v1';
+const scene={
+ schema:1,
+ pois:[{id:'yanaka-ginza-study',name:'谷中銀座・再現研究区画',bounds:{minX:-19,maxX:19,minZ:-66,maxZ:66},source:'photo-inspired estimates',buildingIds:[],objectIds:[]}],
+ buildings:[],
+ objects:[],
+ selectedBuildingId:null
+};
+function defaultShop(side,k){
+ return {
+  id:'yanaka-'+(side===-1?'west':'east')+'-'+String(k+1).padStart(2,'0'),
+  poiId:'yanaka-ginza-study',type:'shop',side,k,
+  x:side*(8.65+seeded(k*17,side)*.52),
+  z:-51+k*7.25+(seeded(k,side)*.55-.275),
+  width:6.75+seeded(k,side*9)*.35,
+  depth:5.2+seeded(k*8,side)*1.3,
+  height:4.8+Math.floor(seeded(k*5,side)*3)*2.65,
+  material:'painted-plaster',source:'photo-inspired estimates'
+ };
+}
+for(const side of [-1,1])for(let k=0;k<15;k++)scene.buildings.push(defaultShop(side,k));
+for(let k=0;k<8;k++)for(const side of [-1,1]){
+ scene.objects.push({id:'pole-'+side+'-'+k,poiId:'yanaka-ginza-study',type:'utility-pole',
+  x:side*5.95,z:-48+k*14.2,height:7.1,source:'photo-inspired estimates'});
+}
+scene.pois[0].buildingIds=scene.buildings.map(b=>b.id);
+scene.pois[0].objectIds=scene.objects.map(o=>o.id);
+function restoreSceneEdits(){
+ try{
+  const saved=JSON.parse(localStorage.getItem(SCENE_STORAGE_KEY)||'null');
+  if(!saved||saved.schema!==1||!Array.isArray(saved.buildings))return;
+  for(const entry of saved.buildings){
+   const b=scene.buildings.find(item=>item.id===entry.id);
+   if(!b)continue;
+   for(const field of ['x','z','width','depth','height']){
+    const value=entry[field];
+    if(Number.isFinite(value)&&Math.abs(value)<200&&
+       (field==='x'||field==='z'||(field==='height'?value>=3:value>=3)))
+      b[field]=value;
+   }
+  }
+ }catch(err){console.warn('Scene edits unavailable',err)}
+}
+function saveSceneEdits(){
+ try{
+  localStorage.setItem(SCENE_STORAGE_KEY,JSON.stringify({
+   schema:scene.schema,
+   buildings:scene.buildings.map(b=>({id:b.id,x:b.x,z:b.z,width:b.width,depth:b.depth,height:b.height}))
+  }));
+  return true;
+ }catch(err){console.warn('Saving scene failed',err);return false;}
+}
+restoreSceneEdits();
 // Yanaka Ginza-inspired compact shopping street. Visual study: Taito ward streetscape
 // guidance and street-level photos. Dimensions are approximate, not surveyed geometry.
 // 1 world unit ~= 1 meter; narrow lane, low-rise mixed facades and varied storefront depths.
@@ -43,17 +113,14 @@ for(const side of [-1,1]){
  box(side*5.37,-.055,0,.24,.055,132,0x858784);
  box(side*5.87,-.045,0,.78,.08,132,0x9a9690);
 }
-// Individual building buffers are used for automatic near-camera occlusion.
+// The scene registry drives individual building buffers and their collision footprints.
 const townBuildings=[];
 const storePalettes=[0x9b8f7d,0xc1ad94,0xc4c2b5,0x998a79,0xa7b0a9,0x877c70,0xb6a48c];
 const awnings=[0x467269,0x824d49,0xc1ab79,0x425d73,0x76674a,0x865f40,0x537b83];
 const signage=[0x554a3d,0x3d5c51,0x755843,0x7b4842,0x4b5861,0x746340];
-function addStreetShop(side,k){
- const z=-51+k*7.25+(seeded(k,side)*.55-.275);
- const x=side*(8.65+seeded(k*17,side)*.52);
- const width=6.75+seeded(k,side*9)*.35;
- const depth=5.2+seeded(k*8,side)*1.3;
- const height=4.8+Math.floor(seeded(k*5,side)*3)*2.65;
+function renderStreetShop(shop){
+ const {side,k}=shop;
+ const x=shop.x,z=shop.z,width=shop.width,depth=shop.depth,height=shop.height;
  const wall=storePalettes[(k+(side>0?3:0))%storePalettes.length];
  const accent=awnings[(k*3+(side>0?1:0))%awnings.length];
  const front=x-side*depth*.5;
@@ -114,16 +181,18 @@ function addStreetShop(side,k){
   box(edge-side*.39,1.33,z+2.20,.08,.06,.53,0xd5c7a5);
  }
  const geometry=new Float32Array(vertices.splice(start));
+ if(shop.buffer)gl.deleteBuffer(shop.buffer);
  const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
  gl.bufferData(gl.ARRAY_BUFFER,geometry,gl.STATIC_DRAW);
- townBuildings.push({cx:x,cz:z,front,side,depth,width,buffer,count:geometry.length/6});
+ Object.assign(shop,{cx:x,cz:z,front,buffer,count:geometry.length/6});
+ return shop;
 }
-for(const side of [-1,1])for(let k=0;k<15;k++)addStreetShop(side,k);
+for(const shop of scene.buildings)townBuildings.push(renderStreetShop(shop));
 // Lanterns, utility poles, overhead cables and drainage add a credible lived-in streetscape.
-for(let k=0;k<8;k++){
- const z=-48+k*14.2;
- for(const side of [-1,1]){
-  const px=side*5.95;
+for(const object of scene.objects){
+ const z=object.z;
+ const side=Math.sign(object.x),px=object.x;
+ {
   box(px,0,z,.18,7.1,.18,0x676765);
   box(px,5.45,z,.36,.23,.40,0x8d8d86);
   box(px-side*.26,4.4,z+.46,.035,.12,1.12,0x565b56);
@@ -357,6 +426,65 @@ pad.addEventListener('pointerdown',e=>{
  }else moveStick(e);
 });for(const ev of ['pointerup','pointercancel','lostpointercapture'])pad.addEventListener(ev,e=>{if(e.pointerId===pointer)resetStick()});
 window.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true});window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});window.addEventListener('blur',()=>{resetStick();cameraTouches.clear();pinchActive=false;pinchDistance=0;gestureContacts.clear();mixedPinchActive=false;mixedPinchDistance=0});
+// v14 scene editor: inspect and edit one building instance at a time.
+// The rest of the town and object catalog remain untouched.
+const editToggle=document.getElementById('editToggle');
+const editPanel=document.getElementById('editPanel');
+const editInfo=document.getElementById('editInfo');
+const editNotice=document.getElementById('editNotice');
+let editorOpen=false,selectedIndex=0;
+function selectedShop(){return scene.buildings[selectedIndex]}
+function refreshEditor(){
+ const b=selectedShop();
+ scene.selectedBuildingId=b.id;
+ editInfo.textContent=(selectedIndex+1)+' / '+scene.buildings.length+'  '+b.id+
+  '  X:'+b.x.toFixed(1)+'  Z:'+b.z.toFixed(1)+'  H:'+b.height.toFixed(1);
+}
+function editShop(action){
+ const b=selectedShop();
+ if(action==='prev'||action==='next'){
+  selectedIndex=(selectedIndex+(action==='prev'?-1:1)+scene.buildings.length)%scene.buildings.length;
+  editNotice.textContent='建物を選択';
+  refreshEditor();return;
+ }
+ if(action==='reset'){
+  const reset=defaultShop(b.side,b.k);
+  for(const name of ['x','z','height','width','depth'])b[name]=reset[name];
+ }else{
+  const commands={xMinus:['x',-.5],xPlus:['x',.5],zMinus:['z',-.5],
+   zPlus:['z',.5],hMinus:['height',-.5],hPlus:['height',.5]};
+  const operation=commands[action];if(!operation)return;
+  const [key,delta]=operation;
+  const next=+(b[key]+delta).toFixed(2);
+  if(key==='height'&&next<3){editNotice.textContent='高さの下限';return}
+  if(key==='x'&&Math.abs(next)<5.4+b.depth*.5){editNotice.textContent='歩行者通路のため移動不可';return}
+  if(key==='x'&&Math.abs(next)>90||key==='z'&&Math.abs(next)>110){
+   editNotice.textContent='区画の外には移動できません';return;
+  }
+  // Do not overlap other building footprints when moving a shop.
+  const candidate={...b,[key]:next};
+  if(scene.buildings.some(other=>other!==b&&
+   Math.abs(other.x-candidate.x)<(other.depth+candidate.depth)*.5+.10&&
+   Math.abs(other.z-candidate.z)<(other.width+candidate.width)*.5+.10)){
+   editNotice.textContent='他の建物と重なります';return;
+  }
+  b[key]=next;
+ }
+ renderStreetShop(b);
+ editNotice.textContent=saveSceneEdits()?'端末に保存しました':'保存できませんでした';
+ refreshEditor();
+}
+editToggle.addEventListener('click',()=>{
+ editorOpen=!editorOpen;
+ editPanel.hidden=!editorOpen;
+ editToggle.textContent=editorOpen?'閉じる':'編集';
+ if(editorOpen){resetStick();refreshEditor()}
+});
+editPanel.addEventListener('click',e=>{
+ const button=e.target.closest('button[data-edit]');
+ if(button)editShop(button.dataset.edit);
+});
+refreshEditor();
 function blocked(x,z){
  // Stop the player at real wall footprints; leave the entire pedestrian lane open.
  for(const b of townBuildings){
@@ -423,6 +551,11 @@ function frame(now){
   const dx=vertices[i]-px,dz=vertices[i+2]-pz;
   vertices[i]=px+dx*cs+dz*sn;
   vertices[i+2]=pz-dx*sn+dz*cs;
+ }
+ // Identify the selected building in editor mode without changing the building itself.
+ if(editorOpen){
+  const picked=selectedShop();
+  box(picked.x,picked.height+.28,picked.z,.52,.38,.52,0xffd65c);
  }
  const arr=new Float32Array(vertices);gl.bindBuffer(gl.ARRAY_BUFFER,avatarBuffer);gl.bufferData(gl.ARRAY_BUFFER,arr,gl.DYNAMIC_DRAW);
  const dpr=Math.min(2,window.devicePixelRatio||1),w=Math.round(canvas.clientWidth*dpr),h=Math.round(canvas.clientHeight*dpr);
