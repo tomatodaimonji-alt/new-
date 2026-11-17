@@ -1978,7 +1978,7 @@ function poiStopRepeat(){if(poiWalkRepeat!==null){clearInterval(poiWalkRepeat);p
 for(const button of document.querySelectorAll('[data-poi-dir]')){
  const dirs={n:[0,-1],s:[0,1],w:[-1,0],e:[1,0]};
  const step=()=>poiWalkStep(...dirs[button.dataset.poiDir]);
- button.addEventListener('pointerdown',e=>{e.preventDefault();poiStopRepeat();step();poiWalkRepeat=setInterval(step,145);button.setPointerCapture(e.pointerId)});
+ button.addEventListener('pointerdown',e=>{e.preventDefault();poiStopRepeat();step();poiWalkRepeat=setInterval(step,175);button.setPointerCapture(e.pointerId)});
  for(const name of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(name,poiStopRepeat);
 }
 document.addEventListener('keydown',e=>{
