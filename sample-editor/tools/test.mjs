@@ -24,7 +24,7 @@ const requirements = [
  ['shadow opacity reset', 'gl.uniform1f(locOpacity,1)'],
  ['leg IK', 'function solveWalkingKnee('],
  ['motion blend', 'characterMovementBlend'],
- ['character head', 'playerOval(0,1.615'],
+ ['character head', 'playerOval(headX,1.616'],
  ['POI registry', 'const scene='],
  ['independent shop records', 'function defaultShop('],
  ['building edit controls', 'function editShop('],
