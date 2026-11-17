@@ -19,8 +19,8 @@ function frame(now){
   const dx=vx*dt*metersPerSecond,dz=vz*dt*metersPerSecond;
   const beforeX=player.x,beforeZ=player.z;
   const nx=clamp(player.x+dx,-112,112),nz=clamp(player.z+dz,-112,112);
-  if(!blocked(nx,player.z))player.x=nx;
-  if(!blocked(player.x,nz))player.z=nz;
+  if(!blocked(nx,player.z)&&!npcBlocks(nx,player.z))player.x=nx;
+  if(!blocked(player.x,nz)&&!npcBlocks(player.x,nz))player.z=nz;
   const moved=Math.hypot(player.x-beforeX,player.z-beforeZ);
   movedDistance=moved;
   if(moved>.0001){
