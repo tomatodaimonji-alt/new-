@@ -10,7 +10,9 @@ const STORE_PRODUCTS=[
  {id:'snack-bag',kind:'pouch',body:0xbb695e,label:0xe6bd77,accent:0x8b3e42},
  {id:'cup-noodles',kind:'cup',body:0xe0d6b9,label:0xa45b48,accent:0x754b3b},
  {id:'bread',kind:'pouch',body:0xcbb284,label:0xe5d2ab,accent:0x927652},
- {id:'boxed-food',kind:'carton',body:0x6e9576,label:0xe0d7b3,accent:0xb4a060}
+ {id:'boxed-food',kind:'carton',body:0x6e9576,label:0xe0d7b3,accent:0xb4a060},
+ {id:'tissue-box',kind:'carton',body:0xc3d9d4,label:0xf4eee7,accent:0x518b9b},
+ {id:'laundry-cleaner',kind:'pouch',body:0x8db9d5,label:0xf0e8d6,accent:0x568da7}
 ];
 const skuById=Object.fromEntries(STORE_PRODUCTS.map(s=>[s.id,s]));
 function storeCylinder(x,y,z,rx,rz,height,hex,segments=9,topHex=hex){
@@ -65,25 +67,58 @@ function renderOriginalProduct(id,x,y,z,scale=1){
 }
 // Shelf faces show identifiable silhouettes rather than uniform colored blocks.
 function populateStoreShelf(o,tier,face,shelfY){
- const count=o.type==='side-rack'?7:8;
- const kindSet=tier===0?['rice-ball','bread','boxed-food']:
-  tier===1?['cup-noodles','snack-bag','boxed-food']:
-  tier===2?['fruit-juice','canned-coffee','green-tea']:
-  ['snack-bag','cup-noodles','mineral-water'];
- const frontX=o.x+face*(o.width/2+.03);
+ const beverage=o.type==='drink-shelf';
+ const daily=o.type==='food-daily-shelf'&&(o.id.includes('side-rack')||tier>=2);
+ const groups=beverage?[
+  ['mineral-water','fruit-juice','green-tea'],
+  ['canned-coffee','green-tea','mineral-water'],
+  ['green-tea','fruit-juice','mineral-water'],
+  ['canned-coffee','mineral-water','fruit-juice']
+ ]:daily?[
+  ['tissue-box','laundry-cleaner','boxed-food'],
+  ['laundry-cleaner','tissue-box','boxed-food'],
+  ['tissue-box','laundry-cleaner','bread'],
+  ['laundry-cleaner','boxed-food','tissue-box']
+ ]:[
+  ['rice-ball','bread','boxed-food'],
+  ['cup-noodles','snack-bag','bread'],
+  ['boxed-food','snack-bag','cup-noodles'],
+  ['snack-bag','cup-noodles','boxed-food']
+ ];
+ const kinds=groups[tier],count=8;
+ const frontX=o.x+face*(o.width/2+.035);
  for(let i=0;i<count;i++){
   const zz=o.z-o.depth*.43+(i+.5)*o.depth*.86/count;
-  const kind=kindSet[(i+o.id.length)%kindSet.length];
-  const xx=frontX+face*.025;
-  // Rows of objects stay above shelves, with no additional collision volumes.
-  renderOriginalProduct(kind,xx,shelfY+.053,zz,.79);
+  const kind=kinds[(i+o.id.length)%kinds.length];
+  renderOriginalProduct(kind,frontX+face*.028,shelfY+.055,zz,.79);
  }
- // Shelf-edge label strip and short price-card blocks.
- box(frontX,shelfY-.022,o.z,.035,.046,o.depth*.91,0xe2dfce);
- for(let i=0;i<4;i++){
-  const zz=o.z-o.depth*.36+i*o.depth*.24;
-  box(frontX+face*.022,shelfY-.016,zz,.012,.019,o.depth*.105,0x856e56);
+ box(frontX,shelfY-.022,o.z,.035,.046,o.depth*.91,0xe4e0d3);
+ for(let i=0;i<4;i++)
+  box(frontX+face*.022,shelfY-.016,o.z-o.depth*.36+i*o.depth*.24,
+   .012,.019,o.depth*.105,beverage?0x4e8292:daily?0x6c9c77:0x856e56);
+}
+// A low tilted magazine display, distinct from groceries or drink gondolas.
+// The cover art is original abstract geometry rather than magazine trademarks.
+function renderMagazineShelf(o){
+ const w=o.width,d=o.depth,h=o.height;
+ box(0,0,0,w,.12,d,0x68747a);
+ for(const side of [-1,1])box(side*(w/2-.055),0,0,.10,h,d,0x788488);
+ box(0,0,d*.4,w,.77,.15,0x8e9895);
+ for(let row=0;row<3;row++){
+  const yy=.28+row*.39;
+  const zz=-d*.27+row*.085;
+  box(0,yy,zz,w-.15,.068,d*.48,0xc6c2ae);
+  box(0,yy+.15,zz+d*.16,w-.15,.28,.045,0x788888);
+  for(let i=0;i<8;i++){
+   const x=-w*.43+(i+.5)*w*.86/8;
+   const cover=[0xbd6e75,0x5f83a1,0xd0ab73,0x72957f,0x9e7199][(i+row)%5];
+   // Front faces face toward -Z, in front of each tilted step.
+   box(x,yy+.055,zz-d*.10,w*.086,.29,.028,cover);
+   box(x,yy+.256,zz-d*.119,w*.068,.027,.012,0xf5e9d4);
+   box(x,yy+.118,zz-d*.119,w*.050,.055,.012,0xe2d4b7);
+  }
  }
+ box(0,h-.10,d*.21,w,.10,.12,0x6d7b80);
 }
 function populateColdCase(o,shelfY,tier){
  const kinds=['green-tea','mineral-water','canned-coffee','fruit-juice'];
