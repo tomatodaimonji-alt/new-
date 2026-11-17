@@ -11,7 +11,7 @@
 8. 端末への負荷を抑える。無限の遠景ジオメトリ生成、毎フレーム全ワールド再構築、不要なGPUバッファ再確保を避ける。
 
 ## 作業ルール
-- 最初に `docs/HANDOFF.md` と本書を読む。関連ソース・隣接機能・元の仕様を確認してから修正する。
+- 最初に `docs/HANDOFF.md` と本書、**`docs/QUALITY_ISSUES.md`（失敗・改善記録）を必ず読む**。対象に関連する過去の失敗と再発防止策を確認してから修正する。
 - GitHubの最新SHAを読んでから更新する。ユーザーの元コードを別の簡易作品へ置き換えない。
 - 変更は原則 `src/` 内で実施し、`node scripts/build.mjs` で2つの完成HTMLを生成する。既存の `forest-game-prototype.html` と `world-editor.html` のプレイ方法は維持する。
 - ビルド整合性 `node scripts/build.mjs --check`、`node scripts/test-build.mjs`、構文検証を必須とする。ブラウザとAndroidのテストは別であり、実施しなければ「未検証」と記す。
