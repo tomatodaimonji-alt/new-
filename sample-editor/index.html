@@ -4,8 +4,16 @@
 #editPanel[hidden]{display:none}#editInfo{font-size:11px;overflow-wrap:anywhere}#editNotice{color:#d4e8ae;min-height:14px;font-size:11px}
 #editPanel .editorRow{display:flex;gap:5px}#editPanel button{background:#435762;color:white;border:1px solid #ffffff55;border-radius:5px;padding:5px 7px;flex:1;font-size:12px}
 #editPanel button:active,#editToggle:active{background:#617c89}
+#shootToggle{position:absolute;right:77px;top:41px;z-index:8;background:#172b36dd;color:white;border:1px solid #ffffff77;border-radius:8px;padding:6px 12px;font-size:13px}
+#shootPanel{position:absolute;right:12px;top:88px;width:min(195px,29vw);padding:9px;background:#14242eea;color:#fff;border:1px solid #ffffff66;border-radius:9px;z-index:8;display:grid;gap:6px;font-size:12px}
+#shootPanel[hidden]{display:none}#shootPanel button{border:1px solid #ffffff55;border-radius:6px;background:#405967;color:#fff;padding:7px 4px;font-size:12px;flex:1}#shootPanel button:disabled{opacity:.35}
+#shootPanel .shotRow{display:flex;gap:5px}#shootStatus{color:#d7e2e4;min-height:15px}#shotCounter{font-size:12px;color:#e5d4a1}
+#portraitGuide{position:absolute;top:0;left:50%;transform:translateX(-50%);height:100%;aspect-ratio:9/16;border-left:1px solid #ffffff88;border-right:1px solid #ffffff88;pointer-events:none;z-index:4}
+#portraitGuide[hidden]{display:none}#portraitGuide:after{content:'9:16 撮影プレビュー';position:absolute;top:6px;left:50%;transform:translateX(-50%);white-space:nowrap;color:#eee9;font-size:11px;text-shadow:0 1px 3px #000}
+body.shooting #pad,body.shooting #editToggle,body.shooting #editPanel,body.shooting #v,body.shooting #hint{display:none}
+body.shooting #shootToggle{right:12px;top:39px}
 @media(max-height:420px){#pad{width:120px;height:120px}#stick{left:37px;top:37px;width:46px;height:46px}}
-</style></head><body><canvas id="scene"></canvas><div id="v">v18</div><div id="hint">サンプルエディター</div>
+</style></head><body><canvas id="scene"></canvas><div id="v">v19</div><div id="hint">サンプルエディター</div>
 <button id="editToggle" type="button">編集</button>
 <div id="editPanel" hidden>
 <strong>POI：谷中銀座・再現研究区画</strong>
@@ -15,6 +23,17 @@
 <div class="editorRow"><button data-edit="hMinus">高さ −</button><button data-edit="hPlus">高さ ＋</button><button data-edit="reset">初期値に戻す</button></div>
 <div id="editNotice">変更はこの端末に自動保存</div>
 </div>
+<button id="shootToggle" type="button">撮影</button>
+<div id="shootPanel" hidden>
+<strong>撮影・カメラカット</strong>
+<span id="shotCounter"></span>
+<div class="shotRow"><button data-shot="add">カット追加</button><button id="shootPlay" data-shot="play">再生</button></div>
+<div class="shotRow"><button data-shot="stop">停止</button><button data-shot="delete">最後を削除</button></div>
+<button data-shot="portrait">縦9:16 / 横プレビュー切替</button>
+<span id="shootStatus">構図を保存できます</span>
+<small>構図は端末内に保存。動画録画は未対応。</small>
+</div>
+<div id="portraitGuide" hidden></div>
 <div id="pad"><div id="stick"></div></div><script>
 'use strict';
 const canvas=document.getElementById('scene'),gl=canvas.getContext('webgl',{antialias:true,alpha:false,powerPreference:'high-performance'});
@@ -221,7 +240,8 @@ function cameraPinchDistance(){
 canvas.addEventListener('pointerdown',e=>{
  if(e.pointerType==='mouse'&&e.button!==0)return;
  canvas.setPointerCapture(e.pointerId);
- const isLeft=e.pointerType==='touch'&&e.clientX<window.innerWidth/2;
+ if(shootState.enabled&&shootState.playing)return;
+ const isLeft=e.pointerType==='touch'&&e.clientX<window.innerWidth/2&&!shootState.enabled;
  if(isLeft){
   if(pointer===null){
    pointer=e.pointerId;
@@ -238,6 +258,7 @@ canvas.addEventListener('pointerdown',e=>{
  unlockAudio();
 });
 canvas.addEventListener('pointermove',e=>{
+ if(shootState.enabled&&shootState.playing)return;
  if(e.pointerId===pointer&&floatingOrigin){
   const radius=Math.max(36,pad.clientWidth*.32);
   const dx=e.clientX-floatingOrigin.x,dy=e.clientY-floatingOrigin.y;
@@ -423,6 +444,126 @@ editPanel.addEventListener('click',e=>{
  if(button)editShop(button.dataset.edit);
 });
 refreshEditor();
+// v19: shorts shot list and portrait preview. Capture setup only: no video encoder yet.
+// Shot records are separate from the editable town model, with stable IDs and schema.
+const SHOTS_KEY='sample-editor-shots-v1';
+const shootState={enabled:false,portrait:true,playing:false,shots:[],elapsed:0,segment:0,
+ focusX:0,focusZ:0,yaw:0,pitch:0,distance:12};
+const shootButton=document.getElementById('shootToggle');
+const shootPanel=document.getElementById('shootPanel');
+const shootStatus=document.getElementById('shootStatus');
+const shotCounter=document.getElementById('shotCounter');
+const previewBorder=document.getElementById('portraitGuide');
+function validateShot(shot){
+ return shot&&typeof shot.id==='string'&&shot.id.length<64&&
+ ['x','z','yaw','pitch','distance'].every(k=>Number.isFinite(shot[k]))&&
+ Math.abs(shot.x)<200&&Math.abs(shot.z)<200&&shot.distance>=4.5&&shot.distance<=26&&
+ shot.pitch>=-1.3&&shot.pitch<=1.54;
+}
+function restoreShots(){
+ try{
+  const value=JSON.parse(localStorage.getItem(SHOTS_KEY)||'null');
+  if(value&&value.schema===1&&Array.isArray(value.shots))
+   shootState.shots=value.shots.filter(validateShot).slice(0,12);
+ }catch(e){console.warn('Shot data unavailable',e)}
+}
+function persistShots(){
+ try{
+  localStorage.setItem(SHOTS_KEY,JSON.stringify({schema:1,shots:shootState.shots}));
+  return true;
+ }catch(e){console.warn('Could not save shots',e);return false}
+}
+function shotAngle(from,to,t){
+ const diff=Math.atan2(Math.sin(to-from),Math.cos(to-from));
+ return from+diff*t;
+}
+function currentShot(){
+ return {id:'shot-'+Date.now()+'-'+shootState.shots.length,
+  x:shootState.focusX,z:shootState.focusZ,
+  yaw:cameraYaw,pitch:cameraPitch,distance:cameraDistance};
+}
+function shootingUI(message){
+ shootButton.textContent=shootState.enabled?'探索に戻る':'撮影';
+ shootPanel.hidden=!shootState.enabled;
+ previewBorder.hidden=!shootState.enabled||!shootState.portrait;
+ document.body.classList.toggle('shooting',shootState.enabled);
+ document.body.classList.toggle('portrait-preview',shootState.enabled&&shootState.portrait);
+ shotCounter.textContent=shootState.shots.length+' カット / 最大12';
+ shootStatus.textContent=message||(
+  shootState.playing?'カメラ再生中':shootState.enabled?'構図を決めて「カット追加」':'撮影モードを終了');
+ const play=document.getElementById('shootPlay');
+ play.disabled=shootState.shots.length===0;
+}
+function startShooting(){
+ shootState.enabled=true;shootState.playing=false;shootState.elapsed=0;
+ shootState.focusX=player.x;shootState.focusZ=player.z;
+ resetStick();cameraTouches.clear();pinchActive=false;pinchDistance=0;
+ if(editorOpen){editorOpen=false;editPanel.hidden=true;editToggle.textContent='編集'}
+ shootingUI();
+}
+function stopShooting(){
+ shootState.playing=false;shootState.enabled=false;
+ resetStick();shootingUI();
+}
+function addShot(){
+ if(shootState.playing)return;
+ if(shootState.shots.length>=12){shootingUI('カットは最大12個');return}
+ const shot=currentShot();
+ shootState.shots.push(shot);
+ shootingUI(persistShots()?'カットを保存しました':'保存に失敗しました');
+}
+function playShots(){
+ if(!shootState.shots.length)return;
+ shootState.playing=true;shootState.elapsed=0;shootState.segment=0;
+ const first=shootState.shots[0];
+ shootState.focusX=first.x;shootState.focusZ=first.z;
+ cameraYaw=first.yaw;cameraPitch=first.pitch;cameraDistance=first.distance;
+ shootingUI('カットを再生中');
+}
+function stopShots(){
+ shootState.playing=false;shootingUI('再生を停止');
+}
+function updateShots(dt){
+ if(!shootState.enabled||!shootState.playing)return;
+ const shots=shootState.shots;
+ if(!shots.length){stopShots();return}
+ // Hold a single cut for three seconds. With multiple cuts, smooth 3s travel per segment.
+ shootState.elapsed+=dt;
+ const duration=3,segments=Math.max(1,shots.length-1);
+ const time=Math.min(shootState.elapsed,segments*duration);
+ const idx=Math.min(segments-1,Math.floor(time/duration));
+ const t=Math.min(1,(time-idx*duration)/duration);
+ const eased=t*t*(3-2*t),a=shots[idx],b=shots[Math.min(idx+1,shots.length-1)];
+ shootState.focusX=a.x+(b.x-a.x)*eased;
+ shootState.focusZ=a.z+(b.z-a.z)*eased;
+ cameraYaw=shotAngle(a.yaw,b.y,eased);
+ cameraPitch=a.pitch+(b.pitch-a.pitch)*eased;
+ cameraDistance=a.distance+(b.distance-a.distance)*eased;
+ if(shootState.elapsed>=segments*duration){
+  shootState.playing=false;
+  shootingUI('再生完了');
+ }
+}
+shootButton.addEventListener('click',()=>{
+ if(shootState.enabled)stopShooting();else startShooting();
+});
+shootPanel.addEventListener('click',e=>{
+ const button=e.target.closest('button[data-shot]');
+ if(!button)return;
+ const action=button.dataset.shot;
+ if(action==='add')addShot();
+ if(action==='play')playShots();
+ if(action==='stop')stopShots();
+ if(action==='delete'){
+  shootState.playing=false;
+  shootState.shots.pop();shootingUI(persistShots()?'最後のカットを削除':'保存失敗');
+ }
+ if(action==='portrait'){
+  shootState.portrait=!shootState.portrait;
+  shootingUI(shootState.portrait?'縦9:16プレビュー':'横画面プレビュー');
+ }
+});
+restoreShots();shootingUI();
 function blocked(x,z){
  // Stop the player at real wall footprints; leave the entire pedestrian lane open.
  for(const b of townBuildings){
@@ -672,11 +813,12 @@ function renderDetailedPlayer(px,pz,heading,phase,effort,running){
 let characterMovementBlend=0;
 function frame(now){
  const dt=Math.min(.05,(now-last)/1000||0);last=now;
+ updateShots(dt);
  let mx=padX+(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),
  my=padY+(keys.s||keys.arrowdown?1:0)-(keys.w||keys.arrowup?1:0);
  const tilt=Math.min(1,Math.hypot(mx,my)),active=tilt>.12;
  let running=false,movedDistance=0;
- if(active){
+ if(active&&!shootState.enabled){
   const length=Math.hypot(mx,my);
   mx/=length;my/=length;
   // Use camera-relative movement so the stick always matches screen direction.
@@ -710,24 +852,40 @@ function frame(now){
  // Character geometry is owned by a dedicated, reusable character module.
  renderDetailedPlayer(player.x,player.z,player.heading,walk,characterMovementBlend,running);
  // Identify the selected building in editor mode without changing the building itself.
- if(editorOpen){
+ if(editorOpen&&!shootState.enabled){
   const picked=selectedShop();
   box(picked.x,picked.height+.28,picked.z,.52,.38,.52,0xffd65c);
  }
  const arr=new Float32Array(vertices);gl.bindBuffer(gl.ARRAY_BUFFER,avatarBuffer);gl.bufferData(gl.ARRAY_BUFFER,arr,gl.DYNAMIC_DRAW);
  const dpr=Math.min(2,window.devicePixelRatio||1),w=Math.round(canvas.clientWidth*dpr),h=Math.round(canvas.clientHeight*dpr);
- if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}gl.viewport(0,0,w,h);gl.enable(gl.DEPTH_TEST);gl.clearColor(.56,.73,.83,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+ if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}
+ const portrait=shootState.enabled&&shootState.portrait;
+ const viewWidth=portrait?Math.min(w,Math.round(h*9/16)):w;
+ const viewX=portrait?Math.floor((w-viewWidth)/2):0;
+ gl.viewport(0,0,w,h);
+ gl.enable(gl.DEPTH_TEST);
+ gl.clearColor(portrait?.075:.56,portrait?.087:.73,portrait?.105:.83,1);
+ gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+ gl.viewport(viewX,0,viewWidth,h);
+ if(portrait){
+  gl.enable(gl.SCISSOR_TEST);gl.scissor(viewX,0,viewWidth,h);
+  gl.clearColor(.56,.73,.83,1);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+ }
+
  // Free-look pitch: remain above the street while allowing an upward view of the sky.
  // Upward pitch does not drag the camera below the ground or underneath buildings.
- const eye=[player.x+Math.sin(cameraYaw)*cameraDistance*.84,
+ const focusX=shootState.enabled?shootState.focusX:player.x;
+ const focusZ=shootState.enabled?shootState.focusZ:player.z;
+ const eye=[focusX+Math.sin(cameraYaw)*cameraDistance*.84,
  1.35+cameraDistance*.25,
- player.z+Math.cos(cameraYaw)*cameraDistance*.84];
+ focusZ+Math.cos(cameraYaw)*cameraDistance*.84];
  const dir=[-Math.sin(cameraYaw)*Math.cos(cameraPitch),
  Math.sin(cameraPitch),
  -Math.cos(cameraYaw)*Math.cos(cameraPitch)];
  const look=[eye[0]+dir[0]*cameraDistance,eye[1]+dir[1]*cameraDistance,
  eye[2]+dir[2]*cameraDistance];
- const vp=mat4.mul(mat4.perspective(1.05,w/h,.1,350),mat4.look(eye,look));
+ const vp=mat4.mul(mat4.perspective(1.05,viewWidth/h,.1,350),mat4.look(eye,look));
  gl.uniformMatrix4fv(locVP,false,vp);
  bind(staticBuffer);gl.drawArrays(gl.TRIANGLES,0,staticArray.length/6);
  for(const b of townBuildings){bind(b.buffer);gl.drawArrays(gl.TRIANGLES,0,b.count)}
@@ -738,6 +896,7 @@ function frame(now){
  gl.drawArrays(gl.TRIANGLES,0,shadowVertices);
  gl.uniform1f(locOpacity,1);gl.depthMask(true);gl.disable(gl.BLEND);
  gl.drawArrays(gl.TRIANGLES,shadowVertices,arr.length/6-shadowVertices);
+ if(portrait)gl.disable(gl.SCISSOR_TEST);
  requestAnimationFrame(frame);
 }
 resetStick();requestAnimationFrame(frame);
