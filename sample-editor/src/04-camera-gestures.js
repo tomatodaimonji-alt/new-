@@ -44,7 +44,7 @@ canvas.addEventListener('pointermove',e=>{
   pinchDistance=distance;
  }else{
   cameraYaw-=dx*.007;
-  cameraPitch=clamp(cameraPitch+dy*.006,-1.30,1.54);
+  // Dragging down looks down; dragging up looks up (non-inverted vertical camera).\n  cameraPitch=clamp(cameraPitch-dy*.006,-1.30,1.54);
  }
 });
 for(const name of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(name,e=>{
