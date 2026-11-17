@@ -38,23 +38,24 @@ scene.buildings.push(convenience);
 const fixtures=[
  ['counter-left','checkout',-5.6,72.35,2.6,1.1,1.05],
  ['counter-machine','register',-5.6,72.35,.48,.40,.33],
- ['shelf-a','aisle-shelf',-3.15,77.2,1.16,3.55,1.57],
- ['shelf-b','aisle-shelf',3.15,77.2,1.16,3.55,1.57],
- ['shelf-c','aisle-shelf',-3.15,83.1,1.16,3.55,1.57],
- ['shelf-d','aisle-shelf',3.15,83.1,1.16,3.55,1.57],
+ ['shelf-a','food-daily-shelf',-3.15,77.2,1.16,3.55,1.57],
+ ['shelf-b','drink-shelf',3.15,77.2,1.16,3.55,1.57],
+ ['shelf-c','food-daily-shelf',-3.15,83.1,1.16,3.55,1.57],
+ ['shelf-d','drink-shelf',3.15,83.1,1.16,3.55,1.57],
  ['back-fridge-a','fridge',-5.45,88.05,2.8,.8,2.50],
  ['back-fridge-b','fridge',-2.55,88.05,2.8,.8,2.50],
  ['back-fridge-c','fridge',.35,88.05,2.8,.8,2.50],
  ['back-fridge-d','fridge',3.25,88.05,2.8,.8,2.50],
  ['back-fridge-e','fridge',6.15,88.05,2.8,.8,2.50],
- ['side-rack-a','side-rack',7.5,75.6,.66,3.4,1.95],
- ['side-rack-b','side-rack',7.5,82.1,.66,3.4,1.95],
+ ['side-rack-a','food-daily-shelf',7.5,75.6,.66,3.4,1.95],
+ ['side-rack-b','food-daily-shelf',7.5,82.1,.66,3.4,1.95],
  ['hot-case','hot-case',-6.15,76.1,1.08,.85,1.15],
+ ['magazine-rack','magazine-shelf',-7.3,74.8,2.7,.52,1.58],
  ['entry-mat','floor-mat',0,71.2,2.9,1.65,.018]
 ];
 for(const [id,type,x,z,width,depth,height] of fixtures){
  scene.objects.push({id:'mini-market-'+id,poiId:'convenience-study',
-  type,x,z,width,depth,height,
+  type,x,z,width,depth,height,yaw:type==='magazine-shelf'?-Math.PI/2:0,
   source:'reference-inspired, approximate'});
  scene.pois[1].objectIds.push('mini-market-'+id);
 }
@@ -86,3 +87,25 @@ function saveSceneEdits(){
  }catch(err){console.warn('Saving scene failed',err);return false;}
 }
 restoreSceneEdits();
+// Separate local-only fixture orientation edits, with strict whitelist validation.
+const FIXTURE_ANGLE_KEY='sample-editor-fixture-yaw-v1';
+function restoreFixtureAngles(){
+ try{
+  const saved=JSON.parse(localStorage.getItem(FIXTURE_ANGLE_KEY)||'null');
+  if(!saved||saved.schema!==1||!saved.angles)return;
+  for(const o of scene.objects.filter(o=>o.poiId==='convenience-study')){
+   const a=saved.angles[o.id];
+   if([0,1,2,3].includes(a))o.yaw=a*Math.PI/2;
+  }
+ }catch(e){console.warn('Fixture angles unavailable',e)}
+}
+function saveFixtureAngles(){
+ try{
+  const angles={};
+  for(const o of scene.objects.filter(o=>o.poiId==='convenience-study'))
+   angles[o.id]=((Math.round(o.yaw/(Math.PI/2))%4)+4)%4;
+  localStorage.setItem(FIXTURE_ANGLE_KEY,JSON.stringify({schema:1,angles}));
+  return true;
+ }catch(e){console.warn('Could not save fixture angles',e);return false}
+}
+restoreFixtureAngles();
