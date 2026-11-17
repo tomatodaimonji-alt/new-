@@ -18,10 +18,10 @@ const NPC_STYLES={
 const npcs=[
  {id:'npc-clerk-01',poiId:'convenience-study',role:'clerk',style:'clerk',
   x:-5.45,z:73.55,heading:Math.PI,phase:0,speed:0,
-  state:'checkout',wait:0,route:[],routeIndex:0,effort:0,transaction:0,action:'idle'},
+  state:'checkout',wait:0,route:[],routeIndex:0,effort:0,transaction:0,action:'idle',motion:0,pose:{pick:0,carry:0,pay:0}},
  {id:'npc-shopper-01',poiId:'convenience-study',role:'shopper',style:'visitorA',
   x:1.08,z:74.3,heading:0,phase:1.3,speed:.69,
-  state:'walking',wait:0,carrying:false,action:'idle',shoppingCycles:0,route:[
+  state:'walking',wait:0,carrying:false,action:'idle',shoppingCycles:0,paymentDone:false,motion:0,pose:{pick:0,carry:0,pay:0},route:[
    {x:1.08,z:77.15,lookX:3.15,lookZ:77.2,wait:3.5,activity:'pick'},
    {x:1.08,z:82.90,lookX:3.15,lookZ:83.1,wait:3.0,activity:'browse'},
    {x:.32,z:74.00,lookX:-5.6,lookZ:72.35,wait:2.5,activity:'pay'},
@@ -29,13 +29,21 @@ const npcs=[
   ],routeIndex:0,effort:0},
  {id:'npc-shopper-02',poiId:'convenience-study',role:'shopper',style:'visitorB',
   x:-1.06,z:84.45,heading:Math.PI,phase:3,speed:.62,
-  state:'walking',wait:0,carrying:false,action:'idle',shoppingCycles:0,route:[
+  state:'walking',wait:0,carrying:false,action:'idle',shoppingCycles:0,paymentDone:false,motion:0,pose:{pick:0,carry:0,pay:0},route:[
    {x:-1.06,z:83.15,lookX:-3.15,lookZ:83.1,wait:2.8,activity:'pick'},
    {x:-1.06,z:77.15,lookX:-3.15,lookZ:77.2,wait:4.2,activity:'browse'},
    {x:-1.06,z:74.65,lookX:-5.6,lookZ:72.35,wait:2.4,activity:'pay'},
    {x:-1.06,z:84.45,lookX:0,lookZ:88,wait:.8}
   ],routeIndex:0,effort:0}
  ];
+function updateNpcPose(npc,dt){
+ const gain=1-Math.exp(-Math.min(.05,Math.max(0,dt))*6);
+ for(const key of ['pick','carry','pay']){
+  npc.pose[key]+=((npc.action===key?1:0)-npc.pose[key])*gain;
+  if(Math.abs(npc.pose[key])<.001)npc.pose[key]=0;
+ }
+ npc.motion+=((npc.effort||0)-npc.motion)*(1-Math.exp(-dt*7));
+}
 // NPC motion is time-based and only advances when an unobstructed route exists.
 // Bystanders stop for merchandise; the clerk remains behind the checkout.
 function updateNPCs(dt){
@@ -47,6 +55,7 @@ function updateNPCs(dt){
    npc.action=active?'pay':'idle';
    npc.transaction=active?Math.min(1,(npc.transaction||0)+time*3):0;
    npc.effort=0;
+   updateNpcPose(npc,time);
    continue;
   }
   const waypoint=npc.route[npc.routeIndex];
@@ -63,12 +72,14 @@ function updateNPCs(dt){
    }else if(waypoint.activity==='pay'){
     npc.action='pay';
     // The purchased product is transferred at the end of the checkout.
-    if(npc.wait<=.45){npc.carrying=false;npc.shoppingCycles++}
+    if(npc.wait<=.45&&!npc.paymentDone){npc.carrying=false;npc.shoppingCycles++;npc.paymentDone=true}
    }else npc.action=npc.carrying?'carry':'idle';
    if(npc.wait<=0){
     npc.state='walking';npc.routeIndex=(npc.routeIndex+1)%npc.route.length;
     npc.action=npc.carrying?'carry':'idle';
+    npc.paymentDone=false;
    }
+   updateNpcPose(npc,time);
    continue;
   }
   const dx=waypoint.x-npc.x,dz=waypoint.z-npc.z;
@@ -76,6 +87,7 @@ function updateNPCs(dt){
   if(distance<.12){
    npc.x=waypoint.x;npc.z=waypoint.z;
    npc.state='looking';npc.wait=waypoint.wait;npc.effort=0;
+   updateNpcPose(npc,time);
    continue;
   }
   const move=Math.min(distance,npc.speed*time),ux=dx/distance,uz=dz/distance;
@@ -84,6 +96,7 @@ function updateNPCs(dt){
   if(blocked(nextX,nextZ)||Math.hypot(nextX-player.x,nextZ-player.z)<.48||
      npcs.some(other=>other!==npc&&Math.hypot(nextX-other.x,nextZ-other.z)<.48)){
    npc.effort=0;
+   updateNpcPose(npc,time);
    continue;
   }
   npc.x=nextX;npc.z=nextZ;
@@ -91,6 +104,7 @@ function updateNPCs(dt){
   npc.phase+=move*Math.PI/.78;
   npc.action=npc.carrying?'carry':'idle';
   npc.effort=Math.min(1,npc.effort+time*7);
+  updateNpcPose(npc,time);
  }
 }
 // One small circular player collider per person; existing shelf/wall rules remain.
@@ -99,14 +113,14 @@ function npcBlocks(x,z){
 }
 function renderNpcShadows(){
  for(const npc of npcs){
-  renderPlayerShadow(npc.x,npc.z,npc.heading,npc.effort,npc.phase);
+  renderPlayerShadow(npc.x,npc.z,npc.heading,npc.motion,npc.phase);
  }
 }
 function renderNPCs(){
  for(const npc of npcs){
-  renderDetailedPlayer(npc.x,npc.z,npc.heading,npc.phase,npc.effort,false,
-    NPC_STYLES[npc.style],npc.action);
-  if(npc.carrying||npc.action==='pick')renderNpcCarriedProduct(npc);
+  renderDetailedPlayer(npc.x,npc.z,npc.heading,npc.phase,npc.motion,false,
+    NPC_STYLES[npc.style],npc.pose);
+  if(npc.carrying||npc.pose.pick>.03)renderNpcCarriedProduct(npc);
  }
  // Reset shared character palette for consistency with any later player effects.
  currentCharacterStyle=PLAYER_STYLE;
@@ -115,12 +129,12 @@ function renderNPCs(){
 // An unbranded product is positioned relative to the raised right hand.
 // This is an animation prop only; shelf inventory is not yet simulated.
 function renderNpcCarriedProduct(npc){
- const isPick=npc.action==='pick',isPay=npc.action==='pay';
- const z=- (isPick?.58:isPay?.45:.22);
+ const pick=npc.pose.pick,pay=npc.pose.pay,carry=npc.pose.carry;
+ const z=-(pick*.58+pay*.45+carry*.22);
  const localX=.35,localZ=z;
  const angle=npc.heading-Math.PI,cs=Math.cos(angle),sn=Math.sin(angle);
  const x=npc.x+localX*cs+localZ*sn;
  const zz=npc.z-localX*sn+localZ*cs;
  const kind=npc.style==='visitorA'?'canned-coffee':'green-tea';
- renderOriginalProduct(kind,x,isPick?1.04:1.00,zz,.8);
+ renderOriginalProduct(kind,x,1.00+.06*pick,zz,.8);
 }
