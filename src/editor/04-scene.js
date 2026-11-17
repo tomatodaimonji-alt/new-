@@ -50,7 +50,7 @@ function poiWalkFrame(now){
 function poiWalkCanStep(x,z){
  if(!validPos(x,z))return false;
  // Vehicles occupy more than one tile and cannot be walked through.
- if(world.some(o=>o.type==='pineSuperCar'&&Math.abs(o.x-x)<=1&&Math.abs(o.z-z)<=1))return false;
+ if(world.some(o=>o.type.startsWith('pineSuperCar')&&Math.abs(o.x-x)<=1&&Math.abs(o.z-z)<=1))return false;
  const blocking=world.find(o=>o.y===0&&o.x===x&&o.z===z&&!isFloor(o.type)&&
  !['pineSuperDoor','plasterwallDoor','woodwallDoor','brickwallDoor','pineSuperLogo','pineSuperStripe','pineSuperCurb','pineSuperBollard','pineSuperSign'].includes(o.type));
  return !blocking;
