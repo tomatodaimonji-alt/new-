@@ -145,7 +145,7 @@ function solveWalkingKnee(hip,ankle){
 function renderDetailedPlayer(px,pz,heading,phase,effort,running,style=PLAYER_STYLE,action='idle'){
  currentCharacterStyle=style;
  const start=vertices.length;
- const amount=clamp((effort-.08)/.62,0,1);
+ const amount=clamp((effort-.035)/.78,0,1);
  const moving=amount>.015;
  const stridePhase=phase;
  const weight=Math.cos(stridePhase)*amount;
@@ -215,11 +215,20 @@ function renderDetailedPlayer(px,pz,heading,phase,effort,running,style=PLAYER_ST
   // The sleeve begins inside the shoulder line, joining the tapered chest.
   const shoulder=[side*.274,1.337+hipHeight,torsoLean*.50];
   const sleeveEnd=[side*.350,1.150+hipHeight,armSwing*.48+.004];
-  const reaching=(side===1&&(action==='pick'||action==='carry'||action==='pay'));
-  const outward=action==='pick'?.58:action==='pay'?.45:.22;
-  const elbow=reaching?[side*.32,1.10+hipHeight,-.16]:[side*.363,1.047+hipHeight,armSwing*.76+.006];
-  const hand=reaching?[side*.35,action==='pick'?1.06+hipHeight:1.00+hipHeight,-outward]:
-    [side*.376,.871+hipHeight,armSwing*1.18-.018];
+  // Action weights change continuously; transition without snapping the arm.
+  const pickWeight=typeof action==='object'?clamp(action.pick||0,0,1):(action==='pick'?1:0);
+  const carryWeight=typeof action==='object'?clamp(action.carry||0,0,1):(action==='carry'?1:0);
+  const payWeight=typeof action==='object'?clamp(action.pay||0,0,1):(action==='pay'?1:0);
+  const reach=Math.min(1,pickWeight+carryWeight+payWeight);
+  const reachZ=pickWeight*.58+carryWeight*.22+payWeight*.45;
+  const baseElbow=[side*.363,1.047+hipHeight,armSwing*.76+.006];
+  const baseHand=[side*.376,.871+hipHeight,armSwing*1.18-.018];
+  const elbow=[baseElbow[0]*(1-reach)+side*.32*reach,
+   baseElbow[1]*(1-reach)+(1.10+hipHeight)*reach,
+   baseElbow[2]*(1-reach)-.16*reach];
+  const hand=[baseHand[0]*(1-reach)+side*.35*reach,
+   baseHand[1]*(1-reach)+(1.00+hipHeight+.06*pickWeight)*reach,
+   baseHand[2]*(1-reach)-reachZ];
   playerLimb(shoulder,sleeveEnd,.106,.109,C.shirt);
   playerOval(...sleeveEnd,.101,.037,.103,C.shirtDark,9,5);
   playerLimb(sleeveEnd,elbow,.077,.083,C.skin);
