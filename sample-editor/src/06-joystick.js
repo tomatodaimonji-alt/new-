@@ -24,14 +24,14 @@ function moveStick(e){
 }
 function resetStick(){pointer=null;floatingOrigin=null;padX=padY=0;restorePadPosition();updateStickDisplay()}
 pad.addEventListener('pointerdown',e=>{
- if(mixedPinchActive||pointer!==null)return;
+ if(pointer!==null)return;
  pointer=e.pointerId;
  pad.setPointerCapture(pointer);
  if(e.pointerType==='touch')beginFloatingPad(e.clientX,e.clientY);
  else moveStick(e);
  unlockAudio();
 });pad.addEventListener('pointermove',e=>{
- if(mixedPinchActive||e.pointerId!==pointer)return;
+ if(e.pointerId!==pointer)return;
  if(floatingOrigin){
   const radius=Math.max(36,pad.clientWidth*.32);
   const dx=e.clientX-floatingOrigin.x,dy=e.clientY-floatingOrigin.y;
@@ -39,4 +39,4 @@ pad.addEventListener('pointerdown',e=>{
   padX=dx*scale/radius;padY=dy*scale/radius;updateStickDisplay();
  }else moveStick(e);
 });for(const ev of ['pointerup','pointercancel','lostpointercapture'])pad.addEventListener(ev,e=>{if(e.pointerId===pointer)resetStick()});
-window.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true});window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});window.addEventListener('blur',()=>{resetStick();cameraTouches.clear();pinchActive=false;pinchDistance=0;gestureContacts.clear();mixedPinchActive=false;mixedPinchDistance=0});
+window.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true});window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});window.addEventListener('blur',()=>{resetStick();cameraTouches.clear();pinchActive=false;pinchDistance=0;});
