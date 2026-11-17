@@ -77,6 +77,7 @@ function frame(now){
  gl.uniformMatrix4fv(locVP,false,vp);
  bind(staticBuffer);gl.drawArrays(gl.TRIANGLES,0,staticArray.length/6);
  for(const b of townBuildings){bind(b.buffer);gl.drawArrays(gl.TRIANGLES,0,b.count)}
+ for(const item of convenienceBuffers){bind(item.buffer);gl.drawArrays(gl.TRIANGLES,0,item.count)}
  bind(avatarBuffer);
  // Alpha blend only the ground decal, and keep it out of the depth buffer.
  gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
