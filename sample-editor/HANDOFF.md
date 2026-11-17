@@ -1,7 +1,7 @@
 # サンプルエディター 引き継ぎ（2026-11-17）
 
 ## 現況
-- 現在の表示/Androidバージョン **v13**。v13で左右の指を使ったピンチを、通常の左移動＋右視点から判別する処理を追加。建物は常に不透明描画。
+- 現在の表示/Androidバージョン **v14**。v14で街のPOI・建物30軒・電柱16本をID付きデータに分離し、建物編集UI・端末ローカル保存を追加。建物は常に不透明描画。
 - GitHub: `tomatodaimonji-alt/new-`
 - 実行用: `sample-editor/index.html`（生成済み、WebView/ブラウザで直接起動）
 - Android: `sample-editor/app/`、Actions: `.github/workflows/build-sample-editor-apk.yml`
@@ -17,12 +17,12 @@
 ## ソースとビルド
 - `src/page.template.html`: 固定HTML/CSSとバージョン表示。
 - `src/01-renderer.js`: WebGL初期化、メッシュ。
-- `src/02-yanaka-town.js`: 商店街構築（静的ジオメトリ）。
+- `src/02-scene-registry.js`: POI・30軒の建物・16本の電柱の配置データ、端末内の変更保存。\n- `src/02-yanaka-town.js`: ID付きデータから商店街を描画、変更した建物のみ再生成。
 - `src/03-math.js`: 数学/バッファ基盤。
 - `src/04-camera-gestures.js`: 右視点/ピンチ・左開始判定。
 - `src/05-audio.js`: 音。
 - `src/06-joystick.js`: 左パッド操作。
-- `src/07-collision.js`: 衝突とカメラ遮蔽。
+- `src/07-scene-editor.js`: 建物の選択・移動・高さ調整・端末保存。\n- `src/07-collision.js`: 建物の共有データによる衝突判定。
 - `src/08-game-loop.js`: 移動、アバター、描画ループ。
 - `tools/build.mjs`: 上記を**元と同じ順番で単一HTMLへ連結**。 `--check` は生成結果とコミット済み成果物の完全一致を検査。
 - `tools/test.mjs`: 構文、版数/Actions整合、主要機能の静的スモーク検査。
@@ -39,5 +39,5 @@
 ## 次に気をつけること
 - 現在はモジュールを**生成時に連結**。実行時のimportではない。WebViewの自動更新とオフライン起動を保護するため。
 - `--check` は実行結果・実機での操作まで保証しない。
-- 写真を根拠にした街並みの材質・寸法は今後も改善余地あり。
+- 写真を根拠にした街並みの材質・寸法は今後も改善余地あり。v14の寸法は現地実測ではない。\n- 建物配置変更はその端末内に保存。別端末への同期やJSONインポートは未実装。\n- 画面右上「編集」で建物を選び、X/Z/高さを0.5単位で調整・保存。選択建物の屋上に黄色のマーカー表示。
 - 実測と写真比較、建物の不透明描画、カメラ＋移動同時操作、ピンチ優先順位、音の重複再生を重点検証。
