@@ -9,13 +9,14 @@ body.shooting #storeJump{display:none}
 #shootToggle{position:absolute;right:77px;top:41px;z-index:8;background:#172b36dd;color:white;border:1px solid #ffffff77;border-radius:8px;padding:6px 12px;font-size:13px}
 #shootPanel{position:absolute;right:12px;top:88px;width:min(195px,29vw);padding:9px;background:#14242eea;color:#fff;border:1px solid #ffffff66;border-radius:9px;z-index:8;display:grid;gap:6px;font-size:12px}
 #shootPanel[hidden]{display:none}#shootPanel button{border:1px solid #ffffff55;border-radius:6px;background:#405967;color:#fff;padding:7px 4px;font-size:12px;flex:1}#shootPanel button:disabled{opacity:.35}
+#shootPanel .shotPresetRow{display:flex;gap:4px}#shootPanel .shotPresetRow button{font-size:11px;padding:6px 2px}
 #shootPanel .shotRow{display:flex;gap:5px}#shootStatus{color:#d7e2e4;min-height:15px}#shotCounter{font-size:12px;color:#e5d4a1}
 #portraitGuide{position:absolute;top:0;left:50%;transform:translateX(-50%);height:100%;aspect-ratio:9/16;border-left:1px solid #ffffff88;border-right:1px solid #ffffff88;pointer-events:none;z-index:4}
 #portraitGuide[hidden]{display:none}#portraitGuide:after{content:'9:16 撮影プレビュー';position:absolute;top:6px;left:50%;transform:translateX(-50%);white-space:nowrap;color:#eee9;font-size:11px;text-shadow:0 1px 3px #000}
 body.shooting #pad,body.shooting #editToggle,body.shooting #editPanel,body.shooting #v,body.shooting #hint{display:none}
 body.shooting #shootToggle{right:12px;top:39px}
 @media(max-height:420px){#pad{width:120px;height:120px}#stick{left:37px;top:37px;width:46px;height:46px}}
-</style></head><body><canvas id="scene"></canvas><div id="v">v22</div><div id="hint">サンプルエディター</div>
+</style></head><body><canvas id="scene"></canvas><div id="v">v23</div><div id="hint">サンプルエディター</div>
 <button id="editToggle" type="button">編集</button>
 <div id="editPanel" hidden>
 <strong>POI：谷中銀座・再現研究区画</strong>
@@ -30,6 +31,8 @@ body.shooting #shootToggle{right:12px;top:39px}
 <div id="shootPanel" hidden>
 <strong>撮影・カメラカット</strong>
 <span id="shotCounter"></span>
+<div class="shotPresetRow"><button data-shot="preset-exterior">店外</button><button data-shot="preset-doorway">入口</button><button data-shot="preset-aisle">棚</button></div>
+<div class="shotPresetRow"><button data-shot="preset-checkout">レジ</button><button data-shot="preset-cold">冷蔵</button></div>
 <div class="shotRow"><button data-shot="add">カット追加</button><button id="shootPlay" data-shot="play">再生</button></div>
 <div class="shotRow"><button data-shot="stop">停止</button><button data-shot="delete">最後を削除</button></div>
 <button data-shot="portrait">縦9:16 / 横プレビュー切替</button>
@@ -773,6 +776,25 @@ function currentShot(){
   x:shootState.focusX,z:shootState.focusZ,
   yaw:cameraYaw,pitch:cameraPitch,distance:cameraDistance};
 }
+// v23: camera positions are reusable shot presets, not duplicate scene geometry.
+// Each preset targets an existing part of the convenience-study POI.
+const STORE_SHOT_PRESETS={
+ exterior:{label:'店外全景',x:0,z:77.2,yaw:Math.PI,pitch:-.21,distance:15.5},
+ doorway:{label:'入口',x:0,z:72.4,yaw:Math.PI,pitch:-.11,distance:7.0},
+ aisle:{label:'商品棚',x:-2.05,z:78.1,yaw:Math.PI/2,pitch:-.17,distance:5.0},
+ checkout:{label:'レジ',x:-5.5,z:72.35,yaw:Math.PI*.64,pitch:-.20,distance:5.4},
+ cold:{label:'冷蔵ケース',x:0.30,z:87.0,yaw:Math.PI,pitch:-.14,distance:6.8}
+};
+function chooseStoreCamera(name){
+ const preset=STORE_SHOT_PRESETS[name];
+ if(!preset||!shootState.enabled)return false;
+ shootState.playing=false;
+ shootState.focusX=preset.x;shootState.focusZ=preset.z;
+ cameraYaw=preset.yaw;cameraPitch=preset.pitch;cameraDistance=preset.distance;
+ cameraTouches.clear();pinchActive=false;pinchDistance=0;
+ shootingUI(preset.label+'を表示中。カット追加で保存');
+ return true;
+}
 function shootingUI(message){
  shootButton.textContent=shootState.enabled?'探索に戻る':'撮影';
  shootPanel.hidden=!shootState.enabled;
@@ -842,6 +864,7 @@ shootPanel.addEventListener('click',e=>{
  const button=e.target.closest('button[data-shot]');
  if(!button)return;
  const action=button.dataset.shot;
+ if(action.startsWith('preset-')){chooseStoreCamera(action.slice(7));return;}
  if(action==='add')addShot();
  if(action==='play')playShots();
  if(action==='stop')stopShots();
