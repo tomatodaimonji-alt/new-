@@ -8,10 +8,9 @@ function frame(now){
   const length=Math.hypot(mx,my);
   mx/=length;my/=length;
   // Use camera-relative movement so the stick always matches screen direction.
-  // Screen-up on the joystick moves away from the camera, screen-down toward it.
-  // Invert the camera-forward component; the old mapping reversed vertical travel.
-  const vx=mx*Math.cos(cameraYaw)-my*Math.sin(cameraYaw);
-  const vz=-mx*Math.sin(cameraYaw)-my*Math.cos(cameraYaw);
+  // Camera-relative movement: up goes away from the camera, down goes toward it.
+  const vx=mx*Math.cos(cameraYaw)+my*Math.sin(cameraYaw);
+  const vz=-mx*Math.sin(cameraYaw)+my*Math.cos(cameraYaw);
   running=tilt>.72;
   const metersPerSecond=running?3.15+(tilt-.72)/.28*2.25:1.15+tilt*2.85;
   const dx=vx*dt*metersPerSecond,dz=vz*dt*metersPerSecond;
