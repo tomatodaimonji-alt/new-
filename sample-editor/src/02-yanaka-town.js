@@ -88,7 +88,7 @@ for(const object of scene.objects){
  const z=object.z;
  const side=Math.sign(object.x),px=object.x;
  {
-  box(px,0,z,.18,7.1,.18,0x676765);
+  box(px,0,z,.18,object.height,.18,0x676765);
   box(px,5.45,z,.36,.23,.40,0x8d8d86);
   box(px-side*.26,4.4,z+.46,.035,.12,1.12,0x565b56);
   box(px-side*.26,4.34,z+1.02,.31,.19,.24,0xb4ae85);
