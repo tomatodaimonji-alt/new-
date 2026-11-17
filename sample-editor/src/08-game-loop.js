@@ -8,8 +8,10 @@ function frame(now){
   const length=Math.hypot(mx,my);
   mx/=length;my/=length;
   // Use camera-relative movement so the stick always matches screen direction.
-  const vx=mx*Math.cos(cameraYaw)+my*Math.sin(cameraYaw);
-  const vz=-mx*Math.sin(cameraYaw)+my*Math.cos(cameraYaw);
+  // Screen-up on the joystick moves away from the camera, screen-down toward it.
+  // Invert the camera-forward component; the old mapping reversed vertical travel.
+  const vx=mx*Math.cos(cameraYaw)-my*Math.sin(cameraYaw);
+  const vz=-mx*Math.sin(cameraYaw)-my*Math.cos(cameraYaw);
   running=tilt>.72;
   const metersPerSecond=running?3.15+(tilt-.72)/.28*2.25:1.15+tilt*2.85;
   const dx=vx*dt*metersPerSecond,dz=vz*dt*metersPerSecond;
@@ -22,7 +24,7 @@ function frame(now){
    player.heading=Math.atan2(vx,vz);
    walk+=dt*(running?14:8.5);
    stepDistance+=moved;
-   const stride=running?1.38:1.05;
+   const stride=running?1.12:.78;
    if(stepDistance>=stride){stepDistance%=stride;footstep(running)}
   }
  }
