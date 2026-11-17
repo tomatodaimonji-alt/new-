@@ -16,6 +16,7 @@ const names = [
   '07-scene-editor.js',
   '07-shots.js',
   '07-collision.js',
+  '07-camera-collision.js',
   '07-character.js',
   '08-game-loop.js',
 ];
