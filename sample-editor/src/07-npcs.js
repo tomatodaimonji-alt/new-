@@ -142,7 +142,7 @@ function npcGripWorld(npc){
  return [npc.x+localX*cs+localZ*sn, .871*(1-weight)+1.00*weight+.06*pick,
   npc.z-localX*sn+localZ*cs];
 }
-const CHECKOUT_ITEM_POINT=Object.freeze({x:-4.39,y:1.035,z:72.35});
+const CHECKOUT_ITEM_POINT=Object.freeze({x:-4.39,y:1.035,z:72.72});
 // An unbranded product is positioned relative to the raised right hand.
 // This is an animation prop only; shelf inventory is not yet simulated.
 function renderNpcCarriedProduct(npc){
@@ -151,7 +151,8 @@ function renderNpcCarriedProduct(npc){
  const remaining=isPay?npc.wait:4;
  const transition=isPay?Math.min(1,Math.max(0,(2.65-remaining)/1.30)):0;
  const eased=transition*transition*(3-2*transition);
- const x=hand[0]+(CHECKOUT_ITEM_POINT.x-hand[0])*eased;
+ const checkoutX=CHECKOUT_ITEM_POINT.x+(npc.style==='visitorB'?-.32:0);
+ const x=hand[0]+(checkoutX-hand[0])*eased;
  const y=hand[1]+(CHECKOUT_ITEM_POINT.y-hand[1])*eased;
  const z=hand[2]+(CHECKOUT_ITEM_POINT.z-hand[2])*eased;
  const kind=npc.style==='visitorA'?'canned-coffee':'green-tea';
