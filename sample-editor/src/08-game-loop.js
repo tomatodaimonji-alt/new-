@@ -45,8 +45,13 @@ function frame(now){
  renderNPCs();
  // Identify the selected building in editor mode without changing the building itself.
  if(editorOpen&&!shootState.enabled){
-  const picked=selectedShop();
-  box(picked.x,picked.height+.28,picked.z,.52,.38,.52,0xffd65c);
+  if(fixtureEditMode){
+   const picked=selectedFixture();
+   box(picked.x,picked.height+.13,picked.z,.22,.19,.22,0xffd65c);
+  }else{
+   const picked=selectedShop();
+   box(picked.x,picked.height+.28,picked.z,.52,.38,.52,0xffd65c);
+  }
  }
  const arr=new Float32Array(vertices);gl.bindBuffer(gl.ARRAY_BUFFER,avatarBuffer);gl.bufferData(gl.ARRAY_BUFFER,arr,gl.DYNAMIC_DRAW);
  const dpr=Math.min(2,window.devicePixelRatio||1),w=Math.round(canvas.clientWidth*dpr),h=Math.round(canvas.clientHeight*dpr);
