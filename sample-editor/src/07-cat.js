@@ -44,6 +44,13 @@ catFindButton.addEventListener('click',()=>{
  player.z=cat.z-Math.max(3,cat.scale*1.1);
  resetStick();
 });
+function catBlockedAt(x,z,radius){
+ // Four cardinal probes keep a large cat out of walls and store fixtures.
+ for(const [dx,dz] of [[0,0],[radius,0],[-radius,0],[0,radius],[0,-radius]]){
+  if(blocked(x+dx,z+dz))return true;
+ }
+ return false;
+}
 function catBlocks(x,z){
  return Math.hypot(x-cat.x,z-cat.z)<.43*cat.scale+.25;
 }
