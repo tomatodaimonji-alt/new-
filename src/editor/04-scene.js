@@ -45,7 +45,7 @@ function poiWalkFrame(now){
  poiWalkViewX=poiWalkFromX+(poiWalkX-poiWalkFromX)*smooth;
  poiWalkViewZ=poiWalkFromZ+(poiWalkZ-poiWalkFromZ)*smooth;
  panX=poiWalkViewX+.5-MAP_W/2;panZ=poiWalkViewZ+.5-MAP_H/2;
- if(t<1)poiWalkAvatar(now);
+ if(now-poiWalkStarted<=POI_WALK_MS+32)poiWalkAvatar(now);
  cursorDirty=true;
 }
 function poiWalkCanStep(x,z){
