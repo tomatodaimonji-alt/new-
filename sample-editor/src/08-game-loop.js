@@ -2,6 +2,7 @@ let characterMovementBlend=0;
 function frame(now){
  const dt=Math.min(.05,(now-last)/1000||0);last=now;
  updateShots(dt);
+ updateNPCs(dt);
  let mx=padX+(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),
  my=padY+(keys.s||keys.arrowdown?1:0)-(keys.w||keys.arrowup?1:0);
  const tilt=Math.min(1,Math.hypot(mx,my)),active=tilt>.12;
@@ -36,9 +37,12 @@ function frame(now){
  characterMovementBlend+=((movedDistance>.0001?tilt:0)-characterMovementBlend)*Math.min(1,dt*9);
  vertices.length=0;
  // A transparent contact shadow anchors the feet without requiring a shadow map.
- const shadowVertices=renderPlayerShadow(player.x,player.z,player.heading,characterMovementBlend,walk);
- // Character geometry is owned by a dedicated, reusable character module.
+ renderPlayerShadow(player.x,player.z,player.heading,characterMovementBlend,walk);
+ renderNpcShadows();
+ const shadowVertices=vertices.length/6;
+ // Reuse the same body, clothes and gait implementation for the player and NPCs.
  renderDetailedPlayer(player.x,player.z,player.heading,walk,characterMovementBlend,running);
+ renderNPCs();
  // Identify the selected building in editor mode without changing the building itself.
  if(editorOpen&&!shootState.enabled){
   const picked=selectedShop();
