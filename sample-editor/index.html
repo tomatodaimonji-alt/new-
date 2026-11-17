@@ -1,6 +1,6 @@
 <!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover"><title>サンプルエディター</title><style>
 *{box-sizing:border-box;touch-action:none}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#92b8ce;font-family:sans-serif}canvas{display:block;width:100%;height:100%}#v{position:absolute;top:max(10px,env(safe-area-inset-top));left:14px;color:#fff;text-shadow:0 2px 4px #222;font:bold 15px sans-serif}#pad{position:absolute;left:max(25px,env(safe-area-inset-left));bottom:max(18px,env(safe-area-inset-bottom));width:150px;height:150px;border:2px solid #ffffff70;border-radius:50%;background:#13293755;box-shadow:0 0 15px #0003;touch-action:none}#stick{position:absolute;left:47px;top:47px;width:56px;height:56px;background:#e2e7e9ad;border:2px solid white;border-radius:50%;pointer-events:none}#hint{position:absolute;right:12px;top:12px;color:#fff;background:#1b2c3970;padding:5px 9px;border-radius:7px;font-size:12px}@media(max-height:420px){#pad{width:120px;height:120px}#stick{left:37px;top:37px;width:46px;height:46px}}
-</style></head><body><canvas id="scene"></canvas><div id="v">v1</div><div id="hint">サンプルエディター</div><div id="pad"><div id="stick"></div></div><script>
+</style></head><body><canvas id="scene"></canvas><div id="v">v2</div><div id="hint">サンプルエディター</div><div id="pad"><div id="stick"></div></div><script>
 'use strict';
 const canvas=document.getElementById('scene'),gl=canvas.getContext('webgl',{antialias:true,alpha:false,powerPreference:'high-performance'});
 if(!gl){document.body.textContent='この端末ではWebGLを使用できません';throw Error('WebGL unavailable')}
@@ -19,21 +19,37 @@ function box(x,y,z,w,h,d,hex){
  quad([X,y,V],[U,y,V],[U,T,V],[X,T,V],c);quad([U,y,Z],[X,y,Z],[X,T,Z],[U,T,Z],side);
  quad([U,y,V],[U,y,Z],[U,T,Z],[U,T,V],dark);quad([X,y,Z],[X,y,V],[X,T,V],[X,T,Z],side);
 }
-function seeded(a,b){let t=Math.sin(a*127.1+b*311.7)*43758.5453;return t-Math.floor(t)}
-// compact traversable grid: five east-west and north-south avenues, buildings in blocks
-box(0,-.16,0,260,.12,260,0x70845f);
-for(let n=-2;n<=2;n++){
- box(n*40,-.095,0,11,.055,236,0x40474d);
- box(0,-.09,n*40,236,.055,11,0x40474d);
- for(let k=-11;k<=11;k++){
-  if(Math.abs(k*10-n*40)<8)continue;
-  box(n*40,-.056,k*10, .16,.007,3.4,0xded6a6);
-  box(k*10,-.054,n*40,3.4,.007,.16,0xded6a6);
+// Ellipsoid meshes for rounded shoulders, head, limbs and soft body silhouette.
+function ellipsoid(cx,cy,cz,rx,ry,rz,hex,longitude=12,latitude=8){
+ const c=color(hex);
+ for(let v=0;v<latitude;v++){
+  const a=Math.PI*v/latitude,b=Math.PI*(v+1)/latitude;
+  for(let u=0;u<longitude;u++){
+   const p=Math.PI*2*u/longitude,q=Math.PI*2*(u+1)/longitude;
+   const point=(th,ph)=>[cx+rx*Math.sin(th)*Math.cos(ph),cy+ry*Math.cos(th),cz+rz*Math.sin(th)*Math.sin(ph)];
+   const x=point(a,p),y=point(b,p),z=point(b,q),w=point(a,q);
+   quad(x,y,z,w,c.map(k=>k*(.76+.24*Math.max(0,Math.sin(a)*Math.cos(p)*.5+.5))));
+  }
  }
 }
+function seeded(a,b){let t=Math.sin(a*127.1+b*311.7)*43758.5453;return t-Math.floor(t)}
+// compact traversable grid: five east-west and north-south avenues, buildings in blocks
+box(0,-.26,0,260,.12,260,0x70845f);
+for(let n=-2;n<=2;n++){
+ // Separate crossing surfaces by several millimeters to eliminate depth fighting.
+ box(n*40,-.139,0,11,.095,236,0x40474d);
+ box(0,-.134,n*40,236,.095,11,0x40474d);
+ for(let k=-11;k<=11;k++){
+  if(Math.abs(k*10-n*40)<8)continue;
+  box(n*40,-.038,k*10,.16,.011,3.4,0xded6a6);
+  box(k*10,-.033,n*40,3.4,.011,.16,0xded6a6);
+ }
+}
+const townBuildings=[];
 for(let x=-2;x<2;x++)for(let z=-2;z<2;z++){
  const bx=x*40+20,bz=z*40+20;
- box(bx,-.04,bz,29,.14,29,0x9f9d97);
+ // Pavement is elevated above street asphalt, with a realistic curb.
+ box(bx,-.042,bz,29,.115,29,0x9f9d97);
  for(let i=0;i<3;i++)for(let j=0;j<3;j++){
   const cx=bx-9+i*9,cz=bz-9+j*9;
   if((i===1&&j===1)||(seeded(x*19+i,z*17+j)<.21)){
@@ -42,19 +58,31 @@ for(let x=-2;x<2;x++)for(let z=-2;z<2;z++){
    box(cx,2.4,cz,3.2,3.7,3.2,0x527c49);
    continue;
   }
-  const height=6+Math.floor(seeded(cx,cz)*5)*3;
+  const height=5.9+Math.floor(seeded(cx,cz)*4)*2.9;
+  const start=vertices.length;
   const shades=[0xb4a99c,0xbcc1c0,0x9badaf,0xd0c4ad,0xa89a89,0xa9b4a5];
   const tint=shades[Math.floor(seeded(cx+6,cz+3)*shades.length)];
   box(cx,0,cz,6.9,height,6.9,tint);
-  box(cx,height,cz,7.1,.28,7.1,0x5d696d);
-  for(let floor=0;floor<Math.floor(height/2.7);floor++)for(let side of [-1,1]){
-   const yy=1.4+floor*2.7;
+  box(cx,height,cz,7.02,.18,7.02,0x5d696d);
+  for(let floor=0;floor<Math.floor(height/2.9);floor++)for(let side of [-1,1]){
+   const yy=1.65+floor*2.9;
    for(let wx of [-1.9,1.9]){
-    box(cx+wx,yy,cz+side*3.485,1.15,1.3,.055,0x4b7184);
-    box(cx+side*3.485,yy,cz+wx,.055,1.3,1.15,0x4b7184);
+    box(cx+wx,yy,cz+side*3.51,1.15,1.45,.065,0x456776);
+    box(cx+side*3.51,yy,cz+wx,.065,1.45,1.15,0x456776);
+    // Slim mullions and a small sill instead of featureless glass rectangles.
+    box(cx+wx,yy-.72,cz+side*3.55,1.32,.09,.09,0xd6d2c8);
    }
   }
-  box(cx,0,cz+3.5,1.5,2.45,.08,0x645b51);
+  box(cx,0,cz+3.56,1.12,2.25,.09,0x645b51);
+  // Small balcony and eaves seen in residential street references.
+  if(seeded(cx+4,cz+8)>.53){
+   box(cx,2.85,cz+3.88,4.2,.12,.83,0x918c80);
+   for(let rail=-1;rail<=1;rail++)box(cx+rail*1.7,2.92,cz+4.23,.045,.75,.045,0x676c69);
+   box(cx,3.59,cz+4.23,4.25,.055,.055,0x676c69);
+  }
+  const geometry=new Float32Array(vertices.splice(start)),buffer=gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,geometry,gl.STATIC_DRAW);
+  townBuildings.push({cx,cz,buffer,count:geometry.length/6});
  }
 }
 // visible pedestrian avatar, regenerated separately from static town
@@ -79,6 +107,15 @@ function blocked(x,z){
   if(Math.abs(x-cx)<3.85&&Math.abs(z-cz)<3.85)return true;
  }return false;
 }
+// Hide only buildings between the player and camera; no transparent sorting artifacts.
+function obscuresPlayer(b,camera){
+ const ax=camera[0]-player.x,az=camera[2]-player.z;
+ const bx=b.cx-player.x,bz=b.cz-player.z;
+ const len=ax*ax+az*az,t=(bx*ax+bz*az)/(len||1);
+ if(t<=0||t>=1)return false;
+ const nearX=player.x+ax*t,nearZ=player.z+az*t;
+ return Math.abs(nearX-b.cx)<4.4&&Math.abs(nearZ-b.cz)<4.4;
+}
 function bind(buffer){gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.vertexAttribPointer(locP,3,gl.FLOAT,false,24,0);gl.enableVertexAttribArray(locP);gl.vertexAttribPointer(locC,3,gl.FLOAT,false,24,12);gl.enableVertexAttribArray(locC)}
 function frame(now){
  const dt=Math.min(.05,(now-last)/1000||0);last=now;
@@ -92,17 +129,27 @@ function frame(now){
  }
  vertices.length=0;
  const bob=speed>.12?Math.sin(walk)*.05:0;
- box(player.x,0,player.z,.53,.22,.36,0x28313a);
- box(player.x,.21+bob,player.z,.68,1.08,.42,0x3c5c6c);
- box(player.x,1.28+bob,player.z,.43,.49,.43,0xc2a185);
- box(player.x-.17,.0,player.z-.03,.16,.7,.19,0x242c33);
- box(player.x+.17,.0,player.z-.03,.16,.7,.19,0x242c33);
+ // Approximately 1.75 m tall human, with rounded anatomy and gently swinging limbs.
+ const px=player.x,pz=player.z,theta=player.heading;
+ const sw= speed>.12?Math.sin(walk)*.13:0;
+ ellipsoid(px,1.00+bob,pz,.34,.48,.23,0x426779,14,9); // fitted torso
+ ellipsoid(px,1.51+bob,pz,.16,.12,.17,0xc69d81); // neck
+ ellipsoid(px,1.66+bob,pz,.22,.27,.22,0xc69d81,14,10); // head
+ ellipsoid(px,1.82+bob,pz-.012,.225,.095,.23,0x2d2927); // hair
+ for(const side of [-1,1]){
+  const x=px+side*.43;
+  ellipsoid(x,1.02+bob+side*sw,pz,.135,.37,.14,0x426779);
+  ellipsoid(x, .66+bob+side*sw,pz,.115,.12,.12,0xc69d81);
+  ellipsoid(px+side*.175,.43+bob-side*sw,pz,.155,.40,.17,0x293b4a);
+  ellipsoid(px+side*.175,.10+bob-side*sw,pz+.09,.16,.105,.27,0x303133);
+ }
  const arr=new Float32Array(vertices);gl.bindBuffer(gl.ARRAY_BUFFER,avatarBuffer);gl.bufferData(gl.ARRAY_BUFFER,arr,gl.DYNAMIC_DRAW);
  const dpr=Math.min(2,window.devicePixelRatio||1),w=Math.round(canvas.clientWidth*dpr),h=Math.round(canvas.clientHeight*dpr);
  if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}gl.viewport(0,0,w,h);gl.enable(gl.DEPTH_TEST);gl.clearColor(.56,.73,.83,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
- const eye=[player.x+8,9.5,player.z+13],look=[player.x,1.2,player.z],vp=mat4.mul(mat4.perspective(1.05,w/h,.1,350),mat4.look(eye,look));
+ const eye=[player.x+5.7,8.0,player.z+9.2],look=[player.x,1.2,player.z],vp=mat4.mul(mat4.perspective(1.05,w/h,.1,350),mat4.look(eye,look));
  gl.uniformMatrix4fv(locVP,false,vp);
  bind(staticBuffer);gl.drawArrays(gl.TRIANGLES,0,staticArray.length/6);
+ for(const b of townBuildings){if(obscuresPlayer(b,eye))continue;bind(b.buffer);gl.drawArrays(gl.TRIANGLES,0,b.count)}
  bind(avatarBuffer);gl.drawArrays(gl.TRIANGLES,0,arr.length/6);
  requestAnimationFrame(frame);
 }
