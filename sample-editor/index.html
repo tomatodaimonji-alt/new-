@@ -4,6 +4,8 @@
 #editPanel[hidden]{display:none}#editInfo{font-size:11px;overflow-wrap:anywhere}#editNotice{color:#d4e8ae;min-height:14px;font-size:11px}
 #editPanel .editorRow{display:flex;gap:5px}#editPanel button{background:#435762;color:white;border:1px solid #ffffff55;border-radius:5px;padding:5px 7px;flex:1;font-size:12px}
 #editPanel button:active,#editToggle:active{background:#617c89}
+#storeJump{position:absolute;right:153px;top:41px;z-index:7;background:#284638dd;color:#fff;border:1px solid #ffffff77;border-radius:8px;padding:6px 10px;font-size:13px}
+body.shooting #storeJump{display:none}
 #shootToggle{position:absolute;right:77px;top:41px;z-index:8;background:#172b36dd;color:white;border:1px solid #ffffff77;border-radius:8px;padding:6px 12px;font-size:13px}
 #shootPanel{position:absolute;right:12px;top:88px;width:min(195px,29vw);padding:9px;background:#14242eea;color:#fff;border:1px solid #ffffff66;border-radius:9px;z-index:8;display:grid;gap:6px;font-size:12px}
 #shootPanel[hidden]{display:none}#shootPanel button{border:1px solid #ffffff55;border-radius:6px;background:#405967;color:#fff;padding:7px 4px;font-size:12px;flex:1}#shootPanel button:disabled{opacity:.35}
@@ -13,7 +15,7 @@
 body.shooting #pad,body.shooting #editToggle,body.shooting #editPanel,body.shooting #v,body.shooting #hint{display:none}
 body.shooting #shootToggle{right:12px;top:39px}
 @media(max-height:420px){#pad{width:120px;height:120px}#stick{left:37px;top:37px;width:46px;height:46px}}
-</style></head><body><canvas id="scene"></canvas><div id="v">v19</div><div id="hint">サンプルエディター</div>
+</style></head><body><canvas id="scene"></canvas><div id="v">v20</div><div id="hint">サンプルエディター</div>
 <button id="editToggle" type="button">編集</button>
 <div id="editPanel" hidden>
 <strong>POI：谷中銀座・再現研究区画</strong>
@@ -23,6 +25,7 @@ body.shooting #shootToggle{right:12px;top:39px}
 <div class="editorRow"><button data-edit="hMinus">高さ −</button><button data-edit="hPlus">高さ ＋</button><button data-edit="reset">初期値に戻す</button></div>
 <div id="editNotice">変更はこの端末に自動保存</div>
 </div>
+<button id="storeJump" type="button">コンビニへ</button>
 <button id="shootToggle" type="button">撮影</button>
 <div id="shootPanel" hidden>
 <strong>撮影・カメラカット</strong>
@@ -82,8 +85,41 @@ for(let k=0;k<8;k++)for(const side of [-1,1]){
  scene.objects.push({id:'pole-'+side+'-'+k,poiId:'yanaka-ginza-study',type:'utility-pole',
   x:side*5.95,z:-48+k*14.2,height:7.1,source:'photo-inspired estimates'});
 }
-scene.pois[0].buildingIds=scene.buildings.map(b=>b.id);
-scene.pois[0].objectIds=scene.objects.map(o=>o.id);
+// v20 convenience-store study at the end of the commercial street.
+// Coordinates are a designed prototype, not measurements of a named real shop.
+const convenience={id:'mini-market-01',poiId:'convenience-study',
+ type:'convenience',x:0,z:79.5,width:17.6,depth:20,height:4.35,
+ entrance:{x:0,z:69.5,opening:3.5},
+ source:'Japanese convenience-store layout reference; approximate proportions'};
+scene.pois.push({id:'convenience-study',name:'小型コンビニ・研究店舗',
+ bounds:{minX:-10,maxX:10,minZ:68,maxZ:91},
+ source:'layout study, estimated',buildingIds:[convenience.id],objectIds:[]});
+scene.buildings.push(convenience);
+const fixtures=[
+ ['counter-left','checkout',-5.6,72.35,2.6,1.1,1.05],
+ ['counter-machine','register',-5.6,72.35,.48,.40,.33],
+ ['shelf-a','aisle-shelf',-3.15,77.2,1.16,3.55,1.57],
+ ['shelf-b','aisle-shelf',3.15,77.2,1.16,3.55,1.57],
+ ['shelf-c','aisle-shelf',-3.15,83.1,1.16,3.55,1.57],
+ ['shelf-d','aisle-shelf',3.15,83.1,1.16,3.55,1.57],
+ ['back-fridge-a','fridge',-5.45,88.05,2.8,.8,2.50],
+ ['back-fridge-b','fridge',-2.55,88.05,2.8,.8,2.50],
+ ['back-fridge-c','fridge',.35,88.05,2.8,.8,2.50],
+ ['back-fridge-d','fridge',3.25,88.05,2.8,.8,2.50],
+ ['back-fridge-e','fridge',6.15,88.05,2.8,.8,2.50],
+ ['side-rack-a','side-rack',7.5,75.6,.66,3.4,1.95],
+ ['side-rack-b','side-rack',7.5,82.1,.66,3.4,1.95],
+ ['hot-case','hot-case',-6.15,76.1,1.08,.85,1.15],
+ ['entry-mat','floor-mat',0,71.2,2.9,1.65,.018]
+];
+for(const [id,type,x,z,width,depth,height] of fixtures){
+ scene.objects.push({id:'mini-market-'+id,poiId:'convenience-study',
+  type,x,z,width,depth,height,
+  source:'reference-inspired, approximate'});
+ scene.pois[1].objectIds.push('mini-market-'+id);
+}
+scene.pois[0].buildingIds=scene.buildings.filter(b=>b.type==='shop').map(b=>b.id);
+scene.pois[0].objectIds=scene.objects.filter(o=>o.poiId==='yanaka-ginza-study').map(o=>o.id);
 function restoreSceneEdits(){
  try{
   const saved=JSON.parse(localStorage.getItem(SCENE_STORAGE_KEY)||'null');
@@ -194,9 +230,9 @@ function renderStreetShop(shop){
  Object.assign(shop,{cx:x,cz:z,front,buffer,count:geometry.length/6});
  return shop;
 }
-for(const shop of scene.buildings)townBuildings.push(renderStreetShop(shop));
+for(const shop of scene.buildings.filter(b=>b.type==='shop'))townBuildings.push(renderStreetShop(shop));
 // Lanterns, utility poles, overhead cables and drainage add a credible lived-in streetscape.
-for(const object of scene.objects){
+for(const object of scene.objects.filter(o=>o.type==='utility-pole')){
  const z=object.z;
  const side=Math.sign(object.x),px=object.x;
  {
@@ -217,6 +253,165 @@ for(const object of scene.objects){
 // Street crosses small paved courts at each end so the scene is explorable.
 box(0,-.155,-62,20,.1,14,0xa99983);
 box(0,-.155,62,20,.1,14,0xa99983);
+// v20: independent, walkable convenience-store study. 1 unit approximately 1 m.
+// Store modeled without a central roof sheet so the interior stays visible from
+// the existing third-person camera. Perimeter eaves and ceiling fixtures remain.
+const convenienceBuffers=[];
+function makeConvenienceMesh(id,build){
+ const start=vertices.length;
+ build();
+ const data=new Float32Array(vertices.splice(start));
+ const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+ gl.bufferData(gl.ARRAY_BUFFER,data,gl.STATIC_DRAW);
+ convenienceBuffers.push({id,buffer,count:data.length/6});
+}
+function storeLight(x,y,z){
+ box(x,y,z,2.1,.055,.24,0xf5eee0);
+ box(x,y+.05,z,2.2,.045,.30,0xc7c7c4);
+}
+function storeShell(){
+ const b=convenience,front=b.z-b.depth/2,back=b.z+b.depth/2;
+ box(b.x,-.12,b.z,b.width,.115,b.depth,0xd2cfbf);
+ // Tile joints: small elevations above the pale floor, no coplanar fighting.
+ for(let x=-8;x<=8;x+=1.1)box(x,-.002,b.z,.013,.004,b.depth-.18,0xb8b9b1);
+ for(let z=70;z<89.5;z+=1.1)box(0,-.002,z,b.width-.20,.004,.013,0xb8b9b1);
+ // Exterior walls; entrance is physically open (no invisible door collision).
+ for(const x of [-b.width/2,b.width/2])
+  box(x,0,b.z,.18,b.height,b.depth+.18,0xbbb9ad);
+ box(0,0,back,b.width+.2,b.height,.2,0xc2c3bb);
+ for(const side of [-1,1]){
+  // Facade: glazed panels at either side of the 3.5 m central sliding doorway.
+  const left=side*5.25;
+  box(left,0,front,7,.17,.17,0x9ca4a1);
+  box(left,3.08,front,7,.17,.17,0x9ca4a1);
+  box(left,0,front,.12,3.1,.18,0x7b898c);
+  box(left+side*3.44,0,front,.12,3.1,.18,0x7b898c);
+  // Blue-grey glazing represented as thin solid tinted panes until texture support.
+  box(left,1.25,front+.03,6.78,1.66,.055,0x779aa4);
+  box(left,.12,front+.035,6.78,1.1,.06,0x98bac1);
+  box(left,1.44,front-.10,6.8,.045,.065,0xd4d6cf);
+ }
+ // Door track is overhead, not in the pedestrian's collision path.
+ box(0,3.08,front,.16,.14,3.75,0x687980);
+ box(0,3.27,front,3.78,.13,.2,0x7a8887);
+ // Prominent unbranded convenience sign above full-width glazed facade.
+ box(0,3.38,front-.29,b.width+.22,.73,.24,0xf0ede5);
+ box(0,3.90,front-.30,b.width+.22,.115,.25,0x3b777f);
+ box(0,3.42,front-.43,b.width-.95,.055,.028,0x7ba49d);
+ box(0,3.17,front-.43,b.width-.95,.05,.028,0x466e8f);
+ // Structural corner posts, soffit edge; ceiling deliberately open for filming.
+ for(const x of [-8.62,8.62])
+  for(const z of [front,back])box(x,0,z,.21,b.height,.21,0x8e9695);
+ for(const x of [-8.6,8.6])box(x,4.29,b.z,.28,.16,b.depth,0xb4b7ad);
+ for(const z of [front,back])box(0,4.29,z,b.width,.16,.28,0xb4b7ad);
+ // Hanging fluorescent strips, checkout light, entrance mat.
+ for(const x of [-5.7,0,5.7])for(const z of [74.5,81.0,86.6])storeLight(x,3.72,z);
+ box(0,-.014,front-2.85,7.3,.045,4.1,0xa8a7a0);
+ // Outdoor trash/recycling stations and bicycle stand beside facade.
+ for(let i=0;i<3;i++){
+  const x=5.65+i*.92;
+  box(x,-.025,front-1.35,.7,1.05,.63,[0x4f717a,0x728d69,0x8c7770][i]);
+  box(x,1.02,front-1.35,.73,.10,.66,0x424e4f);
+ }
+ for(const x of [-6.8,-5.8]){
+  box(x,-.015,front-1.0,.075,.57,.075,0x838f91);
+  box(x,.52,front-1,.82,.06,.07,0x838f91);
+ }
+}
+function renderStoreFixture(o){
+ const {type,x,z,width:w,depth:d,height:h}=o;
+ if(type==='floor-mat'){
+  box(x,-.009,z,w,.012,d,0x52605f);
+  for(let i=-1;i<=1;i++)box(x+i*.48,.005,z,.09,.012,d*.72,0x677471);
+  return;
+ }
+ if(type==='register'){
+  // Point-of-sale equipment is displayed on, but does not double-block, checkout.
+  box(x,.96,z,w,.12,d,0x333940);
+  box(x,1.05,z-.16,.39,.32,.09,0x263944);
+  box(x,1.08,z-.215,.28,.22,.017,0x6c98a9);
+  box(x+.3,1.01,z+.16,.23,.13,.24,0xddddce);
+  return;
+ }
+ if(type==='checkout'){
+  box(x,0,z,w,.9,d,0xa58d72);
+  box(x,.90,z,w+.12,.12,d+.14,0x5d6261);
+  box(x,.13,z-d/2,.12,.75,d*.48,0x877b66);
+  return;
+ }
+ if(type==='fridge'){
+  box(x,0,z,w,h,d,0xdadfd9);
+  box(x,.14,z-d/2-.035,w-.18,h-.32,.09,0x6b929f);
+  for(let shelf=0;shelf<4;shelf++){
+   const y=.47+shelf*.47;
+   box(x,y,z-d/2-.11,w-.22,.055,.15,0xc2d0ce);
+   for(let k=0;k<8;k++){
+    const xx=x-w*.43+(k+.5)*(w*.86/8);
+    box(xx,y+.06,z-d/2-.17,.18,.23,.10,
+      [0x66a4b9,0xbd8b5c,0x67916f,0xe4d2ae,0xb6695f][(shelf+k)%5]);
+   }
+  }
+  // Narrow divisions and refrigerator handles.
+  box(x,0,z-d/2-.20,.045,h-.14,.06,0xced4d4);
+  for(const side of [-1,1])
+   box(x+side*(w/2-.1),.95,z-d/2-.21,.055,.65,.045,0xe8ede9);
+  return;
+ }
+ if(type==='hot-case'){
+  box(x,0,z,w,.6,d,0x8f8271);
+  box(x,.64,z,w,h-.64,d,0xb3a695);
+  box(x,.69,z-d/2-.06,w-.12,h-.76,.055,0x8b9b9a);
+  for(let i=0;i<3;i++)box(x-w*.3+i*w*.3,.82,z-d/2-.12,.17,.12,.12,0xc7a36e);
+  return;
+ }
+ // Gondola and side racks: open shelves and repeated product silhouettes.
+ box(x,0,z,w,.14,d,0x747a76);
+ for(const side of [-1,1]){
+  box(x+side*(w/2-.05),0,z,.07,h,d,0x858e8b);
+ }
+ for(let tier=0;tier<4;tier++){
+  const y=.28+tier*(h-.35)/4;
+  box(x,y,z,w,.05,d,0xb6bab4);
+  for(const face of [-1,1]){
+   const px=x+face*(w/2+.035);
+   for(let i=0;i<9;i++){
+    const zz=z-d*.45+(i+.5)*d*.9/9;
+    const col=[0xbc8b53,0xb85f4e,0x7c9970,0xd7b65d,0x738ea1,0xc4a3a2][(i+2*tier+(face+1))%6];
+    box(px,y+.045,zz,.14,.19+.025*(i%3),d*.075,col);
+   }
+  }
+ }
+ box(x,h-.07,z,w+.04,.13,d+.03,0x999e96);
+}
+function buildConvenience(){
+ makeConvenienceMesh(convenience.id,storeShell);
+ for(const o of scene.objects.filter(o=>o.poiId===convenience.poiId))
+  makeConvenienceMesh(o.id,()=>renderStoreFixture(o));
+}
+buildConvenience();
+// Small navigation shortcut makes the new study area accessible from the 100+ m street.
+const storeJump=document.getElementById('storeJump');
+storeJump.addEventListener('click',()=>{
+ if(shootState.enabled)return;
+ if(player.z<66){player.x=0;player.z=65.8;storeJump.textContent='街へ戻る';}
+ else {player.x=0;player.z=0;storeJump.textContent='コンビニへ';}
+ resetStick();
+});
+// Walkable store: explicit perimeter walls and individual fixture colliders.
+function convenienceBlocked(x,z){
+ const b=convenience,front=b.z-b.depth/2,back=b.z+b.depth/2;
+ const margin=.23;
+ if(x>-b.width/2-margin&&x<b.width/2+margin&&z>front-margin&&z<back+margin){
+  if(Math.abs(x)>b.width/2-margin||z>back-margin)return true;
+  if(z<front+margin&&Math.abs(x)>b.entrance.opening/2-margin)return true;
+ }
+ // Only registered fixture volumes can block walking, not drawn decorations.
+ for(const o of scene.objects){
+  if(o.poiId!=='convenience-study'||o.type==='floor-mat'||o.type==='register')continue;
+  if(Math.abs(x-o.x)<o.width/2+margin&&Math.abs(z-o.z)<o.depth/2+margin)return true;
+ }
+ return false;
+}
 // visible pedestrian avatar, regenerated separately from static town
 const staticArray=new Float32Array(vertices),staticBuffer=gl.createBuffer();
 gl.bindBuffer(gl.ARRAY_BUFFER,staticBuffer);gl.bufferData(gl.ARRAY_BUFFER,staticArray,gl.STATIC_DRAW);
@@ -390,17 +585,18 @@ const editPanel=document.getElementById('editPanel');
 const editInfo=document.getElementById('editInfo');
 const editNotice=document.getElementById('editNotice');
 let editorOpen=false,selectedIndex=0;
-function selectedShop(){return scene.buildings[selectedIndex]}
+const editableShops=scene.buildings.filter(b=>b.type==='shop');
+function selectedShop(){return editableShops[selectedIndex]}
 function refreshEditor(){
  const b=selectedShop();
  scene.selectedBuildingId=b.id;
- editInfo.textContent=(selectedIndex+1)+' / '+scene.buildings.length+'  '+b.id+
+ editInfo.textContent=(selectedIndex+1)+' / '+editableShops.length+'  '+b.id+
   '  X:'+b.x.toFixed(1)+'  Z:'+b.z.toFixed(1)+'  H:'+b.height.toFixed(1);
 }
 function editShop(action){
  const b=selectedShop();
  if(action==='prev'||action==='next'){
-  selectedIndex=(selectedIndex+(action==='prev'?-1:1)+scene.buildings.length)%scene.buildings.length;
+  selectedIndex=(selectedIndex+(action==='prev'?-1:1)+editableShops.length)%editableShops.length;
   editNotice.textContent='建物を選択';
   refreshEditor();return;
  }
@@ -422,7 +618,7 @@ function editShop(action){
   }
   // Do not overlap other building footprints when moving a shop.
   const candidate={...b,[key]:next};
-  if(scene.buildings.some(other=>other!==b&&
+  if(editableShops.some(other=>other!==b&&
    Math.abs(other.x-candidate.x)<(other.depth+candidate.depth)*.5+.10&&
    Math.abs(other.z-candidate.z)<(other.width+candidate.width)*.5+.10)){
    editNotice.textContent='他の建物と重なります';return;
@@ -569,7 +765,7 @@ function blocked(x,z){
  for(const b of townBuildings){
   if(Math.abs(x-b.cx)<b.depth*.5+.26&&Math.abs(z-b.cz)<b.width*.5+.26)return true;
  }
- return false;
+ return convenienceBlocked(x,z);
 }
 function bind(buffer){gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.vertexAttribPointer(locP,3,gl.FLOAT,false,24,0);gl.enableVertexAttribArray(locP);gl.vertexAttribPointer(locC,3,gl.FLOAT,false,24,12);gl.enableVertexAttribArray(locC)}
 // v18: self-contained procedural pedestrian, ~1.76 world units tall.
@@ -889,6 +1085,7 @@ function frame(now){
  gl.uniformMatrix4fv(locVP,false,vp);
  bind(staticBuffer);gl.drawArrays(gl.TRIANGLES,0,staticArray.length/6);
  for(const b of townBuildings){bind(b.buffer);gl.drawArrays(gl.TRIANGLES,0,b.count)}
+ for(const item of convenienceBuffers){bind(item.buffer);gl.drawArrays(gl.TRIANGLES,0,item.count)}
  bind(avatarBuffer);
  // Alpha blend only the ground decal, and keep it out of the depth buffer.
  gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
