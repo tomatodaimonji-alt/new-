@@ -2754,26 +2754,49 @@ function initSignTextures(){
  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
 }
 
+// Shared deterministic display layout: avoids artificial four-can rows and keeps labels aligned.
+function pineCannedShelfPositions(o){
+ const out=[],decks=[.17,.52,.87];
+ const seed=Math.abs(Math.floor(o.x*29+o.z*43+(o.y||0)*17));
+ for(let tier=0;tier<3;tier++)for(const side of [-1,1]){
+  const count=3+((seed+tier*5+(side>0?2:0))%4);
+  for(let i=0;i<count;i++){
+   // Slight irregularity without allowing cans to intersect the supports or each other.
+   if((seed+tier*11+i*7+(side>0?3:0))%13===0)continue;
+   const spacing=.79/count,cz=-.395+(i+.5)*spacing+(((seed+i*19+tier*13)%5)-2)*.006;
+   const cx=side*(.34+((seed+tier*3+i*7)%3)*.011);
+   const product=(seed+i+tier*3+(side>0?1:0))%CAN_LABELS.length;
+   const twist=(((seed+i*11+tier*17+(side>0?5:0))%7)-3)*.075;
+   out.push({tier,side,cx,cz,bottom:decks[tier]+.025,product,twist});
+  }
+ }
+ return out;
+}
 function buildCanShelfLabelOverlays(groups){
- // Each SKU shares a single texture; multiple labeled cans share one buffer per product type.
- const scale=.78,r=.068,h=.235,decks=[.17,.52,.87];
+ // Bend the print around the cylindrical can wall, sharing the exact placement used by the mesh.
+ const scale=.78,r=.068,h=.235,segments=9;
  for(const o of world){
   if(o.type!=='pineCannedShelfDetailed'||(hideUpper&&o.y>level))continue;
   const angle=((o.rot||0)%4+4)%4,bx=o.x+.5,bz=o.z+.5,by=o.y*1.4+terrainY(o.x,o.z);
-  for(let level=0;level<3;level++)for(const side of [-1,1])for(let i=0;i<4;i++){
-   const present=((level*13+i*7+(side===1?3:0))%9)>1||(level===0&&i===0);
-   if(!present)continue;
-   const product=(i+level*3+(side===1?1:0))%CAN_LABELS.length;
-   const data=groups.get(CAN_LABELS[product].id);
-   const xx=side*(.375+r+.009),zz=-.375+i*.245,bottom=decks[level]+.025;
-   // Printed front panel sits tangent to the cylindrical body, with matching can angle and scale.
-   const y0=bottom+h*.25,y1=bottom+h*.77,half=.053;
-   const pts=[[xx,y0,zz-half],[xx,y0,zz+half],[xx,y1,zz+half],[xx,y1,zz-half]];
-   const vertices=pts.map(([px,py,pz])=>{
-    const [rx,rz]=rot2(px*scale,pz*scale,angle);return[bx+rx,by+py*scale,bz+rz]
-   });
-   const uv=side===1?[[0,0],[1,0],[1,1],[0,1]]:[[1,0],[0,0],[0,1],[1,1]];
-   for(const n of [0,1,2,0,2,3])data.push(...vertices[n],...uv[n]);
+  for(const can of pineCannedShelfPositions(o)){
+   const data=groups.get(CAN_LABELS[can.product].id);
+   const y0=can.bottom+h*.25,y1=can.bottom+h*.77;
+   // Outward-facing curved strip: each column follows the ten-sided can profile.
+   const verts=[];
+   for(let j=0;j<=segments;j++){
+    const theta=-1.05+j*2.10/segments+can.twist;
+    const px=can.cx+can.side*(r+.002)*Math.cos(theta);
+    const pz=can.cz+(r+.002)*Math.sin(theta);
+    const [rx,rz]=rot2(px*scale,pz*scale,angle);
+    verts.push([[bx+rx,by+y0*scale,bz+rz],[bx+rx,by+y1*scale,bz+rz]]);
+   }
+   for(let j=0;j<segments;j++){
+    const u0=j/segments,u1=(j+1)/segments;
+    const corners=[[...verts[j][0],u0,0],[...verts[j+1][0],u1,0],
+      [...verts[j+1][1],u1,1],[...verts[j][1],u0,1]];
+    const order=can.side>0?[0,1,2,0,2,3]:[2,1,0,3,2,0];
+    for(const n of order)data.push(...corners[n]);
+   }
   }
  }
 }
@@ -3185,15 +3208,9 @@ function pineCannedShelfDetailedGeometry(m,o){
   // Full product artwork is rendered with the shared texture renderer, not colored fake text blocks.
  };
  const inks=[[.26,.48,.58],[.25,.44,.62],[.72,.31,.23],[.78,.60,.24],[.88,.52,.26]];
- let total=0;
- for(let level=0;level<3;level++)for(const side of [-1,1])for(let i=0;i<4;i++){
-  // Visible scavenging gaps with a clearly stocked section in every tier.
-  const present=((level*13+i*7+(side===1?3:0))%9)>1 || (level===0&&i===0);
-  if(!present)continue;
-  const cz=-.375+i*.245,cx=side*.375;
-  const ink=inks[(i+level*3+(side===1?1:0))%inks.length];
-  can(cx,decks[level]+.025,cz,.068,.235,ink,side);
-  total++;
+ for(const item of pineCannedShelfPositions(o)){
+  const ink=inks[item.product%inks.length];
+  can(item.cx,item.bottom,item.cz,.068,.235,ink,item.side);
  }
  // Low side-mounted handwritten inventory tape: never forms a roof over the cans.
  B(.584,1.03,.06,.012,.075,.28,[.77,.70,.55]);
