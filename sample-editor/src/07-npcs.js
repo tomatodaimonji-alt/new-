@@ -4,15 +4,15 @@
 const NPC_STYLES={
  clerk:Object.freeze({...PLAYER_STYLE,
   skin:0xd3a88a,shadowSkin:0xb88d72,hair:0x38302c,
-  shirt:0x4c775e,shirtDark:0x365a45,shirtHighlight:0xb7bc88,
+  shirt:0x4c775e,shirtDark:0x365a45,shirtHighlight:0xb7bc88,haircut:'sidepart',
   trousers:0x323a43,trouserShadow:0x252c34,shoes:0x292b30}),
  visitorA:Object.freeze({...PLAYER_STYLE,
   skin:0xc69a79,shadowSkin:0x9e725c,hair:0x302d30,
-  shirt:0xad7767,shirtDark:0x86554d,shirtHighlight:0xc49b7f,
+  shirt:0xad7767,shirtDark:0x86554d,shirtHighlight:0xc49b7f,haircut:'short',
   trousers:0x52647a,trouserShadow:0x384b5c}),
  visitorB:Object.freeze({...PLAYER_STYLE,
   skin:0xd3ac91,shadowSkin:0xb58d72,hair:0x594337,
-  shirt:0xb5b6a8,shirtDark:0x929485,shirtHighlight:0xe0d6bc,
+  shirt:0xb5b6a8,shirtDark:0x929485,shirtHighlight:0xe0d6bc,haircut:'long',
   trousers:0x4a5860,trouserShadow:0x353f46})
 };
 const npcs=[
