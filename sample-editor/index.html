@@ -1275,7 +1275,7 @@ function solveWalkingKnee(hip,ankle){
 }
 // Procedural skinned-like pose: separate meshes share moving anatomical joints.
 // Rendering is built each frame without external models, Web APIs or textures.
-function renderDetailedPlayer(px,pz,heading,phase,effort,running,style=PLAYER_STYLE,action='idle'){
+function renderDetailedPlayer(px,pz,heading,phase,effort,running,style=PLAYER_STYLE,action='idle',missing=null){
  currentCharacterStyle=style;
  const start=vertices.length;
  const amount=clamp((effort-.035)/.78,0,1);
@@ -1298,6 +1298,7 @@ function renderDetailedPlayer(px,pz,heading,phase,effort,running,style=PLAYER_ST
  playerOval(hipShift,.850+hipHeight,0,.225,.020,.153,C.trouserShadow,10,5);
  // v29: restrained semi-realistic face; no protruding sphere-eyes, swollen
  // mouth, or thick cheek blobs. Most facial features sit close to the skull.
+ const headPartStart=vertices.length;
  const headX=-headCounter,headY=hipHeight*.55;
  const faceZ=torsoLean*.48;
  playerLimb([0,1.41+hipHeight,torsoLean*.35],[headX,1.54+headY,faceZ],.068,.065,C.skin);
@@ -1343,9 +1344,11 @@ function renderDetailedPlayer(px,pz,heading,phase,effort,running,style=PLAYER_ST
  }else{
   playerOval(headX,1.744+headY,faceZ-.103,.116,.030,.040,C.hair,13,6);
  }
+ const removableParts=[{name:'head',a:headPartStart,b:vertices.length}];
  // Each foot has independent stance/swing and a small heel/toe roll.
  for(const side of [-1,1]){
-  const foot=footCycle(stridePhase+(side===1?Math.PI:0),amount,running);
+  const legPartStart=vertices.length;
+   const foot=footCycle(stridePhase+(side===1?Math.PI:0),amount,running);
   const ankleZ=moving?foot.z:0;
   const footRise=foot.lift;
   const h=[hipShift+side*.133,.823+hipHeight,.012];
@@ -1365,7 +1368,9 @@ function renderDetailedPlayer(px,pz,heading,phase,effort,running,style=PLAYER_ST
   for(let lace=0;lace<2;lace++)
    playerOval(side*.137,.123+footRise+foot.toe*.6,ankleZ-.079+lace*.042,
     .050,.009,.015,0xa7a9a6,7,4);
-  // Elbow follows but slightly lags shoulder; swing is opposite the same-side leg.
+  removableParts.push({name:side===1?'rightLeg':'leftLeg',a:legPartStart,b:vertices.length});
+   const armPartStart=vertices.length;
+   // Elbow follows but slightly lags shoulder; swing is opposite the same-side leg.
   const armSwing=moving?Math.sin(stridePhase+(side===1?Math.PI:0))*.155*amount:0;
   // The sleeve begins inside the shoulder line, joining the tapered chest.
   const shoulder=[side*.274,1.337+hipHeight,torsoLean*.50];
@@ -1405,7 +1410,9 @@ function renderDetailedPlayer(px,pz,heading,phase,effort,running,style=PLAYER_ST
     [hand[0]-.030,hand[1]-.022*reach,hand[2]-.052*reach],
     .017,.015,C.skin);
   }
+  removableParts.push({name:side===1?'rightArm':'leftArm',a:armPartStart,b:vertices.length});
  }
+ if(missing)for(const part of removableParts.reverse())if(missing.includes(part.name))vertices.splice(part.a,part.b-part.a);
  // Very small whole-body counter-twist: shoulders turn against pelvic stride.
  // Rotate locally sculpted vertices toward the gameplay heading once.
  const rotation=heading-Math.PI,cs=Math.cos(rotation),sn=Math.sin(rotation);
@@ -1558,7 +1565,7 @@ function renderNPCs(){
  for(const npc of npcs){
   const start=vertices.length;
   renderDetailedPlayer(npc.x,npc.z,npc.heading,npc.phase,npc.motion,false,
-    NPC_STYLES[npc.style],npc.pose);
+    NPC_STYLES[npc.style],npc.pose,npc.missing||null);
   // Whole-body tumble: tilt around the pelvis while airborne, not gore/dismemberment.
   if(npc.knock){
    const k=npc.knock,c=Math.cos(k.tilt),s=Math.sin(k.tilt);
@@ -1571,6 +1578,7 @@ function renderNPCs(){
   if(!npc.knock&&(npc.carrying||npc.pose.pick>.03||npc.itemPlaced))
    renderNpcCarriedProduct(npc);
  }
+ renderDetachedNpcParts();
  // Reset shared character palette for consistency with any later player effects.
  currentCharacterStyle=PLAYER_STYLE;
 }
@@ -1604,7 +1612,7 @@ function renderNpcCarriedProduct(npc){
  const visibility=npc.carrying||npc.itemPlaced?1:Math.min(1,npc.pose.pick);
  if(visibility>.02)renderOriginalProduct(kind,x,y,z,.76*visibility);
 }
-// v31: a single scalable, original low-poly cat; offline WebGL geometry.
+// v32: scalable cat and independent ballistic NPC body parts.
 const cat={x:0,z:12,scale:1.5,time:0,heading:Math.PI,walkPhase:0,
  punch:0,punchTime:0,purr:true,purrIntensity:0,step:0,controlled:false,impactDone:false,impactCount:0};
 const catScaleInput=document.getElementById('catScale');
@@ -1781,7 +1789,7 @@ function catCameraShake(dt){
   (cat.purrIntensity*.30+cat.punch*.95);
  return Math.sin(cat.time*57)*magnitude;
 }
-// v31: lightweight local impact simulation; not a rigid-body physics engine.
+// v32: ballistic physics and separate NPC mesh parts.
 // Cars are original procedural props. NPCs are kicked as whole bodies with a tumble.
 // Existing shop meshes are hidden when destroyed, replaced by rubble.
 const catCars=[
@@ -1790,6 +1798,45 @@ const catCars=[
  {x:2.8,z:27,y:0,vx:0,vy:0,vz:0,angle:0,spin:0,hit:false,body:0xe8d7b1}
 ];
 const catDebris=[];
+const detachedNpcParts=[];
+const PART_LIMIT=20;
+function detachNpcPart(npc,name,ux,uz,power){
+ if(!npc.missing)npc.missing=[];
+ if(npc.missing.includes(name)||detachedNpcParts.length>=PART_LIMIT)return;
+ npc.missing.push(name);
+ const side=name.startsWith('left')?-1:1;
+ const arm=name.endsWith('Arm'),head=name==='head';
+ const height=head?1.62:arm?1.13:.48,offset=head?0:arm?.34:.14;
+ const heading=npc.heading-Math.PI,speed=power*(.65+Math.random()*.25);
+ detachedNpcParts.push({name,style:npc.style,x:npc.x+side*Math.cos(heading)*offset,
+  y:height,z:npc.z-side*Math.sin(heading)*offset,
+  vx:ux*speed+(Math.random()-.5)*2,vy:2.6+power*.34,
+  vz:uz*speed+(Math.random()-.5)*2,
+  angle:0,spin:(Math.random()-.5)*11,radius:head?.16:arm?.12:.15});
+}
+function renderDetachedNpcParts(){
+ for(const part of detachedNpcParts){
+  const style=NPC_STYLES[part.style]||PLAYER_STYLE,st=vertices.length;
+  if(part.name==='head'){
+   playerOval(0,0,0,.145,.20,.135,style.skin,14,9);
+   playerOval(0,.17,.02,.145,.065,.13,style.hair,12,6);
+  }else if(part.name.endsWith('Arm')){
+   playerLimb([0,.30,0],[0,-.28,0],.080,.087,style.skin);
+   playerOval(0,.31,0,.11,.15,.115,style.shirt,10,6);
+   playerOval(0,-.31,0,.066,.079,.058,style.skin,9,6);
+  }else{
+   playerLimb([0,.38,0],[0,-.30,0],.105,.108,style.trousers);
+   playerOval(0,-.35,-.07,.11,.10,.17,style.shoes,10,6);
+  }
+  const c=Math.cos(part.angle),sn=Math.sin(part.angle);
+  for(let i=st;i<vertices.length;i+=6){
+   const x=vertices[i],y=vertices[i+1];
+   vertices[i]=part.x+x*c-y*sn;
+   vertices[i+1]=Math.max(.015,part.y+x*sn+y*c);
+   vertices[i+2]+=part.z;
+  }
+ }
+}
 function renderCatCar(car){
  const start=vertices.length;
  // Build local car geometry, then apply a small roll about its longitudinal axis.
@@ -1815,7 +1862,17 @@ function renderCatCar(car){
 function catKnockNPC(npc,ux,uz,power){
  npc.knock={vx:ux*power,vy:Math.min(8,2+power*.4),vz:uz*power,
   y:0,tilt:0,spin:3.8+power*.19,rest:0};
- npc.state='stunned';
+ if(power>=6.8){
+   const options=['leftArm','rightArm','leftLeg','rightLeg'];
+   const first=options[Math.floor(Math.random()*options.length)];
+   detachNpcPart(npc,first,ux,uz,power);
+   if(power>=10.5){
+    const remaining=options.filter(n=>n!==first);
+    detachNpcPart(npc,remaining[Math.floor(Math.random()*remaining.length)],ux,uz,power);
+   }
+   if(power>=15&&Math.random()<.3)detachNpcPart(npc,'head',ux,uz,power);
+  }
+  npc.state='stunned';
  npc.action='idle';npc.effort=0;
  npc.carrying=false;
 }
@@ -1842,14 +1899,27 @@ function updateCatImpacts(dt){
   if(k.y===0&&k.vy<0)k.vy=0;
   k.tilt=Math.min(Math.PI/2,k.tilt+Math.abs(k.spin)*dt);
   k.vx*=friction;k.vz*=friction;k.spin*=friction;
-  if(k.y===0){k.rest+=dt;if(k.rest>3.5){
+  if(k.y===0){k.rest+=dt;if(k.rest>3.5&&!npc.missing?.length){
    npc.knock=null;
    // Restore authored route at its initial waypoint; avoid retaining an interrupted transaction.
    npc.state=npc.role==='bystander'?'idle':'walking';
    npc.wait=0;npc.action='idle';npc.routeIndex=0;
   }}
  }
- for(let i=catDebris.length-1;i>=0;i--){
+ for(const part of detachedNpcParts){
+   part.x+=part.vx*dt;part.z+=part.vz*dt;
+   part.y+=part.vy*dt;part.vy-=9.8*dt;
+   if(part.y<=part.radius){
+    part.y=part.radius;
+    if(part.vy<0)part.vy=Math.abs(part.vy)>1?-part.vy*.27:0;
+    part.vx*=Math.exp(-dt*7);part.vz*=Math.exp(-dt*7);
+    part.spin*=Math.exp(-dt*6);
+   }
+   part.vx*=friction;part.vz*=friction;part.spin*=friction;
+   part.angle+=part.spin*dt;
+   part.x=clamp(part.x,-110,110);part.z=clamp(part.z,-110,110);
+  }
+  for(let i=catDebris.length-1;i>=0;i--){
   const d=catDebris[i];
   if(d.life<=0){catDebris.splice(i,1);continue}
   d.life-=dt;d.x+=d.vx*dt;d.z+=d.vz*dt;
