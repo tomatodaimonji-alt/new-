@@ -36,6 +36,25 @@ function currentShot(){
   x:shootState.focusX,z:shootState.focusZ,
   yaw:cameraYaw,pitch:cameraPitch,distance:cameraDistance};
 }
+// v23: camera positions are reusable shot presets, not duplicate scene geometry.
+// Each preset targets an existing part of the convenience-study POI.
+const STORE_SHOT_PRESETS={
+ exterior:{label:'店外全景',x:0,z:77.2,yaw:Math.PI,pitch:-.21,distance:15.5},
+ doorway:{label:'入口',x:0,z:72.4,yaw:Math.PI,pitch:-.11,distance:7.0},
+ aisle:{label:'商品棚',x:-2.05,z:78.1,yaw:Math.PI/2,pitch:-.17,distance:5.0},
+ checkout:{label:'レジ',x:-5.5,z:72.35,yaw:Math.PI*.64,pitch:-.20,distance:5.4},
+ cold:{label:'冷蔵ケース',x:0.30,z:87.0,yaw:Math.PI,pitch:-.14,distance:6.8}
+};
+function chooseStoreCamera(name){
+ const preset=STORE_SHOT_PRESETS[name];
+ if(!preset||!shootState.enabled)return false;
+ shootState.playing=false;
+ shootState.focusX=preset.x;shootState.focusZ=preset.z;
+ cameraYaw=preset.yaw;cameraPitch=preset.pitch;cameraDistance=preset.distance;
+ cameraTouches.clear();pinchActive=false;pinchDistance=0;
+ shootingUI(preset.label+'を表示中。カット追加で保存');
+ return true;
+}
 function shootingUI(message){
  shootButton.textContent=shootState.enabled?'探索に戻る':'撮影';
  shootPanel.hidden=!shootState.enabled;
@@ -105,6 +124,7 @@ shootPanel.addEventListener('click',e=>{
  const button=e.target.closest('button[data-shot]');
  if(!button)return;
  const action=button.dataset.shot;
+ if(action.startsWith('preset-')){chooseStoreCamera(action.slice(7));return;}
  if(action==='add')addShot();
  if(action==='play')playShots();
  if(action==='stop')stopShots();
