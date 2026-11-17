@@ -163,31 +163,53 @@ function renderDetailedPlayer(px,pz,heading,phase,effort,running,style=PLAYER_ST
  playerOval(0,1.219+hipHeight,torsoLean-.183,.006,.079,.009,C.shirtDark,6,4);
  playerOval(-.143,1.147+hipHeight,torsoLean-.160,.033,.012,.009,C.shirtHighlight,7,4);
  playerOval(hipShift,.850+hipHeight,0,.225,.020,.153,C.trouserShadow,10,5);
- // Natural neck and head with mild counter-motion, rather than bobbing identically.
+ // v29: restrained semi-realistic face; no protruding sphere-eyes, swollen
+ // mouth, or thick cheek blobs. Most facial features sit close to the skull.
  const headX=-headCounter,headY=hipHeight*.55;
  const faceZ=torsoLean*.48;
- playerLimb([0,1.40+hipHeight,torsoLean*.35],[headX,1.56+headY,faceZ],.075,.074,C.skin);
- // Narrower cheekbones and a less spherical forehead/head shape.
- playerOval(headX,1.616+headY,faceZ-.006,.153,.216,.147,C.skin,18,12);
- playerOval(headX,1.514+headY,faceZ-.053,.117,.061,.111,C.shadowSkin,11,6);
- playerOval(headX,1.537+headY,faceZ-.083,.123,.069,.103,C.skin,11,6);
+ playerLimb([0,1.41+hipHeight,torsoLean*.35],[headX,1.54+headY,faceZ],.068,.065,C.skin);
+ // Skull and soft lower jaw; the upper skull supplies the continuous silhouette.
+ playerOval(headX,1.616+headY,faceZ-.006,.145,.207,.137,C.skin,19,14);
+ playerOval(headX,1.512+headY,faceZ-.035,.108,.063,.105,C.skin,12,7);
+ // Small ears close to the head rather than floating knobs.
  for(const side of [-1,1]){
-  playerOval(headX+side*.155,1.592+headY,faceZ+.003,.025,.052,.026,C.shadowSkin,8,6);
-  playerOval(headX+side*.157,1.600+headY,faceZ-.018,.014,.033,.018,C.skin,8,5);
-  // Recessed eyes, not large white pupils. A thin lid and small iris.
-  playerOval(headX+side*.059,1.635+headY,faceZ-.146,.022,.010,.007,0x6b544c,9,5);
-  playerOval(headX+side*.059,1.637+headY,faceZ-.151,.008,.008,.006,C.eye,8,5);
-  playerOval(headX+side*.059,1.668+headY,faceZ-.146,.033,.006,.008,C.hair,8,4);
+  playerOval(headX+side*.145,1.589+headY,faceZ-.002,.017,.041,.024,C.skin,9,6);
+  playerOval(headX+side*.157,1.586+headY,faceZ-.019,.006,.019,.009,C.shadowSkin,7,5);
+  // Subtle almond-shaped eyes: only the dark upper lash and the tiny iris.
+  playerOval(headX+side*.056,1.638+headY,faceZ-.134,.025,.008,.006,
+   C.shadowSkin,11,5);
+  playerOval(headX+side*.056,1.637+headY,faceZ-.140,.010,.008,.005,
+   C.eye,9,5);
+  playerOval(headX+side*.058,1.666+headY,faceZ-.129,.029,.007,.007,
+   C.hair,11,5);
  }
- playerOval(headX,1.586+headY,faceZ-.150,.024,.060,.031,C.skin,10,8);
- playerOval(headX,1.558+headY,faceZ-.171,.028,.016,.025,C.shadowSkin,9,7);
- playerOval(headX,1.514+headY,faceZ-.153,.041,.006,.006,0x905e57,9,4);
- playerOval(headX,1.755+headY,faceZ+.013,.157,.089,.151,C.hair,14,9);
+ // A narrow bridge and small nose tip give depth without the old bulb.
+ playerOval(headX,1.600+headY,faceZ-.139,.016,.039,.012,C.skin,10,7);
+ playerOval(headX,1.569+headY,faceZ-.151,.021,.012,.012,C.shadowSkin,10,6);
+ playerOval(headX,1.573+headY,faceZ-.159,.019,.010,.008,C.skin,9,5);
+ // Short, desaturated lip seam; avoid the previous thick painted smile.
+ playerOval(headX,1.531+headY,faceZ-.133,.029,.0038,.005,0x936b61,11,5);
+ playerOval(headX,1.519+headY,faceZ-.128,.023,.006,.004,C.skin,9,5);
+ // Hair is a single close-fitting cap plus lightweight swept locks.
+ // NPC style determines haircut silhouette while sharing one humanoid mesh.
+ const haircut=C.haircut||'short';
+ const hairHeight=haircut==='long'?.092:.067;
+ playerOval(headX,1.781+headY,faceZ+.012,.145,hairHeight,.139,C.hair,15,9);
  for(const side of [-1,1]){
-  playerOval(headX+side*.120,1.684+headY,faceZ+.045,.030,.088,.088,C.hair,9,6);
-  playerOval(headX+side*.075,1.705+headY,faceZ-.115,.064,.038,.037,C.hair,8,5);
+  playerOval(headX+side*.123,1.706+headY,faceZ+.050,
+   .022,haircut==='long'?.119:.060,.074,C.hair,10,7);
  }
- playerOval(headX+.016,1.728+headY,faceZ-.123,.100,.025,.035,0x3e3430,10,5);
+ if(haircut==='sidepart'){
+  playerOval(headX-.043,1.750+headY,faceZ-.095,.093,.029,.052,C.hair,13,6);
+  playerOval(headX+.051,1.750+headY,faceZ-.091,.055,.020,.037,C.hair,10,5);
+ }else if(haircut==='long'){
+  playerOval(headX,1.743+headY,faceZ-.108,.113,.033,.040,C.hair,13,6);
+  for(const side of [-1,1])
+   playerOval(headX+side*.128,1.584+headY,faceZ+.047,.025,.107,.063,
+    C.hair,11,7);
+ }else{
+  playerOval(headX,1.744+headY,faceZ-.103,.116,.030,.040,C.hair,13,6);
+ }
  // Each foot has independent stance/swing and a small heel/toe roll.
  for(const side of [-1,1]){
   const foot=footCycle(stridePhase+(side===1?Math.PI:0),amount,running);
@@ -230,11 +252,11 @@ function renderDetailedPlayer(px,pz,heading,phase,effort,running,style=PLAYER_ST
    baseHand[1]*(1-reach)+(1.00+hipHeight+.06*pickWeight)*reach,
    baseHand[2]*(1-reach)-reachZ];
   playerLimb(shoulder,sleeveEnd,.106,.109,C.shirt);
-  playerOval(...sleeveEnd,.101,.037,.103,C.shirtDark,9,5);
+  playerOval(...sleeveEnd,.086,.027,.084,C.shirtDark,9,5);
   playerLimb(sleeveEnd,elbow,.077,.083,C.skin);
-  playerOval(...elbow,.070,.057,.076,C.skin,9,5);
+  playerOval(...elbow,.061,.041,.065,C.skin,9,5);
   playerLimb(elbow,hand,.061,.068,C.skin);
-  playerOval(...hand,.061,.088,.045,C.skin,10,7);
+  playerOval(...hand,.048,.070,.038,C.skin,10,7);
   playerOval(hand[0]-side*.034,hand[1]-.01,hand[2]-.043,.022,.037,.031,C.shadowSkin,8,5);
   // Three short curved grip segments close toward a carried can or bottle.
   // They are local limb geometry and follow the same body rotation/pose blend.
