@@ -1,6 +1,6 @@
 <!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover"><title>サンプルエディター</title><style>
 *{box-sizing:border-box;touch-action:none}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#92b8ce;font-family:sans-serif}canvas{display:block;width:100%;height:100%}#v{position:absolute;top:max(10px,env(safe-area-inset-top));left:14px;color:#fff;text-shadow:0 2px 4px #222;font:bold 15px sans-serif}#pad{position:absolute;left:max(25px,env(safe-area-inset-left));bottom:max(18px,env(safe-area-inset-bottom));width:150px;height:150px;border:2px solid #ffffff70;border-radius:50%;background:#13293755;box-shadow:0 0 15px #0003;touch-action:none}#stick{position:absolute;left:47px;top:47px;width:56px;height:56px;background:#e2e7e9ad;border:2px solid white;border-radius:50%;pointer-events:none}#hint{position:absolute;right:12px;top:12px;color:#fff;background:#1b2c3970;padding:5px 9px;border-radius:7px;font-size:12px}@media(max-height:420px){#pad{width:120px;height:120px}#stick{left:37px;top:37px;width:46px;height:46px}}
-</style></head><body><canvas id="scene"></canvas><div id="v">v4</div><div id="hint">サンプルエディター</div><div id="pad"><div id="stick"></div></div><script>
+</style></head><body><canvas id="scene"></canvas><div id="v">v5</div><div id="hint">サンプルエディター</div><div id="pad"><div id="stick"></div></div><script>
 'use strict';
 const canvas=document.getElementById('scene'),gl=canvas.getContext('webgl',{antialias:true,alpha:false,powerPreference:'high-performance'});
 if(!gl){document.body.textContent='この端末ではWebGLを使用できません';throw Error('WebGL unavailable')}
@@ -102,11 +102,29 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 canvas.addEventListener('pointerdown',e=>{
  if(e.pointerType==='mouse'&&e.button!==0)return;
  canvas.setPointerCapture(e.pointerId);
+ // Left-half touch is a floating joystick; the permanent pad stays in its UI position.
+ if(e.pointerType==='touch'&&e.clientX<window.innerWidth/2&&pointer===null){
+  pointer=e.pointerId;
+  floatingOrigin={x:e.clientX,y:e.clientY};
+  padX=padY=0;
+  updateStickDisplay();
+  unlockAudio();
+  return;
+ }
  cameraTouches.set(e.pointerId,{x:e.clientX,y:e.clientY});
  pinchDistance=0;
  unlockAudio();
 });
 canvas.addEventListener('pointermove',e=>{
+ if(e.pointerId===pointer&&floatingOrigin){
+  const radius=Math.max(36,pad.clientWidth*.32);
+  const dx=e.clientX-floatingOrigin.x,dy=e.clientY-floatingOrigin.y;
+  const scale=Math.min(1,radius/(Math.hypot(dx,dy)||1));
+  padX=dx*scale/radius;
+  padY=dy*scale/radius;
+  updateStickDisplay();
+  return;
+ }
  const old=cameraTouches.get(e.pointerId);
  if(!old)return;
  const dx=e.clientX-old.x,dy=e.clientY-old.y;
@@ -122,6 +140,7 @@ canvas.addEventListener('pointermove',e=>{
  }
 });
 for(const name of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(name,e=>{
+ if(e.pointerId===pointer&&floatingOrigin){resetStick();return;}
  cameraTouches.delete(e.pointerId);pinchDistance=0;
 });
 canvas.addEventListener('wheel',e=>{e.preventDefault();cameraDistance=clamp(cameraDistance*Math.exp(e.deltaY*.001),4.5,26)},{passive:false});
@@ -157,10 +176,20 @@ function footstep(running){
  gain.gain.exponentialRampToValueAtTime(.0001,t+.12);
  osc.connect(gain);gain.connect(audio.destination);osc.start(t);osc.stop(t+.13);
 }
-const pad=document.getElementById('pad'),stick=document.getElementById('stick');let pointer=null;
-function moveStick(e){const r=pad.getBoundingClientRect(),dx=e.clientX-r.left-r.width/2,dy=e.clientY-r.top-r.height/2,rad=r.width*.32,mag=Math.hypot(dx,dy),s=Math.min(1,rad/(mag||1));padX=dx*s/rad;padY=dy*s/rad;const size=stick.offsetWidth;stick.style.left=(r.width/2-size/2+padX*rad)+'px';stick.style.top=(r.height/2-size/2+padY*rad)+'px'}
-function resetStick(){pointer=null;padX=padY=0;stick.style.left=(pad.clientWidth-stick.offsetWidth)/2+'px';stick.style.top=(pad.clientHeight-stick.offsetHeight)/2+'px'}
-pad.addEventListener('pointerdown',e=>{pointer=e.pointerId;pad.setPointerCapture(pointer);moveStick(e);unlockAudio()});pad.addEventListener('pointermove',e=>{if(e.pointerId===pointer)moveStick(e)});for(const ev of ['pointerup','pointercancel','lostpointercapture'])pad.addEventListener(ev,e=>{if(e.pointerId===pointer)resetStick()});
+const pad=document.getElementById('pad'),stick=document.getElementById('stick');
+let pointer=null,floatingOrigin=null;
+function updateStickDisplay(){
+ const radius=pad.clientWidth*.32,size=stick.offsetWidth;
+ stick.style.left=(pad.clientWidth/2-size/2+padX*radius)+'px';
+ stick.style.top=(pad.clientHeight/2-size/2+padY*radius)+'px';
+}
+function moveStick(e){
+ const r=pad.getBoundingClientRect(),dx=e.clientX-r.left-r.width/2,dy=e.clientY-r.top-r.height/2;
+ const rad=r.width*.32,scale=Math.min(1,rad/(Math.hypot(dx,dy)||1));
+ padX=dx*scale/rad;padY=dy*scale/rad;updateStickDisplay();
+}
+function resetStick(){pointer=null;floatingOrigin=null;padX=padY=0;updateStickDisplay()}
+pad.addEventListener('pointerdown',e=>{if(pointer!==null)return;pointer=e.pointerId;floatingOrigin=null;pad.setPointerCapture(pointer);moveStick(e);unlockAudio()});pad.addEventListener('pointermove',e=>{if(e.pointerId===pointer)moveStick(e)});for(const ev of ['pointerup','pointercancel','lostpointercapture'])pad.addEventListener(ev,e=>{if(e.pointerId===pointer)resetStick()});
 window.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true});window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});window.addEventListener('blur',resetStick);
 function blocked(x,z){
  // building footprints only; roads and sidewalks remain fully navigable
