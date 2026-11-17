@@ -29,7 +29,7 @@ const npcs=[
   ],routeIndex:0,effort:0},
  {id:'npc-shopper-02',poiId:'convenience-study',role:'shopper',style:'visitorB',
   x:-1.06,z:84.45,heading:Math.PI,phase:3,speed:.62,
-  state:'walking',wait:0,route:[
+  state:'walking',wait:0,carrying:false,action:'idle',shoppingCycles:0,route:[
    {x:-1.06,z:83.15,lookX:-3.15,lookZ:83.1,wait:2.8,activity:'pick'},
    {x:-1.06,z:77.15,lookX:-3.15,lookZ:77.2,wait:4.2,activity:'browse'},
    {x:-1.06,z:74.65,lookX:-5.6,lookZ:72.35,wait:2.4,activity:'pay'},
@@ -81,7 +81,8 @@ function updateNPCs(dt){
   const move=Math.min(distance,npc.speed*time),ux=dx/distance,uz=dz/distance;
   const nextX=npc.x+ux*move,nextZ=npc.z+uz*move;
   // Shared wall/fixture collision and player clearance.
-  if(blocked(nextX,nextZ)||Math.hypot(nextX-player.x,nextZ-player.z)<.48){
+  if(blocked(nextX,nextZ)||Math.hypot(nextX-player.x,nextZ-player.z)<.48||
+     npcs.some(other=>other!==npc&&Math.hypot(nextX-other.x,nextZ-other.z)<.48)){
    npc.effort=0;
    continue;
   }
