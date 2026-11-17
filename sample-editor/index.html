@@ -1,6 +1,6 @@
 <!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover"><title>サンプルエディター</title><style>
 *{box-sizing:border-box;touch-action:none}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#92b8ce;font-family:sans-serif}canvas{display:block;width:100%;height:100%}#v{position:absolute;top:max(10px,env(safe-area-inset-top));left:20px;color:#fff;text-shadow:0 2px 4px #222;font:bold 15px sans-serif}#pad{position:absolute;left:max(25px,env(safe-area-inset-left));bottom:max(18px,env(safe-area-inset-bottom));width:150px;height:150px;border:2px solid #ffffff70;border-radius:50%;background:#13293755;box-shadow:0 0 15px #0003;touch-action:none}#stick{position:absolute;left:47px;top:47px;width:56px;height:56px;background:#e2e7e9ad;border:2px solid white;border-radius:50%;pointer-events:none}#hint{position:absolute;right:12px;top:12px;color:#fff;background:#1b2c3970;padding:5px 9px;border-radius:7px;font-size:12px}@media(max-height:420px){#pad{width:120px;height:120px}#stick{left:37px;top:37px;width:46px;height:46px}}
-</style></head><body><canvas id="scene"></canvas><div id="v">v7</div><div id="hint">サンプルエディター</div><div id="pad"><div id="stick"></div></div><script>
+</style></head><body><canvas id="scene"></canvas><div id="v">v8</div><div id="hint">サンプルエディター</div><div id="pad"><div id="stick"></div></div><script>
 'use strict';
 const canvas=document.getElementById('scene'),gl=canvas.getContext('webgl',{antialias:true,alpha:false,powerPreference:'high-performance'});
 if(!gl){document.body.textContent='この端末ではWebGLを使用できません';throw Error('WebGL unavailable')}
@@ -33,58 +33,114 @@ function ellipsoid(cx,cy,cz,rx,ry,rz,hex,longitude=12,latitude=8){
  }
 }
 function seeded(a,b){let t=Math.sin(a*127.1+b*311.7)*43758.5453;return t-Math.floor(t)}
-// compact traversable grid: five east-west and north-south avenues, buildings in blocks
-box(0,-.26,0,260,.12,260,0x70845f);
-for(let n=-2;n<=2;n++){
- // Separate crossing surfaces by several millimeters to eliminate depth fighting.
- box(n*40,-.139,0,11,.095,236,0x40474d);
- box(0,-.134,n*40,236,.095,11,0x40474d);
- for(let k=-11;k<=11;k++){
-  if(Math.abs(k*10-n*40)<8)continue;
-  box(n*40,-.038,k*10,.16,.011,3.4,0xded6a6);
-  box(k*10,-.033,n*40,3.4,.011,.16,0xded6a6);
- }
+// Yanaka Ginza-inspired compact shopping street. Visual study: Taito ward streetscape
+// guidance and street-level photos. Dimensions are approximate, not surveyed geometry.
+// 1 world unit ~= 1 meter; narrow lane, low-rise mixed facades and varied storefront depths.
+box(0,-.30,0,150,.15,175,0x6b795e);
+box(0,-.155,0,10.6,.10,132,0xb18d67); // warm ochre pedestrian surface
+for(const side of [-1,1]){
+ // Drainage and narrow stone frontage, raised slightly above the pedestrian street.
+ box(side*5.37,-.055,0,.24,.055,132,0x858784);
+ box(side*5.87,-.045,0,.78,.08,132,0x9a9690);
 }
+// Individual building buffers are used for automatic near-camera occlusion.
 const townBuildings=[];
-for(let x=-2;x<2;x++)for(let z=-2;z<2;z++){
- const bx=x*40+20,bz=z*40+20;
- // Pavement is elevated above street asphalt, with a realistic curb.
- box(bx,-.042,bz,29,.115,29,0x9f9d97);
- for(let i=0;i<3;i++)for(let j=0;j<3;j++){
-  const cx=bx-9+i*9,cz=bz-9+j*9;
-  if((i===1&&j===1)||(seeded(x*19+i,z*17+j)<.21)){
-   box(cx,.02,cz,3,.12,3,0x55704b);
-   box(cx,.1,cz, .45,3,.45,0x624e39);
-   box(cx,2.4,cz,3.2,3.7,3.2,0x527c49);
-   continue;
+const storePalettes=[0x9b8f7d,0xc1ad94,0xc4c2b5,0x998a79,0xa7b0a9,0x877c70,0xb6a48c];
+const awnings=[0x467269,0x824d49,0xc1ab79,0x425d73,0x76674a,0x865f40,0x537b83];
+const signage=[0x554a3d,0x3d5c51,0x755843,0x7b4842,0x4b5861,0x746340];
+function addStreetShop(side,k){
+ const z=-51+k*7.25+(seeded(k,side)*.55-.275);
+ const x=side*(8.65+seeded(k*17,side)*.52);
+ const width=6.75+seeded(k,side*9)*.35;
+ const depth=5.2+seeded(k*8,side)*1.3;
+ const height=4.8+Math.floor(seeded(k*5,side)*3)*2.65;
+ const wall=storePalettes[(k+(side>0?3:0))%storePalettes.length];
+ const accent=awnings[(k*3+(side>0?1:0))%awnings.length];
+ const front=x-side*depth*.5;
+ const start=vertices.length;
+ // Individual plot: narrower than a modern office frontage.
+ box(x,.0,z,depth,height,width,wall);
+ box(x,height,z,depth+.18,.17,width+.22,0x555653);
+ for(let floor=1;floor<Math.floor(height/2.65);floor++){
+  const y=1.6+floor*2.66;
+  for(const p of [-1.65,1.65]){
+   box(front-side*.055,y,z+p,.08,1.37,1.32,0x4b6266);
+   box(front-side*.103,y-.72,z+p,.12,.085,1.47,0xc7b9a4);
+   box(front-side*.12,y,z+p,.08,1.43,.07,0xb2a598);
   }
-  const height=5.9+Math.floor(seeded(cx,cz)*4)*2.9;
-  const start=vertices.length;
-  const shades=[0xb4a99c,0xbcc1c0,0x9badaf,0xd0c4ad,0xa89a89,0xa9b4a5];
-  const tint=shades[Math.floor(seeded(cx+6,cz+3)*shades.length)];
-  box(cx,0,cz,6.9,height,6.9,tint);
-  box(cx,height,cz,7.02,.18,7.02,0x5d696d);
-  for(let floor=0;floor<Math.floor(height/2.9);floor++)for(let side of [-1,1]){
-   const yy=1.65+floor*2.9;
-   for(let wx of [-1.9,1.9]){
-    box(cx+wx,yy,cz+side*3.51,1.15,1.45,.065,0x456776);
-    box(cx+side*3.51,yy,cz+wx,.065,1.45,1.15,0x456776);
-    // Slim mullions and a small sill instead of featureless glass rectangles.
-    box(cx+wx,yy-.72,cz+side*3.55,1.32,.09,.09,0xd6d2c8);
+ }
+ // Open shop fronts, not repetitive full-height glass office walls.
+ box(front-side*.07,.045,z,.12,2.55,width-.38,0x342f2a);
+ box(front-side*.14,.21,z,.14,2.18,width-.58,0x53635f);
+ for(const p of [-width*.28,width*.28]){
+  box(front-side*.20,.1,z+p,.09,2.32,.1,0x8d755b);
+  box(front-side*.23,.96,z+p,.075,1.4,1.45,0x304946);
+ }
+ // Varied upper signboards, small projecting sign + realistic awning with sloped fabric.
+ box(front-side*.19,2.62,z,.17,.56,width-.28,signage[k%signage.length]);
+ for(const p of [-1.75,-.85,.1,1.1,1.75]){
+  box(front-side*.293,2.65,z+p,.015,.12,.37,0xd0ba89);
+ }
+ const edge=front-side*(1.10+seeded(k*7,side)*.28);
+ quad([front-side*.25,2.45,z-width*.47],[edge,2.15,z-width*.47],
+      [edge,2.15,z+width*.47],[front-side*.25,2.45,z+width*.47],color(accent));
+ box(edge,2.11,z,.09,.12,width*.95,accent);
+ for(const p of [-width*.42,width*.42])box(edge,2.16,z+p,.045,.09,.04,0x4a4743);
+ // Cargo boxes, shop baskets, planters and varied stock extend towards the street.
+ const category=k%5;
+ for(let i=0;i<4;i++){
+  const zz=z-2.1+i*1.33+seeded(k,i)*.12;
+  const offset=category===0?.46:category===1?.68:.48;
+  const px=edge-side*offset;
+  if(i===3&&k%4===0)continue;
+  const isPlants=category===0||category===4;
+  box(px,.09,zz,.60,.26,.72,isPlants?0x65513e:0x836b51);
+  if(isPlants){
+   box(px,.34,zz,.42,.12,.49,0x41452d);
+   box(px,.45,zz,.54,.36,.55,[0x536c41,0x758647,0x597b56][i%3]);
+  }else{
+   for(let t=0;t<3;t++)
+    box(px,.38,zz-.22+t*.21,.42,.18,.17,[0xb7a579,0x9b633c,0xc3a24f,0x72817b][(i+t+k)%4]);
+  }
+ }
+ // Door handles and wall-mounted air-conditioning boxes.
+ box(front-side*.31,1.06,z+width*.24,.035,.16,.035,0xbdb4a0);
+ if(k%3===0){
+  box(front-side*.12,3.75,z-width*.34,.30,.43,.66,0xc1c2bc);
+  for(let t=0;t<4;t++)box(front-side*.29,3.62+t*.08,z-width*.34,.012,.025,.44,0x656b67);
+ }
+ if(k%4===1){
+  box(edge-side*.36,.45,z+2.20,.52,.88,.45,0x8d7b5d);
+  box(edge-side*.39,1.33,z+2.20,.08,.06,.53,0xd5c7a5);
+ }
+ const geometry=new Float32Array(vertices.splice(start));
+ const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+ gl.bufferData(gl.ARRAY_BUFFER,geometry,gl.STATIC_DRAW);
+ townBuildings.push({cx:x,cz:z,front,side,depth,width,buffer,count:geometry.length/6});
+}
+for(const side of [-1,1])for(let k=0;k<15;k++)addStreetShop(side,k);
+// Lanterns, utility poles, overhead cables and drainage add a credible lived-in streetscape.
+for(let k=0;k<8;k++){
+ const z=-48+k*14.2;
+ for(const side of [-1,1]){
+  const px=side*5.95;
+  box(px,0,z,.18,7.1,.18,0x676765);
+  box(px,5.45,z,.36,.23,.40,0x8d8d86);
+  box(px-side*.26,4.4,z+.46,.035,.12,1.12,0x565b56);
+  box(px-side*.26,4.34,z+1.02,.31,.19,.24,0xb4ae85);
+  // Thin rails imitate several drooping overhead lines without expensive curves.
+  for(let wire=0;wire<3;wire++){
+   const h=6.3+wire*.17;
+   for(let t=0;t<5;t++){
+    const xx=-5.6+t*2.24;
+    box(xx,h-.24*Math.sin((t+1)*Math.PI/6),z+wire*.15,2.27,.027,.029,0x424544);
    }
   }
-  box(cx,0,cz+3.56,1.12,2.25,.09,0x645b51);
-  // Small balcony and eaves seen in residential street references.
-  if(seeded(cx+4,cz+8)>.53){
-   box(cx,2.85,cz+3.88,4.2,.12,.83,0x918c80);
-   for(let rail=-1;rail<=1;rail++)box(cx+rail*1.7,2.92,cz+4.23,.045,.75,.045,0x676c69);
-   box(cx,3.59,cz+4.23,4.25,.055,.055,0x676c69);
-  }
-  const geometry=new Float32Array(vertices.splice(start)),buffer=gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,geometry,gl.STATIC_DRAW);
-  townBuildings.push({cx,cz,buffer,count:geometry.length/6});
  }
 }
+// Street crosses small paved courts at each end so the scene is explorable.
+box(0,-.155,-62,20,.1,14,0xa99983);
+box(0,-.155,62,20,.1,14,0xa99983);
 // visible pedestrian avatar, regenerated separately from static town
 const staticArray=new Float32Array(vertices),staticBuffer=gl.createBuffer();
 gl.bindBuffer(gl.ARRAY_BUFFER,staticBuffer);gl.bufferData(gl.ARRAY_BUFFER,staticArray,gl.STATIC_DRAW);
@@ -253,12 +309,11 @@ pad.addEventListener('pointerdown',e=>{
 });for(const ev of ['pointerup','pointercancel','lostpointercapture'])pad.addEventListener(ev,e=>{if(e.pointerId===pointer)resetStick()});
 window.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true});window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});window.addEventListener('blur',()=>{resetStick();allTouches.clear();cameraTouches.clear();pinchActive=false;pinchDistance=0});
 function blocked(x,z){
- // building footprints only; roads and sidewalks remain fully navigable
- for(let bx=-2;bx<2;bx++)for(let bz=-2;bz<2;bz++)for(let i=0;i<3;i++)for(let j=0;j<3;j++){
-  const cx=bx*40+20-9+i*9,cz=bz*40+20-9+j*9;
-  if(i===1&&j===1||seeded(bx*19+i,bz*17+j)<.21)continue;
-  if(Math.abs(x-cx)<3.85&&Math.abs(z-cz)<3.85)return true;
- }return false;
+ // Stop the player at real wall footprints; leave the entire pedestrian lane open.
+ for(const b of townBuildings){
+  if(Math.abs(x-b.cx)<b.depth*.5+.26&&Math.abs(z-b.cz)<b.width*.5+.26)return true;
+ }
+ return false;
 }
 // Hide only buildings between the player and camera; no transparent sorting artifacts.
 function obscuresPlayer(b,camera){
