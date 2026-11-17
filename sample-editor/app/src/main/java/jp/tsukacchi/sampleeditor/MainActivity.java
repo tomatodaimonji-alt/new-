@@ -14,7 +14,7 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
+import java.io.ByteArrayOutputStream;
 
 /** Bundled starter + quietly refreshed, validated HTML from the project's pinned GitHub location. */
 public final class MainActivity extends Activity {
@@ -45,10 +45,17 @@ public final class MainActivity extends Activity {
   loadCurrent();
   checkForUpdate();
  }
+ private static byte[] readFile(File f) throws IOException{
+  try(InputStream in=new FileInputStream(f);ByteArrayOutputStream out=new ByteArrayOutputStream()){
+   byte[] buf=new byte[8192];int n,total=0;
+   while((n=in.read(buf))!=-1){total+=n;if(total>MAX_BYTES)throw new IOException("Too large");out.write(buf,0,n);}
+   return out.toByteArray();
+  }
+ }
  private boolean valid(File f) {
   if(!f.isFile()||f.length()<1000||f.length()>MAX_BYTES)return false;
   try{
-   String html=new String(Files.readAllBytes(f.toPath()),StandardCharsets.UTF_8);
+   String html=new String(readFile(f),StandardCharsets.UTF_8);
    return html.contains("<title>サンプルエディター</title>") &&
      html.contains("id=\"v\"") && html.contains("id=\"scene\"") &&
      html.contains("requestAnimationFrame(frame)") && html.contains("</html>");
@@ -83,7 +90,7 @@ public final class MainActivity extends Activity {
     }
     if(!valid(temp))throw new IOException("Invalid update");
     if(valid(current)&&java.util.Arrays.equals(
-      Files.readAllBytes(current.toPath()),Files.readAllBytes(temp.toPath()))){
+      readFile(current),readFile(temp))){
       temp.delete();return;
     }
     // Staged replacement: never remove the last known-good version before validation.
