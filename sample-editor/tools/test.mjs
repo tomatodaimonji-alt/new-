@@ -16,6 +16,11 @@ const requirements = [
  ['ambient audio', 'function unlockAudio('],
  ['town collision', 'function blocked('],
  ['animation', 'requestAnimationFrame(frame)'],
+ ['POI registry', 'const scene='],
+ ['independent shop records', 'function defaultShop('],
+ ['building edit controls', 'function editShop('],
+ ['saved scene edits', 'function saveSceneEdits('],
+ ['scene edit UI', 'id="editPanel"'],
 ];
 for (const [name, token] of requirements) {
  if (!html.includes(token)) throw new Error('Missing feature: ' + name);
