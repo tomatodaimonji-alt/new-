@@ -22,8 +22,9 @@ catPurrButton.addEventListener('click',()=>{
 });
 catFindButton.addEventListener('click',()=>{
  if(shootState.enabled)return;
- player.x=cat.x+Math.max(2.4,cat.scale*1.3);
- player.z=cat.z+Math.max(3,cat.scale*1.3);
+ // Stay on the open central road rather than teleporting into a storefront.
+ player.x=cat.x;
+ player.z=cat.z-Math.max(3,cat.scale*1.1);
  resetStick();
 });
 function catBlocks(x,z){
