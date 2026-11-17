@@ -8,6 +8,7 @@ const names = [
   '01-renderer.js',
   '02-scene-registry.js',
   '02-yanaka-town.js',
+  '02-convenience.js',
   '03-math.js',
   '04-camera-gestures.js',
   '05-audio.js',
