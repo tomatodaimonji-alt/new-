@@ -76,6 +76,10 @@ function updateNPCs(dt){
   npc.effort=Math.min(1,npc.effort+time*7);
  }
 }
+// One small circular player collider per person; existing shelf/wall rules remain.
+function npcBlocks(x,z){
+ return npcs.some(npc=>Math.hypot(x-npc.x,z-npc.z)<.43);
+}
 function renderNpcShadows(){
  for(const npc of npcs){
   renderPlayerShadow(npc.x,npc.z,npc.heading,npc.effort,npc.phase);
