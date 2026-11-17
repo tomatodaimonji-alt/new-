@@ -1,6 +1,6 @@
 <!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover"><title>サンプルエディター</title><style>
 *{box-sizing:border-box;touch-action:none}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#92b8ce;font-family:sans-serif}canvas{display:block;width:100%;height:100%}#v{position:absolute;top:max(10px,env(safe-area-inset-top));left:14px;color:#fff;text-shadow:0 2px 4px #222;font:bold 15px sans-serif}#pad{position:absolute;left:max(25px,env(safe-area-inset-left));bottom:max(18px,env(safe-area-inset-bottom));width:150px;height:150px;border:2px solid #ffffff70;border-radius:50%;background:#13293755;box-shadow:0 0 15px #0003;touch-action:none}#stick{position:absolute;left:47px;top:47px;width:56px;height:56px;background:#e2e7e9ad;border:2px solid white;border-radius:50%;pointer-events:none}#hint{position:absolute;right:12px;top:12px;color:#fff;background:#1b2c3970;padding:5px 9px;border-radius:7px;font-size:12px}@media(max-height:420px){#pad{width:120px;height:120px}#stick{left:37px;top:37px;width:46px;height:46px}}
-</style></head><body><canvas id="scene"></canvas><div id="v">v3</div><div id="hint">サンプルエディター</div><div id="pad"><div id="stick"></div></div><script>
+</style></head><body><canvas id="scene"></canvas><div id="v">v4</div><div id="hint">サンプルエディター</div><div id="pad"><div id="stick"></div></div><script>
 'use strict';
 const canvas=document.getElementById('scene'),gl=canvas.getContext('webgl',{antialias:true,alpha:false,powerPreference:'high-performance'});
 if(!gl){document.body.textContent='この端末ではWebGLを使用できません';throw Error('WebGL unavailable')}
@@ -94,10 +94,73 @@ const mat4={mul(a,b){const out=new Float32Array(16);for(let col=0;col<4;col++)fo
  look(eye,target){let z=norm(sub(eye,target)),x=norm(cross([0,1,0],z)),y=cross(z,x);return new Float32Array([x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-dot(x,eye),-dot(y,eye),-dot(z,eye),1])}};
 function sub(a,b){return a.map((v,i)=>v-b[i])}function dot(a,b){return a.reduce((s,v,i)=>s+v*b[i],0)}function cross(a,b){return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]]}function norm(a){let q=Math.hypot(...a)||1;return a.map(v=>v/q)}
 let player={x:0,z:0,heading:0},padX=0,padY=0,keys={},last=0,walk=0;
+let cameraYaw=Math.atan2(5.7,9.2),cameraPitch=.63,cameraDistance=12;
+const cameraTouches=new Map();
+let pinchDistance=0,stepDistance=0,walkingMotion=0;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+// A finger over the world orbits; two fingers pinch to zoom and pan to orbit.
+canvas.addEventListener('pointerdown',e=>{
+ if(e.pointerType==='mouse'&&e.button!==0)return;
+ canvas.setPointerCapture(e.pointerId);
+ cameraTouches.set(e.pointerId,{x:e.clientX,y:e.clientY});
+ pinchDistance=0;
+ unlockAudio();
+});
+canvas.addEventListener('pointermove',e=>{
+ const old=cameraTouches.get(e.pointerId);
+ if(!old)return;
+ const dx=e.clientX-old.x,dy=e.clientY-old.y;
+ cameraTouches.set(e.pointerId,{x:e.clientX,y:e.clientY});
+ if(cameraTouches.size===1){
+  cameraYaw-=dx*.007;
+  cameraPitch=clamp(cameraPitch+dy*.006,.23,1.35);
+ }else if(cameraTouches.size===2){
+  const p=[...cameraTouches.values()];
+  const distance=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
+  if(pinchDistance>0)cameraDistance=clamp(cameraDistance*pinchDistance/Math.max(1,distance),4.5,26);
+  pinchDistance=distance;
+ }
+});
+for(const name of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(name,e=>{
+ cameraTouches.delete(e.pointerId);pinchDistance=0;
+});
+canvas.addEventListener('wheel',e=>{e.preventDefault();cameraDistance=clamp(cameraDistance*Math.exp(e.deltaY*.001),4.5,26)},{passive:false});
+// All sound is generated locally; no copyrighted samples or network resources.
+let audio=null,windSource=null;
+function unlockAudio(){
+ try{
+  if(!audio){
+   const AC=window.AudioContext||window.webkitAudioContext;
+   if(!AC)return;
+   audio=new AC();
+   const n=audio.sampleRate*3,buffer=audio.createBuffer(1,n,audio.sampleRate),data=buffer.getChannelData(0);
+   let random=0;
+   for(let i=0;i<n;i++){random=(random+((Math.random()*2-1)-random)*.018);data[i]=random*.75}
+   const wind=audio.createBufferSource();wind.buffer=buffer;wind.loop=true;
+   const filter=audio.createBiquadFilter();filter.type='lowpass';filter.frequency.value=540;
+   const gain=audio.createGain();gain.gain.value=.065;
+   wind.connect(filter);filter.connect(gain);gain.connect(audio.destination);wind.start();windSource=wind;
+   const hum=audio.createOscillator(),hg=audio.createGain();
+   hum.type='sine';hum.frequency.value=73;hg.gain.value=.008;
+   hum.connect(hg);hg.connect(audio.destination);hum.start();
+  }
+  if(audio.state==='suspended')audio.resume();
+ }catch(e){console.warn('Audio unavailable',e)}
+}
+function footstep(running){
+ if(!audio||audio.state!=='running')return;
+ const t=audio.currentTime,osc=audio.createOscillator(),gain=audio.createGain();
+ osc.type='triangle';osc.frequency.setValueAtTime(running?112:93,t);
+ osc.frequency.exponentialRampToValueAtTime(48,t+.11);
+ gain.gain.setValueAtTime(.0001,t);
+ gain.gain.exponentialRampToValueAtTime(running?.11:.075,t+.009);
+ gain.gain.exponentialRampToValueAtTime(.0001,t+.12);
+ osc.connect(gain);gain.connect(audio.destination);osc.start(t);osc.stop(t+.13);
+}
 const pad=document.getElementById('pad'),stick=document.getElementById('stick');let pointer=null;
 function moveStick(e){const r=pad.getBoundingClientRect(),dx=e.clientX-r.left-r.width/2,dy=e.clientY-r.top-r.height/2,rad=r.width*.32,mag=Math.hypot(dx,dy),s=Math.min(1,rad/(mag||1));padX=dx*s/rad;padY=dy*s/rad;const size=stick.offsetWidth;stick.style.left=(r.width/2-size/2+padX*rad)+'px';stick.style.top=(r.height/2-size/2+padY*rad)+'px'}
 function resetStick(){pointer=null;padX=padY=0;stick.style.left=(pad.clientWidth-stick.offsetWidth)/2+'px';stick.style.top=(pad.clientHeight-stick.offsetHeight)/2+'px'}
-pad.addEventListener('pointerdown',e=>{pointer=e.pointerId;pad.setPointerCapture(pointer);moveStick(e)});pad.addEventListener('pointermove',e=>{if(e.pointerId===pointer)moveStick(e)});for(const ev of ['pointerup','pointercancel','lostpointercapture'])pad.addEventListener(ev,e=>{if(e.pointerId===pointer)resetStick()});
+pad.addEventListener('pointerdown',e=>{pointer=e.pointerId;pad.setPointerCapture(pointer);moveStick(e);unlockAudio()});pad.addEventListener('pointermove',e=>{if(e.pointerId===pointer)moveStick(e)});for(const ev of ['pointerup','pointercancel','lostpointercapture'])pad.addEventListener(ev,e=>{if(e.pointerId===pointer)resetStick()});
 window.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true});window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});window.addEventListener('blur',resetStick);
 function blocked(x,z){
  // building footprints only; roads and sidewalks remain fully navigable
@@ -119,23 +182,47 @@ function obscuresPlayer(b,camera){
 function bind(buffer){gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.vertexAttribPointer(locP,3,gl.FLOAT,false,24,0);gl.enableVertexAttribArray(locP);gl.vertexAttribPointer(locC,3,gl.FLOAT,false,24,12);gl.enableVertexAttribArray(locC)}
 function frame(now){
  const dt=Math.min(.05,(now-last)/1000||0);last=now;
- let vx=padX+(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),
- vz=padY+(keys.s||keys.arrowdown?1:0)-(keys.w||keys.arrowup?1:0);
- const speed=Math.min(1,Math.hypot(vx,vz));if(speed>.12){
-  let len=Math.hypot(vx,vz);vx/=len;vz/=len;let step=dt*4.5*speed;
-  let nx=Math.max(-112,Math.min(112,player.x+vx*step)),nz=Math.max(-112,Math.min(112,player.z+vz*step));
-  if(!blocked(nx,player.z))player.x=nx;if(!blocked(player.x,nz))player.z=nz;
-  player.heading=Math.atan2(vx,vz);walk+=dt*10;
+ let mx=padX+(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),
+ my=padY+(keys.s||keys.arrowdown?1:0)-(keys.w||keys.arrowup?1:0);
+ const tilt=Math.min(1,Math.hypot(mx,my)),active=tilt>.12;
+ let running=false;
+ if(active){
+  const length=Math.hypot(mx,my);
+  mx/=length;my/=length;
+  // Use camera-relative movement so the stick always matches screen direction.
+  const vx=mx*Math.cos(cameraYaw)+my*Math.sin(cameraYaw);
+  const vz=-mx*Math.sin(cameraYaw)+my*Math.cos(cameraYaw);
+  running=tilt>.72;
+  const metersPerSecond=running?3.15+(tilt-.72)/.28*2.25:1.15+tilt*2.85;
+  const dx=vx*dt*metersPerSecond,dz=vz*dt*metersPerSecond;
+  const beforeX=player.x,beforeZ=player.z;
+  const nx=clamp(player.x+dx,-112,112),nz=clamp(player.z+dz,-112,112);
+  if(!blocked(nx,player.z))player.x=nx;
+  if(!blocked(player.x,nz))player.z=nz;
+  const moved=Math.hypot(player.x-beforeX,player.z-beforeZ);
+  if(moved>.0001){
+   player.heading=Math.atan2(vx,vz);
+   walk+=dt*(running?14:8.5);
+   stepDistance+=moved;
+   const stride=running?1.38:1.05;
+   if(stepDistance>=stride){stepDistance%=stride;footstep(running)}
+  }
  }
+
  vertices.length=0;
- const bob=speed>.12?Math.sin(walk)*.05:0;
+ const bob=active?Math.sin(walk)*.045:0;
  // Approximately 1.75 m tall human, with rounded anatomy and gently swinging limbs.
  const px=player.x,pz=player.z,theta=player.heading;
- const sw= speed>.12?Math.sin(walk)*.13:0;
+ const sw=active?Math.sin(walk)*(running?.21:.13):0;
  ellipsoid(px,1.00+bob,pz,.34,.48,.23,0x426779,14,9); // fitted torso
  ellipsoid(px,1.51+bob,pz,.16,.12,.17,0xc69d81); // neck
  ellipsoid(px,1.66+bob,pz,.22,.27,.22,0xc69d81,14,10); // head
  ellipsoid(px,1.82+bob,pz-.012,.225,.095,.23,0x2d2927); // hair
+ // Face has unmistakable forward direction (local -Z): eyes, nose and upper chest.
+ ellipsoid(px-.09,1.69+bob,pz-.211,.035,.025,.026,0x292929,8,5);
+ ellipsoid(px+.09,1.69+bob,pz-.211,.035,.025,.026,0x292929,8,5);
+ ellipsoid(px,1.61+bob,pz-.244,.052,.066,.075,0xb78c6c,10,6);
+ box(px,1.08+bob,pz-.229,.17,.13,.025,0xb5a48c);
  for(const side of [-1,1]){
   const x=px+side*.43;
   ellipsoid(x,1.02+bob+side*sw,pz,.135,.37,.14,0x426779);
@@ -143,10 +230,21 @@ function frame(now){
   ellipsoid(px+side*.175,.43+bob-side*sw,pz,.155,.40,.17,0x293b4a);
   ellipsoid(px+side*.175,.10+bob-side*sw,pz+.09,.16,.105,.27,0x303133);
  }
+ // Rotate every avatar vertex around its vertical axis to match walking direction.
+ // The mesh is sculpted facing local -Z, so its natural heading is PI.
+ const rotation=player.heading-Math.PI,cs=Math.cos(rotation),sn=Math.sin(rotation);
+ for(let i=0;i<vertices.length;i+=6){
+  const dx=vertices[i]-px,dz=vertices[i+2]-pz;
+  vertices[i]=px+dx*cs+dz*sn;
+  vertices[i+2]=pz-dx*sn+dz*cs;
+ }
  const arr=new Float32Array(vertices);gl.bindBuffer(gl.ARRAY_BUFFER,avatarBuffer);gl.bufferData(gl.ARRAY_BUFFER,arr,gl.DYNAMIC_DRAW);
  const dpr=Math.min(2,window.devicePixelRatio||1),w=Math.round(canvas.clientWidth*dpr),h=Math.round(canvas.clientHeight*dpr);
  if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}gl.viewport(0,0,w,h);gl.enable(gl.DEPTH_TEST);gl.clearColor(.56,.73,.83,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
- const eye=[player.x+5.7,8.0,player.z+9.2],look=[player.x,1.2,player.z],vp=mat4.mul(mat4.perspective(1.05,w/h,.1,350),mat4.look(eye,look));
+ const eye=[player.x+Math.sin(cameraYaw)*cameraDistance*Math.cos(cameraPitch),
+ 1.35+cameraDistance*Math.sin(cameraPitch),
+ player.z+Math.cos(cameraYaw)*cameraDistance*Math.cos(cameraPitch)],
+ look=[player.x,1.2,player.z],vp=mat4.mul(mat4.perspective(1.05,w/h,.1,350),mat4.look(eye,look));
  gl.uniformMatrix4fv(locVP,false,vp);
  bind(staticBuffer);gl.drawArrays(gl.TRIANGLES,0,staticArray.length/6);
  for(const b of townBuildings){if(obscuresPlayer(b,eye))continue;bind(b.buffer);gl.drawArrays(gl.TRIANGLES,0,b.count)}
