@@ -2020,7 +2020,7 @@ $('confirmMapSize').addEventListener('click',()=>{
  $('mapWidth').value=width;$('mapHeight').value=height;
  setMapSize(true);closeMapSizeModal();
 });
-$('applyMapSize').addEventListener('click',setMapSize);
+$('applyMapSize').addEventListener('click',()=>setMapSize());
 $('quickPlace').addEventListener('click',()=>{mode='place';updateSelected()});
 $('quickErase').addEventListener('click',()=>{mode='erase';updateSelected()});
 $('quickRotate').addEventListener('click',()=>{mode='rotate';updateSelected()});
