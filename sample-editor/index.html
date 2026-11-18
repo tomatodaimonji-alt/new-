@@ -16,7 +16,7 @@ body.shooting #storeJump,body.shooting #catFind{display:none}
 body.shooting #pad,body.shooting #editToggle,body.shooting #editPanel,body.shooting #v,body.shooting #hint{display:none}
 body.shooting #shootToggle{right:12px;top:39px}
 @media(max-height:420px){#pad{width:120px;height:120px}#stick{left:37px;top:37px;width:46px;height:46px}}
-</style></head><body><canvas id="scene"></canvas><div id="v">v45</div><div id="hint">サンプルエディター</div>
+</style></head><body><canvas id="scene"></canvas><div id="v">v46</div><div id="hint">サンプルエディター</div>
 <button id="editToggle" type="button">編集</button>
 <div id="editPanel" hidden>
 <strong>POI：谷中銀座・再現研究区画</strong>
@@ -2724,4 +2724,44 @@ function frame(now){
  requestAnimationFrame(frame);
 }
 resetStick();requestAnimationFrame(frame);
+// Check public deployment for fresh versions with cache bypass.
+(function(){
+ const current=46;
+ let busy=false,lastCheck=0,latestFound=0;
+ const button=document.createElement('button');
+ button.type='button';button.textContent='更新あり';
+ button.style.cssText='position:absolute;left:76px;top:10px;z-index:12;background:#32674f;color:#fff;border:1px solid #b8e4cb;border-radius:6px;padding:6px 10px;font-size:12px;display:none';
+ document.body.appendChild(button);
+ function reload(){
+  const stamp=Date.now();
+  try{if(stamp-Number(sessionStorage.getItem('last-v-reload')||0)<20000)return;sessionStorage.setItem('last-v-reload',String(stamp))}catch(e){}
+  const dest=new URL(location.href);
+  dest.searchParams.set('update',String(latestFound||stamp));
+  location.replace(dest.toString());
+ }
+ button.addEventListener('click',reload);
+ async function check(onResume){
+  if(busy||document.hidden||Date.now()-lastCheck<25000)return;
+  busy=true;lastCheck=Date.now();
+  try{
+   const u=new URL('./index.html',location.href);
+   u.searchParams.set('_fresh',String(Date.now()));
+   const response=await fetch(u.toString(),{cache:'no-store'});
+   if(!response.ok)return;
+   const html=await response.text();
+   const marker='<div id="v">v';
+   const at=html.indexOf(marker);
+   const published=at<0?0:parseInt(html.slice(at+marker.length,at+marker.length+5),10)||0;
+   if(published>current){
+    latestFound=published;button.textContent='v'+published+'に更新';button.style.display='block';
+    if(onResume)reload();
+   }
+  }catch(e){/* Offline and temporary network failures must not interrupt gameplay. */}
+  finally{busy=false}
+ }
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden){lastCheck=0;check(true)}});
+ window.addEventListener('focus',()=>check(false));
+ setInterval(()=>check(false),60000);
+ setTimeout(()=>check(false),3000);
+})();
 </script></body></html>
