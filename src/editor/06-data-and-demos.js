@@ -1877,9 +1877,21 @@ function pineReadSavedPOIs(){
    p.map.format==='forest-world-v1'&&p.map.version===1&&Array.isArray(p.map.world));
  }catch(e){return []}
 }
+let poiExpanded=false;
 function pineBuildPOICategories(){
  const host=$('poiSampleCategories');if(!host)return;
  host.replaceChildren();
+ const heading=expandableRow('POI','',poiExpanded,()=>{
+  poiExpanded=!poiExpanded;pineBuildPOICategories();
+ },'pineSuperShelfStocked');
+ host.append(heading);
+ if(!poiExpanded)return;
+ const inner=document.createElement('div');inner.className='nestedChoices poiInner';
+ const register=document.createElement('button');
+ register.type='button';register.id='registerPOI';register.className='wide';
+ register.textContent='＋ POIとして登録';
+ register.addEventListener('click',pineRegisterCurrentPOI);
+ inner.append(register);
  const button=document.createElement('button');
  button.type='button';button.className='poiSampleEntry item';
  const glyph=document.createElement('span');glyph.className='poiEntryGlyph';glyph.textContent='▦';
@@ -1887,7 +1899,7 @@ function pineBuildPOICategories(){
  const detail=document.createElement('small');detail.textContent='倉庫型・通常の廃墟';
  info.append(detail);button.append(glyph,info);
  button.addEventListener('click',()=>{pineSupermarketPOI('wholesale','normal');$('palette').classList.remove('mobileOpen')});
- host.append(button);
+ inner.append(button);
  for(const record of customPOIs){
   const row=document.createElement('div');row.className='poiCustomEntry';
   const choice=document.createElement('button');choice.type='button';choice.className='poiSampleEntry item';
@@ -1904,8 +1916,9 @@ function pineBuildPOICategories(){
    if(!pineStorePOIs(next))return;
    customPOIs=next;pineBuildPOICategories();toast('登録POIを削除しました');
   });
-  row.append(choice,remove);host.append(row);
+  row.append(choice,remove);inner.append(row);
  }
+ host.append(inner);
 }
 function pineStorePOIs(entries){
  try{
@@ -2044,7 +2057,6 @@ $('fitMap').addEventListener('click',showEntireMap);$('turn').addEventListener('
 $('hideUpper').addEventListener('change',e=>{hideUpper=e.target.checked;dirty=true;cursorDirty=true;$('poiRoofToggle').textContent=hideUpper?'屋根を表示':'屋根を隠す';toast(hideUpper?'上階を隠して編集中':'全階層を表示中')});
 $('eyedrop').addEventListener('click',()=>{mode='pick';updateSelected();toast('配置済み部材をタップすると選べます')});for(const b of document.querySelectorAll('[data-mode]'))b.addEventListener('click',()=>{mode=b.dataset.mode;updateSelected()});
 $('undo').addEventListener('click',()=>{if(!undoStack.length)return;redoStack.push(JSON.stringify(data()));restore(undoStack.pop())});$('redo').addEventListener('click',()=>{if(!redoStack.length)return;undoStack.push(JSON.stringify(data()));restore(redoStack.pop())});
-$('registerPOI').addEventListener('click',pineRegisterCurrentPOI);
 $('villageDemo').addEventListener('click',makeVillageDemo);
 $('organicTownDemo').addEventListener('click',makeOrganicTownDemo);
 $('showcaseTownDemo').addEventListener('click',makeShowcaseTownDemo);

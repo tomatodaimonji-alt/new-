@@ -15,6 +15,8 @@ if(await page.locator('#makeModel').count()||await page.locator('#modelModal').c
 if(await page.locator('#savePrefab').count()||await page.locator('#prefabList').count())throw Error('Prefab authoring UI still present');
 if(await page.locator('#customList').count())throw Error('Legacy custom model UI still present');
 if(await page.locator('#showInspector').count()||await page.locator('#quickMove').count())throw Error('Removed buttons still exist');
+for(const label of ['素材','道タイル','オブジェクト','キャラクターブロック','装備','POI'])if(await page.locator('#palette h3').filter({hasText:label}).count())throw Error('Duplicate heading: '+label);
+await page.locator('#poiSampleCategories .categoryRow').click();
 if(await page.locator('#poiSampleCategories .poiSampleEntry').count()!==1)throw Error('Default supermarket POI missing');
 page.once('dialog',dialog=>dialog.accept('テストPOI'));
 await page.locator('#registerPOI').click();
@@ -28,6 +30,7 @@ await page.locator('#save').click();const json=JSON.parse(await page.locator('#j
 if(json.format!=='forest-world-v1'||json.models.length!==0)throw Error('Export invalid');
 await page.locator('#importJson').click();
 await page.reload();await page.waitForTimeout(400);
+await page.locator('#poiSampleCategories .categoryRow').click();
 if(await page.locator('#poiSampleCategories .poiSampleEntry').count()!==2)throw Error('POI did not persist after reload');
 await page.screenshot({path:'editor-after.png'});if(errors.length)throw Error(errors.join(' | '));console.log('DESKTOP PASS: WebGL, catalog, undo/redo, persistent custom POI, JSON roundtrip');
 await page.close();const mobile=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});mobile.on('pageerror',e=>errors.push(e.message));
