@@ -127,7 +127,7 @@ function wallFaceState(o,lookup){
  const visible=[],exterior=[];
  for(const [dx,dz] of [[0,1],[-1,0],[0,-1],[1,0]]){
   const x=o.x+dx,z=o.z+dz,inBounds=validPos(x,z);
-  const occupied=inBounds&&neighbors.has(x+','+z);
+  const occupied=inBounds&&neighbors.has(x+','+z)&&terrainLevel(x,z)===terrainLevel(o.x,o.z);
   visible.push(!occupied);
   exterior.push(!occupied&&(!inBounds||outdoor[z*MAP_W+x]===1));
  }
