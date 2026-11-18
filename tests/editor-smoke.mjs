@@ -18,8 +18,11 @@ if(await page.locator('#showInspector').count()||await page.locator('#quickMove'
 for(const label of ['素材','道タイル','オブジェクト','キャラクターブロック','装備','POI'])if(await page.locator('#palette h3').filter({hasText:label}).count())throw Error('Duplicate heading: '+label);
 await page.locator('#poiSampleCategories .categoryRow').click();
 if(await page.locator('#poiSampleCategories .poiSampleEntry').count()!==1)throw Error('Default supermarket POI missing');
-page.once('dialog',dialog=>dialog.accept('テストPOI'));
 await page.locator('#registerPOI').click();
+if(!await page.locator('#poiNameModal').isVisible())throw Error('POI naming modal not shown');
+await page.locator('#poiNameInput').fill('テストPOI');
+await page.locator('#poiNameSave').click();
+if(await page.locator('#poiNameModal').isVisible())throw Error('POI naming modal did not close');
 if(await page.locator('#poiSampleCategories .poiSampleEntry').count()!==2)throw Error('New POI was not registered');
 await page.evaluate(()=>window.__editorTest.place(4,4));
 page.once('dialog',dialog=>dialog.accept());

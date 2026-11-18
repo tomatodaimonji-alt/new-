@@ -1930,13 +1930,23 @@ function pineStorePOIs(entries){
 function pineRegisterCurrentPOI(){
  if(!world.length){toast('建材がないマップは登録できません');return}
  if(customPOIs.length>=20){toast('POIは20件まで。不要なPOIを削除してください');return}
- const name=prompt('現在のマップをPOIとして登録します。名前を入力してください','マイPOI '+(customPOIs.length+1));
- if(name===null)return;
- const label=name.trim();if(!label||label.length>40){toast('POI名は1～40文字で入力してください');return}
+ $('poiNameInput').value='マイPOI '+(customPOIs.length+1);
+ $('poiNameError').textContent='';
+ $('poiNameModal').classList.add('open');
+ requestAnimationFrame(()=>$('poiNameInput').focus());
+}
+function pineClosePOINameModal(){
+ $('poiNameModal').classList.remove('open');
+ $('poiNameError').textContent='';
+}
+function pineConfirmPOIName(){
+ const label=$('poiNameInput').value.trim();
+ if(!label||label.length>40){$('poiNameError').textContent='POI名を1〜40文字で入力してください';$('poiNameInput').focus();return}
+ if(customPOIs.length>=20){$('poiNameError').textContent='POIは20件まで登録できます';return}
  const record={id:'poi-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7),name:label,map:data()};
  const next=[...customPOIs,record];
- if(!pineStorePOIs(next))return;
- customPOIs=next;pineBuildPOICategories();toast('「'+label+'」をPOIに登録しました');
+ if(!pineStorePOIs(next)){$('poiNameError').textContent='保存できません。端末の空き容量を確認してください';return}
+ customPOIs=next;pineBuildPOICategories();pineClosePOINameModal();toast('「'+label+'」をPOIに登録しました');
 }
 function pineLoadCustomPOI(id){
  const record=customPOIs.find(p=>p.id===id);if(!record)return;
@@ -2095,6 +2105,10 @@ document.addEventListener('keydown',e=>{
  const k=e.key.toLowerCase(),d={arrowup:[0,-1],w:[0,-1],arrowdown:[0,1],s:[0,1],arrowleft:[-1,0],a:[-1,0],arrowright:[1,0],d:[1,0]}[k];
  if(d){e.preventDefault();poiWalkStep(...d)}
 });
+$('poiNameCancel').addEventListener('click',pineClosePOINameModal);
+$('poiNameForm').addEventListener('submit',e=>{e.preventDefault();pineConfirmPOIName()});
+$('poiNameModal').addEventListener('click',e=>{if(e.target===$('poiNameModal'))pineClosePOINameModal()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('poiNameModal').classList.contains('open')){e.preventDefault();pineClosePOINameModal()}});
 $('openJson').addEventListener('click',()=>{$('jsonModal').classList.add('open');displayJSON()});$('save').addEventListener('click',()=>{$('jsonModal').classList.add('open');displayJSON()});$('closeJson').addEventListener('click',()=>$('jsonModal').classList.remove('open'));
 $('exportJson').addEventListener('click',displayJSON);$('copyJson').addEventListener('click',async()=>{const str=$('jsonText').value;try{await navigator.clipboard.writeText(str);toast('JSONをコピーした')}catch(e){$('jsonText').select();document.execCommand('copy');toast('JSONをコピーしました')}});
 $('downloadJson').addEventListener('click',()=>{const blob=new Blob([JSON.stringify(data(),null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='my-forest-world.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)});
