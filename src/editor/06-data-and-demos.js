@@ -2158,7 +2158,7 @@ $('poiNameCancel').addEventListener('click',pineClosePOINameModal);
 $('poiNameForm').addEventListener('submit',e=>{e.preventDefault();pineConfirmPOIName()});
 $('poiNameModal').addEventListener('click',e=>{if(e.target===$('poiNameModal'))pineClosePOINameModal()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('poiNameModal').classList.contains('open')){e.preventDefault();pineClosePOINameModal()}});
-$('openJson').addEventListener('click',()=>{$('jsonModal').classList.add('open');displayJSON()});$('save').addEventListener('click',()=>{$('jsonModal').classList.add('open');displayJSON()});$('closeJson').addEventListener('click',()=>$('jsonModal').classList.remove('open'));
+$('openJson').addEventListener('click',()=>{$('jsonModal').classList.add('open');displayJSON()});$('closeJson').addEventListener('click',()=>$('jsonModal').classList.remove('open'));
 $('exportJson').addEventListener('click',displayJSON);$('copyJson').addEventListener('click',async()=>{const str=$('jsonText').value;try{await navigator.clipboard.writeText(str);toast('JSONをコピーした')}catch(e){$('jsonText').select();document.execCommand('copy');toast('JSONをコピーしました')}});
 $('downloadJson').addEventListener('click',()=>{const blob=new Blob([JSON.stringify(data(),null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='my-forest-world.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)});
 $('pickJsonFile').addEventListener('click',()=>$('jsonFile').click());
