@@ -1,25 +1,24 @@
-# 森の遺跡 3D — 24×24 小さな森
+# 3Dワールド工房
 
-真上寄り視点のWebGL 3Dタイル探索ゲームです。旧2D版を上書きしています。床はA（草原）＋B（落ち葉の森）＋C（苔と石）の3種類を混ぜ、木は①（丸い広葉樹）＋③（枝の見える自然な広葉樹）の2種類です。
+このリポジトリは **3Dワールド工房専用** です。他のゲーム本体・ゲーム用テスト・ゲーム用APKビルドは含めません。
 
-## 仕様
+- 完成版: `world-editor.html`
+- 編集ソース: `src/editor/`
+- 建材と形状の共有部品: `src/shared/`
+- HTML生成と検証: `scripts/`
+- Androidアプリ: `app/`
+- Android APKビルド: `.github/workflows/build-apk.yml`
+- ブラウザ検証: `.github/workflows/editor-test.yml`
+- ソース整合性検証: `.github/workflows/editor-integrity.yml`
+- 工房の操作説明: `WORLD_EDITOR_GUIDE.md`
 
-- 24×24マスの立体タイルマップ。A：明るい草原の草束と花、B：森の土と枯葉・小枝、C：苔と石の立体パッチ。エリアによって3種を配置し、家周辺に苔を多めにしています。\n- 木は①丸い樹冠の広葉樹と③幹・枝が見える広葉樹。枝と葉の塊を複数の立体メッシュで描画。
-- 家は1軒のみ。家の外周すべてに壁があり、四隅の壁も欠けません。入口のみ1マス空けています。室内に家具あり。
-- スマートフォン縦画面。画面下の大型十字キーで1マス単位の移動（長押し連続移動）。中央で調べる。PCは矢印キーまたはWASDで移動。
-- ブロック体型のキャラクター。4方向の向き、目・頭頂の方向マーカー、歩行時の手足の振りと上下動。
-- WebAudioによるゲームオリジナルのピアノBGM、風音、鳥の鳴き声、移動ごとの足音。音量スライダー（初期85%）と音楽ON/OFF。
-- 完全オフライン対応、外部ライブラリ不要。1ファイル `index.html` に全ゲームを収録。最初の「探索を始める」を押すことで音声再生が始まります。
-- カメラ切替ボタンで真上寄り・やや斜めを変更。
-- 現段階では敵・戦闘・物資収集・セーブ機能はありません。
+## 開発手順
+```sh
+node scripts/build.mjs
+node scripts/build.mjs --check
+node scripts/test-build.mjs
+```
 
-## テスト
+ワールドの保存形式 `forest-world-v1`、既存の建材ID（`pine*` など）は古い利用者データとの互換性のため維持します。これらは別ゲームの実行ファイルではありません。
 
-`tests/smoke.mjs` と `.github/workflows/browser-test.yml` はChromium実ブラウザのWebGL初期化、ゲーム起動、1マス移動、4方向の向き、壁四隅、入口、WebAudio初期化、音量コントロールを確認します。`.github/workflows/android-smoke.yml` はAndroidエミュレーターでスクリーンショット比較を行います。
-
-## Android
-
-GitHub Actions の `Build Moon Ruins APK` が成功したら `moon-ruins-apk` の成果物を入手できます。
-`index.html` を更新すると自動更新対応APKは起動時に新HTMLを取得し、次回起動で適用します。すでにインストール済みであればHTML更新にはAPK再インストールは必要ありません。
-
-異なるGitHub Actions実行で署名が異なるdebug APKは上書きインストールに失敗する場合があります。
+工房以外のアプリは変更・復元しないでください。
