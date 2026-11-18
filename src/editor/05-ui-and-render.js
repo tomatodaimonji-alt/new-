@@ -132,10 +132,11 @@ function createRoadSurfaceThumb(id){
  return cv;
 }
 function selectableTile(id,name,description,thumbnail){
- const btn=document.createElement('button');btn.className='wallOption'+(selected===id&&mode==='place'?' active':'');
- const info=document.createElement('div'),strong=document.createElement('strong'),small=document.createElement('small');
- strong.textContent=name;small.textContent=description;
- info.append(strong,small);btn.append(thumbnail,info);
+ const btn=document.createElement('button');btn.className='wallOption compactTile'+(selected===id&&mode==='place'?' active':'');
+ const strong=document.createElement('strong');
+ strong.textContent=name;strong.title=name;
+ btn.title=name;
+ btn.append(thumbnail,strong);
  btn.addEventListener('click',()=>{selected=id;mode='place';updateSelected();refreshPalette();toast(name+'を選択しました')});
  return btn;
 }
@@ -155,12 +156,13 @@ function renderWallCategories(){
   },id));
   if(open){
    const list=document.createElement('div');list.className='nestedChoices floorTileChoices';
+   const materialShort={wall:'基本',stonewall:'石',woodwall:'木',brickwall:'レンガ',plasterwall:'漆喰',mosswall:'苔石',ironwall:'鉄'}[id]||name;
    for(const [part,label,detail] of [
-    ...MATERIAL_FLOORS[id].map(floorId=>[floorId,catalog.get(floorId).name,'1マスの床タイル']),
-    [id,'壁（外面自動装飾）','屋外側だけ装飾・室内側と隣接面は平滑'],
-    [id+'Window','窓','素材に合わせた枠・両面ガラス'],
-    [id+'Door','扉','素材に合わせた扉と枠'],
-    [id+'Counter','店カウンター','素材に合わせた正面装飾と天板']
+    ...MATERIAL_FLOORS[id].map(floorId=>[floorId,materialShort+'床','']),
+    [id,materialShort+'壁',''],
+    [id+'Window',materialShort+'窓',''],
+    [id+'Door',materialShort+'扉',''],
+    [id+'Counter',materialShort+'カウンター','']
    ]){
     const cv=document.createElement('canvas');cv.width=200;cv.height=152;
     list.appendChild(selectableTile(part,label+'（'+name+'）',detail+' / '+description,cv));
