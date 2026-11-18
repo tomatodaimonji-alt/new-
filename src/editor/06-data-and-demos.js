@@ -1971,6 +1971,12 @@ function setMapSize(){
  $('rangeX2').value=Math.min(width-1,Number($('rangeX2').value));$('rangeZ2').value=Math.min(height-1,Number($('rangeZ2').value));
  showEntireMap();commit();toast(width+'×'+height+' マスの地面を表示しました');
 }
+$('clearEntireMap').addEventListener('click',()=>{
+ if(!world.length&&!terrainHeights.size){toast('消去するものがありません');return}
+ if(!window.confirm('マップ上の配置物と地形の高低差をすべて消去します。よろしいですか？'))return;
+ snapshot();world.length=0;terrainHeights.clear();worldMaxLevel=0;cursorDirty=true;
+ commit();toast('マップを全消去しました（元に戻すで復元できます）');
+});
 $('applyMapSize').addEventListener('click',setMapSize);
 $('quickPlace').addEventListener('click',()=>{mode='place';updateSelected()});
 $('quickErase').addEventListener('click',()=>{mode='erase';updateSelected()});
