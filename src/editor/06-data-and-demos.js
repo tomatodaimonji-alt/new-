@@ -1952,7 +1952,6 @@ $('applyMapSize').addEventListener('click',setMapSize);
 $('quickPlace').addEventListener('click',()=>{mode='place';updateSelected()});
 $('quickErase').addEventListener('click',()=>{mode='erase';updateSelected()});
 $('quickRotate').addEventListener('click',()=>{mode='rotate';updateSelected()});
-$('quickMove').addEventListener('click',()=>{mode='move';if(tapCandidate)tapCandidate.cancelled=true;updateSelected()});
 // Touch gestures: place/erase/pick only on a completed, stationary single-finger tap.
 // Any dragging, multitouch, cancellation, or long press suppresses block changes.
 const touchPositions=new Map();
@@ -2090,7 +2089,7 @@ $('downloadJson').addEventListener('click',()=>{const blob=new Blob([JSON.string
 $('pickJsonFile').addEventListener('click',()=>$('jsonFile').click());
 $('jsonFile').addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{if(file.size>6*1024*1024)throw Error('ファイルが大きすぎます（上限6MB）');const contents=await file.text();JSON.parse(contents);$('jsonText').value=contents;toast('JSONファイルを読み込みました。「JSONを読み込む」で配置に反映します')}catch(err){toast('ファイルの読み込み失敗: '+err.message)}finally{e.target.value=''}});
 $('importJson').addEventListener('click',()=>{try{const o=JSON.parse($('jsonText').value);const before=JSON.stringify(data());loadData(o);undoStack.push(before);if(undoStack.length>45)undoStack.shift();redoStack.length=0;commit();$('jsonModal').classList.remove('open');toast('ワールドを読み込んだ')}catch(e){toast('読み込み失敗：'+e.message)}});
-$('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mobileOpen');$('inspector').classList.remove('mobileOpen')});$('showInspector').addEventListener('click',()=>{$('inspector').classList.toggle('mobileOpen');$('palette').classList.remove('mobileOpen')});
+$('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mobileOpen');$('inspector').classList.remove('mobileOpen')});
 try{const saved=localStorage.getItem(SAVE_KEY);if(saved)loadData(JSON.parse(saved));else makeDemo()}catch(e){MAP_W=16;MAP_H=16;world=[];models=[];prefabs=[];makeDemo()}
 customPOIs=pineReadSavedPOIs();
 pineBuildPOICategories();

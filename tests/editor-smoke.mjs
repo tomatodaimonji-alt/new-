@@ -14,6 +14,7 @@ await page.locator('#redo').click();s=await page.evaluate(()=>window.__editorTes
 if(await page.locator('#makeModel').count()||await page.locator('#modelModal').count())throw Error('Removed model builder is still visible');
 if(await page.locator('#savePrefab').count()||await page.locator('#prefabList').count())throw Error('Prefab authoring UI still present');
 if(await page.locator('#customList').count())throw Error('Legacy custom model UI still present');
+if(await page.locator('#showInspector').count()||await page.locator('#quickMove').count())throw Error('Removed buttons still exist');
 if(await page.locator('#poiSampleCategories .poiSampleEntry').count()!==1)throw Error('Default supermarket POI missing');
 page.once('dialog',dialog=>dialog.accept('テストPOI'));
 await page.locator('#registerPOI').click();
