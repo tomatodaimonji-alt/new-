@@ -5,7 +5,7 @@ try{browser=await chromium.launch({headless:true,args:['--enable-webgl','--use-g
 const page=await browser.newPage({viewport:{width:1200,height:760},deviceScaleFactor:1});const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
 await page.goto('http://127.0.0.1:'+server.address().port+'/?test=1',{waitUntil:'load'});await page.waitForTimeout(550);
 const state=await page.evaluate(()=>window.__editorTest?.state());if(!state?.glLink)throw Error('WebGL editor unavailable: '+(await page.locator('#canvasTip').innerText()));
-if(state.world.length<30||!state.world.some(o=>o.type==='wall'&&o.y===0))throw Error('Initial house missing ground-level walls');
+if(state.world.length<30||!state.world.some(o=>o.type==='pineSuperWall'&&o.y===0))throw Error('Default supermarket POI missing ground-level walls');
 await page.screenshot({path:'editor-before.png'});
 await page.locator('[data-brush="treeRound"]').click();await page.evaluate(()=>window.__editorTest.place(3,3));
 let s=await page.evaluate(()=>window.__editorTest.state());if(!s.world.some(o=>o.x===3&&o.z===3&&o.type==='treeRound'))throw Error('Place failed');
