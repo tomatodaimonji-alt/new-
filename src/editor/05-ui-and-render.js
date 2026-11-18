@@ -284,7 +284,7 @@ const CHARACTER_GROUPS=[
 ];
 function renderCharacterList(){
  const root=$('characterList');root.replaceChildren();
- root.appendChild(expandableRow('キャラクターブロック','',characterExpanded,()=>{
+ root.appendChild(expandableRow('キャラクター','',characterExpanded,()=>{
   characterExpanded=!characterExpanded;renderCharacterList();
  },'humanVillager'));
  if(!characterExpanded)return;
