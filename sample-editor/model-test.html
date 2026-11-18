@@ -12,23 +12,87 @@ h1{font-size:15px;margin:0;flex:1}a{color:#b9dce9;text-decoration:none;font-size
 footer{background:#19282e;border-top:1px solid #ffffff25;padding:10px;display:grid;gap:8px}
 .row{display:flex;gap:7px;flex-wrap:wrap;align-items:center}button{border:1px solid #ffffff47;border-radius:8px;background:#3a555f;color:#fff;padding:9px 11px;font-size:13px;flex:1}button[aria-pressed=true]{background:#2d8068;border-color:#b5e7d0}
 label{font-size:12px;color:#d7e1dd}small{font-size:11px;color:#b4c6c6}
-#tip{font-size:12px;color:#aec0c1}
+#tip{font-size:12px;color:#aec0c1}#backup{position:absolute;inset:0;width:100%;height:100%;touch-action:none}#state{z-index:5}#credit{z-index:5}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.177.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.177.0/examples/jsm/"}}</script>
 </head><body>
 <div id="app">
 <header><h1>v40 | 既存3Dモデルを試す</h1><a href="./index.html">シェルターへ戻る</a></header>
-<div id="view"><div id="state" role="status">3Dモデルの準備中...</div><div id="credit">モデル: Sheen Chair / Wayfair LLC / CC0 1.0<br>出典: Khronos glTF Sample Assets</div></div>
+<div id="view"><canvas id="backup"></canvas><div id="state" role="status">軽量3Dプレビューを表示中。既存モデルの読み込みを確認しています…</div><div id="credit">モデル: Sheen Chair / Wayfair LLC / CC0 1.0<br>出典: Khronos glTF Sample Assets</div></div>
 <footer>
 <div class="row"><button type="button" id="primitive" aria-pressed="false">従来の簡易モデル</button><button type="button" id="real" aria-pressed="true">既存GLBモデル</button><button type="button" id="spin" aria-pressed="false">自動回転 OFF</button></div>
 <div class="row"><label for="quality">画質:</label><button type="button" id="low" aria-pressed="true">軽量</button><button type="button" id="high" aria-pressed="false">高画質</button></div>
 <div id="tip">ドラッグで回転、2本指で拡大縮小。既存モデルは初回のみ約4MBを読み込みます。試用ページを閉じれば3D描画は停止します。</div>
 </footer>
 </div>
+<script>
+// Built-in offline/404 fallback: the viewer and its buttons must never be blank.
+// This procedural chair is explicitly NOT the externally licensed GLB.
+(function(){
+const c=document.getElementById('backup'),v=document.getElementById('view'),ctx=c.getContext('2d');
+const state=document.getElementById('state');
+let yaw=.48,tilt=.27,zoom=1.0,active='real',spin=false,high=false,drag=null,frames=0,run=true;
+window.__preview={loaded:false,stop(){run=false;c.hidden=true;},setMode(m){active=m}};
+function rotate(p){let [x,y,z]=p;
+ const a=Math.cos(yaw),b=Math.sin(yaw),xx=a*x-b*z,zz=b*x+a*z;
+ return [xx,Math.cos(tilt)*y-Math.sin(tilt)*zz,Math.sin(tilt)*y+Math.cos(tilt)*zz];}
+function proj(p){const q=rotate(p),d=5.8/zoom+q[2],k=Math.min(c.width,c.height)*.72/Math.max(2,d);
+ return [c.width/2+q[0]*k,c.height*.52-q[1]*k,k,d];}
+let polys=[];
+function cuboid(x,y,z,w,h,d,col){
+ const verts=[[x-w/2,y-h/2,z-d/2],[x+w/2,y-h/2,z-d/2],[x+w/2,y+h/2,z-d/2],[x-w/2,y+h/2,z-d/2],
+ [x-w/2,y-h/2,z+d/2],[x+w/2,y-h/2,z+d/2],[x+w/2,y+h/2,z+d/2],[x-w/2,y+h/2,z+d/2]];
+ const faces=[[0,1,2,3],[1,5,6,2],[4,5,6,7],[0,4,7,3],[3,2,6,7],[0,1,5,4]];
+ const shade=[.82,.68,.94,.67,1,.56];
+ faces.forEach((idx,i)=>{const pp=idx.map(j=>proj(verts[j]));
+ polys.push({p:pp,z:pp.reduce((a,q)=>a+q[3],0)/4,col,shade:shade[i]})});
+}
+function draw(){
+ if(!run||window.__preview.loaded)return;
+ const w=Math.max(1,v.clientWidth),h=Math.max(1,v.clientHeight),dpr=Math.min(devicePixelRatio||1,high?1.7:1);
+ if(c.width!==Math.round(w*dpr)||c.height!==Math.round(h*dpr)){c.width=Math.round(w*dpr);c.height=Math.round(h*dpr)}
+ ctx.fillStyle='#293b43';ctx.fillRect(0,0,c.width,c.height);polys=[];
+ cuboid(0,-.14,0,4,.14,3.7,'#8e9b98');
+ cuboid(0,1.1,-1.84,4,2.4,.12,'#64747b');
+ if(active==='basic'){
+ cuboid(0,.53,0,1.05,.16,1,'#72848d');cuboid(0,1.03,.41,1.05,.94,.15,'#72848d');
+ for(const x of [-.43,.43])for(const z of [-.41,.41])cuboid(x,.25,z,.10,.5,.10,'#6a777b');
+ }else{
+ // Procedural preview only while the original GLB is downloading.
+ const timber='#a37b57',cloth='#c5baa5',dark='#584c41';
+ for(const x of [-.58,.58])for(const z of [-.46,.48])cuboid(x,.37,z,.12,.74,.13,timber);
+ cuboid(0,.73,.03,1.55,.18,1.17,timber);
+ cuboid(0,.83,.01,1.32,.20,.97,cloth);
+ cuboid(0,1.34,.5,1.47,1.18,.19,timber);
+ cuboid(0,1.35,.37,1.28,1.04,.17,cloth);
+ for(const x of [-.67,.67]){cuboid(x,1.04,.02,.16,.22,1.10,timber);cuboid(x,1.13,.02,.21,.12,1.04,dark)}
+ }
+ polys.sort((a,b)=>b.z-a.z);
+ for(const f of polys){ctx.beginPath();f.p.forEach((p,i)=>{if(!i)ctx.moveTo(p[0],p[1]);else ctx.lineTo(p[0],p[1])});ctx.closePath();
+ ctx.fillStyle=f.col;ctx.globalAlpha=.96*f.shade+.04;ctx.fill();ctx.globalAlpha=1;ctx.strokeStyle='#23343b25';ctx.stroke()}
+ ctx.fillStyle='#e5eded';ctx.font=(13*dpr)+'px sans-serif';
+ ctx.fillText('軽量プレビュー（GLB未確認）',14*dpr,c.height-20*dpr);
+ if(spin)yaw+=.006;frames++;requestAnimationFrame(draw);
+}
+c.addEventListener('pointerdown',e=>{c.setPointerCapture(e.pointerId);drag={x:e.clientX,y:e.clientY}});
+c.addEventListener('pointermove',e=>{if(!drag)return;yaw+=(e.clientX-drag.x)*.009;tilt=Math.max(-.25,Math.min(.8,tilt+(e.clientY-drag.y)*.007));drag={x:e.clientX,y:e.clientY}});
+c.addEventListener('pointerup',()=>drag=null);
+c.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.6,Math.min(2.2,zoom*Math.exp(-e.deltaY*.001)))},{passive:false});
+let pinch=0;c.addEventListener('touchmove',e=>{if(e.touches.length===2){const a=e.touches[0],b=e.touches[1],d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);if(pinch)zoom=Math.max(.6,Math.min(2.2,zoom*d/pinch));pinch=d}});c.addEventListener('touchend',()=>pinch=0);
+document.getElementById('primitive').onclick=()=>{active='basic';state.textContent='簡易モデル（通信不要）'};
+document.getElementById('real').onclick=()=>{active='real';state.textContent='高精細GLBを読み込めない場合は簡易プレビューを表示します'};
+document.getElementById('spin').onclick=e=>{spin=!spin;e.currentTarget.textContent=spin?'自動回転 ON':'自動回転 OFF'};
+document.getElementById('low').onclick=()=>high=false;
+document.getElementById('high').onclick=()=>high=true;
+setTimeout(()=>{if(!window.__preview.loaded){state.textContent='外部ライブラリまたはモデルが読み込めません。軽量3Dプレビューを表示中。'}} ,6500);
+requestAnimationFrame(draw);
+})();
+</script>
 <script type="module">
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+window.__preview.loaded=true;window.__preview.stop();
 const modelURL='https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/SheenChair/glTF-Binary/SheenChair.glb';
 const view=document.getElementById('view'),status=document.getElementById('state');
 const renderer=new THREE.WebGLRenderer({antialias:false,alpha:false,powerPreference:'low-power'});
