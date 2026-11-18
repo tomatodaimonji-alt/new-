@@ -73,13 +73,23 @@ function poiWalkFrame(now){
  panX=poiWalkViewX+.5-MAP_W/2;panZ=poiWalkViewZ+.5-MAP_H/2;
  if(now-poiWalkStarted<=POI_WALK_MS+32)poiWalkAvatar(now);
 }
+function poiWalkPassableDoor(type){
+ // Pass through door/entrance cells across all material families, including
+ // already-saved wall doors and older town door designs.
+ return type==='door'||type==='pineSuperDoor'||type==='ruinDoorBroken'||
+  type==='ruinDoorHanging'||/(?:Door|DoorOpen|Entrance)$/.test(type)||
+  /^oldTown(?:Cream|Ochre|Rose|Mint|Blue|Sand)Shop$/.test(type);
+}
 function poiWalkCanStep(x,z){
  if(!validPos(x,z))return false;
  // Vehicles occupy more than one tile and cannot be walked through.
  if(world.some(o=>pineSuperVehicleType(o.type)&&Math.abs(o.x-x)<=1&&Math.abs(o.z-z)<=1))return false;
- const blocking=world.find(o=>o.y===0&&o.x===x&&o.z===z&&!isFloor(o.type)&&
- !['pineSuperDoor','plasterwallDoor','woodwallDoor','brickwallDoor','pineSuperLogo','pineSuperStripe','pineSuperBayEnd','pineSuperCurb','pineSuperBollard','pineSuperSign'].includes(o.type));
- return !blocking;
+ const nonBlocking=new Set(['pineSuperLogo','pineSuperStripe','pineSuperBayEnd',
+  'pineSuperCurb','pineSuperBollard','pineSuperSign']);
+ // Check every occupied object on this cell. Door frames are walkable, but
+ // an unrelated solid object placed in the doorway must still block passage.
+ return !world.some(o=>o.y===0&&o.x===x&&o.z===z&&!isFloor(o.type)&&
+  !poiWalkPassableDoor(o.type)&&!nonBlocking.has(o.type));
 }
 function poiWalkCamera(){panX=poiWalkViewX+.5-MAP_W/2;panZ=poiWalkViewZ+.5-MAP_H/2;zoom=Math.max(zoom,.82);cursorDirty=true}
 function poiWalkStatus(){const e=$('poiWalkCoords');if(e)e.textContent='位置 '+(poiWalkX+1)+','+(poiWalkZ+1)+(poiWalkIndoor()?'・店内':'・屋外')}
