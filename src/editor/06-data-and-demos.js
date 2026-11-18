@@ -2133,6 +2133,27 @@ $('topDownView').addEventListener('click',toggleTopDown);
 $('registerPOI').addEventListener('click',pineRegisterCurrentPOI);
 $('poiWalkToggle').addEventListener('click',()=>poiWalkSet(!poiWalkActive));
 $('poiThirdView').addEventListener('click',togglePoiThirdPerson);
+// Build and erase in front of the avatar without leaving Play mode.
+function poiPlayEdit(action){
+ if(!poiWalkActive)return;
+ const dirs=[[0,-1],[1,0],[0,1],[-1,0]],dir=dirs[poiWalkFacing];
+ const x=poiWalkX+dir[0],z=poiWalkZ+dir[1];
+ if(!validPos(x,z)){toast('マップの範囲外です');return}
+ if(action==='place'&&x===poiWalkX&&z===poiWalkZ){toast('足元には配置できません');return}
+ if(action==='place'&&!isFloor(selected)&&world.some(o=>pineSuperVehicleType(o.type)&&Math.abs(o.x-x)<=1&&Math.abs(o.z-z)<=1)){
+  toast('車両のある場所には配置できません');return;
+ }
+ level=0;$('level').value='0';
+ mode=action;changeCell(x,z);updateSelected();
+ toast(action==='place'?'正面のマスに配置しました':'正面のマスを消去しました');
+}
+$('poiPlayPlace').addEventListener('click',()=>poiPlayEdit('place'));
+$('poiPlayErase').addEventListener('click',()=>poiPlayEdit('erase'));
+$('poiPlayLibrary').addEventListener('click',()=>{
+ if(!poiWalkActive)return;
+ $('palette').classList.toggle('mobileOpen');
+});
+
 $('poiRoofToggle').addEventListener('click',()=>{
  if(poiWalkActive){toast('歩行中の屋根は入退店に応じて自動切替します');return}
  hideUpper=!hideUpper;$('hideUpper').checked=hideUpper;dirty=true;cursorDirty=true;
