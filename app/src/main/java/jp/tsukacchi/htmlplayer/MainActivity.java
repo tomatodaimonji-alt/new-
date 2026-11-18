@@ -228,7 +228,7 @@ public class MainActivity extends Activity {
             File downloading = new File(getFilesDir(), "download.tmp");
             HttpURLConnection connection = null;
             try {
-                URL url = new URL(UPDATE_URL);
+                URL url = new URL(UPDATE_URL + "?editor_update=" + System.currentTimeMillis());
                 connection = (HttpURLConnection) url.openConnection();
                 connection.setInstanceFollowRedirects(true);
                 connection.setUseCaches(false);
