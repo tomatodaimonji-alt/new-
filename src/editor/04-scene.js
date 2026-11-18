@@ -88,8 +88,15 @@ function poiWalkCanStep(x,z){
   'pineSuperCurb','pineSuperBollard','pineSuperSign']);
  // Check every occupied object on this cell. Door frames are walkable, but
  // an unrelated solid object placed in the doorway must still block passage.
- return !world.some(o=>o.y===0&&o.x===x&&o.z===z&&!isFloor(o.type)&&
-  !poiWalkPassableDoor(o.type)&&!nonBlocking.has(o.type));
+ const cell=world.filter(o=>o.y===0&&o.x===x&&o.z===z);
+ const hasDoor=cell.some(o=>poiWalkPassableDoor(o.type));
+ // A door shares its cell with wall/trim pieces in some saved maps.
+ // Those wall pieces must not seal the entrance; unrelated obstacles still block.
+ return !cell.some(o=>{
+  if(isFloor(o.type)||poiWalkPassableDoor(o.type)||nonBlocking.has(o.type))return false;
+  if(hasDoor&&(isWallId(o.type)||/(?:wall|Wall|Frame|Trim|Lintel|Facade)/.test(o.type)))return false;
+  return true;
+ });
 }
 function poiWalkCamera(){panX=poiWalkViewX+.5-MAP_W/2;panZ=poiWalkViewZ+.5-MAP_H/2;zoom=Math.max(zoom,.82);cursorDirty=true}
 function poiWalkStatus(){const e=$('poiWalkCoords');if(e)e.textContent='位置 '+(poiWalkX+1)+','+(poiWalkZ+1)+(poiWalkIndoor()?'・店内':'・屋外')}
