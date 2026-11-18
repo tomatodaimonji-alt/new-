@@ -1,5 +1,5 @@
 function houseFacadeDetails(m,visible){
- const walls=visible.filter(o=>/^(?:plasterwall|woodwall|stonewall|brickwall)(?:Plain|Door|Window)$/.test(o.type));
+ const walls=visible.filter(o=>/^(?:plasterwall|woodwall|stonewall|brickwall)(?:Door|Window)$/.test(o.type));
  const all=new Map(visible.filter(o=>o.y>=0&&!isFloor(o.type)).map(o=>[o.x+','+o.z+','+o.y,o]));
  for(const o of walls){
   const type=o.type,material=type.startsWith('stone')?[.61,.60,.54]:
