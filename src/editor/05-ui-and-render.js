@@ -128,11 +128,7 @@ function renderWallCategories(){
    const list=document.createElement('div');list.className='nestedChoices floorTileChoices';
    for(const [part,label,detail] of [
     ...MATERIAL_FLOORS[id].map(floorId=>[floorId,catalog.get(floorId).name,'1マスの床タイル']),
-    [id+'Plain','装飾なしの壁','室内用・模様のない平滑な壁'],
-    [id,'片面装飾の壁','外側の1面に模様'],
-    [id+'corner','角の壁','隣接する2面に装飾'],
-    [id+'Double','両面装飾の壁','向かい合う2面に装飾'],
-    [id+'All','全面装飾の壁','4側面すべてに装飾'],
+    [id,'壁（外面自動装飾）','屋外側だけ装飾・室内側と隣接面は平滑'],
     [id+'Window','窓','素材に合わせた枠・両面ガラス'],
     [id+'Door','扉','素材に合わせた扉と枠'],
     [id+'Counter','店カウンター','素材に合わせた正面装飾と天板']
