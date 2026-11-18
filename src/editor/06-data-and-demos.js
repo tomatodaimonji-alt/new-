@@ -1677,21 +1677,11 @@ function makeHighBuilding(kind){
 }
 
 // POI sample catalog: six building typologies, three architectural states.
-const PINE_SUPER_VARIANTS=[
- ['compact','小型スーパー',16,12,1,'住宅街の小型食料品店'],
- ['standard','標準スーパー',24,16,1,'郊外型の標準店舗'],
- ['hyper','大型スーパー',40,28,1,'広い売り場・複数レジ'],
- ['urban','都市型スーパー',18,16,2,'2階のある都市部店舗'],
- ['rural','地方スーパー',20,14,1,'地方道沿いの古い店舗'],
- ['wholesale','倉庫型スーパー',36,24,1,'高い棚列と荷役施設']
-];
-const PINE_SUPER_STATES=[
- ['normal','通常の廃墟','構造を維持した店舗'],
- ['damaged','荒廃した廃墟','壁・屋根が部分破損'],
- ['converted','封鎖・転用','一部入口を封鎖した店舗']
-];
-function pineSupermarketPOI(style='standard',condition='normal',force=false){
- const spec=PINE_SUPER_VARIANTS.find(v=>v[0]===style)||PINE_SUPER_VARIANTS[1];
+const PINE_SUPER_VARIANTS=[['wholesale','スーパー',36,24,1,'倉庫型スーパーの通常の廃墟']];
+const PINE_SUPER_STATES=[['normal','通常の廃墟','構造を維持した店舗']];
+function pineSupermarketPOI(style='wholesale',condition='normal',force=false){
+ style='wholesale';condition='normal';
+ const spec=PINE_SUPER_VARIANTS[0];
  if(!force&&world.length&&!confirm('現在のエディター配置をスーパーのPOIサンプルで置き換えますか？ JSON保存をおすすめします。'))return;
  const [,label,w,d,levels]=spec;
  snapshot();world=[];models=[];prefabs=[];terrainHeights=new Map();
@@ -1876,29 +1866,17 @@ function pineSwitchEditor(open){
 function pineBuildPOICategories(){
  const host=$('poiSampleCategories');if(!host)return;
  host.replaceChildren();
- for(const [key,label,w,d,levels,description] of PINE_SUPER_VARIANTS){
-  const group=document.createElement('details');
-  if(key==='standard')group.open=true;
-  const summary=document.createElement('summary');
-  summary.textContent=label+'　'+w+'×'+d+(levels>1?'・'+levels+'階':'');
-  group.append(summary);
-  for(const [state,stateLabel,stateDesc] of PINE_SUPER_STATES){
-   const button=document.createElement('button');
-   button.className='poiSampleEntry';
-   button.type='button';
-   button.textContent=stateLabel;
-   const small=document.createElement('small');
-   small.textContent=description+' ／ '+stateDesc;
-   button.append(small);
-   button.addEventListener('click',()=>{pineSupermarketPOI(key,state);$('palette').classList.remove('mobileOpen')});
-   group.append(button);
-  }
-  host.append(group);
- }
+ const button=document.createElement('button');
+ button.type='button';button.className='poiSampleEntry item';
+ const glyph=document.createElement('span');glyph.className='poiEntryGlyph';glyph.textContent='▦';
+ const info=document.createElement('span');info.textContent='スーパー';
+ const detail=document.createElement('small');detail.textContent='倉庫型・通常の廃墟';
+ info.append(detail);button.append(glyph,info);
+ button.addEventListener('click',()=>{pineSupermarketPOI('wholesale','normal');$('palette').classList.remove('mobileOpen')});
+ host.append(button);
 }
 
-
-function makeDemo(){pineSupermarketPOI('standard','normal',false)}
+function makeDemo(){pineSupermarketPOI('wholesale','normal',false)}
 function setMapSize(){
  const width=Number($('mapWidth').value),height=Number($('mapHeight').value);
  if(!Number.isInteger(width)||!Number.isInteger(height)||width<MIN_MAP||height<MIN_MAP||width>MAX_MAP||height>MAX_MAP){toast('縦横は12〜128の整数で指定してください');return}
