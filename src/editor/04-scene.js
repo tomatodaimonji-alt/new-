@@ -184,7 +184,7 @@ function zoomForFullMap(){
  return Math.max(.025,Math.min(4,9/(Math.max(horizontal,vertical)+height*.55+1.2)*.84));
 }
 function showEntireMap(){panX=panZ=0;zoom=zoomForFullMap();cursorDirty=true}
-function parameters(){const q=layout(),halfH=9/zoom,halfW=halfH*q.aspect;const centerX=MAP_W/2+panX,centerZ=MAP_H/2+panZ,elev=.86,targetY=poiWalkActive?0:hideUpper?level*1.4:Math.min(8.5,worldMaxLevel*.7+Math.max(0,...terrainHeights.values())*TERRAIN_STEP*.5);const eye=[centerX+24*Math.sin(yaw)*Math.cos(elev),targetY+24*Math.sin(elev),centerZ+24*Math.cos(yaw)*Math.cos(elev)];return{...q,halfH,halfW,centerX,centerZ,elev,targetY,vp:mult(ortho(-halfW,halfW,-halfH,halfH,.1,100),look(eye,[centerX,targetY,centerZ]))}}
+function parameters(){const q=layout(),halfH=9/zoom,halfW=halfH*q.aspect;const centerX=MAP_W/2+panX,centerZ=MAP_H/2+panZ,elev=.86,targetY=poiWalkActive?0:hideUpper?level*1.4:Math.min(8.5,worldMaxLevel*.7+Math.max(0,...terrainHeights.values())*TERRAIN_STEP*.5);const sceneReach=Math.hypot(MAP_W,MAP_H)+Math.max(0,worldMaxLevel)*1.4+TERRAIN_MAX*TERRAIN_STEP;const cameraDistance=Math.max(80,sceneReach*1.6+24);const eye=[centerX+cameraDistance*Math.sin(yaw)*Math.cos(elev),targetY+cameraDistance*Math.sin(elev),centerZ+cameraDistance*Math.cos(yaw)*Math.cos(elev)];return{...q,halfH,halfW,centerX,centerZ,elev,targetY,vp:mult(ortho(-halfW,halfW,-halfH,halfH,.1,cameraDistance+sceneReach*2+80),look(eye,[centerX,targetY,centerZ]))}}
 function cursorAt(clientX,clientY){
  const b=canvas.getBoundingClientRect(),p=parameters(),nx=(clientX-b.left)/b.width*2-1,ny=1-(clientY-b.top)/b.height*2,a=nx*p.halfW;
  let x=0,z=0,height=0;
