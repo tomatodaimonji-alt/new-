@@ -735,6 +735,7 @@ buildConvenience();
 const storeJump=document.getElementById('storeJump');
 storeJump.addEventListener('click',()=>{
  if(shootState.enabled)return;
+ if(shelterActive){shelterActive=false;shelterPanel.hidden=true;shelterJump.textContent='シェルター';}
  if(player.z<66){player.x=0;player.z=65.8;storeJump.textContent='街へ戻る';}
  else {player.x=0;player.z=0;storeJump.textContent='コンビニへ';}
  resetStick();
@@ -743,6 +744,7 @@ const tokyoJump=document.getElementById('tokyoJump');
 let tokyoActive=false;
 tokyoJump.addEventListener('click',()=>{
  if(shootState.enabled)return;
+ if(shelterActive){shelterActive=false;shelterPanel.hidden=true;shelterJump.textContent='シェルター';}
  tokyoActive=!tokyoActive;
  if(tokyoActive){
   if(cat.controlled){cat.x=91;cat.z=13;cat.heading=Math.PI;}
@@ -901,11 +903,12 @@ shelterMesh(()=>{
  for(let x=-13;x<=13;x+=4)shelterBox(x,4.11,0,.24,.17,29,0x929995);
 },true);
 scene.pois.push({id:'underground-shelter',name:'地下シェルター（実験用）',bounds:{minX:-120,maxX:-90,minZ:2,maxZ:34},source:'fictional underground living simulation',buildingIds:[],objectIds:[]});
-const shelterState={day:1,people:4,food:28,water:84,power:100,air:100};
+const shelterState={day:1,people:4,food:56,water:84,power:100,air:100};
 function updateShelterStats(){
  document.getElementById('shelterStats').textContent=
   shelterState.people+'人 / '+shelterState.day+'日目 / 食料 '+shelterState.food.toFixed(0)+
-  '食 / 水 '+shelterState.water.toFixed(0)+'L / 電力 '+shelterState.power.toFixed(0)+'%';
+  '食 / 水 '+shelterState.water.toFixed(0)+'L / 電力 '+shelterState.power.toFixed(0)+
+  '% / 換気 '+shelterState.air.toFixed(0)+'%';
 }
 updateShelterStats();
 // visible pedestrian avatar, regenerated separately from static town
@@ -1808,6 +1811,16 @@ const npcs=[
 for(const [id,x,z,style] of [['tokyo-1',84,-17,'visitorA'],['tokyo-2',99,18,'visitorB'],['tokyo-3',83,27,'visitorB'],['tokyo-4',100,-26,'visitorA']])
  npcs.push({id,poiId:'tokyo-fiction',role:'bystander',style,x,z,heading:Math.PI,phase:0,speed:0,state:'idle',wait:0,
  carrying:false,itemPlaced:false,action:'idle',motion:0,route:[],routeIndex:0,effort:0,pose:{pick:0,carry:0,pay:0}});
+// Four residents in the underground model, independently addressable.
+for(const [id,dx,dz,style] of [
+ ['shelter-1',-1.05,-8,'visitorA'],['shelter-2',1.15,-4,'visitorB'],
+ ['shelter-3',-1.1,4.5,'visitorB'],['shelter-4',1.1,10,'visitorA']
+]){
+ npcs.push({id,poiId:'underground-shelter',role:'bystander',style,
+  x:SHELTER.x+dx,z:SHELTER.z+dz,heading:Math.PI,phase:0,speed:0,
+  state:'idle',wait:0,carrying:false,itemPlaced:false,action:'idle',
+  motion:0,route:[],routeIndex:0,effort:0,pose:{pick:0,carry:0,pay:0}});
+}
 function updateNpcPose(npc,dt){
  const gain=1-Math.exp(-Math.min(.05,Math.max(0,dt))*6);
  for(const key of ['pick','carry','pay']){
@@ -1889,7 +1902,12 @@ function npcBlocks(x,z){
 }
 function renderNpcShadows(){
  for(const npc of npcs){
-  if(!npc.knock||npc.knock.y<.15)renderPlayerShadow(npc.x,npc.z,npc.heading,npc.motion,npc.phase);
+  if(!npc.knock||npc.knock.y<.15){
+   const st=vertices.length;
+   renderPlayerShadow(npc.x,npc.z,npc.heading,npc.motion,npc.phase);
+   if(npc.poiId==='underground-shelter')
+    for(let i=st;i<vertices.length;i+=6)vertices[i+1]+=SHELTER.floor;
+  }
  }
 }
 function renderNPCs(){
@@ -1897,6 +1915,8 @@ function renderNPCs(){
   const start=vertices.length;
   renderDetailedPlayer(npc.x,npc.z,npc.heading,npc.phase,npc.motion,false,
     NPC_STYLES[npc.style],npc.pose,npc.missing||null,npc.knock||null);
+  if(npc.poiId==='underground-shelter')
+   for(let i=start;i<vertices.length;i+=6)vertices[i+1]+=SHELTER.floor;
   // Whole-body tumble: tilt around the pelvis while airborne, not gore/dismemberment.
   if(npc.knock){
    const k=npc.knock,c=Math.cos(k.tilt),s=Math.sin(k.tilt);
@@ -1967,6 +1987,7 @@ catPunchButton.addEventListener('click',()=>{
 });
 catControlButton.addEventListener('click',()=>{
  if(shootState.enabled)return;
+ if(shelterActive){shelterActive=false;shelterPanel.hidden=true;shelterJump.textContent='シェルター';player.x=shelterReturn.x;player.z=shelterReturn.z;}
  cat.controlled=!cat.controlled;
  resetStick();
  if(cat.controlled){
@@ -1983,6 +2004,7 @@ catControlButton.addEventListener('click',()=>{
 });
 catCloseButton.addEventListener('click',()=>{
  if(shootState.enabled)return;
+ if(shelterActive){shelterActive=false;shelterPanel.hidden=true;shelterJump.textContent='シェルター';player.x=shelterReturn.x;player.z=shelterReturn.z;}
  if(!cat.controlled){
   cat.controlled=true;previousHumanDistance=cameraDistance;previousHumanYaw=cameraYaw;
   resetStick();catControlButton.textContent='人間に戻る';
