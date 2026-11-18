@@ -4,6 +4,14 @@ let poiWalkFacing=2,poiWalkStarted=-10000,poiWalkFromX=0,poiWalkFromZ=0;
 let poiWalkViewX=0,poiWalkViewZ=0,poiWalkNextReady=0;
 const POI_WALK_MS=160;
 let cameraTopDown=false,poiThirdPerson=false;
+let poiCameraYaw=0,poiCameraPitch=.35,poiCameraDistance=5.5;
+function poiCameraRelativeStep(key){
+ const forward=[Math.sin(poiCameraYaw),Math.cos(poiCameraYaw)];
+ const vectors={n:forward,s:[-forward[0],-forward[1]],e:[forward[1],-forward[0]],w:[-forward[1],forward[0]]};
+ const v=vectors[key]||forward;
+ return Math.abs(v[0])>Math.abs(v[1])?[Math.sign(v[0]),0]:[0,Math.sign(v[1])];
+}
+
 function togglePoiThirdPerson(){
  if(!poiWalkActive)return;
  poiThirdPerson=!poiThirdPerson;
@@ -114,6 +122,7 @@ function poiWalkSet(active){
   const spawn=poiWalkSpawnNearCenter();
   if(!spawn){toast('プレイ可能な空きマスがありません');return}
   poiWalkReset(spawn.x,spawn.z);
+  poiCameraYaw=0;poiCameraPitch=.35;poiCameraDistance=5.5;
   poiThirdPerson=false;
   $('poiThirdView').textContent='三人称視点';
   $('poiThirdView').setAttribute('aria-pressed','false');
@@ -291,11 +300,12 @@ function parameters(){
  const targetY=poiWalkActive?0:hideUpper?level*1.4:Math.min(8.5,worldMaxLevel*.7+Math.max(0,...terrainHeights.values())*TERRAIN_STEP*.5);
  const sceneReach=Math.hypot(MAP_W,MAP_H)+Math.max(0,worldMaxLevel)*1.4+TERRAIN_MAX*TERRAIN_STEP;
  if(poiWalkActive&&poiThirdPerson){
-  const dirs=[[0,-1],[1,0],[0,1],[-1,0]],dir=dirs[poiWalkFacing];
+  // Independent orbit camera: walking changes the avatar's direction, not the camera.
   const x=poiWalkViewX+.5,z=poiWalkViewZ+.5;
   const ground=terrainY(poiWalkX,poiWalkZ);
-  const eye=[x-dir[0]*4.2,ground+2.8,z-dir[1]*4.2];
-  const target=[x+dir[0]*1.7,ground+1,z+dir[1]*1.7];
+  const horizontal=poiCameraDistance*Math.cos(poiCameraPitch);
+  const eye=[x-horizontal*Math.sin(poiCameraYaw),ground+1.1+poiCameraDistance*Math.sin(poiCameraPitch),z-horizontal*Math.cos(poiCameraYaw)];
+  const target=[x,ground+1.1,z];
   return{...q,halfH,halfW,centerX,centerZ,elev,targetY,vp:mult(perspective(Math.PI/3,Math.max(.1,q.aspect),.12,Math.max(250,sceneReach*3)),look(eye,target))};
  }
  const cameraDistance=Math.max(80,sceneReach*1.6+24);
