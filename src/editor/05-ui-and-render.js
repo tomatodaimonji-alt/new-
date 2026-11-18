@@ -119,18 +119,6 @@ function renderWallCategories(){
  root.appendChild(expandableRow('素材','▦',wallExpanded,openWallSelector));
  if(!wallExpanded)return;
  const groups=document.createElement('div');groups.className='nestedChoices';
- // Natural ground and constructed material families live in one library.
- groups.appendChild(expandableRow('自然','🌱',naturalExpanded,()=>{
-  naturalExpanded=!naturalExpanded;renderWallCategories();
- },'grass'));
- if(naturalExpanded){
-  const naturalList=document.createElement('div');naturalList.className='nestedChoices floorTileChoices';
-  for(const item of NATURAL_FLOORS){
-   const cv=createFloorThumb(item.id);
-   naturalList.appendChild(selectableTile(item.id,item.name,'自然の地面タイル',cv));
-  }
-  groups.appendChild(naturalList);
- }
  for(const [id,name,description] of WALL_CHOICES){
   const open=openedWallGroup===id;
   groups.appendChild(expandableRow(name,catalog.get(id)?.icon||'🧱',open,()=>{
@@ -309,7 +297,7 @@ function renderEquipmentList(){
  if(equipmentExpanded)appendObjectItems(root,EQUIPMENT_IDS);
 }
 
-let roadExpanded=false,roadOpenGroup=null,roadMode='auto';
+let roadExpanded=false,roadOpenGroup=null,roadMode='full';
 const ROAD_GROUPS=[
  ['自然の道',["roadDirt","roadGravel","roadMoss","roadMud"]],
  ['人工の道',["roadCobble","roadCutStone","roadBrick","roadPlank"]],
@@ -319,29 +307,27 @@ function renderRoadList(){
  const root=$('roadList');root.replaceChildren();
  root.appendChild(expandableRow('地面タイル','',roadExpanded,()=>{roadExpanded=!roadExpanded;renderRoadList()},'roadCobble'));
  if(!roadExpanded)return;
- const toggle=document.createElement('div');toggle.className='row';toggle.style.gap='8px';
- for(const [value,label] of [['auto','自動接続'],['full','1マス全面']]){
-  const btn=document.createElement('button');btn.type='button';btn.textContent=label;
-  btn.style.flex='1';btn.className=roadMode===value?'selected':'';
-  btn.setAttribute('aria-pressed',String(roadMode===value));
-  btn.addEventListener('click',()=>{roadMode=value;
-   if(ROAD_IDS.has(selected)){selected=baseRoad(selected)+(value==='full'?'Full':'');mode='place'}
-   renderRoadList();updateSelected();
-  });toggle.appendChild(btn);
- }
- root.appendChild(toggle);
  const nest=document.createElement('div');nest.className='nestedChoices';
+ nest.appendChild(expandableRow('自然','',naturalExpanded,()=>{
+  naturalExpanded=!naturalExpanded;renderRoadList();
+ },'grass'));
+ if(naturalExpanded){
+  const naturalList=document.createElement('div');naturalList.className='nestedChoices floorTileChoices';
+  for(const item of NATURAL_FLOORS){
+   naturalList.appendChild(selectableTile(item.id,item.name,'自然の地面タイル',createFloorThumb(item.id)));
+  }
+  nest.appendChild(naturalList);
+ }
  ROAD_GROUPS.forEach(([label,ids],index)=>{
   const open=roadOpenGroup===index;
   nest.appendChild(expandableRow(label,'',open,()=>{roadOpenGroup=open?null:index;renderRoadList()},ids[0]));
   if(open){
    const list=document.createElement('div');list.className='nestedChoices floorTileChoices';
    ids.forEach(base=>{
-    const id=base+(roadMode==='full'?'Full':'');
-    list.appendChild(selectableTile(id,catalog.get(base).name,
-      roadMode==='full'?'独立した1マス全面舗装':'同素材の道と自動接続・外縁を描画',
-      createFloorThumb(id)));
-   });nest.appendChild(list);
+    const id=base+'Full';
+    list.appendChild(selectableTile(id,catalog.get(base).name,'独立した1マス全面舗装',createFloorThumb(id)));
+   });
+   nest.appendChild(list);
   }
  });
  root.appendChild(nest);
