@@ -1887,11 +1887,6 @@ function pineBuildPOICategories(){
  host.append(heading);
  if(!poiExpanded)return;
  const inner=document.createElement('div');inner.className='nestedChoices poiInner';
- const register=document.createElement('button');
- register.type='button';register.id='registerPOI';register.className='wide';
- register.textContent='＋ POIとして登録';
- register.addEventListener('click',pineRegisterCurrentPOI);
- inner.append(register);
  const button=document.createElement('button');
  button.type='button';button.className='poiSampleEntry item';
  const glyph=document.createElement('span');glyph.className='poiEntryGlyph';glyph.textContent='▦';
@@ -2135,6 +2130,7 @@ $('house3Demo').addEventListener('click',()=>makeHighBuilding('house'));
 $('tower7Demo').addEventListener('click',()=>makeHighBuilding('tower'));
 $('clear').addEventListener('click',()=>{if(!confirm('配置したすべての部材を消去しますか？'))return;snapshot();world=[];commit();toast('マップを空にしました')});$('demo').addEventListener('click',makeDemo);
 $('topDownView').addEventListener('click',toggleTopDown);
+$('registerPOI').addEventListener('click',pineRegisterCurrentPOI);
 $('poiWalkToggle').addEventListener('click',()=>poiWalkSet(!poiWalkActive));
 $('poiWalkExit').addEventListener('click',()=>poiWalkSet(false));
 $('poiRoofToggle').addEventListener('click',()=>{
