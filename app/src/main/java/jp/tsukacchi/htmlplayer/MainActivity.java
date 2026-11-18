@@ -230,12 +230,16 @@ public class MainActivity extends Activity {
             try {
                 URL url = new URL(UPDATE_URL);
                 connection = (HttpURLConnection) url.openConnection();
-                connection.setInstanceFollowRedirects(false);
+                connection.setInstanceFollowRedirects(true);
+                connection.setUseCaches(false);
+                connection.setRequestProperty("Cache-Control", "no-cache, no-store");
+                connection.setRequestProperty("Pragma", "no-cache");
                 connection.setConnectTimeout(8000);
                 connection.setReadTimeout(15000);
-                connection.setRequestProperty("User-Agent", "MoonRuinsGame/2.0");
-                if (connection.getResponseCode() != 200)
-                    throw new IOException("Update endpoint unavailable");
+                connection.setRequestProperty("User-Agent", "WorldWorkshop/6.0");
+                final int status = connection.getResponseCode();
+                if (status != 200)
+                    throw new IOException("GitHub HTTP " + status);
                 if (connection.getContentLengthLong() > MAX_HTML_BYTES)
                     throw new IOException("Update too large");
                 try (InputStream input = connection.getInputStream()) {
@@ -248,10 +252,30 @@ public class MainActivity extends Activity {
                     throw new IOException("Cannot replace queued update");
                 if (!downloading.renameTo(pending))
                     throw new IOException("Cannot queue update");
-                // Never interrupt active modeling. Updated HTML loads on the next launch.
+                // Apply the verified HTML immediately. A separate reload URL avoids
+                // WebView reusing the current document after the file changes.
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    try {
+                        activatePending();
+                        if (web != null) {
+                            web.stopLoading();
+                            web.clearCache(false);
+                            web.loadUrl(GAME_URL + "?revision=" + System.currentTimeMillis());
+                            Toast.makeText(this, "ワールド工房を更新しました", Toast.LENGTH_SHORT).show();
+                        }
+                    } catch (Exception applyError) {
+                        android.util.Log.e("WorldWorkshop", "Could not apply editor update", applyError);
+                        Toast.makeText(this, "更新適用失敗: " + applyError.getMessage(), Toast.LENGTH_LONG).show();
+                    }
+                });
             } catch (Exception ex) {
                 // Offline, Private/404, or bad update: current game remains available.
-                android.util.Log.i("MoonRuins", "Editor update skipped: " + ex.getMessage());
+                android.util.Log.w("WorldWorkshop", "Editor update failed", ex);
+                runOnUiThread(() -> {
+                    if (!isFinishing() && !isDestroyed())
+                        Toast.makeText(this, "更新確認失敗: " + ex.getMessage(), Toast.LENGTH_LONG).show();
+                });
             } finally {
                 if (connection != null) connection.disconnect();
                 if (downloading.exists()) downloading.delete();
