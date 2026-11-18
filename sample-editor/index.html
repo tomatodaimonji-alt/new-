@@ -16,7 +16,12 @@ body.shooting #storeJump,body.shooting #catFind{display:none}
 body.shooting #pad,body.shooting #editToggle,body.shooting #editPanel,body.shooting #v,body.shooting #hint{display:none}
 body.shooting #shootToggle{right:12px;top:39px}
 @media(max-height:420px){#pad{width:120px;height:120px}#stick{left:37px;top:37px;width:46px;height:46px}}
-</style></head><body><canvas id="scene"></canvas><div id="v">v41</div><div id="hint">サンプルエディター</div>
+#vfxCanvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3}
+#vfxToggle{position:absolute;left:50%;top:40px;transform:translateX(-50%);z-index:8;background:#33484bdf;color:#fff;border:1px solid #ffffff77;border-radius:7px;padding:7px 11px;font-size:12px}
+#vfxPanel{position:absolute;top:76px;left:50%;transform:translateX(-50%);z-index:9;display:flex;gap:5px;padding:7px;background:#15292de8;border-radius:8px;border:1px solid #ffffff77}
+#vfxPanel[hidden]{display:none}#vfxPanel button{background:#36555b;border:1px solid #ffffff65;border-radius:5px;color:white;padding:9px 12px;font-size:12px}
+body.shooting #vfxToggle,body.shooting #vfxPanel{display:none}
+</style></head><body><canvas id="scene"></canvas><canvas id="vfxCanvas" aria-hidden="true"></canvas><button id="vfxToggle" type="button">VFX 実験</button><div id="vfxPanel" hidden><button type="button" id="vfxExplosion">爆発</button><button type="button" id="vfxWater">水しぶき</button><button type="button" id="vfxClear">消す</button></div><div id="v">v42</div><div id="hint">サンプルエディター</div>
 <button id="editToggle" type="button">編集</button>
 <div id="editPanel" hidden>
 <strong>POI：谷中銀座・再現研究区画</strong>
@@ -2568,6 +2573,123 @@ function renderCatDebris(){
  }
  for(const d of catDebris)box(d.x,d.y,d.z,d.w||.32,.28,.4,d.color);
 }
+
+/* v42: lightweight world-positioned TWO-DIMENSIONAL VFX.
+   No rigid-body simulation or fluid simulation: visual effects only.
+   Sprites are pre-rendered once as image textures on offscreen canvases. */
+const vfxCanvas=document.getElementById('vfxCanvas');
+const vfxContext=vfxCanvas.getContext('2d',{alpha:true});
+const vfxPanel=document.getElementById('vfxPanel');
+const vfxEvents=[];
+let vfxTime=0;
+document.getElementById('vfxToggle').addEventListener('click',()=>{vfxPanel.hidden=!vfxPanel.hidden});
+function vfxOrigin(){
+ const point=shootState.enabled?{x:shootState.focusX,z:shootState.focusZ}:cat.controlled?cat:player;
+ return {x:point.x-Math.sin(cameraYaw)*5,z:point.z-Math.cos(cameraYaw)*5,y:shelterActive?SHELTER.floor:0};
+}
+function startVfx(kind){
+ const p=vfxOrigin();vfxEvents.push({kind,x:p.x,y:p.y,z:p.z,life:0,duration:kind==='explosion'?2.65:1.95,seed:Math.random()*1000});
+ if(vfxEvents.length>6)vfxEvents.shift();
+ vfxPanel.hidden=true;
+}
+document.getElementById('vfxExplosion').onclick=()=>startVfx('explosion');
+document.getElementById('vfxWater').onclick=()=>startVfx('water');
+document.getElementById('vfxClear').onclick=()=>{vfxEvents.length=0;vfxContext.clearRect(0,0,vfxCanvas.width,vfxCanvas.height);vfxPanel.hidden=true};
+function makeVfxSprite(kind){
+ const c=document.createElement('canvas');c.width=c.height=128;
+ const g=c.getContext('2d');const rng=(i)=>{let x=Math.sin((i+1)*78.233)*43758.5453;return x-Math.floor(x)};
+ if(kind==='flame'){
+  for(let i=0;i<34;i++){
+   const px=64+(rng(i*3)-.5)*79,py=65+(rng(i*3+1)-.5)*68;
+   const radius=14+rng(i*3+2)*34;
+   const grad=g.createRadialGradient(px,py,0,px,py,radius);
+   grad.addColorStop(0,'rgba(255,246,197,.90)');
+   grad.addColorStop(.18,'rgba(255,186,52,.85)');
+   grad.addColorStop(.50,'rgba(229,66,11,.55)');
+   grad.addColorStop(1,'rgba(105,20,8,0)');
+   g.fillStyle=grad;g.fillRect(px-radius,py-radius,2*radius,2*radius);
+  }
+ }else if(kind==='smoke'){
+  for(let i=0;i<28;i++){
+   const px=64+(rng(i*3+30)-.5)*90,py=65+(rng(i*3+31)-.5)*90;
+   const radius=18+rng(i*3+32)*26;
+   const grad=g.createRadialGradient(px,py,1,px,py,radius);
+   grad.addColorStop(0,'rgba(72,66,60,.55)');grad.addColorStop(.5,'rgba(77,74,71,.38)');
+   grad.addColorStop(1,'rgba(58,62,64,0)');
+   g.fillStyle=grad;g.fillRect(px-radius,py-radius,radius*2,radius*2);
+  }
+ }else if(kind==='droplet'){
+  const grad=g.createRadialGradient(52,39,2,65,65,65);
+  grad.addColorStop(0,'rgba(250,255,255,.95)');
+  grad.addColorStop(.32,'rgba(151,222,246,.92)');
+  grad.addColorStop(.7,'rgba(53,145,199,.65)');
+  grad.addColorStop(1,'rgba(36,99,157,0)');
+  g.fillStyle=grad;g.beginPath();g.ellipse(64,64,39,54,0,0,Math.PI*2);g.fill();
+ }else{
+  const grad=g.createRadialGradient(64,64,8,64,64,64);
+  grad.addColorStop(0,'rgba(213,249,255,.0)');grad.addColorStop(.63,'rgba(201,246,255,.04)');
+  grad.addColorStop(.72,'rgba(230,252,255,.65)');grad.addColorStop(.8,'rgba(96,189,227,.32)');
+  grad.addColorStop(1,'rgba(96,189,227,0)');
+  g.fillStyle=grad;g.fillRect(0,0,128,128);
+ }
+ return c;
+}
+const vfxSprites={flame:makeVfxSprite('flame'),smoke:makeVfxSprite('smoke'),droplet:makeVfxSprite('droplet'),ripple:makeVfxSprite('ripple')};
+function projectVfxPoint(vp,x,y,z,w,h,viewX,viewWidth){
+ const q=[x,y,z,1],p=[0,0,0,0];
+ for(let row=0;row<4;row++)for(let col=0;col<4;col++)p[row]+=vp[col*4+row]*q[col];
+ if(p[3]<=.1||p[2]<-p[3]||p[2]>p[3])return null;
+ return {x:viewX+(.5+.5*p[0]/p[3])*viewWidth,y:(.5-.5*p[1]/p[3])*h,depth:p[3],scale:h/(p[3]*1.15)};
+}
+function drawVfx(vp,dt,viewX,viewWidth,w,h){
+ if(!vfxContext)return;
+ if(vfxCanvas.width!==w||vfxCanvas.height!==h){vfxCanvas.width=w;vfxCanvas.height=h}
+ vfxContext.clearRect(0,0,w,h);
+ if(!vfxEvents.length)return;
+ vfxTime+=dt;
+ vfxContext.save();
+ vfxContext.beginPath();vfxContext.rect(viewX,0,viewWidth,h);vfxContext.clip();
+ function sprite(kind,x,y,z,size,alpha,stretchY=1){
+  const point=projectVfxPoint(vp,x,y,z,w,h,viewX,viewWidth);
+  if(!point)return;
+  const pix=Math.min(550,Math.max(1,size*point.scale));
+  if(pix<1.5)return;
+  vfxContext.globalAlpha=Math.min(1,Math.max(0,alpha));
+  vfxContext.drawImage(vfxSprites[kind],point.x-pix/2,point.y-pix*stretchY/2,pix,pix*stretchY);
+ }
+ for(let j=vfxEvents.length-1;j>=0;j--){
+  const e=vfxEvents[j];e.life+=dt;
+  if(e.life>e.duration){vfxEvents.splice(j,1);continue}
+  const t=e.life,fade=Math.min(1,(e.duration-t)*2);
+  if(e.kind==='explosion'){
+   const flash=Math.max(0,1-t*4);
+   if(flash>0)sprite('flame',e.x,e.y+.8,e.z,1.7+t*3,flash);
+   for(let i=0;i<13;i++){
+    const a=i*2.39996+e.seed,dr=.30+((i*37)%11)/10;
+    const dist=(.12+Math.min(t,.85)*2.9)*dr;
+    const height=.25+Math.sin(i*12.99)*.28+Math.min(t,.75)*(.25+(i%4)*.21);
+    const radius=(.9+(i%4)*.32)*(1+Math.min(t,1)*.85);
+    sprite('flame',e.x+Math.cos(a)*dist,e.y+height,e.z+Math.sin(a)*dist,radius,fade*Math.max(0,1-t/1.25)*.85);
+   }
+   for(let i=0;i<9;i++){
+    const a=i*2.39996+e.seed;
+    const dist=(.22+t*1.3)*(.45+(i%4)*.27);
+    sprite('smoke',e.x+Math.sin(a)*dist,e.y+.65+t*(1+(i%3)*.23),e.z+Math.cos(a)*dist,
+      1.1+t*(1.5+(i%3)*.3),fade*Math.min(1,t*2.5)*(.5+(i%3)*.1));
+   }
+  }else{
+   sprite('ripple',e.x,e.y+.08,e.z,1+t*3.2,fade*.8,.32);
+   for(let i=0;i<20;i++){
+    const a=i*2.39996+e.seed,rad=(.15+t*(1.1+(i%5)*.22));
+    const y=Math.max(.09,.24+t*(2.3+(i%7)*.28)-t*t*5.5);
+    sprite('droplet',e.x+Math.sin(a)*rad,e.y+y,e.z+Math.cos(a)*rad,
+      .09+(i%4)*.058,fade*(1-Math.max(0,t-1.3)),1.4);
+   }
+  }
+ }
+ vfxContext.restore();vfxContext.globalAlpha=1;
+}
+
 let characterMovementBlend=0;
 function frame(now){
  const dt=Math.min(.05,(now-last)/1000||0);last=now;
@@ -2731,6 +2853,7 @@ function frame(now){
  gl.uniform1f(locOpacity,1);gl.depthMask(true);gl.disable(gl.BLEND);
  gl.drawArrays(gl.TRIANGLES,shadowVertices,arr.length/6-shadowVertices);
  if(portrait)gl.disable(gl.SCISSOR_TEST);
+ drawVfx(vp,dt,viewX,viewWidth,w,h);
  requestAnimationFrame(frame);
 }
 resetStick();requestAnimationFrame(frame);
