@@ -102,6 +102,35 @@ function createFloorThumb(id){
  const cv=document.createElement('canvas');cv.width=112;cv.height=74;
  drawWallThumbnail(cv,id);return cv;
 }
+// Show the actual road surface straight-on, filling the preview tile.
+// The underlying grassy terrain layer (y=0) is deliberately omitted so
+// asphalt, stone, gravel and damaged paving are recognizable immediately.
+function createRoadSurfaceThumb(id){
+ const cv=document.createElement('canvas');cv.width=112;cv.height=74;
+ const g=cv.getContext('2d');if(!g)return cv;
+ g.fillStyle='#293b34';g.fillRect(0,0,cv.width,cv.height);
+ const m=mesh();addFloorTile(m,0,0,id,256,0);
+ const faces=[];
+ for(let i=0;i<m.p.length;i+=9){
+  const y0=m.p[i+1],y1=m.p[i+4],y2=m.p[i+7];
+  if(Math.min(y0,y1,y2)<.001)continue;
+  const pts=[[m.p[i],m.p[i+2]],[m.p[i+3],m.p[i+5]],[m.p[i+6],m.p[i+8]]];
+  const color=m.c.slice(i,i+3).map(v=>Math.round(Math.max(0,Math.min(1,v))*255));
+  faces.push({pts,depth:(y0+y1+y2)/3,color:'rgb('+color.join(',')+')'});
+ }
+ faces.sort((a,b)=>a.depth-b.depth);
+ for(const f of faces){
+  g.beginPath();
+  for(let j=0;j<3;j++){
+   const x=6+f.pts[j][0]*100,y=5+f.pts[j][1]*64;
+   if(j===0)g.moveTo(x,y);else g.lineTo(x,y);
+  }
+  g.closePath();g.fillStyle=f.color;g.fill();
+ }
+ g.strokeStyle='rgba(221,235,218,.6)';g.lineWidth=1;
+ g.strokeRect(5.5,4.5,101,65);
+ return cv;
+}
 function selectableTile(id,name,description,thumbnail){
  const btn=document.createElement('button');btn.className='wallOption'+(selected===id&&mode==='place'?' active':'');
  const info=document.createElement('div'),strong=document.createElement('strong'),small=document.createElement('small');
@@ -321,7 +350,7 @@ function renderRoadList(){
    const list=document.createElement('div');list.className='nestedChoices floorTileChoices';
    ids.forEach(base=>{
     const id=base+'Full';
-    list.appendChild(selectableTile(id,catalog.get(base).name,'独立した1マス全面舗装',createFloorThumb(id)));
+    list.appendChild(selectableTile(id,catalog.get(base).name,'1マス全面の道タイル',createRoadSurfaceThumb(id)));
    });
    nest.appendChild(list);
   }
