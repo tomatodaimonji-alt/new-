@@ -16,7 +16,7 @@ body.shooting #storeJump,body.shooting #catFind{display:none}
 body.shooting #pad,body.shooting #editToggle,body.shooting #editPanel,body.shooting #v,body.shooting #hint{display:none}
 body.shooting #shootToggle{right:12px;top:39px}
 @media(max-height:420px){#pad{width:120px;height:120px}#stick{left:37px;top:37px;width:46px;height:46px}}
-</style></head><body><canvas id="scene"></canvas><div id="v">v36</div><div id="hint">サンプルエディター</div>
+</style></head><body><canvas id="scene"></canvas><div id="v">v37</div><div id="hint">サンプルエディター</div>
 <button id="editToggle" type="button">編集</button>
 <div id="editPanel" hidden>
 <strong>POI：谷中銀座・再現研究区画</strong>
@@ -2090,18 +2090,61 @@ function catKnockNPC(npc,ux,uz,power){
  npc.action='idle';npc.effort=0;
  npc.carrying=false;
 }
+// v37: common wall and ground contact solver, bounded for Android WebGL.
+function impactRadius(b){return b.kind==='vending'?.52:b.kind==='sign'?.28:b.kind==='rail'?.43:b.body!==undefined?1.05:b.radius||.16}
+function impactStaticTest(x,z,r){
+ for(const b of [...townBuildings,...tokyoBuildings]){
+  if(b.catDestroyed)continue;
+  const dx=Math.max(b.cx-b.depth*.5-x,0,x-b.cx-b.depth*.5);
+  const dz=Math.max(b.cz-b.width*.5-z,0,z-b.cz-b.width*.5);
+  if(dx*dx+dz*dz<r*r)return true;
+ }
+ for(const [ox,oz] of [[0,0],[r,0],[-r,0],[0,r],[0,-r]])
+  if(convenienceBlocked(x+ox,z+oz))return true;
+ return false;
+}
+function impactMove(b,dt,r,bounce=.23){
+ const nx=b.x+b.vx*dt,nz=b.z+b.vz*dt;
+ let hit=false;
+ if(!impactStaticTest(nx,b.z,r))b.x=nx;
+ else{b.vx=-b.vx*bounce;b.vz*=.84;hit=true}
+ if(!impactStaticTest(b.x,nz,r))b.z=nz;
+ else{b.vz=-b.vz*bounce;b.vx*=.84;hit=true}
+ return hit;
+}
+function impactLand(b,dt,floor=0,restitution=.23){
+ b.y+=b.vy*dt;b.vy-=9.8*dt;
+ if(b.y<=floor){
+  if(b.vy<0){
+   const speed=-b.vy;b.vy=speed>1.15?speed*restitution:0;
+   b.vx*=speed>2?.82:.65;b.vz*=speed>2?.82:.65;
+   if(b.spin!==undefined)b.spin*=.65;
+  }
+  b.y=floor;return true;
+ }
+ return false;
+}
+function impactPropChain(b,power){
+ if(power<2)return;
+ for(const o of tokyoProps){
+  if(o===b)continue;
+  const dx=o.x-b.x,dz=o.z-b.z,d=Math.hypot(dx,dz);
+  if(d<.01||d>impactRadius(b)+impactRadius(o))continue;
+  const q=Math.min(3.2,power*.3);
+  o.hit=true;o.vx+=dx/d*q;o.vz+=dz/d*q;
+  o.vy=Math.max(o.vy,Math.min(2.5,power*.15));
+  o.spin+=(dx>0?1:-1)*q*.3;
+ }
+}
 function updateCatImpacts(dt){
  const friction=Math.exp(-Math.max(0,dt)*1.8);
  for(const car of [...catCars,...tokyoProps]){
   if(!car.hit)continue;
-  car.x+=car.vx*dt;car.z+=car.vz*dt;
-  car.y=Math.max(0,car.y+car.vy*dt);
-  car.vy-=9.8*dt;
-  if(car.y===0&&car.vy<0){car.vy=car.vy< -1?-car.vy*.23:0;car.spin*=.70}
-  car.vx*=friction;car.vz*=friction;car.spin*=friction;
-  car.angle+=car.spin*dt;
-  // Keep the visual simulation bounded; do not clip through the town's entire map.
+  const hit=impactMove(car,dt,impactRadius(car),car.kind?.32:.20);
+  impactLand(car,dt,0,car.kind?.27:.20);
+  car.vx*=friction;car.vz*=friction;car.spin*=friction;car.angle+=car.spin*dt;
   car.x=clamp(car.x,-120,145);car.z=clamp(car.z,-105,105);
+  if(hit)impactPropChain(car,Math.hypot(car.vx,car.vz));
  }
  // Moving objects push nearby props and passersby: bounded pairwise impulses.
  for(const mover of [...catCars,...tokyoProps]){
@@ -2125,19 +2168,22 @@ function updateCatImpacts(dt){
  }
  for(const npc of npcs){
   const k=npc.knock;if(!k)continue;
-  const nx=npc.x+k.vx*dt,nz=npc.z+k.vz*dt;
-  if(!blocked(nx,npc.z))npc.x=nx;else k.vx*=-.25;
-  if(!blocked(npc.x,nz))npc.z=nz;else k.vz*=-.25;
-  k.y=Math.max(0,k.y+k.vy*dt);
-  k.vy-=9.8*dt;
-  if(k.y===0&&k.vy<0){
-   const landing=Math.min(4,Math.abs(k.vy));
+  // Contact-normal response on solid surfaces; tangential slide remains.
+  const body={x:npc.x,z:npc.z,vx:k.vx,vz:k.vz};
+  const hit=impactMove(body,dt,.22,.24);
+  npc.x=body.x;npc.z=body.z;k.vx=body.vx;k.vz=body.vz;
+  if(hit){k.spin*=.83;for(const j of Object.values(k.joints||{})){j.vu*=.85;j.vl*=.85}}
+  k.y+=k.vy*dt;k.vy-=9.8*dt;
+  if(k.y<=0&&k.vy<0){
+   const landing=Math.min(7,-k.vy);
    if(landing>.5)for(const j of Object.values(k.joints||{})){
-    j.vu+=(Math.random()-.5)*landing*.75;
-    j.vl+=(Math.random()-.5)*landing*.95;
+    j.vu+=(Math.random()-.5)*landing*.60;
+    j.vl+=(Math.random()-.5)*landing*.77;
    }
-   k.vy=0;
+   k.vy=landing>1.9?landing*.12:0;k.y=0;
+   k.vx*=.76;k.vz*=.76;
   }
+  if(k.y<0)k.y=0;
   const jointDrag=Math.exp(-dt*(k.y===0?5.5:1.4));
   for(const [name,j] of Object.entries(k.joints||{})){
    j.vu=(j.vu-Math.sin(j.upper)*dt*(k.y===0?5:1.6))*jointDrag;
@@ -2157,25 +2203,24 @@ function updateCatImpacts(dt){
   }}
  }
  for(const part of detachedNpcParts){
-   part.x+=part.vx*dt;part.z+=part.vz*dt;
-   part.y+=part.vy*dt;part.vy-=9.8*dt;
-   if(part.y<=part.radius){
-    part.y=part.radius;
-    if(part.vy<0)part.vy=Math.abs(part.vy)>1?-part.vy*.27:0;
-    part.vx*=Math.exp(-dt*7);part.vz*=Math.exp(-dt*7);
-    part.spin*=Math.exp(-dt*6);
-   }
-   part.vx*=friction;part.vz*=friction;part.spin*=friction;
-   part.angle+=part.spin*dt;
-   part.x=clamp(part.x,-110,110);part.z=clamp(part.z,-110,110);
-  }
-  for(let i=catDebris.length-1;i>=0;i--){
-  const d=catDebris[i];
-  if(d.life<=0){catDebris.splice(i,1);continue}
-  d.life-=dt;d.x+=d.vx*dt;d.z+=d.vz*dt;
-  d.y=Math.max(0,d.y+d.vy*dt);d.vy-=9.8*dt;
-  if(d.y===0&&d.vy<0){d.vy=0;d.vx*=.8;d.vz*=.8}
+  impactMove(part,dt,part.radius||.13,.18);
+  const ground=impactLand(part,dt,part.radius||.13,.22);
+  part.vx*=friction;part.vz*=friction;part.spin*=friction;
+  if(ground){part.vx*=Math.exp(-dt*5);part.vz*=Math.exp(-dt*5);part.spin*=Math.exp(-dt*4)}
+  part.angle+=part.spin*dt;
+  part.x=clamp(part.x,-120,145);part.z=clamp(part.z,-105,105);
  }
+ for(let i=catDebris.length-1;i>=0;i--){
+  const d=catDebris[i];
+  d.life-=dt;
+  if(d.life<=0){catDebris.splice(i,1);continue}
+  const hit=impactMove(d,dt,Math.max(.08,(d.w||.32)*.4),.28);
+  const ground=impactLand(d,dt,.14,.20);
+  if(ground){d.vx*=Math.exp(-dt*4);d.vz*=Math.exp(-dt*4)}
+  if(hit)impactPropChain(d,Math.hypot(d.vx,d.vz));
+  d.vx*=friction;d.vz*=friction;
+ }
+
 }
 let catWhooshNoise=null;
 function catWhooshSound(){
