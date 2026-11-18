@@ -2160,7 +2160,7 @@ for(const button of document.querySelectorAll('[data-poi-dir]')){
 document.addEventListener('keydown',e=>{
  if(!poiWalkActive||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
  const k=e.key.toLowerCase(),d={arrowup:[0,-1],w:[0,-1],arrowdown:[0,1],s:[0,1],arrowleft:[-1,0],a:[-1,0],arrowright:[1,0],d:[1,0]}[k];
- if(d){e.preventDefault();poiWalkStep(...d)}
+ if(d){e.preventDefault();const cameraKey={arrowup:'n',w:'n',arrowdown:'s',s:'s',arrowleft:'w',a:'w',arrowright:'e',d:'e'}[k];poiWalkStep(...(poiThirdPerson?poiCameraRelativeStep(cameraKey):d))}
 });
 $('poiNameCancel').addEventListener('click',pineClosePOINameModal);
 $('poiNameForm').addEventListener('submit',e=>{e.preventDefault();pineConfirmPOIName()});
