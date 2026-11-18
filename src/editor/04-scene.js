@@ -7,7 +7,7 @@ let cameraTopDown=false,poiThirdPerson=false;
 let poiCameraYaw=0,poiCameraPitch=.35,poiCameraDistance=5.5;
 function poiCameraRelativeStep(key){
  const forward=[Math.sin(poiCameraYaw),Math.cos(poiCameraYaw)];
- const vectors={n:forward,s:[-forward[0],-forward[1]],e:[forward[1],-forward[0]],w:[-forward[1],forward[0]]};
+ const vectors={n:forward,s:[-forward[0],-forward[1]],e:[-forward[1],forward[0]],w:[forward[1],-forward[0]]};
  const v=vectors[key]||forward;
  return Math.abs(v[0])>Math.abs(v[1])?[Math.sign(v[0]),0]:[0,Math.sign(v[1])];
 }
