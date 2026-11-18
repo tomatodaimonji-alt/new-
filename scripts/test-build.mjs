@@ -8,7 +8,7 @@ import {bundle,run,groups} from './build.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const editor=bundle(groups.editor);
 run(true);
-for(const symbol of ['function pineSupermarketPOI(','function pineBuildPOICategories(){','id="poiWalkPad"','id="palette"','id="inspector"',"register.id='registerPOI'"]){
+for(const symbol of ['function pineSupermarketPOI(','function pineBuildPOICategories(){','id="poiWalkPad"','id="palette"','id="inspector"','id="registerPOI"']){
  assert.ok(editor.includes(symbol),'World Workshop missing '+symbol);
 }
 const sourceDir=join(root,'src/editor');
