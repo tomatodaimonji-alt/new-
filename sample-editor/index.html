@@ -16,7 +16,7 @@ body.shooting #storeJump,body.shooting #catFind{display:none}
 body.shooting #pad,body.shooting #editToggle,body.shooting #editPanel,body.shooting #v,body.shooting #hint{display:none}
 body.shooting #shootToggle{right:12px;top:39px}
 @media(max-height:420px){#pad{width:120px;height:120px}#stick{left:37px;top:37px;width:46px;height:46px}}
-</style></head><body><canvas id="scene"></canvas><div id="v">v35</div><div id="hint">サンプルエディター</div>
+</style></head><body><canvas id="scene"></canvas><div id="v">v36</div><div id="hint">サンプルエディター</div>
 <button id="editToggle" type="button">編集</button>
 <div id="editPanel" hidden>
 <strong>POI：谷中銀座・再現研究区画</strong>
@@ -300,43 +300,50 @@ for(let z=-50;z<51;z+=8)if(Math.abs(z)>12)box(91,0,z,.14,.02,3,0xf2efe6);
 for(let x=52;x<130;x+=8)if(Math.abs(x-91)>12)box(x,0,0,3,.02,.14,0xf2efe6);
 for(const z of [-10.4,10.4])for(let x=85;x<=97;x+=1.65)box(x,.027,z,1,.016,3.6,0xf5f1e8);
 for(const x of [80.5,101.5])for(let z=-5.5;z<=5.5;z+=1.65)box(x,.027,z,3.6,.016,1,0xf5f1e8);
+// v36: Building shells have no front face. Each facade cell owns its own GPU buffer,
+// so a hit can remove just that wall/window without erasing the whole building.
 function addTokyoBuilding(id,x,z,w,d,h,tint,kind){
- const start=vertices.length,side=x<91?1:-1,front=x+side*w/2;
- box(x,0,z,w,h,d,tint);box(x,h,z,w+.2,.2,d+.2,0x62686b);
- box(x,h+.2,z,w*.30,.45,d*.24,0x8d9697);
+ const side=x<91?1:-1,front=x+side*w/2;
+ const start=vertices.length;
+ // Hollow exterior shell (roof, rear, two sides, and floor). Front is tiled below.
+ box(x,h-.18,z,w,.18,d,0x62686b);
+ box(x,.0,z,w,.13,d,0x8b8a84);
+ box(x-side*(w*.5-.095),.0,z,.19,h,d,tint);
+ for(const face of [-1,1])box(x,0,z+face*(d*.5-.10),w,h,.20,tint);
+ box(x,h+.18,z,w*.30,.45,d*.24,0x8d9697);
  for(let floor=1;floor<Math.floor(h/2.8);floor++){
-  for(const j of [-1,0,1]){
-   box(front+side*.065,floor*2.8+.55,z+j*d*.26,.12,1.4,d*.18,0x526f7a);
-   box(x+j*w*.26,floor*2.8+.55,z+(z<0?1:-1)*d*.51,w*.18,1.4,.12,0x526f7a);
-  }
-  if(kind==='flat'){
-   box(front+side*.33,floor*2.8-.3,z,.6,.10,d*.84,0xa5abab);
-   box(front+side*.61,floor*2.8-.23,z,.07,.92,d*.83,0x65747b);
-   for(let j=-3;j<=3;j++)box(front+side*.64,floor*2.8-.28,z+j*d*.12,.045,.95,.048,0x677477);
-   // balcony outdoor unit
-   box(front+side*.34,floor*2.8-.18,z+d*.26,.48,.45,.52,0xc7c9c2);
-   for(let u=0;u<3;u++)box(front+side*.61,floor*2.8-.09+u*.09,z+d*.26,.03,.025,.41,0x777e7e);
-  }else if(floor%2===1){
-   box(front+side*.20,floor*2.8-.3,z+d*.33,.45,.42,.58,0xb4bbba);
-   for(let u=0;u<3;u++)box(front+side*.46,floor*2.8-.20+u*.09,z+d*.33,.025,.028,.43,0x6f7777);
-  }
+  for(const j of [-1,0,1])box(x+j*w*.26,floor*2.8+.55,z+(z<0?1:-1)*d*.51,w*.18,1.4,.12,0x526f7a);
  }
- box(front+side*.07,.07,z,.17,2.15,d*.91,0x36434a);
- for(const j of [-1,0,1])box(front+side*.16,.1,z+j*d*.26,.1,1.82,d*.18,0x698589);
- box(front+side*.19,2.40,z,.15,.52,d*.86,kind==='store'?0x367265:0x556e7e);
- // Tokyo ground-floor shutters, doorway lintels and alternating stone base.
- for(const j of [-1,1]){
-  box(front+side*.17,.12,z+j*d*.39,.14,1.95,.12,0xc0bcb1);
-  box(front+side*.19,.22,z+j*d*.34,.05,1.65,d*.13,0x54636b);
+ const geometry=new Float32Array(vertices.splice(start)),buffer=gl.createBuffer();
+ gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,geometry,gl.STATIC_DRAW);
+ const b={id,x,z,cx:x,cz:z,depth:w,width:d,height:h,front,side,buffer,
+  count:geometry.length/6,facade:[],catDestroyed:false,kind};
+ // Horizontal Z strips and vertical floors form independently removable panels.
+ const floors=Math.max(2,Math.ceil(h/2.8)),columns=5,cellZ=d/columns;
+ for(let floor=0;floor<floors;floor++)for(let col=0;col<columns;col++){
+  const y=floor*2.8,cellH=Math.min(2.8,h-y);
+  const zz=z-d*.5+(col+.5)*cellZ;
+  const st=vertices.length,outer=front+side*.09;
+  box(outer,y+.02,zz,.21,Math.max(.08,cellH-.04),cellZ-.035,tint);
+  if(floor===0){
+   box(outer+side*.13,y+.18,zz,.09,Math.max(.2,cellH-.54),cellZ*.72,0x4d686e);
+   box(outer+side*.20,y+2.30,zz,.15,.32,cellZ*.91,kind==='store'?0x44786f:0x596f82);
+  }else{
+   box(outer+side*.14,y+.61,zz,.08,1.42,cellZ*.67,0x526f7a);
+   box(outer+side*.21,y+.58,zz,.06,.055,cellZ*.69,0xb9bbba);
+   if(kind==='flat'){
+    box(outer+side*.34,y+.35,zz,.58,.08,cellZ*.86,0xa1a8ab);
+    for(const edge of [-1,1])box(outer+side*.59,y+.42,zz+edge*cellZ*.39,.055,.66,.05,0x6b797f);
+   }else if((floor+col)%3===0)box(outer+side*.22,y+.26,zz+.2,.36,.34,.42,0xb0b8b6);
+  }
+  if(col%2===0)box(outer+side*.20,y+cellH*.5,zz-cellZ*.47,.08,cellH*.9,.045,0x9ba5a4);
+  const mesh=new Float32Array(vertices.splice(st)),paneBuffer=gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER,paneBuffer);gl.bufferData(gl.ARRAY_BUFFER,mesh,gl.STATIC_DRAW);
+  b.facade.push({buffer:paneBuffer,count:mesh.length/6,col,floor,y:y+cellH*.5,z:zz,height:cellH,broken:false});
  }
- box(front+side*.22,2.18,z,.18,.12,d*.9,0x8e9592);
- for(let j=-3;j<=3;j++)box(front+side*.30,.39,z+j*d*.115,.028,.027,d*.075,0x929c9d);
- // Slim rainwater downpipes and weathered service boxes.
- for(const j of [-1,1])box(front+side*.09,0,z+j*d*.48,.11,h-.15,.09,0x969d9b);
- for(let j=-2;j<=2;j++)box(front+side*.26,2.59,z+j*d*.14,.03,.08,.44,0xd0c5a6);
- const arr=new Float32Array(vertices.splice(start)),buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,arr,gl.STATIC_DRAW);
- tokyoBuildings.push({id,x,z,cx:x,cz:z,depth:w,width:d,height:h,front,buffer,count:arr.length/6,catDestroyed:false});
+ tokyoBuildings.push(b);
 }
+
 [
  ['w1',63,-29,16,18,14.2,0xadb4ad,'office'],['w2',63,29,16,18,11.4,0xb9b0a1,'store'],
  ['e1',119,-29,16,18,17.2,0xaab1b5,'flat'],['e2',119,29,16,18,14.2,0xb6afa6,'office'],
@@ -2175,13 +2182,27 @@ function catStrike(){
   car.spin+=(car.x-cat.x>0?1:-1)*(1.5+cat.scale*.18);
   hits++;
  }
- // Tokyo buildings react with local facade debris rather than vanishing entirely.
- if(cat.scale>=3)for(const b of tokyoBuildings){
-  if(b.catDamaged||!catHitTest(b.front,b.z,Math.max(1.5,b.width*.32)))continue;
-  b.catDamaged=true;hits++;
-  for(let i=0;i<14;i++)catDebris.push({x:b.front,z:b.z+(i/14-.5)*b.width,y:1+Math.random()*4,
-   vx:dirX*(2+Math.random()*4),vy:2+Math.random()*5,vz:dirZ*(2+Math.random()*4),life:12,
-   color:[0x9ba6a2,0x587681,0xcbc4b4][i%3]});
+ // v36: Localized facade fracture. Permanently remove specific wall/window cells,
+// preserving neighboring floors and structural walls. Cap shards for mobile GPUs.
+ if(cat.scale>=2.5)for(const b of tokyoBuildings){
+  if(!catHitTest(b.front,b.z,Math.max(1.5,b.width*.32)))continue;
+  const strikeZ=clamp(cat.z+dirZ*cat.scale*.8,b.z-b.width*.48,b.z+b.width*.48);
+  const strikeY=clamp(cat.scale*.67,.7,b.height-1);
+  const candidates=b.facade.filter(panel=>!panel.broken).sort((a,b2)=>
+   Math.hypot(a.z-strikeZ,(a.y-strikeY)*.62)-Math.hypot(b2.z-strikeZ,(b2.y-strikeY)*.62));
+  const count=Math.min(candidates.length,cat.scale>=7?4:cat.scale>=4?3:1);
+  for(let j=0;j<count;j++){
+   const panel=candidates[j];
+   if(!panel||Math.abs(panel.z-strikeZ)>Math.max(b.width*.45,cat.scale*1.3))break;
+   panel.broken=true;hits++;
+   for(let i=0;i<5;i++){
+    const q=(i-2)*.28;
+    catDebris.push({x:b.front+dirX*.26,z:panel.z+q,y:panel.y+(i%2?-.38:.38),
+     vx:dirX*(3+Math.random()*4),vy:2+Math.random()*4,
+     vz:dirZ*(2+Math.random()*4)+(Math.random()-.5)*3,
+     life:9,color:i%2?0x5a8393:0xaaa59c,w:.18+Math.random()*.35});
+   }
+  }
   break;
  }
  // Buildings are already in separate, independently rendered buffers.
@@ -2213,7 +2234,7 @@ function renderCatDebris(){
   for(let i=0;i<12;i++)box(shop.front+Math.sin(i*6.1)*1.0,.12,
    shop.z+(i-5.5)*shop.width/13,.55,.43,.60,0x938575);
  }
- for(const d of catDebris)box(d.x,d.y,d.z,.32,.28,.4,d.color);
+ for(const d of catDebris)box(d.x,d.y,d.z,d.w||.32,.28,.4,d.color);
 }
 let characterMovementBlend=0;
 function frame(now){
@@ -2329,7 +2350,14 @@ function frame(now){
  const vp=mat4.mul(mat4.perspective(1.05,viewWidth/h,.1,350),mat4.look(eye,look));
  gl.uniformMatrix4fv(locVP,false,vp);
  bind(staticBuffer);gl.drawArrays(gl.TRIANGLES,0,staticArray.length/6);
- for(const b of [...townBuildings,...tokyoBuildings]){if(b.catDestroyed)continue;bind(b.buffer);gl.drawArrays(gl.TRIANGLES,0,b.count)}
+ for(const b of [...townBuildings,...tokyoBuildings]){
+  if(b.catDestroyed)continue;
+  bind(b.buffer);gl.drawArrays(gl.TRIANGLES,0,b.count);
+  if(b.facade)for(const panel of b.facade){
+   if(panel.broken)continue;
+   bind(panel.buffer);gl.drawArrays(gl.TRIANGLES,0,panel.count);
+  }
+ }
  for(const item of convenienceBuffers){bind(item.buffer);gl.drawArrays(gl.TRIANGLES,0,item.count)}
  bind(avatarBuffer);
  // Alpha blend only the ground decal, and keep it out of the depth buffer.
