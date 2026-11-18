@@ -317,7 +317,7 @@ const ROAD_GROUPS=[
 ];
 function renderRoadList(){
  const root=$('roadList');root.replaceChildren();
- root.appendChild(expandableRow('道タイル・自動接続／1マス全面','',roadExpanded,()=>{roadExpanded=!roadExpanded;renderRoadList()},'roadCobble'));
+ root.appendChild(expandableRow('地面タイル','',roadExpanded,()=>{roadExpanded=!roadExpanded;renderRoadList()},'roadCobble'));
  if(!roadExpanded)return;
  const toggle=document.createElement('div');toggle.className='row';toggle.style.gap='8px';
  for(const [value,label] of [['auto','自動接続'],['full','1マス全面']]){

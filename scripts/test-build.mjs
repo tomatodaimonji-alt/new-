@@ -15,6 +15,8 @@ const sourceDir=join(root,'src/editor');
 assert.ok(readFileSync(join(sourceDir,'02-palette.js'),'utf8').includes('/*__PINE_SHARED_BLOCK_CATALOG__*/'));
 assert.ok(readFileSync(join(sourceDir,'03-geometry.js'),'utf8').includes('/*__PINE_SHARED_HARBOR_GEOMETRY__*/'));
 assert.ok(!editor.includes('__PINE_SHARED_'),'Unresolved shared geometry marker');
+assert.ok(editor.includes("expandableRow('地面タイル'"),'Ground tile category label missing');
+assert.ok(editor.includes('height*.55+1.2)*.84'),'Map-fit margin missing');
 assert.ok(editor.includes("['wholesale','スーパー',36,24,1"),'Single supermarket sample missing');
 assert.ok(!editor.includes("['compact','小型スーパー'"),'Removed supermarket variant still visible');
 process.stdout.write('World Workshop source checks: PASS\n');

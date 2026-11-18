@@ -180,7 +180,8 @@ function zoomForFullMap(){
  const c=Math.abs(Math.cos(yaw)),sn=Math.abs(Math.sin(yaw));
  const horizontal=(MAP_W*c+MAP_H*sn)/2/aspect;
  const vertical=(MAP_W*sn+MAP_H*c)*Math.sin(.86)/2;
- const height=world.reduce((top,o)=>Math.max(top,o.y),0)*1.4+Math.max(0,...terrainHeights.values())*TERRAIN_STEP;return Math.max(.025,Math.min(4,9/(Math.max(horizontal,vertical)+height*.38)*1.18));
+ const height=world.reduce((top,o)=>Math.max(top,o.y),0)*1.4+Math.max(0,...terrainHeights.values())*TERRAIN_STEP;// Extra margin prevents bottom map corners from being clipped on tall mobile screens.
+ return Math.max(.025,Math.min(4,9/(Math.max(horizontal,vertical)+height*.55+1.2)*.84));
 }
 function showEntireMap(){panX=panZ=0;zoom=zoomForFullMap();cursorDirty=true}
 function parameters(){const q=layout(),halfH=9/zoom,halfW=halfH*q.aspect;const centerX=MAP_W/2+panX,centerZ=MAP_H/2+panZ,elev=.86,targetY=poiWalkActive?0:hideUpper?level*1.4:Math.min(8.5,worldMaxLevel*.7+Math.max(0,...terrainHeights.values())*TERRAIN_STEP*.5);const eye=[centerX+24*Math.sin(yaw)*Math.cos(elev),targetY+24*Math.sin(elev),centerZ+24*Math.cos(yaw)*Math.cos(elev)];return{...q,halfH,halfW,centerX,centerZ,elev,targetY,vp:mult(ortho(-halfW,halfW,-halfH,halfH,.1,100),look(eye,[centerX,targetY,centerZ]))}}
