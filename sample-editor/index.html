@@ -1426,7 +1426,7 @@ function solveWalkingKnee(hip,ankle){
 }
 // Procedural skinned-like pose: separate meshes share moving anatomical joints.
 // Rendering is built each frame without external models, Web APIs or textures.
-function renderDetailedPlayer(px,pz,heading,phase,effort,running,style=PLAYER_STYLE,action='idle',missing=null){
+function renderDetailedPlayer(px,pz,heading,phase,effort,running,style=PLAYER_STYLE,action='idle',missing=null,rag=null){
  currentCharacterStyle=style;
  const start=vertices.length;
  const amount=clamp((effort-.035)/.78,0,1);
@@ -1496,6 +1496,7 @@ function renderDetailedPlayer(px,pz,heading,phase,effort,running,style=PLAYER_ST
   playerOval(headX,1.744+headY,faceZ-.103,.116,.030,.040,C.hair,13,6);
  }
  const removableParts=[{name:'head',a:headPartStart,b:vertices.length}];
+ const articulated=[];
  // Each foot has independent stance/swing and a small heel/toe roll.
  for(const side of [-1,1]){
   const legPartStart=vertices.length;
@@ -1508,6 +1509,7 @@ function renderDetailedPlayer(px,pz,heading,phase,effort,running,style=PLAYER_ST
   playerLimb(h,k,.110,.113,C.trousers);
   // Smaller knee transitions and tapering shin, without the previous ball joints.
   playerOval(...k,.093,.071,.093,C.trousers,9,5);
+  const shinStart=vertices.length;
   playerLimb(k,a,.083,.091,C.trouserShadow);
   playerOval(side*.137,.151+footRise,ankleZ,.078,.055,.080,C.trousers,9,5);
   // Sole stays close to the ground in stance, and clears it in swing.
@@ -1520,6 +1522,7 @@ function renderDetailedPlayer(px,pz,heading,phase,effort,running,style=PLAYER_ST
    playerOval(side*.137,.123+footRise+foot.toe*.6,ankleZ-.079+lace*.042,
     .050,.009,.015,0xa7a9a6,7,4);
   removableParts.push({name:side===1?'rightLeg':'leftLeg',a:legPartStart,b:vertices.length});
+  articulated.push({type:side===1?'rightLeg':'leftLeg',a:legPartStart,b:vertices.length,lower:shinStart,pivot:h,joint:k});
    const armPartStart=vertices.length;
    // Elbow follows but slightly lags shoulder; swing is opposite the same-side leg.
   const armSwing=moving?Math.sin(stridePhase+(side===1?Math.PI:0))*.155*amount:0;
@@ -1544,6 +1547,7 @@ function renderDetailedPlayer(px,pz,heading,phase,effort,running,style=PLAYER_ST
   playerOval(...sleeveEnd,.086,.027,.084,C.shirtDark,9,5);
   playerLimb(sleeveEnd,elbow,.077,.083,C.skin);
   playerOval(...elbow,.061,.041,.065,C.skin,9,5);
+  const forearmStart=vertices.length;
   playerLimb(elbow,hand,.061,.068,C.skin);
   playerOval(...hand,.048,.070,.038,C.skin,10,7);
   playerOval(hand[0]-side*.034,hand[1]-.01,hand[2]-.043,.022,.037,.031,C.shadowSkin,8,5);
@@ -1562,6 +1566,23 @@ function renderDetailedPlayer(px,pz,heading,phase,effort,running,style=PLAYER_ST
     .017,.015,C.skin);
   }
   removableParts.push({name:side===1?'rightArm':'leftArm',a:armPartStart,b:vertices.length});
+  articulated.push({type:side===1?'rightArm':'leftArm',a:armPartStart,b:vertices.length,lower:forearmStart,pivot:shoulder,joint:elbow});
+ }
+ // v36: articulated swing of forearms, shins, shoulders and hips.
+ if(rag&&rag.joints){
+  const rotateRange=(a,b,o,angle)=>{
+   const c=Math.cos(angle),sn=Math.sin(angle);
+   for(let i=a;i<b;i+=6){
+    const dy=vertices[i+1]-o[1],dz=vertices[i+2]-o[2];
+    vertices[i+1]=o[1]+dy*c-dz*sn;vertices[i+2]=o[2]+dy*sn+dz*c;
+   }
+  };
+  for(const part of articulated){
+   const j=rag.joints[part.type];if(!j)continue;
+   rotateRange(part.lower,part.b,part.joint,j.lower);
+   rotateRange(part.a,part.b,part.pivot,j.upper);
+  }
+  if(rag.joints.neck)rotateRange(headPartStart,removableParts[0].b,[0,1.43,0],rag.joints.neck.upper);
  }
  if(missing)for(const part of removableParts.reverse())if(missing.includes(part.name))vertices.splice(part.a,part.b-part.a);
  // Very small whole-body counter-twist: shoulders turn against pelvic stride.
@@ -1719,7 +1740,7 @@ function renderNPCs(){
  for(const npc of npcs){
   const start=vertices.length;
   renderDetailedPlayer(npc.x,npc.z,npc.heading,npc.phase,npc.motion,false,
-    NPC_STYLES[npc.style],npc.pose,npc.missing||null);
+    NPC_STYLES[npc.style],npc.pose,npc.missing||null,npc.knock||null);
   // Whole-body tumble: tilt around the pelvis while airborne, not gore/dismemberment.
   if(npc.knock){
    const k=npc.knock,c=Math.cos(k.tilt),s=Math.sin(k.tilt);
@@ -2048,7 +2069,13 @@ function renderCatCar(car){
 }
 function catKnockNPC(npc,ux,uz,power){
  npc.knock={vx:ux*power,vy:Math.min(8,2+power*.4),vz:uz*power,
-  y:0,tilt:0,spin:3.8+power*.19,rest:0};
+  y:0,tilt:0,spin:3.8+power*.19,rest:0,joints:{}};
+  for(const [i,name] of ['leftArm','rightArm','leftLeg','rightLeg','neck'].entries()){
+   const side=i%2===0?1:-1;
+   npc.knock.joints[name]={upper:0,lower:0,
+    vu:side*(2.2+power*.19)*(i>=2?.75:1),
+    vl:-side*(2.7+power*.11)*(i>=2?1.1:.85)};
+  }
  if(power>=6.8){
    const options=['leftArm','rightArm','leftLeg','rightLeg'];
    const first=options[Math.floor(Math.random()*options.length)];
@@ -2103,7 +2130,23 @@ function updateCatImpacts(dt){
   if(!blocked(npc.x,nz))npc.z=nz;else k.vz*=-.25;
   k.y=Math.max(0,k.y+k.vy*dt);
   k.vy-=9.8*dt;
-  if(k.y===0&&k.vy<0)k.vy=0;
+  if(k.y===0&&k.vy<0){
+   const landing=Math.min(4,Math.abs(k.vy));
+   if(landing>.5)for(const j of Object.values(k.joints||{})){
+    j.vu+=(Math.random()-.5)*landing*.75;
+    j.vl+=(Math.random()-.5)*landing*.95;
+   }
+   k.vy=0;
+  }
+  const jointDrag=Math.exp(-dt*(k.y===0?5.5:1.4));
+  for(const [name,j] of Object.entries(k.joints||{})){
+   j.vu=(j.vu-Math.sin(j.upper)*dt*(k.y===0?5:1.6))*jointDrag;
+   j.vl=(j.vl-Math.sin(j.lower)*dt*(k.y===0?8:2.2))*jointDrag;
+   j.upper=clamp(j.upper+j.vu*dt,name==='neck'?-.5:-1.7,name==='neck'?.5:1.7);
+   j.lower=clamp(j.lower+j.vl*dt,-2,2);
+   if(Math.abs(j.upper)>=1.68)j.vu*=-.25;
+   if(Math.abs(j.lower)>=1.98)j.vl*=-.25;
+  }
   k.tilt=Math.min(Math.PI/2,k.tilt+Math.abs(k.spin)*dt);
   k.vx*=friction;k.vz*=friction;k.spin*=friction;
   if(k.y===0){k.rest+=dt;if(k.rest>3.5&&!npc.missing?.length){
