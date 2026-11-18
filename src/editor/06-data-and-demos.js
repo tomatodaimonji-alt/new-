@@ -2068,10 +2068,17 @@ canvas.addEventListener('pointermove',e=>{
   if(tapCandidate)tapCandidate.cancelled=true;
   const now=gestureSnapshot();
   if(now&&multiGesture){
-   if(multiGesture.dist>1)zoom=Math.max(.025,Math.min(4,zoom*now.dist/multiGesture.dist));
-   yaw+=angleDifference(now.angle,multiGesture.angle);
-   panGesture(now.x-multiGesture.x,now.y-multiGesture.y);
-   cursorDirty=true;
+   if(poiWalkActive&&poiThirdPerson){
+    if(multiGesture.dist>1)poiCameraDistance=Math.max(2.5,Math.min(15,poiCameraDistance*multiGesture.dist/Math.max(1,now.dist)));
+    poiCameraYaw-=angleDifference(now.angle,multiGesture.angle);
+    poiCameraPitch=Math.max(.12,Math.min(1.15,poiCameraPitch+(now.y-multiGesture.y)*.004));
+    cursorDirty=true;
+   }else{
+    if(multiGesture.dist>1)zoom=Math.max(.025,Math.min(4,zoom*now.dist/multiGesture.dist));
+    yaw+=angleDifference(now.angle,multiGesture.angle);
+    panGesture(now.x-multiGesture.x,now.y-multiGesture.y);
+    cursorDirty=true;
+   }
   }
   multiGesture=now;
   return;
@@ -2080,8 +2087,12 @@ canvas.addEventListener('pointermove',e=>{
  if(!t||t.id!==e.pointerId)return;
  if(Math.hypot(e.clientX-t.x,e.clientY-t.y)>TAP_SLOP)t.moved=true;
  if(t.moved){
-  panGesture(e.clientX-t.lastX,e.clientY-t.lastY);
- }else{
+  if(poiWalkActive&&poiThirdPerson){
+   poiCameraYaw-=(e.clientX-t.lastX)*.008;
+   poiCameraPitch=Math.max(.12,Math.min(1.15,poiCameraPitch+(e.clientY-t.lastY)*.006));
+   cursorDirty=true;
+  }else panGesture(e.clientX-t.lastX,e.clientY-t.lastY);
+ }else if(!(poiWalkActive&&poiThirdPerson)){
   updateHover(e);
  }
  t.lastX=e.clientX;t.lastY=e.clientY;
@@ -2092,7 +2103,7 @@ canvas.addEventListener('pointerup',e=>{
  touchPositions.delete(e.pointerId);
  if(isSingle&&t&&t.id===e.pointerId&&!t.cancelled&&!t.moved&&
     Math.hypot(e.clientX-t.x,e.clientY-t.y)<=TAP_SLOP&&
-    performance.now()-t.start<=MAX_TAP_MS&&mode!=='move'){
+    performance.now()-t.start<=MAX_TAP_MS&&mode!=='move'&&!(poiWalkActive&&poiThirdPerson)){
   const pos=cursorAt(e.clientX,e.clientY);
   if(validPos(pos.x,pos.z))changeCell(pos.x,pos.z);
  }
@@ -2105,7 +2116,7 @@ for(const ev of ['pointercancel','lostpointercapture'])canvas.addEventListener(e
  if(tapCandidate?.id===e.pointerId)tapCandidate=null;
  multiGesture=touchPositions.size>=2?gestureSnapshot():null;
 });
-canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.025,Math.min(4,zoom*(e.deltaY>0?.92:1.08)))},{passive:false});
+canvas.addEventListener('wheel',e=>{e.preventDefault();if(poiWalkActive&&poiThirdPerson){poiCameraDistance=Math.max(2.5,Math.min(15,poiCameraDistance*(e.deltaY>0?1.12:.89)));cursorDirty=true}else zoom=Math.max(.025,Math.min(4,zoom*(e.deltaY>0?.92:1.08)))},{passive:false});
 $('rotatePlacement').addEventListener('click',()=>{rotation=(rotation+1)%4;updateStats();toast('次に置く部材の向き：'+rotation*90+'°')});
 $('fitMap').addEventListener('click',showEntireMap);$('turn').addEventListener('click',()=>{yaw+=Math.PI/2;cursorDirty=true});$('zoomIn').addEventListener('click',()=>zoom=Math.min(4,zoom*1.2));$('zoomOut').addEventListener('click',()=>zoom=Math.max(.025,zoom/1.2));$('resetCamera').addEventListener('click',()=>{yaw=Math.PI/4;showEntireMap()});$('rotatePart').addEventListener('click',()=>{rotation=(rotation+1)%4;updateStats()});$('level').addEventListener('change',e=>{level=Math.max(0,Math.min(MAX_LEVEL,Number(e.target.value)||0));dirty=true;cursorDirty=true;updateStats()});
 $('hideUpper').addEventListener('change',e=>{hideUpper=e.target.checked;dirty=true;cursorDirty=true;$('poiRoofToggle').textContent=hideUpper?'屋根を表示':'屋根を隠す';toast(hideUpper?'上階を隠して編集中':'全階層を表示中')});
@@ -2133,27 +2144,6 @@ $('topDownView').addEventListener('click',toggleTopDown);
 $('registerPOI').addEventListener('click',pineRegisterCurrentPOI);
 $('poiWalkToggle').addEventListener('click',()=>poiWalkSet(!poiWalkActive));
 $('poiThirdView').addEventListener('click',togglePoiThirdPerson);
-// Build and erase in front of the avatar without leaving Play mode.
-function poiPlayEdit(action){
- if(!poiWalkActive)return;
- const dirs=[[0,-1],[1,0],[0,1],[-1,0]],dir=dirs[poiWalkFacing];
- const x=poiWalkX+dir[0],z=poiWalkZ+dir[1];
- if(!validPos(x,z)){toast('マップの範囲外です');return}
- if(action==='place'&&x===poiWalkX&&z===poiWalkZ){toast('足元には配置できません');return}
- if(action==='place'&&!isFloor(selected)&&world.some(o=>pineSuperVehicleType(o.type)&&Math.abs(o.x-x)<=1&&Math.abs(o.z-z)<=1)){
-  toast('車両のある場所には配置できません');return;
- }
- level=0;$('level').value='0';
- mode=action;changeCell(x,z);updateSelected();
- toast(action==='place'?'正面のマスに配置しました':'正面のマスを消去しました');
-}
-$('poiPlayPlace').addEventListener('click',()=>poiPlayEdit('place'));
-$('poiPlayErase').addEventListener('click',()=>poiPlayEdit('erase'));
-$('poiPlayLibrary').addEventListener('click',()=>{
- if(!poiWalkActive)return;
- $('palette').classList.toggle('mobileOpen');
-});
-
 $('poiRoofToggle').addEventListener('click',()=>{
  if(poiWalkActive){toast('歩行中の屋根は入退店に応じて自動切替します');return}
  hideUpper=!hideUpper;$('hideUpper').checked=hideUpper;dirty=true;cursorDirty=true;
@@ -2163,7 +2153,7 @@ let poiWalkRepeat=null;
 function poiStopRepeat(){if(poiWalkRepeat!==null){clearInterval(poiWalkRepeat);poiWalkRepeat=null}}
 for(const button of document.querySelectorAll('[data-poi-dir]')){
  const dirs={n:[0,-1],s:[0,1],w:[-1,0],e:[1,0]};
- const step=()=>poiWalkStep(...dirs[button.dataset.poiDir]);
+ const step=()=>poiWalkStep(...(poiWalkActive&&poiThirdPerson?poiCameraRelativeStep(button.dataset.poiDir):dirs[button.dataset.poiDir]));
  button.addEventListener('pointerdown',e=>{e.preventDefault();poiStopRepeat();step();poiWalkRepeat=setInterval(step,175);button.setPointerCapture(e.pointerId)});
  for(const name of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(name,poiStopRepeat);
 }
