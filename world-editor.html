@@ -5981,12 +5981,12 @@ function pineLoadCustomPOI(id){
  }catch(e){toast('POIの読み込みに失敗: '+e.message)}
 }
 function makeDemo(){pineSupermarketPOI('wholesale','normal',false)}
-function setMapSize(){
+function setMapSize(skipRemovalConfirm=false){
  const width=Number($('mapWidth').value),height=Number($('mapHeight').value);
  if(!Number.isInteger(width)||!Number.isInteger(height)||width<MIN_MAP||height<MIN_MAP||width>MAX_MAP||height>MAX_MAP){toast('縦横は12〜128の整数で指定してください');return}
  if(width===MAP_W&&height===MAP_H){showEntireMap();toast('マップ全体を表示しました');return}
  const removed=world.filter(p=>p.x>=width||p.z>=height);
- if(removed.length&&!confirm('範囲外の建材 '+removed.length+' 個が消えます。縮小しますか？'))return;
+ if(removed.length&&!skipRemovalConfirm&&!confirm('範囲外の建材 '+removed.length+' 個が消えます。縮小しますか？'))return;
  snapshot();world=world.filter(p=>p.x<width&&p.z<height);terrainHeights=new Map([...terrainHeights].filter(([key])=>{const [x,z]=key.split(',').map(Number);return x<width&&z<height}));MAP_W=width;MAP_H=height;
  $('rangeX1').max=$('rangeX2').max=width-1;$('rangeZ1').max=$('rangeZ2').max=height-1;
  $('rangeX2').value=Math.min(width-1,Number($('rangeX2').value));$('rangeZ2').value=Math.min(height-1,Number($('rangeZ2').value));
@@ -6008,6 +6008,38 @@ $('confirmClearMap').addEventListener('click',()=>{
  if(!world.length&&!terrainHeights.size){closeClearMapModal();return}
  snapshot();world.length=0;terrainHeights.clear();worldMaxLevel=0;cursorDirty=true;
  commit();closeClearMapModal();toast('マップを全消去しました（元に戻すで復元できます）');
+});
+let mapSizeRemovalApproved=false;
+function closeMapSizeModal(){
+ $('mapSizeModal').classList.remove('open');
+ $('openMapSize').focus();
+}
+$('openMapSize').addEventListener('click',()=>{
+ $('mapSizeWidth').value=MAP_W;$('mapSizeHeight').value=MAP_H;
+ $('mapSizeWarning').textContent='';mapSizeRemovalApproved=false;
+ $('confirmMapSize').textContent='変更する';
+ $('mapSizeModal').classList.add('open');
+ $('mapSizeWidth').focus();
+});
+for(const id of ['mapSizeWidth','mapSizeHeight'])$(id).addEventListener('input',()=>{
+ mapSizeRemovalApproved=false;$('mapSizeWarning').textContent='';$('confirmMapSize').textContent='変更する';
+});
+$('cancelMapSize').addEventListener('click',closeMapSizeModal);
+$('mapSizeModal').addEventListener('click',e=>{if(e.target===$('mapSizeModal'))closeMapSizeModal()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('mapSizeModal').classList.contains('open')){e.preventDefault();closeMapSizeModal()}});
+$('confirmMapSize').addEventListener('click',()=>{
+ const width=Number($('mapSizeWidth').value),height=Number($('mapSizeHeight').value);
+ if(!Number.isInteger(width)||!Number.isInteger(height)||width<MIN_MAP||width>MAX_MAP||height<MIN_MAP||height>MAX_MAP){
+  $('mapSizeWarning').textContent='縦横は12〜128の整数で指定してください';return;
+ }
+ const removed=world.filter(p=>p.x>=width||p.z>=height).length;
+ if(removed&&!mapSizeRemovalApproved){
+  mapSizeRemovalApproved=true;
+  $('mapSizeWarning').textContent='範囲外の建材 '+removed+' 個が消去されます。続行する場合はもう一度押してください。';
+  $('confirmMapSize').textContent='縮小を確定';return;
+ }
+ $('mapWidth').value=width;$('mapHeight').value=height;
+ setMapSize(true);closeMapSizeModal();
 });
 $('applyMapSize').addEventListener('click',setMapSize);
 $('quickPlace').addEventListener('click',()=>{mode='place';updateSelected()});
