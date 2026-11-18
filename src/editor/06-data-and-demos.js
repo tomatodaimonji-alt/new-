@@ -2132,7 +2132,7 @@ $('clear').addEventListener('click',()=>{if(!confirm('配置したすべての�
 $('topDownView').addEventListener('click',toggleTopDown);
 $('registerPOI').addEventListener('click',pineRegisterCurrentPOI);
 $('poiWalkToggle').addEventListener('click',()=>poiWalkSet(!poiWalkActive));
-$('poiWalkExit').addEventListener('click',()=>poiWalkSet(false));
+$('poiThirdView').addEventListener('click',togglePoiThirdPerson);
 $('poiRoofToggle').addEventListener('click',()=>{
  if(poiWalkActive){toast('歩行中の屋根は入退店に応じて自動切替します');return}
  hideUpper=!hideUpper;$('hideUpper').checked=hideUpper;dirty=true;cursorDirty=true;
