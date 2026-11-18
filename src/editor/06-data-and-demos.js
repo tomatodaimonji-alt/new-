@@ -2134,6 +2134,7 @@ $('worldAudit').addEventListener('click',showWorldAudit);
 $('house3Demo').addEventListener('click',()=>makeHighBuilding('house'));
 $('tower7Demo').addEventListener('click',()=>makeHighBuilding('tower'));
 $('clear').addEventListener('click',()=>{if(!confirm('配置したすべての部材を消去しますか？'))return;snapshot();world=[];commit();toast('マップを空にしました')});$('demo').addEventListener('click',makeDemo);
+$('topDownView').addEventListener('click',toggleTopDown);
 $('poiWalkToggle').addEventListener('click',()=>poiWalkSet(!poiWalkActive));
 $('poiWalkExit').addEventListener('click',()=>poiWalkSet(false));
 $('poiRoofToggle').addEventListener('click',()=>{
