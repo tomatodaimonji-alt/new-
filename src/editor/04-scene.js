@@ -3,6 +3,16 @@ let poiWalkActive=false,poiWalkX=0,poiWalkZ=0,poiWalkMesh=null,poiWalkOldRoof=fa
 let poiWalkFacing=2,poiWalkStarted=-10000,poiWalkFromX=0,poiWalkFromZ=0;
 let poiWalkViewX=0,poiWalkViewZ=0,poiWalkNextReady=0;
 const POI_WALK_MS=160;
+let cameraTopDown=false;
+function toggleTopDown(){
+ if(poiWalkActive)poiWalkSet(false);
+ cameraTopDown=!cameraTopDown;
+ showEntireMap();cursorDirty=true;
+ $('topDownView').classList.toggle('active',cameraTopDown);
+ $('topDownView').setAttribute('aria-pressed',String(cameraTopDown));
+ toast(cameraTopDown?'真上から表示':'斜め視点に戻しました');
+}
+
 function poiWalkIndoor(){
  const a=world.filter(o=>o.type==='pineSuperRoof');if(!a.length)return false;
  let left=Infinity,right=-Infinity,top=Infinity,bottom=-Infinity;
@@ -71,8 +81,35 @@ function poiWalkReset(x,z){
  poiWalkX=x;poiWalkZ=z;poiWalkFromX=x;poiWalkFromZ=z;poiWalkViewX=x;poiWalkViewZ=z;poiWalkStarted=-10000;poiWalkNextReady=0;
  if(poiWalkActive){poiWalkRoof();poiWalkAvatar();poiWalkCamera();poiWalkStatus()}
 }
+function poiWalkSpawnNearCenter(){
+ const cx=Math.floor((MAP_W-1)/2),cz=Math.floor((MAP_H-1)/2);
+ const maxRadius=MAP_W+MAP_H;
+ for(let radius=0;radius<=maxRadius;radius++){
+  let fallback=null;
+  for(let dz=-radius;dz<=radius;dz++){
+   const offset=radius-Math.abs(dz);
+   for(const dx of offset===0?[0]:[-offset,offset]){
+    const x=cx+dx,z=cz+dz;
+    if(!poiWalkCanStep(x,z))continue;
+    const open=[[1,0],[-1,0],[0,1],[0,-1]].filter(([nx,nz])=>poiWalkCanStep(x+nx,z+nz)).length;
+    if(open>=2)return{x,z};
+    if(open>=1&&!fallback)fallback={x,z};
+   }
+  }
+  if(fallback)return fallback;
+ }
+ return null;
+}
 function poiWalkSet(active){
  if(active===poiWalkActive)return;
+ if(active){
+  const spawn=poiWalkSpawnNearCenter();
+  if(!spawn){toast('プレイ可能な空きマスがありません');return}
+  poiWalkReset(spawn.x,spawn.z);
+  cameraTopDown=false;
+  $('topDownView').classList.remove('active');
+  $('topDownView').setAttribute('aria-pressed','false');
+ }
  poiWalkActive=active;
  if(active){
   poiWalkOldRoof=hideUpper;
@@ -86,7 +123,7 @@ function poiWalkSet(active){
   showEntireMap();
  }
  $('poiWalkPad').classList.toggle('active',active);
- $('poiWalkToggle').textContent=active?'歩行中':'人型で歩く';
+ $('poiWalkToggle').textContent=active?'プレイ中':'プレイ';
  $('poiRoofToggle').textContent=hideUpper?'屋根を表示':'屋根を隠す';
  poiWalkAvatar();poiWalkStatus();dirty=true;cursorDirty=true;updateSelected();
 }
@@ -224,12 +261,12 @@ function zoomForFullMap(){
  const aspect=Math.max(.25,canvas.clientWidth/Math.max(1,canvas.clientHeight));
  const c=Math.abs(Math.cos(yaw)),sn=Math.abs(Math.sin(yaw));
  const horizontal=(MAP_W*c+MAP_H*sn)/2/aspect;
- const vertical=(MAP_W*sn+MAP_H*c)*Math.sin(.86)/2;
+ const vertical=(MAP_W*sn+MAP_H*c)*Math.sin(cameraTopDown?Math.PI/2-.001:.86)/2;
  const height=world.reduce((top,o)=>Math.max(top,o.y),0)*1.4+Math.max(0,...terrainHeights.values())*TERRAIN_STEP;// Extra margin prevents bottom map corners from being clipped on tall mobile screens.
  return Math.max(.025,Math.min(4,9/(Math.max(horizontal,vertical)+height*.55+1.2)*.84));
 }
 function showEntireMap(){panX=panZ=0;zoom=zoomForFullMap();cursorDirty=true}
-function parameters(){const q=layout(),halfH=9/zoom,halfW=halfH*q.aspect;const centerX=MAP_W/2+panX,centerZ=MAP_H/2+panZ,elev=.86,targetY=poiWalkActive?0:hideUpper?level*1.4:Math.min(8.5,worldMaxLevel*.7+Math.max(0,...terrainHeights.values())*TERRAIN_STEP*.5);const sceneReach=Math.hypot(MAP_W,MAP_H)+Math.max(0,worldMaxLevel)*1.4+TERRAIN_MAX*TERRAIN_STEP;const cameraDistance=Math.max(80,sceneReach*1.6+24);const eye=[centerX+cameraDistance*Math.sin(yaw)*Math.cos(elev),targetY+cameraDistance*Math.sin(elev),centerZ+cameraDistance*Math.cos(yaw)*Math.cos(elev)];return{...q,halfH,halfW,centerX,centerZ,elev,targetY,vp:mult(ortho(-halfW,halfW,-halfH,halfH,.1,cameraDistance+sceneReach*2+80),look(eye,[centerX,targetY,centerZ]))}}
+function parameters(){const q=layout(),halfH=9/zoom,halfW=halfH*q.aspect;const centerX=MAP_W/2+panX,centerZ=MAP_H/2+panZ,elev=cameraTopDown?Math.PI/2-.001:.86,targetY=poiWalkActive?0:hideUpper?level*1.4:Math.min(8.5,worldMaxLevel*.7+Math.max(0,...terrainHeights.values())*TERRAIN_STEP*.5);const sceneReach=Math.hypot(MAP_W,MAP_H)+Math.max(0,worldMaxLevel)*1.4+TERRAIN_MAX*TERRAIN_STEP;const cameraDistance=Math.max(80,sceneReach*1.6+24);const eye=[centerX+cameraDistance*Math.sin(yaw)*Math.cos(elev),targetY+cameraDistance*Math.sin(elev),centerZ+cameraDistance*Math.cos(yaw)*Math.cos(elev)];return{...q,halfH,halfW,centerX,centerZ,elev,targetY,vp:mult(ortho(-halfW,halfW,-halfH,halfH,.1,cameraDistance+sceneReach*2+80),look(eye,[centerX,targetY,centerZ]))}}
 function cursorAt(clientX,clientY){
  const b=canvas.getBoundingClientRect(),p=parameters(),nx=(clientX-b.left)/b.width*2-1,ny=1-(clientY-b.top)/b.height*2,a=nx*p.halfW;
  let x=0,z=0,height=0;
