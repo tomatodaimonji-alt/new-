@@ -3,7 +3,15 @@ let poiWalkActive=false,poiWalkX=0,poiWalkZ=0,poiWalkMesh=null,poiWalkOldRoof=fa
 let poiWalkFacing=2,poiWalkStarted=-10000,poiWalkFromX=0,poiWalkFromZ=0;
 let poiWalkViewX=0,poiWalkViewZ=0,poiWalkNextReady=0;
 const POI_WALK_MS=160;
-let cameraTopDown=false;
+let cameraTopDown=false,poiThirdPerson=false;
+function togglePoiThirdPerson(){
+ if(!poiWalkActive)return;
+ poiThirdPerson=!poiThirdPerson;
+ $('poiThirdView').textContent=poiThirdPerson?'俯瞰視点':'三人称視点';
+ $('poiThirdView').setAttribute('aria-pressed',String(poiThirdPerson));
+ cursorDirty=true;
+}
+
 function toggleTopDown(){
  if(poiWalkActive)poiWalkSet(false);
  cameraTopDown=!cameraTopDown;
@@ -106,6 +114,9 @@ function poiWalkSet(active){
   const spawn=poiWalkSpawnNearCenter();
   if(!spawn){toast('プレイ可能な空きマスがありません');return}
   poiWalkReset(spawn.x,spawn.z);
+  poiThirdPerson=false;
+  $('poiThirdView').textContent='三人称視点';
+  $('poiThirdView').setAttribute('aria-pressed','false');
   cameraTopDown=false;
   $('topDownView').classList.remove('active');
   $('topDownView').setAttribute('aria-pressed','false');
@@ -120,6 +131,9 @@ function poiWalkSet(active){
  }else{
   hideUpper=poiWalkOldRoof;$('hideUpper').checked=hideUpper;
   if(poiWalkMesh){gl.deleteBuffer(poiWalkMesh.buf);poiWalkMesh=null}
+  poiThirdPerson=false;
+  $('poiThirdView').textContent='三人称視点';
+  $('poiThirdView').setAttribute('aria-pressed','false');
   showEntireMap();
  }
  $('poiWalkPad').classList.toggle('active',active);
@@ -266,7 +280,28 @@ function zoomForFullMap(){
  return Math.max(.025,Math.min(4,9/(Math.max(horizontal,vertical)+height*.55+1.2)*.84));
 }
 function showEntireMap(){panX=panZ=0;zoom=zoomForFullMap();cursorDirty=true}
-function parameters(){const q=layout(),halfH=9/zoom,halfW=halfH*q.aspect;const centerX=MAP_W/2+panX,centerZ=MAP_H/2+panZ,elev=cameraTopDown?Math.PI/2-.001:.86,targetY=poiWalkActive?0:hideUpper?level*1.4:Math.min(8.5,worldMaxLevel*.7+Math.max(0,...terrainHeights.values())*TERRAIN_STEP*.5);const sceneReach=Math.hypot(MAP_W,MAP_H)+Math.max(0,worldMaxLevel)*1.4+TERRAIN_MAX*TERRAIN_STEP;const cameraDistance=Math.max(80,sceneReach*1.6+24);const eye=[centerX+cameraDistance*Math.sin(yaw)*Math.cos(elev),targetY+cameraDistance*Math.sin(elev),centerZ+cameraDistance*Math.cos(yaw)*Math.cos(elev)];return{...q,halfH,halfW,centerX,centerZ,elev,targetY,vp:mult(ortho(-halfW,halfW,-halfH,halfH,.1,cameraDistance+sceneReach*2+80),look(eye,[centerX,targetY,centerZ]))}}
+function perspective(fov,aspect,near,far){
+ const f=1/Math.tan(fov/2);
+ return new Float32Array([f/aspect,0,0,0,0,f,0,0,0,0,(far+near)/(near-far),-1,0,0,2*far*near/(near-far),0]);
+}
+function parameters(){
+ const q=layout(),halfH=9/zoom,halfW=halfH*q.aspect;
+ const centerX=MAP_W/2+panX,centerZ=MAP_H/2+panZ;
+ const elev=cameraTopDown?Math.PI/2-.001:.86;
+ const targetY=poiWalkActive?0:hideUpper?level*1.4:Math.min(8.5,worldMaxLevel*.7+Math.max(0,...terrainHeights.values())*TERRAIN_STEP*.5);
+ const sceneReach=Math.hypot(MAP_W,MAP_H)+Math.max(0,worldMaxLevel)*1.4+TERRAIN_MAX*TERRAIN_STEP;
+ if(poiWalkActive&&poiThirdPerson){
+  const dirs=[[0,-1],[1,0],[0,1],[-1,0]],dir=dirs[poiWalkFacing];
+  const x=poiWalkViewX+.5,z=poiWalkViewZ+.5;
+  const ground=terrainY(poiWalkX,poiWalkZ);
+  const eye=[x-dir[0]*4.2,ground+2.8,z-dir[1]*4.2];
+  const target=[x+dir[0]*1.7,ground+1,z+dir[1]*1.7];
+  return{...q,halfH,halfW,centerX,centerZ,elev,targetY,vp:mult(perspective(Math.PI/3,Math.max(.1,q.aspect),.12,Math.max(250,sceneReach*3)),look(eye,target))};
+ }
+ const cameraDistance=Math.max(80,sceneReach*1.6+24);
+ const eye=[centerX+cameraDistance*Math.sin(yaw)*Math.cos(elev),targetY+cameraDistance*Math.sin(elev),centerZ+cameraDistance*Math.cos(yaw)*Math.cos(elev)];
+ return{...q,halfH,halfW,centerX,centerZ,elev,targetY,vp:mult(ortho(-halfW,halfW,-halfH,halfH,.1,cameraDistance+sceneReach*2+80),look(eye,[centerX,targetY,centerZ]))};
+}
 function cursorAt(clientX,clientY){
  const b=canvas.getBoundingClientRect(),p=parameters(),nx=(clientX-b.left)/b.width*2-1,ny=1-(clientY-b.top)/b.height*2,a=nx*p.halfW;
  let x=0,z=0,height=0;
