@@ -10,16 +10,6 @@ import {Script} from 'node:vm';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 export const groups={
- game:{
-  directory:'src/game',output:'forest-game-prototype.html',
-  sections:[
-   '01-runtime.js','02-palette.js','03-geometry.js','04-scene.js',
-   '05-editor-ui.js','06-editor-data-and-demos.js','07-island-migration.js',
-   '08-island-zones.js','09-military-expansion.js','10-seamless-world.js',
-   '11-zone-geometry.js','12-collision-and-interiors.js','13-player-loop.js',
-   '14-game-entry.js'
-  ]
- },
  editor:{
   directory:'src/editor',output:'world-editor.html',
   sections:['01-runtime.js','02-palette.js','03-geometry.js',
