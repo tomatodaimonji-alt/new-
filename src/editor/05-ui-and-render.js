@@ -355,7 +355,6 @@ function refreshPalette(){
  renderCharacterList();
  renderWallCategories();
  renderObjectList();
- $('customList').replaceChildren(...models.map(m=>mkButton(m.id,{name:m.name,icon:'◈'})));
  $('prefabList').replaceChildren(...prefabs.map(p=>mkButton(p.id,{name:p.name,icon:'⌂'})));
  updateSelected();
 }
