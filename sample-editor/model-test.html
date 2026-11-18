@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>高品質GLBモデル実験 | v40</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#121b1f;color:#edf1ef;font-family:system-ui,-apple-system,sans-serif}
+#app{display:grid;grid-template-rows:auto minmax(0,1fr) auto;height:100dvh}
+header{padding:10px 12px;display:flex;align-items:center;gap:12px;background:#18252b;border-bottom:1px solid #ffffff20}
+h1{font-size:15px;margin:0;flex:1}a{color:#b9dce9;text-decoration:none;font-size:12px}
+#view{position:relative;min-height:0;overflow:hidden;touch-action:none}canvas{display:block}
+#state{position:absolute;top:10px;left:10px;max-width:min(390px,85vw);background:#0e1822ba;padding:8px 10px;border-radius:7px;font-size:12px;pointer-events:none}
+#credit{position:absolute;bottom:8px;left:10px;background:#0e1822ba;padding:6px 8px;border-radius:6px;font-size:10px;pointer-events:none}
+footer{background:#19282e;border-top:1px solid #ffffff25;padding:10px;display:grid;gap:8px}
+.row{display:flex;gap:7px;flex-wrap:wrap;align-items:center}button{border:1px solid #ffffff47;border-radius:8px;background:#3a555f;color:#fff;padding:9px 11px;font-size:13px;flex:1}button[aria-pressed=true]{background:#2d8068;border-color:#b5e7d0}
+label{font-size:12px;color:#d7e1dd}small{font-size:11px;color:#b4c6c6}
+#tip{font-size:12px;color:#aec0c1}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.177.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.177.0/examples/jsm/"}}</script>
+</head><body>
+<div id="app">
+<header><h1>v40 | 既存3Dモデルを試す</h1><a href="./index.html">シェルターへ戻る</a></header>
+<div id="view"><div id="state" role="status">3Dモデルの準備中...</div><div id="credit">モデル: Sheen Chair / Wayfair LLC / CC0 1.0<br>出典: Khronos glTF Sample Assets</div></div>
+<footer>
+<div class="row"><button type="button" id="primitive" aria-pressed="false">従来の簡易モデル</button><button type="button" id="real" aria-pressed="true">既存GLBモデル</button><button type="button" id="spin" aria-pressed="false">自動回転 OFF</button></div>
+<div class="row"><label for="quality">画質:</label><button type="button" id="low" aria-pressed="true">軽量</button><button type="button" id="high" aria-pressed="false">高画質</button></div>
+<div id="tip">ドラッグで回転、2本指で拡大縮小。既存モデルは初回のみ約4MBを読み込みます。試用ページを閉じれば3D描画は停止します。</div>
+</footer>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+const modelURL='https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/SheenChair/glTF-Binary/SheenChair.glb';
+const view=document.getElementById('view'),status=document.getElementById('state');
+const renderer=new THREE.WebGLRenderer({antialias:false,alpha:false,powerPreference:'low-power'});
+renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.2));
+renderer.setSize(view.clientWidth,view.clientHeight);
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.15;
+renderer.shadowMap.enabled=false;
+view.insertBefore(renderer.domElement,view.firstChild);
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x26333a);
+const camera=new THREE.PerspectiveCamera(46,Math.max(1,view.clientWidth)/Math.max(1,view.clientHeight),.1,90);
+camera.position.set(3.0,2.2,3.3);camera.lookAt(0,.8,0);
+const controls=new OrbitControls(camera,renderer.domElement);
+controls.target.set(0,.85,0);controls.enableDamping=true;controls.dampingFactor=.12;
+controls.minDistance=1.5;controls.maxDistance=9;
+controls.maxPolarAngle=Math.PI*.52;
+scene.add(new THREE.HemisphereLight(0xe4f0ff,0x4c5352,2.6));
+const light=new THREE.DirectionalLight(0xfff0dc,3.1);light.position.set(-3,6,4);scene.add(light);
+const fill=new THREE.DirectionalLight(0xa6c9de,1.6);fill.position.set(4,3,-4);scene.add(fill);
+// Neutral bunker sample room: intentionally simple to isolate asset fidelity.
+const floor=new THREE.Mesh(new THREE.BoxGeometry(6,.15,6),new THREE.MeshStandardMaterial({color:0x858e89,roughness:.9}));
+floor.position.y=-.075;scene.add(floor);
+for(const [x,z,w,d] of [[0,-2.8,6,.18],[-2.8,0,.18,6]]){
+ const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,2.7,d),new THREE.MeshStandardMaterial({color:0x7b8886,roughness:.96}));
+ mesh.position.set(x,1.35,z);scene.add(mesh);
+}
+function block(w,h,d,x,y,z,hex){
+ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color:hex,roughness:.8}));
+ m.position.set(x,y,z);return m;
+}
+const basic=new THREE.Group();
+basic.add(block(1.05,.16,1.0,0,.54,0,0x6d7780));
+basic.add(block(1.05,.9,.17,0,1.03,.39,0x6d7780));
+for(const x of [-.44,.44])for(const z of [-.40,.40])
+ basic.add(block(.12,.54,.12,x,.27,z,0x626c73));
+scene.add(basic);
+let detailed=null,active='basic',rotate=false,quality='low',needsRender=true,frame=null;
+const lowBtn=document.getElementById('low'),highBtn=document.getElementById('high');
+function setQuality(v){
+ quality=v;const high=v==='high';
+ renderer.setPixelRatio(Math.min(devicePixelRatio||1,high?2:1));
+ renderer.shadowMap.enabled=high;
+ renderer.setSize(view.clientWidth,view.clientHeight);
+ lowBtn.setAttribute('aria-pressed',String(!high));
+ highBtn.setAttribute('aria-pressed',String(high));
+ needsRender=true;
+}
+document.getElementById('low').onclick=()=>setQuality('low');
+document.getElementById('high').onclick=()=>setQuality('high');
+function show(name){
+ active=name;basic.visible=name==='basic';
+ if(detailed)detailed.visible=name==='real';
+ document.getElementById('primitive').setAttribute('aria-pressed',String(name==='basic'));
+ document.getElementById('real').setAttribute('aria-pressed',String(name==='real'));
+ status.textContent=name==='basic'?'従来モデル：図形を組み合わせた椅子':detailed?'既存GLB：木材・布地・金属・高精細テクスチャ':'既存GLBを読込中...';
+ needsRender=true;
+}
+document.getElementById('primitive').onclick=()=>show('basic');
+document.getElementById('real').onclick=()=>show('real');
+document.getElementById('spin').onclick=e=>{
+ rotate=!rotate;e.currentTarget.textContent=rotate?'自動回転 ON':'自動回転 OFF';
+ e.currentTarget.setAttribute('aria-pressed',String(rotate));needsRender=true;
+};
+const loader=new GLTFLoader();
+loader.load(modelURL,gltf=>{
+ detailed=gltf.scene;
+ const bounds=new THREE.Box3().setFromObject(detailed);
+ const size=bounds.getSize(new THREE.Vector3()),center=bounds.getCenter(new THREE.Vector3());
+ if(Math.max(size.x,size.y,size.z)>.0001){
+  const scale=1.65/Math.max(size.x,size.y,size.z);
+  detailed.scale.setScalar(scale);
+  detailed.position.set(-center.x*scale,-bounds.min.y*scale,-center.z*scale);
+ }
+ detailed.traverse(o=>{if(o.isMesh){o.frustumCulled=true}});
+ scene.add(detailed);show('real');
+},evt=>{
+ if(evt.total)status.textContent='既存GLB 読込中 '+Math.floor(evt.loaded/evt.total*100)+'%';
+},err=>{
+ console.error('GLB load failed',err);active='basic';show('basic');
+ status.textContent='モデルの読込に失敗。通信を確認してください。';
+});
+show('real');
+const observer=new ResizeObserver(()=>{
+ const w=Math.max(1,view.clientWidth),h=Math.max(1,view.clientHeight);
+ camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h);needsRender=true;
+});observer.observe(view);
+function loop(){
+ frame=requestAnimationFrame(loop);
+ if(document.hidden)return;
+ if(rotate){const r=camera.position.clone().sub(controls.target);r.applyAxisAngle(new THREE.Vector3(0,1,0),.003);camera.position.copy(controls.target).add(r);needsRender=true}
+ if(controls.update())needsRender=true;
+ if(needsRender){renderer.render(scene,camera);needsRender=false}
+}
+loop();
+window.addEventListener('pagehide',()=>{cancelAnimationFrame(frame);observer.disconnect();controls.dispose();renderer.dispose()},{once:true});
+</script></body></html>
