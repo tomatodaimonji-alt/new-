@@ -90,6 +90,49 @@ function poiWalkSet(active){
  $('poiRoofToggle').textContent=hideUpper?'屋根を表示':'屋根を隠す';
  poiWalkAvatar();poiWalkStatus();dirty=true;cursorDirty=true;updateSelected();
 }
+// Exterior cells are flood-filled independently on each floor. A face pointing
+// into a closed room is smooth; a face pointing into connected outdoor air is
+// decorated. This is recalculated when blocks or dimensions change.
+function wallExteriorLookup(visible){
+ const layers=new Map(),blocking=t=>isWallId(t)||/^(?:wall|stonewall|woodwall|brickwall|plasterwall|mosswall|ironwall)(?:Window|Door|Counter)$/.test(t)||t==='door'||t==='window';
+ for(const o of visible){
+  if(!blocking(o.type))continue;
+  if(!layers.has(o.y))layers.set(o.y,new Map());
+  layers.get(o.y).set(o.x+','+o.z,o);
+ }
+ const outdoors=new Map(),count=MAP_W*MAP_H;
+ for(const [level,blocks] of layers){
+  const blocked=new Uint8Array(count),outside=new Uint8Array(count),queue=new Int32Array(count);
+  for(const o of blocks.values())if(validPos(o.x,o.z))blocked[o.z*MAP_W+o.x]=1;
+  let head=0,tail=0;
+  const add=(x,z)=>{
+   const i=z*MAP_W+x;
+   if(!blocked[i]&&!outside[i]){outside[i]=1;queue[tail++]=i}
+  };
+  for(let x=0;x<MAP_W;x++){add(x,0);add(x,MAP_H-1)}
+  for(let z=0;z<MAP_H;z++){add(0,z);add(MAP_W-1,z)}
+  while(head<tail){
+   const idx=queue[head++],x=idx%MAP_W,z=(idx-x)/MAP_W;
+   if(x>0)add(x-1,z);
+   if(x+1<MAP_W)add(x+1,z);
+   if(z>0)add(x,z-1);
+   if(z+1<MAP_H)add(x,z+1);
+  }
+  outdoors.set(level,outside);
+ }
+ return{layers,outdoors};
+}
+function wallFaceState(o,lookup){
+ const neighbors=lookup.layers.get(o.y),outdoor=lookup.outdoors.get(o.y);
+ const visible=[],exterior=[];
+ for(const [dx,dz] of [[0,1],[-1,0],[0,-1],[1,0]]){
+  const x=o.x+dx,z=o.z+dz,inBounds=validPos(x,z);
+  const occupied=inBounds&&neighbors.has(x+','+z);
+  visible.push(!occupied);
+  exterior.push(!occupied&&(!inBounds||outdoor[z*MAP_W+x]===1));
+ }
+ return{visible,exterior};
+}
 function makeScene(){
  const m=mesh(),visible=world.filter(o=>!hideUpper||o.y<=level);
  const floors=new Map(world.filter(o=>o.y===0&&isFloor(o.type)).map(o=>[o.x+','+o.z,o.type]));
@@ -146,6 +189,7 @@ function makeScene(){
  const bridgeLookup=new Map(visible.filter(o=>BRIDGE_IDS.has(o.type)).map(o=>[o.x+','+o.z,o]));
  const fenceLookup=new Map(visible.filter(o=>/^fence(Wood|Stone|Iron)/.test(o.type)).map(o=>[o.x+','+o.z+','+o.y,o]));
  const roofs=new Map(visible.filter(o=>roofFamily(o.type)).map(o=>[o.x+','+o.z+','+o.y,o]));
+ const wallLookup=wallExteriorLookup(visible);
  houseFacadeDetails(m,visible);
  const groups=residentialRoofComponents(visible.filter(o=>RESIDENTIAL_ROOFS.has(o.type)));
  const allRoofLookup=new Map(visible.filter(o=>RESIDENTIAL_ROOFS.has(o.type)).map(o=>[o.x+','+o.z+','+o.y,o]));
@@ -157,6 +201,7 @@ function makeScene(){
   else if(o.type==='pineLandingCraft')pineLandingCraftGeometry(m,o.x+.5,o.z+.5);
   else if(o.type.startsWith('pineHarbor'))pineHarborGeometry(m,o);
   else if(o.type.startsWith('pineSuper'))pineSupermarketGeometry(m,o);
+  else if(isWallId(o.type)){const faces=wallFaceState(o,wallLookup);wallBlock(m,o.type,o.x+.5,o.y*1.4+terrainY(o.x,o.z),o.z+.5,o.rot||0,faces.visible,faces.exterior)}
   else if(o.type==='terrainStairs')elevationStairGeometry(m,o.x,o.z,o.y*1.4+terrainY(o.x,o.z),o.rot||0);
   else if(/^fence(Wood|Stone|Iron)/.test(o.type)&&connectedFenceGeometry(m,o,fenceLookup)){} 
   else deco(m,o.type,o.x+.5,o.y*1.4+terrainY(o.x,o.z),o.z+.5,o.rot||0);
