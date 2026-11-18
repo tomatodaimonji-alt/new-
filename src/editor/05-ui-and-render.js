@@ -143,7 +143,7 @@ function renderWallCategories(){
  // Specialty variants remain valid for saved projects, but the main
  // catalogue is organized by matching wall material rather than duplicate groups.
  const legacyFixtures=new Set(['window','door','shopCounter','windowWood','windowStone','windowBrick','doorWood','doorIron','doorStone','counterWood','counterStone','counterLuxury']);
- const extras=palette.filter(p=>p.cat==='build'&&p.id!=='wall'&&!legacyFixtures.has(p.id));
+ const extras=palette.filter(p=>p.cat==='build'&&!isWallId(p.id)&&!legacyFixtures.has(p.id));
  groups.appendChild(expandableRow('建具・その他','🚪',constructionExtrasExpanded,()=>{
   constructionExtrasExpanded=!constructionExtrasExpanded;renderWallCategories();
  }));
