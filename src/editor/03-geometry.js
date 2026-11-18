@@ -1607,7 +1607,7 @@ function wallMaterialForId(id){
  return null;
 }
 function isWallId(id){return wallMaterialForId(id)!==null}
-function wallBlock(m,id,x,y,z,r=0){
+function wallBlock(m,id,x,y,z,r=0,faceVisible=null,faceExterior=null){
  const mat=wallMaterialForId(id)||'wall';
  const colors={
   wall:[.81,.82,.74],stonewall:[.54,.57,.54],woodwall:[.43,.29,.17],
@@ -1615,15 +1615,19 @@ function wallBlock(m,id,x,y,z,r=0){
   mosswall:[.45,.51,.44],ironwall:[.35,.40,.44]
  };
  const base=colors[mat],turn=((r%4)+4)%4,height=1.38;
- // The core occupies the full tile. Unadorned interior walls show this flat material.
- cube(m,x,y,z,1.002,height,1.002,base);
- if(id.endsWith('Plain'))return;
- // Four logical sides in clockwise order: +Z, +X, -Z, -X.
- // Double = opposing sides, corner = adjoining sides, All = four sides.
- const faces=id.endsWith('All')?[0,1,2,3]:id.endsWith('Double')?[0,2]:
- (id==='corner'||id.endsWith('corner'))?[0,1]:[0];
- for(const side of faces){
-  const direction=(side+turn)%4;
+ // One wall material covers all four sides. Adjacent wall faces are not
+ // generated at all; enclosed room faces are flat, exterior faces carry relief.
+ // Side order: +Z, -X, -Z, +X (the same order as rot2).
+ const visible=faceVisible||[true,true,true,true];
+ const exterior=faceExterior||[true,true,true,true];
+ const x0=x-.501,x1=x+.501,z0=z-.501,z1=z+.501,y1=y+height;
+ quad(m,[x0,y1,z0],[x0,y1,z1],[x1,y1,z1],[x1,y1,z0],base.map(v=>Math.min(1,v*1.08)));
+ if(visible[0])quad(m,[x0,y,z1],[x1,y,z1],[x1,y1,z1],[x0,y1,z1],base);
+ if(visible[1])quad(m,[x0,y,z0],[x0,y,z1],[x0,y1,z1],[x0,y1,z0],base.map(v=>v*.88));
+ if(visible[2])quad(m,[x1,y,z0],[x0,y,z0],[x0,y1,z0],[x1,y1,z0],base.map(v=>v*.72));
+ if(visible[3])quad(m,[x1,y,z1],[x1,y,z0],[x1,y1,z0],[x1,y1,z1],base.map(v=>v*.83));
+ for(let direction=0;direction<4;direction++){
+  if(!visible[direction]||!exterior[direction])continue;
   function panel(u,yy,w,h,depth,color){
    // The relief is laid against the surface; no overlapping inner half walls.
    // Limit surface relief to 0.035 tiles so adjoining wall blocks fit closely.
