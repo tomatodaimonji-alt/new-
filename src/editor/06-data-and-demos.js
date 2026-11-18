@@ -1863,6 +1863,20 @@ function pineSwitchEditor(open){
  else url.searchParams.delete('editor');
  location.href=url.toString();
 }
+
+const PINE_CUSTOM_POI_KEY='world-workshop-pois-v1';
+let customPOIs=[];
+function pineReadSavedPOIs(){
+ try{
+  const saved=localStorage.getItem(PINE_CUSTOM_POI_KEY);
+  if(!saved)return [];
+  const list=JSON.parse(saved);
+  if(!Array.isArray(list)||list.length>20)return [];
+  return list.filter(p=>p&&typeof p.id==='string'&&/^poi-[a-z0-9-]{3,40}$/.test(p.id)&&
+   typeof p.name==='string'&&p.name.length>0&&p.name.length<=40&&p.map&&
+   p.map.format==='forest-world-v1'&&p.map.version===1&&Array.isArray(p.map.world));
+ }catch(e){return []}
+}
 function pineBuildPOICategories(){
  const host=$('poiSampleCategories');if(!host)return;
  host.replaceChildren();
@@ -1874,8 +1888,54 @@ function pineBuildPOICategories(){
  info.append(detail);button.append(glyph,info);
  button.addEventListener('click',()=>{pineSupermarketPOI('wholesale','normal');$('palette').classList.remove('mobileOpen')});
  host.append(button);
+ for(const record of customPOIs){
+  const row=document.createElement('div');row.className='poiCustomEntry';
+  const choice=document.createElement('button');choice.type='button';choice.className='poiSampleEntry item';
+  const symbol=document.createElement('span');symbol.className='poiEntryGlyph';symbol.textContent='▦';
+  const label=document.createElement('span');label.textContent=record.name;
+  const desc=document.createElement('small');desc.textContent=record.map.width+'×'+record.map.height+' マス · 登録済み';
+  label.append(desc);choice.append(symbol,label);
+  choice.addEventListener('click',()=>pineLoadCustomPOI(record.id));
+  const remove=document.createElement('button');remove.type='button';remove.className='poiDelete';remove.textContent='×';remove.setAttribute('aria-label',record.name+' を削除');
+  remove.addEventListener('click',()=>{
+   if(!confirm('登録済みPOI「'+record.name+'」を削除しますか？'))return;
+   const ix=customPOIs.findIndex(p=>p.id===record.id);if(ix<0)return;
+   const next=customPOIs.filter(p=>p.id!==record.id);
+   if(!pineStorePOIs(next))return;
+   customPOIs=next;pineBuildPOICategories();toast('登録POIを削除しました');
+  });
+  row.append(choice,remove);host.append(row);
+ }
 }
-
+function pineStorePOIs(entries){
+ try{
+  const content=JSON.stringify(entries);
+  if(content.length>4*1024*1024){toast('POI保存容量の上限です。不要なPOIを削除してください');return false}
+  localStorage.setItem(PINE_CUSTOM_POI_KEY,content);return true;
+ }catch(e){toast('POIを保存できません。端末の空き容量を確認してください');return false}
+}
+function pineRegisterCurrentPOI(){
+ if(!world.length){toast('建材がないマップは登録できません');return}
+ if(customPOIs.length>=20){toast('POIは20件まで。不要なPOIを削除してください');return}
+ const name=prompt('現在のマップをPOIとして登録します。名前を入力してください','マイPOI '+(customPOIs.length+1));
+ if(name===null)return;
+ const label=name.trim();if(!label||label.length>40){toast('POI名は1～40文字で入力してください');return}
+ const record={id:'poi-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7),name:label,map:data()};
+ const next=[...customPOIs,record];
+ if(!pineStorePOIs(next))return;
+ customPOIs=next;pineBuildPOICategories();toast('「'+label+'」をPOIに登録しました');
+}
+function pineLoadCustomPOI(id){
+ const record=customPOIs.find(p=>p.id===id);if(!record)return;
+ if(!confirm('現在の編集マップを「'+record.name+'」で置き換えますか？ 未保存の変更はJSONで保存してください。'))return;
+ try{
+  const before=JSON.stringify(data());
+  loadData(record.map);
+  undoStack.push(before);if(undoStack.length>45)undoStack.shift();redoStack.length=0;
+  commit();showEntireMap();$('palette').classList.remove('mobileOpen');
+  toast('「'+record.name+'」を読み込みました');
+ }catch(e){toast('POIの読み込みに失敗: '+e.message)}
+}
 function makeDemo(){pineSupermarketPOI('wholesale','normal',false)}
 function setMapSize(){
  const width=Number($('mapWidth').value),height=Number($('mapHeight').value);
@@ -1985,7 +2045,7 @@ $('fitMap').addEventListener('click',showEntireMap);$('turn').addEventListener('
 $('hideUpper').addEventListener('change',e=>{hideUpper=e.target.checked;dirty=true;cursorDirty=true;$('poiRoofToggle').textContent=hideUpper?'屋根を表示':'屋根を隠す';toast(hideUpper?'上階を隠して編集中':'全階層を表示中')});
 $('eyedrop').addEventListener('click',()=>{mode='pick';updateSelected();toast('配置済み部材をタップすると選べます')});for(const b of document.querySelectorAll('[data-mode]'))b.addEventListener('click',()=>{mode=b.dataset.mode;updateSelected()});
 $('undo').addEventListener('click',()=>{if(!undoStack.length)return;redoStack.push(JSON.stringify(data()));restore(undoStack.pop())});$('redo').addEventListener('click',()=>{if(!redoStack.length)return;undoStack.push(JSON.stringify(data()));restore(redoStack.pop())});
-$('savePrefab').addEventListener('click',savePrefab);
+$('registerPOI').addEventListener('click',pineRegisterCurrentPOI);
 $('villageDemo').addEventListener('click',makeVillageDemo);
 $('organicTownDemo').addEventListener('click',makeOrganicTownDemo);
 $('showcaseTownDemo').addEventListener('click',makeShowcaseTownDemo);
@@ -2032,6 +2092,7 @@ $('jsonFile').addEventListener('change',async e=>{const file=e.target.files?.[0]
 $('importJson').addEventListener('click',()=>{try{const o=JSON.parse($('jsonText').value);const before=JSON.stringify(data());loadData(o);undoStack.push(before);if(undoStack.length>45)undoStack.shift();redoStack.length=0;commit();$('jsonModal').classList.remove('open');toast('ワールドを読み込んだ')}catch(e){toast('読み込み失敗：'+e.message)}});
 $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mobileOpen');$('inspector').classList.remove('mobileOpen')});$('showInspector').addEventListener('click',()=>{$('inspector').classList.toggle('mobileOpen');$('palette').classList.remove('mobileOpen')});
 try{const saved=localStorage.getItem(SAVE_KEY);if(saved)loadData(JSON.parse(saved));else makeDemo()}catch(e){MAP_W=16;MAP_H=16;world=[];models=[];prefabs=[];makeDemo()}
+customPOIs=pineReadSavedPOIs();
 pineBuildPOICategories();
 const poiEntrance=world.find(o=>o.type==='pineSuperDoor');
 if(poiEntrance)poiWalkReset(poiEntrance.x,Math.min(MAP_H-2,poiEntrance.z+2));

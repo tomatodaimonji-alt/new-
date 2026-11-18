@@ -35,9 +35,6 @@ function stampPrefab(x,z){const f=prefabs.find(p=>p.id===selected);if(!f)return;
 const placements=f.tiles.map(t=>{const pair=r===0?[t.x,t.z]:r===1?[f.h-1-t.z,t.x]:r===2?[f.w-1-t.x,f.h-1-t.z]:[t.z,f.w-1-t.x];return{x:x+pair[0],z:z+pair[1],y:level+t.y,type:t.type,rot:(t.rot+r)%4}});
 if(placements.some(p=>!validPos(p.x,p.z)||p.y>MAX_LEVEL)){toast('この場所には設計図を置けません');return}
 snapshot();for(const p of placements){const ix=world.findIndex(o=>o.x===p.x&&o.z===p.z&&o.y===p.y&&isFloor(o.type)===isFloor(p.type));if(ix>=0)world.splice(ix,1);world.push(p)}commit();toast('「'+f.name+'」を配置した')}
-function savePrefab(){const x1=numeric('rangeX1'),z1=numeric('rangeZ1'),x2=numeric('rangeX2'),z2=numeric('rangeZ2');if(![x1,z1,x2,z2].every(Number.isInteger)||!validPos(x1,z1)||!validPos(x2,z2)||x1>x2||z1>z2){toast('範囲の座標を確認してね');return}
-const tiles=world.filter(o=>o.x>=x1&&o.x<=x2&&o.z>=z1&&o.z<=z2).map(o=>({x:o.x-x1,z:o.z-z1,y:o.y,type:o.type,rot:o.rot}));if(!tiles.length){toast('指定範囲に建材がないよ');return}
-const f={id:'prefab-'+Date.now().toString(36),name:$('prefabName').value.trim()||'自作の家',w:x2-x1+1,h:z2-z1+1,tiles};snapshot();prefabs.push(f);commit();refreshPalette();selected=f.id;mode='place';updateSelected();toast('建物をテンプレート登録した')}
 function updateStats(){$('terrainHeightLabel').textContent=hover&&validPos(hover.x,hover.z)?terrainLevel(hover.x,hover.z):'-';$('gridLabel').textContent=MAP_W+'×'+MAP_H;$('countLabel').textContent=world.length;$('selectedLabel').textContent=byId(selected)?.name||'未選択';$('rotationLabel').textContent=rotation*90+'°';$('cursorStatus').textContent=hover?'マス: '+(hover.x+1)+', '+(hover.z+1)+' · '+({place:'配置',erase:'消去',pick:'取得',rotate:'回転',move:'視点移動',terrainUp:'地面を上げる',terrainDown:'地面を下げる',terrainFlat:'平坦化'}[mode]||'配置'):'マスを選んで配置';}
 function updateSelected(){for(const [id,active] of [['quickPlace',mode==='place'],['quickErase',mode==='erase'],['quickRotate',mode==='rotate'],['quickMove',mode==='move']]){$(id).classList.toggle('active',active)}for(const b of document.querySelectorAll('[data-brush]'))b.classList.toggle('selected',mode==='place'&&(b.dataset.brush===selected||(b.dataset.brush==='wall'&&isWallId(selected))));for(const b of document.querySelectorAll('[data-mode]'))b.classList.toggle('selected',b.dataset.mode===mode);updateStats()}
 let wallExpanded=false,openedWallGroup=null,constructionExtrasExpanded=false,naturalExpanded=false;
@@ -355,7 +352,6 @@ function refreshPalette(){
  renderCharacterList();
  renderWallCategories();
  renderObjectList();
- $('prefabList').replaceChildren(...prefabs.map(p=>mkButton(p.id,{name:p.name,icon:'⌂'})));
  updateSelected();
 }
 function numeric(id,fallback=0){const v=Number($(id).value);return Number.isFinite(v)?v:fallback}
