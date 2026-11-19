@@ -2144,6 +2144,7 @@ $('topDownView').addEventListener('click',toggleTopDown);
 $('registerPOI').addEventListener('click',pineRegisterCurrentPOI);
 $('poiWalkToggle').addEventListener('click',()=>poiWalkSet(!poiWalkActive));
 $('poiThirdView').addEventListener('click',togglePoiThirdPerson);
+$('poiAudioToggle').addEventListener('click',poiToggleAudio);
 $('poiWalkAction').addEventListener('click',poiWalkAction);
 $('poiRoofToggle').addEventListener('click',()=>{
  if(poiWalkActive){toast('歩行中の屋根は入退店に応じて自動切替します');return}
