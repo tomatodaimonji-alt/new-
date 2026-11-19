@@ -2236,6 +2236,15 @@ window.addEventListener('pagehide',()=>pineGameSave(true));
 document.addEventListener('visibilitychange',()=>{if(document.hidden)pineGameSave(true)});
 $('poiThirdView').addEventListener('click',togglePoiThirdPerson);
 $('poiAudioToggle').addEventListener('click',poiToggleAudio);
+$('poiSoundSettingsToggle').addEventListener('click',()=>{
+ const panel=$('poiSoundPanel');panel.hidden=!panel.hidden;
+ $('poiSoundSettingsToggle').setAttribute('aria-expanded',String(!panel.hidden));
+});
+for(const [kind,id] of [['master','poiVolumeMaster'],['bgm','poiVolumeBgm'],['se','poiVolumeSe']]){
+ $(id).addEventListener('input',e=>poiAudioSetVolume(kind,e.target.value));
+}
+poiAudioSyncUI();
+
 $('poiWalkAction').addEventListener('click',poiWalkAction);
 $('poiRoofToggle').addEventListener('click',()=>{
  if(poiWalkActive){toast('歩行中の屋根は入退店に応じて自動切替します');return}
