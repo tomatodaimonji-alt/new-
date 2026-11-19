@@ -3,6 +3,23 @@ let poiWalkActive=false,poiWalkX=0,poiWalkZ=0,poiWalkMesh=null,poiWalkOldRoof=fa
 let poiWalkFacing=2,poiWalkStarted=-10000,poiWalkFromX=0,poiWalkFromZ=0;
 let poiWalkViewX=0,poiWalkViewZ=0,poiWalkNextReady=0,poiWalkActionStarted=-10000;
 const POI_WALK_MS=160;
+const POI_PLAYER_MAX_HP=100,POI_PLAYER_ATTACK=20;
+const POI_MONSTER_STATS={monsterSlime:{hp:35,attack:6},monsterGoblin:{hp:55,attack:10},monsterSkeleton:{hp:45,attack:9},monsterDragon:{hp:150,attack:22}};
+let poiPlayerHP=POI_PLAYER_MAX_HP,poiSpawnX=0,poiSpawnZ=0,poiMonsterStates=new Map(),poiNextMobTick=0,poiAttackReady=0;
+let poiDamageLabels=[];
+function poiIsMonster(type){return Object.prototype.hasOwnProperty.call(POI_MONSTER_STATS,type)}
+function poiResetCombat(){poiPlayerHP=POI_PLAYER_MAX_HP;poiMonsterStates=new Map();for(const o of world){if(poiIsMonster(o.type)){const stats=POI_MONSTER_STATS[o.type];poiMonsterStates.set(o,{x:o.x,z:o.z,hp:stats.hp,nextAttack:0})}}poiDamageLabels=[];poiNextMobTick=0;poiAttackReady=0;poiCombatHud();dirty=true}
+function poiCombatHud(){const hud=$('poiCombatHud');if(!hud)return;hud.hidden=!poiWalkActive;hud.textContent='HP '+poiPlayerHP+'/'+POI_PLAYER_MAX_HP+'　攻撃力 '+POI_PLAYER_ATTACK}
+function poiDamageNumber(x,z,y,value,isPlayer=false){poiDamageLabels.push({x,z,y,value,time:performance.now(),isPlayer});if(poiDamageLabels.length>24)poiDamageLabels.shift()}
+function poiWorldToScreen(vp,x,y,z){const w=vp[3]*x+vp[7]*y+vp[11]*z+vp[15];if(w<=.05)return null;const a=(vp[0]*x+vp[4]*y+vp[8]*z+vp[12])/w,b=(vp[1]*x+vp[5]*y+vp[9]*z+vp[13])/w;if(Math.abs(a)>1.25||Math.abs(b)>1.25)return null;return {x:(a+1)*.5*canvas.clientWidth,y:(1-b)*.5*canvas.clientHeight}}
+function poiRenderDamageLabels(now,vp){const layer=$('poiDamageLayer');if(!layer)return;const active=poiWalkActive?poiDamageLabels.filter(d=>now-d.time<950):[];poiDamageLabels=active;layer.replaceChildren();for(const d of active){const elapsed=(now-d.time)/950,point=poiWorldToScreen(vp,d.x,d.y+elapsed*.75,d.z);if(!point)continue;const el=document.createElement('span');el.className='poiDamageNumber'+(d.isPlayer?' playerDamage':'');el.textContent='-'+d.value;el.style.left=point.x+'px';el.style.top=point.y+'px';el.style.opacity=String(Math.min(1,(1-elapsed)*2.5));layer.append(el)}}
+function poiMonsterAt(x,z){for(const [obj,state] of poiMonsterStates){if(state.hp>0&&state.x===x&&state.z===z)return [obj,state]}return null}
+function poiMonsterCanMove(x,z,except){if(!poiWalkCanStep(x,z)||poiMonsterAt(x,z))return false;if(poiWalkX===x&&poiWalkZ===z)return false;return true}
+function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMobTick=now+380;let changed=false;for(const [obj,state] of poiMonsterStates){if(state.hp<=0)continue;const dx=poiWalkX-state.x,dz=poiWalkZ-state.z,dist=Math.hypot(dx,dz);if(dist>6.5)continue;if(dist<=1.45){if(now>=state.nextAttack){state.nextAttack=now+1150;const amount=POI_MONSTER_STATS[obj.type].attack;poiPlayerHP=Math.max(0,poiPlayerHP-amount);poiDamageNumber(poiWalkViewX+.5,poiWalkViewZ+.5,terrainY(poiWalkX,poiWalkZ)+1.8,amount,true);poiCombatHud();if(!poiPlayerHP){poiPlayerHP=POI_PLAYER_MAX_HP;poiWalkReset(poiSpawnX,poiSpawnZ);poiDamageLabels=[];toast('倒されたため初期位置にリスポーン');poiCombatHud();break}}continue}
+ const steps=[[Math.sign(dx),0],[0,Math.sign(dz)]].filter(([sx,sz])=>sx||sz).sort((a,b)=>Math.abs(a[0]*dx+a[1]*dz)>Math.abs(b[0]*dx+b[1]*dz)?-1:1);
+ for(const [sx,sz] of steps){const nx=state.x+sx,nz=state.z+sz;if(poiMonsterCanMove(nx,nz,state)){state.x=nx;state.z=nz;changed=true;break}}
+ }if(changed)dirty=true}
+
 let cameraTopDown=false,poiThirdPerson=false;
 let poiCameraYaw=0,poiCameraPitch=.35,poiCameraDistance=5.5;
 function poiCameraRelativeStep(key){
@@ -74,6 +91,7 @@ function poiWalkFrame(now){
  poiWalkViewZ=poiWalkFromZ+(poiWalkZ-poiWalkFromZ)*smooth;
  panX=poiWalkViewX+.5-MAP_W/2;panZ=poiWalkViewZ+.5-MAP_H/2;
  if(now-poiWalkStarted<=POI_WALK_MS+32||now-poiWalkActionStarted<290)poiWalkAvatar(now);
+ poiMobFrame(now);
 }
 function poiWalkPassableDoor(type){
  // Pass through door/entrance cells across all material families, including
@@ -90,7 +108,8 @@ function poiWalkCanStep(x,z){
   'pineSuperCurb','pineSuperBollard','pineSuperSign']);
  // Check every occupied object on this cell. Door frames are walkable, but
  // an unrelated solid object placed in the doorway must still block passage.
- const cell=world.filter(o=>o.y===0&&o.x===x&&o.z===z);
+ const cell=world.filter(o=>o.y===0&&o.x===x&&o.z===z&&(!poiWalkActive||!poiIsMonster(o.type)));
+ if(poiWalkActive&&poiMonsterAt(x,z))return false;
  const hasDoor=cell.some(o=>poiWalkPassableDoor(o.type));
  // A door shares its cell with wall/trim pieces in some saved maps.
  // Those wall pieces must not seal the entrance; unrelated obstacles still block.
@@ -114,14 +133,17 @@ function poiWalkStep(dx,dz){
 }
 function poiWalkAction(){
  if(!poiWalkActive)return;
+ const now=performance.now();if(now<poiAttackReady)return;poiAttackReady=now+300;poiWalkActionStarted=now;poiWalkAvatar(now);
  const delta=[[0,-1],[1,0],[0,1],[-1,0]][poiWalkFacing];
  const x=poiWalkX+delta[0],z=poiWalkZ+delta[1];
- const target=world.find(o=>o.x===x&&o.z===z&&o.y===0&&!isFloor(o.type));
+ const monster=poiMonsterAt(x,z);
+ if(monster){const [obj,state]=monster;state.hp=Math.max(0,state.hp-POI_PLAYER_ATTACK);poiDamageNumber(state.x+.5,state.z+.5,terrainY(state.x,state.z)+1.8,POI_PLAYER_ATTACK);dirty=true;if(!state.hp)toast('モンスターを倒した');return}
+ const target=world.find(o=>o.x===x&&o.z===z&&o.y===0&&!isFloor(o.type)&&!poiIsMonster(o.type));
  if(target){
   const item=palette.find(p=>p.id===target.type);
   toast((item?.name||'目の前のオブジェクト')+'を調べた');
  }else{
-  poiWalkActionStarted=performance.now();poiWalkAvatar(poiWalkActionStarted);toast('攻撃');
+  toast('攻撃');
  }
 }
 function poiWalkReset(x,z){
@@ -152,6 +174,7 @@ function poiWalkSet(active){
  if(active){
   const spawn=poiWalkSpawnNearCenter();
   if(!spawn){toast('プレイ可能な空きマスがありません');return}
+  poiSpawnX=spawn.x;poiSpawnZ=spawn.z;
   poiWalkReset(spawn.x,spawn.z);
   poiCameraYaw=0;poiCameraPitch=.35;poiCameraDistance=5.5;
   poiThirdPerson=false;
@@ -162,6 +185,8 @@ function poiWalkSet(active){
   $('topDownView').setAttribute('aria-pressed','false');
  }
  poiWalkActive=active;
+ if(active)poiResetCombat();else{poiMonsterStates.clear();poiDamageLabels=[];}
+ poiCombatHud();
  if(active){
   poiWalkOldRoof=hideUpper;
   hideUpper=false;$('hideUpper').checked=false;
@@ -225,7 +250,7 @@ function wallFaceState(o,lookup){
  return{visible,exterior};
 }
 function makeScene(){
- const m=mesh(),visible=world.filter(o=>!hideUpper||o.y<=level);
+ const m=mesh(),visible=world.filter(o=>!hideUpper||o.y<=level).filter(o=>!poiWalkActive||!poiIsMonster(o.type)||!poiMonsterStates.has(o)||poiMonsterStates.get(o).hp>0).map(o=>{const state=poiWalkActive&&poiMonsterStates.get(o);return state?{...o,x:state.x,z:state.z}:o});
  const floors=new Map(world.filter(o=>o.y===0&&isFloor(o.type)).map(o=>[o.x+','+o.z,o.type]));
  for(let z=0;z<MAP_H;z++)for(let x=0;x<MAP_W;x++){
   const kind=floors.get(x+','+z)||'grass';
