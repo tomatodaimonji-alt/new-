@@ -4,36 +4,164 @@ let poiWalkFacing=2,poiWalkStarted=-10000,poiWalkFromX=0,poiWalkFromZ=0;
 let poiWalkViewX=0,poiWalkViewZ=0,poiWalkNextReady=0,poiWalkActionStarted=-10000;
 const POI_WALK_MS=160;
 
-let poiAudioContext=null,poiAudioMaster=null,poiAudioAmbient=[],poiAudioEnabled=true;
-function poiAudioStart(){
- if(!poiAudioEnabled)return;
- try{
-  const C=window.AudioContext||window.webkitAudioContext;if(!C)return;
-  if(!poiAudioContext){poiAudioContext=new C();poiAudioMaster=poiAudioContext.createGain();poiAudioMaster.gain.value=.28;poiAudioMaster.connect(poiAudioContext.destination)}
-  if(poiAudioContext.state==='suspended')poiAudioContext.resume().catch(()=>{});
-  if(poiAudioAmbient.length)return;
-  const ctx=poiAudioContext,amb=ctx.createGain();amb.gain.value=.11;amb.connect(poiAudioMaster);
-  for(const [frequency,level] of [[110,.38],[164.81,.16],[220,.09]]){const o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=frequency;g.gain.value=level;o.connect(g).connect(amb);o.start();poiAudioAmbient.push(o)}
-  const buf=ctx.createBuffer(1,ctx.sampleRate*2,ctx.sampleRate),samples=buf.getChannelData(0);for(let i=0;i<samples.length;i++)samples[i]=Math.random()*2-1;
-  const wind=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),wg=ctx.createGain();wind.buffer=buf;wind.loop=true;filter.type='lowpass';filter.frequency.value=380;wg.gain.value=.035;wind.connect(filter).connect(wg).connect(poiAudioMaster);wind.start();poiAudioAmbient.push(wind);
-  const lfo=ctx.createOscillator(),lg=ctx.createGain();lfo.frequency.value=.13;lg.gain.value=.018;lfo.connect(lg).connect(wg.gain);lfo.start();poiAudioAmbient.push(lfo);
- }catch(e){console.warn('Sound unavailable',e)}
+// v40: original offline soundscape and layered game sound design.
+const PINE_AUDIO_SETTINGS_KEY='world-workshop-audio-v2';
+let poiAudioContext=null,poiAudioMaster=null,poiAudioMusic=null,poiAudioAmbience=null,poiAudioEffects=null;
+let poiAudioAmbient=[],poiAudioInterval=null,poiAudioNoise=null,poiAudioEnabled=true;
+let poiAudioLevels={master:85,bgm:68,se:90};
+try{
+ const saved=JSON.parse(localStorage.getItem(PINE_AUDIO_SETTINGS_KEY)||'null');
+ if(saved&&typeof saved==='object'){
+  for(const k of ['master','bgm','se'])if(Number.isFinite(saved[k]))poiAudioLevels[k]=Math.max(0,Math.min(100,Math.round(saved[k])));
+  if(typeof saved.enabled==='boolean')poiAudioEnabled=saved.enabled;
+ }
+}catch(e){}
+function poiAudioSyncUI(){
+ for(const k of ['master','bgm','se']){
+  const slider=$('poiVolume'+k[0].toUpperCase()+k.slice(1)),label=$('poiVolume'+k[0].toUpperCase()+k.slice(1)+'Value');
+  if(slider)slider.value=poiAudioLevels[k];
+  if(label)label.textContent=poiAudioLevels[k]+'%';
+ }
+ const button=$('poiAudioToggle');
+ if(button){button.textContent=poiAudioEnabled?'音 ON':'音 OFF';button.setAttribute('aria-pressed',String(poiAudioEnabled))}
 }
-function poiAudioStop(){for(const node of poiAudioAmbient){try{node.stop()}catch(e){}try{node.disconnect()}catch(e){}}poiAudioAmbient=[]}
-function poiSound(kind){
- if(!poiAudioEnabled||!poiWalkActive)return;poiAudioStart();const ctx=poiAudioContext;if(!ctx||ctx.state!=='running')return;
+function poiAudioApplyLevels(){
+ if(!poiAudioContext)return;
+ const now=poiAudioContext.currentTime;
+ if(poiAudioMaster)poiAudioMaster.gain.setTargetAtTime(poiAudioEnabled?poiAudioLevels.master/100:0,now,.025);
+ if(poiAudioMusic)poiAudioMusic.gain.setTargetAtTime(.38*poiAudioLevels.bgm/100,now,.045);
+ if(poiAudioAmbience)poiAudioAmbience.gain.setTargetAtTime(.39*poiAudioLevels.bgm/100,now,.045);
+ if(poiAudioEffects)poiAudioEffects.gain.setTargetAtTime(.90*poiAudioLevels.se/100,now,.02);
+}
+function poiAudioSaveSettings(){
+ try{localStorage.setItem(PINE_AUDIO_SETTINGS_KEY,JSON.stringify({...poiAudioLevels,enabled:poiAudioEnabled}))}catch(e){}
+}
+function poiAudioSetVolume(kind,value){
+ if(!Object.prototype.hasOwnProperty.call(poiAudioLevels,kind))return;
+ poiAudioLevels[kind]=Math.max(0,Math.min(100,Math.round(Number(value)||0)));
+ poiAudioApplyLevels();poiAudioSaveSettings();poiAudioSyncUI();
+}
+function poiAudioNoiseBuffer(){
+ if(poiAudioNoise)return poiAudioNoise;
+ const ctx=poiAudioContext,buffer=ctx.createBuffer(1,Math.round(ctx.sampleRate*2),ctx.sampleRate);
+ const samples=buffer.getChannelData(0);
+ // Gentle correlated noise rather than piercing raw white noise.
+ let last=0;
+ for(let i=0;i<samples.length;i++){last=(last*.65)+((Math.random()*2-1)*.35);samples[i]=last}
+ poiAudioNoise=buffer;return buffer;
+}
+function poiAudioInitialize(){
+ if(poiAudioContext)return true;
+ const C=window.AudioContext||window.webkitAudioContext;if(!C)return false;
+ const ctx=new C();poiAudioContext=ctx;
+ const master=ctx.createGain(),limiter=ctx.createDynamicsCompressor();
+ limiter.threshold.value=-12;limiter.knee.value=12;limiter.ratio.value=8;limiter.attack.value=.004;limiter.release.value=.18;
+ master.connect(limiter).connect(ctx.destination);poiAudioMaster=master;
+ poiAudioMusic=ctx.createGain();poiAudioAmbience=ctx.createGain();poiAudioEffects=ctx.createGain();
+ poiAudioMusic.connect(master);poiAudioAmbience.connect(master);poiAudioEffects.connect(master);
+ poiAudioApplyLevels();return true;
+}
+function poiAudioTone(freq,when,duration,volume,type='sine',dest=poiAudioMusic,attack=.05){
+ const ctx=poiAudioContext,o=ctx.createOscillator(),gain=ctx.createGain();
+ const end=when+duration;
+ o.type=type;o.frequency.setValueAtTime(freq,when);
+ gain.gain.setValueAtTime(.0001,when);
+ gain.gain.linearRampToValueAtTime(volume,when+Math.min(attack,duration*.4));
+ gain.gain.setTargetAtTime(.0001,Math.max(when+attack,end-.4),.13);
+ o.connect(gain).connect(dest);o.start(when);o.stop(end+.08);
+ o.onended=()=>{o.disconnect();gain.disconnect()};
+ return o;
+}
+function poiAudioMusicPhrase(){
+ if(!poiWalkActive||!poiAudioEnabled||!poiAudioContext)return;
+ const ctx=poiAudioContext,t=ctx.currentTime+.08;
+ // Original D minor / F major / C sus2 / G minor ambient progression.
+ const chords=[[146.83,174.61,220,293.66],[174.61,220,261.63,349.23],[130.81,196,261.63,293.66],[146.83,196,233.08,293.66]];
+ const phrase=chords[Math.floor(t/8)%chords.length];
+ for(let i=0;i<phrase.length;i++){
+  const f=phrase[i],start=t+i*.10;
+  poiAudioTone(f,start,7.1,.095,'sine',poiAudioMusic,1.7);
+  if(i<3)poiAudioTone(f/2,start,6.8,.037,'triangle',poiAudioMusic,1.4);
+ }
+ // Sparse, mellow glass-like tones, not repetitive sharp beeps.
+ const lead=phrase[2]*2;
+ poiAudioTone(lead,t+2.7,2.1,.07,'sine',poiAudioMusic,.045);
+ poiAudioTone(lead*.75,t+4.65,2.15,.055,'sine',poiAudioMusic,.08);
+}
+function poiAudioStart(){
+ if(!poiAudioEnabled||!poiWalkActive)return;
  try{
-  const t=ctx.currentTime,o=ctx.createOscillator(),gain=ctx.createGain();let frequency=140,duration=.11,peak=.20,wave='triangle';
-  if(kind==='step'){frequency=86+Math.random()*25;duration=.075;peak=.095}
-  if(kind==='attack'){frequency=240;duration=.18;peak=.22;wave='sawtooth'}
-  if(kind==='hit'){frequency=95;duration=.14;peak=.24;wave='square'}
-  if(kind==='hurt'){frequency=190;duration=.2;peak=.19}
-  o.type=wave;o.frequency.setValueAtTime(frequency,t);o.frequency.exponentialRampToValueAtTime(Math.max(40,frequency*(kind==='attack'?.42:.67)),t+duration);
-  gain.gain.setValueAtTime(.0001,t);gain.gain.exponentialRampToValueAtTime(peak,t+.012);gain.gain.exponentialRampToValueAtTime(.0001,t+duration);
-  o.connect(gain).connect(poiAudioMaster);o.start(t);o.stop(t+duration+.02);o.onended=()=>{o.disconnect();gain.disconnect()};
+  if(!poiAudioInitialize())return;
+  const ctx=poiAudioContext;
+  if(ctx.state==='suspended')ctx.resume().catch(()=>{});
+  if(poiAudioAmbient.length)return;
+  // Long soft wind and leafy rustle. No remote media/network required.
+  const wind=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),g=ctx.createGain();
+  wind.buffer=poiAudioNoiseBuffer();wind.loop=true;
+  filter.type='lowpass';filter.frequency.value=550;g.gain.value=.17;
+  wind.connect(filter).connect(g).connect(poiAudioAmbience);
+  wind.start();poiAudioAmbient.push(wind);
+  const lfo=ctx.createOscillator(),lg=ctx.createGain();
+  lfo.type='sine';lfo.frequency.value=.11;lg.gain.value=.055;
+  lfo.connect(lg).connect(g.gain);lfo.start();poiAudioAmbient.push(lfo);
+  const rustle=ctx.createBufferSource(),rf=ctx.createBiquadFilter(),rg=ctx.createGain();
+  rustle.buffer=poiAudioNoiseBuffer();rustle.loop=true;
+  rf.type='bandpass';rf.frequency.value=1450;rf.Q.value=.35;rg.gain.value=.05;
+  rustle.connect(rf).connect(rg).connect(poiAudioAmbience);rustle.start();poiAudioAmbient.push(rustle);
+  poiAudioMusicPhrase();poiAudioInterval=setInterval(poiAudioMusicPhrase,8000);
+ }catch(e){console.warn('Audio unavailable',e)}
+}
+function poiAudioStop(){
+ if(poiAudioInterval!==null){clearInterval(poiAudioInterval);poiAudioInterval=null}
+ for(const node of poiAudioAmbient){try{node.stop()}catch(e){}try{node.disconnect()}catch(e){}}
+ poiAudioAmbient=[];
+}
+function poiAudioNoiseBurst(when,duration,frequency,q,peak){
+ const ctx=poiAudioContext,src=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),gain=ctx.createGain();
+ src.buffer=poiAudioNoiseBuffer();filter.type='bandpass';filter.frequency.value=frequency;filter.Q.value=q;
+ gain.gain.setValueAtTime(.0001,when);
+ gain.gain.linearRampToValueAtTime(peak,when+.008);
+ gain.gain.exponentialRampToValueAtTime(.0001,when+duration);
+ src.connect(filter).connect(gain).connect(poiAudioEffects);
+ src.start(when);src.stop(when+duration+.01);
+ src.onended=()=>{src.disconnect();filter.disconnect();gain.disconnect()};
+}
+function poiAudioThud(when,startFrequency,endFrequency,duration,volume){
+ const ctx=poiAudioContext,o=ctx.createOscillator(),g=ctx.createGain();
+ o.type='sine';o.frequency.setValueAtTime(startFrequency,when);o.frequency.exponentialRampToValueAtTime(endFrequency,when+duration);
+ g.gain.setValueAtTime(.0001,when);g.gain.linearRampToValueAtTime(volume,when+.008);
+ g.gain.exponentialRampToValueAtTime(.0001,when+duration);
+ o.connect(g).connect(poiAudioEffects);o.start(when);o.stop(when+duration+.015);
+ o.onended=()=>{o.disconnect();g.disconnect()};
+}
+function poiSound(kind){
+ if(!poiWalkActive||!poiAudioEnabled)return;
+ poiAudioStart();const ctx=poiAudioContext;if(!ctx||ctx.state!=='running')return;
+ const now=ctx.currentTime;
+ try{
+  if(kind==='step'){
+   // Short filtered gravel/soil crunch plus sole impact; alternate tone subtly.
+   poiAudioNoiseBurst(now,.12,650+Math.random()*320,.7,.40);
+   poiAudioThud(now,105+Math.random()*24,62,.115,.21);
+  }else if(kind==='attack'){
+   // Sweeping whoosh plus low body, not a fixed-pitch electronic beep.
+   poiAudioNoiseBurst(now,.24,1250, .55,.58);
+   poiAudioNoiseBurst(now+.07,.15,2100,.7,.32);
+   poiAudioThud(now+.04,180,70,.21,.26);
+  }else if(kind==='hit'){
+   poiAudioNoiseBurst(now,.13,1500,.65,.68);
+   poiAudioThud(now,230,75,.18,.40);
+  }else if(kind==='hurt'){
+   poiAudioNoiseBurst(now,.19,420,.8,.42);
+   poiAudioThud(now,180,52,.25,.46);
+  }
  }catch(e){console.warn('Sound effect unavailable',e)}
 }
-function poiToggleAudio(){poiAudioEnabled=!poiAudioEnabled;const b=$('poiAudioToggle');if(b){b.textContent=poiAudioEnabled?'音 ON':'音 OFF';b.setAttribute('aria-pressed',String(poiAudioEnabled))}if(!poiAudioEnabled)poiAudioStop();else if(poiWalkActive)poiAudioStart()}
+function poiToggleAudio(){
+ poiAudioEnabled=!poiAudioEnabled;
+ if(!poiAudioEnabled)poiAudioStop();else if(poiWalkActive)poiAudioStart();
+ poiAudioApplyLevels();poiAudioSaveSettings();poiAudioSyncUI();
+}
 
 const POI_PLAYER_MAX_HP=100,POI_PLAYER_ATTACK=20;
 const POI_MONSTER_STATS={monsterSlime:{hp:35,attack:6},monsterGoblin:{hp:55,attack:10},monsterSkeleton:{hp:45,attack:9},monsterDragon:{hp:150,attack:22}};
