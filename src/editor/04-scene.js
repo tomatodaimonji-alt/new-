@@ -3,6 +3,38 @@ let poiWalkActive=false,poiWalkX=0,poiWalkZ=0,poiWalkMesh=null,poiWalkOldRoof=fa
 let poiWalkFacing=2,poiWalkStarted=-10000,poiWalkFromX=0,poiWalkFromZ=0;
 let poiWalkViewX=0,poiWalkViewZ=0,poiWalkNextReady=0,poiWalkActionStarted=-10000;
 const POI_WALK_MS=160;
+
+let poiAudioContext=null,poiAudioMaster=null,poiAudioAmbient=[],poiAudioEnabled=true;
+function poiAudioStart(){
+ if(!poiAudioEnabled)return;
+ try{
+  const C=window.AudioContext||window.webkitAudioContext;if(!C)return;
+  if(!poiAudioContext){poiAudioContext=new C();poiAudioMaster=poiAudioContext.createGain();poiAudioMaster.gain.value=.28;poiAudioMaster.connect(poiAudioContext.destination)}
+  if(poiAudioContext.state==='suspended')poiAudioContext.resume().catch(()=>{});
+  if(poiAudioAmbient.length)return;
+  const ctx=poiAudioContext,amb=ctx.createGain();amb.gain.value=.11;amb.connect(poiAudioMaster);
+  for(const [frequency,level] of [[110,.38],[164.81,.16],[220,.09]]){const o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=frequency;g.gain.value=level;o.connect(g).connect(amb);o.start();poiAudioAmbient.push(o)}
+  const buf=ctx.createBuffer(1,ctx.sampleRate*2,ctx.sampleRate),samples=buf.getChannelData(0);for(let i=0;i<samples.length;i++)samples[i]=Math.random()*2-1;
+  const wind=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),wg=ctx.createGain();wind.buffer=buf;wind.loop=true;filter.type='lowpass';filter.frequency.value=380;wg.gain.value=.035;wind.connect(filter).connect(wg).connect(poiAudioMaster);wind.start();poiAudioAmbient.push(wind);
+  const lfo=ctx.createOscillator(),lg=ctx.createGain();lfo.frequency.value=.13;lg.gain.value=.018;lfo.connect(lg).connect(wg.gain);lfo.start();poiAudioAmbient.push(lfo);
+ }catch(e){console.warn('Sound unavailable',e)}
+}
+function poiAudioStop(){for(const node of poiAudioAmbient){try{node.stop()}catch(e){}try{node.disconnect()}catch(e){}}poiAudioAmbient=[]}
+function poiSound(kind){
+ if(!poiAudioEnabled||!poiWalkActive)return;poiAudioStart();const ctx=poiAudioContext;if(!ctx||ctx.state!=='running')return;
+ try{
+  const t=ctx.currentTime,o=ctx.createOscillator(),gain=ctx.createGain();let frequency=140,duration=.11,peak=.20,wave='triangle';
+  if(kind==='step'){frequency=86+Math.random()*25;duration=.075;peak=.095}
+  if(kind==='attack'){frequency=240;duration=.18;peak=.22;wave='sawtooth'}
+  if(kind==='hit'){frequency=95;duration=.14;peak=.24;wave='square'}
+  if(kind==='hurt'){frequency=190;duration=.2;peak=.19}
+  o.type=wave;o.frequency.setValueAtTime(frequency,t);o.frequency.exponentialRampToValueAtTime(Math.max(40,frequency*(kind==='attack'?.42:.67)),t+duration);
+  gain.gain.setValueAtTime(.0001,t);gain.gain.exponentialRampToValueAtTime(peak,t+.012);gain.gain.exponentialRampToValueAtTime(.0001,t+duration);
+  o.connect(gain).connect(poiAudioMaster);o.start(t);o.stop(t+duration+.02);o.onended=()=>{o.disconnect();gain.disconnect()};
+ }catch(e){console.warn('Sound effect unavailable',e)}
+}
+function poiToggleAudio(){poiAudioEnabled=!poiAudioEnabled;const b=$('poiAudioToggle');if(b){b.textContent=poiAudioEnabled?'音 ON':'音 OFF';b.setAttribute('aria-pressed',String(poiAudioEnabled))}if(!poiAudioEnabled)poiAudioStop();else if(poiWalkActive)poiAudioStart()}
+
 const POI_PLAYER_MAX_HP=100,POI_PLAYER_ATTACK=20;
 const POI_MONSTER_STATS={monsterSlime:{hp:35,attack:6},monsterGoblin:{hp:55,attack:10},monsterSkeleton:{hp:45,attack:9},monsterDragon:{hp:150,attack:22}};
 let poiPlayerHP=POI_PLAYER_MAX_HP,poiSpawnX=0,poiSpawnZ=0,poiMonsterStates=new Map(),poiNextMobTick=0,poiAttackReady=0;
@@ -15,7 +47,7 @@ function poiWorldToScreen(vp,x,y,z){const w=vp[3]*x+vp[7]*y+vp[11]*z+vp[15];if(w
 function poiRenderDamageLabels(now,vp){const layer=$('poiDamageLayer');if(!layer)return;const active=poiWalkActive?poiDamageLabels.filter(d=>now-d.time<950):[];poiDamageLabels=active;layer.replaceChildren();for(const d of active){const elapsed=(now-d.time)/950,point=poiWorldToScreen(vp,d.x,d.y+elapsed*.75,d.z);if(!point)continue;const el=document.createElement('span');el.className='poiDamageNumber'+(d.isPlayer?' playerDamage':'');el.textContent='-'+d.value;el.style.left=point.x+'px';el.style.top=point.y+'px';el.style.opacity=String(Math.min(1,(1-elapsed)*2.5));layer.append(el)}}
 function poiMonsterAt(x,z){for(const [obj,state] of poiMonsterStates){if(state.hp>0&&state.x===x&&state.z===z)return [obj,state]}return null}
 function poiMonsterCanMove(x,z,except){if(!poiWalkCanStep(x,z)||poiMonsterAt(x,z))return false;if(poiWalkX===x&&poiWalkZ===z)return false;return true}
-function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMobTick=now+380;let changed=false;for(const [obj,state] of poiMonsterStates){if(state.hp<=0)continue;const dx=poiWalkX-state.x,dz=poiWalkZ-state.z,dist=Math.hypot(dx,dz);if(dist>6.5)continue;if(dist<=1.45){if(now>=state.nextAttack){state.nextAttack=now+1150;const amount=POI_MONSTER_STATS[obj.type].attack;poiPlayerHP=Math.max(0,poiPlayerHP-amount);poiDamageNumber(poiWalkViewX+.5,poiWalkViewZ+.5,terrainY(poiWalkX,poiWalkZ)+1.8,amount,true);poiCombatHud();if(!poiPlayerHP){poiPlayerHP=POI_PLAYER_MAX_HP;poiWalkReset(poiSpawnX,poiSpawnZ);poiDamageLabels=[];toast('倒されたため初期位置にリスポーン');poiCombatHud();break}}continue}
+function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMobTick=now+380;let changed=false;for(const [obj,state] of poiMonsterStates){if(state.hp<=0)continue;const dx=poiWalkX-state.x,dz=poiWalkZ-state.z,dist=Math.hypot(dx,dz);if(dist>6.5)continue;if(dist<=1.45){if(now>=state.nextAttack){state.nextAttack=now+1150;const amount=POI_MONSTER_STATS[obj.type].attack;poiPlayerHP=Math.max(0,poiPlayerHP-amount);poiSound('hurt');poiDamageNumber(poiWalkViewX+.5,poiWalkViewZ+.5,terrainY(poiWalkX,poiWalkZ)+1.8,amount,true);poiCombatHud();if(!poiPlayerHP){poiPlayerHP=POI_PLAYER_MAX_HP;poiWalkReset(poiSpawnX,poiSpawnZ);poiDamageLabels=[];toast('倒されたため初期位置にリスポーン');poiCombatHud();break}}continue}
  const steps=[[Math.sign(dx),0],[0,Math.sign(dz)]].filter(([sx,sz])=>sx||sz).sort((a,b)=>Math.abs(a[0]*dx+a[1]*dz)>Math.abs(b[0]*dx+b[1]*dz)?-1:1);
  for(const [sx,sz] of steps){const nx=state.x+sx,nz=state.z+sz;if(poiMonsterCanMove(nx,nz,state)){state.x=nx;state.z=nz;changed=true;break}}
  }if(changed)dirty=true}
@@ -129,15 +161,15 @@ function poiWalkStep(dx,dz){
  if(!poiWalkCanStep(poiWalkX+dx,poiWalkZ+dz)){poiWalkAvatar();return}
  poiWalkFromX=poiWalkX;poiWalkFromZ=poiWalkZ;poiWalkX+=dx;poiWalkZ+=dz;
  poiWalkStarted=now;poiWalkNextReady=now+POI_WALK_MS;
- poiWalkRoof();poiWalkAvatar(poiWalkStarted);poiWalkStatus();
+ poiSound('step');poiWalkRoof();poiWalkAvatar(poiWalkStarted);poiWalkStatus();
 }
 function poiWalkAction(){
  if(!poiWalkActive)return;
- const now=performance.now();if(now<poiAttackReady)return;poiAttackReady=now+300;poiWalkActionStarted=now;poiWalkAvatar(now);
+ const now=performance.now();if(now<poiAttackReady)return;poiAttackReady=now+300;poiWalkActionStarted=now;poiWalkAvatar(now);poiSound('attack');
  const delta=[[0,-1],[1,0],[0,1],[-1,0]][poiWalkFacing];
  const x=poiWalkX+delta[0],z=poiWalkZ+delta[1];
  const monster=poiMonsterAt(x,z);
- if(monster){const [obj,state]=monster;state.hp=Math.max(0,state.hp-POI_PLAYER_ATTACK);poiDamageNumber(state.x+.5,state.z+.5,terrainY(state.x,state.z)+1.8,POI_PLAYER_ATTACK);dirty=true;if(!state.hp)toast('モンスターを倒した');return}
+ if(monster){const [obj,state]=monster;state.hp=Math.max(0,state.hp-POI_PLAYER_ATTACK);poiSound('hit');poiDamageNumber(state.x+.5,state.z+.5,terrainY(state.x,state.z)+1.8,POI_PLAYER_ATTACK);dirty=true;if(!state.hp)toast('モンスターを倒した');return}
  const target=world.find(o=>o.x===x&&o.z===z&&o.y===0&&!isFloor(o.type)&&!poiIsMonster(o.type));
  if(target){
   const item=palette.find(p=>p.id===target.type);
@@ -185,6 +217,7 @@ function poiWalkSet(active){
   $('topDownView').setAttribute('aria-pressed','false');
  }
  poiWalkActive=active;
+ if(active)poiAudioStart();else poiAudioStop();
  if(active)poiResetCombat();else{poiMonsterStates.clear();poiDamageLabels=[];}
  poiCombatHud();
  if(active){
