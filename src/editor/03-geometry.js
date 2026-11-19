@@ -1499,13 +1499,13 @@ case 'monsterSkeleton':{
  for(const s of [-1,1])cube(m,x+s*.085,y+1.17,z+.275,.018,.05,.018,dark);
  break;}
 case 'monsterSlime':{
- const base=[.22,.67,.48],light=[.41,.88,.60],shadow=[.13,.44,.36];
+ const base=[.26,.73,.88],light=[.57,.91,.98],shadow=[.13,.46,.63];
  // Rounded faceted blob with a domed crown and glossy highlight.
  naturalCrown(m,x,y+.33,z,.43,.36,.42,base,3);
  naturalCrown(m,x,y+.51,z,.32,.25,.33,light,8);
  for(const xx of [-.135,.135])cube(m,x+xx,y+.46,z+.363,.067,.105,.04,[.09,.21,.20]);
  cube(m,x,y+.33,z+.397,.15,.035,.026,shadow);
- cube(m,x-.14,y+.67,z+.23,.11,.045,.03,[.76,.99,.82]);
+ cube(m,x-.14,y+.67,z+.23,.11,.045,.03,[.86,.99,1.0]);
  break;}
 case 'monsterGoblin':{
  const green=[.37,.61,.32],dark=[.18,.34,.23],shirt=[.43,.30,.20],metal=[.63,.67,.59];
