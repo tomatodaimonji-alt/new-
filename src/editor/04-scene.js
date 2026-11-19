@@ -193,16 +193,16 @@ let poiPlayerHP=POI_PLAYER_MAX_HP,poiSpawnX=0,poiSpawnZ=0,poiMonsterStates=new M
 let poiDamageLabels=[];
 let poiMonsterMesh=null,poiMonsterMeshLast=-10000,poiMonsterMeshDirty=true;
 function poiIsMonster(type){return Object.prototype.hasOwnProperty.call(POI_MONSTER_STATS,type)}
-function poiResetCombat(){poiPlayerHP=POI_PLAYER_MAX_HP;poiMonsterStates=new Map();for(const o of world){if(poiIsMonster(o.type)){const stats=POI_MONSTER_STATS[o.type];poiMonsterStates.set(o,{x:o.x,z:o.z,fromX:o.x,fromZ:o.z,moveStarted:-10000,hp:stats.hp,nextAttack:0})}}poiDamageLabels=[];poiNextMobTick=0;poiAttackReady=0;poiMonsterMeshDirty=true;poiCombatHud();dirty=true}
+function poiResetCombat(){poiPlayerHP=POI_PLAYER_MAX_HP;poiMonsterStates=new Map();for(const o of world){if(poiIsMonster(o.type)){const stats=POI_MONSTER_STATS[o.type];poiMonsterStates.set(o,{x:o.x,z:o.z,fromX:o.x,fromZ:o.z,moveStarted:-10000,facing:0,hp:stats.hp,nextAttack:0})}}poiDamageLabels=[];poiNextMobTick=0;poiAttackReady=0;poiMonsterMeshDirty=true;poiCombatHud();dirty=true}
 function poiCombatHud(){const hud=$('poiCombatHud');if(!hud)return;hud.hidden=!poiWalkActive;hud.textContent='HP '+poiPlayerHP+'/'+POI_PLAYER_MAX_HP+'　攻撃力 '+POI_PLAYER_ATTACK}
 function poiDamageNumber(x,z,y,value,isPlayer=false){poiDamageLabels.push({x,z,y,value,time:performance.now(),isPlayer});if(poiDamageLabels.length>24)poiDamageLabels.shift()}
 function poiWorldToScreen(vp,x,y,z){const w=vp[3]*x+vp[7]*y+vp[11]*z+vp[15];if(w<=.05)return null;const a=(vp[0]*x+vp[4]*y+vp[8]*z+vp[12])/w,b=(vp[1]*x+vp[5]*y+vp[9]*z+vp[13])/w;if(Math.abs(a)>1.25||Math.abs(b)>1.25)return null;return {x:(a+1)*.5*canvas.clientWidth,y:(1-b)*.5*canvas.clientHeight}}
 function poiRenderDamageLabels(now,vp){const layer=$('poiDamageLayer');if(!layer)return;const active=poiWalkActive?poiDamageLabels.filter(d=>now-d.time<950):[];poiDamageLabels=active;if(!active.length){if(layer.childElementCount)layer.replaceChildren();return}layer.replaceChildren();for(const d of active){const elapsed=(now-d.time)/950,point=poiWorldToScreen(vp,d.x,d.y+elapsed*.75,d.z);if(!point)continue;const el=document.createElement('span');el.className='poiDamageNumber'+(d.isPlayer?' playerDamage':'');el.textContent='-'+d.value;el.style.left=point.x+'px';el.style.top=point.y+'px';el.style.opacity=String(Math.min(1,(1-elapsed)*2.5));layer.append(el)}}
 function poiMonsterAt(x,z){for(const [obj,state] of poiMonsterStates){if(state.hp>0&&state.x===x&&state.z===z)return [obj,state]}return null}
 function poiMonsterCanMove(x,z,except){if(!poiWalkCanStep(x,z)||poiMonsterAt(x,z))return false;if(poiWalkX===x&&poiWalkZ===z)return false;return true}
-function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMobTick=now+380;let changed=false;for(const [obj,state] of poiMonsterStates){if(state.hp<=0)continue;const dx=poiWalkX-state.x,dz=poiWalkZ-state.z,dist=Math.hypot(dx,dz);if(dist>6.5){if(pineGameActive&&Math.random()<.32){const [rx,rz]=[[0,1],[0,-1],[1,0],[-1,0]][Math.floor(Math.random()*4)],nx=state.x+rx,nz=state.z+rz;if(Math.max(Math.abs(nx-24),Math.abs(nz-24))>=10&&poiMonsterCanMove(nx,nz,state)){state.fromX=state.x;state.fromZ=state.z;state.x=nx;state.z=nz;state.moveStarted=now;changed=true}}continue;}if(dist<=1.45){if(now>=state.nextAttack){state.nextAttack=now+1150;const amount=POI_MONSTER_STATS[obj.type].attack;poiPlayerHP=Math.max(0,poiPlayerHP-amount);poiSound('hurt');poiDamageNumber(poiWalkViewX+.5,poiWalkViewZ+.5,terrainY(poiWalkX,poiWalkZ)+1.8,amount,true);poiCombatHud();if(!poiPlayerHP){poiPlayerHP=POI_PLAYER_MAX_HP;poiWalkReset(poiSpawnX,poiSpawnZ);poiDamageLabels=[];toast('倒されたため初期位置にリスポーン');poiCombatHud();break}}continue}
+function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMobTick=now+380;let changed=false;for(const [obj,state] of poiMonsterStates){if(state.hp<=0)continue;const dx=poiWalkX-state.x,dz=poiWalkZ-state.z,dist=Math.hypot(dx,dz);if(dist>6.5){if(pineGameActive&&Math.random()<.32){const [rx,rz]=[[0,1],[0,-1],[1,0],[-1,0]][Math.floor(Math.random()*4)],nx=state.x+rx,nz=state.z+rz;if(Math.max(Math.abs(nx-24),Math.abs(nz-24))>=10&&poiMonsterCanMove(nx,nz,state)){state.fromX=state.x;state.fromZ=state.z;state.x=nx;state.z=nz;state.moveStarted=now;state.facing=rx?rx>0?3:1:rz<0?2:0;changed=true}}continue;}if(dist<=1.45){if(now>=state.nextAttack){state.nextAttack=now+1150;const amount=POI_MONSTER_STATS[obj.type].attack;poiPlayerHP=Math.max(0,poiPlayerHP-amount);poiSound('hurt');poiDamageNumber(poiWalkViewX+.5,poiWalkViewZ+.5,terrainY(poiWalkX,poiWalkZ)+1.8,amount,true);poiCombatHud();if(!poiPlayerHP){poiPlayerHP=POI_PLAYER_MAX_HP;poiWalkReset(poiSpawnX,poiSpawnZ);poiDamageLabels=[];toast('倒されたため初期位置にリスポーン');poiCombatHud();break}}continue}
  const steps=[[Math.sign(dx),0],[0,Math.sign(dz)]].filter(([sx,sz])=>sx||sz).sort((a,b)=>Math.abs(a[0]*dx+a[1]*dz)>Math.abs(b[0]*dx+b[1]*dz)?-1:1);
- for(const [sx,sz] of steps){const nx=state.x+sx,nz=state.z+sz;if((!pineGameActive||Math.max(Math.abs(nx-24),Math.abs(nz-24))>=10)&&poiMonsterCanMove(nx,nz,state)){state.fromX=state.x;state.fromZ=state.z;state.x=nx;state.z=nz;state.moveStarted=now;changed=true;break}}
+ for(const [sx,sz] of steps){const nx=state.x+sx,nz=state.z+sz;if((!pineGameActive||Math.max(Math.abs(nx-24),Math.abs(nz-24))>=10)&&poiMonsterCanMove(nx,nz,state)){state.fromX=state.x;state.fromZ=state.z;state.x=nx;state.z=nz;state.moveStarted=now;state.facing=sx?sx>0?3:1:sz<0?2:0;changed=true;break}}
  }if(changed)poiMonsterMeshDirty=true;if(pineGameActive)pineGameSave()}
 
 let cameraTopDown=false,poiThirdPerson=false;
@@ -232,6 +232,34 @@ function toggleTopDown(){
 }
 
 function poiIsRoofPiece(type){return type.startsWith('roof')||type==='pineSuperRoof'}
+
+let poiGameRoofMeshes=[];
+function poiDestroyGameRoofs(){
+ for(const entry of poiGameRoofMeshes)if(entry.mesh)gl.deleteBuffer(entry.mesh.buf);
+ poiGameRoofMeshes=[];
+}
+function poiBuildGameRoofs(){
+ poiDestroyGameRoofs();
+ if(!pineGameActive)return;
+ const roofs=world.filter(o=>o.y===1&&AUTO_ROOFS.has(o.type));
+ const lookup=new Map(roofs.map(o=>[o.x+','+o.z+','+o.y,o]));
+ for(const [hx,hz] of [[14,14],[29,14],[14,29],[29,29]]){
+  const m=mesh();
+  for(const o of roofs){
+   if(o.x<hx||o.x>=hx+5||o.z<hz||o.z>=hz+5)continue;
+   const part=mesh();connectedRoofGeometry(part,o,lookup);shiftMesh(m,part,terrainY(o.x,o.z));
+  }
+  poiGameRoofMeshes.push({hx,hz,mesh:upload(m)});
+ }
+}
+function poiDrawGameRoofs(vp){
+ if(!pineGameActive)return;
+ for(const r of poiGameRoofMeshes){
+  if(poiWalkX>=r.hx&&poiWalkX<r.hx+5&&poiWalkZ>=r.hz&&poiWalkZ<r.hz+5)continue;
+  draw(r.mesh,vp);
+ }
+}
+
 function poiGameRoofHiddenAt(x,z){
  if(!pineGameActive)return false;
  for(const [hx,hz] of [[14,14],[29,14],[14,29],[29,29]]){
@@ -247,7 +275,7 @@ function poiWalkIndoor(){
 }
 function poiWalkRoof(){
  if(!poiWalkActive)return;
- if(pineGameActive){const inside=[[14,14],[29,14],[14,29],[29,29]].some(([x,z])=>poiWalkX>=x&&poiWalkX<x+5&&poiWalkZ>=z&&poiWalkZ<z+5);if(inside!==poiWalkOldRoof){poiWalkOldRoof=inside;dirty=true;cursorDirty=true}return;}
+ if(pineGameActive){const inside=[[14,14],[29,14],[14,29],[29,29]].some(([x,z])=>poiWalkX>=x&&poiWalkX<x+5&&poiWalkZ>=z&&poiWalkZ<z+5);if(inside!==poiWalkOldRoof){poiWalkOldRoof=inside;cursorDirty=true}return;}
  const next=poiWalkIndoor();
  if(hideUpper!==next){hideUpper=next;$('hideUpper').checked=next;dirty=true;cursorDirty=true}
  $('poiRoofToggle').textContent=next?'屋根を表示':'屋根を隠す';
@@ -290,7 +318,16 @@ function poiMonsterRender(now,vp){
    const z=(s.fromZ??s.z)+(s.z-(s.fromZ??s.z))*e;
    const moving=t<1&&((s.fromX??s.x)!==s.x||(s.fromZ??s.z)!==s.z);
    const bounce=moving?.10*Math.sin(t*Math.PI):.02*Math.sin(now*.003+obj.x);
-   deco(m,obj.type,x+.5,terrainY(s.x,s.z)+bounce,z+.5,obj.rot||0);
+   const part=mesh(),cx=x+.5,cz=z+.5;
+   deco(part,obj.type,cx,terrainY(s.x,s.z)+bounce,cz,0);
+   const facing=s.facing||0;
+   for(let i=0;i<part.p.length;i+=3){
+    const [px,pz]=rot2(part.p[i]-cx,part.p[i+2]-cz,facing);
+    const [nx,nz]=rot2(part.n[i],part.n[i+2],facing);
+    m.p.push(cx+px,part.p[i+1],cz+pz);
+    m.n.push(nx,part.n[i+1],nz);
+    m.c.push(part.c[i],part.c[i+1],part.c[i+2]);
+   }
   }
   if(poiMonsterMesh)gl.deleteBuffer(poiMonsterMesh.buf);
   poiMonsterMesh=upload(m);poiMonsterMeshLast=now;poiMonsterMeshDirty=false;
@@ -467,7 +504,7 @@ function wallFaceState(o,lookup){
 function makeScene(){
  const m=mesh(),visible=world.filter(o=>{
   if(poiWalkActive&&poiIsMonster(o.type))return false;
-  if(pineGameActive&&poiWalkActive&&o.y>0&&poiGameRoofHiddenAt(o.x,o.z)&&poiIsRoofPiece(o.type))return false;
+  if(pineGameActive&&poiWalkActive&&o.y>0&&poiIsRoofPiece(o.type))return false;
   return !hideUpper||o.y<=level;
  });
  const floors=new Map(world.filter(o=>o.y===0&&isFloor(o.type)).map(o=>[o.x+','+o.z,o.type]));
