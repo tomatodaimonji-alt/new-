@@ -1954,6 +1954,93 @@ function pineLoadCustomPOI(id){
   toast('「'+record.name+'」を読み込みました');
  }catch(e){toast('POIの読み込みに失敗: '+e.message)}
 }
+
+/* v39 - independent, autosaved adventure world */
+const PINE_GAME_SAVE_KEY='world-workshop-adventure-v1';
+let pineGameActive=false,pineEditorBackup=null,pineGameLastSave=0;
+const PINE_GAME_SPAWN={x:24,z:24};
+function pineGameGenerate(){
+ const worldItems=[],add=(x,z,type,y=0,rot=0)=>{if(x>=0&&z>=0&&x<48&&z<48)worldItems.push({x,z,y,type,rot})};
+ for(let t=0;t<48;t++)for(let q=23;q<=25;q++){add(q,t,t<13||t>35?'roadDirt':'roadCobble');add(t,q,t<13||t>35?'roadDirt':'roadCobble')}
+ for(let x=20;x<=28;x++)for(let z=20;z<=28;z++)add(x,z,'roadCobble');
+ for(const [bx,bz,wall,roof] of [[14,14,'plasterwall','roofThatch'],[29,14,'woodwall','roofPlank'],[14,29,'brickwall','roofTile'],[29,29,'stonewall','roofThatch']]){
+  for(let dx=0;dx<5;dx++)for(let dz=0;dz<5;dz++){
+   const x=bx+dx,z=bz+dz;
+   if(dx===0||dx===4||dz===0||dz===4){
+    const entrance=dx===2&&dz===(bz<24?4:0),window=!entrance&&(dx===2||dz===2);
+    add(x,z,entrance?wall+'Door':window?wall+'Window':wall);
+   }else add(x,z,'woodfloor');
+   add(x,z,roof,1);
+  }
+ }
+ for(const [x,z,type] of [[21,21,'wellStone'],[27,21,'marketStallCloth'],[21,27,'benchWood'],[27,27,'marketStallWood'],[22,22,'humanVillager'],[26,22,'humanVillager'],[22,26,'humanVillager'],[26,26,'humanVillager']])add(x,z,type);
+ for(let x=3;x<45;x+=4)for(let z=3;z<45;z+=4){
+  if(Math.abs(x-24)<12&&Math.abs(z-24)<12)continue;
+  if(x>=22&&x<=26||z>=22&&z<=26)continue;
+  const hash=(x*37+z*71)%11;
+  add(x,z,hash%3===0?'treeOak':hash%3===1?'treeBirch':'treePine');
+  if(hash%2===0)add(Math.min(x+1,46),z,'bush');
+ }
+ for(const [x,z] of [[10,10],[10,19],[11,32],[9,40],[17,7],[29,8],[38,12],[42,20],[39,32],[32,41],[20,40],[7,28],[35,6],[6,35],[41,42],[15,41]])add(x,z,'monsterSlime');
+ return {format:'forest-world-v1',version:1,size:48,width:48,height:48,terrainHeights:[],world:worldItems,models:[],prefabs:[]};
+}
+function pineGameRead(){
+ try{const v=JSON.parse(localStorage.getItem(PINE_GAME_SAVE_KEY)||'null');
+  return v&&v.version===1&&Number.isInteger(v.x)&&Number.isInteger(v.z)&&v.x>=0&&v.x<48&&v.z>=0&&v.z<48&&Array.isArray(v.monsters)?v:null;
+ }catch(e){return null}
+}
+function pineGameSave(force=false){
+ if(!pineGameActive)return;
+ const now=performance.now();if(!force&&now-pineGameLastSave<1800)return;
+ pineGameLastSave=now;
+ try{localStorage.setItem(PINE_GAME_SAVE_KEY,JSON.stringify({
+  version:1,x:poiWalkX,z:poiWalkZ,hp:poiPlayerHP,
+  monsters:[...poiMonsterStates.values()].map(s=>({x:s.x,z:s.z,hp:s.hp}))
+ }))}catch(e){if(force)toast('ゲームの自動保存に失敗しました')}
+}
+function pineGameEnter(){
+ if(pineGameActive)return;
+ if(poiWalkActive)poiWalkSet(false);
+ saveLocal();pineEditorBackup=JSON.stringify(data());
+ try{
+  const saved=pineGameRead();
+  loadData(pineGameGenerate());
+  pineGameActive=true;
+  $('app').classList.add('gameWorldMode');
+  $('palette').classList.remove('mobileOpen');$('inspector').classList.remove('mobileOpen');
+  poiWalkSet(true);
+  poiSpawnX=PINE_GAME_SPAWN.x;poiSpawnZ=PINE_GAME_SPAWN.z;
+  const pos=saved&&poiWalkCanStep(saved.x,saved.z)?saved:PINE_GAME_SPAWN;
+  poiWalkReset(pos.x,pos.z);
+  if(saved){
+   poiPlayerHP=Number.isFinite(saved.hp)?Math.max(1,Math.min(POI_PLAYER_MAX_HP,saved.hp)):POI_PLAYER_MAX_HP;
+   [...poiMonsterStates.values()].forEach((state,i)=>{
+    const m=saved.monsters[i];
+    if(m&&Number.isInteger(m.x)&&Number.isInteger(m.z)&&Number.isFinite(m.hp)&&validPos(m.x,m.z)){
+     state.x=m.x;state.z=m.z;state.hp=Math.max(0,Math.min(POI_MONSTER_STATS.monsterSlime.hp,m.hp));
+    }
+   });
+  }
+  poiThirdPerson=true;$('poiThirdView').textContent='俯瞰視点';$('poiThirdView').setAttribute('aria-pressed','true');
+  poiCombatHud();dirty=true;cursorDirty=true;pineGameSave(true);
+  toast(saved?'冒険を再開しました':'村に到着しました。草原でスライムと戦えます');
+ }catch(e){
+  console.error('Could not enter game',e);
+  pineGameActive=false;$('app').classList.remove('gameWorldMode');
+  if(poiWalkActive)poiWalkSet(false);
+  if(pineEditorBackup){try{loadData(JSON.parse(pineEditorBackup))}catch(_e){}}
+  pineEditorBackup=null;showEntireMap();toast('ゲーム世界を開けませんでした');
+ }
+}
+function pineGameExit(){
+ if(!pineGameActive)return;
+ pineGameSave(true);poiWalkSet(false);
+ pineGameActive=false;$('app').classList.remove('gameWorldMode');
+ if(pineEditorBackup)loadData(JSON.parse(pineEditorBackup));
+ pineEditorBackup=null;showEntireMap();updateSelected();dirty=true;cursorDirty=true;
+ toast('エディターに戻りました');
+}
+
 function makeDemo(){pineSupermarketPOI('wholesale','normal',false)}
 function setMapSize(skipRemovalConfirm=false){
  const width=Number($('mapWidth').value),height=Number($('mapHeight').value);
@@ -2143,6 +2230,10 @@ $('clear').addEventListener('click',()=>{if(!confirm('配置したすべての�
 $('topDownView').addEventListener('click',toggleTopDown);
 $('registerPOI').addEventListener('click',pineRegisterCurrentPOI);
 $('poiWalkToggle').addEventListener('click',()=>poiWalkSet(!poiWalkActive));
+$('enterGameWorld').addEventListener('click',pineGameEnter);
+$('returnEditorWorld').addEventListener('click',pineGameExit);
+window.addEventListener('pagehide',()=>pineGameSave(true));
+document.addEventListener('visibilitychange',()=>{if(document.hidden)pineGameSave(true)});
 $('poiThirdView').addEventListener('click',togglePoiThirdPerson);
 $('poiAudioToggle').addEventListener('click',poiToggleAudio);
 $('poiWalkAction').addEventListener('click',poiWalkAction);
