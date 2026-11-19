@@ -2009,6 +2009,7 @@ function pineGameEnter(){
   $('app').classList.add('gameWorldMode');
   $('palette').classList.remove('mobileOpen');$('inspector').classList.remove('mobileOpen');
   poiWalkSet(true);
+  poiBuildGameRoofs();
   poiSpawnX=PINE_GAME_SPAWN.x;poiSpawnZ=PINE_GAME_SPAWN.z;
   const pos=saved&&poiWalkCanStep(saved.x,saved.z)?saved:PINE_GAME_SPAWN;
   poiWalkReset(pos.x,pos.z);
@@ -2017,7 +2018,7 @@ function pineGameEnter(){
    [...poiMonsterStates.values()].forEach((state,i)=>{
     const m=saved.monsters[i];
     if(m&&Number.isInteger(m.x)&&Number.isInteger(m.z)&&Number.isFinite(m.hp)&&validPos(m.x,m.z)){
-     state.x=m.x;state.z=m.z;state.fromX=m.x;state.fromZ=m.z;state.moveStarted=-10000;state.hp=Math.max(0,Math.min(POI_MONSTER_STATS.monsterSlime.hp,m.hp));
+     state.x=m.x;state.z=m.z;state.fromX=m.x;state.fromZ=m.z;state.moveStarted=-10000;state.facing=0;state.hp=Math.max(0,Math.min(POI_MONSTER_STATS.monsterSlime.hp,m.hp));
     }
    });
   }
@@ -2034,7 +2035,7 @@ function pineGameEnter(){
 }
 function pineGameExit(){
  if(!pineGameActive)return;
- pineGameSave(true);poiWalkSet(false);
+ pineGameSave(true);poiDestroyGameRoofs();poiWalkSet(false);
  pineGameActive=false;$('app').classList.remove('gameWorldMode');
  if(pineEditorBackup)loadData(JSON.parse(pineEditorBackup));
  pineEditorBackup=null;showEntireMap();updateSelected();dirty=true;cursorDirty=true;
