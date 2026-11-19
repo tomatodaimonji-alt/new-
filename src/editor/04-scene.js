@@ -290,13 +290,13 @@ function poiWalkAvatar(now=performance.now()){
  const z=poiWalkViewZ+.5;
  const y=terrainY(poiWalkX,poiWalkZ)+.03;
  const walking=t<1&&(poiWalkFromX!==poiWalkX||poiWalkFromZ!==poiWalkZ);
- const stride=walking?Math.sin(t*Math.PI)*.055:0;
+ const stride=walking?Math.sin(t*Math.PI)*.12:0;
  const actionPhase=Math.max(0,1-(now-poiWalkActionStarted)/260);
  const r=[2,3,0,1][poiWalkFacing];
  for(let i=0;i<body.p.length;i+=3){
   const lx=body.p[i],ly=body.p[i+1],lz=body.p[i+2];
   const swing=ly<.54&&Math.abs(lx)<.22?(lx<0?-stride:stride):
-    ly>.45&&ly<.85&&Math.abs(lx)>.23?(lx<0?stride:-stride)*.20:0;
+    ly>.45&&ly<.85&&Math.abs(lx)>.23?(lx<0?stride:-stride)*.36:0;
   const punch=actionPhase>0&&ly>.45&&ly<.85&&lx>.23?actionPhase*.40:0;
   const [rx,rz]=rot2(lx,lz+swing+punch,r);
   m.p.push(x+rx,y+ly+0,z+rz);
@@ -379,7 +379,7 @@ function poiWalkStep(dx,dz){
  if(!poiWalkCanStep(poiWalkX+dx,poiWalkZ+dz)){poiWalkAvatar();return}
  poiWalkFromX=poiWalkX;poiWalkFromZ=poiWalkZ;poiWalkX+=dx;poiWalkZ+=dz;
  poiWalkStarted=now;poiWalkNextReady=now+POI_WALK_MS;
- poiSound('step');poiWalkRoof();poiWalkAvatar(poiWalkStarted);poiWalkStatus();if(pineGameActive)pineGameSave(true);
+ poiSound('step');poiWalkRoof();poiWalkAvatar(poiWalkStarted);poiWalkStatus();if(pineGameActive)pineGameSave();
 }
 function poiWalkAction(){
  if(!poiWalkActive)return;
