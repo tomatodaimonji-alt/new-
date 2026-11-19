@@ -525,6 +525,7 @@ const palette=[
 {id:'treeOak',name:'大きな広葉樹',icon:'🌳',cat:'decor'},
 {id:'treeDead',name:'枯れ木',icon:'♧',cat:'decor'},
 {id:'treeStump',name:'切り株',icon:'◉',cat:'decor'},
+{id:'guildSign',name:'冒険者ギルド・紋章看板',icon:'⚔',cat:'decor'},
 {id:'innSign',name:'宿屋の看板（INN）',icon:'▣',cat:'decor'},
 {id:'shopHerbSign',name:'道具屋の看板・薬草',icon:'🌿',cat:'decor'},
 {id:'shopChestSign',name:'道具屋の看板・宝箱',icon:'▣',cat:'decor'},
@@ -1774,7 +1775,7 @@ case 'treeStump':{
  cube(m,x,y+.461,z,.31,.009,.30,[.51,.35,.23]);
  cube(m,x,y+.470,z,.10,.011,.11,[.76,.60,.40]);
  break;}
-case 'innSign':case 'shopHerbSign':case 'shopChestSign':case 'shopBagSign':{
+case 'guildSign':case 'innSign':case 'shopHerbSign':case 'shopChestSign':case 'shopBagSign':{
  // Shared hanging sign with flat, legible pixel lettering / pictograms.
  const dark=[.25,.15,.095],wood=[.52,.32,.17],rim=[.73,.51,.29],metal=[.53,.53,.48];
  cube(m,x-.405,y,z,.12,1.96,.13,dark);
@@ -2840,7 +2841,7 @@ if(kind==='woodfloor'||kind==='woodfloorLight'||kind==='woodfloorDark'){
 }
 }
 
-const SIGN_TYPES=['innSign','shopHerbSign','shopChestSign','shopBagSign','pineSuperLogo'];
+const SIGN_TYPES=['guildSign','innSign','shopHerbSign','shopChestSign','shopBagSign','pineSuperLogo'];
 const signTextures=new Map();
 function makeSignArtwork(id){
  const c=document.createElement('canvas');c.width=id==='pineSuperLogo'?768:256;c.height=160;
@@ -2855,6 +2856,12 @@ function makeSignArtwork(id){
   for(let i=0;i<3;i++){const y=50+i*22;a.beginPath();a.moveTo(84,y+21);a.lineTo(61,y-1);a.moveTo(84,y+21);a.lineTo(108,y-1);a.stroke()}
   a.textAlign='left';a.font='900 88px system-ui,sans-serif';a.fillStyle='#fff6d9';a.fillText('PINE MART',157,87);
   a.font='bold 24px system-ui,sans-serif';a.fillStyle='#d9e0be';a.fillText('SUPERMARKET',169,137);
+ }else if(id==='guildSign'){
+  a.fillStyle='#d7bc79';a.strokeStyle='#4b3020';a.lineWidth=7;
+  a.beginPath();a.moveTo(128,15);a.lineTo(193,35);a.lineTo(184,103);a.lineTo(128,146);a.lineTo(72,103);a.lineTo(63,35);a.closePath();a.fill();a.stroke();
+  a.lineCap='round';a.lineWidth=12;a.strokeStyle='#563b2a';
+  a.beginPath();a.moveTo(94,45);a.lineTo(162,111);a.moveTo(162,45);a.lineTo(94,111);a.stroke();
+  a.lineWidth=6;a.strokeStyle='#f5ebcf';a.beginPath();a.moveTo(94,45);a.lineTo(162,111);a.moveTo(162,45);a.lineTo(94,111);a.stroke();
  }else if(id==='innSign'){
   // Real 2D text drawn once by Canvas2D; no triangulated/voxel letters.
   a.font='900 93px Georgia, serif';a.lineJoin='round';a.lineWidth=5;
@@ -3872,7 +3879,7 @@ function poiGameRoofHiddenAt(x,z){
 function poiWalkIndoor(){
  // Indoor bounds for both supermarket and user-editable pitched-roof buildings.
  // Exterior wall cells count as the transition; the first step inside clears the roof.
- const roofs=world.filter(o=>o.y>0&&(AUTO_ROOFS.has(o.type)||o.type==='pineSuperRoof'));
+ const roofs=world.filter(o=>o.y>0&&(AUTO_ROOFS.has(o.type)||RESIDENTIAL_ROOFS.has(o.type)||o.type==='pineSuperRoof'));
  if(!roofs.length)return false;
  const cells=new Set(roofs.map(o=>o.x+','+o.z));
  if(!cells.has(poiWalkX+','+poiWalkZ))return false;
@@ -3891,11 +3898,14 @@ function poiReleaseEditorGhostRoof(){
 function poiBuildEditorGhostRoof(){
  poiReleaseEditorGhostRoof();
  if(!poiWalkActive||pineGameActive)return;
- const roofs=world.filter(o=>o.y>0&&AUTO_ROOFS.has(o.type));
+ const roofs=world.filter(o=>o.y>0&&(AUTO_ROOFS.has(o.type)||RESIDENTIAL_ROOFS.has(o.type)));
  if(!roofs.length)return;
- const lookup=new Map(roofs.map(o=>[o.x+','+o.z+','+o.y,o]));
- const m=mesh();
- for(const o of roofs){const part=mesh();connectedRoofGeometry(part,o,lookup);shiftMesh(m,part,terrainY(o.x,o.z))}
+ const m=mesh(),automatic=roofs.filter(o=>AUTO_ROOFS.has(o.type));
+ const lookup=new Map(automatic.map(o=>[o.x+','+o.z+','+o.y,o]));
+ for(const o of automatic){const part=mesh();connectedRoofGeometry(part,o,lookup);shiftMesh(m,part,terrainY(o.x,o.z))}
+ const residential=roofs.filter(o=>RESIDENTIAL_ROOFS.has(o.type));
+ const roofLookup=new Map(residential.map(o=>[o.x+','+o.z+','+o.y,o]));
+ for(const group of residentialRoofComponents(residential))residentialRoofGeometry(m,group,roofLookup);
  poiEditorGhostRoof=upload(m);
 }
 function poiDrawEditorGhostRoof(vp){
@@ -4522,7 +4532,7 @@ const OBJECT_GROUPS=[
  {id:'kitchens',label:'キッチン',icon:'kitchenStove',items:['kitchenStove','kitchenCounter','kitchenSink']},
  {id:'bathrooms',label:'風呂',icon:'bathWood',items:['bathWood','bathStone','bathLuxury']},
  {id:'storage',label:'収納・設備',icon:'rewardChest',items:['chest','rewardChest']},
- {id:'decorations',label:'看板・装飾',icon:'innSign',items:['innSign','shopHerbSign','shopChestSign','shopBagSign']}
+ {id:'decorations',label:'看板・装飾',icon:'innSign',items:['guildSign','innSign','shopHerbSign','shopChestSign','shopBagSign']}
 ];
 let openedObjectGroup=null,openedNatureSubgroup=null;
 function appendObjectItems(parent,ids){
@@ -6355,7 +6365,7 @@ function pineStarterGuildPOI(){
    add(x,z,window?'windowWood':'stonewall',1,z===north?2:x===west?3:x===east?1:0);
   }
   // Roof joins automatically create a pitched ridge instead of a flat warehouse lid.
-  add(x,z,'roofTile',2);
+  add(x,z,'roofHip',2);
  }
  // Ground-floor reception sits ahead of the door, with accessible side aisles.
  for(const [x,z,t,r,y] of [
@@ -6372,10 +6382,10 @@ function pineStarterGuildPOI(){
   [9,24,'flowerField',0,0],[20,24,'flowerField',0,0],
   [4,9,'treeOak',0,0],[26,10,'treeBirch',0,0],
   [4,21,'bushFlower',0,0],[26,22,'bushFlower',0,0],
-  [17,21,'innSign',2,0]
+  [17,21,'guildSign',2,0]
  ])add(x,z,t,y,r);
  // A visible crest above the entry, and framing lanterns at the porch.
- add(doorX,south,'innSign',1,2);
+ add(doorX,south,'guildSign',1,2);
  add(11,south+1,'lantern');add(18,south+1,'lantern');
  for(const [id,val] of [['mapWidth',w],['mapHeight',h],['rangeX1',west],['rangeX2',east],['rangeZ1',north],['rangeZ2',south]]){
   const el=$(id);if(el)el.value=val;
