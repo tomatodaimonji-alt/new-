@@ -531,6 +531,7 @@ const palette=[
 {id:'treeStump',name:'切り株',icon:'◉',cat:'decor'},
 {id:'guildSign',name:'冒険者ギルド・紋章看板',icon:'⚔',cat:'decor'},
 {id:'guildFacadeSign',name:'冒険者ギルド・正面大型看板',icon:'▣',cat:'decor'},
+{id:'guildQuestBoard',name:'冒険者ギルド・依頼掲示板',icon:'▤',cat:'decor'},
 {id:'innSign',name:'宿屋の看板（INN）',icon:'▣',cat:'decor'},
 {id:'shopHerbSign',name:'道具屋の看板・薬草',icon:'🌿',cat:'decor'},
 {id:'shopChestSign',name:'道具屋の看板・宝箱',icon:'▣',cat:'decor'},
@@ -944,6 +945,14 @@ function expansionGeometry(m,id,x,y,z){
  case 'benchWood':
   for(let dx of [-.37,.37])B(dx,0,0,.12,.49,.29,dark);
   B(0,.46,0,.96,.13,.51,wood);B(0,.60,-.22,.97,.45,.12,dark);break;
+ case 'guildQuestBoard':{
+  B(0,.05,0,.83,.10,.24,dark);
+  for(const dx of [-.36,.36])B(dx,.12,0,.085,1.15,.10,wood);
+  B(0,.94,0,.96,.12,.17,dark);B(0,.66,0,.82,.67,.11,wood);
+  for(const [dx,dy] of [[-.23,.57],[.16,.70],[.12,.44]]){
+   B(dx,dy,.065,.25,.23,.012,[.85,.75,.53]);B(dx,dy+.09,.077,.035,.035,.015,[.53,.22,.15]);
+   for(let k=0;k<3;k++)B(dx,dy+.035-k*.052,.078,.16,.008,.003,[.38,.30,.22]);
+  }break;}
  case 'bookshelf':
   B(0,0,0,.93,1.23,.36,dark);
   for(let yy of [.08,.47,.86]){B(0,yy,.04,.91,.075,.43,wood);
@@ -4097,13 +4106,13 @@ function poiWalkStep(dx,dz){
  if(!poiWalkCanStep(poiWalkX+dx,poiWalkZ+dz)){poiWalkAvatar();return}
  const wasDoor=world.some(o=>o.y===0&&o.x===poiWalkX&&o.z===poiWalkZ&&poiWalkPassableDoor(o.type));
  poiWalkFromX=poiWalkX;poiWalkFromZ=poiWalkZ;poiWalkX+=dx;poiWalkZ+=dz;
-  const stair=poiWalkLevel===0?'guildStairUp':'guildStairDown';
-  if(world.some(o=>o.x===poiWalkX&&o.z===poiWalkZ&&o.y===poiWalkLevel&&o.type===stair)){
-   const next=poiWalkLevel===0?1:0;
-   if(world.some(o=>o.x===poiWalkX&&o.z===poiWalkZ&&o.y===next&&o.type===(next===1?'guildStairDown':'guildStairUp'))){
-    poiWalkLevel=next;level=next;$('level').value=String(level);dirty=true;cursorDirty=true;
-    toast(next?'階段を上って2階へ':'階段を下りて1階へ');
-   }
+
+  const stairCell=world.filter(o=>o.x===poiWalkX&&o.z===poiWalkZ&&o.y===poiWalkLevel);
+  const direction=stairCell.some(o=>o.type==='guildStairUp')?1:stairCell.some(o=>o.type==='guildStairDown')?-1:0;
+  const next=poiWalkLevel+direction;
+  if(direction&&next>=0&&world.some(o=>o.x===poiWalkX&&o.z===poiWalkZ&&o.y===next&&o.type===(direction>0?'guildStairDown':'guildStairUp'))){
+   poiWalkLevel=next;level=next;$('level').value=String(level);dirty=true;cursorDirty=true;
+   toast(direction>0?'階段を上って'+(next+1)+'階へ':'階段を下りて'+(next+1)+'階へ');
   }
  const isDoor=world.some(o=>o.y===0&&o.x===poiWalkX&&o.z===poiWalkZ&&poiWalkPassableDoor(o.type));
  poiWalkStarted=now;poiWalkNextReady=now+POI_WALK_MS;
@@ -4116,6 +4125,22 @@ function poiWalkAction(){
  const x=poiWalkX+delta[0],z=poiWalkZ+delta[1];
  const monster=poiMonsterAt(x,z);
  if(monster){const [obj,state]=monster;state.hp=Math.max(0,state.hp-POI_PLAYER_ATTACK);poiSound('hit');poiDamageNumber(state.x+.5,state.z+.5,terrainY(state.x,state.z)+1.8,POI_PLAYER_ATTACK);if(!state.hp)toast('モンスターを倒した');poiMonsterMeshDirty=true;if(pineGameActive)pineGameSave(true);return}
+ const furniture=world.find(o=>o.x===x&&o.z===z&&o.y===poiWalkLevel&&
+  ['guildQuestBoard','bookshelf','rewardChest','counterWood','table','roundTableWood','roundTableStone','chairWood','chairClassic','benchWood','lantern'].includes(o.type));
+ if(furniture){
+  const messages={guildQuestBoard:'依頼掲示板：討伐・護衛・探索の依頼書を確認した。',
+   bookshelf:'資料棚：周辺地域の地図と冒険記録を読んだ。',
+   rewardChest:'報酬保管箱：受付で管理されている。',
+   counterWood:'受付カウンター：依頼の受付と報告を行う場所だ。',
+   table:'談話テーブル：冒険者たちの情報交換の場だ。',
+   roundTableWood:'談話テーブル：冒険者たちの情報交換の場だ。',
+   roundTableStone:'談話テーブル：冒険者たちの情報交換の場だ。',
+   chairWood:'椅子に腰掛け、周囲の話を聞いた。',
+   chairClassic:'椅子に腰掛け、周囲の話を聞いた。',
+   benchWood:'ベンチに座り、依頼について話し合った。',
+   lantern:'ランタンの灯りを確認した。'};
+  toast(messages[furniture.type]);return;
+ }
  // Interactions without an assigned action are intentionally silent.
 }
 function poiWalkReset(x,z){
@@ -6488,19 +6513,33 @@ function pineStarterGuildPOI(){
    add(x,z,window?'stonewallWindow':'stonewall',1,z===north?2:x===west?3:x===east?1:0);
   }
   // Roof joins automatically create a pitched ridge instead of a flat warehouse lid.
-  add(x,z,'roofHip',2);
+ }
+ // Third floor: guild archive and meeting gallery.
+ for(let z=north;z<=south;z++)for(let x=west;x<=east;x++){
+  const opening=x>=13&&x<=16&&z>=12&&z<=15;
+  if(!opening&&!(x===19&&z===17))add(x,z,'woodfloor',2);
+  if(x===west||x===east||z===north||z===south){
+   const window=(z===south&&(x===10||x===14||x===19))||(z===north&&(x===10||x===19))||((x===west||x===east)&&(z===10||z===16));
+   add(x,z,window?'stonewallWindow':'stonewall',2,z===north?2:x===west?3:x===east?1:0);
+  }
+  add(x,z,'roofHip',3);
  }
  // Ground-floor reception sits ahead of the door, with accessible side aisles.
  for(const [x,z,t,r,y] of [
   [10,8,'bookshelf',0,0],[11,8,'bookshelf',0,0],[19,8,'bookshelf',0,0],
   [12,10,'counterWood',0,0],[13,10,'counterWood',0,0],[14,10,'counterWood',0,0],[15,10,'counterWood',0,0],
-  [9,13,'table',0,0],[9,14,'chairWood',2,0],[10,13,'chairWood',1,0],
-  [20,13,'table',0,0],[20,14,'chairWood',2,0],[19,13,'chairWood',3,0],
+  [9,13,'roundTableWood',0,0],[9,14,'chairWood',2,0],[10,13,'chairWood',1,0],
+  [20,13,'roundTableWood',0,0],[20,14,'chairWood',2,0],[19,13,'chairWood',3,0],
+  [11,10,'guildQuestBoard',0,0],[18,10,'guildQuestBoard',0,0],
   [9,18,'rewardChest',1,0],[20,18,'barrel',0,0],
   [9,10,'lantern',0,0],[20,10,'lantern',0,0],
   [8,17,'guildStairUp',0,0],[8,17,'guildStairDown',0,1],
   [9,8,'bookshelf',0,1],[20,8,'bookshelf',0,1],
-  [10,18,'table',0,1],[19,18,'chairWood',2,1],
+  [10,18,'roundTableWood',0,1],[11,18,'chairWood',2,1],
+  [19,17,'guildStairUp',0,1],[19,17,'guildStairDown',0,2],
+  [9,8,'bookshelf',0,2],[10,8,'bookshelf',0,2],[20,8,'bookshelf',0,2],
+  [10,18,'roundTableStone',0,2],[11,18,'chairWood',2,2],
+  [18,10,'guildQuestBoard',0,2],[19,13,'table',0,2],
   [9,22,'benchWood',0,0],[20,22,'benchWood',0,0],
   [9,24,'flowerField',0,0],[20,24,'flowerField',0,0],
   [4,9,'treeOak',0,0],[26,10,'treeBirch',0,0],
@@ -6520,7 +6559,7 @@ function pineStarterGuildPOI(){
  selected='stonewall';mode='move';rotation=0;
  commit();refreshPalette();updateSelected();showEntireMap();
  $('palette').classList.remove('mobileOpen');
- toast('冒険者ギルドを配置しました（2階建て）。編集後にPOIとして登録できます');
+ toast('冒険者ギルドを配置しました（3階建て・談話スペース）。編集後にPOIとして登録できます');
 }
 function pineSupermarketPOI(style='wholesale',condition='normal',force=false){
  style='wholesale';condition='normal';
