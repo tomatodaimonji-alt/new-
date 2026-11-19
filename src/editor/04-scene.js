@@ -7,7 +7,7 @@ const POI_WALK_MS=160;
 // v40: original offline soundscape and layered game sound design.
 const PINE_AUDIO_SETTINGS_KEY='world-workshop-audio-v2';
 let poiAudioContext=null,poiAudioMaster=null,poiAudioMusic=null,poiAudioAmbience=null,poiAudioEffects=null;
-let poiAudioAmbient=[],poiAudioInterval=null,poiAudioNoise=null,poiAudioEnabled=true;
+let poiAudioAmbient=[],poiAudioInterval=null,poiAudioNoise=null,poiAudioEnabled=true,poiAudioNotes=new Set();
 let poiAudioLevels={master:85,bgm:68,se:90};
 try{
  const saved=JSON.parse(localStorage.getItem(PINE_AUDIO_SETTINGS_KEY)||'null');
@@ -69,7 +69,8 @@ function poiAudioTone(freq,when,duration,volume,type='sine',dest=poiAudioMusic,a
  gain.gain.linearRampToValueAtTime(volume,when+Math.min(attack,duration*.4));
  gain.gain.setTargetAtTime(.0001,Math.max(when+attack,end-.4),.13);
  o.connect(gain).connect(dest);o.start(when);o.stop(end+.08);
- o.onended=()=>{o.disconnect();gain.disconnect()};
+ poiAudioNotes.add(o);
+ o.onended=()=>{poiAudioNotes.delete(o);o.disconnect();gain.disconnect()};
  return o;
 }
 function poiAudioMusicPhrase(){
@@ -113,6 +114,8 @@ function poiAudioStart(){
 }
 function poiAudioStop(){
  if(poiAudioInterval!==null){clearInterval(poiAudioInterval);poiAudioInterval=null}
+ for(const note of poiAudioNotes){try{note.stop()}catch(e){}}
+ poiAudioNotes.clear();
  for(const node of poiAudioAmbient){try{node.stop()}catch(e){}try{node.disconnect()}catch(e){}}
  poiAudioAmbient=[];
 }
