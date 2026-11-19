@@ -2144,6 +2144,7 @@ $('topDownView').addEventListener('click',toggleTopDown);
 $('registerPOI').addEventListener('click',pineRegisterCurrentPOI);
 $('poiWalkToggle').addEventListener('click',()=>poiWalkSet(!poiWalkActive));
 $('poiThirdView').addEventListener('click',togglePoiThirdPerson);
+$('poiWalkAction').addEventListener('click',poiWalkAction);
 $('poiRoofToggle').addEventListener('click',()=>{
  if(poiWalkActive){toast('歩行中の屋根は入退店に応じて自動切替します');return}
  hideUpper=!hideUpper;$('hideUpper').checked=hideUpper;dirty=true;cursorDirty=true;
@@ -2159,7 +2160,9 @@ for(const button of document.querySelectorAll('[data-poi-dir]')){
 }
 document.addEventListener('keydown',e=>{
  if(!poiWalkActive||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
- const k=e.key.toLowerCase(),d={arrowup:[0,-1],w:[0,-1],arrowdown:[0,1],s:[0,1],arrowleft:[-1,0],a:[-1,0],arrowright:[1,0],d:[1,0]}[k];
+ const k=e.key.toLowerCase();
+ if(k===' '||k==='enter'){e.preventDefault();poiWalkAction();return}
+ const d={arrowup:[0,-1],w:[0,-1],arrowdown:[0,1],s:[0,1],arrowleft:[-1,0],a:[-1,0],arrowright:[1,0],d:[1,0]}[k];
  if(d){e.preventDefault();const cameraKey={arrowup:'n',w:'n',arrowdown:'s',s:'s',arrowleft:'w',a:'w',arrowright:'e',d:'e'}[k];poiWalkStep(...(poiThirdPerson?poiCameraRelativeStep(cameraKey):d))}
 });
 $('poiNameCancel').addEventListener('click',pineClosePOINameModal);
