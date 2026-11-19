@@ -73,21 +73,42 @@ function poiAudioTone(freq,when,duration,volume,type='sine',dest=poiAudioMusic,a
  o.onended=()=>{poiAudioNotes.delete(o);o.disconnect();gain.disconnect()};
  return o;
 }
+function poiPianoKey(f,at,velocity=1){
+ const ctx=poiAudioContext;
+ // Soft felt-piano: quickly struck harmonics, warm decay, slight low-key body.
+ const bus=ctx.createGain(),filter=ctx.createBiquadFilter();
+ filter.type='lowpass';filter.frequency.value=1800;filter.Q.value=.5;
+ bus.connect(filter).connect(poiAudioMusic);
+ const partials=[[1,.19],[2,.072],[3,.025],[4,.008]];
+ for(const [multiple,amplitude] of partials){
+  const o=ctx.createOscillator(),g=ctx.createGain();
+  o.type='sine';o.frequency.value=f*multiple;
+  const start=at+.003*(multiple-1);
+  g.gain.setValueAtTime(.0001,start);
+  g.gain.linearRampToValueAtTime(amplitude*velocity,start+.009);
+  g.gain.exponentialRampToValueAtTime(.0001,start+(multiple===1?3.7:1.45));
+  o.connect(g).connect(bus);o.start(start);o.stop(start+(multiple===1?3.8:1.55));
+  poiAudioNotes.add(o);
+  o.onended=()=>{poiAudioNotes.delete(o);o.disconnect();g.disconnect()};
+ }
+}
+let poiMusicBars=0;
 function poiAudioMusicPhrase(){
  if(!poiWalkActive||!poiAudioEnabled||!poiAudioContext)return;
- const ctx=poiAudioContext,t=ctx.currentTime+.08;
- // Original D minor / F major / C sus2 / G minor ambient progression.
- const chords=[[146.83,174.61,220,293.66],[174.61,220,261.63,349.23],[130.81,196,261.63,293.66],[146.83,196,233.08,293.66]];
- const phrase=chords[Math.floor(t/8)%chords.length];
- for(let i=0;i<phrase.length;i++){
-  const f=phrase[i],start=t+i*.10;
-  poiAudioTone(f,start,7.1,.095,'sine',poiAudioMusic,1.7);
-  if(i<3)poiAudioTone(f/2,start,6.8,.037,'triangle',poiAudioMusic,1.4);
- }
- // Sparse, mellow glass-like tones, not repetitive sharp beeps.
- const lead=phrase[2]*2;
- poiAudioTone(lead,t+2.7,2.1,.07,'sine',poiAudioMusic,.045);
- poiAudioTone(lead*.75,t+4.65,2.15,.055,'sine',poiAudioMusic,.08);
+ const t=poiAudioContext.currentTime+.09;
+ // Original slow post-apocalyptic felt-piano sketch. Long silences are intentional.
+ // D minor / B flat / F maj7 / A minor; wind remains audible beneath it.
+ const progression=[
+  [146.83,174.61,220.00,293.66],
+  [116.54,174.61,233.08,293.66],
+  [130.81,174.61,220.00,329.63],
+  [110.00,164.81,220.00,261.63]
+ ];
+ const chord=progression[poiMusicBars++%progression.length];
+ poiPianoKey(chord[0]/2,t,.85);
+ poiPianoKey(chord[2],t+.6,.58);
+ poiPianoKey(chord[1],t+2.8,.48);
+ poiPianoKey(chord[3],t+5.4,.42);
 }
 function poiAudioStart(){
  if(!poiAudioEnabled||!poiWalkActive)return;
