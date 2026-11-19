@@ -4251,38 +4251,87 @@ function wallFaceState(o,lookup){
 }
 // A balcony guard for the guild's second-floor atrium. Built from actual
 // saved floor geometry, so existing registered POIs receive it without reset.
-function guildAtriumRailing(m,visible){
- const byLevel=new Map([1,2].map(y=>[y,new Set(visible.filter(o=>o.y===y&&isFloor(o.type)).map(o=>o.x+','+o.z))]));
- const counters=world.filter(o=>o.y===0&&o.type==='counterWood');
- if(counters.length<3)return;
+// Guild details are inferred from the reception counter and the existing
+// floor tiles. This also decorates older saved guild layouts without resetting them.
+function guildBounds(objects=world){
+ const counters=objects.filter(o=>o.y===0&&o.type==='counterWood');
+ if(counters.length<3)return null;
  const cx=counters.reduce((n,o)=>n+o.x,0)/counters.length;
  const cz=counters.reduce((n,o)=>n+o.z,0)/counters.length;
- // Recognize the current gallery rather than adding railings to arbitrary towns.
- if(!byLevel.get(1).size)return;
- const timber=[.40,.255,.15],cap=[.67,.465,.27],iron=[.25,.24,.23];
- const segments=[];
- for(const o of visible){
-  if(!byLevel.has(o.y)||!isFloor(o.type))continue;
-  const has=(x,z)=>byLevel.get(o.y).has(x+','+z);
-  const {x,z}=o;
-  if(Math.abs(x-cx)>7||Math.abs(z-cz)>8)continue;
-  for(const [dx,dz] of [[0,1],[0,-1],[1,0],[-1,0]]){
-   if(has(x+dx,z+dz))continue;
-   const gx=x+dx,gz=z+dz;
-   if(Math.abs(gx-cx)>3.5||gz<cz||gz>cz+7)continue;
-   segments.push([x,z,dx,dz]);
+ const walls=objects.filter(o=>o.y===0&&o.type.startsWith('stonewall')&&Math.abs(o.x-cx)<14&&Math.abs(o.z-cz)<14);
+ if(walls.length<25)return null;
+ const xs=walls.map(o=>o.x),zs=walls.map(o=>o.z);
+ const west=Math.min(...xs),east=Math.max(...xs),north=Math.min(...zs),south=Math.max(...zs);
+ if(east-west<10||south-north<9||cx<=west||cx>=east||cz<=north||cz>=south)return null;
+ return {west,east,north,south,cx,cz};
+}
+function guildAtriumRailing(m,visible){
+ const g=guildBounds();if(!g)return;
+ const wood=[.38,.235,.13],cap=[.67,.44,.25],inlay=[.22,.17,.14];
+ for(const floor of [1,2]){
+  const tiles=new Set(visible.filter(o=>o.y===floor&&isFloor(o.type)&&o.x>g.west&&o.x<g.east&&o.z>g.north&&o.z<g.south).map(o=>o.x+','+o.z));
+  if(!tiles.size)continue;
+  const shaft=new Set(world.filter(o=>o.y===floor&&(o.type==='guildStairUp'||o.type==='guildStairDown')).map(o=>o.x+','+o.z));
+  // Enclose only true internal openings, never the outer building perimeter.
+  for(let z=g.north+2;z<=g.south-2;z++)for(let x=g.west+2;x<=g.east-2;x++){
+   if(!tiles.has(x+','+z))continue;
+   const Y=floor*1.4+terrainY(x,z)+.12;
+   for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
+    const nx=x+dx,nz=z+dz;
+    if(tiles.has(nx+','+nz)||shaft.has(nx+','+nz))continue;
+    // A missing tile must be part of the upper-level interior gallery.
+    if(nx<=g.west+1||nx>=g.east-1||nz<=g.north+1||nz>=g.south-1)continue;
+    const alongX=dz!==0,px=x+.5+dx*.49,pz=z+.5+dz*.49;
+    cube(m,px,Y+.88,pz,alongX?1.01:.11,.12,alongX?.11:1.01,cap);
+    cube(m,px,Y+.14,pz,alongX?.96:.10,.11,alongX?.10:.96,wood);
+    for(const v of [-.43,-.14,.14,.43]){
+     const xx=px+(alongX?v:0),zz=pz+(alongX?0:v);
+     cube(m,xx,Y+.22,zz,.07,.65,.07,wood);
+     cube(m,xx,Y+.64,zz,.085,.10,.085,inlay);
+    }
+    for(const v of [-.49,.49])cube(m,px+(alongX?v:0),Y+.18,pz+(alongX?0:v),.12,.81,.12,wood);
+   }
   }
  }
- for(const [x,z,dx,dz,floor] of segments){
-  const Y=floor*1.4+terrainY(x,z),X=x+.5,Z=z+.5;
-  const cx0=X+dx*.46,cz0=Z+dz*.46;
-  const alongX=dz!==0;
-  // A waist-high rail, spaced spindles, and a continuous wooden handrail.
-  cube(m,cx0,Y+.87,cz0,alongX?1.01:.105,.105,alongX?.105:1.01,cap);
-  cube(m,cx0,Y+.12,cz0,alongX?.95:.07,.065,alongX?.07:.95,timber);
-  for(const v of [-.40,0,.40]){
-   cube(m,cx0+(alongX?v:0),Y+.17,cz0+(alongX?0:v),.065,.72,.065,iron);
+}
+function guildMountedLighting(m,visible){
+ const g=guildBounds();if(!g)return;
+ const metal=[.17,.17,.16],oak=[.44,.28,.16],amber=[.98,.73,.35],glass=[.85,.54,.21];
+ // The existing floor lantern POI placements become wall-mounted fixtures
+ // without mutating or duplicating the user's saved world objects.
+ const emit=(x,z,y,dx,dz)=>{
+  const wallX=x-dx*.17,wallZ=z-dz*.17;
+  cube(m,wallX,y+.95,wallZ,.15,.42,.15,oak);
+  const fx=x+dx*.19,fz=z+dz*.19;
+  naturalBranch(m,wallX,y+1.18,wallZ,fx,y+1.18,fz,.047,.036,metal);
+  cube(m,fx,y+.76,fz,.23,.08,.23,metal);
+  cube(m,fx,y+.93,fz,.17,.31,.17,glass);
+  cube(m,fx,y+.91,fz,.12,.22,.12,amber);
+  cube(m,fx,y+1.11,fz,.24,.08,.24,metal);
+  cube(m,fx,y+1.19,fz,.06,.12,.06,metal);
+  for(const i of [-1,1]){
+   cube(m,fx+i*.108,y+.94,fz,.022,.30,.022,metal);
+   cube(m,fx,y+.94,fz+i*.108,.022,.30,.022,metal);
   }
+ };
+ for(const o of visible){
+  if(o.type!=='lantern'||o.y!==0)continue;
+  if(o.x===9&&o.z===10)emit(g.west+.55,o.z+.5,terrainY(o.x,o.z),1,0);
+  if(o.x===20&&o.z===10)emit(g.east+.45,o.z+.5,terrainY(o.x,o.z),-1,0);
+  if((o.x===11||o.x===18)&&o.z===g.south+1)
+   emit(o.x+.5,g.south+.63,terrainY(o.x,o.z),0,1);
+ }
+ // High wall windows: thick exterior stone ledge and modest interior timber sill.
+ for(const o of visible){
+  if(o.type!=='stonewallWindow'||o.y>2)continue;
+  const facing=o.z===g.south?[0,1]:o.z===g.north?[0,-1]:
+   o.x===g.west?[-1,0]:o.x===g.east?[1,0]:null;
+  if(!facing)continue;
+  const [dx,dz]=facing,px=o.x+.5,pz=o.z+.5,Y=o.y*1.4+terrainY(o.x,o.z);
+  const alongX=dz!==0;
+  cube(m,px+dx*.545,Y+.27,pz+dz*.545,alongX?.91:.14,.10,alongX?.14:.91,[.72,.73,.68]);
+  cube(m,px-dx*.43,Y+.27,pz-dz*.43,alongX?.85:.13,.07,alongX?.13:.85,[.58,.38,.23]);
+  cube(m,px+dx*.532,Y+1.28,pz+dz*.532,alongX?.90:.09,.075,alongX?.09:.90,[.68,.69,.65]);
  }
 }
 function makeScene(){
@@ -4350,6 +4399,7 @@ function makeScene(){
  const wallLookup=wallExteriorLookup(visible);
  houseFacadeDetails(m,visible);
  guildAtriumRailing(m,visible);
+ guildMountedLighting(m,visible);
  const groups=residentialRoofComponents(visible.filter(o=>RESIDENTIAL_ROOFS.has(o.type)));
  const allRoofLookup=new Map(visible.filter(o=>RESIDENTIAL_ROOFS.has(o.type)).map(o=>[o.x+','+o.z+','+o.y,o]));
  for(const group of groups)residentialRoofGeometry(m,group,allRoofLookup);
@@ -4361,6 +4411,8 @@ function makeScene(){
   else if(o.type.startsWith('pineHarbor'))pineHarborGeometry(m,o);
   else if(o.type.startsWith('pineSuper'))pineSupermarketGeometry(m,o);
   else if(isWallId(o.type)){const faces=wallFaceState(o,wallLookup);wallBlock(m,o.type,o.x+.5,o.y*1.4+terrainY(o.x,o.z),o.z+.5,o.rot||0,faces.visible,faces.exterior)}
+  else if(o.type==='lantern'&&guildBounds()&&o.y===0&&
+   ((o.z===10&&(o.x===9||o.x===20))||(o.z===guildBounds().south+1&&(o.x===11||o.x===18)))){}
   else if(o.type==='terrainStairs')elevationStairGeometry(m,o.x,o.z,o.y*1.4+terrainY(o.x,o.z),o.rot||0);
   else if(/^fence(Wood|Stone|Iron)/.test(o.type)&&connectedFenceGeometry(m,o,fenceLookup)){} 
   else deco(m,o.type,o.x+.5,o.y*1.4+terrainY(o.x,o.z),o.z+.5,o.rot||0);
