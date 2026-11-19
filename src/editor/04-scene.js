@@ -1,7 +1,7 @@
 // Editor walk-through uses the same bare avatar and stride/facing rules as PINE gameplay.
 let poiWalkActive=false,poiWalkX=0,poiWalkZ=0,poiWalkMesh=null,poiWalkOldRoof=false;
 let poiWalkFacing=2,poiWalkStarted=-10000,poiWalkFromX=0,poiWalkFromZ=0;
-let poiWalkViewX=0,poiWalkViewZ=0,poiWalkNextReady=0;
+let poiWalkViewX=0,poiWalkViewZ=0,poiWalkNextReady=0,poiWalkActionStarted=-10000;
 const POI_WALK_MS=160;
 let cameraTopDown=false,poiThirdPerson=false;
 let poiCameraYaw=0,poiCameraPitch=.35,poiCameraDistance=5.5;
@@ -52,12 +52,14 @@ function poiWalkAvatar(now=performance.now()){
  const y=terrainY(poiWalkX,poiWalkZ)+.03;
  const walking=t<1&&(poiWalkFromX!==poiWalkX||poiWalkFromZ!==poiWalkZ);
  const stride=walking?Math.sin(t*Math.PI*2)*.18:0;
+ const actionPhase=Math.max(0,1-(now-poiWalkActionStarted)/260);
  const r=[2,3,0,1][poiWalkFacing];
  for(let i=0;i<body.p.length;i+=3){
   const lx=body.p[i],ly=body.p[i+1],lz=body.p[i+2];
   const swing=ly<.54&&Math.abs(lx)<.22?(lx<0?-stride:stride):
     ly>.45&&ly<.85&&Math.abs(lx)>.23?(lx<0?stride:-stride)*.40:0;
-  const [rx,rz]=rot2(lx,lz+swing,r);
+  const punch=actionPhase>0&&ly>.45&&ly<.85&&lx>.23?actionPhase*.40:0;
+  const [rx,rz]=rot2(lx,lz+swing+punch,r);
   m.p.push(x+rx,y+ly+(walking?.015*Math.abs(stride):0),z+rz);
   const [nx,nz]=rot2(body.n[i],body.n[i+2],r);
   m.n.push(nx,body.n[i+1],nz);
@@ -71,7 +73,7 @@ function poiWalkFrame(now){
  poiWalkViewX=poiWalkFromX+(poiWalkX-poiWalkFromX)*smooth;
  poiWalkViewZ=poiWalkFromZ+(poiWalkZ-poiWalkFromZ)*smooth;
  panX=poiWalkViewX+.5-MAP_W/2;panZ=poiWalkViewZ+.5-MAP_H/2;
- if(now-poiWalkStarted<=POI_WALK_MS+32)poiWalkAvatar(now);
+ if(now-poiWalkStarted<=POI_WALK_MS+32||now-poiWalkActionStarted<290)poiWalkAvatar(now);
 }
 function poiWalkPassableDoor(type){
  // Pass through door/entrance cells across all material families, including
@@ -109,6 +111,18 @@ function poiWalkStep(dx,dz){
  poiWalkFromX=poiWalkX;poiWalkFromZ=poiWalkZ;poiWalkX+=dx;poiWalkZ+=dz;
  poiWalkStarted=now;poiWalkNextReady=now+POI_WALK_MS;
  poiWalkRoof();poiWalkAvatar(poiWalkStarted);poiWalkStatus();
+}
+function poiWalkAction(){
+ if(!poiWalkActive)return;
+ const delta=[[0,-1],[1,0],[0,1],[-1,0]][poiWalkFacing];
+ const x=poiWalkX+delta[0],z=poiWalkZ+delta[1];
+ const target=world.find(o=>o.x===x&&o.z===z&&o.y===0&&!isFloor(o.type));
+ if(target){
+  const item=palette.find(p=>p.id===target.type);
+  toast((item?.name||'目の前のオブジェクト')+'を調べた');
+ }else{
+  poiWalkActionStarted=performance.now();poiWalkAvatar(poiWalkActionStarted);toast('攻撃');
+ }
 }
 function poiWalkReset(x,z){
  poiWalkX=x;poiWalkZ=z;poiWalkFromX=x;poiWalkFromZ=z;poiWalkViewX=x;poiWalkViewZ=z;poiWalkStarted=-10000;poiWalkNextReady=0;
