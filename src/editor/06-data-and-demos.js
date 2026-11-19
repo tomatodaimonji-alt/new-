@@ -1961,8 +1961,8 @@ let pineGameActive=false,pineEditorBackup=null,pineGameLastSave=0;
 const PINE_GAME_SPAWN={x:24,z:24};
 function pineGameGenerate(){
  const worldItems=[],add=(x,z,type,y=0,rot=0)=>{if(x>=0&&z>=0&&x<48&&z<48)worldItems.push({x,z,y,type,rot})};
- for(let t=0;t<48;t++)for(let q=23;q<=25;q++){add(q,t,t<13||t>35?'roadDirt':'roadCobble');add(t,q,t<13||t>35?'roadDirt':'roadCobble')}
- for(let x=20;x<=28;x++)for(let z=20;z<=28;z++)add(x,z,'roadCobble');
+ for(let t=0;t<48;t++)for(let q=23;q<=25;q++){add(q,t,t<13||t>35?'earth':'stone');add(t,q,t<13||t>35?'earth':'stone')}
+ for(let x=20;x<=28;x++)for(let z=20;z<=28;z++)add(x,z,'stone');
  for(const [bx,bz,wall,roof] of [[14,14,'plasterwall','roofThatch'],[29,14,'woodwall','roofPlank'],[14,29,'brickwall','roofTile'],[29,29,'stonewall','roofThatch']]){
   for(let dx=0;dx<5;dx++)for(let dz=0;dz<5;dz++){
    const x=bx+dx,z=bz+dz;
@@ -2017,11 +2017,11 @@ function pineGameEnter(){
    [...poiMonsterStates.values()].forEach((state,i)=>{
     const m=saved.monsters[i];
     if(m&&Number.isInteger(m.x)&&Number.isInteger(m.z)&&Number.isFinite(m.hp)&&validPos(m.x,m.z)){
-     state.x=m.x;state.z=m.z;state.hp=Math.max(0,Math.min(POI_MONSTER_STATS.monsterSlime.hp,m.hp));
+     state.x=m.x;state.z=m.z;state.fromX=m.x;state.fromZ=m.z;state.moveStarted=-10000;state.hp=Math.max(0,Math.min(POI_MONSTER_STATS.monsterSlime.hp,m.hp));
     }
    });
   }
-  poiThirdPerson=true;$('poiThirdView').textContent='俯瞰視点';$('poiThirdView').setAttribute('aria-pressed','true');
+  poiThirdPerson=false;$('poiThirdView').textContent='三人称視点';$('poiThirdView').setAttribute('aria-pressed','false');
   poiCombatHud();dirty=true;cursorDirty=true;pineGameSave(true);
   toast(saved?'冒険を再開しました':'村に到着しました。草原でスライムと戦えます');
  }catch(e){
