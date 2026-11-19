@@ -4252,19 +4252,18 @@ function wallFaceState(o,lookup){
 // A balcony guard for the guild's second-floor atrium. Built from actual
 // saved floor geometry, so existing registered POIs receive it without reset.
 function guildAtriumRailing(m,visible){
- const floors=new Set(visible.filter(o=>o.y===1&&isFloor(o.type)).map(o=>o.x+','+o.z));
- const has=(x,z)=>floors.has(x+','+z);
+ const byLevel=new Map([1,2].map(y=>[y,new Set(visible.filter(o=>o.y===y&&isFloor(o.type)).map(o=>o.x+','+o.z))]));
  const counters=world.filter(o=>o.y===0&&o.type==='counterWood');
  if(counters.length<3)return;
  const cx=counters.reduce((n,o)=>n+o.x,0)/counters.length;
  const cz=counters.reduce((n,o)=>n+o.z,0)/counters.length;
  // Recognize the current gallery rather than adding railings to arbitrary towns.
- let gaps=0;for(let x=Math.round(cx)-2;x<=Math.round(cx)+2;x++)for(let z=Math.round(cz)+1;z<=Math.round(cz)+5;z++)if(!has(x,z))gaps++;
- if(gaps<12)return;
+ if(!byLevel.get(1).size)return;
  const timber=[.40,.255,.15],cap=[.67,.465,.27],iron=[.25,.24,.23];
  const segments=[];
  for(const o of visible){
-  if(o.y!==1||!isFloor(o.type))continue;
+  if(!byLevel.has(o.y)||!isFloor(o.type))continue;
+  const has=(x,z)=>byLevel.get(o.y).has(x+','+z);
   const {x,z}=o;
   if(Math.abs(x-cx)>7||Math.abs(z-cz)>8)continue;
   for(const [dx,dz] of [[0,1],[0,-1],[1,0],[-1,0]]){
@@ -4274,8 +4273,8 @@ function guildAtriumRailing(m,visible){
    segments.push([x,z,dx,dz]);
   }
  }
- for(const [x,z,dx,dz] of segments){
-  const Y=1.4+terrainY(x,z),X=x+.5,Z=z+.5;
+ for(const [x,z,dx,dz,floor] of segments){
+  const Y=floor*1.4+terrainY(x,z),X=x+.5,Z=z+.5;
   const cx0=X+dx*.46,cz0=Z+dz*.46;
   const alongX=dz!==0;
   // A waist-high rail, spaced spindles, and a continuous wooden handrail.
