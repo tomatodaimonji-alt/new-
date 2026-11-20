@@ -639,7 +639,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
  #viewWrap #pineAILegend{font-size:9px}
 }
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v86）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v87）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -4463,7 +4463,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v86',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v87',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -8396,69 +8396,72 @@ function pineReadSavedPOIs(){
    p.map.format==='forest-world-v1'&&p.map.version===1&&Array.isArray(p.map.world));
  }catch(e){return []}
 }
+// v87: The only published POI is the exact map restored from the user's
+// "写真配置の前に戻す" backup, not an inferred screenshot or a generated sample.
+const PINE_GUILD_PRIMARY_ID='poi-guild-primary-v87';
+const PINE_GUILD_SAVED_BACKUP='pine-guild-screenshot-before-v86';
+const PINE_OLD_POI_ARCHIVE='world-workshop-pois-before-guild-v87';
+function pineInstallOnlyGuildPOI(){
+ const existing=customPOIs.find(p=>p.id===PINE_GUILD_PRIMARY_ID);
+ if(existing){
+  // An already-installed guild remains stable across automatic HTML updates.
+  if(customPOIs.length!==1||existing.name!=='ギルド'){
+   const fixed={...existing,name:'ギルド'};
+   if(pineStorePOIs([fixed]))customPOIs=[fixed];
+  }
+  return true;
+ }
+ let raw=null,source=null;
+ try{raw=localStorage.getItem(PINE_GUILD_SAVED_BACKUP)}catch(e){}
+ if(!raw)return false; // Never substitute a different sample for the correct map.
+ try{
+  source=JSON.parse(raw);
+  if(!source||source.format!=='forest-world-v1'||source.version!==1||
+    source.width!==30||source.height!==30||!Array.isArray(source.world)||
+    !Array.isArray(source.models)||!Array.isArray(source.prefabs)||source.world.length<100)
+    throw Error('Guild backup is incomplete');
+  const count=t=>source.world.filter(o=>o.y===0&&o.type===t).length;
+  if(count('stonewall')<20||count('counterWood')<3)throw Error('Guild layout missing');
+  // Keep the user's earlier POIs recoverable, but remove them from the live list.
+  // Never overwrite an earlier archive when the app is reopened.
+  const former=localStorage.getItem(PINE_CUSTOM_POI_KEY);
+  if(former&&!localStorage.getItem(PINE_OLD_POI_ARCHIVE))
+   localStorage.setItem(PINE_OLD_POI_ARCHIVE,former);
+  const record={id:PINE_GUILD_PRIMARY_ID,name:'ギルド',map:source};
+  if(!pineStorePOIs([record]))return false;
+  customPOIs=[record];
+  return true;
+ }catch(e){console.warn('Guild POI was not installed; earlier POIs preserved',e);return false}
+}
 let poiExpanded=false;
 function pineBuildPOICategories(){
  const host=$('poiSampleCategories');if(!host)return;
  host.replaceChildren();
  const heading=expandableRow('POI','',poiExpanded,()=>{
   poiExpanded=!poiExpanded;pineBuildPOICategories();
- },'pineSuperShelfStocked');
+ },'guildQuestBoard');
  host.append(heading);
  if(!poiExpanded)return;
  const inner=document.createElement('div');inner.className='nestedChoices poiInner';
- const button=document.createElement('button');
- button.type='button';button.className='poiSampleEntry item';
- const glyph=document.createElement('span');glyph.className='poiEntryGlyph';glyph.textContent='▦';
- const info=document.createElement('span');info.textContent='スーパー';
- const detail=document.createElement('small');detail.textContent='倉庫型・通常の廃墟';
- info.append(detail);button.append(glyph,info);
- button.addEventListener('click',()=>{pineSupermarketPOI('wholesale','normal');$('palette').classList.remove('mobileOpen')});
- inner.append(button);
- const guildButton=document.createElement('button');
- guildButton.type='button';guildButton.className='poiSampleEntry item';
- const guildGlyph=document.createElement('span');guildGlyph.className='poiEntryGlyph';guildGlyph.textContent='▦';
- const guildLabel=document.createElement('span');guildLabel.textContent='冒険者ギルド';
- const guildDetail=document.createElement('small');guildDetail.textContent='石造り・木製内装・編集用サンプル';
- guildLabel.append(guildDetail);guildButton.append(guildGlyph,guildLabel);
- guildButton.addEventListener('click',pineStarterGuildPOI);
- inner.append(guildButton);
- const screenshotGuildButton=document.createElement('button');
- screenshotGuildButton.type='button';screenshotGuildButton.className='poiSampleEntry item';
- const screenshotGuildLabel=document.createElement('span');screenshotGuildLabel.textContent='ギルド・写真の配置へ';
- const screenshotGuildDetail=document.createElement('small');
- screenshotGuildDetail.textContent='v84スクショ基準・1階のみ・実行前バックアップ';
- screenshotGuildLabel.append(screenshotGuildDetail);
- const screenshotGuildGlyph=document.createElement('span');screenshotGuildGlyph.className='poiEntryGlyph';screenshotGuildGlyph.textContent='▤';
- screenshotGuildButton.append(screenshotGuildGlyph,screenshotGuildLabel);
- screenshotGuildButton.addEventListener('click',()=>{pineApplyScreenshotGuildLayout();$('palette').classList.remove('mobileOpen')});
- inner.append(screenshotGuildButton);
- const restoreGuildButton=document.createElement('button');
- restoreGuildButton.type='button';restoreGuildButton.className='poiSampleEntry item';
- const restoreGuildLabel=document.createElement('span');restoreGuildLabel.textContent='写真配置の前に戻す';
- const restoreGuildDetail=document.createElement('small');restoreGuildDetail.textContent='実行前バックアップから全体復元';
- restoreGuildLabel.append(restoreGuildDetail);restoreGuildButton.append(restoreGuildLabel);
- restoreGuildButton.addEventListener('click',()=>{pineRestoreScreenshotGuildBackup();$('palette').classList.remove('mobileOpen')});
- if(localStorage.getItem('pine-guild-screenshot-before-v86'))inner.append(restoreGuildButton);
- for(const record of customPOIs){
-  const row=document.createElement('div');row.className='poiCustomEntry';
-  const choice=document.createElement('button');choice.type='button';choice.className='poiSampleEntry item';
-  const symbol=document.createElement('span');symbol.className='poiEntryGlyph';symbol.textContent='▦';
-  const label=document.createElement('span');label.textContent=record.name;
-  const desc=document.createElement('small');desc.textContent=record.map.width+'×'+record.map.height+' マス · 登録済み';
-  label.append(desc);choice.append(symbol,label);
-  choice.addEventListener('click',()=>pineLoadCustomPOI(record.id));
-  const remove=document.createElement('button');remove.type='button';remove.className='poiDelete';remove.textContent='×';remove.setAttribute('aria-label',record.name+' を削除');
-  remove.addEventListener('click',()=>{
-   if(!confirm('登録済みPOI「'+record.name+'」を削除しますか？'))return;
-   const ix=customPOIs.findIndex(p=>p.id===record.id);if(ix<0)return;
-   const next=customPOIs.filter(p=>p.id!==record.id);
-   if(!pineStorePOIs(next))return;
-   customPOIs=next;pineBuildPOICategories();toast('登録POIを削除しました');
-  });
-  row.append(choice,remove);inner.append(row);
+ const record=customPOIs.find(p=>p.id===PINE_GUILD_PRIMARY_ID);
+ if(record){
+  const open=document.createElement('button');
+  open.type='button';open.className='poiSampleEntry item';
+  const glyph=document.createElement('span');glyph.className='poiEntryGlyph';glyph.textContent='▦';
+  const title=document.createElement('span');title.textContent='ギルド';
+  const subtitle=document.createElement('small');
+  subtitle.textContent='正しい配置を保存したPOI · 30×30';
+  title.append(subtitle);open.append(glyph,title);
+  open.addEventListener('click',()=>pineLoadCustomPOI(PINE_GUILD_PRIMARY_ID));
+  inner.append(open);
+ }else{
+  const error=document.createElement('div');error.className='muted';
+  error.textContent='正しいギルドの復元バックアップが見つかりません。保存済みPOIは削除していません。';
+  inner.append(error);
  }
  host.append(inner);
 }
+
 function pineStorePOIs(entries){
  try{
   const content=JSON.stringify(entries);
@@ -8467,6 +8470,7 @@ function pineStorePOIs(entries){
  }catch(e){toast('POIを保存できません。端末の空き容量を確認してください');return false}
 }
 function pineRegisterCurrentPOI(){
+ toast('POIは「ギルド」1件に整理されています');return;
  if(!world.length){toast('建材がないマップは登録できません');return}
  if(customPOIs.length>=20){toast('POIは20件まで。不要なPOIを削除してください');return}
  $('poiNameInput').value='マイPOI '+(customPOIs.length+1);
@@ -8479,6 +8483,7 @@ function pineClosePOINameModal(){
  $('poiNameError').textContent='';
 }
 function pineConfirmPOIName(){
+ toast('POIは「ギルド」1件に整理されています');pineClosePOINameModal();return;
  const label=$('poiNameInput').value.trim();
  if(!label||label.length>40){$('poiNameError').textContent='POI名を1〜40文字で入力してください';$('poiNameInput').focus();return}
  if(customPOIs.length>=20){$('poiNameError').textContent='POIは20件まで登録できます';return}
@@ -8879,6 +8884,7 @@ $('showPalette').addEventListener('click',()=>{pineSetCheckMode(false);$('palett
   MAP_W=30;MAP_H=30;world=[];models=[];prefabs=[];terrainHeights=new Map();$('mapWidth').value=MAP_W;$('mapHeight').value=MAP_H;
   toast('セーブデータ読み込みエラー。保存済みデータは保護されています');}
 customPOIs=pineReadSavedPOIs();
+pineInstallOnlyGuildPOI();
 pineBuildPOICategories();
 const poiEntrance=world.find(o=>o.type==='pineSuperDoor');
 if(poiEntrance)poiWalkReset(poiEntrance.x,Math.min(MAP_H-2,poiEntrance.z+2));
