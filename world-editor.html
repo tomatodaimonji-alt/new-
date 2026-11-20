@@ -4709,7 +4709,29 @@ function cursorAt(clientX,clientY){
  }
  return{x,z};
 }
-function makeCursor(){const m=mesh();if(!hover||!validPos(hover.x,hover.z))return upload(m);const x=hover.x+.5,z=hover.z+.5,y=level*1.4+terrainY(hover.x,hover.z)+.205;const c=[.96,.73,.30],t=.045;cube(m,x,y,z-.45,.95,t,.055,c);cube(m,x,y,z+.45,.95,t,.055,c);cube(m,x-.45,y,z,.055,t,.95,c);cube(m,x+.45,y,z,.055,t,.95,c);return upload(m)}
+function makeCursor(){
+ const m=mesh(),c=[1,.82,.14];
+ function frame(x,z,y,w,d,t=.045){
+  cube(m,x,y,z-d/2,w,t,.054,c);cube(m,x,y,z+d/2,w,t,.054,c);
+  cube(m,x-w/2,y,z,.054,t,d,c);cube(m,x+w/2,y,z,.054,t,d,c);
+ }
+ if(hover&&validPos(hover.x,hover.z))
+  frame(hover.x+.5,hover.z+.5,level*1.4+terrainY(hover.x,hover.z)+.205,.95,.95);
+ if(pineSelectedTile&&!pineGameActive&&validPos(pineSelectedTile.x,pineSelectedTile.z)){
+  const {x,z,y}=pineSelectedTile,base=y*1.4+terrainY(x,z);
+  frame(x+.5,z+.5,base+.235,1.03,1.03,.056);
+  const o=pineObjectSelection;
+  if(o&&world.includes(o)&&!isFloor(o.type)){
+   const height=/wall|door|window|counter/i.test(o.type)?1.42:/tree|tower|streetlamp/i.test(o.type)?2.2:1.15;
+   const width=o.type==='guildWallQuestBoard'?1.8:.94;
+   const cx=o.x+.5,cz=o.z+.5,low=base+.02,high=base+height;
+   frame(cx,cz,low,width,.94,.032);frame(cx,cz,high,width,.94,.032);
+   for(const dx of [-width/2,width/2])for(const dz of [-.47,.47])
+    cube(m,cx+dx,(low+high)/2,cz+dz,.035,high-low,.035,c);
+  }
+ }
+ return upload(m);
+}
 function render(){requestAnimationFrame(render);const now=performance.now();poiWalkFrame(now);const p=parameters();if(dirty){if(sceneMesh)gl.deleteBuffer(sceneMesh.buf);for(const o of signOverlays)gl.deleteBuffer(o.buf);sceneMesh=makeScene();signOverlays=signProgram?buildSignOverlay():[];dirty=false}if(cursorDirty){if(cursorMesh)gl.deleteBuffer(cursorMesh.buf);cursorMesh=makeCursor();cursorDirty=false}gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);draw(sceneMesh,p.vp);poiDrawGameRoofs(p.vp);poiDrawEditorGhostRoof(p.vp);drawSignOverlays(p.vp);draw(cursorMesh,p.vp);if(poiWalkActive){draw(poiWalkMesh,p.vp);poiMonsterRender(now,p.vp)}poiRenderDamageLabels(now,p.vp);pineDrawChecks(p.vp)}
 let savedMapRestoreFailed=false;
 function saveLocal(){
@@ -4770,8 +4792,8 @@ function stampPrefab(x,z){const f=prefabs.find(p=>p.id===selected);if(!f)return;
 const placements=f.tiles.map(t=>{const pair=r===0?[t.x,t.z]:r===1?[f.h-1-t.z,t.x]:r===2?[f.w-1-t.x,f.h-1-t.z]:[t.z,f.w-1-t.x];return{x:x+pair[0],z:z+pair[1],y:level+t.y,type:t.type,rot:(t.rot+r)%4}});
 if(placements.some(p=>!validPos(p.x,p.z)||p.y>MAX_LEVEL)){toast('この場所には設計図を置けません');return}
 snapshot();for(const p of placements){const ix=world.findIndex(o=>o.x===p.x&&o.z===p.z&&o.y===p.y&&isFloor(o.type)===isFloor(p.type));if(ix>=0)world.splice(ix,1);world.push(p)}commit();toast('「'+f.name+'」を配置した')}
-function updateStats(){$('terrainHeightLabel').textContent=hover&&validPos(hover.x,hover.z)?terrainLevel(hover.x,hover.z):'-';$('gridLabel').textContent=MAP_W+'×'+MAP_H;$('countLabel').textContent=world.length;$('selectedLabel').textContent=byId(selected)?.name||'未選択';$('rotationLabel').textContent=rotation*90+'°';$('cursorStatus').textContent=hover?'マス: '+(hover.x+1)+', '+(hover.z+1)+' · '+({place:'配置',erase:'消去',pick:'取得',rotate:'回転',move:'視点移動',terrainUp:'地面を上げる',terrainDown:'地面を下げる',terrainFlat:'平坦化'}[mode]||'配置'):'マスを選んで配置';}
-function updateSelected(){for(const [id,active] of [['quickPlace',mode==='place'],['quickErase',mode==='erase'],['quickRotate',mode==='rotate']]){$(id).classList.toggle('active',active)}for(const b of document.querySelectorAll('[data-brush]'))b.classList.toggle('selected',mode==='place'&&(b.dataset.brush===selected||(b.dataset.brush==='wall'&&isWallId(selected))));for(const b of document.querySelectorAll('[data-mode]'))b.classList.toggle('selected',b.dataset.mode===mode);updateStats()}
+function updateStats(){$('terrainHeightLabel').textContent=hover&&validPos(hover.x,hover.z)?terrainLevel(hover.x,hover.z):'-';$('gridLabel').textContent=MAP_W+'×'+MAP_H;$('countLabel').textContent=world.length;$('selectedLabel').textContent=byId(selected)?.name||'未選択';$('rotationLabel').textContent=rotation*90+'°';$('cursorStatus').textContent=hover?'マス: '+(hover.x+1)+', '+(hover.z+1)+' · '+({place:'配置',erase:'消去',pick:'取得',rotate:'回転',move:'選択',select:'選択',relocate:'移動先を指定',terrainUp:'地面を上げる',terrainDown:'地面を下げる',terrainFlat:'平坦化'}[mode]||'配置'):'マスを選んで配置';}
+function updateSelected(){for(const [id,active] of [['quickPlace',mode==='place'],['quickErase',mode==='erase'],['quickRotate',mode==='rotate'],['quickSelect',mode==='select'||mode==='move'],['quickMoveObject',mode==='relocate']]){$(id).classList.toggle('active',active)}for(const b of document.querySelectorAll('[data-brush]'))b.classList.toggle('selected',mode==='place'&&(b.dataset.brush===selected||(b.dataset.brush==='wall'&&isWallId(selected))));for(const b of document.querySelectorAll('[data-mode]'))b.classList.toggle('selected',b.dataset.mode===mode);updateStats()}
 let wallExpanded=false,openedWallGroup=null,constructionExtrasExpanded=false,naturalExpanded=false;
 function mkButton(id,el){const btn=document.createElement('button');btn.className='item';btn.dataset.brush=id;const icon=createBlockIcon(id);const name=document.createElement('span');name.textContent=el.name+(id==='wall'?(wallExpanded?'　⌃':'　⌄'):'');btn.append(icon,name);btn.addEventListener('click',()=>{if(id==='wall'){openWallSelector();return}selected=id;mode='place';updateSelected();$('palette').classList.remove('mobileOpen')});return btn}
 const WALL_CHOICES=[
@@ -7448,6 +7470,17 @@ $('applyMapSize').addEventListener('click',()=>setMapSize());
 $('quickPlace').addEventListener('click',()=>{mode='place';updateSelected()});
 $('quickErase').addEventListener('click',()=>{mode='erase';updateSelected()});
 $('quickRotate').addEventListener('click',()=>{mode='rotate';updateSelected()});
+$('quickSelect').addEventListener('click',()=>{
+ if(poiWalkActive){toast('選択はプレイを解除してから行えます');return}
+ pineMoveArmed=false;mode='select';updateSelected();toast('マス・壁・オブジェクトをタップして選択');
+});
+$('quickMoveObject').addEventListener('click',()=>{
+ if(poiWalkActive){toast('移動はプレイを解除してから行えます');return}
+ if(!pineObjectSelection||!world.includes(pineObjectSelection)){
+  pineMoveArmed=false;mode='select';updateSelected();toast('先に移動する部材をタップして選択してください');return;
+ }
+ pineMoveArmed=true;mode='relocate';updateSelected();toast('移動先の空きマスをタップ');
+});
 // Touch gestures: place/erase/pick only on a completed, stationary single-finger tap.
 // Any dragging, multitouch, cancellation, or long press suppresses block changes.
 const touchPositions=new Map();
@@ -7532,7 +7565,7 @@ canvas.addEventListener('pointerup',e=>{
  touchPositions.delete(e.pointerId);
  if(isSingle&&t&&t.id===e.pointerId&&!t.cancelled&&!t.moved&&
     Math.hypot(e.clientX-t.x,e.clientY-t.y)<=TAP_SLOP&&
-    performance.now()-t.start<=MAX_TAP_MS&&(pineCheckMode||mode!=='move')&&!(poiWalkActive&&poiThirdPerson)){
+    performance.now()-t.start<=MAX_TAP_MS&&(pineCheckMode||!poiWalkActive)&&!(poiWalkActive&&poiThirdPerson)){
   const pos=cursorAt(e.clientX,e.clientY);
   if(validPos(pos.x,pos.z)){if(pineCheckMode)pineToggleCheck(pos.x,pos.z);else changeCell(pos.x,pos.z)}
  }
