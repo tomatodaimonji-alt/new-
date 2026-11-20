@@ -1759,6 +1759,77 @@ function pineDrawChecks(vp){
  }
  for(const [key,node] of pineCheckNodes)if(!present.has(key)){node.remove();pineCheckNodes.delete(key)}
 }
+// v86: Safe, opt-in reconstruction of the user's v84 guild screenshots.
+// Only the 30x30 guild GROUND-FLOOR solid objects are replaced. Floors, all
+// upstairs objects, terrain and every position outside the guild are preserved.
+// Original full map is separately backed up before any change.
+function pineApplyScreenshotGuildLayout(){
+ if(MAP_W!==30||MAP_H!==30||!guildBounds()){
+  toast('30×30の冒険者ギルドを開いてから実行してください');return;
+ }
+ const west=7,east=22,north=6,south=20;
+ const inside=o=>o.y===0&&o.x>=west&&o.x<=east&&o.z>=north&&o.z<=south;
+ const existing=world.filter(o=>inside(o)&&!isFloor(o.type));
+ if(!confirm('v84の写真に合わせてギルド1階の壁・家具を再配置します。\n対象 '+existing.length+'件を置き換えます。上階・床・屋外は残します。\n現在の全マップを別途バックアップして続けますか？'))return;
+ try{
+  // Do not overwrite the previous backup if the action is accidentally repeated.
+  const key='pine-guild-screenshot-before-v86';
+  if(!localStorage.getItem(key))localStorage.setItem(key,JSON.stringify(data()));
+ }catch(e){
+  alert('安全なバックアップを保存できなかったため、配置は変更していません。');return;
+ }
+ snapshot();
+ world=world.filter(o=>!inside(o)||isFloor(o.type));
+ const add=(x,z,type,rot=0)=>world.push({x,z,y:0,type,rot});
+ // The outer shell and six ground-floor windows match the photograph.
+ for(let z=north;z<=south;z++)for(let x=west;x<=east;x++){
+  if(x!==west&&x!==east&&z!==north&&z!==south)continue;
+  const doorway=z===south&&x===14;
+  const window=(z===south&&(x===10||x===19))||
+   (z===north&&(x===10||x===19))||
+   ((x===west||x===east)&&(z===10||z===16));
+  add(x,z,doorway?'stonewallDoor':window?'stonewallWindow':'stonewall',z===north?2:x===west?3:x===east?1:0);
+ }
+ // Left staff wing, bath, stair passage and north-right sanitary cubicle.
+ for(let z=7;z<=17;z++)add(11,z,z===8?'woodwallDoor':'woodwall',z===8?1:0);
+ for(let x=8;x<=10;x++)add(x,13,x===9?'woodwallDoor':'woodwall');
+ for(let x=8;x<=10;x++)add(x,17,'woodwall');
+ for(let z=7;z<=11;z++)add(18,z,'woodwall');
+ for(let x=19;x<=21;x++)add(x,11,x===20?'woodwallDoor':'woodwall');
+ // Photo-reference furniture coordinates, including all reception sections.
+ const pieces=[
+  [9,8,'bed'],[10,8,'bookshelf'],[21,12,'bookshelf',3],
+  [12,10,'counterWood'],[13,10,'counterWood'],[14,10,'counterWood'],
+  [15,10,'counterWood'],[16,10,'counterWood'],
+  [16,8,'counterWood',1],[16,9,'counterWood',1],
+  [9,10,'table'],[10,10,'chairWood',2],[10,12,'wardrobe'],
+  [9,15,'bathWood'],[20,13,'roundTableWood'],[20,14,'chairWood',2],
+  [19,13,'chairWood',3],[20,16,'benchWood',2],[19,16,'roundTableWood'],
+  [11,12,'guildWallQuestBoard',3],[20,8,'guildLatrine'],[21,9,'crate'],
+  [10,16,'crate'],[20,18,'barrel'],[10,14,'guildLatrine'],
+  [20,13,'lantern'],[8,18,'guildStairUp'],
+  [14,20,'guildFacadeSign']
+ ];
+ for(const [x,z,type,rot=0] of pieces)add(x,z,type,rot);
+ // Ledger, pen cup and charter are rendered from the counter layout:
+ // never save them as duplicates in world[].
+ commit();refreshPalette();updateSelected();
+ toast('ギルド1階を写真の配置へ調整。元データはバックアップ済み（元に戻すことも可能）');
+}
+
+function pineRestoreScreenshotGuildBackup(){
+ const key='pine-guild-screenshot-before-v86';
+ let backup;
+ try{backup=localStorage.getItem(key)}catch(e){}
+ if(!backup){toast('復元用バックアップがありません');return}
+ if(!confirm('写真配置を適用する直前のマップ全体を復元します。\n現在の未保存変更は上書きされます。よろしいですか？'))return;
+ try{
+  const parsed=JSON.parse(backup);
+  if(!parsed||!Array.isArray(parsed.world)||!Number.isFinite(parsed.width))throw Error('backup invalid');
+  snapshot();loadData(parsed);commit();refreshPalette();updateSelected();showEntireMap();
+  toast('写真配置の適用前のマップを復元しました');
+ }catch(e){alert('バックアップの復元に失敗しました。現在の配置は維持されています。')}
+}
 function pineStarterGuildPOI(){
  if(world.length&&!confirm('現在の編集マップを冒険者ギルドのサンプルで置き換えますか？ 先にJSON保存をおすすめします。'))return;
  snapshot();world=[];models=[];prefabs=[];terrainHeights=new Map();
