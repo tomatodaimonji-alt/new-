@@ -639,7 +639,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
  #viewWrap #pineAILegend{font-size:9px}
 }
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v87）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v88）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -4463,7 +4463,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v87',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v88',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -4486,12 +4486,14 @@ function pineAIUpdateHeader(){
 }
 function pineAISetActive(active){
  pineAIActive=!!active;
+ if(!pineAIActive){pineAICaptureGeneration++;const old=$('pineAIFullCapture');if(old)old.remove()}
  $('pineAIMode').hidden=!pineAIActive;
  if(pineAIActive){
   pineAILevel=Math.max(0,Math.min(MAX_LEVEL,poiWalkActive?poiWalkLevel:level));
   pineAISelected=null;
   $('palette').classList.remove('mobileOpen');$('inspector').classList.remove('mobileOpen');
   pineAIUpdateHeader();requestAnimationFrame(pineAIFitMap);
+  requestAnimationFrame(pineAIFullCapture);
  }
  poiSyncCameraModeUI();
 }
@@ -4549,6 +4551,152 @@ function pineAIRender(){
  }
 }
 
+
+// v88: lossless full-map screenshot. The visible diagram is for people; the
+// encoded color grid below contains the entire JSON save (all levels, types,
+// rotations, overlaps, terrain, custom models, prefabs, checks). No object is
+// inferred from a pixel color or a numbered overlay ID. Python decoder:
+// tools/decode_ai_screenshot.py
+let pineAICaptureGeneration=0;
+const PINE_AI_COLORS=['#141414','#e23439','#19a257','#2859e2',
+ '#f7c638','#aa3be1','#20c8d0','#f4f4f4'];
+function pineAIScreenChecksum(bytes){
+ let h=2166136261;
+ for(const b of bytes){h=Math.imul(h^b,16777619)>>>0}
+ return h>>>0;
+}
+function pineAIFrameBytes(gz){
+ const output=new Uint8Array(gz.length+12);
+ output.set([80,71,65,49]); // PGA1
+ const dv=new DataView(output.buffer);
+ dv.setUint32(4,gz.length,true);
+ dv.setUint32(8,pineAIScreenChecksum(gz),true);
+ output.set(gz,12);return output;
+}
+async function pineAIGzip(bytes){
+ if(typeof CompressionStream==='undefined')throw Error('このWebViewは画像内データ圧縮に対応していません。JSON保存を利用してください');
+ const stream=new CompressionStream('gzip');
+ const w=stream.writable.getWriter();
+ await w.write(bytes);await w.close();
+ return new Uint8Array(await new Response(stream.readable).arrayBuffer());
+}
+function pineAIEncodeColorGrid(canvas,bytes,maxHeight,width){
+ const unit=5,border=4,cols=Math.max(20,Math.floor((width-12-border*2)/unit));
+ const nSymbols=Math.ceil(bytes.length*8/3),rows=Math.ceil(nSymbols/cols);
+ const height=rows*unit+border*2;
+ if(height>maxHeight)throw Error('全データが1枚に収まりません ('+bytes.length+'バイト)。JSON保存を利用してください');
+ canvas.width=cols*unit+border*2;canvas.height=height;
+ canvas.style.width=canvas.width+'px';canvas.style.height=height+'px';
+ const g=canvas.getContext('2d',{alpha:false});g.imageSmoothingEnabled=false;
+ g.fillStyle='#ff00b4';g.fillRect(0,0,canvas.width,canvas.height);
+ // Border's unique magenta is a finder; exact fixed-size modules survive PNG screenshots.
+ let bitIndex=0;
+ for(let index=0;index<rows*cols;index++){
+  let value=0;
+  for(let k=0;k<3;k++){
+   const bit=bitIndex++,byte=bytes[bit>>3];
+   value=(value<<1)|((byte===undefined)?0:((byte>>(7-(bit&7)))&1));
+  }
+  const x=border+(index%cols)*unit,y=border+Math.floor(index/cols)*unit;
+  g.fillStyle=PINE_AI_COLORS[value];g.fillRect(x,y,unit,unit);
+ }
+ return{cols,rows,unit,height,bytes:bytes.length};
+}
+function pineAIRenderHumanGrid(canvas,objects,level,available){
+ const w=MAP_W,h=MAP_H,margin=21,cell=Math.max(3,Math.min(16,Math.floor((available-2*margin)/Math.max(w,h))));
+ const logicalW=margin+w*cell+2,logicalH=margin+h*cell+2;
+ const scale=Math.min(window.devicePixelRatio||1,2);
+ canvas.width=Math.floor(logicalW*scale);canvas.height=Math.floor(logicalH*scale);
+ canvas.style.width=logicalW+'px';canvas.style.height=logicalH+'px';
+ const g=canvas.getContext('2d');g.setTransform(scale,0,0,scale,0,0);
+ g.fillStyle='#fff';g.fillRect(0,0,logicalW,logicalH);
+ const groups=new Map();
+ for(const o of objects){
+  if(o.y!==level)continue;
+  const key=o.x+','+o.z;
+  if(!groups.has(key))groups.set(key,[]);
+  groups.get(key).push(o);
+ }
+ const types=[...new Set(objects.filter(o=>o.y===level&&!isFloor(o.type)).map(o=>o.type))].sort();
+ const index=new Map(types.map((type,i)=>[type,(i+1).toString(36).toUpperCase()]));
+ for(let z=0;z<h;z++)for(let x=0;x<w;x++){
+  const group=groups.get(x+','+z)||[],floor=group.find(o=>isFloor(o.type));
+  const stack=group.filter(o=>!isFloor(o.type));
+  const px=margin+x*cell,py=margin+z*cell;
+  g.fillStyle=floor?(/grass|meadow|forest/i.test(floor.type)?'#d4e6cd':/wood/i.test(floor.type)?'#e2c6a6':'#ddd9cf'):'#fff';
+  g.fillRect(px,py,cell,cell);
+  g.strokeStyle='#abbcb1';g.lineWidth=.45;g.strokeRect(px+.25,py+.25,cell-.5,cell-.5);
+  if(stack.length){
+   const o=stack[stack.length-1];
+   g.fillStyle='#1c3a58';g.textAlign='center';g.textBaseline='middle';
+   g.font='bold '+Math.max(6,cell*.6)+'px monospace';
+   g.fillText(index.get(o.type)||'?',px+cell/2,py+cell*.44,cell-1);
+   if(cell>=11){
+    g.font='bold '+Math.max(6,cell*.40)+'px sans-serif';
+    g.fillText(['↑','→','↓','←'][((o.rot||0)%4+4)%4],px+cell/2,py+cell*.81);
+   }
+   if(stack.length>1){g.fillStyle='#e32f29';g.fillRect(px+cell-4,py,4,4)}
+  }
+ }
+ g.fillStyle='#243f32';g.font='bold '+Math.max(6,Math.min(9,cell*.55))+'px monospace';
+ for(let x=0;x<w;x++){g.textAlign='center';g.fillText(''+x,margin+(x+.5)*cell,margin-6)}
+ for(let z=0;z<h;z++){g.textAlign='right';g.fillText(''+z,margin-4,margin+(z+.65)*cell)}
+ if(poiWalkActive&&level===poiWalkLevel){
+  g.strokeStyle='#ee2424';g.lineWidth=2;
+  g.strokeRect(margin+poiWalkX*cell+1,margin+poiWalkZ*cell+1,cell-2,cell-2);
+ }
+}
+async function pineAIFullCapture(){
+ const generation=++pineAICaptureGeneration;
+ let panel=$('pineAIFullCapture');
+ if(!panel){
+  panel=document.createElement('div');panel.id='pineAIFullCapture';
+  panel.style.cssText='position:fixed;inset:0;z-index:100001;background:#f8faf7;color:#143b2f;padding:5px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;gap:4px;overflow:hidden;font-family:monospace';
+  const top=document.createElement('div');top.style.cssText='display:flex;align-items:center;gap:6px;width:100%;font-size:12px;flex-shrink:0';
+  const label=document.createElement('strong');label.id='pineCaptureTitle';label.style.cssText='flex:1;min-width:0';
+  const normal=document.createElement('button');normal.textContent='通常表示';normal.type='button';
+  normal.style.cssText='min-height:27px;background:#dfede2;border:1px solid #88ab9a;border-radius:5px;padding:3px 7px';
+  normal.onclick=()=>{pineAICaptureGeneration++;panel.remove()};
+  top.append(label,normal);
+  const status=document.createElement('div');status.id='pineCaptureStatus';
+  status.style.cssText='width:100%;text-align:center;font-size:11px;font-weight:bold;flex-shrink:0';
+  const human=document.createElement('canvas');human.id='pineCaptureMap';human.style.cssText='display:block;flex-shrink:0;max-width:100%';
+  const caption=document.createElement('div');caption.id='pineCaptureCaption';
+  caption.style.cssText='font-size:10px;width:100%;text-align:center;flex-shrink:0';
+  const machine=document.createElement('canvas');machine.id='pineCaptureCode';
+  machine.style.cssText='display:block;flex-shrink:0;max-width:100%;image-rendering:pixelated';
+  const instruction=document.createElement('div');instruction.id='pineCaptureInstructions';
+  instruction.style.cssText='font-size:11px;font-weight:bold;text-align:center;flex-shrink:0';
+  panel.append(top,status,human,caption,machine,instruction);
+  document.body.appendChild(panel);
+ }
+ const level=poiWalkActive?poiWalkLevel:pineAILevel;
+ const shotData=data();
+ const objects=shotData.world;
+ $('pineCaptureTitle').textContent='AI配置全記録 / '+MAP_W+'×'+MAP_H+' / Y='+level+' / '+objects.length+'件';
+ $('pineCaptureStatus').textContent='圧縮データ作成中…';
+ $('pineCaptureCode').style.display='none';
+ pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.48));
+ $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
+ try{
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v88',save:shotData}));
+  const gzip=await pineAIGzip(source);
+  if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
+  const payload=pineAIFrameBytes(gzip);
+  // Leave ample space for phone navigation and bottom text; do not crop bytes.
+  const mapHeight=$('pineCaptureMap').getBoundingClientRect().height;
+  const maxHeight=Math.floor(window.innerHeight-mapHeight-125);
+  const dims=pineAIEncodeColorGrid($('pineCaptureCode'),payload,maxHeight,window.innerWidth);
+  $('pineCaptureCode').style.display='block';
+  $('pineCaptureStatus').textContent='全データ収録完了: '+objects.length+'件 / '+gzip.length+'バイト圧縮 / '+dims.cols+'×'+dims.rows;
+  $('pineCaptureInstructions').textContent='この画面を1枚スクショして送信（コード部分を切り取らない）';
+ }catch(e){
+  if(generation!==pineAICaptureGeneration)return;
+  $('pineCaptureCode').style.display='none';
+  $('pineCaptureStatus').textContent='1枚で完全収録できません: '+e.message;
+  $('pineCaptureInstructions').textContent='この状態のスクショだけでは正確な再現はできません。JSON保存を利用してください。';
+ }
+}
 
 // v84 - single-screen floor overview for existing Android APKs.
 // Every used type has its own stable, locally numbered short code; avoid
