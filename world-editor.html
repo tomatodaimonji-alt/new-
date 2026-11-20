@@ -4088,7 +4088,7 @@ function poiWalkCanStep(x,z){
  if(world.some(o=>pineSuperVehicleType(o.type)&&Math.abs(o.x-x)<=1&&Math.abs(o.z-z)<=1))return false;
  const nonBlocking=new Set(['pineSuperLogo','guildFacadeSign','pineSuperStripe','pineSuperBayEnd',
   'pineSuperCurb','pineSuperBollard','pineSuperSign',
-  'chairWood','chairClassic','stoolRound','flowerField','bushFlower','tallGrass']);
+  'chairWood','chairClassic','stoolRound','flowerField','bushFlower','tallGrass','lantern']);
  // Check every occupied object on this cell. Door frames are walkable, but
  // an unrelated solid object placed in the doorway must still block passage.
  const cell=world.filter(o=>o.y===poiWalkLevel&&o.x===x&&o.z===z&&(!poiWalkActive||!poiIsMonster(o.type)));
@@ -4347,51 +4347,69 @@ function guildInteriorDetails(m,visible){
  const solid=(x,z,y=0)=>visible.some(o=>o.x===x&&o.z===z&&o.y===y&&o.type==='stonewall');
  const front=visible.filter(o=>o.type==='counterWood'&&o.y===0&&Math.abs(o.x-g.cx)<4&&Math.abs(o.z-g.cz)<2);
  if(front.length<3)return;
- // Structural timber framing sits along existing solid wall bays, not in walkways.
+ // Reinforced wall-mounted oak columns, molding and beams on every storey.
+ // All geometry is decorative and inferred from saved guilds; no floor blockers.
  for(const floor of [0,1,2]){
   if(floor>0&&!visible.some(o=>o.y===floor&&o.type.startsWith('stonewall')))continue;
   const y=floor*1.4;
-  for(const z of [g.north+2,g.north+7,g.south-1]){
-   for(const x of [g.west,g.east]){
-    if(!solid(x,z,floor))continue;
-    const insideX=x===g.west?x+.91:x+.09;
-    const wz=z+.5,base=y+terrainY(x,z);
-    cube(m,insideX,base+.08,wz,.16,1.14,.20,timber);
-    cube(m,insideX,base+1.17,wz,.30,.17,.34,trim);
-    cube(m,insideX,base+.12,wz,.27,.10,.31,shadow);
-   }
+  for(const z of [g.north+2,g.north+7,g.south-2])for(const x of [g.west,g.east]){
+   if(!solid(x,z,floor))continue;
+   const px=x===g.west?x+.94:x+.06,base=y+terrainY(x,z),pz=z+.5;
+   cube(m,px,base+.08,pz,.15,1.12,.22,timber);
+   cube(m,px,base+1.16,pz,.27,.15,.34,trim);
+   cube(m,px,base+.08,pz,.24,.09,.30,shadow);
+   cube(m,px,base+.94,pz,.20,.055,.26,trim);
   }
-  // Raised wooden molding follows the back wall where masonry is uninterrupted.
   for(let x=g.west+1;x<g.east;x++){
    if(!solid(x,g.north,floor))continue;
    const base=y+terrainY(x,g.north);
-   cube(m,x+.5,base+1.25,g.north+.98,.95,.105,.075,timber);
-   cube(m,x+.5,base+1.36,g.north+.98,.95,.045,.095,trim);
+   cube(m,x+.5,base+1.25,g.north+.975,.93,.12,.09,timber);
+   cube(m,x+.5,base+1.35,g.north+.975,.93,.045,.11,trim);
+   cube(m,x+.5,base+.16,g.north+.985,.88,.09,.06,shadow);
+  }
+  for(let z=g.north+1;z<g.south;z++)for(const x of [g.west,g.east]){
+   if(!solid(x,z,floor))continue;
+   const px=x===g.west?x+.97:x+.03,base=y+terrainY(x,z);
+   cube(m,px,base+1.27,z+.5,.09,.115,.90,timber);
+   cube(m,px,base+1.35,z+.5,.11,.04,.90,trim);
+  }
+  // Short beam braces on solid back-wall masonry, not above the main aisle.
+  for(const x of [g.west+3,g.east-3]){
+   if(!solid(x,g.north,floor))continue;
+   const base=y+terrainY(x,g.north),cx=x+.5;
+   cube(m,cx,base+1.22,g.north+1.18,.18,.18,.46,timber);
+   cube(m,cx,base+1.29,g.north+1.18,.23,.055,.46,trim);
   }
  }
- const baseY=terrainY(Math.round(g.cx),Math.round(g.cz));
- // Guild charter / regional map: framed leather-toned board on the back wall,
- // positioned above the counter rather than occupying a floor cell.
- const mapX=Math.round(g.cx)+.5,mapZ=g.north+1.035;
+ const baseY=terrainY(Math.round(g.cx),g.north+1);
+ // Framed charter above the reception counter.
+ const mapX=Math.round(g.cx)+.5,mapZ=g.north+1.04;
  if(solid(Math.round(g.cx),g.north)){
-  cube(m,mapX,baseY+.67,mapZ,1.28,.79,.075,timber);
-  cube(m,mapX,baseY+.72,mapZ+.046,1.08,.61,.012,parchment);
-  // Stylised paths and district markers are raised geometry, no texture assets.
-  for(const [dx,dz] of [[-.33,-.14],[-.12,.12],[.22,-.05],[.33,.19]]){
-   cube(m,mapX+dx,baseY+.95+dz,mapZ+.062,.11,.018,.008,ink);
-  }
+  cube(m,mapX,baseY+.69,mapZ,1.30,.83,.085,timber);
+  cube(m,mapX,baseY+.73,mapZ+.051,1.12,.65,.012,parchment);
+  cube(m,mapX,baseY+1.135,mapZ+.057,1.27,.065,.027,trim);
+  for(const [dx,dy] of [[-.35,.81],[-.16,1.02],[.12,.88],[.31,1.09]])
+   cube(m,mapX+dx,baseY+dy,mapZ+.068,.11,.014,.010,ink);
   for(const [dx,dy] of [[-.31,.91],[.21,1.08],[.07,.77]])
-   cube(m,mapX+dx,baseY+dy,mapZ+.068,.06,.06,.010,brass);
+   cube(m,mapX+dx,baseY+dy,mapZ+.073,.05,.05,.012,brass);
  }
- // A clear timber-framed quest display at the west side of reception.
- const questX=g.west+4,questZ=g.north+1.045;
- if(solid(questX,g.north)){
-  cube(m,questX+.5,baseY+.47,questZ,1.22,.80,.11,timber);
-  cube(m,questX+.5,baseY+.52,questZ+.070,1.08,.65,.012,shadow);
-  for(const [dx,dy] of [[-.32,.65],[.06,.75],[.31,.45],[-.24,.38]]){
-   cube(m,questX+.5+dx,baseY+dy,questZ+.081,.24,.24,.011,parchment);
-   cube(m,questX+.5+dx,baseY+dy+.096,questZ+.095,.037,.035,.012,brass);
-   for(let k=0;k<3;k++)cube(m,questX+.5+dx,baseY+dy+.035-k*.049,questZ+.092,.16,.010,.004,ink);
+ // Oversized quest board mounted on the reception-side wall. Nine notices,
+ // prominent carved header, no freestanding object blocking the approach.
+ const questX=Math.round(g.west+4.5),questZ=g.north+1.045;
+ if([questX-1,questX,questX+1].every(x=>solid(x,g.north))){
+  const cx=questX+.5;
+  cube(m,cx,baseY+.65,questZ,2.66,1.14,.11,timber);
+  cube(m,cx,baseY+.65,questZ+.064,2.45,.91,.018,shadow);
+  cube(m,cx,baseY+1.235,questZ+.044,2.80,.12,.16,trim);
+  cube(m,cx,baseY+.12,questZ+.05,2.77,.085,.16,trim);
+  for(const x of [-1.25,1.25])cube(m,cx+x,baseY+.65,questZ+.06,.11,1.19,.15,trim);
+  for(let i=0;i<9;i++){
+   const col=i%3,row=Math.floor(i/3),dx=(col-1)*.75+(row%2?.035:-.025);
+   const dy=1.005-row*.275+((i%2)*.025),w=i===4?.49:.48,h=i===4?.23:.21;
+   cube(m,cx+dx,baseY+dy,questZ+.082,w,h,.012,parchment);
+   cube(m,cx+dx,baseY+dy+h*.39,questZ+.10,.038,.033,.012,brass);
+   for(let k=0;k<3;k++)
+    cube(m,cx+dx,baseY+dy+.044-k*.042,questZ+.095,w*.65-(k%2)*.04,.008,.005,ink);
   }
  }
  // One tidy ledger and pencil cup on the reception counter. Do not scatter
