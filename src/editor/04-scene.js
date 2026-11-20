@@ -217,17 +217,22 @@ function poiCameraRelativeStep(key){
 function togglePoiThirdPerson(){
  if(!poiWalkActive)return;
  poiThirdPerson=!poiThirdPerson;
+ if(poiThirdPerson&&cameraTopDown){cameraTopDown=false;$('topDownView').classList.remove('active');$('topDownView').setAttribute('aria-pressed','false')}
  $('poiThirdView').textContent=poiThirdPerson?'俯瞰視点':'三人称視点';
  $('poiThirdView').setAttribute('aria-pressed',String(poiThirdPerson));
  cursorDirty=true;
 }
 
 function toggleTopDown(){
- if(poiWalkActive)poiWalkSet(false);
+ // Keep editor-play and movement alive while switching to an overhead camera.
+ if(poiWalkActive&&poiThirdPerson)poiThirdPerson=false;
  cameraTopDown=!cameraTopDown;
- showEntireMap();cursorDirty=true;
+ if(poiWalkActive)poiWalkCamera();else showEntireMap();
+ cursorDirty=true;
  $('topDownView').classList.toggle('active',cameraTopDown);
  $('topDownView').setAttribute('aria-pressed',String(cameraTopDown));
+ $('poiThirdView').textContent=poiThirdPerson?'俯瞰視点':'三人称視点';
+ $('poiThirdView').setAttribute('aria-pressed',String(poiThirdPerson));
  toast(cameraTopDown?'真上から表示':'斜め視点に戻しました');
 }
 
