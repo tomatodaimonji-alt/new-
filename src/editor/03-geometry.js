@@ -1638,39 +1638,43 @@ function isWallId(id){return wallMaterialForId(id)!==null}
 // Shared staggered timber cladding for solid walls and door/window surrounds.
 // Identical course heights, colors and face depths make connected cells read
 // as a single built structure, not separate decorative tiles.
+// Continuous timber planks on both sides of guild and standard wood walls.
 function woodPlankFacing(m,x,y,z,direction,areas){
- const plankTones=[[.52,.36,.23],[.48,.33,.20],[.55,.38,.24],[.50,.34,.21]];
- const shadow=[.31,.205,.13],grain=[.41,.285,.18];
- const faceOffset=.510,relief=.019,course=.264;
- const add=(u,h,w,thick,color,off=faceOffset)=>{
-  if(w<=.002||thick<=.002)return;
-  const [dx,dz]=rot2(u,off,direction);
-  cube(m,x+dx,y+h,z+dz,direction%2?relief:w,thick,direction%2?w:relief,color);
- };
- // Natural board lengths stagger on alternate courses, as in dressed masonry.
- for(let row=0;row<6;row++){
-  const bottom=row*course,top=Math.min(1.4,bottom+course);
-  if(top<=bottom)continue;
-  const stagger=row%2?.175:0;
-  for(let i=-3;i<4;i++){
-   const start=i*.350+stagger-.5,end=start+.350;
-   for(const region of areas){
-    const left=Math.max(start,region.left),right=Math.min(end,region.right);
-    const low=Math.max(bottom,region.bottom),high=Math.min(top,region.top);
-    if(right-left<.012||high-low<.019)continue;
-    const gap=.009,lo=left+gap*.5,hi=right-gap*.5;
-    const floor=low+gap*.45,ceil=high-gap*.50;
-    if(hi<=lo||ceil<=floor)continue;
-    const tone=plankTones[(row*3+i+16)%plankTones.length];
-    add((lo+hi)/2,floor,hi-lo,ceil-floor,tone);
-    // Slight grain only on the broad boards, with the same orientation.
-    if(hi-lo>.16&&ceil-floor>.15){
-     const gY=floor+(ceil-floor)*.57;
-     const [gx,gz]=rot2((lo+hi)/2,.521,direction);
-     const w=(hi-lo)*.58;
-     cube(m,x+gx,y+gY,z+gz,direction%2?.004:w,.006,direction%2?w:.004,grain);
+ const boardColors=[[.55,.37,.225],[.51,.34,.205],[.58,.40,.25],[.49,.325,.195],[.54,.355,.215]];
+ const seam=[.255,.165,.100],grain=[.37,.245,.145],highlight=[.64,.455,.29];
+ const columns=6,width=1.002/columns,face=.510;
+ function strip(u,low,w,h,depth,color,forward=face){
+  if(w<=.001||h<=.001)return;
+  const [dx,dz]=rot2(u,forward,direction);
+  cube(m,x+dx,y+low,z+dz,direction%2?depth:w,h,direction%2?w:depth,color);
+ }
+ for(let i=0;i<columns;i++){
+  const left=-.501+i*width,right=left+width;
+  for(const region of areas){
+   const l=Math.max(left,region.left),rr=Math.min(right,region.right),
+    bottom=Math.max(0,region.bottom),top=Math.min(1.4,region.top);
+   if(rr-l<.015||top-bottom<.016)continue;
+   const center=(l+rr)/2,h=top-bottom;
+   const shade=boardColors[(i+Math.abs(Math.round(x*2))+Math.abs(Math.round(z*2)))%boardColors.length];
+   strip(center,bottom,rr-l-.005,h,.023,shade);
+   if(l===left&&i>0)strip(l,bottom,.010,h,.028,seam,.524);
+   const seed=(i+Math.round(x*13)+Math.round(z*9)+40)%3;
+   const grainX=center+(seed-1)*.032;
+   strip(grainX,bottom+.04,.006,Math.max(.02,h-.095),.006,grain,.527);
+   if(h>.6){
+    strip(center+.048,bottom+.14,.004,h*.34,.006,highlight,.528);
+    const knotY=bottom+.31+((i*7+Math.round(x*3)+Math.round(z*5)+30)%4)*.14;
+    if(knotY<top-.13){
+     strip(center-.028,knotY,.019,.048,.008,grain,.529);
+     strip(center-.028,knotY+.051,.009,.065,.007,highlight,.528);
     }
    }
+  }
+ }
+ for(const region of areas){
+  if(region.bottom<=.025&&region.top>=1.37){
+   strip((region.left+region.right)/2,.045,region.right-region.left,.064,.042,[.40,.255,.15],.538);
+   strip((region.left+region.right)/2,1.335,region.right-region.left,.066,.041,[.43,.285,.17],.538);
   }
  }
 }
@@ -1695,7 +1699,7 @@ function wallBlock(m,id,x,y,z,r=0,faceVisible=null,faceExterior=null){
  if(visible[2])quad(m,[x1,y,z0],[x0,y,z0],[x0,y1,z0],[x1,y1,z0],base.map(v=>v*.72));
  if(visible[3])quad(m,[x1,y,z1],[x1,y,z0],[x1,y1,z0],[x1,y1,z1],base.map(v=>v*.83));
  for(let direction=0;direction<4;direction++){
-  if(!visible[direction]||!exterior[direction])continue;
+  if(!visible[direction]||(!exterior[direction]&&mat!=='woodwall'))continue;
   function panel(u,yy,w,h,depth,color){
    // The relief is laid against the surface; no overlapping inner half walls.
    // Limit surface relief to 0.035 tiles so adjoining wall blocks fit closely.
