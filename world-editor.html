@@ -639,7 +639,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
  #viewWrap #pineAILegend{font-size:9px}
 }
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v78）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v79）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -2619,6 +2619,46 @@ function wallMaterialForId(id){
  return null;
 }
 function isWallId(id){return wallMaterialForId(id)!==null}
+// Shared staggered timber cladding for solid walls and door/window surrounds.
+// Identical course heights, colors and face depths make connected cells read
+// as a single built structure, not separate decorative tiles.
+function woodPlankFacing(m,x,y,z,direction,areas){
+ const plankTones=[[.52,.36,.23],[.48,.33,.20],[.55,.38,.24],[.50,.34,.21]];
+ const shadow=[.31,.205,.13],grain=[.41,.285,.18];
+ const faceOffset=.510,relief=.019,course=.264;
+ const add=(u,h,w,thick,color,off=faceOffset)=>{
+  if(w<=.002||thick<=.002)return;
+  const [dx,dz]=rot2(u,off,direction);
+  cube(m,x+dx,y+h,z+dz,direction%2?relief:w,thick,direction%2?w:relief,color);
+ };
+ // Natural board lengths stagger on alternate courses, as in dressed masonry.
+ for(let row=0;row<6;row++){
+  const bottom=row*course,top=Math.min(1.4,bottom+course);
+  if(top<=bottom)continue;
+  const stagger=row%2?.175:0;
+  for(let i=-3;i<4;i++){
+   const start=i*.350+stagger-.5,end=start+.350;
+   for(const region of areas){
+    const left=Math.max(start,region.left),right=Math.min(end,region.right);
+    const low=Math.max(bottom,region.bottom),high=Math.min(top,region.top);
+    if(right-left<.012||high-low<.019)continue;
+    const gap=.009,lo=left+gap*.5,hi=right-gap*.5;
+    const floor=low+gap*.45,ceil=high-gap*.50;
+    if(hi<=lo||ceil<=floor)continue;
+    const tone=plankTones[(row*3+i+16)%plankTones.length];
+    add((lo+hi)/2,floor,hi-lo,ceil-floor,tone);
+    // Slight grain only on the broad boards, with the same orientation.
+    if(hi-lo>.16&&ceil-floor>.15){
+     const gY=floor+(ceil-floor)*.57;
+     const [gx,gz]=rot2((lo+hi)/2,.521,direction);
+     const w=(hi-lo)*.58;
+     cube(m,x+gx,y+gY,z+gz,direction%2?.004:w,.006,direction%2?w:.004,grain);
+    }
+   }
+  }
+ }
+}
+
 function wallBlock(m,id,x,y,z,r=0,faceVisible=null,faceExterior=null){
  const mat=wallMaterialForId(id)||'wall';
  const colors={
@@ -2661,15 +2701,8 @@ function wallBlock(m,id,x,y,z,r=0,faceVisible=null,faceExterior=null){
     }
    }
    panel(0,1.331,.98,.047,.028,mat==='wall'?[.88,.87,.78]:[.65,.67,.62]);
-  }else if(mat==='woodwall'){
-    // Wood-plank relief and grain: each tile retains dark grooves and a shared trim.
-    for(let i=0;i<6;i++){
-     const u=-.407+i*.164;
-     panel(u,0,.153,1.32,.035,[.52+(i%3)*.026,.35+(i%3)*.018,.21+(i%2)*.015]);
-     panel(u+.070,.07,.009,1.16,.035,[.38,.25,.15]);
-     for(let k=0;k<3;k++)panel(u-.032+(k%2)*.045,.22+k*.32,.007,.14,.035,[.64,.44,.27]);
-    }
-    for(const yy of [.15,1.23])panel(0,yy,.98,.08,.035,[.39,.26,.16]);
+   }else if(mat==='woodwall'){
+    woodPlankFacing(m,x,y,z,direction,[{left:-.501,right:.501,bottom:0,top:1.4}]);
    }else if(mat==='brickwall'){
    const course=.219;
    for(let row=0;row<6;row++){
@@ -2907,7 +2940,14 @@ function matchedOpening(m,id,x,y,z){
    for(const side of [-1,1])for(const yy of [.36,.77,1.12])
     cube(m,x+side*.45,y+yy,dz,.085,.024,.018,c.edge);
   }else if(material==='woodwall'){
-   for(const side of [-1,1])cube(m,x+side*.445,y+.03,dz,.055,1.24,.02,c.edge);
+   // Exterior and interior wooden jambs, window sills, and lintels.
+   const areas=[
+    {left:-.501,right:-.36,bottom:0,top:1.4},
+    {left:.36,right:.501,bottom:0,top:1.4},
+    {left:-.36,right:.36,bottom:1.28,top:1.4}
+   ];
+   if(isWindow)areas.push({left:-.36,right:.36,bottom:0,top:.26});
+   woodPlankFacing(m,x,y,z,face>0?0:2,areas);
    if(!isWindow){
     for(let i=-2;i<=2;i++){
      const u=i*.127,zFace=z+face*.449;
