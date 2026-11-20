@@ -4889,7 +4889,7 @@ snapshot();for(const p of placements){const ix=world.findIndex(o=>o.x===p.x&&o.z
 function updateStats(){$('terrainHeightLabel').textContent=hover&&validPos(hover.x,hover.z)?terrainLevel(hover.x,hover.z):'-';$('gridLabel').textContent=MAP_W+'×'+MAP_H;$('countLabel').textContent=world.length;$('selectedLabel').textContent=byId(selected)?.name||'未選択';$('rotationLabel').textContent=rotation*90+'°';$('cursorStatus').textContent=hover?'マス: '+(hover.x+1)+', '+(hover.z+1)+' · '+({place:'配置',erase:'消去',pick:'取得',rotate:'回転',move:'選択',select:'選択',relocate:'移動',duplicate:'複製',terrainUp:'地面を上げる',terrainDown:'地面を下げる',terrainFlat:'平坦化'}[mode]||'配置'):'マスを選んで配置';}
 function updateSelected(){for(const [id,active] of [['quickPlace',mode==='place'],['quickErase',mode==='erase'],['quickRotate',mode==='rotate'],['quickMoveObject',mode==='relocate'],['quickDuplicate',mode==='duplicate']]){$(id).classList.toggle('active',active)}for(const b of document.querySelectorAll('[data-brush]'))b.classList.toggle('selected',mode==='place'&&(b.dataset.brush===selected||(b.dataset.brush==='wall'&&isWallId(selected))));for(const b of document.querySelectorAll('[data-mode]'))b.classList.toggle('selected',b.dataset.mode===mode);updateStats()}
 let wallExpanded=false,openedWallGroup=null,constructionExtrasExpanded=false,naturalExpanded=false;
-function mkButton(id,el){const btn=document.createElement('button');btn.className='item';btn.dataset.brush=id;const icon=createBlockIcon(id);const name=document.createElement('span');name.textContent=el.name+(id==='wall'?(wallExpanded?'　⌃':'　⌄'):'');btn.append(icon,name);btn.addEventListener('click',()=>{if(id==='wall'){openWallSelector();return}selected=id;mode='place';updateSelected();$('palette').classList.remove('mobileOpen')});return btn}
+function mkButton(id,el){const btn=document.createElement('button');btn.className='item';btn.dataset.brush=id;const icon=createBlockIcon(id);const name=document.createElement('span');name.textContent=el.name+(id==='wall'?(wallExpanded?'　⌃':'　⌄'):'');btn.append(icon,name);btn.addEventListener('click',()=>{if(id==='wall'){openWallSelector();return}selected=id;pineClearObjectSelection();mode='place';updateSelected();$('palette').classList.remove('mobileOpen')});return btn}
 const WALL_CHOICES=[
  ['wall','基本素材','標準的な明るい石の建材'],['stonewall','石積み','重厚な石造り'],['woodwall','木材','縦板と補強材'],
  ['brickwall','レンガ','赤いレンガ積み'],['plasterwall','漆喰','白壁と木枠'],['mosswall','苔むした石','古びた石と苔'],['ironwall','鉄板','金属パネルと鋲']
@@ -7570,9 +7570,9 @@ function pinePreparePlayEditing(){
   poiThirdPerson=false;cameraTopDown=true;poiSyncCameraModeUI();poiWalkCamera();
  }
 }
-$('quickPlace').addEventListener('click',()=>{pinePreparePlayEditing();mode='place';updateSelected()});
-$('quickErase').addEventListener('click',()=>{pinePreparePlayEditing();mode='erase';updateSelected()});
-$('quickRotate').addEventListener('click',()=>{pinePreparePlayEditing();mode='rotate';updateSelected()});
+$('quickPlace').addEventListener('click',()=>{pinePreparePlayEditing();pineClearObjectSelection();mode='place';updateSelected()});
+$('quickErase').addEventListener('click',()=>{pinePreparePlayEditing();pineClearObjectSelection();mode='erase';updateSelected();toast('削除する部材をタップして選択')});
+$('quickRotate').addEventListener('click',()=>{pinePreparePlayEditing();pineClearObjectSelection();mode='rotate';updateSelected();toast('回転する部材をタップして選択')});
 $('quickMoveObject').addEventListener('click',()=>{
  if(pineGameActive)return;
  pinePreparePlayEditing();pineClearObjectSelection();mode='relocate';updateSelected();
@@ -7583,7 +7583,7 @@ $('quickDuplicate').addEventListener('click',()=>{
  pinePreparePlayEditing();pineClearObjectSelection();mode='duplicate';updateSelected();
  toast('複製する部材をタップして選択');
 });
-// Touch gestures:// Touch gestures: place/erase/pick only on a completed, stationary single-finger tap.
+// Touch gestures: edits only on a completed, stationary single-finger tap.
 // Any dragging, multitouch, cancellation, or long press suppresses block changes.
 const touchPositions=new Map();
 let tapCandidate=null,multiGesture=null;
@@ -7684,7 +7684,7 @@ canvas.addEventListener('wheel',e=>{e.preventDefault();if(poiWalkActive&&poiThir
 $('rotatePlacement').addEventListener('click',()=>{rotation=(rotation+1)%4;updateStats();toast('次に置く部材の向き：'+rotation*90+'°')});
 $('fitMap').addEventListener('click',showEntireMap);$('turn').addEventListener('click',()=>{yaw+=Math.PI/2;cursorDirty=true});$('zoomIn').addEventListener('click',()=>zoom=Math.min(4,zoom*1.2));$('zoomOut').addEventListener('click',()=>zoom=Math.max(.025,zoom/1.2));$('resetCamera').addEventListener('click',()=>{yaw=Math.PI/4;showEntireMap()});$('rotatePart').addEventListener('click',()=>{rotation=(rotation+1)%4;updateStats()});$('level').addEventListener('change',e=>{level=Math.max(0,Math.min(MAX_LEVEL,Number(e.target.value)||0));dirty=true;cursorDirty=true;updateStats()});
 $('hideUpper').addEventListener('change',e=>{hideUpper=e.target.checked;dirty=true;cursorDirty=true;$('poiRoofToggle').textContent=hideUpper?'屋根を表示':'屋根を隠す';toast(hideUpper?'上階を隠して編集中':'全階層を表示中')});
-$('eyedrop').addEventListener('click',()=>{mode='pick';updateSelected();toast('配置済み部材をタップすると選べます')});for(const b of document.querySelectorAll('[data-mode]'))b.addEventListener('click',()=>{mode=b.dataset.mode;updateSelected()});
+$('eyedrop').addEventListener('click',()=>{mode='pick';updateSelected();toast('配置済み部材をタップすると選べます')});for(const b of document.querySelectorAll('[data-mode]'))b.addEventListener('click',()=>{pineClearObjectSelection();mode=b.dataset.mode;updateSelected()});
 $('undo').addEventListener('click',()=>{if(!undoStack.length)return;redoStack.push(JSON.stringify(data()));restore(undoStack.pop())});$('redo').addEventListener('click',()=>{if(!redoStack.length)return;undoStack.push(JSON.stringify(data()));restore(redoStack.pop())});
 $('villageDemo').addEventListener('click',makeVillageDemo);
 $('organicTownDemo').addEventListener('click',makeOrganicTownDemo);
