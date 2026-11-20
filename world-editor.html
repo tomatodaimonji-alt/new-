@@ -449,8 +449,17 @@ header h1{letter-spacing:.015em;white-space:nowrap;flex-shrink:0}
  #viewWrap:has(#poiWalkPad.active) #poiGameTools{top:84px!important}
  #viewWrap:has(#poiWalkPad.active) #pineCheckToolbar{top:128px}
 }
+/* v57: review controls dock immediately below whichever tool rows are visible.
+   A measured offset replaces fixed top values, including small-screen wraps. */
+#viewWrap #pineCheckToolbar,
+#viewWrap:has(#poiWalkPad.active) #pineCheckToolbar{
+ top:var(--pine-check-top,58px)!important;
+ right:8px!important;left:auto!important;transform:none!important;
+ max-width:calc(100% - 16px)!important;
+ flex-wrap:wrap;justify-content:flex-end;
+}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v56）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button></header>
+<div id="app"><header><h1>3Dワールド工房（v57）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button></header>
 <aside id="palette"><h2>建材ライブラリ</h2><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -6749,8 +6758,36 @@ function pineApplyGuildMarkedEdits(){
 let pineCheckMarks=[],pineCheckMode=false,pineCheckColor='#f5cb54';
 const PINE_CHECK_COLORS=['#f5cb54','#f06262','#43c579','#429ff0','#ffffff','#bd80ed'];
 const pineCheckNodes=new Map();
+// Dock checks under the real tool-row height, not an assumed top offset.
+let pineCheckLayoutQueued=false;
+function pinePositionCheckToolbar(){
+ const wrap=$('viewWrap'),bar=$('pineCheckToolbar');
+ if(!wrap||!bar||bar.hidden)return;
+ const wrapTop=wrap.getBoundingClientRect().top;
+ let bottom=wrapTop;
+ for(const id of ['quickTools','poiGameTools']){
+  const tool=$(id);
+  if(!tool||getComputedStyle(tool).display==='none')continue;
+  const rect=tool.getBoundingClientRect();
+  if(rect.height>0)bottom=Math.max(bottom,rect.bottom);
+ }
+ wrap.style.setProperty('--pine-check-top',Math.max(8,Math.ceil(bottom-wrapTop+8))+'px');
+}
+function pineQueueCheckLayout(){
+ if(pineCheckLayoutQueued)return;
+ pineCheckLayoutQueued=true;
+ requestAnimationFrame(()=>{pineCheckLayoutQueued=false;pinePositionCheckToolbar()});
+}
+if(typeof ResizeObserver!=='undefined'){
+ const pineToolsObserver=new ResizeObserver(pineQueueCheckLayout);
+ pineToolsObserver.observe($('quickTools'));
+ pineToolsObserver.observe($('poiGameTools'));
+}
+window.addEventListener('resize',pineQueueCheckLayout);
+if(window.visualViewport)window.visualViewport.addEventListener('resize',pineQueueCheckLayout);
 function pineCheckRefresh(){
  const bar=$('pineCheckToolbar');if(bar)bar.hidden=!pineCheckMode;
+ if(pineCheckMode)pineQueueCheckLayout();
  const button=$('pineCheckMode');
  if(button){button.classList.toggle('selected',pineCheckMode);button.setAttribute('aria-pressed',String(pineCheckMode))}
  const count=$('pineCheckCount');if(count)count.textContent=pineCheckMarks.length+'件';
