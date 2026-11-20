@@ -1331,6 +1331,28 @@ case 'kitchenSink':{
  cube(m,x,y+1.10,z-.17,.07,.09,.07,brass);
  for(const xx of [-.20,.20])cube(m,x+xx,y+.9,z-.35,.10,.06,.10,brass);
  break;}
+case 'guildLatrine':{
+ // Ceramic flushing toilet with lowered pale-blue water.
+ const porcelain=[.88,.86,.79],shine=[.98,.95,.87],shade=[.67,.67,.61],wood=[.48,.31,.19],dark=[.18,.21,.20];
+ const T=(dx,dy,dz,w,h,d,col)=>cube(m,x+dx*.74,y+dy*.78,z+dz*.74,w*.74,h*.78,d*.74,col);
+ T(0,.025,-.05,.78,.10,.80,wood);
+ T(0,.15,-.10,.55,.39,.49,porcelain);
+ T(0,.42,.09,.68,.17,.66,porcelain);
+ // Recessed interior: separated surface heights remove overlapping faces.
+ T(0,.590,.09,.49,.015,.49,shade);
+ T(0,.606,.09,.39,.012,.39,dark);
+ const waterY=y+.625*.78,rx=.145*.74,rz=.138*.74,wz=z+.09*.74;
+ for(let i=0;i<16;i++){
+  const a=i*Math.PI/8,b=(i+1)*Math.PI/8;
+  tri(m,[x,waterY,wz],[x+Math.cos(a)*rx,waterY,wz+Math.sin(a)*rz],
+    [x+Math.cos(b)*rx,waterY,wz+Math.sin(b)*rz],[.48,.78,.85]);
+ }
+ for(const dx of [-.30,.30])T(dx,.611,.09,.10,.058,.61,shine);
+ for(const dz of [-.22,.40])T(0,.611,dz,.65,.058,.10,shine);
+ T(0,.41,-.35,.65,.65,.19,porcelain);
+ T(0,1.04,-.35,.70,.11,.23,shine);
+ T(.20,1.14,-.35,.10,.05,.07,[.67,.54,.30]);
+ break;}
 case 'bathWood':case 'bathStone':case 'bathLuxury':{
  // Three distinct 1x1 open-top baths. Water plane sits below the rim.
  const timber=id==='bathWood',luxury=id==='bathLuxury';
@@ -1610,7 +1632,7 @@ function isWallId(id){return wallMaterialForId(id)!==null}
 function wallBlock(m,id,x,y,z,r=0,faceVisible=null,faceExterior=null){
  const mat=wallMaterialForId(id)||'wall';
  const colors={
-  wall:[.81,.82,.74],stonewall:[.54,.57,.54],woodwall:[.43,.29,.17],
+  wall:[.81,.82,.74],stonewall:[.54,.57,.54],woodwall:[.50,.34,.21],
   brickwall:[.50,.27,.21],plasterwall:[.87,.84,.72],
   mosswall:[.45,.51,.44],ironwall:[.35,.40,.44]
  };
@@ -1772,12 +1794,47 @@ function materialFixture(m,id,x,y,z){
  cube(m,x,y+.96,z,.94,.028,.86,stone?[.88,.87,.83]:luxury?[.62,.43,.25]:[.79,.61,.38]);
  cube(m,x,y+.83,z+.476,1.0,.068,.040,trim);
  cube(m,x,y+.095,z+.465,.89,.045,.06,stone?[.46,.48,.47]:[.62,.50,.34]);
+ // Guild reception chart: a parchment map with land masses, river, roads and compass.
+ // Add to the center inner counter only, without altering other counters.
+ if(id==='counterWood'&&MAP_W===30&&MAP_H===30&&Math.abs(x-14.5)<.01&&Math.abs(z-10.5)<.01&&
+    world.some(o=>o.x===14&&o.z===20&&o.y===0&&o.type==='stonewallDoor')&&
+    world.some(o=>o.x===12&&o.z===10&&o.y===0&&o.type==='counterWood')){
+  const paper=[.86,.75,.54],ink=[.36,.27,.19],land=[.68,.71,.48],
+   river=[.32,.59,.68],road=[.59,.38,.23],pin=[.74,.24,.17];
+  // Counter top finishes at y+.984; each layer sits above it at a distinct Y.
+  cube(m,x,y+.992,z-.014,.76,.009,.68,ink);
+  cube(m,x,y+1.003,z-.014,.719,.006,.638,paper);
+  const poly=(points,color,yy)=>{
+   const center=points.reduce((sum,p)=>[sum[0]+p[0]/points.length,sum[1]+p[1]/points.length],[0,0]);
+   for(let i=0;i<points.length;i++){
+    const a=points[i],b=points[(i+1)%points.length];
+    tri(m,[x+center[0],yy,z+center[1]],[x+a[0],yy,z+a[1]],[x+b[0],yy,z+b[1]],color);
+   }
+  };
+  const stroke=(ax,az,bx,bz,width,color,yy)=>{
+   const dx=bx-ax,dz=bz-az,len=Math.hypot(dx,dz)||1,ox=-dz/len*width/2,oz=dx/len*width/2;
+   quad(m,[x+ax+ox,yy,z+az+oz],[x+bx+ox,yy,z+bz+oz],
+     [x+bx-ox,yy,z+bz-oz],[x+ax-ox,yy,z+az-oz],color);
+  };
+  poly([[-.30,-.23],[-.11,-.24],[.02,-.12],[-.06,.02],[-.22,.04],[-.31,-.08]],land,y+1.011);
+  poly([[.04,.06],[.19,-.02],[.29,.08],[.26,.24],[.08,.26],[-.02,.16]],land,y+1.011);
+  poly([[-.24,-.14],[-.16,-.20],[-.08,-.12],[-.14,-.06]], [.48,.56,.35],y+1.012);
+  const riverPoints=[[-.27,.22],[-.15,.15],[-.03,.08],[.08,-.04],[.16,-.15],[.24,-.24]];
+  for(let i=1;i<riverPoints.length;i++)stroke(...riverPoints[i-1],...riverPoints[i],.021,river,y+1.015);
+  const route=[[-.23,-.12],[-.04,-.08],[.11,.14],[.25,.17]];
+  for(let i=1;i<route.length;i++)stroke(...route[i-1],...route[i],.011,road,y+1.018);
+  for(const [xx,zz] of [[-.22,-.12],[.11,.14],[.24,.17]])
+   cube(m,x+xx,y+1.018,z+zz,.029,.006,.029,ink);
+  stroke(.264,-.19,.264,-.12,.013,ink,y+1.019);
+  poly([[.264,-.24],[.24,-.19],[.288,-.19]],ink,y+1.021);
+  cube(m,x-.04,y+1.020,z+.08,.037,.008,.037,pin);
+ }
 }
 
 const MATCHED_OPENING_MATERIALS={
  wall:{shell:[.81,.82,.74],edge:[.65,.68,.62],frame:[.57,.48,.35],door:[.51,.35,.23],detail:[.73,.69,.54]},
  stonewall:{shell:[.54,.57,.54],edge:[.34,.39,.37],frame:[.68,.69,.64],door:[.46,.31,.22],detail:[.39,.43,.40]},
- woodwall:{shell:[.43,.29,.17],edge:[.29,.19,.12],frame:[.67,.46,.26],door:[.45,.29,.17],detail:[.75,.55,.33]},
+ woodwall:{shell:[.50,.34,.21],edge:[.29,.19,.12],frame:[.67,.46,.26],door:[.45,.29,.17],detail:[.75,.55,.33]},
  brickwall:{shell:[.50,.27,.21],edge:[.37,.20,.17],frame:[.72,.47,.31],door:[.48,.30,.18],detail:[.75,.44,.30]},
  plasterwall:{shell:[.87,.84,.72],edge:[.65,.57,.44],frame:[.55,.42,.30],door:[.56,.36,.23],detail:[.92,.88,.77]},
  mosswall:{shell:[.45,.51,.44],edge:[.31,.41,.31],frame:[.48,.53,.38],door:[.41,.29,.19],detail:[.30,.46,.28]},
@@ -1901,41 +1958,7 @@ function matchedCounter(m,id,x,y,z){
  cube(m,x,y+.961,z-.015,.91,.023,.85,c.detail);
  cube(m,x,y+.085,z+.475,.85,.04,.037,c.edge);
 
- // Guild reception chart: a parchment map with land masses, river, roads and compass.
- // Add to the center inner counter only, without altering other counters.
- if(wood&&MAP_W===30&&MAP_H===30&&Math.abs(x-14.5)<.01&&Math.abs(z-10.5)<.01&&
-    world.some(o=>o.x===14&&o.z===20&&o.y===0&&o.type==='stonewallDoor')&&
-    world.some(o=>o.x===12&&o.z===10&&o.y===0&&o.type==='counterWood')){
-  const paper=[.86,.75,.54],ink=[.36,.27,.19],land=[.68,.71,.48],
-   river=[.32,.59,.68],road=[.59,.38,.23],pin=[.74,.24,.17];
-  // Counter top finishes at y+.984; each layer sits above it at a distinct Y.
-  cube(m,x,y+.992,z-.014,.76,.009,.68,ink);
-  cube(m,x,y+1.003,z-.014,.719,.006,.638,paper);
-  const poly=(points,color,yy)=>{
-   const center=points.reduce((sum,p)=>[sum[0]+p[0]/points.length,sum[1]+p[1]/points.length],[0,0]);
-   for(let i=0;i<points.length;i++){
-    const a=points[i],b=points[(i+1)%points.length];
-    tri(m,[x+center[0],yy,z+center[1]],[x+a[0],yy,z+a[1]],[x+b[0],yy,z+b[1]],color);
-   }
-  };
-  const stroke=(ax,az,bx,bz,width,color,yy)=>{
-   const dx=bx-ax,dz=bz-az,len=Math.hypot(dx,dz)||1,ox=-dz/len*width/2,oz=dx/len*width/2;
-   quad(m,[x+ax+ox,yy,z+az+oz],[x+bx+ox,yy,z+bz+oz],
-     [x+bx-ox,yy,z+bz-oz],[x+ax-ox,yy,z+az-oz],color);
-  };
-  poly([[-.30,-.23],[-.11,-.24],[.02,-.12],[-.06,.02],[-.22,.04],[-.31,-.08]],land,y+1.011);
-  poly([[.04,.06],[.19,-.02],[.29,.08],[.26,.24],[.08,.26],[-.02,.16]],land,y+1.011);
-  poly([[-.24,-.14],[-.16,-.20],[-.08,-.12],[-.14,-.06]], [.48,.56,.35],y+1.012);
-  const riverPoints=[[-.27,.22],[-.15,.15],[-.03,.08],[.08,-.04],[.16,-.15],[.24,-.24]];
-  for(let i=1;i<riverPoints.length;i++)stroke(...riverPoints[i-1],...riverPoints[i],.021,river,y+1.015);
-  const route=[[-.23,-.12],[-.04,-.08],[.11,.14],[.25,.17]];
-  for(let i=1;i<route.length;i++)stroke(...route[i-1],...route[i],.011,road,y+1.018);
-  for(const [xx,zz] of [[-.22,-.12],[.11,.14],[.24,.17]])
-   cube(m,x+xx,y+1.018,z+zz,.029,.006,.029,ink);
-  stroke(.264,-.19,.264,-.12,.013,ink,y+1.019);
-  poly([[.264,-.24],[.24,-.19],[.288,-.19]],ink,y+1.021);
-  cube(m,x-.04,y+1.020,z+.08,.037,.008,.037,pin);
- }
+
 }
 function deco(m,id,x,y,z,r=0){
  if(MATCHED_COUNTER_IDS.has(id)){
