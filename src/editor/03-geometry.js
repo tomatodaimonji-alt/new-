@@ -1341,11 +1341,17 @@ case 'guildLatrine':{
  // Recessed interior: separated surface heights remove overlapping faces.
  T(0,.590,.09,.49,.015,.49,shade);
  T(0,.606,.09,.39,.012,.39,dark);
- const waterY=y+.625*.78,rx=.145*.74,rz=.138*.74,wz=z+.09*.74;
- for(let i=0;i<16;i++){
-  const a=i*Math.PI/8,b=(i+1)*Math.PI/8;
-  tri(m,[x,waterY,wz],[x+Math.cos(a)*rx,waterY,wz+Math.sin(a)*rz],
-    [x+Math.cos(b)*rx,waterY,wz+Math.sin(b)*rz],[.48,.78,.85]);
+ // Rounded rectangle: narrower across the seat, longer front-to-back.
+ // A superellipse gives gently curved corners without a circular water patch.
+ const waterY=y+.625*.78,rx=.139*.74,rz=.173*.74,wz=z+.09*.74;
+ const waterCorner=a=>{
+  const co=Math.cos(a),si=Math.sin(a),power=.38;
+  return [x+Math.sign(co)*Math.pow(Math.abs(co),power)*rx,waterY,
+          wz+Math.sign(si)*Math.pow(Math.abs(si),power)*rz];
+ };
+ for(let i=0;i<24;i++){
+  const a=i*Math.PI/12,b=(i+1)*Math.PI/12;
+  tri(m,[x,waterY,wz],waterCorner(a),waterCorner(b),[.48,.78,.85]);
  }
  for(const dx of [-.30,.30])T(dx,.611,.09,.10,.058,.61,shine);
  for(const dz of [-.22,.40])T(0,.611,dz,.65,.058,.10,shine);
