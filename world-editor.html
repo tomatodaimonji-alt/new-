@@ -639,7 +639,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
  #viewWrap #pineAILegend{font-size:9px}
 }
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v83）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v84）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -652,7 +652,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
  <button id="pineCheckClear" type="button">全消去</button>
 </div><div id="pineAIMode" hidden aria-label="AI理解用の配置図">
  <div id="pineAIHeader"><strong>AI理解用 · 座標マップ</strong><span id="pineAIMapInfo"></span></div>
- <div id="pineAIControls"><button type="button" id="pineAILevelDown">階 −</button><strong id="pineAILevelLabel">階 0</strong><button type="button" id="pineAILevelUp">階 ＋</button><button type="button" id="pineAIZoomOut">−</button><button type="button" id="pineAIZoomIn">＋</button><button type="button" id="pineAIFit">全体</button><button type="button" id="pineAIScreenMode">スクショ用</button><button type="button" id="pineAIImageSave">画像を保存</button><button type="button" id="pineAIDownload">JSON保存</button><button type="button" id="pineAIClose">戻る</button></div>
+ <div id="pineAIControls"><button type="button" id="pineAILevelDown">階 −</button><strong id="pineAILevelLabel">階 0</strong><button type="button" id="pineAILevelUp">階 ＋</button><button type="button" id="pineAIZoomOut">−</button><button type="button" id="pineAIZoomIn">＋</button><button type="button" id="pineAIFit">全体</button><button type="button" id="pineAIFullShot">全体1枚</button><button type="button" id="pineAIScreenMode">10マス詳細</button><button type="button" id="pineAIImageSave">画像を保存</button><button type="button" id="pineAIDownload">JSON保存</button><button type="button" id="pineAIClose">戻る</button></div>
  <canvas id="pineAIMap" aria-label="座標・家具ID・回転を表示する2Dマップ"></canvas>
  <div id="pineAIDetail" role="status">マスをタップすると、物の種類・座標・向きが表示されます。</div>
  <div id="pineAILegend">W 壁 / D 扉 / N 窓 / C カウンター / F 家具 / G 床 / O その他　矢印＝向き　ドラッグ＝移動</div>
@@ -4454,7 +4454,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v83',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v84',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -4540,6 +4540,137 @@ function pineAIRender(){
  }
 }
 
+
+// v84 - single-screen floor overview for existing Android APKs.
+// Every used type has its own stable, locally numbered short code; avoid
+// ungrounded aliases and do not pretend clipped legends are complete.
+function pineAIShortTypeMap(entries){
+ const groups={W:[],D:[],N:[],C:[],F:[],S:[],G:[],O:[]};
+ const unique=[...new Set(entries.map(o=>o.type))].sort();
+ for(const type of unique){
+  const kind=pineAIKind({type});
+  const family=/sign|logo|nameplate/i.test(type)?'S':groups[kind]?kind:'O';
+  groups[family].push(type);
+ }
+ const mappings=new Map(),legend=[];
+ for(const [family,types] of Object.entries(groups))for(let i=0;i<types.length;i++){
+  // Two-character labels where possible (0-9A-Z); longer IDs stay exact.
+  const code=family+i.toString(36).toUpperCase();
+  mappings.set(types[i],code);
+  legend.push({code,type:types[i],category:family});
+ }
+ return {mappings,legend};
+}
+function pineAIOneShotMode(){
+ if(!pineAIActive)pineAISetActive(true);
+ let view=document.getElementById('pineAIOneShot');
+ if(!view){
+  view=document.createElement('div');view.id='pineAIOneShot';
+  view.style.cssText='position:fixed;inset:0;z-index:99999;background:#f6f9f5;color:#17352c;box-sizing:border-box;padding:5px;font:11px ui-monospace,monospace;display:flex;flex-direction:column;gap:3px;overflow:hidden';
+  const top=document.createElement('div');top.style.cssText='display:flex;align-items:center;gap:8px;flex-shrink:0;min-height:26px';
+  const title=document.createElement('strong');title.id='pineFullShotTitle';title.style.cssText='flex:1;font-size:12px;white-space:nowrap;overflow:hidden';
+  const back=document.createElement('button');back.type='button';back.textContent='閉じる';back.style.cssText='padding:3px 10px;color:#163629;background:#dceae0;border:1px solid #8daa9d;border-radius:5px';
+  back.onclick=()=>view.remove();
+  top.append(title,back);
+  const content=document.createElement('div');content.style.cssText='display:flex;gap:6px;flex:1;min-height:0;overflow:hidden';
+  const mapWrap=document.createElement('div');mapWrap.style.cssText='flex:0 0 auto;min-width:0;display:flex;align-items:center;justify-content:center;overflow:hidden';
+  const map=document.createElement('canvas');map.id='pineFullShotCanvas';map.style.cssText='display:block;background:white';
+  mapWrap.append(map);
+  const right=document.createElement('div');right.id='pineFullShotLegend';
+  right.style.cssText='flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;overflow:hidden;font-size:10px;line-height:1.13';
+  content.append(mapWrap,right);view.append(top,content);document.body.appendChild(view);
+  const update=()=>{if(document.getElementById('pineAIOneShot'))pineAIOneShotRender()};
+  window.addEventListener('resize',update,{passive:true});
+  view._cleanup=()=>window.removeEventListener('resize',update);
+  back.onclick=()=>{view._cleanup();view.remove()};
+ }
+ pineAIOneShotRender();
+}
+function pineAIOneShotRender(){
+ const view=document.getElementById('pineAIOneShot');if(!view)return;
+ const floor=poiWalkActive?poiWalkLevel:pineAILevel;
+ const objects=world.filter(o=>o.y===floor).map(pineAIRecord);
+ const {mappings,legend}=pineAIShortTypeMap(objects);
+ const byCell=new Map();
+ for(const o of objects){
+  const key=o.x+','+o.z;
+  if(!byCell.has(key))byCell.set(key,[]);
+  byCell.get(key).push(o);
+ }
+ const real=objects.filter(o=>!isFloor(o.type));
+ const overlaps=[...byCell].filter(([,items])=>items.filter(o=>!isFloor(o.type)).length>1);
+ const canvas=view.querySelector('#pineFullShotCanvas'),right=view.querySelector('#pineFullShotLegend');
+ const top=view.querySelector('#pineFullShotTitle');
+ top.textContent='AI全体1枚 / Y='+floor+' / '+MAP_W+'×'+MAP_H+' / 物 '+real.length+'・床 '+(objects.length-real.length)+' / ↑0 →1 ↓2 ←3';
+ const body=view.children[1],availH=Math.max(100,body.clientHeight-2);
+ // At 30x30 on a landscape phone a 12-14px cell is possible.
+ const availW=Math.max(80,Math.floor(view.clientWidth*.52));
+ const unit=Math.max(3,Math.floor(Math.min((availW-32)/MAP_W,(availH-22)/MAP_H)));
+ const gridW=MAP_W*unit,gridH=MAP_H*unit,margin=unit>9?22:15;
+ canvas.style.width=(gridW+margin+2)+'px';canvas.style.height=(gridH+margin+2)+'px';
+ const scale=Math.min(window.devicePixelRatio||1,2);
+ canvas.width=Math.ceil((gridW+margin+2)*scale);canvas.height=Math.ceil((gridH+margin+2)*scale);
+ const g=canvas.getContext('2d');g.setTransform(scale,0,0,scale,0,0);
+ g.fillStyle='#f8faf6';g.fillRect(0,0,canvas.width/scale,canvas.height/scale);
+ const glyph=['↑','→','↓','←'];
+ for(let z=0;z<MAP_H;z++)for(let x=0;x<MAP_W;x++){
+  const items=byCell.get(x+','+z)||[];
+  const elements=items.filter(o=>!isFloor(o.type));
+  const floorObject=items.find(o=>isFloor(o.type));
+  const xx=margin+x*unit,yy=margin+z*unit,topObj=elements[elements.length-1];
+  const terrain=terrainLevel(x,z);
+  g.fillStyle=floorObject?(/grass|meadow|forest/i.test(floorObject.type)?'#d3e5c9':/wood/i.test(floorObject.type)?'#e3ccad':'#e1dfcf'):'#fff';
+  g.fillRect(xx,yy,unit,unit);
+  g.strokeStyle='#adc2b5';g.lineWidth=.45;g.strokeRect(xx+.15,yy+.15,unit-.3,unit-.3);
+  if(topObj){
+   const short=mappings.get(topObj.type);
+   g.fillStyle='#193b63';g.textAlign='center';g.textBaseline='middle';
+   g.font='bold '+Math.min(10,Math.max(5,unit*.67))+'px monospace';
+   g.fillText(short,xx+unit*.45,yy+unit*.45,Math.max(3,unit*.88));
+   if(unit>=9){
+    g.fillStyle='#a14b16';g.font='bold '+Math.min(8,unit*.55)+'px sans-serif';
+    g.fillText(glyph[((topObj.rot%4)+4)%4],xx+unit*.7,yy+unit*.84);
+   }
+  }
+  if(elements.length>1){
+   g.fillStyle='#d7332d';g.fillRect(xx+unit-4,yy,4,4);
+   if(unit>=12){g.fillStyle='white';g.font='bold 6px monospace';g.textAlign='center';g.fillText(String(Math.min(elements.length,9)),xx+unit-2,yy+2.8)}
+  }
+  if(poiWalkActive&&floor===poiWalkLevel&&poiWalkX===x&&poiWalkZ===z){
+   g.strokeStyle='#ea211e';g.lineWidth=2;g.strokeRect(xx+1,yy+1,unit-2,unit-2);
+  }
+  if(terrain>0&&!topObj){
+   g.fillStyle='#826326';g.font='bold 7px monospace';g.textAlign='center';g.fillText('h'+terrain,xx+unit*.5,yy+unit*.54,unit-1);
+  }
+ }
+ g.fillStyle='#204632';g.textBaseline='middle';g.font='bold '+Math.min(9,Math.max(5,unit*.65))+'px monospace';
+ for(let x=0;x<MAP_W;x++){g.textAlign='center';g.fillText(''+x,margin+(x+.5)*unit,margin-7)}
+ for(let z=0;z<MAP_H;z++){g.textAlign='right';g.fillText(''+z,margin-3,margin+(z+.5)*unit)}
+ const density=Math.max(8,Math.floor((Math.min(view.clientHeight,body.clientHeight)-30)/11));
+ const keyLines=legend.map(o=>o.code+'='+o.type);
+ const stackLines=overlaps.map(([key,items])=>key+':'+items.filter(o=>!isFloor(o.type))
+  .map(o=>mappings.get(o.type)+(((o.rot%4)+4)%4)).join('/'));
+ const heightLines=[...terrainHeights.entries()].filter(([,v])=>v!==0).map(([key,n])=>key+' h'+n);
+ const legendHeader=document.createElement('div');
+ legendHeader.style.cssText='font-weight:bold;font-size:10px;white-space:normal;flex:0 0 auto';
+ legendHeader.textContent='凡例 '+legend.length+'種 / 重なり '+overlaps.length+'マス / 略号+回転番号 (例 W2↑)';
+ const formatLines=[...keyLines.map(x=>'ID '+x),...stackLines.map(x=>'重 '+x),...heightLines.map(x=>'高 '+x)];
+ const colWidth=195;
+ const rightW=Math.max(180,right.clientWidth);
+ const cols=Math.max(1,Math.floor(rightW/colWidth));
+ const lineCapacity=cols*Math.max(1,density-2);
+ const warning=document.createElement('div');
+ warning.style.cssText='flex:0 0 auto;font-weight:bold;color:#a42f22;font-size:10px';
+ if(formatLines.length>lineCapacity){
+  warning.textContent='情報超過：右側 '+(formatLines.length-lineCapacity)+'行は1枚に収まりません。10マス詳細またはJSONが必要です';
+ }else warning.textContent='全データ表示：凡例・重なり・高さの一覧';
+ const list=document.createElement('div');
+ list.style.cssText='flex:1;min-height:0;display:grid;grid-auto-flow:column;grid-template-rows:repeat('+Math.max(1,density-2)+',minmax(0,1fr));grid-template-columns:repeat('+cols+',minmax(0,1fr));gap:0 4px;overflow:hidden;font-size:clamp(8px,1vw,10px);line-height:1.1';
+ for(const line of formatLines.slice(0,lineCapacity)){
+  const e=document.createElement('div');e.textContent=line;e.style.cssText='white-space:nowrap;overflow:hidden;text-overflow:clip';list.appendChild(e);
+ }
+ right.replaceChildren(legendHeader,warning,list);
+}
 
 // Screenshot-first AI export for old APKs: each fixed 10x10 viewport is fully
 // self-describing (grid, IDs, rotations, and legend). No download API is used.
@@ -4809,6 +4940,7 @@ function pineAIWire(){
  $('pineAIFit').addEventListener('click',pineAIFitMap);
  $('pineAIClose').addEventListener('click',()=>pineAISetActive(false));
  $('pineAIScreenMode').addEventListener('click',pineAIScreenshotMode);
+ $('pineAIFullShot').addEventListener('click',pineAIOneShotMode);
  $('pineAIImageSave').addEventListener('click',pineAIExportImage);
  // Show a usable export fallback when the installed Android WebView cannot
  // download blob: links (older APKs lack the native file-save bridge).
