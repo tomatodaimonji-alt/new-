@@ -1635,6 +1635,46 @@ function wallMaterialForId(id){
  return null;
 }
 function isWallId(id){return wallMaterialForId(id)!==null}
+// Shared staggered timber cladding for solid walls and door/window surrounds.
+// Identical course heights, colors and face depths make connected cells read
+// as a single built structure, not separate decorative tiles.
+function woodPlankFacing(m,x,y,z,direction,areas){
+ const plankTones=[[.52,.36,.23],[.48,.33,.20],[.55,.38,.24],[.50,.34,.21]];
+ const shadow=[.31,.205,.13],grain=[.41,.285,.18];
+ const faceOffset=.510,relief=.019,course=.264;
+ const add=(u,h,w,thick,color,off=faceOffset)=>{
+  if(w<=.002||thick<=.002)return;
+  const [dx,dz]=rot2(u,off,direction);
+  cube(m,x+dx,y+h,z+dz,direction%2?relief:w,thick,direction%2?w:relief,color);
+ };
+ // Natural board lengths stagger on alternate courses, as in dressed masonry.
+ for(let row=0;row<6;row++){
+  const bottom=row*course,top=Math.min(1.4,bottom+course);
+  if(top<=bottom)continue;
+  const stagger=row%2?.175:0;
+  for(let i=-3;i<4;i++){
+   const start=i*.350+stagger-.5,end=start+.350;
+   for(const region of areas){
+    const left=Math.max(start,region.left),right=Math.min(end,region.right);
+    const low=Math.max(bottom,region.bottom),high=Math.min(top,region.top);
+    if(right-left<.012||high-low<.019)continue;
+    const gap=.009,lo=left+gap*.5,hi=right-gap*.5;
+    const floor=low+gap*.45,ceil=high-gap*.50;
+    if(hi<=lo||ceil<=floor)continue;
+    const tone=plankTones[(row*3+i+16)%plankTones.length];
+    add((lo+hi)/2,floor,hi-lo,ceil-floor,tone);
+    // Slight grain only on the broad boards, with the same orientation.
+    if(hi-lo>.16&&ceil-floor>.15){
+     const gY=floor+(ceil-floor)*.57;
+     const [gx,gz]=rot2((lo+hi)/2,.521,direction);
+     const w=(hi-lo)*.58;
+     cube(m,x+gx,y+gY,z+gz,direction%2?.004:w,.006,direction%2?w:.004,grain);
+    }
+   }
+  }
+ }
+}
+
 function wallBlock(m,id,x,y,z,r=0,faceVisible=null,faceExterior=null){
  const mat=wallMaterialForId(id)||'wall';
  const colors={
@@ -1676,11 +1716,7 @@ function wallBlock(m,id,x,y,z,r=0,faceVisible=null,faceExterior=null){
    }
    panel(0,1.331,.98,.047,.028,mat==='wall'?[.88,.87,.78]:[.65,.67,.62]);
   }else if(mat==='woodwall'){
-   for(let i=0;i<5;i++){
-    const u=-.4+i*.2;
-    panel(u,0,.176,1.32,.026,[.46+(i%3)*.035,.30+(i%3)*.024,.18+(i%2)*.016]);
-   }
-   for(const yy of [.20,1.17])panel(0,yy,.98,.065,.030,[.33,.23,.15]);
+   woodPlankFacing(m,x,y,z,direction,[{left:-.501,right:.501,bottom:0,top:1.4}]);
   }else if(mat==='brickwall'){
    const course=.219;
    for(let row=0;row<6;row++){
@@ -1918,7 +1954,15 @@ function matchedOpening(m,id,x,y,z){
    for(const side of [-1,1])for(const yy of [.36,.77,1.12])
     cube(m,x+side*.45,y+yy,dz,.085,.024,.018,c.edge);
   }else if(material==='woodwall'){
-   for(const side of [-1,1])cube(m,x+side*.445,y+.03,dz,.055,1.24,.02,c.edge);
+   // Same staggered wood courses as neighboring wall tiles, clipped to the
+   // posts, upper lintel and (for windows) the solid sill.
+   const areas=[
+    {left:-.501,right:-.36,bottom:0,top:1.4},
+    {left:.36,right:.501,bottom:0,top:1.4},
+    {left:-.36,right:.36,bottom:1.28,top:1.4}
+   ];
+   if(isWindow)areas.push({left:-.36,right:.36,bottom:0,top:.26});
+   woodPlankFacing(m,x,y,z,face>0?0:2,areas);
   }else if(material==='mosswall'){
    for(const side of [-1,1])for(const yy of [.33,1.01])
     cube(m,x+side*.44,y+yy,dz,.075,.14,.02,[.26,.47,.27]);
