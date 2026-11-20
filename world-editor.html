@@ -639,7 +639,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
  #viewWrap #pineAILegend{font-size:9px}
 }
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v88）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v89）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -4463,7 +4463,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v88',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v89',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -4558,8 +4558,11 @@ function pineAIRender(){
 // inferred from a pixel color or a numbered overlay ID. Python decoder:
 // tools/decode_ai_screenshot.py
 let pineAICaptureGeneration=0;
+// Four bits per module, enabling large guild layouts in a single screen.
 const PINE_AI_COLORS=['#141414','#e23439','#19a257','#2859e2',
- '#f7c638','#aa3be1','#20c8d0','#f4f4f4'];
+ '#f7c638','#aa3be1','#20c8d0','#f4f4f4',
+ '#904316','#f0759c','#87bb42','#7880ed',
+ '#c07c25','#503b73','#567a7e','#aaaaaa'];
 function pineAIScreenChecksum(bytes){
  let h=2166136261;
  for(const b of bytes){h=Math.imul(h^b,16777619)>>>0}
@@ -4579,24 +4582,28 @@ async function pineAIGzip(bytes){
  return new Uint8Array(await new Response(input.pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
 }
 function pineAIEncodeColorGrid(canvas,bytes,maxHeight,width){
- const unit=5,border=4,cols=Math.max(20,Math.floor((width-12-border*2)/unit));
- const nSymbols=Math.ceil(bytes.length*8/3),rows=Math.ceil(nSymbols/cols);
- const height=rows*unit+border*2;
- if(height>maxHeight)throw Error('全データが1枚に収まりません ('+bytes.length+'バイト)。JSON保存を利用してください');
+ const border=4;
+ const target=Math.max(12,bytes.length*2); // Two 4-bit cells per byte.
+ // Select the largest reliably readable module size that still fits the
+ // screenshot; never silently crop any payload bytes.
+ let candidate=null;
+ for(const unit of [6,5,4,3,2]){
+  const cols=Math.floor((width-12-border*2)/unit);
+  if(cols<20)continue;
+  const rows=Math.ceil(target/cols),height=rows*unit+border*2;
+  if(height<=maxHeight){candidate={unit,cols,rows,height};break}
+ }
+ if(!candidate)throw Error('全データが1枚に収まりません ('+bytes.length+'バイト)。JSON保存を利用してください');
+ const {unit,cols,rows,height}=candidate;
  canvas.width=cols*unit+border*2;canvas.height=height;
  canvas.style.width=canvas.width+'px';canvas.style.height=height+'px';
  const g=canvas.getContext('2d',{alpha:false});g.imageSmoothingEnabled=false;
  g.fillStyle='#ff00b4';g.fillRect(0,0,canvas.width,canvas.height);
- // Border's unique magenta is a finder; exact fixed-size modules survive PNG screenshots.
- let bitIndex=0;
  for(let index=0;index<rows*cols;index++){
-  let value=0;
-  for(let k=0;k<3;k++){
-   const bit=bitIndex++,byte=bytes[bit>>3];
-   value=(value<<1)|((byte===undefined)?0:((byte>>(7-(bit&7)))&1));
-  }
+  const byte=bytes[index>>1]||0;
+  const symbol=(index&1)?byte&15:byte>>4;
   const x=border+(index%cols)*unit,y=border+Math.floor(index/cols)*unit;
-  g.fillStyle=PINE_AI_COLORS[value];g.fillRect(x,y,unit,unit);
+  g.fillStyle=PINE_AI_COLORS[symbol];g.fillRect(x,y,unit,unit);
  }
  return{cols,rows,unit,height,bytes:bytes.length};
 }
@@ -4674,10 +4681,10 @@ async function pineAIFullCapture(){
  $('pineCaptureTitle').textContent='AI配置全記録 / '+MAP_W+'×'+MAP_H+' / Y='+level+' / '+objects.length+'件';
  $('pineCaptureStatus').textContent='圧縮データ作成中…';
  $('pineCaptureCode').style.display='none';
- pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.48));
+ pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v88',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v89',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -4686,7 +4693,7 @@ async function pineAIFullCapture(){
   const maxHeight=Math.floor(window.innerHeight-mapHeight-125);
   const dims=pineAIEncodeColorGrid($('pineCaptureCode'),payload,maxHeight,window.innerWidth);
   $('pineCaptureCode').style.display='block';
-  $('pineCaptureStatus').textContent='全データ収録完了: '+objects.length+'件 / '+gzip.length+'バイト圧縮 / '+dims.cols+'×'+dims.rows;
+  $('pineCaptureStatus').textContent='全データ収録完了: '+objects.length+'件 / '+gzip.length+'バイト圧縮 / '+dims.cols+'×'+dims.rows+' / '+dims.unit+'px';
   $('pineCaptureInstructions').textContent='この画面を1枚スクショして送信（コード部分を切り取らない）';
  }catch(e){
   if(generation!==pineAICaptureGeneration)return;
