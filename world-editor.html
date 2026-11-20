@@ -615,7 +615,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
  header #batteryIndicator .batteryShape{width:23px;height:13px}
 }
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v68）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v69）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -7028,14 +7028,32 @@ function pineApplyGuildMarkedEdits(){
   world=world.filter(p=>!(p.x===x&&p.z===z&&p.y===0&&types.includes(p.type)));
   if(world.length!==before)changed=true;
  };
- if(has(11,8,'woodwall')&&!has(11,8,'woodwallDoor')){
+ // Red mark: replace an existing wall at (11,8) with a passable timber door.
+ if(!has(11,8,'woodwallDoor')){
   remove(11,8,['woodwall']);
   world.push({x:11,z:8,y:0,type:'woodwallDoor',rot:0});changed=true;
- }
+ }else remove(11,8,['woodwall']);
+ // Preserve prior intentional cleanup of unmarked partitions and counters.
  remove(13,9,['counterWood']);
  for(const z of [8,9,10])remove(17,z,['counterWood']);
  remove(18,10,['counterWood']);
  for(const z of [7,8,9,10])remove(19,z,['woodwall']);
+ // Green marks: two vertically linked counter units at (16,8) and (16,9).
+ for(const z of [8,9]){
+  if(!has(16,z,'counterWood')){
+   const conflicting=world.filter(o=>o.x===16&&o.z===z&&o.y===0&&!isFloor(o.type));
+   if(conflicting.length){world=world.filter(o=>!conflicting.includes(o));changed=true}
+   world.push({x:16,z,y:0,type:'counterWood',rot:1});changed=true;
+  }
+ }
+ // Yellow marks: two timber wall segments at (18,10) and (18,11).
+ for(const z of [10,11]){
+  if(!has(18,z,'woodwall')){
+   const conflicting=world.filter(o=>o.x===18&&o.z===z&&o.y===0&&!isFloor(o.type));
+   if(conflicting.length){world=world.filter(o=>!conflicting.includes(o));changed=true}
+   world.push({x:18,z,y:0,type:'woodwall',rot:0});changed=true;
+  }
+ }
  return changed;
 }
 
@@ -7180,6 +7198,8 @@ function pineStarterGuildPOI(){
  // Shift the private-toilet side partition one tile inward only where
  // the counter meets it, keeping the toilet screened by an actual wall.
  for(let z=7;z<=9;z++)add(18,z,'woodwall');
+ // Yellow marks: continue wood partition two more cells to cross-wall.
+ for(const z of [10,11])add(18,z,'woodwall');
  // Remove the four white-marked right partition pieces (x19,z7-10).
  for(let x=19;x<=21;x++)add(x,11,x===20?'woodwallDoor':'woodwall');
  // Ground-floor reception sits ahead of the door, with accessible side aisles.
@@ -7192,6 +7212,8 @@ function pineStarterGuildPOI(){
   [12,10,'counterWood',0,0],[13,10,'counterWood',0,0],
   [14,10,'counterWood',0,0],[15,10,'counterWood',0,0],
   [16,10,'counterWood',0,0],
+  // Green marks: northern extension of the right reception corner.
+  [16,8,'counterWood',1,0],[16,9,'counterWood',1,0],
   [9,10,'table',0,0],[10,10,'chairWood',2,0],
   [10,12,'wardrobe',0,0],[9,15,'bathWood',0,0],
   [20,13,'roundTableWood',0,0],[20,14,'chairWood',2,0],[19,13,'chairWood',3,0],
