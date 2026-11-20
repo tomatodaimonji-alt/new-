@@ -639,7 +639,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
  #viewWrap #pineAILegend{font-size:9px}
 }
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v85）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v86）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -4463,7 +4463,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v85',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v86',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -8015,6 +8015,64 @@ function pineDrawChecks(vp){
  }
  for(const [key,node] of pineCheckNodes)if(!present.has(key)){node.remove();pineCheckNodes.delete(key)}
 }
+// v86: Safe, opt-in reconstruction of the user's v84 guild screenshots.
+// Only the 30x30 guild GROUND-FLOOR solid objects are replaced. Floors, all
+// upstairs objects, terrain and every position outside the guild are preserved.
+// Original full map is separately backed up before any change.
+function pineApplyScreenshotGuildLayout(){
+ if(MAP_W!==30||MAP_H!==30||!guildBounds()){
+  toast('30×30の冒険者ギルドを開いてから実行してください');return;
+ }
+ const west=7,east=22,north=6,south=20;
+ const inside=o=>o.y===0&&o.x>=west&&o.x<=east&&o.z>=north&&o.z<=south;
+ const existing=world.filter(o=>inside(o)&&!isFloor(o.type));
+ if(!confirm('v84の写真に合わせてギルド1階の壁・家具を再配置します。\n対象 '+existing.length+'件を置き換えます。上階・床・屋外は残します。\n現在の全マップを別途バックアップして続けますか？'))return;
+ try{
+  // Do not overwrite the previous backup if the action is accidentally repeated.
+  const key='pine-guild-screenshot-before-v86';
+  if(!localStorage.getItem(key))localStorage.setItem(key,JSON.stringify(data()));
+ }catch(e){
+  alert('安全なバックアップを保存できなかったため、配置は変更していません。');return;
+ }
+ snapshot();
+ world=world.filter(o=>!inside(o)||isFloor(o.type));
+ const add=(x,z,type,rot=0)=>world.push({x,z,y:0,type,rot});
+ // The outer shell and six ground-floor windows match the photograph.
+ for(let z=north;z<=south;z++)for(let x=west;x<=east;x++){
+  if(x!==west&&x!==east&&z!==north&&z!==south)continue;
+  const doorway=z===south&&x===14;
+  const window=(z===south&&(x===10||x===19))||
+   (z===north&&(x===10||x===19))||
+   ((x===west||x===east)&&(z===10||z===16));
+  add(x,z,doorway?'stonewallDoor':window?'stonewallWindow':'stonewall',z===north?2:x===west?3:x===east?1:0);
+ }
+ // Left staff wing, bath, stair passage and north-right sanitary cubicle.
+ for(let z=7;z<=17;z++)add(11,z,z===8?'woodwallDoor':'woodwall',z===8?1:0);
+ for(let x=8;x<=10;x++)add(x,13,x===9?'woodwallDoor':'woodwall');
+ for(let x=8;x<=10;x++)add(x,17,'woodwall');
+ for(let z=7;z<=11;z++)add(18,z,'woodwall');
+ for(let x=19;x<=21;x++)add(x,11,x===20?'woodwallDoor':'woodwall');
+ // Photo-reference furniture coordinates, including all reception sections.
+ const pieces=[
+  [9,8,'bed'],[10,8,'bookshelf'],[21,12,'bookshelf',3],
+  [12,10,'counterWood'],[13,10,'counterWood'],[14,10,'counterWood'],
+  [15,10,'counterWood'],[16,10,'counterWood'],
+  [16,8,'counterWood',1],[16,9,'counterWood',1],
+  [9,10,'table'],[10,10,'chairWood',2],[10,12,'wardrobe'],
+  [9,15,'bathWood'],[20,13,'roundTableWood'],[20,14,'chairWood',2],
+  [19,13,'chairWood',3],[20,16,'benchWood',2],[19,16,'roundTableWood'],
+  [11,12,'guildWallQuestBoard',3],[20,8,'guildLatrine'],[21,9,'crate'],
+  [10,16,'crate'],[20,18,'barrel'],[10,14,'guildLatrine'],
+  [20,13,'lantern'],[8,18,'guildStairUp'],
+  [14,20,'guildFacadeSign']
+ ];
+ for(const [x,z,type,rot=0] of pieces)add(x,z,type,rot);
+ // Ledger, pen cup and charter are rendered from the counter layout:
+ // never save them as duplicates in world[].
+ commit();refreshPalette();updateSelected();
+ toast('ギルド1階を写真の配置へ調整。元データはバックアップ済み（元に戻すことも可能）');
+}
+
 function pineStarterGuildPOI(){
  if(world.length&&!confirm('現在の編集マップを冒険者ギルドのサンプルで置き換えますか？ 先にJSON保存をおすすめします。'))return;
  snapshot();world=[];models=[];prefabs=[];terrainHeights=new Map();
@@ -8351,6 +8409,16 @@ function pineBuildPOICategories(){
  guildLabel.append(guildDetail);guildButton.append(guildGlyph,guildLabel);
  guildButton.addEventListener('click',pineStarterGuildPOI);
  inner.append(guildButton);
+ const screenshotGuildButton=document.createElement('button');
+ screenshotGuildButton.type='button';screenshotGuildButton.className='poiSampleEntry item';
+ const screenshotGuildLabel=document.createElement('span');screenshotGuildLabel.textContent='ギルド・写真の配置へ';
+ const screenshotGuildDetail=document.createElement('small');
+ screenshotGuildDetail.textContent='v84スクショ基準・1階のみ・実行前バックアップ';
+ screenshotGuildLabel.append(screenshotGuildDetail);
+ const screenshotGuildGlyph=document.createElement('span');screenshotGuildGlyph.className='poiEntryGlyph';screenshotGuildGlyph.textContent='▤';
+ screenshotGuildButton.append(screenshotGuildGlyph,screenshotGuildLabel);
+ screenshotGuildButton.addEventListener('click',()=>{pineApplyScreenshotGuildLayout();$('palette').classList.remove('mobileOpen')});
+ inner.append(screenshotGuildButton);
  for(const record of customPOIs){
   const row=document.createElement('div');row.className='poiCustomEntry';
   const choice=document.createElement('button');choice.type='button';choice.className='poiSampleEntry item';
