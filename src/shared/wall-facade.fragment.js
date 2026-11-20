@@ -20,10 +20,7 @@ function houseFacadeDetails(m,visible){
    // Short threshold flush with ground, not a high doorstep.
    cube(scratch,0,y+.006,.61,.72,.055,.24,[.56,.56,.50]);
   }
-  if(type.endsWith('Window')){
-   cube(scratch,0,y+.44,front+.045,.64,.10,.12,light);
-   cube(scratch,0,y+1.04,front+.04,.62,.07,.09,material);
-  }
+  // Keep the structural window frame; omit the two superimposed horizontal bars.
   // On upper floors, a shared horizontal beam reads as domestic construction.
   if(o.y>0)cube(scratch,0,y+.05,front,.90,.06,.05,material);
   for(let i=0;i<scratch.p.length;i+=3){
