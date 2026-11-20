@@ -584,8 +584,18 @@ header h1{letter-spacing:.015em;white-space:nowrap;flex-shrink:0}
   font-size:9px!important;padding:5px 3px!important
  }
 }
+/* v65: compact device battery percentage following Undo / Redo in header. */
+header #batteryIndicator{
+ display:inline-flex;align-items:center;justify-content:center;
+ flex:none;min-width:42px;padding:6px 4px;
+ font-size:12px;font-weight:750;font-variant-numeric:tabular-nums;
+ color:#e5e7cf;white-space:nowrap;
+}
+header #batteryIndicator.low{color:#ff9b8c}
+header #batteryIndicator.charging{color:#c0ecc5}
+@media(max-width:800px){header #batteryIndicator{font-size:11px;min-width:36px;padding:4px 2px}}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v64）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button></header>
+<div id="app"><header><h1>3Dワールド工房（v65）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません">--%</span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -646,6 +656,29 @@ header h1{letter-spacing:.015em;white-space:nowrap;flex-shrink:0}
  const canvas=document.getElementById('view'),gl=canvas.getContext('webgl',{antialias:true,alpha:true,depth:true,powerPreference:'low-power'}),toastEl=document.getElementById('toast');
 let MAP_W=16,MAP_H=16,terrainHeights=new Map();const TERRAIN_MAX=8,TERRAIN_STEP=1;const MIN_MAP=12,MAX_MAP=128,MAX_LEVEL=9,SAVE_KEY='forest-world-editor-v1',TAU=Math.PI*2;
 const $=id=>document.getElementById(id);
+// Battery Status API is optional (and may be blocked by the browser).
+// Report only actual readings; never guess the device's charge percentage.
+async function pineInitBatteryIndicator(){
+ const element=$('batteryIndicator');
+ if(!element)return;
+ if(typeof navigator.getBattery!=='function')return;
+ try{
+  const battery=await navigator.getBattery();
+  const update=()=>{
+   if(!Number.isFinite(battery.level)||battery.level<0||battery.level>1)return;
+   const percent=Math.round(battery.level*100);
+   element.textContent=percent+'%';
+   element.classList.toggle('low',percent<=20&&!battery.charging);
+   element.classList.toggle('charging',!!battery.charging);
+   const label='バッテリー残量 '+percent+'%'+(battery.charging?'（充電中）':'');
+   element.setAttribute('aria-label',label);element.title=label;
+  };
+  battery.addEventListener('levelchange',update);
+  battery.addEventListener('chargingchange',update);
+  update();
+ }catch(e){/* API unsupported, denied, or unavailable: keep --%. */}
+}
+pineInitBatteryIndicator();
 function toast(message){toastEl.textContent=message;toastEl.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>toastEl.classList.remove('show'),2200)}
 if(!gl){$('canvasTip').textContent='この端末はWebGLに対応していません。3D編集を開始できません。';return}
 const palette=[
