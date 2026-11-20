@@ -1726,12 +1726,15 @@ function pineCheckRefresh(){
  });
 }
 function pineSetCheckMode(active){
- pineCheckMode=!!active&&!poiWalkActive&&!pineGameActive;
+ pineCheckMode=!!active&&!pineGameActive;
+ if(pineCheckMode&&poiWalkActive&&!cameraTopDown){cameraTopDown=true;poiThirdPerson=false;
+  $('topDownView').classList.add('active');$('topDownView').setAttribute('aria-pressed','true');
+  $('poiThirdView').textContent='三人称視点';$('poiThirdView').setAttribute('aria-pressed','false');poiWalkCamera();}
  if(pineCheckMode){$('palette').classList.remove('mobileOpen');$('inspector').classList.remove('mobileOpen')}
  pineCheckRefresh();
 }
 function pineToggleCheck(x,z){
- if(!validPos(x,z)||poiWalkActive||pineGameActive)return;
+ if(!validPos(x,z)||pineGameActive)return;
  const index=pineCheckMarks.findIndex(p=>p.x===x&&p.z===z&&p.y===level);
  if(index<0&&pineCheckMarks.length>=300){toast('チェック上限は300件です');return}
  snapshot();
@@ -1742,7 +1745,7 @@ function pineToggleCheck(x,z){
 }
 function pineDrawChecks(vp){
  const layer=$('pineCheckOverlay');if(!layer)return;
- if(pineGameActive||poiWalkActive){layer.hidden=true;return}
+ if(pineGameActive){layer.hidden=true;return}
  layer.hidden=false;
  const present=new Set();
  for(const p of pineCheckMarks){
