@@ -315,20 +315,20 @@ function expansionGeometry(m,id,x,y,z){
   // Eight-sided round stool: radial seat, separate legs and circular footrest.
   const seat=[.57,.38,.22],rim=[.39,.25,.15],legs=[.34,.23,.15],top=[.68,.49,.31];
   const ring=(height,radius)=>Array.from({length:12},(_,i)=>{const a=i*Math.PI/6;return [x+Math.cos(a)*radius,y+height,z+Math.sin(a)*radius]});
-  const low=ring(.46,.365),high=ring(.57,.365),inset=ring(.583,.31);
+  const low=ring(.405,.299),high=ring(.500,.299),inset=ring(.512,.254);
   for(let i=0;i<12;i++){
    const j=(i+1)%12;
    quad(m,low[i],low[j],high[j],high[i],i%3?seat:rim);
-   tri(m,[x,y+.583,z],inset[i],inset[j],top);
+   tri(m,[x,y+.512,z],inset[i],inset[j],top);
    quad(m,inset[i],high[i],high[j],inset[j],seat);
   }
   for(let i=0;i<4;i++){
-   const a=Math.PI/4+i*Math.PI/2,xx=Math.cos(a)*.235,zz=Math.sin(a)*.235;
-   B(xx,0,zz,.085,.48,.085,legs);
+   const a=Math.PI/4+i*Math.PI/2,xx=Math.cos(a)*.193,zz=Math.sin(a)*.193;
+   B(xx,0,zz,.070,.416,.070,legs);
   }
   for(let i=0;i<4;i++){
    const a=Math.PI/4+i*Math.PI/2,b=a+Math.PI/2;
-   branch([Math.cos(a)*.235,.21,Math.sin(a)*.235],[Math.cos(b)*.235,.21,Math.sin(b)*.235],.025,.025,rim);
+   branch([Math.cos(a)*.193,.18,Math.sin(a)*.193],[Math.cos(b)*.193,.18,Math.sin(b)*.193],.020,.020,rim);
   }
   break;}
  case 'chairWood':
@@ -1900,6 +1900,42 @@ function matchedCounter(m,id,x,y,z){
  cube(m,x,y+.823,z+.469,1.0,.075,.045,c.frame);
  cube(m,x,y+.961,z-.015,.91,.023,.85,c.detail);
  cube(m,x,y+.085,z+.475,.85,.04,.037,c.edge);
+
+ // Guild reception chart: a parchment map with land masses, river, roads and compass.
+ // Add to the center inner counter only, without altering other counters.
+ if(wood&&MAP_W===30&&MAP_H===30&&Math.abs(x-14.5)<.01&&Math.abs(z-10.5)<.01&&
+    world.some(o=>o.x===14&&o.z===20&&o.y===0&&o.type==='stonewallDoor')&&
+    world.some(o=>o.x===12&&o.z===10&&o.y===0&&o.type==='counterWood')){
+  const paper=[.86,.75,.54],ink=[.36,.27,.19],land=[.68,.71,.48],
+   river=[.32,.59,.68],road=[.59,.38,.23],pin=[.74,.24,.17];
+  // Counter top finishes at y+.984; each layer sits above it at a distinct Y.
+  cube(m,x,y+.992,z-.014,.76,.009,.68,ink);
+  cube(m,x,y+1.003,z-.014,.719,.006,.638,paper);
+  const poly=(points,color,yy)=>{
+   const center=points.reduce((sum,p)=>[sum[0]+p[0]/points.length,sum[1]+p[1]/points.length],[0,0]);
+   for(let i=0;i<points.length;i++){
+    const a=points[i],b=points[(i+1)%points.length];
+    tri(m,[x+center[0],yy,z+center[1]],[x+a[0],yy,z+a[1]],[x+b[0],yy,z+b[1]],color);
+   }
+  };
+  const stroke=(ax,az,bx,bz,width,color,yy)=>{
+   const dx=bx-ax,dz=bz-az,len=Math.hypot(dx,dz)||1,ox=-dz/len*width/2,oz=dx/len*width/2;
+   quad(m,[x+ax+ox,yy,z+az+oz],[x+bx+ox,yy,z+bz+oz],
+     [x+bx-ox,yy,z+bz-oz],[x+ax-ox,yy,z+az-oz],color);
+  };
+  poly([[-.30,-.23],[-.11,-.24],[.02,-.12],[-.06,.02],[-.22,.04],[-.31,-.08]],land,y+1.011);
+  poly([[.04,.06],[.19,-.02],[.29,.08],[.26,.24],[.08,.26],[-.02,.16]],land,y+1.011);
+  poly([[-.24,-.14],[-.16,-.20],[-.08,-.12],[-.14,-.06]], [.48,.56,.35],y+1.012);
+  const riverPoints=[[-.27,.22],[-.15,.15],[-.03,.08],[.08,-.04],[.16,-.15],[.24,-.24]];
+  for(let i=1;i<riverPoints.length;i++)stroke(...riverPoints[i-1],...riverPoints[i],.021,river,y+1.015);
+  const route=[[-.23,-.12],[-.04,-.08],[.11,.14],[.25,.17]];
+  for(let i=1;i<route.length;i++)stroke(...route[i-1],...route[i],.011,road,y+1.018);
+  for(const [xx,zz] of [[-.22,-.12],[.11,.14],[.24,.17]])
+   cube(m,x+xx,y+1.018,z+zz,.029,.006,.029,ink);
+  stroke(.264,-.19,.264,-.12,.013,ink,y+1.019);
+  poly([[.264,-.24],[.24,-.19],[.288,-.19]],ink,y+1.021);
+  cube(m,x-.04,y+1.020,z+.08,.037,.008,.037,pin);
+ }
 }
 function deco(m,id,x,y,z,r=0){
  if(MATCHED_COUNTER_IDS.has(id)){
