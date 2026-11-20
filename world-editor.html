@@ -615,7 +615,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
  header #batteryIndicator .batteryShape{width:23px;height:13px}
 }
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v71）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v72）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -2402,9 +2402,15 @@ case 'equipIronSword':{
  const point=[x,y+1.50,z],left=[x-.113,y+1.30,z],right=[x+.113,y+1.30,z];
  tri(m,left,right,point,shine);tri(m,right,left,[x,y+1.30,z-.043],steel);
  break;}
-case 'humanBare':case 'humanVillager':
- // Simplified, non-explicit anatomical mannequin for bare human.
- characterHuman(m,x,y,z,id==='humanVillager');break;
+case 'humanBare':case 'humanVillager':{
+ // Keep the top of the head just under the 1.38-high doorway.
+ const human=mesh();characterHuman(human,0,0,0,id==='humanVillager');
+ for(let i=0;i<human.p.length;i+=3){
+  m.p.push(x+human.p[i],y+human.p[i+1]*.90,z+human.p[i+2]);
+  m.n.push(human.n[i],human.n[i+1],human.n[i+2]);
+  m.c.push(human.c[i],human.c[i+1],human.c[i+2]);
+ }
+ break;}
 case 'humanMerchant':{
  // Brown tunic, pale apron, shoulder pack and money pouch: recognizable from above.
  const cloth=[.47,.30,.19],apron=[.73,.60,.39],skin=[.78,.58,.41],hair=[.29,.19,.12],bag=[.42,.27,.16];
@@ -2758,11 +2764,11 @@ function matchedOpening(m,id,x,y,z){
  const c=MATCHED_OPENING_MATERIALS[material];if(!c)return;
  const iron=material==='ironwall',brick=material==='brickwall';
  const glass=[.34,.67,.74],glow=[.75,.94,.97],metal=[.82,.73,.49];
- const h=1.4;
- // Continuous wall-size side posts and lintel, shared between both block styles.
+ const h=material==='woodwall'?1.38:1.4;
+ // Match timber partitions precisely, preserve the already-correct stone exteriors.
  const post=.14,half=.5-post/2;
  for(const side of [-1,1])cube(m,x+side*half,y,z,post,h,1.0,c.shell);
- cube(m,x,y+1.28,z,1.002,.12,1.0,c.shell);
+ cube(m,x,y+(material==='woodwall'?1.26:1.28),z,1.002,.12,1.0,c.shell);
  if(isWindow){
   // Sill + open central cavity + a large, visible blue glass pane on BOTH sides.
   cube(m,x,y,z,1.002,.26,1.0,c.shell);
@@ -4358,7 +4364,7 @@ function poiWalkAvatar(now=performance.now()){
     ly>.45&&ly<.85&&Math.abs(lx)>.23?(lx<0?stride:-stride)*.36:0;
   const punch=actionPhase>0&&ly>.45&&ly<.85&&lx>.23?actionPhase*.40:0;
   const [rx,rz]=rot2(lx,lz+swing+punch,r);
-  m.p.push(x+rx,y+ly+0,z+rz);
+  m.p.push(x+rx,y+ly*.90,z+rz);
   const [nx,nz]=rot2(body.n[i],body.n[i+2],r);
   m.n.push(nx,body.n[i+1],nz);
   m.c.push(body.c[i],body.c[i+1],body.c[i+2]);
@@ -4707,6 +4713,42 @@ function guildInteriorDetails(m,visible){
   }
  }
 }
+// v72: Blend the INTERIOR stone window jamb with neighboring stone masonry.
+// Check the outside flood-fill, so exterior window faces remain unchanged.
+function pineFinishInteriorWindow(m,o,lookup){
+ if(o.type!=='stonewallWindow')return;
+ const faces=wallFaceState(o,lookup),rot=o.rot||0;
+ const x=o.x+.5,z=o.z+.5,y=o.y*1.4+terrainY(o.x,o.z);
+ for(const side of [1,-1]){
+  const worldSide=(rot+(side===1?0:2))%4;
+  if(!faces.visible[worldSide]||faces.exterior[worldSide])continue;
+  const tmp=mesh(),stone=[.54,.57,.54],mortar=[.38,.42,.40],trim=[.60,.62,.58];
+  const zz=side*.512;
+  for(const px of [-.443,.443]){
+   cube(tmp,px,y+.26,zz,.112,.995,.018,stone);
+   for(const h of [.53,.79,1.05])cube(tmp,px,y+h,zz+side*.011,.107,.014,.016,mortar);
+  }
+  cube(tmp,0,y+.02,zz,.99,.22,.018,stone);
+  cube(tmp,0,y+1.27,zz,.99,.10,.018,stone);
+  for(const h of [.23,1.27])cube(tmp,0,y+h,zz+side*.011,.99,.013,.016,mortar);
+  for(const px of [-.380,.380])cube(tmp,px,y+.28,zz+side*.014,.024,.93,.013,trim);
+  for(let i=0;i<tmp.p.length;i+=3){
+   const [dx,dz]=rot2(tmp.p[i],tmp.p[i+2]-0,rot);
+   const [nx,nz]=rot2(tmp.n[i],tmp.n[i+2],rot);
+   m.p.push(x+dx,tmp.p[i+1],z+dz);
+   m.n.push(nx,tmp.n[i+1],nz);
+   m.c.push(tmp.c[i],tmp.c[i+1],tmp.c[i+2]);
+  }
+ }
+}
+// Smooth, uniform top surfaces across adjoining timber wall/door/wall tiles.
+function pineFinishPartitionTops(m,visible){
+ for(const o of visible){
+  if(!['woodwall','woodwallDoor','woodwallWindow'].includes(o.type))continue;
+  const y=o.y*1.4+terrainY(o.x,o.z);
+  cube(m,o.x+.5,y+1.382,o.z+.5,1.005,.008,1.005,[.54,.367,.227]);
+ }
+}
 function makeScene(){
  const m=mesh(),visible=world.filter(o=>{
   if(poiWalkActive&&poiIsMonster(o.type))return false;
@@ -4793,6 +4835,8 @@ function makeScene(){
   else if(/^fence(Wood|Stone|Iron)/.test(o.type)&&connectedFenceGeometry(m,o,fenceLookup)){} 
   else deco(m,o.type,o.x+.5,o.y*1.4+terrainY(o.x,o.z),o.z+.5,o.rot||0);
  }
+ for(const o of visible)pineFinishInteriorWindow(m,o,wallLookup);
+ pineFinishPartitionTops(m,visible);
  return upload(m);
 }
 function upload(m){const n=m.p.length/3,data=new Float32Array(n*9);for(let i=0;i<n;i++){const a=i*9,b=i*3;for(let j=0;j<3;j++){data[a+j]=m.p[b+j];data[a+3+j]=m.n[b+j];data[a+6+j]=m.c[b+j]}}const vbo=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vbo);gl.bufferData(gl.ARRAY_BUFFER,data,gl.STATIC_DRAW);return{buf:vbo,count:n}}
