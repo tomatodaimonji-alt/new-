@@ -2,6 +2,7 @@ package jp.tsukacchi.htmlplayer;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
@@ -11,6 +12,7 @@ import android.view.WindowInsets;
 import android.webkit.ConsoleMessage;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebChromeClient;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -36,7 +38,7 @@ import java.util.Collections;
 
 /**
  * Lightweight auto-updating 3D editor launcher.
- * No AI service, JavaScript bridge, local HTML picker, or visible update toolbar.
+ * No AI service or visible update toolbar; the limited bridge only exports JSON files.
  * The app downloads editor HTML from its pinned public HTTPS endpoint at launch.
  */
 public class MainActivity extends Activity {
@@ -45,6 +47,9 @@ public class MainActivity extends Activity {
     private static final String UPDATE_URL =
         "https://raw.githubusercontent.com/tomatodaimonji-alt/new-/main/world-editor.html";
     private static final long MAX_HTML_BYTES = 12L * 1024 * 1024;
+    private static final int JSON_SAVE_REQUEST = 781;
+    private static final int MAX_JSON_CHARS = 5_000_000;
+    private byte[] pendingJsonExport;
     private File current;
     private File previous;
     private File pending;
@@ -116,6 +121,7 @@ public class MainActivity extends Activity {
             settings.setSafeBrowsingEnabled(true);
             settings.setMediaPlaybackRequiresUserGesture(false);
         }
+        web.addJavascriptInterface(new JsonFileExporter(), "PineFileSave");
         web.setWebViewClient(new WebViewClient() {
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
@@ -156,6 +162,53 @@ public class MainActivity extends Activity {
         });
         root.addView(web, new FrameLayout.LayoutParams(-1, -1));
         web.loadUrl(GAME_URL);
+    }
+
+
+    // System document picker: saves exported AI-layout data without clipboard limits.
+    private final class JsonFileExporter {
+        @JavascriptInterface public void saveJson(String filename, String json) {
+            if (json == null || json.length() < 2 || json.length() > MAX_JSON_CHARS) {
+                runOnUiThread(() -> Toast.makeText(MainActivity.this,
+                    "JSONのサイズが不正です", Toast.LENGTH_LONG).show());
+                return;
+            }
+            final byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+            runOnUiThread(() -> {
+                try {
+                    if (pendingJsonExport != null) {
+                        Toast.makeText(MainActivity.this, "保存先の選択中です", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    pendingJsonExport = bytes;
+                    Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("application/json");
+                    String safeName = filename != null && filename.matches("[a-zA-Z0-9._-]+\\.json")
+                        ? filename : "ai-world-layout.json";
+                    intent.putExtra(Intent.EXTRA_TITLE, safeName);
+                    startActivityForResult(intent, JSON_SAVE_REQUEST);
+                } catch (Exception ex) {
+                    pendingJsonExport = null;
+                    Toast.makeText(MainActivity.this, "保存画面を開けませんでした", Toast.LENGTH_LONG).show();
+                }
+            });
+        }
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != JSON_SAVE_REQUEST) return;
+        byte[] bytes = pendingJsonExport;
+        pendingJsonExport = null;
+        if (resultCode != RESULT_OK || data == null || data.getData() == null || bytes == null) return;
+        try (OutputStream out = getContentResolver().openOutputStream(data.getData())) {
+            if (out == null) throw new IOException("No output stream");
+            out.write(bytes);
+            Toast.makeText(this, "配置JSONファイルを保存しました", Toast.LENGTH_LONG).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "JSON保存に失敗しました: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
 
     private static WebResourceResponse blocked(int status, String message) {
