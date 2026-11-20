@@ -532,6 +532,8 @@ const palette=[
 {id:'guildSign',name:'冒険者ギルド・紋章看板',icon:'⚔',cat:'decor'},
 {id:'guildFacadeSign',name:'冒険者ギルド・正面大型看板',icon:'▣',cat:'decor'},
 {id:'guildQuestBoard',name:'冒険者ギルド・依頼掲示板',icon:'▤',cat:'decor'},
+{id:'guildStairUp',name:'ギルド・上り階段',icon:'↗',cat:'build'},
+{id:'guildStairDown',name:'ギルド・下り階段',icon:'↘',cat:'build'},
 {id:'innSign',name:'宿屋の看板（INN）',icon:'▣',cat:'decor'},
 {id:'shopHerbSign',name:'道具屋の看板・薬草',icon:'🌿',cat:'decor'},
 {id:'shopChestSign',name:'道具屋の看板・宝箱',icon:'▣',cat:'decor'},
@@ -2450,12 +2452,10 @@ function matchedOpening(m,id,x,y,z){
   for(const face of [-1,1]){
    const zFace=z+face*.478;
    cube(m,x,y+.31,z+face*.441,.73,.88,.026,glass);
-   cube(m,x-.19,y+.40,z+face*.461,.085,.62,.012,glow);
-   cube(m,x+.22,y+.88,z+face*.461,.045,.24,.012,[.59,.86,.93]);
+
    for(const side of [-1,1])cube(m,x+side*.373,y+.28,zFace,.07,.99,.044,c.frame);
    for(const yy of [.27,1.24])cube(m,x,y+yy,zFace,.81,.076,.044,c.frame);
-   cube(m,x,y+.29,zFace,.053,.94,.048,c.frame);
-   cube(m,x,y+.78,zFace,.75,.047,.045,c.frame);
+
   }
  }else{
   // Solid inset door leaf with two-sided decorated paneling and a handle.
@@ -4420,6 +4420,8 @@ function makeScene(){
   else if(isWallId(o.type)){const faces=wallFaceState(o,wallLookup);wallBlock(m,o.type,o.x+.5,o.y*1.4+terrainY(o.x,o.z),o.z+.5,o.rot||0,faces.visible,faces.exterior)}
   else if(o.type==='lantern'&&guildBounds()&&o.y===0&&
    ((o.z===10&&(o.x===9||o.x===20))||(o.z===guildBounds().south+1&&(o.x===11||o.x===18)))){}
+  else if(o.type==='rewardChest'&&guildBounds()&&o.y===0&&o.x===9&&o.z===18)
+   deco(m,'crate',o.x+.5,o.y*1.4+terrainY(o.x,o.z),o.z+.5,o.rot||0);
   else if(o.type==='terrainStairs')elevationStairGeometry(m,o.x,o.z,o.y*1.4+terrainY(o.x,o.z),o.rot||0);
   else if(/^fence(Wood|Stone|Iron)/.test(o.type)&&connectedFenceGeometry(m,o,fenceLookup)){} 
   else deco(m,o.type,o.x+.5,o.y*1.4+terrainY(o.x,o.z),o.z+.5,o.rot||0);
@@ -4483,7 +4485,11 @@ function cursorAt(clientX,clientY){
 }
 function makeCursor(){const m=mesh();if(!hover||!validPos(hover.x,hover.z))return upload(m);const x=hover.x+.5,z=hover.z+.5,y=level*1.4+terrainY(hover.x,hover.z)+.205;const c=[.96,.73,.30],t=.045;cube(m,x,y,z-.45,.95,t,.055,c);cube(m,x,y,z+.45,.95,t,.055,c);cube(m,x-.45,y,z,.055,t,.95,c);cube(m,x+.45,y,z,.055,t,.95,c);return upload(m)}
 function render(){requestAnimationFrame(render);const now=performance.now();poiWalkFrame(now);const p=parameters();if(dirty){if(sceneMesh)gl.deleteBuffer(sceneMesh.buf);for(const o of signOverlays)gl.deleteBuffer(o.buf);sceneMesh=makeScene();signOverlays=signProgram?buildSignOverlay():[];dirty=false}if(cursorDirty){if(cursorMesh)gl.deleteBuffer(cursorMesh.buf);cursorMesh=makeCursor();cursorDirty=false}gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);draw(sceneMesh,p.vp);poiDrawGameRoofs(p.vp);poiDrawEditorGhostRoof(p.vp);drawSignOverlays(p.vp);draw(cursorMesh,p.vp);if(poiWalkActive){draw(poiWalkMesh,p.vp);poiMonsterRender(now,p.vp)}poiRenderDamageLabels(now,p.vp)}
-function saveLocal(){if(pineGameActive)return;try{localStorage.setItem(SAVE_KEY,JSON.stringify(data()))}catch(e){}}
+let savedMapRestoreFailed=false;
+function saveLocal(){
+ if(pineGameActive||savedMapRestoreFailed)return;
+ try{localStorage.setItem(SAVE_KEY,JSON.stringify(data()))}catch(e){console.warn('Save write failed',e)}
+}
 function data(){return{format:'forest-world-v1',version:1,size:MAP_W,width:MAP_W,height:MAP_H,terrainHeights:[...terrainHeights.entries()].map(([key,h])=>{const [x,z]=key.split(',').map(Number);return{x,z,h}}),world:world.map(o=>({...o})),models:models.map(m=>({id:m.id,name:m.name,parts:m.parts.map(p=>({...p}))})),prefabs:prefabs.map(p=>({id:p.id,name:p.name,w:p.w,h:p.h,tiles:p.tiles.map(t=>({...t}))}))}}
 function snapshot(){undoStack.push(JSON.stringify(data()));if(undoStack.length>45)undoStack.shift();redoStack.length=0}
 function commit(){worldMaxLevel=world.reduce((top,o)=>Math.max(top,o.y),0);dirty=true;saveLocal();updateStats()}
@@ -6589,7 +6595,7 @@ function pineStarterGuildPOI(){
   [9,13,'roundTableWood',0,0],[9,14,'chairWood',2,0],[10,13,'chairWood',1,0],
   [20,13,'roundTableWood',0,0],[20,14,'chairWood',2,0],[19,13,'chairWood',3,0],
   [11,10,'guildQuestBoard',0,0],[18,10,'guildQuestBoard',0,0],
-  [9,18,'rewardChest',1,0],[20,18,'barrel',0,0],
+  [10,18,'crate',0,0],[20,18,'barrel',0,0],
   [9,10,'lantern',0,0],[20,10,'lantern',0,0],
   [8,17,'guildStairUp',0,0],[8,17,'guildStairDown',0,1],
   [9,8,'bookshelf',0,1],[20,8,'bookshelf',0,1],
@@ -7239,9 +7245,9 @@ $('importJson').addEventListener('click',()=>{try{const o=JSON.parse($('jsonText
 $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mobileOpen');$('inspector').classList.remove('mobileOpen')});
 // Saved maps, including empty maps, always take precedence over samples.
  try{const saved=localStorage.getItem(SAVE_KEY);
-  if(saved!==null)loadData(JSON.parse(saved));
+  if(saved!==null){loadData(JSON.parse(saved));savedMapRestoreFailed=false;}
   else {MAP_W=30;MAP_H=30;world=[];models=[];prefabs=[];terrainHeights=new Map();$('mapWidth').value=MAP_W;$('mapHeight').value=MAP_H;}
- }catch(e){console.error('Save restore failed; existing storage not overwritten',e);
+ }catch(e){savedMapRestoreFailed=true;console.error('Save restore failed; existing storage not overwritten',e);
   MAP_W=30;MAP_H=30;world=[];models=[];prefabs=[];terrainHeights=new Map();$('mapWidth').value=MAP_W;$('mapHeight').value=MAP_H;
   toast('セーブデータ読み込みエラー。保存済みデータは保護されています');}
 customPOIs=pineReadSavedPOIs();
