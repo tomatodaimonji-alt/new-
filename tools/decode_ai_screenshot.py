@@ -12,7 +12,9 @@ import numpy as np
 from PIL import Image
 
 PALETTE=np.array([(20,20,20),(226,52,57),(25,162,87),(40,89,226),
-                  (247,198,56),(170,59,225),(32,200,208),(244,244,244)],dtype=np.int32)
+                  (247,198,56),(170,59,225),(32,200,208),(244,244,244),
+                  (144,67,22),(240,117,156),(135,187,66),(120,128,237),
+                  (192,124,37),(80,59,115),(86,122,126),(170,170,170)],dtype=np.int32)
 
 def fnv32(buf):
     h=2166136261
@@ -20,13 +22,13 @@ def fnv32(buf):
         h=((h^b)*16777619)&0xffffffff
     return h
 
-def symbols_to_bytes(symbols):
+def symbols_to_bytes(symbols, bits_per_symbol=4):
     out=bytearray()
     carry=0
     bits=0
     for symbol in symbols:
-        carry=(carry<<3)|int(symbol)
-        bits+=3
+        carry=(carry<<bits_per_symbol)|int(symbol)
+        bits+=bits_per_symbol
         while bits>=8:
             bits-=8
             out.append((carry>>bits)&255)
@@ -74,23 +76,26 @@ def decode(path):
             samples=image[yy[:,None],xx[None,:]].reshape(-1,3).astype(np.int32)
             delta=samples[:,None,:]-PALETTE[None,:,:]
             symbols=(delta*delta).sum(axis=2).argmin(axis=1)
-            raw=symbols_to_bytes(symbols)
-            if len(raw)<12 or raw[:4]!=b'PGA1':
-                continue
-            size=int.from_bytes(raw[4:8],'little')
-            expected=int.from_bytes(raw[8:12],'little')
-            if not 0<size<=len(raw)-12:
-                continue
-            payload=raw[12:12+size]
-            if fnv32(payload)!=expected:
-                continue
-            result=json.loads(gzip.decompress(payload).decode('utf-8'))
-            if result.get('format')!='pine-ai-screenshot-v1':
-                raise ValueError('Unexpected screenshot data format.')
-            save=result.get('save')
-            if not isinstance(save,dict) or not isinstance(save.get('world'),list):
-                raise ValueError('Missing saved map.')
-            return result,{'cols':cols,'rows':rows,'compressed_bytes':size}
+            for bits_per_symbol in (4,3):  # v89, v88 legacy
+                if bits_per_symbol==3 and np.any(symbols>7):
+                    continue
+                raw=symbols_to_bytes(symbols,bits_per_symbol)
+                if len(raw)<12 or raw[:4]!=b'PGA1':
+                    continue
+                size=int.from_bytes(raw[4:8],'little')
+                expected=int.from_bytes(raw[8:12],'little')
+                if not 0<size<=len(raw)-12:
+                    continue
+                payload=raw[12:12+size]
+                if fnv32(payload)!=expected:
+                    continue
+                result=json.loads(gzip.decompress(payload).decode('utf-8'))
+                if result.get('format')!='pine-ai-screenshot-v1':
+                    raise ValueError('Unexpected screenshot data format.')
+                save=result.get('save')
+                if not isinstance(save,dict) or not isinstance(save.get('world'),list):
+                    raise ValueError('Missing saved map.')
+                return result,{'cols':cols,'rows':rows,'compressed_bytes':size}
     raise ValueError('Checksum mismatch: screenshot was clipped or reduced. Send the original PNG without cropping.')
 
 def main():
