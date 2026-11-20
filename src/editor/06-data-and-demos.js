@@ -5,7 +5,14 @@ const blocks=o.prefabs||[];if(!Array.isArray(blocks)||blocks.length>100)throw Er
 if(!o.models.every(validModel))throw Error('モデルの内容が不正です');
 const heights=o.terrainHeights??[];
 if(!Array.isArray(heights)||heights.length>MAX_MAP*MAX_MAP||!heights.every(p=>p&&Number.isInteger(p.x)&&Number.isInteger(p.z)&&p.x>=0&&p.z>=0&&p.x<newW&&p.z<newH&&Number.isInteger(p.h)&&p.h>=1&&p.h<=TERRAIN_MAX))throw Error('地形の高さデータが不正です');const names=new Set([...palette.map(p=>p.id),...o.models.map(m=>m.id)]);
-if(!blocks.every(f=>f&&/^prefab-[a-z0-9-]{1,32}$/.test(f.id)&&typeof f.name==='string'&&f.name.length<41&&Number.isInteger(f.w)&&Number.isInteger(f.h)&&f.w>0&&f.h>0&&f.w<=MAX_MAP&&f.h<=MAX_MAP&&Array.isArray(f.tiles)&&f.tiles.length<=650&&f.tiles.every(t=>t&&Number.isInteger(t.x)&&t.x>=0&&t.x<f.w&&Number.isInteger(t.z)&&t.z>=0&&t.z<f.h&&Number.isInteger(t.y)&&t.y>=0&&t.y<=MAX_LEVEL&&names.has(t.type)&&Number.isInteger(t.rot)&&t.rot>=0&&t.rot<4)))throw Error('設計図の内容が不正です');if(!o.world.every(p=>p&&p.x>=0&&p.z>=0&&Number.isInteger(p.x)&&Number.isInteger(p.z)&&p.x<newW&&p.z<newH&&Number.isInteger(p.y)&&p.y>=0&&p.y<=MAX_LEVEL&&typeof p.type==='string'&&names.has(p.type)&&Number.isInteger(p.rot)&&p.rot>=0&&p.rot<=3))throw Error('配置の内容が不正です');MAP_W=newW;MAP_H=newH;terrainHeights=new Map(heights.map(p=>[terrainKey(p.x,p.z),p.h]));world=o.world.map(p=>({...p}));worldMaxLevel=world.reduce((top,p)=>Math.max(top,p.y),0);models=o.models.map(m=>({...m,parts:m.parts.map(p=>({...p}))}));prefabs=blocks.map(f=>({...f,tiles:f.tiles.map(t=>({...t}))}));selected='wall';rotation=0;mode='place';level=0;$('level').value='0';$('mapWidth').value=MAP_W;$('mapHeight').value=MAP_H;for(const id of ['rangeX1','rangeX2'])$(id).max=MAP_W-1;for(const id of ['rangeZ1','rangeZ2'])$(id).max=MAP_H-1;cursorDirty=true;refreshPalette();}
+if(!blocks.every(f=>f&&/^prefab-[a-z0-9-]{1,32}$/.test(f.id)&&typeof f.name==='string'&&f.name.length<41&&Number.isInteger(f.w)&&Number.isInteger(f.h)&&f.w>0&&f.h>0&&f.w<=MAX_MAP&&f.h<=MAX_MAP&&Array.isArray(f.tiles)&&f.tiles.length<=650&&f.tiles.every(t=>t&&Number.isInteger(t.x)&&t.x>=0&&t.x<f.w&&Number.isInteger(t.z)&&t.z>=0&&t.z<f.h&&Number.isInteger(t.y)&&t.y>=0&&t.y<=MAX_LEVEL&&names.has(t.type)&&Number.isInteger(t.rot)&&t.rot>=0&&t.rot<4)))throw Error('設計図の内容が不正です');if(!o.world.every(p=>p&&p.x>=0&&p.z>=0&&Number.isInteger(p.x)&&Number.isInteger(p.z)&&p.x<newW&&p.z<newH&&Number.isInteger(p.y)&&p.y>=0&&p.y<=MAX_LEVEL&&typeof p.type==='string'&&names.has(p.type)&&Number.isInteger(p.rot)&&p.rot>=0&&p.rot<=3))throw Error('配置の内容が不正です');const incomingChecks=o.checks??[];
+if(!Array.isArray(incomingChecks)||incomingChecks.length>300||
+ !incomingChecks.every(p=>p&&Number.isInteger(p.x)&&Number.isInteger(p.z)&&Number.isInteger(p.y)&&
+ p.x>=0&&p.z>=0&&p.x<newW&&p.z<newH&&p.y>=0&&p.y<=MAX_LEVEL&&PINE_CHECK_COLORS.includes(p.color)))
+ throw Error('チェックデータが不正です');
+pineCheckMarks=incomingChecks.map(p=>({...p}));pineCheckNodes.clear();
+$('pineCheckOverlay').replaceChildren();pineCheckRefresh();
+MAP_W=newW;MAP_H=newH;terrainHeights=new Map(heights.map(p=>[terrainKey(p.x,p.z),p.h]));world=o.world.map(p=>({...p}));worldMaxLevel=world.reduce((top,p)=>Math.max(top,p.y),0);models=o.models.map(m=>({...m,parts:m.parts.map(p=>({...p}))}));prefabs=blocks.map(f=>({...f,tiles:f.tiles.map(t=>({...t}))}));selected='wall';rotation=0;mode='place';level=0;$('level').value='0';$('mapWidth').value=MAP_W;$('mapHeight').value=MAP_H;for(const id of ['rangeX1','rangeX2'])$(id).max=MAP_W-1;for(const id of ['rangeZ1','rangeZ2'])$(id).max=MAP_H-1;cursorDirty=true;refreshPalette();}
 function displayJSON(){$('jsonText').value=JSON.stringify(data(),null,2)}
 
 
@@ -1703,6 +1710,55 @@ function pineApplyGuildMarkedEdits(){
  for(const z of [7,8,9,10])remove(19,z,['woodwall']);
  return changed;
 }
+
+// Visual review checks: separate from the terrain, editable independently, saved in map JSON.
+let pineCheckMarks=[],pineCheckMode=false,pineCheckColor='#f5cb54';
+const PINE_CHECK_COLORS=['#f5cb54','#f06262','#43c579','#429ff0','#ffffff','#bd80ed'];
+const pineCheckNodes=new Map();
+function pineCheckRefresh(){
+ const bar=$('pineCheckToolbar');if(bar)bar.hidden=!pineCheckMode;
+ const button=$('pineCheckMode');
+ if(button){button.classList.toggle('selected',pineCheckMode);button.setAttribute('aria-pressed',String(pineCheckMode))}
+ const count=$('pineCheckCount');if(count)count.textContent=pineCheckMarks.length+'件';
+ document.querySelectorAll('[data-check-color]').forEach(button=>{
+  const active=button.dataset.checkColor===pineCheckColor;
+  button.classList.toggle('selected',active);button.setAttribute('aria-pressed',String(active));
+ });
+}
+function pineSetCheckMode(active){
+ pineCheckMode=!!active&&!poiWalkActive&&!pineGameActive;
+ if(pineCheckMode){$('palette').classList.remove('mobileOpen');$('inspector').classList.remove('mobileOpen')}
+ pineCheckRefresh();
+}
+function pineToggleCheck(x,z){
+ if(!validPos(x,z)||poiWalkActive||pineGameActive)return;
+ const index=pineCheckMarks.findIndex(p=>p.x===x&&p.z===z&&p.y===level);
+ if(index<0&&pineCheckMarks.length>=300){toast('チェック上限は300件です');return}
+ snapshot();
+ if(index>=0)pineCheckMarks.splice(index,1);
+ else pineCheckMarks.push({x,z,y:level,color:pineCheckColor});
+ pineCheckNodes.clear();$('pineCheckOverlay').replaceChildren();
+ commit();pineCheckRefresh();
+}
+function pineDrawChecks(vp){
+ const layer=$('pineCheckOverlay');if(!layer)return;
+ if(pineGameActive||poiWalkActive){layer.hidden=true;return}
+ layer.hidden=false;
+ const present=new Set();
+ for(const p of pineCheckMarks){
+  if(p.y!==level||p.x>=MAP_W||p.z>=MAP_H)continue;
+  const key=p.x+','+p.z+','+p.y;present.add(key);
+  let node=pineCheckNodes.get(key);
+  if(!node){node=document.createElement('span');node.className='pineMapCheck';
+   node.textContent='✓';layer.append(node);pineCheckNodes.set(key,node)}
+  node.style.color=p.color;
+  const pt=poiWorldToScreen(vp,p.x+.5,terrainY(p.x,p.z)+p.y*1.4+.7,p.z+.5);
+  const visible=pt&&pt.x>=-24&&pt.y>=-24&&pt.x<=canvas.clientWidth+24&&pt.y<=canvas.clientHeight+24;
+  node.style.display=visible?'grid':'none';
+  if(visible){node.style.left=pt.x+'px';node.style.top=pt.y+'px'}
+ }
+ for(const [key,node] of pineCheckNodes)if(!present.has(key)){node.remove();pineCheckNodes.delete(key)}
+}
 function pineStarterGuildPOI(){
  if(world.length&&!confirm('現在の編集マップを冒険者ギルドのサンプルで置き換えますか？ 先にJSON保存をおすすめします。'))return;
  snapshot();world=[];models=[];prefabs=[];terrainHeights=new Map();
@@ -2323,9 +2379,9 @@ canvas.addEventListener('pointerup',e=>{
  touchPositions.delete(e.pointerId);
  if(isSingle&&t&&t.id===e.pointerId&&!t.cancelled&&!t.moved&&
     Math.hypot(e.clientX-t.x,e.clientY-t.y)<=TAP_SLOP&&
-    performance.now()-t.start<=MAX_TAP_MS&&mode!=='move'&&!(poiWalkActive&&poiThirdPerson)){
+    performance.now()-t.start<=MAX_TAP_MS&&(pineCheckMode||mode!=='move')&&!(poiWalkActive&&poiThirdPerson)){
   const pos=cursorAt(e.clientX,e.clientY);
-  if(validPos(pos.x,pos.z))changeCell(pos.x,pos.z);
+  if(validPos(pos.x,pos.z)){if(pineCheckMode)pineToggleCheck(pos.x,pos.z);else changeCell(pos.x,pos.z)}
  }
  if(t?.id===e.pointerId)tapCandidate=null;
  if(touchPositions.size<2)multiGesture=null;
@@ -2360,10 +2416,21 @@ $('worldAudit').addEventListener('click',showWorldAudit);
 $('house3Demo').addEventListener('click',()=>makeHighBuilding('house'));
 $('tower7Demo').addEventListener('click',()=>makeHighBuilding('tower'));
 $('clear').addEventListener('click',()=>{if(!confirm('配置したすべての部材を消去しますか？'))return;snapshot();world=[];commit();toast('マップを空にしました')});$('demo').addEventListener('click',makeDemo);
+
+$('pineCheckMode').addEventListener('click',()=>pineSetCheckMode(!pineCheckMode));
+document.querySelectorAll('[data-check-color]').forEach(button=>button.addEventListener('click',()=>{
+ pineCheckColor=button.dataset.checkColor;pineCheckRefresh();
+}));
+$('pineCheckClear').addEventListener('click',()=>{
+ if(!pineCheckMarks.length||!confirm('チェックをすべて消去しますか？'))return;
+ snapshot();pineCheckMarks=[];pineCheckNodes.clear();$('pineCheckOverlay').replaceChildren();
+ commit();pineCheckRefresh();
+});
+pineCheckRefresh();
 $('topDownView').addEventListener('click',toggleTopDown);
 $('registerPOI').addEventListener('click',pineRegisterCurrentPOI);
 $('poiWalkToggle').addEventListener('click',()=>poiWalkSet(!poiWalkActive));
-$('enterGameWorld').addEventListener('click',pineGameEnter);
+$('enterGameWorld').addEventListener('click',()=>{pineSetCheckMode(false);pineGameEnter()});
 $('returnEditorWorld').addEventListener('click',pineGameExit);
 window.addEventListener('pagehide',()=>pineGameSave(true));
 document.addEventListener('visibilitychange',()=>{if(document.hidden)pineGameSave(true)});
@@ -2420,7 +2487,7 @@ $('downloadJson').addEventListener('click',()=>{const blob=new Blob([JSON.string
 $('pickJsonFile').addEventListener('click',()=>$('jsonFile').click());
 $('jsonFile').addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{if(file.size>6*1024*1024)throw Error('ファイルが大きすぎます（上限6MB）');const contents=await file.text();JSON.parse(contents);$('jsonText').value=contents;toast('JSONファイルを読み込みました。「JSONを読み込む」で配置に反映します')}catch(err){toast('ファイルの読み込み失敗: '+err.message)}finally{e.target.value=''}});
 $('importJson').addEventListener('click',()=>{try{const o=JSON.parse($('jsonText').value);const before=JSON.stringify(data());loadData(o);undoStack.push(before);if(undoStack.length>45)undoStack.shift();redoStack.length=0;commit();$('jsonModal').classList.remove('open');toast('ワールドを読み込んだ')}catch(e){toast('読み込み失敗：'+e.message)}});
-$('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mobileOpen');$('inspector').classList.remove('mobileOpen')});
+$('showPalette').addEventListener('click',()=>{pineSetCheckMode(false);$('palette').classList.toggle('mobileOpen');$('inspector').classList.remove('mobileOpen')});
 try{const saved=localStorage.getItem(SAVE_KEY);if(saved){loadData(JSON.parse(saved));if(pineApplyGuildMarkedEdits())commit()}else makeDemo()}catch(e){MAP_W=16;MAP_H=16;world=[];models=[];prefabs=[];makeDemo()}
 customPOIs=pineReadSavedPOIs();
 pineBuildPOICategories();
