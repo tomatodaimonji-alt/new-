@@ -639,7 +639,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
  #viewWrap #pineAILegend{font-size:9px}
 }
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v79）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v80）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -4392,7 +4392,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v78',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v80',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -4514,19 +4514,89 @@ function pineAIWire(){
    pineAIAutoFit=false;pineAIRender();
   });
  $('pineAIFit').addEventListener('click',pineAIFitMap);
- $('pineAIDownload').addEventListener('click',()=>{
-  const content=JSON.stringify(pineAIExport(),null,2);
-  const name='ai-world-layout-v78.json';
-  // Installed Android builds use the system file picker; browsers download a .json.
-  if(window.PineFileSave&&typeof window.PineFileSave.saveJson==='function'){
-   try{window.PineFileSave.saveJson(name,content);return}
-   catch(e){console.warn('Native JSON file save unavailable',e)}
+ // Show a usable export fallback when the installed Android WebView cannot
+ // download blob: links (older APKs lack the native file-save bridge).
+ function pineShowJSONExportFallback(content,filename){
+  let layer=document.getElementById('pineJSONExportFallback');
+  if(!layer){
+   layer=document.createElement('div');
+   layer.id='pineJSONExportFallback';
+   layer.setAttribute('role','dialog');
+   layer.setAttribute('aria-modal','true');
+   layer.setAttribute('aria-label','配置JSONの保存');
+   Object.assign(layer.style,{position:'fixed',inset:'0',zIndex:'99999',background:'rgba(9,18,23,.84)',
+    display:'flex',alignItems:'center',justifyContent:'center',padding:'16px',boxSizing:'border-box'});
+   const panel=document.createElement('div');
+   Object.assign(panel.style,{width:'min(720px,100%)',maxHeight:'94%',background:'#203039',
+    border:'1px solid #7c958f',borderRadius:'12px',padding:'14px',boxSizing:'border-box',
+    display:'flex',flexDirection:'column',gap:'10px',color:'#fff'});
+   const title=document.createElement('strong');
+   title.textContent='配置JSONの保存';
+   const help=document.createElement('p');
+   help.textContent='このアプリでは直接ダウンロードできません。新しいAPKなら「JSONファイル保存」で保存先を選べます。いまは下の内容をコピーして、テキストエディターで .json ファイルとして保存できます。';
+   Object.assign(help.style,{margin:'0',fontSize:'13px',lineHeight:'1.5'});
+   const filenameLabel=document.createElement('div');
+   filenameLabel.id='pineJSONExportName';
+   Object.assign(filenameLabel.style,{fontSize:'12px',opacity:'.8',overflowWrap:'anywhere'});
+   const area=document.createElement('textarea');
+   area.id='pineJSONExportText';
+   area.readOnly=true;
+   area.setAttribute('aria-label','配置JSONの内容');
+   Object.assign(area.style,{width:'100%',minHeight:'130px',height:'28vh',resize:'vertical',
+    fontFamily:'monospace',fontSize:'11px',boxSizing:'border-box',color:'#202020',background:'#fff'});
+   const buttons=document.createElement('div');
+   Object.assign(buttons.style,{display:'flex',flexWrap:'wrap',gap:'8px'});
+   const copy=document.createElement('button');copy.type='button';copy.textContent='JSONをコピー';
+   const close=document.createElement('button');close.type='button';close.textContent='閉じる';
+   copy.addEventListener('click',async()=>{
+    area.focus();area.select();area.setSelectionRange(0,area.value.length);
+    try{if(!navigator.clipboard?.writeText)throw Error('clipboard unavailable');
+     await navigator.clipboard.writeText(area.value);toast('配置JSONをコピーしました');}
+    catch(e){const ok=document.execCommand('copy');
+     toast(ok?'配置JSONをコピーしました':'テキストを長押しして全選択・コピーしてください');}
+   });
+   close.addEventListener('click',()=>{layer.hidden=true;layer.style.display='none'});
+   for(const button of [copy,close])Object.assign(button.style,{padding:'8px 14px',
+    border:'1px solid #acb9b7',borderRadius:'8px',background:'#385259',color:'#fff'});
+   buttons.append(copy,close);
+   panel.append(title,help,filenameLabel,area,buttons);
+   layer.append(panel);document.body.appendChild(layer);
   }
-  const url=URL.createObjectURL(new Blob([content],{type:'application/json;charset=utf-8'}));
-  const a=document.createElement('a');a.href=url;a.download=name;
-  document.body.appendChild(a);a.click();a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),30000);
-  toast('JSONファイルの保存を開始しました');
+  layer.querySelector('#pineJSONExportName').textContent=filename;
+  layer.querySelector('#pineJSONExportText').value=content;
+  layer.hidden=false;layer.style.display='flex';
+ }
+ $('pineAIDownload').addEventListener('click',()=>{
+  // Immediate feedback avoids a silent button even when a download is blocked.
+  toast('配置JSONを準備しています');
+  let content;
+  try{content=JSON.stringify(pineAIExport(),null,2)}
+  catch(e){console.error('JSON export failed',e);toast('配置JSONを作成できませんでした');return}
+  const name='ai-world-layout-v80.json';
+  if(window.PineFileSave&&typeof window.PineFileSave.saveJson==='function'){
+   try{window.PineFileSave.saveJson(name,content);toast('Androidの保存画面を開きます');return}
+   catch(e){console.warn('Native file save is unavailable',e)}
+  }
+  const blob=new Blob([content],{type:'application/json;charset=utf-8'});
+  const file=new File([blob],name,{type:'application/json'});
+  const isWebView=/\\bwv\\b|Version\\/4\\.0.*Chrome/i.test(navigator.userAgent);
+  if(isWebView){
+   // File sharing works in some Android WebViews; otherwise show a copyable
+   // fallback instead of attempting an invisible, unsupported blob download.
+   if(navigator.canShare?.({files:[file]})&&navigator.share){
+    navigator.share({files:[file],title:'3Dワールド工房 配置JSON'})
+     .then(()=>toast('配置JSONを共有しました'))
+     .catch(()=>pineShowJSONExportFallback(content,name));
+   }else pineShowJSONExportFallback(content,name);
+   return;
+  }
+  try{
+   const url=URL.createObjectURL(blob);
+   const a=document.createElement('a');a.href=url;a.download=name;
+   document.body.appendChild(a);a.click();a.remove();
+   setTimeout(()=>URL.revokeObjectURL(url),30000);
+   toast('JSONファイルのダウンロードを開始しました');
+  }catch(e){console.error('JSON download failed',e);pineShowJSONExportFallback(content,name)}
  });
  if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>{
   if(pineAIActive){if(pineAIAutoFit)pineAIFitMap();else pineAIRender()}
