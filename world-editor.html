@@ -615,7 +615,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
  header #batteryIndicator .batteryShape{width:23px;height:13px}
 }
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v70）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v71）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -4688,7 +4688,11 @@ function guildInteriorDetails(m,visible){
  // board on the staff partition is the sole ground-floor quest noticeboard.
  // One tidy ledger and pencil cup on the reception counter. Do not scatter
  // duplicate paperwork across every counter module or the lounge tables.
- const reception=front.find(o=>o.x===Math.round(g.cx)&&onFloor.has(o.x+','+o.z)) || front.find(o=>onFloor.has(o.x+','+o.z));
+ // v71: place the single ledger and pen cup at the user's red mark (14,10),
+ // not at the average X of the counter group (which shifts as wings are added).
+ const reception=front.find(o=>o.x===14&&o.z===10&&onFloor.has(o.x+','+o.z))||
+  front.find(o=>o.z===10&&onFloor.has(o.x+','+o.z))||
+  front.find(o=>onFloor.has(o.x+','+o.z));
  if(reception){
   const x=reception.x+.5,z=reception.z+.5,y=terrainY(reception.x,reception.z);
   cube(m,x-.09,y+.992,z-.10,.44,.030,.30,parchment);
@@ -7031,8 +7035,11 @@ function pineApplyGuildMarkedEdits(){
  // Red mark: replace an existing wall at (11,8) with a passable timber door.
  if(!has(11,8,'woodwallDoor')){
   remove(11,8,['woodwall']);
-  world.push({x:11,z:8,y:0,type:'woodwallDoor',rot:0});changed=true;
+  world.push({x:11,z:8,y:0,type:'woodwallDoor',rot:1});changed=true;
  }else remove(11,8,['woodwall']);
+ // The staff entry runs along the X=11 vertical timber partition.
+ const staffDoor=world.find(o=>o.x===11&&o.z===8&&o.y===0&&o.type==='woodwallDoor');
+ if(staffDoor&&staffDoor.rot!==1){staffDoor.rot=1;changed=true}
  // Preserve prior intentional cleanup of unmarked partitions and counters.
  remove(13,9,['counterWood']);
  for(const z of [8,9,10])remove(17,z,['counterWood']);
@@ -7204,7 +7211,7 @@ function pineStarterGuildPOI(){
  // Red mark: remove the doorway entirely at (11,18), leaving an open stair path.
  for(let z=7;z<=18;z++){
   if(z===18)continue;
-  add(11,z,z===8?'woodwallDoor':'woodwall');
+  add(11,z,z===8?'woodwallDoor':'woodwall',0,z===8?1:0);
  }
  for(let x=8;x<=10;x++)add(x,13,x===9?'woodwallDoor':'woodwall');
  for(let x=8;x<=10;x++)add(x,17,'woodwall');
