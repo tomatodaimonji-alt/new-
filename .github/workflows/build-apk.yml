@@ -12,6 +12,9 @@ on:
       - 'gradle.properties'
       - '.github/workflows/build-apk.yml'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -40,3 +43,20 @@ jobs:
           name: world-editor-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
+
+      - name: Publish installable APK to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="3d-world-workshop-v81"
+          APK="3D-world-workshop-v81.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$APK"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --clobber
+          else
+            gh release create "$TAG" "$APK" \
+              --title "3Dワールド工房 v81 Android APK" \
+              --notes "AI画像解析用PNG保存に対応したAndroidアプリ。既存のアプリを削除せず上書きインストールを試してください。デバッグ署名が異なる場合は上書きできません。既存データ保護のため、アプリをアンインストールしないでください。" \
+              --latest
+          fi
