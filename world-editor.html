@@ -4337,6 +4337,77 @@ function guildMountedLighting(m,visible){
   cube(m,px+dx*.504,Y+1.28,pz+dz*.504,alongX?.88:.055,.075,alongX?.055:.88,[.68,.69,.65]);
  }
 }
+// Lightweight, wall-attached guild fittings. The generated detail layer also
+// upgrades previously saved guild POIs without changing their stored objects.
+function guildInteriorDetails(m,visible){
+ const g=guildBounds();if(!g)return;
+ const timber=[.38,.24,.14],trim=[.62,.44,.27],shadow=[.24,.17,.12];
+ const parchment=[.84,.76,.57],ink=[.33,.29,.24],brass=[.79,.60,.30];
+ const onFloor=new Set(visible.filter(o=>o.y===0&&isFloor(o.type)).map(o=>o.x+','+o.z));
+ const solid=(x,z,y=0)=>visible.some(o=>o.x===x&&o.z===z&&o.y===y&&o.type==='stonewall');
+ const front=visible.filter(o=>o.type==='counterWood'&&o.y===0&&Math.abs(o.x-g.cx)<4&&Math.abs(o.z-g.cz)<2);
+ if(front.length<3)return;
+ // Structural timber framing sits along existing solid wall bays, not in walkways.
+ for(const floor of [0,1,2]){
+  if(floor>0&&!visible.some(o=>o.y===floor&&o.type.startsWith('stonewall')))continue;
+  const y=floor*1.4;
+  for(const z of [g.north+2,g.north+7,g.south-1]){
+   for(const x of [g.west,g.east]){
+    if(!solid(x,z,floor))continue;
+    const insideX=x===g.west?x+.91:x+.09;
+    const wz=z+.5,base=y+terrainY(x,z);
+    cube(m,insideX,base+.08,wz,.16,1.14,.20,timber);
+    cube(m,insideX,base+1.17,wz,.30,.17,.34,trim);
+    cube(m,insideX,base+.12,wz,.27,.10,.31,shadow);
+   }
+  }
+  // Raised wooden molding follows the back wall where masonry is uninterrupted.
+  for(let x=g.west+1;x<g.east;x++){
+   if(!solid(x,g.north,floor))continue;
+   const base=y+terrainY(x,g.north);
+   cube(m,x+.5,base+1.25,g.north+.98,.95,.105,.075,timber);
+   cube(m,x+.5,base+1.36,g.north+.98,.95,.045,.095,trim);
+  }
+ }
+ const baseY=terrainY(Math.round(g.cx),Math.round(g.cz));
+ // Guild charter / regional map: framed leather-toned board on the back wall,
+ // positioned above the counter rather than occupying a floor cell.
+ const mapX=Math.round(g.cx)+.5,mapZ=g.north+1.035;
+ if(solid(Math.round(g.cx),g.north)){
+  cube(m,mapX,baseY+.67,mapZ,1.28,.79,.075,timber);
+  cube(m,mapX,baseY+.72,mapZ+.046,1.08,.61,.012,parchment);
+  // Stylised paths and district markers are raised geometry, no texture assets.
+  for(const [dx,dz] of [[-.33,-.14],[-.12,.12],[.22,-.05],[.33,.19]]){
+   cube(m,mapX+dx,baseY+.95+dz,mapZ+.062,.11,.018,.008,ink);
+  }
+  for(const [dx,dy] of [[-.31,.91],[.21,1.08],[.07,.77]])
+   cube(m,mapX+dx,baseY+dy,mapZ+.068,.06,.06,.010,brass);
+ }
+ // A clear timber-framed quest display at the west side of reception.
+ const questX=g.west+4,questZ=g.north+1.045;
+ if(solid(questX,g.north)){
+  cube(m,questX+.5,baseY+.47,questZ,1.22,.80,.11,timber);
+  cube(m,questX+.5,baseY+.52,questZ+.070,1.08,.65,.012,shadow);
+  for(const [dx,dy] of [[-.32,.65],[.06,.75],[.31,.45],[-.24,.38]]){
+   cube(m,questX+.5+dx,baseY+dy,questZ+.081,.24,.24,.011,parchment);
+   cube(m,questX+.5+dx,baseY+dy+.096,questZ+.095,.037,.035,.012,brass);
+   for(let k=0;k<3;k++)cube(m,questX+.5+dx,baseY+dy+.035-k*.049,questZ+.092,.16,.010,.004,ink);
+  }
+ }
+ // Ledger, ink and paperwork are small objects placed *on* the reception
+ // counter, leaving the player's approach unobstructed.
+ for(const o of front){
+  if(!onFloor.has(o.x+','+o.z))continue;
+  const x=o.x+.5,z=o.z+.5,y=terrainY(o.x,o.z);
+  cube(m,x,y+.992,z-.10,.48,.034,.34,parchment);
+  cube(m,x-.13,y+1.031,z-.10,.10,.015,.24,shadow);
+  for(let k=0;k<3;k++)cube(m,x+.07,y+1.030,z-.17+k*.073,.25,.009,.013,ink);
+  if(o.x===Math.round(g.cx)){
+   cube(m,x+.34,y+.987,z+.25,.13,.14,.13,shadow);
+   cube(m,x+.34,y+1.12,z+.25,.045,.055,.045,brass);
+  }
+ }
+}
 function makeScene(){
  const m=mesh(),visible=world.filter(o=>{
   if(poiWalkActive&&poiIsMonster(o.type))return false;
@@ -4403,6 +4474,7 @@ function makeScene(){
  houseFacadeDetails(m,visible);
  guildAtriumRailing(m,visible);
  guildMountedLighting(m,visible);
+ guildInteriorDetails(m,visible);
  const groups=residentialRoofComponents(visible.filter(o=>RESIDENTIAL_ROOFS.has(o.type)));
  const allRoofLookup=new Map(visible.filter(o=>RESIDENTIAL_ROOFS.has(o.type)).map(o=>[o.x+','+o.z+','+o.y,o]));
  for(const group of groups)residentialRoofGeometry(m,group,allRoofLookup);
@@ -6587,9 +6659,12 @@ function pineStarterGuildPOI(){
  // Ground-floor reception sits ahead of the door, with accessible side aisles.
  for(const [x,z,t,r,y] of [
   [10,8,'bookshelf',0,0],[11,8,'bookshelf',0,0],[19,8,'bookshelf',0,0],
+  [18,8,'bookshelf',0,0],
   [12,10,'counterWood',0,0],[13,10,'counterWood',0,0],[14,10,'counterWood',0,0],[15,10,'counterWood',0,0],
   [9,13,'roundTableWood',0,0],[9,14,'chairWood',2,0],[10,13,'chairWood',1,0],
   [20,13,'roundTableWood',0,0],[20,14,'chairWood',2,0],[19,13,'chairWood',3,0],
+  [9,16,'benchWood',0,0],[20,16,'benchWood',2,0],
+  [10,16,'roundTableWood',0,0],[19,16,'roundTableWood',0,0],
   [11,10,'guildQuestBoard',0,0],[18,10,'guildQuestBoard',0,0],
   [10,18,'crate',0,0],[20,18,'barrel',0,0],
   [9,10,'lantern',0,0],[20,10,'lantern',0,0],
@@ -6619,7 +6694,7 @@ function pineStarterGuildPOI(){
  selected='stonewall';mode='move';rotation=0;
  commit();refreshPalette();updateSelected();showEntireMap();
  $('palette').classList.remove('mobileOpen');
- toast('冒険者ギルドを配置しました（3階建て・談話スペース）。編集後にPOIとして登録できます');
+ toast('冒険者ギルドを配置しました（受付・依頼掲示・談話スペース）。編集後にPOIとして登録できます');
 }
 function pineSupermarketPOI(style='wholesale',condition='normal',force=false){
  style='wholesale';condition='normal';
