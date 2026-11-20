@@ -1333,7 +1333,7 @@ case 'kitchenSink':{
  break;}
 case 'guildLatrine':{
  // Ceramic flushing toilet with lowered pale-blue water.
- const porcelain=[.88,.86,.79],shine=[.98,.95,.87],shade=[.67,.67,.61],wood=[.48,.31,.19],dark=[.18,.21,.20];
+ const porcelain=[.88,.86,.79],shine=[.98,.95,.87],shade=[.87,.87,.83],wood=[.48,.31,.19],dark=[.76,.80,.79];
  const T=(dx,dy,dz,w,h,d,col)=>cube(m,x+dx*.74,y+dy*.78,z+dz*.74,w*.74,h*.78,d*.74,col);
  T(0,.025,-.05,.78,.10,.80,wood);
  T(0,.15,-.10,.55,.39,.49,porcelain);
@@ -1794,41 +1794,58 @@ function materialFixture(m,id,x,y,z){
  cube(m,x,y+.96,z,.94,.028,.86,stone?[.88,.87,.83]:luxury?[.62,.43,.25]:[.79,.61,.38]);
  cube(m,x,y+.83,z+.476,1.0,.068,.040,trim);
  cube(m,x,y+.095,z+.465,.89,.045,.06,stone?[.46,.48,.47]:[.62,.50,.34]);
- // Guild reception chart: a parchment map with land masses, river, roads and compass.
- // Add to the center inner counter only, without altering other counters.
+ // Guild reception world chart: recognizable continental silhouettes viewed from above.
+ // Apply only to the existing center counter; leave saved furniture positions alone.
  if(id==='counterWood'&&MAP_W===30&&MAP_H===30&&Math.abs(x-14.5)<.01&&Math.abs(z-10.5)<.01&&
     world.some(o=>o.x===14&&o.z===20&&o.y===0&&o.type==='stonewallDoor')&&
     world.some(o=>o.x===12&&o.z===10&&o.y===0&&o.type==='counterWood')){
-  const paper=[.86,.75,.54],ink=[.36,.27,.19],land=[.68,.71,.48],
-   river=[.32,.59,.68],road=[.59,.38,.23],pin=[.74,.24,.17];
-  // Counter top finishes at y+.984; each layer sits above it at a distinct Y.
-  cube(m,x,y+.992,z-.014,.76,.009,.68,ink);
-  cube(m,x,y+1.003,z-.014,.719,.006,.638,paper);
-  const poly=(points,color,yy)=>{
-   const center=points.reduce((sum,p)=>[sum[0]+p[0]/points.length,sum[1]+p[1]/points.length],[0,0]);
+  const parchment=[.88,.78,.56],border=[.47,.32,.19],land=[.51,.62,.39],
+    coast=[.36,.48,.30],sea=[.57,.73,.72],route=[.67,.39,.25],red=[.79,.27,.19];
+  // The countertop upper face is at y+.984. Keep painted surfaces strictly above it.
+  cube(m,x,y+.990,z-.014,.79,.011,.69,border);
+  cube(m,x,y+1.002,z-.014,.752,.007,.650,parchment);
+  const paintY=y+1.012,detailY=y+1.015,markerY=y+1.019;
+  const polygon=(points,color,yy=paintY)=>{
+   const center=points.reduce((v,p)=>[v[0]+p[0]/points.length,v[1]+p[1]/points.length],[0,0]);
    for(let i=0;i<points.length;i++){
     const a=points[i],b=points[(i+1)%points.length];
     tri(m,[x+center[0],yy,z+center[1]],[x+a[0],yy,z+a[1]],[x+b[0],yy,z+b[1]],color);
    }
   };
-  const stroke=(ax,az,bx,bz,width,color,yy)=>{
+  const stroke=(ax,az,bx,bz,width,color,yy=detailY)=>{
    const dx=bx-ax,dz=bz-az,len=Math.hypot(dx,dz)||1,ox=-dz/len*width/2,oz=dx/len*width/2;
    quad(m,[x+ax+ox,yy,z+az+oz],[x+bx+ox,yy,z+bz+oz],
-     [x+bx-ox,yy,z+bz-oz],[x+ax-ox,yy,z+az-oz],color);
+    [x+bx-ox,yy,z+bz-oz],[x+ax-ox,yy,z+az-oz],color);
   };
-  poly([[-.30,-.23],[-.11,-.24],[.02,-.12],[-.06,.02],[-.22,.04],[-.31,-.08]],land,y+1.011);
-  poly([[.04,.06],[.19,-.02],[.29,.08],[.26,.24],[.08,.26],[-.02,.16]],land,y+1.011);
-  poly([[-.24,-.14],[-.16,-.20],[-.08,-.12],[-.14,-.06]], [.48,.56,.35],y+1.012);
-  const riverPoints=[[-.27,.22],[-.15,.15],[-.03,.08],[.08,-.04],[.16,-.15],[.24,-.24]];
-  for(let i=1;i<riverPoints.length;i++)stroke(...riverPoints[i-1],...riverPoints[i],.021,river,y+1.015);
-  const route=[[-.23,-.12],[-.04,-.08],[.11,.14],[.25,.17]];
-  for(let i=1;i<route.length;i++)stroke(...route[i-1],...route[i],.011,road,y+1.018);
-  for(const [xx,zz] of [[-.22,-.12],[.11,.14],[.24,.17]])
-   cube(m,x+xx,y+1.018,z+zz,.029,.006,.029,ink);
-  stroke(.264,-.19,.264,-.12,.013,ink,y+1.019);
-  poly([[.264,-.24],[.24,-.19],[.288,-.19]],ink,y+1.021);
-  cube(m,x-.04,y+1.020,z+.08,.037,.008,.037,pin);
+  // Five major landmasses plus Greenland and island chains.
+  // West is the Americas; east is Eurasia, Africa and Oceania.
+  polygon([[-.33,-.23],[-.24,-.26],[-.17,-.23],[-.12,-.16],[-.17,-.09],[-.13,-.05],
+    [-.19,.015],[-.24,-.025],[-.27,-.10],[-.32,-.13]],land);
+  polygon([[-.14,.01],[-.075,.055],[-.045,.12],[-.078,.19],[-.095,.26],
+    [-.155,.23],[-.18,.15],[-.16,.09]],land);
+  polygon([[-.075,-.21],[.01,-.25],[.12,-.23],[.16,-.17],[.28,-.20],
+    [.33,-.14],[.29,-.075],[.19,-.065],[.135,-.11],[.075,-.055],
+    [.01,-.075],[-.035,-.13]],land);
+  polygon([[.045,-.045],[.14,-.055],[.18,.015],[.145,.105],[.09,.18],
+    [.035,.11],[.015,.035]],land);
+  polygon([[.23,.14],[.31,.13],[.34,.19],[.285,.25],[.22,.22]],land);
+  polygon([[-.105,-.285],[-.04,-.275],[-.035,-.22],[-.09,-.205]],land);
+  for(const [u,v] of [[.20,-.03],[.25,.006],[.30,.036],[.20,.072]])
+   cube(m,x+u,paintY,z+v,.018,.003,.014,coast);
+  // Latitude and sea-route lines give the paper the look of an atlas.
+  for(const zz of [-.17,.10])stroke(-.35,zz,.35,zz,.003,sea,detailY);
+  for(const xx of [-.12,.12])stroke(xx,-.275,xx,.275,.003,sea,detailY);
+  for(const [a,b] of [
+   [[-.235,-.06],[-.13,.02]],[[-.13,.02],[.015,.045]],
+   [[.015,.045],[.14,.085]],[[.14,.085],[.265,.165]]
+  ])stroke(...a,...b,.008,route,markerY);
+  // Compass rose, a red destination and coastline legends.
+  stroke(.325,-.275,.325,-.208,.009,border,markerY);
+  polygon([[.325,-.294],[.304,-.249],[.345,-.249]],border,markerY+.002);
+  cube(m,x+.145,markerY,z+.083,.028,.006,.028,red);
+  cube(m,x+.145,markerY+.006,z+.083,.011,.004,.011,parchment);
  }
+
 }
 
 const MATCHED_OPENING_MATERIALS={
