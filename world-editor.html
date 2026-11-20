@@ -595,7 +595,7 @@ header #batteryIndicator.low{color:#ff9b8c}
 header #batteryIndicator.charging{color:#c0ecc5}
 @media(max-width:800px){header #batteryIndicator{font-size:11px;min-width:36px;padding:4px 2px}}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v65）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません">--%</span></header>
+<div id="app"><header><h1>3Dワールド工房（v66）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません">--%</span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -4204,8 +4204,12 @@ function poiSyncCameraModeUI(){
  $('topDownView').setAttribute('aria-pressed',String(cameraTopDown));
 }
 function togglePoiThirdPerson(){
- if(!poiWalkActive)return;
- // 俯瞰 -> 三人称 -> 真上 -> 俯瞰
+ if(!poiWalkActive){
+  // Editor view cycles between overview and overhead without resetting pan or zoom.
+  cameraTopDown=!cameraTopDown;poiThirdPerson=false;
+  poiSyncCameraModeUI();cursorDirty=true;return;
+ }
+ // During play keep the previous 3-stage camera sequence.
  if(cameraTopDown){cameraTopDown=false;poiThirdPerson=false}
  else if(poiThirdPerson){poiThirdPerson=false;cameraTopDown=true}
  else{poiThirdPerson=true;cameraTopDown=false}
@@ -4916,7 +4920,7 @@ function pineApplyObjectAction(x,z){
  commit();updateSelected();
 }
 function changeCell(x,z){
- if(pineGameActive||!validPos(x,z))return;
+ if(pineGameActive||!validPos(x,z)||mode==='idle')return;
  if(['relocate','duplicate','rotate','erase'].includes(mode)){
   pineApplyObjectAction(x,z);return;
  }
@@ -4951,7 +4955,7 @@ function stampPrefab(x,z){const f=prefabs.find(p=>p.id===selected);if(!f)return;
 const placements=f.tiles.map(t=>{const pair=r===0?[t.x,t.z]:r===1?[f.h-1-t.z,t.x]:r===2?[f.w-1-t.x,f.h-1-t.z]:[t.z,f.w-1-t.x];return{x:x+pair[0],z:z+pair[1],y:level+t.y,type:t.type,rot:(t.rot+r)%4}});
 if(placements.some(p=>!validPos(p.x,p.z)||p.y>MAX_LEVEL)){toast('この場所には設計図を置けません');return}
 snapshot();for(const p of placements){const ix=world.findIndex(o=>o.x===p.x&&o.z===p.z&&o.y===p.y&&isFloor(o.type)===isFloor(p.type));if(ix>=0)world.splice(ix,1);world.push(p)}commit();toast('「'+f.name+'」を配置した')}
-function updateStats(){$('terrainHeightLabel').textContent=hover&&validPos(hover.x,hover.z)?terrainLevel(hover.x,hover.z):'-';$('gridLabel').textContent=MAP_W+'×'+MAP_H;$('countLabel').textContent=world.length;$('selectedLabel').textContent=byId(selected)?.name||'未選択';$('rotationLabel').textContent=rotation*90+'°';$('cursorStatus').textContent=hover?'マス: '+(hover.x+1)+', '+(hover.z+1)+' · '+({place:'配置',erase:'消去',pick:'取得',rotate:'回転',move:'選択',select:'選択',relocate:'移動',duplicate:'複製',terrainUp:'地面を上げる',terrainDown:'地面を下げる',terrainFlat:'平坦化'}[mode]||'配置'):'マスを選んで配置';}
+function updateStats(){$('terrainHeightLabel').textContent=hover&&validPos(hover.x,hover.z)?terrainLevel(hover.x,hover.z):'-';$('gridLabel').textContent=MAP_W+'×'+MAP_H;$('countLabel').textContent=world.length;$('selectedLabel').textContent=byId(selected)?.name||'未選択';$('rotationLabel').textContent=rotation*90+'°';$('cursorStatus').textContent=hover?'マス: '+(hover.x+1)+', '+(hover.z+1)+' · '+({place:'配置',erase:'消去',pick:'取得',rotate:'回転',move:'選択',select:'選択',idle:'操作なし',relocate:'移動',duplicate:'複製',terrainUp:'地面を上げる',terrainDown:'地面を下げる',terrainFlat:'平坦化'}[mode]||'配置'):'マスを選んで配置';}
 function updateSelected(){for(const [id,active] of [['quickPlace',mode==='place'],['quickErase',mode==='erase'],['quickRotate',mode==='rotate'],['quickMoveObject',mode==='relocate'],['quickDuplicate',mode==='duplicate']]){$(id).classList.toggle('active',active)}for(const b of document.querySelectorAll('[data-brush]'))b.classList.toggle('selected',mode==='place'&&(b.dataset.brush===selected||(b.dataset.brush==='wall'&&isWallId(selected))));for(const b of document.querySelectorAll('[data-mode]'))b.classList.toggle('selected',b.dataset.mode===mode);updateStats()}
 let wallExpanded=false,openedWallGroup=null,constructionExtrasExpanded=false,naturalExpanded=false;
 function mkButton(id,el){const btn=document.createElement('button');btn.className='item';btn.dataset.brush=id;const icon=createBlockIcon(id);const name=document.createElement('span');name.textContent=el.name+(id==='wall'?(wallExpanded?'　⌃':'　⌄'):'');btn.append(icon,name);btn.addEventListener('click',()=>{if(id==='wall'){openWallSelector();return}selected=id;pineClearObjectSelection();mode='place';updateSelected();$('palette').classList.remove('mobileOpen')});return btn}
@@ -7635,19 +7639,23 @@ function pinePreparePlayEditing(){
   poiThirdPerson=false;cameraTopDown=true;poiSyncCameraModeUI();poiWalkCamera();
  }
 }
-$('quickPlace').addEventListener('click',()=>{pinePreparePlayEditing();pineClearObjectSelection();mode='place';updateSelected()});
-$('quickErase').addEventListener('click',()=>{pinePreparePlayEditing();pineClearObjectSelection();mode='erase';updateSelected();toast('削除する部材をタップして選択')});
-$('quickRotate').addEventListener('click',()=>{pinePreparePlayEditing();pineClearObjectSelection();mode='rotate';updateSelected();toast('回転する部材をタップして選択')});
-$('quickMoveObject').addEventListener('click',()=>{
+// v66: pressing the currently active quick tool again deselects it.
+function pineToggleQuickTool(next,notice){
  if(pineGameActive)return;
- pinePreparePlayEditing();pineClearObjectSelection();mode='relocate';updateSelected();
- toast('移動する部材をタップして選択');
-});
-$('quickDuplicate').addEventListener('click',()=>{
- if(pineGameActive)return;
- pinePreparePlayEditing();pineClearObjectSelection();mode='duplicate';updateSelected();
- toast('複製する部材をタップして選択');
-});
+ const wasActive=mode===next;
+ pineClearObjectSelection();
+ if(wasActive){
+  mode='idle';updateSelected();toast('ツールの選択を解除しました');return;
+ }
+ pinePreparePlayEditing();
+ mode=next;updateSelected();
+ if(notice)toast(notice);
+}
+$('quickPlace').addEventListener('click',()=>pineToggleQuickTool('place'));
+$('quickErase').addEventListener('click',()=>pineToggleQuickTool('erase','削除する部材をタップして選択'));
+$('quickRotate').addEventListener('click',()=>pineToggleQuickTool('rotate','回転する部材をタップして選択'));
+$('quickMoveObject').addEventListener('click',()=>pineToggleQuickTool('relocate','移動する部材をタップして選択'));
+$('quickDuplicate').addEventListener('click',()=>pineToggleQuickTool('duplicate','複製する部材をタップして選択'));
 // Touch gestures: edits only on a completed, stationary single-finger tap.
 // Any dragging, multitouch, cancellation, or long press suppresses block changes.
 const touchPositions=new Map();
