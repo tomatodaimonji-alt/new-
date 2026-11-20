@@ -2,6 +2,7 @@ package jp.tsukacchi.htmlplayer;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.util.Base64;
 import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
@@ -50,6 +51,8 @@ public class MainActivity extends Activity {
     private static final int JSON_SAVE_REQUEST = 781;
     private static final int MAX_JSON_CHARS = 5_000_000;
     private byte[] pendingJsonExport;
+    private String pendingExportMime = "application/json";
+    private static final int MAX_PNG_BASE64 = 28_000_000;
     private File current;
     private File previous;
     private File pending;
@@ -167,33 +170,56 @@ public class MainActivity extends Activity {
 
     // System document picker: saves exported AI-layout data without clipboard limits.
     private final class JsonFileExporter {
+        @JavascriptInterface public void savePng(String filename, String encoded) {
+            if (encoded == null || encoded.length() > MAX_PNG_BASE64 || encoded.length() < 32) {
+                runOnUiThread(() -> Toast.makeText(MainActivity.this,
+                    "画像サイズが大きすぎます", Toast.LENGTH_LONG).show());
+                return;
+            }
+            try {
+                byte[] bytes = Base64.decode(encoded, Base64.DEFAULT);
+                if (bytes.length < 8 || (bytes[0] & 0xff) != 0x89 ||
+                    bytes[1] != 0x50 || bytes[2] != 0x4e || bytes[3] != 0x47)
+                    throw new IllegalArgumentException("Not PNG");
+                requestFileSave(filename, bytes, "image/png");
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(MainActivity.this,
+                    "PNG画像を解析できませんでした", Toast.LENGTH_LONG).show());
+            }
+        }
         @JavascriptInterface public void saveJson(String filename, String json) {
             if (json == null || json.length() < 2 || json.length() > MAX_JSON_CHARS) {
                 runOnUiThread(() -> Toast.makeText(MainActivity.this,
                     "JSONのサイズが不正です", Toast.LENGTH_LONG).show());
                 return;
             }
-            final byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
-            runOnUiThread(() -> {
-                try {
-                    if (pendingJsonExport != null) {
-                        Toast.makeText(MainActivity.this, "保存先の選択中です", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    pendingJsonExport = bytes;
-                    Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-                    intent.addCategory(Intent.CATEGORY_OPENABLE);
-                    intent.setType("application/json");
-                    String safeName = filename != null && filename.matches("[a-zA-Z0-9._-]+\\.json")
-                        ? filename : "ai-world-layout.json";
-                    intent.putExtra(Intent.EXTRA_TITLE, safeName);
-                    startActivityForResult(intent, JSON_SAVE_REQUEST);
-                } catch (Exception ex) {
-                    pendingJsonExport = null;
-                    Toast.makeText(MainActivity.this, "保存画面を開けませんでした", Toast.LENGTH_LONG).show();
-                }
-            });
+            requestFileSave(filename, json.getBytes(StandardCharsets.UTF_8), "application/json");
+
         }
+    }
+
+    private void requestFileSave(String filename, byte[] bytes, String mime) {
+        runOnUiThread(() -> {
+            try {
+                if (pendingJsonExport != null) {
+                    Toast.makeText(MainActivity.this, "保存先の選択中です", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                pendingJsonExport = bytes;
+                pendingExportMime = mime;
+                Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType(mime);
+                String extension = "image/png".equals(mime) ? ".png" : ".json";
+                String safeName = filename != null && filename.matches("[a-zA-Z0-9._-]+")
+                    && filename.endsWith(extension) ? filename : "ai-world-layout" + extension;
+                intent.putExtra(Intent.EXTRA_TITLE, safeName);
+                startActivityForResult(intent, JSON_SAVE_REQUEST);
+            } catch (Exception e) {
+                pendingJsonExport = null;
+                Toast.makeText(MainActivity.this, "保存画面を開けませんでした", Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -205,9 +231,9 @@ public class MainActivity extends Activity {
         try (OutputStream out = getContentResolver().openOutputStream(data.getData())) {
             if (out == null) throw new IOException("No output stream");
             out.write(bytes);
-            Toast.makeText(this, "配置JSONファイルを保存しました", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "ファイルを保存しました", Toast.LENGTH_LONG).show();
         } catch (Exception e) {
-            Toast.makeText(this, "JSON保存に失敗しました: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "ファイル保存に失敗しました: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
