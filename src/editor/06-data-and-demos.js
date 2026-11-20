@@ -1679,6 +1679,138 @@ function makeHighBuilding(kind){
 // POI sample catalog: six building typologies, three architectural states.
 const PINE_SUPER_VARIANTS=[['wholesale','スーパー',36,24,1,'倉庫型スーパーの通常の廃墟']];
 const PINE_SUPER_STATES=[['normal','通常の廃墟','構造を維持した店舗']];
+// Apply marked corrections only to the starter-guild layout in existing local saves.
+function pineApplyGuildMarkedEdits(){
+ const has=(x,z,type)=>world.some(p=>p.x===x&&p.z===z&&p.y===0&&p.type===type);
+ const isGuild=MAP_W===30&&MAP_H===30&&
+  has(7,6,'stonewall')&&has(22,6,'stonewall')&&
+  has(14,20,'stonewallDoor')&&
+  has(12,10,'counterWood')&&has(16,10,'counterWood')&&
+  (has(11,8,'woodwall')||has(11,8,'woodwallDoor'));
+ if(!isGuild)return false;
+ let changed=false;
+ const remove=(x,z,types)=>{const before=world.length;
+  world=world.filter(p=>!(p.x===x&&p.z===z&&p.y===0&&types.includes(p.type)));
+  if(world.length!==before)changed=true;
+ };
+ if(has(11,8,'woodwall')&&!has(11,8,'woodwallDoor')){
+  remove(11,8,['woodwall']);
+  world.push({x:11,z:8,y:0,type:'woodwallDoor',rot:0});changed=true;
+ }
+ remove(13,9,['counterWood']);
+ for(const z of [8,9,10])remove(17,z,['counterWood']);
+ remove(18,10,['counterWood']);
+ for(const z of [7,8,9,10])remove(19,z,['woodwall']);
+ return changed;
+}
+function pineStarterGuildPOI(){
+ if(world.length&&!confirm('現在の編集マップを冒険者ギルドのサンプルで置き換えますか？ 先にJSON保存をおすすめします。'))return;
+ snapshot();world=[];models=[];prefabs=[];terrainHeights=new Map();
+ const w=30,h=30;MAP_W=w;MAP_H=h;
+ const add=(x,z,type,y=0,rot=0)=>{if(x>=0&&x<w&&z>=0&&z<h)world.push({x,z,y,type,rot})};
+ const west=7,east=22,north=6,south=20,doorX=14;
+ // Courtyard / three-tile approach, without unrelated obstacles on the threshold.
+ for(let z=2;z<h-2;z++)for(let x=2;x<w-2;x++)
+  add(x,z,(z>south&&Math.abs(x-doorX)<=2)?'grassTrampled':((x>=west-2&&x<=east+2&&z>=north-2&&z<=south+3&&(x+z)%11===0)?'grassPebbles':'grassMeadow'));
+ for(let z=south+1;z<h-2;z++)for(let x=doorX-1;x<=doorX+1;x++)add(x,z,'stone');
+ // Ground floor: clear central aisle, symmetric windows, timber-lined entry hall.
+ for(let z=north;z<=south;z++)for(let x=west;x<=east;x++){
+  add(x,z,'woodfloor');
+  if(x===west||x===east||z===north||z===south){
+   const entrance=z===south&&x===doorX;
+   const window=(z===south&&(x===10||x===19))||
+     (z===north&&(x===10||x===19))||
+     ((x===west||x===east)&&(z===10||z===16));
+   add(x,z,entrance?'stonewallDoor':window?'stonewallWindow':'stonewall',0,z===north?2:x===west?3:x===east?1:0);
+  }
+ }
+ // Upper storey is a separate editable layer, with windows and its own floor.
+ for(let z=north;z<=south;z++)for(let x=west;x<=east;x++){
+  // Keep a large central gallery opening to make the ground-floor atrium legible.
+  const gallery=x>=12&&x<=17&&z>=11&&z<=16;
+  if(!gallery&&!(x===8&&z===18))add(x,z,'woodfloor',1);
+  if(x===west||x===east||z===north||z===south){
+   const window=(z===south&&(x===10||x===14||x===19))||
+    (z===north&&(x===10||x===19))||
+    ((x===west||x===east)&&(z===10||z===16));
+   add(x,z,window?'stonewallWindow':'stonewall',1,z===north?2:x===west?3:x===east?1:0);
+  }
+  // Roof joins automatically create a pitched ridge instead of a flat warehouse lid.
+ }
+ // Third floor: guild archive and meeting gallery.
+ for(let z=north;z<=south;z++)for(let x=west;x<=east;x++){
+  const opening=x>=13&&x<=16&&z>=12&&z<=15;
+  if(!opening&&!(x===19&&z===17))add(x,z,'woodfloor',2);
+  if(x===west||x===east||z===north||z===south){
+   const window=(z===south&&(x===10||x===14||x===19))||(z===north&&(x===10||x===19))||((x===west||x===east)&&(z===10||z===16));
+   add(x,z,window?'stonewallWindow':'stonewall',2,z===north?2:x===west?3:x===east?1:0);
+  }
+  add(x,z,'roofHip',3);
+ }
+ // Reference floor plan: rear-left living room, compact middle-left bath
+ // (3x3 cells), left-front stair landing, north-east private toilet.
+ // Blue mark: move staff entrance to (11,8), near the back of the left wing.
+ // Red mark: remove the doorway entirely at (11,18), leaving an open stair path.
+ for(let z=7;z<=18;z++){
+  if(z===18)continue;
+  add(11,z,z===8?'woodwallDoor':'woodwall');
+ }
+ for(let x=8;x<=10;x++)add(x,13,x===9?'woodwallDoor':'woodwall');
+ for(let x=8;x<=10;x++)add(x,17,'woodwall');
+ // Remove the freestanding strip at the front of the staff stair landing.
+ // Shift the private-toilet side partition one tile inward only where
+ // the counter meets it, keeping the toilet screened by an actual wall.
+ for(let z=7;z<=9;z++)add(18,z,'woodwall');
+ // Remove the four white-marked right partition pieces (x19,z7-10).
+ for(let x=19;x<=21;x++)add(x,11,x===20?'woodwallDoor':'woodwall');
+ // Ground-floor reception sits ahead of the door, with accessible side aisles.
+ for(const [x,z,t,r,y] of [
+  // Keep the notice-board sightlines open; storage belongs along side bays.
+  [8,9,'bookshelf',1,0],[9,8,'bed',0,0],
+  [21,12,'bookshelf',3,0],
+  // Keep the unmarked front counter at x12 through x16.
+  // Keep the existing rear-facing side wings and a staff-only route behind them.
+  [12,10,'counterWood',0,0],[13,10,'counterWood',0,0],
+  [14,10,'counterWood',0,0],[15,10,'counterWood',0,0],
+  [16,10,'counterWood',0,0],
+  [9,10,'table',0,0],[10,10,'chairWood',2,0],
+  [10,12,'wardrobe',0,0],[9,15,'bathWood',0,0],
+  [20,13,'roundTableWood',0,0],[20,14,'chairWood',2,0],[19,13,'chairWood',3,0],
+  [20,16,'benchWood',2,0],
+  [19,16,'roundTableWood',0,0],
+  // Wide two-cell noticeboard faces the public area, on the marked upper wall.
+  [11,12,'guildWallQuestBoard',3,0],
+  [20,8,'guildLatrine',0,0],[21,9,'crate',0,0],
+  [10,16,'crate',0,0],[20,18,'barrel',0,0],
+  [10,14,'lantern',0,0],[20,13,'lantern',0,0],
+  [8,18,'guildStairUp',0,0],[8,18,'guildStairDown',0,1],
+  [9,8,'bookshelf',0,1],[20,8,'bookshelf',0,1],
+  [10,18,'roundTableWood',0,1],[11,18,'chairWood',2,1],
+  [19,17,'guildStairUp',0,1],[19,17,'guildStairDown',0,2],
+  [9,8,'bookshelf',0,2],[10,8,'bookshelf',0,2],[20,8,'bookshelf',0,2],
+  [10,18,'roundTableStone',0,2],[11,18,'chairWood',2,2],
+  [18,10,'guildQuestBoard',0,2],[19,13,'table',0,2],
+  [9,22,'benchWood',0,0],[20,22,'benchWood',0,0],
+  [8,24,'bushFlower',0,0],[21,25,'bushFlower',0,0],
+  [4,9,'treeOak',0,0],[26,10,'treeBirch',0,0],
+  [4,21,'bushFlower',0,0],[26,22,'bushFlower',0,0],
+  [14,20,'guildFacadeSign',0,0]
+ ])add(x,z,t,y,r);
+ // A single facade-mounted guild nameplate replaces the old freestanding crest.
+ add(11,south+1,'lantern');add(18,south+1,'lantern');
+ for(const [id,val] of [['mapWidth',w],['mapHeight',h],['rangeX1',west],['rangeX2',east],['rangeZ1',north],['rangeZ2',south]]){
+  const el=$(id);if(el)el.value=val;
+ }
+ for(const id of ['rangeX1','rangeX2'])$(id).max=w-1;
+ for(const id of ['rangeZ1','rangeZ2'])$(id).max=h-1;
+ level=0;$('level').value='0';hideUpper=false;$('hideUpper').checked=false;
+ $('poiRoofToggle').textContent='屋根を隠す';
+ poiWalkReset(doorX,south+3);
+ selected='stonewall';mode='move';rotation=0;
+ commit();refreshPalette();updateSelected();showEntireMap();
+ $('palette').classList.remove('mobileOpen');
+ toast('冒険者ギルドを配置しました（受付・職員室・トイレ・談話スペース）。編集後にPOIとして登録できます');
+}
 function pineSupermarketPOI(style='wholesale',condition='normal',force=false){
  style='wholesale';condition='normal';
  const spec=PINE_SUPER_VARIANTS[0];
@@ -2289,7 +2421,7 @@ $('pickJsonFile').addEventListener('click',()=>$('jsonFile').click());
 $('jsonFile').addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{if(file.size>6*1024*1024)throw Error('ファイルが大きすぎます（上限6MB）');const contents=await file.text();JSON.parse(contents);$('jsonText').value=contents;toast('JSONファイルを読み込みました。「JSONを読み込む」で配置に反映します')}catch(err){toast('ファイルの読み込み失敗: '+err.message)}finally{e.target.value=''}});
 $('importJson').addEventListener('click',()=>{try{const o=JSON.parse($('jsonText').value);const before=JSON.stringify(data());loadData(o);undoStack.push(before);if(undoStack.length>45)undoStack.shift();redoStack.length=0;commit();$('jsonModal').classList.remove('open');toast('ワールドを読み込んだ')}catch(e){toast('読み込み失敗：'+e.message)}});
 $('showPalette').addEventListener('click',()=>{$('palette').classList.toggle('mobileOpen');$('inspector').classList.remove('mobileOpen')});
-try{const saved=localStorage.getItem(SAVE_KEY);if(saved)loadData(JSON.parse(saved));else makeDemo()}catch(e){MAP_W=16;MAP_H=16;world=[];models=[];prefabs=[];makeDemo()}
+try{const saved=localStorage.getItem(SAVE_KEY);if(saved){loadData(JSON.parse(saved));if(pineApplyGuildMarkedEdits())commit()}else makeDemo()}catch(e){MAP_W=16;MAP_H=16;world=[];models=[];prefabs=[];makeDemo()}
 customPOIs=pineReadSavedPOIs();
 pineBuildPOICategories();
 const poiEntrance=world.find(o=>o.type==='pineSuperDoor');
