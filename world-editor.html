@@ -4125,27 +4125,11 @@ function poiWalkStep(dx,dz){
 }
 function poiWalkAction(){
  if(!poiWalkActive)return;
- const now=performance.now();if(now<poiAttackReady)return;poiAttackReady=now+300;poiWalkActionStarted=now;poiWalkAvatar(now);poiSound('attack');
+ const now=performance.now();if(now<poiAttackReady)return;
  const delta=[[0,-1],[1,0],[0,1],[-1,0]][poiWalkFacing];
  const x=poiWalkX+delta[0],z=poiWalkZ+delta[1];
  const monster=poiMonsterAt(x,z);
- if(monster){const [obj,state]=monster;state.hp=Math.max(0,state.hp-POI_PLAYER_ATTACK);poiSound('hit');poiDamageNumber(state.x+.5,state.z+.5,terrainY(state.x,state.z)+1.8,POI_PLAYER_ATTACK);if(!state.hp)toast('モンスターを倒した');poiMonsterMeshDirty=true;if(pineGameActive)pineGameSave(true);return}
- const furniture=world.find(o=>o.x===x&&o.z===z&&o.y===poiWalkLevel&&
-  ['guildQuestBoard','bookshelf','rewardChest','counterWood','table','roundTableWood','roundTableStone','chairWood','chairClassic','benchWood','lantern'].includes(o.type));
- if(furniture){
-  const messages={guildQuestBoard:'依頼掲示板：討伐・護衛・探索の依頼書を確認した。',
-   bookshelf:'資料棚：周辺地域の地図と冒険記録を読んだ。',
-   rewardChest:'報酬保管箱：受付で管理されている。',
-   counterWood:'受付カウンター：依頼の受付と報告を行う場所だ。',
-   table:'談話テーブル：冒険者たちの情報交換の場だ。',
-   roundTableWood:'談話テーブル：冒険者たちの情報交換の場だ。',
-   roundTableStone:'談話テーブル：冒険者たちの情報交換の場だ。',
-   chairWood:'椅子に腰掛け、周囲の話を聞いた。',
-   chairClassic:'椅子に腰掛け、周囲の話を聞いた。',
-   benchWood:'ベンチに座り、依頼について話し合った。',
-   lantern:'ランタンの灯りを確認した。'};
-  toast(messages[furniture.type]);return;
- }
+ if(monster){poiAttackReady=now+300;poiWalkActionStarted=now;poiWalkAvatar(now);poiSound('attack');const [obj,state]=monster;state.hp=Math.max(0,state.hp-POI_PLAYER_ATTACK);poiSound('hit');poiDamageNumber(state.x+.5,state.z+.5,terrainY(state.x,state.z)+1.8,POI_PLAYER_ATTACK);if(!state.hp)toast('モンスターを倒した');poiMonsterMeshDirty=true;if(pineGameActive)pineGameSave(true);return}
  // Interactions without an assigned action are intentionally silent.
 }
 function poiWalkReset(x,z){
@@ -4305,9 +4289,10 @@ function guildMountedLighting(m,visible){
  // The existing floor lantern POI placements become wall-mounted fixtures
  // without mutating or duplicating the user's saved world objects.
  const emit=(x,z,y,dx,dz)=>{
-  const wallX=x-dx*.17,wallZ=z-dz*.17;
+  // x/z marks the actual exposed wall face; the lantern must hang beyond it.
+  const wallX=x-dx*.04,wallZ=z-dz*.04;
   cube(m,wallX,y+.95,wallZ,.15,.42,.15,oak);
-  const fx=x+dx*.19,fz=z+dz*.19;
+  const fx=x+dx*.29,fz=z+dz*.29;
   naturalBranch(m,wallX,y+1.18,wallZ,fx,y+1.18,fz,.047,.036,metal);
   cube(m,fx,y+.76,fz,.23,.08,.23,metal);
   cube(m,fx,y+.93,fz,.17,.31,.17,glass);
@@ -4321,10 +4306,12 @@ function guildMountedLighting(m,visible){
  };
  for(const o of visible){
   if(o.type!=='lantern'||o.y!==0)continue;
-  if(o.x===9&&o.z===10)emit(g.west+.55,o.z+.5,terrainY(o.x,o.z),1,0);
-  if(o.x===20&&o.z===10)emit(g.east+.45,o.z+.5,terrainY(o.x,o.z),-1,0);
-  if((o.x===11||o.x===18)&&o.z===g.south+1)
-   emit(o.x+.5,g.south+.63,terrainY(o.x,o.z),0,1);
+  if(o.x===g.west+2&&o.z===g.north+4)
+   emit(g.west+1.015,o.z+.5,terrainY(o.x,o.z),1,0);
+  if(o.x===g.east-2&&o.z===g.north+4)
+   emit(g.east-.015,o.z+.5,terrainY(o.x,o.z),-1,0);
+  if((o.x===g.west+4||o.x===g.east-4)&&o.z===g.south+1)
+   emit(o.x+.5,g.south+1.015,terrainY(o.x,o.z),0,1);
  }
  // High wall windows: thick exterior stone ledge and modest interior timber sill.
  for(const o of visible){
