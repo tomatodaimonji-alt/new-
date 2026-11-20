@@ -1614,7 +1614,7 @@ function wallBlock(m,id,x,y,z,r=0,faceVisible=null,faceExterior=null){
   brickwall:[.50,.27,.21],plasterwall:[.87,.84,.72],
   mosswall:[.45,.51,.44],ironwall:[.35,.40,.44]
  };
- const base=colors[mat],turn=((r%4)+4)%4,height=1.38;
+ const base=colors[mat],turn=((r%4)+4)%4,height=1.4;
  // One wall material covers all four sides. Adjacent wall faces are not
  // generated at all; enclosed room faces are flat, exterior faces carry relief.
  // Side order: +Z, -X, -Z, +X (the same order as rot2).
@@ -1777,11 +1777,11 @@ function materialFixture(m,id,x,y,z){
 const MATCHED_OPENING_MATERIALS={
  wall:{shell:[.81,.82,.74],edge:[.65,.68,.62],frame:[.57,.48,.35],door:[.51,.35,.23],detail:[.73,.69,.54]},
  stonewall:{shell:[.54,.57,.54],edge:[.34,.39,.37],frame:[.68,.69,.64],door:[.46,.31,.22],detail:[.39,.43,.40]},
- woodwall:{shell:[.49,.34,.20],edge:[.29,.19,.12],frame:[.67,.46,.26],door:[.45,.29,.17],detail:[.75,.55,.33]},
- brickwall:{shell:[.58,.29,.22],edge:[.37,.20,.17],frame:[.72,.47,.31],door:[.48,.30,.18],detail:[.75,.44,.30]},
+ woodwall:{shell:[.43,.29,.17],edge:[.29,.19,.12],frame:[.67,.46,.26],door:[.45,.29,.17],detail:[.75,.55,.33]},
+ brickwall:{shell:[.50,.27,.21],edge:[.37,.20,.17],frame:[.72,.47,.31],door:[.48,.30,.18],detail:[.75,.44,.30]},
  plasterwall:{shell:[.87,.84,.72],edge:[.65,.57,.44],frame:[.55,.42,.30],door:[.56,.36,.23],detail:[.92,.88,.77]},
- mosswall:{shell:[.47,.52,.45],edge:[.31,.41,.31],frame:[.48,.53,.38],door:[.41,.29,.19],detail:[.30,.46,.28]},
- ironwall:{shell:[.37,.43,.47],edge:[.24,.28,.32],frame:[.57,.62,.65],door:[.38,.43,.46],detail:[.76,.71,.51]}
+ mosswall:{shell:[.45,.51,.44],edge:[.31,.41,.31],frame:[.48,.53,.38],door:[.41,.29,.19],detail:[.30,.46,.28]},
+ ironwall:{shell:[.35,.40,.44],edge:[.24,.28,.32],frame:[.57,.62,.65],door:[.38,.43,.46],detail:[.76,.71,.51]}
 };
 const MATCHED_OPENING_IDS=new Set(Object.keys(MATCHED_OPENING_MATERIALS).flatMap(id=>[id+'Window',id+'Door']));
 function matchedOpening(m,id,x,y,z){
@@ -1791,12 +1791,12 @@ function matchedOpening(m,id,x,y,z){
  const glass=[.34,.67,.74],glow=[.75,.94,.97],metal=[.82,.73,.49];
  const h=1.4;
  // Continuous wall-size side posts and lintel, shared between both block styles.
- const post=.14,half=.5-post/2;
- for(const side of [-1,1])cube(m,x+side*half,y,z,post,h,1.0,c.shell);
- cube(m,x,y+1.28,z,1.002,.12,1.0,c.shell);
+ const post=.14,half=.501-post/2;
+ for(const side of [-1,1])cube(m,x+side*half,y,z,post,h,1.002,c.shell);
+ cube(m,x,y+1.28,z,1.002,.12,1.002,c.shell);
  if(isWindow){
   // Sill + open central cavity + a large, visible blue glass pane on BOTH sides.
-  cube(m,x,y,z,1.002,.26,1.0,c.shell);
+  cube(m,x,y,z,1.002,.26,1.002,c.shell);
   for(const face of [-1,1]){
    const zFace=z+face*.478;
    cube(m,x,y+.31,z+face*.441,.73,.88,.026,glass);
@@ -1827,10 +1827,16 @@ function matchedOpening(m,id,x,y,z){
  // Two-sided material finishing: recognizable masonry, planks, metal or moss.
  for(const face of [-1,1]){
   const dz=z+face*.49;
-  if(brick||material==='stonewall'){
-   for(const yy of [.05,1.34])cube(m,x,yy,dz,.94,.025,.014,c.edge);
+  if(material==='stonewall'||material==='wall'){
+   // Match the masonry course heights on adjacent full wall blocks.
+   const joint=material==='wall'?[.62,.64,.58]:[.38,.42,.40];
+   for(let row=1;row<5;row++)for(const side of [-1,1])
+    cube(m,x+side*.443,y+row*.264,dz,.116,.012,.014,joint);
+   cube(m,x,y+1.331,dz,.99,.047,.016,material==='wall'?[.88,.87,.78]:[.65,.67,.62]);
+  }else if(brick){
+   for(const yy of [.05,1.34])cube(m,x,y+yy,dz,.94,.025,.014,c.edge);
    for(const side of [-1,1])for(const yy of [.36,.77,1.12])
-    cube(m,x+side*.45,yy,dz,.085,.024,.018,c.edge);
+    cube(m,x+side*.45,y+yy,dz,.085,.024,.018,c.edge);
   }else if(material==='woodwall'){
    for(const side of [-1,1])cube(m,x+side*.445,y+.03,dz,.055,1.24,.02,c.edge);
   }else if(material==='mosswall'){
