@@ -639,7 +639,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
  #viewWrap #pineAILegend{font-size:9px}
 }
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v98）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v99）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -1274,7 +1274,7 @@ function expansionGeometry(m,id,x,y,z){
   }
   break;}
  case 'wardrobe':
-  // v98: keep the wardrobe below the next floor (floor spacing = 1.4).
+  // v99: keep the wardrobe below the next floor (floor spacing = 1.4).
   // Only scale its vertical geometry; do not change any saved placements.
   B(0,0,0,.86,1.30,.50,wood);B(0,.12,.258,.81,1.10,.045,dark);
   B(-.20,.16,.29,.36,1.02,.025,wood);B(.20,.16,.29,.36,1.02,.025,wood);
@@ -3378,11 +3378,43 @@ if(kind==='woodfloor'||kind==='woodfloorLight'||kind==='woodfloorDark'){
 }
 }
 
-const SIGN_TYPES=['guildSign','innSign','shopHerbSign','shopChestSign','shopBagSign','pineSuperLogo','guildFacadeSign'];
+const SIGN_TYPES=['guildSign','innSign','shopHerbSign','shopChestSign','shopBagSign','pineSuperLogo','guildFacadeSign','pineGuildWorldMap'];
 const signTextures=new Map();
 function makeSignArtwork(id){
  const c=document.createElement('canvas');c.width=(id==='pineSuperLogo'||id==='guildFacadeSign')?768:256;c.height=160;
  const a=c.getContext('2d');
+ if(id==='pineGuildWorldMap'){
+  // Offline vector artwork. One small texture shared by every rendering of
+  // the guild; not a separate 3D mesh per country, and not generated per frame.
+  c.width=512;c.height=288;
+  const t=c.getContext('2d');
+  t.fillStyle='#d6c69a';t.fillRect(0,0,512,288);
+  t.fillStyle='#4c7d8b';t.fillRect(15,16,482,257);
+  t.strokeStyle='rgba(215,231,214,.28)';t.lineWidth=1;
+  for(let x=55;x<495;x+=48){t.beginPath();t.moveTo(x,16);t.lineTo(x,273);t.stroke()}
+  for(let y=42;y<273;y+=38){t.beginPath();t.moveTo(15,y);t.lineTo(497,y);t.stroke()}
+  const shape=(points,fill='#c9bb7d')=>{
+   t.beginPath();points.forEach(([x,y],i)=>i?t.lineTo(x,y):t.moveTo(x,y));t.closePath();
+   t.fillStyle=fill;t.fill();t.lineWidth=2;t.strokeStyle='#526c52';t.stroke();
+  };
+  // Atlas-like continental silhouettes, separated by clear blue seas.
+  shape([[44,54],[71,36],[111,44],[139,65],[133,88],[113,103],[119,127],[95,146],[83,127],[63,113],[53,86],[38,78]]);
+  shape([[102,144],[125,151],[142,180],[137,207],[125,243],[111,222],[111,198],[95,173]]);
+  shape([[204,64],[233,44],[271,48],[294,62],[333,46],[367,53],[403,68],[454,71],[476,95],[446,111],[426,98],[390,115],[372,140],[342,126],[319,116],[286,121],[257,103],[235,113],[215,96],[196,90]]);
+  shape([[242,129],[279,123],[305,148],[309,182],[291,217],[266,239],[252,209],[234,172]]);
+  shape([[337,138],[357,146],[367,173],[355,192],[341,173]]);
+  shape([[393,204],[435,197],[459,219],[448,241],[413,246],[393,229]]);
+  shape([[227,40],[245,28],[261,35],[255,47]],'#d9cc93');
+  for(const [x,y] of [[388,165],[379,183],[471,158],[186,174],[479,206],[213,138]])
+   shape([[x,y],[x+7,y-2],[x+6,y+5],[x+2,y+8]],'#d9cc93');
+  // Compass rose, route line and compact readable border.
+  t.save();t.translate(461,38);t.strokeStyle='#f2dcaa';t.lineWidth=2;
+  t.beginPath();t.moveTo(0,-14);t.lineTo(0,14);t.moveTo(-14,0);t.lineTo(14,0);t.stroke();
+  t.fillStyle='#ffe7ad';t.beginPath();t.moveTo(0,-17);t.lineTo(4,3);t.lineTo(0,0);t.lineTo(-4,3);t.closePath();t.fill();t.restore();
+  t.strokeStyle='rgba(244,224,174,.85)';t.lineWidth=4;t.strokeRect(20,21,472,247);
+  t.strokeStyle='#5a4030';t.lineWidth=8;t.strokeRect(4,5,504,278);
+  return c;
+ }
  a.clearRect(0,0,256,160);
  a.textAlign='center';a.textBaseline='middle';
  if(id==='pineSuperLogo'){
@@ -3476,6 +3508,17 @@ function buildSignOverlay(){
    const uv=side>0?[[0,0],[1,0],[1,1],[0,1]]:[[1,0],[0,0],[0,1],[1,1]];
    for(const i of [0,1,2,0,2,3])data.push(...vs[i],...uv[i]);
   }
+ }
+ // Place the atlas precisely on the existing guild wall-frame, without
+ // adding a saved world object. Uses the same textured sign draw call.
+ const guild=guildBounds();
+ if(guild&&world.some(o=>o.y===0&&o.type==='counterWood'&&Math.abs(o.x-guild.cx)<4&&Math.abs(o.z-guild.cz)<2)&&
+    world.some(o=>o.x===Math.round(guild.cx)&&o.z===guild.north&&o.y===0&&o.type==='stonewall')){
+  const x=Math.round(guild.cx)+.5,z=guild.north+1.04+.149,
+        y=terrainY(Math.round(guild.cx),guild.north+1);
+  const corners=[[x-.538,y+.455,z],[x+.538,y+.455,z],[x+.538,y+1.015,z],[x-.538,y+1.015,z]];
+  const uv=[[0,0],[1,0],[1,1],[0,1]],vertices=groups.get('pineGuildWorldMap');
+  for(const j of [0,1,2,0,2,3])vertices.push(...corners[j],...uv[j]);
  }
  const out=[];
  for(const [id,data] of groups){
@@ -4465,7 +4508,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v98',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v99',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -4487,7 +4530,7 @@ function pineAIUpdateHeader(){
  $('pineAILevelUp').disabled=poiWalkActive||pineAILevel===MAX_LEVEL;
 }
 
-/* v98: One-screenshot AI blueprint. Registry mirrored verbatim in src/editor/ai-object-numbers.json.
+/* v99: One-screenshot AI blueprint. Registry mirrored verbatim in src/editor/ai-object-numbers.json.
    This is read-only: never mutates world, saves, POIs, or the existing legacy AI exports. */
 const pineAINumberEntries=[{"number":"001","id":"ancientAltar","name":"古い祭壇"},{"number":"002","id":"archStone","name":"石造りアーチ"},{"number":"003","id":"balcony","name":"木製ベランダ"},{"number":"004","id":"barrel","name":"樽"},{"number":"005","id":"basketProduce","name":"野菜かご"},{"number":"006","id":"bathLuxury","name":"風呂・豪華な浴槽"},{"number":"007","id":"bathStone","name":"風呂・石造り浴槽"},{"number":"008","id":"bathWood","name":"風呂・木製浴槽"},{"number":"009","id":"bed","name":"ベッド"},{"number":"010","id":"bedLuxury","name":"豪華なベッド"},{"number":"011","id":"benchWood","name":"木製長椅子"},{"number":"012","id":"bookshelf","name":"本棚"},{"number":"013","id":"bowlClay","name":"土焼きの器"},{"number":"014","id":"breadBoard","name":"パンとまな板"},{"number":"015","id":"brickwall","name":"レンガの壁"},{"number":"016","id":"brickwallAll","name":"レンガ・全面"},{"number":"017","id":"brickwallcorner","name":"レンガの壁・角"},{"number":"018","id":"brickwallCounter","name":"レンガの壁・店カウンター"},{"number":"019","id":"brickwallDoor","name":"レンガの壁・扉"},{"number":"020","id":"brickwallDouble","name":"レンガ・両面"},{"number":"021","id":"brickwallPlain","name":"レンガ・装飾なし"},{"number":"022","id":"brickwallWindow","name":"レンガの壁・窓"},{"number":"023","id":"bridgeStone","name":"石橋・中央"},{"number":"024","id":"bridgeStoneEnd","name":"石橋・端"},{"number":"025","id":"bridgeWood","name":"木橋・中央"},{"number":"026","id":"bridgeWoodEnd","name":"木橋・端"},{"number":"027","id":"brokenPillar","name":"崩壊した石柱"},{"number":"028","id":"bush","name":"低木"},{"number":"029","id":"bushFern","name":"シダ"},{"number":"030","id":"bushFlower","name":"花の低木"},{"number":"031","id":"candleStand","name":"燭台"},{"number":"032","id":"chairClassic","name":"椅子"},{"number":"033","id":"chairWood","name":"木製椅子"},{"number":"034","id":"chest","name":"宝箱"},{"number":"035","id":"chimney","name":"レンガの煙突"},{"number":"036","id":"cliffEdge","name":"崖の端"},{"number":"037","id":"cliffFace","name":"崖の壁面"},{"number":"038","id":"corner","name":"角の壁"},{"number":"039","id":"counterLuxury","name":"高級木製カウンター"},{"number":"040","id":"counterStone","name":"石製カウンター"},{"number":"041","id":"counterWood","name":"木製カウンター"},{"number":"042","id":"crackedWall","name":"ひび割れた石壁"},{"number":"043","id":"crate","name":"木箱"},{"number":"044","id":"cropVegetable","name":"野菜の畑"},{"number":"045","id":"cropWheat","name":"麦の畑"},{"number":"046","id":"cupWood","name":"木のコップ"},{"number":"047","id":"displayShelf","name":"商品陳列棚"},{"number":"048","id":"door","name":"ドア枠"},{"number":"049","id":"doorIron","name":"鉄の扉"},{"number":"050","id":"doorStone","name":"石造りの扉枠"},{"number":"051","id":"doorWood","name":"木の扉"},{"number":"052","id":"equipClub","name":"棍棒"},{"number":"053","id":"equipIronSword","name":"鉄の剣"},{"number":"054","id":"equipStick","name":"木の棒"},{"number":"055","id":"equipStoneSword","name":"石の剣"},{"number":"056","id":"equipWoodSword","name":"木の剣"},{"number":"057","id":"exposedRoots","name":"木の根"},{"number":"058","id":"fallenLog","name":"倒木"},{"number":"059","id":"fenceIron","name":"鉄柵・直線"},{"number":"060","id":"fenceIronCorner","name":"鉄柵・角"},{"number":"061","id":"fenceIronEnd","name":"鉄柵・端"},{"number":"062","id":"fenceIronGate","name":"鉄の門扉"},{"number":"063","id":"fenceStone","name":"石柵・直線"},{"number":"064","id":"fenceStoneCorner","name":"石柵・角"},{"number":"065","id":"fenceStoneEnd","name":"石柵・端"},{"number":"066","id":"fenceStoneGate","name":"石の門扉"},{"number":"067","id":"fenceWood","name":"木柵・直線"},{"number":"068","id":"fenceWoodCorner","name":"木柵・角"},{"number":"069","id":"fenceWoodEnd","name":"木柵・端"},{"number":"070","id":"fenceWoodGate","name":"木の門扉"},{"number":"071","id":"fireplace","name":"暖炉"},{"number":"072","id":"flowerField","name":"花畑"},{"number":"073","id":"frameWoodBeam","name":"木製の梁"},{"number":"074","id":"frameWoodBrace","name":"斜め補強材"},{"number":"075","id":"frameWoodPost","name":"木製の柱"},{"number":"076","id":"giantMushroom","name":"巨大キノコ"},{"number":"077","id":"gravestone","name":"墓石"},{"number":"078","id":"guildFacadeSign","name":"冒険者ギルド・正面大型看板"},{"number":"079","id":"guildLatrine","name":"ギルド・陶器便器"},{"number":"080","id":"guildQuestBoard","name":"冒険者ギルド・依頼掲示板"},{"number":"081","id":"guildSign","name":"冒険者ギルド・紋章看板"},{"number":"082","id":"guildStairDown","name":"ギルド・下り階段"},{"number":"083","id":"guildStairUp","name":"ギルド・上り階段"},{"number":"084","id":"guildWallQuestBoard","name":"ギルド・壁掛け依頼掲示板"},{"number":"085","id":"handcartEmpty","name":"木製の荷車"},{"number":"086","id":"handcartLoaded","name":"荷積みの荷車"},{"number":"087","id":"humanBare","name":"裸の人間"},{"number":"088","id":"humanKnight","name":"騎士"},{"number":"089","id":"humanMerchant","name":"商人"},{"number":"090","id":"humanVillager","name":"村人"},{"number":"091","id":"innSign","name":"宿屋の看板（INN）"},{"number":"092","id":"ironGate","name":"鉄格子"},{"number":"093","id":"ironwall","name":"鉄板の壁"},{"number":"094","id":"ironwallAll","name":"鉄板・全面"},{"number":"095","id":"ironwallcorner","name":"鉄板の壁・角"},{"number":"096","id":"ironwallCounter","name":"鉄板の壁・店カウンター"},{"number":"097","id":"ironwallDoor","name":"鉄板の壁・扉"},{"number":"098","id":"ironwallDouble","name":"鉄板・両面"},{"number":"099","id":"ironwallPlain","name":"鉄板・装飾なし"},{"number":"100","id":"ironwallWindow","name":"鉄板の壁・窓"},{"number":"101","id":"jugClay","name":"水差し"},{"number":"102","id":"kitchenCounter","name":"キッチン・調理台"},{"number":"103","id":"kitchenSink","name":"キッチン・流し台"},{"number":"104","id":"kitchenStove","name":"キッチン・石のかまど"},{"number":"105","id":"lantern","name":"ランタン"},{"number":"106","id":"marketStallCloth","name":"布屋根の露店"},{"number":"107","id":"marketStallWood","name":"木屋根の屋台"},{"number":"108","id":"monsterDragon","name":"ドラゴン"},{"number":"109","id":"monsterGoblin","name":"ゴブリン"},{"number":"110","id":"monsterSkeleton","name":"ガイコツ"},{"number":"111","id":"monsterSlime","name":"スライム"},{"number":"112","id":"mosswall","name":"苔むした石壁"},{"number":"113","id":"mosswallAll","name":"苔むした石・全面"},{"number":"114","id":"mosswallcorner","name":"苔むした壁・角"},{"number":"115","id":"mosswallCounter","name":"苔むした壁・店カウンター"},{"number":"116","id":"mosswallDoor","name":"苔むした壁・扉"},{"number":"117","id":"mosswallDouble","name":"苔むした石・両面"},{"number":"118","id":"mosswallPlain","name":"苔むした石・装飾なし"},{"number":"119","id":"mosswallWindow","name":"苔むした壁・窓"},{"number":"120","id":"mugCeramic","name":"陶器のマグ"},{"number":"121","id":"mushroomPatch","name":"キノコ群"},{"number":"122","id":"oldTownAwning","name":"旧市街・布の庇"},{"number":"123","id":"oldTownBlueDoor","name":"旧市街・淡青店舗入口"},{"number":"124","id":"oldTownBlueShop","name":"旧市街・Blueの店先"},{"number":"125","id":"oldTownBlueWall","name":"旧市街・淡青壁"},{"number":"126","id":"oldTownBlueWindow","name":"旧市街・淡青窓付き外壁"},{"number":"127","id":"oldTownCreamDoor","name":"旧市街・クリーム店舗入口"},{"number":"128","id":"oldTownCreamShop","name":"旧市街・Creamの店先"},{"number":"129","id":"oldTownCreamWall","name":"旧市街・クリーム壁"},{"number":"130","id":"oldTownCreamWindow","name":"旧市街・クリーム窓付き外壁"},{"number":"131","id":"oldTownFlowerBox","name":"旧市街・窓辺の花箱"},{"number":"132","id":"oldTownMintDoor","name":"旧市街・薄緑店舗入口"},{"number":"133","id":"oldTownMintShop","name":"旧市街・Mintの店先"},{"number":"134","id":"oldTownMintWall","name":"旧市街・薄緑壁"},{"number":"135","id":"oldTownMintWindow","name":"旧市街・薄緑窓付き外壁"},{"number":"136","id":"oldTownOchreDoor","name":"旧市街・黄店舗入口"},{"number":"137","id":"oldTownOchreShop","name":"旧市街・Ochreの店先"},{"number":"138","id":"oldTownOchreWall","name":"旧市街・黄壁"},{"number":"139","id":"oldTownOchreWindow","name":"旧市街・黄窓付き外壁"},{"number":"140","id":"oldTownQuay","name":"旧市街・連続する石の護岸"},{"number":"141","id":"oldTownRoseDoor","name":"旧市街・赤桃店舗入口"},{"number":"142","id":"oldTownRoseShop","name":"旧市街・Roseの店先"},{"number":"143","id":"oldTownRoseWall","name":"旧市街・赤桃壁"},{"number":"144","id":"oldTownRoseWindow","name":"旧市街・赤桃窓付き外壁"},{"number":"145","id":"oldTownSandDoor","name":"旧市街・砂色店舗入口"},{"number":"146","id":"oldTownSandShop","name":"旧市街・Sandの店先"},{"number":"147","id":"oldTownSandWall","name":"旧市街・砂色壁"},{"number":"148","id":"oldTownSandWindow","name":"旧市街・砂色窓付き外壁"},{"number":"149","id":"oldTownShop","name":"旧市街・店舗ショーウィンドウ"},{"number":"150","id":"oldTownShutters","name":"旧市街・開いた雨戸"},{"number":"151","id":"oldTownSign","name":"旧市街・吊り看板"},{"number":"152","id":"oldTownStreetLamp","name":"旧市街・壁付街灯"},{"number":"153","id":"oldTownTower","name":"旧市街・小塔"},{"number":"154","id":"pillar","name":"柱"},{"number":"155","id":"pineHarborBollard","name":"港・係船柱"},{"number":"156","id":"pineHarborFender","name":"港・防舷材"},{"number":"157","id":"pineHarborLamp","name":"港・照明灯"},{"number":"158","id":"pineHarborPallet","name":"港・荷役パレット"},{"number":"159","id":"pineHarborPier","name":"港・木造歩行桟橋"},{"number":"160","id":"pineHarborQuay","name":"港・コンクリート岸壁"},{"number":"161","id":"pineHarborSign","name":"港・航路標識"},{"number":"162","id":"pineLandingCraft","name":"兵員輸送艇・20人乗り（18×8）"},{"number":"163","id":"pineSuperAC","name":"空調室外機"},{"number":"164","id":"pineSuperAccent","name":"スーパー緑色アクセント壁"},{"number":"165","id":"pineSuperBayEnd","name":"駐車枠・奥の白線"},{"number":"166","id":"pineSuperBollard","name":"車止め"},{"number":"167","id":"pineSuperCar","name":"放置車両"},{"number":"168","id":"pineSuperCarMini","name":"放置車・軽ハッチ"},{"number":"169","id":"pineSuperCarPickup","name":"放置車・荷台付き"},{"number":"170","id":"pineSuperCarSUV","name":"放置車・SUV"},{"number":"171","id":"pineSuperCart","name":"カート置場"},{"number":"172","id":"pineSuperCarVan","name":"放置車・ワンボックス"},{"number":"173","id":"pineSuperCheckout","name":"レジ台"},{"number":"174","id":"pineSuperCooler","name":"壁面冷蔵ケース"},{"number":"175","id":"pineSuperCorner","name":"スーパー外壁コーナー"},{"number":"176","id":"pineSuperCurb","name":"縁石"},{"number":"177","id":"pineSuperDoor","name":"自動ガラス入口"},{"number":"178","id":"pineSuperFreezer","name":"冷凍平ケース"},{"number":"179","id":"pineSuperFreshCase","name":"精肉・鮮魚対面ケース"},{"number":"180","id":"pineSuperGlass","name":"ガラス正面壁"},{"number":"181","id":"pineSuperLogo","name":"PINE MART 大型看板"},{"number":"182","id":"pineSuperPacking","name":"レジ横サッカー台"},{"number":"183","id":"pineSuperProduce","name":"青果平台"},{"number":"184","id":"pineSuperProduceSlope","name":"青果・傾斜陳列台"},{"number":"185","id":"pineSuperRack","name":"業務用棚"},{"number":"186","id":"pineSuperRegisterGate","name":"レジ通路ゲート"},{"number":"187","id":"pineSuperRoof","name":"スーパー平屋フラット屋根"},{"number":"188","id":"pineSuperShelf","name":"ゴンドラ棚"},{"number":"189","id":"pineSuperShelfEmpty","name":"スーパー・空の棚"},{"number":"190","id":"pineSuperShelfEnd","name":"売り場棚の端末"},{"number":"191","id":"pineSuperShelfSparse","name":"スーパー・残りわずかな棚"},{"number":"192","id":"pineSuperShelfStocked","name":"スーパー・食品が残る棚"},{"number":"193","id":"pineSuperShutter","name":"荷受けシャッター"},{"number":"194","id":"pineSuperSign","name":"看板"},{"number":"195","id":"pineSuperStripe","name":"駐車区画線"},{"number":"196","id":"pineSuperWall","name":"スーパー彩色外壁"},{"number":"197","id":"plasterwall","name":"白い漆喰壁"},{"number":"198","id":"plasterwallAll","name":"漆喰・全面"},{"number":"199","id":"plasterwallcorner","name":"漆喰の壁・角"},{"number":"200","id":"plasterwallCounter","name":"漆喰の壁・店カウンター"},{"number":"201","id":"plasterwallDoor","name":"漆喰の壁・扉"},{"number":"202","id":"plasterwallDouble","name":"漆喰・両面"},{"number":"203","id":"plasterwallPlain","name":"漆喰・装飾なし"},{"number":"204","id":"plasterwallWindow","name":"漆喰の壁・窓"},{"number":"205","id":"plateCeramic","name":"陶器皿"},{"number":"206","id":"plateWood","name":"木皿"},{"number":"207","id":"rewardChest","name":"ダンジョン報酬の豪華宝箱"},{"number":"208","id":"rock","name":"大岩"},{"number":"209","id":"rockBasalt","name":"玄武岩"},{"number":"210","id":"rockCliff","name":"大きな岩塊"},{"number":"211","id":"rockCluster","name":"岩の集まり"},{"number":"212","id":"rockGranite","name":"花崗岩"},{"number":"213","id":"rockMossy","name":"苔むした岩"},{"number":"214","id":"rockSandstone","name":"砂岩"},{"number":"215","id":"roof","name":"屋根"},{"number":"216","id":"roofCorner","name":"屋根・角"},{"number":"217","id":"roofCross","name":"住宅・交差切妻屋根"},{"number":"218","id":"roofDormer","name":"住宅・屋根窓付き"},{"number":"219","id":"roofHip","name":"住宅・寄棟屋根"},{"number":"220","id":"roofLean","name":"住宅・片流れ屋根"},{"number":"221","id":"roofPlank","name":"木板屋根"},{"number":"222","id":"roofPlankEnd","name":"木板屋根・端"},{"number":"223","id":"roofPlankRidge","name":"木板屋根・棟"},{"number":"224","id":"roofRuin","name":"崩れた屋根"},{"number":"225","id":"roofSteep","name":"住宅・急勾配切妻屋根"},{"number":"226","id":"roofThatch","name":"茅葺き屋根"},{"number":"227","id":"roofThatchEnd","name":"茅葺き屋根・端"},{"number":"228","id":"roofThatchRidge","name":"茅葺き屋根・棟"},{"number":"229","id":"roofThatchThick","name":"住宅・厚い茅葺き"},{"number":"230","id":"roofTile","name":"瓦屋根"},{"number":"231","id":"roofTileEnd","name":"瓦屋根・端"},{"number":"232","id":"roofTileRidge","name":"瓦屋根・棟"},{"number":"233","id":"roundTableSet","name":"食器付き丸テーブル"},{"number":"234","id":"roundTableStone","name":"石の丸テーブル"},{"number":"235","id":"roundTableWood","name":"木の丸テーブル"},{"number":"236","id":"rubble","name":"瓦礫"},{"number":"237","id":"ruinDoorBroken","name":"壊れた扉"},{"number":"238","id":"ruinDoorHanging","name":"外れかけた木扉"},{"number":"239","id":"ruinFloorCrack","name":"ひび割れた床"},{"number":"240","id":"ruinFloorHole","name":"穴のある床"},{"number":"241","id":"ruinRoofCollapse","name":"崩れ落ちた屋根"},{"number":"242","id":"ruinRoofHole","name":"穴の開いた屋根"},{"number":"243","id":"ruinStonePost","name":"折れた石柱"},{"number":"244","id":"ruinWallJagged","name":"崩れた壁・半壊"},{"number":"245","id":"ruinWallLow","name":"崩れた壁・低"},{"number":"246","id":"ruinWindowEmpty","name":"枠だけ残った窓"},{"number":"247","id":"ruinWindowShattered","name":"割れた窓"},{"number":"248","id":"ruinWoodPost","name":"折れた木柱"},{"number":"249","id":"sack","name":"麻袋"},{"number":"250","id":"sarcophagus","name":"石棺"},{"number":"251","id":"sheepWool","name":"羊"},{"number":"252","id":"shopBagSign","name":"道具屋の看板・袋"},{"number":"253","id":"shopChestSign","name":"道具屋の看板・宝箱"},{"number":"254","id":"shopCounter","name":"店カウンター"},{"number":"255","id":"shopHerbSign","name":"道具屋の看板・薬草"},{"number":"256","id":"slopeGrass","name":"草地の斜面"},{"number":"257","id":"slopeStone","name":"岩の斜面"},{"number":"258","id":"smallFlowerVase","name":"小さな花瓶"},{"number":"259","id":"stairDown","name":"地下への階段"},{"number":"260","id":"stairs","name":"階段"},{"number":"261","id":"stairSpiral","name":"螺旋階段"},{"number":"262","id":"stairStraight","name":"直線階段"},{"number":"263","id":"stairSwitchback","name":"折り返し階段"},{"number":"264","id":"stonewall","name":"石積みの壁"},{"number":"265","id":"stonewallAll","name":"石積み・全面"},{"number":"266","id":"stonewallcorner","name":"石積みの壁・角"},{"number":"267","id":"stonewallCounter","name":"石積みの壁・店カウンター"},{"number":"268","id":"stonewallDoor","name":"石積みの壁・扉"},{"number":"269","id":"stonewallDouble","name":"石積み・両面"},{"number":"270","id":"stonewallPlain","name":"石積み・装飾なし"},{"number":"271","id":"stonewallWindow","name":"石積みの壁・窓"},{"number":"272","id":"stoolRound","name":"丸椅子"},{"number":"273","id":"streamBank","name":"小川の岸"},{"number":"274","id":"streamBend","name":"曲がった岸"},{"number":"275","id":"streamFord","name":"渡りやすい浅瀬"},{"number":"276","id":"streamShallow","name":"浅瀬"},{"number":"277","id":"table","name":"木の机"},{"number":"278","id":"tallGrass","name":"背の高い草"},{"number":"279","id":"terrainStairs","name":"段差を上る石段"},{"number":"280","id":"terrainStep","name":"土の段差"},{"number":"281","id":"timberWall","name":"木骨組み漆喰壁"},{"number":"282","id":"towerBattlement","name":"塔の胸壁"},{"number":"283","id":"towerPillar","name":"塔の石柱"},{"number":"284","id":"towerSpire","name":"尖塔屋根"},{"number":"285","id":"towerWall","name":"塔の円弧石壁"},{"number":"286","id":"towerWindow","name":"塔の小窓"},{"number":"287","id":"treeAutumn","name":"紅葉した木"},{"number":"288","id":"treeBamboo","name":"竹"},{"number":"289","id":"treeBirch","name":"白樺"},{"number":"290","id":"treeBranch","name":"枝のある木 ③"},{"number":"291","id":"treeCedar","name":"杉"},{"number":"292","id":"treeCherry","name":"桜"},{"number":"293","id":"treeDead","name":"枯れ木"},{"number":"294","id":"treeMaple","name":"カエデ"},{"number":"295","id":"treeOak","name":"大きな広葉樹"},{"number":"296","id":"treePine","name":"針葉樹"},{"number":"297","id":"treeRound","name":"丸い広葉樹 ①"},{"number":"298","id":"treeStump","name":"切り株"},{"number":"299","id":"treeWillow","name":"柳"},{"number":"300","id":"vineWall","name":"つる植物"},{"number":"301","id":"wall","name":"壁"},{"number":"302","id":"wallAll","name":"基本素材・全面"},{"number":"303","id":"wallcorner","name":"基本の壁・角"},{"number":"304","id":"wallCounter","name":"基本の壁・店カウンター"},{"number":"305","id":"wallDoor","name":"基本の壁・扉"},{"number":"306","id":"wallDouble","name":"基本素材・両面"},{"number":"307","id":"wallPlain","name":"基本素材・装飾なし"},{"number":"308","id":"wallWindow","name":"基本の壁・窓"},{"number":"309","id":"wardrobe","name":"タンス"},{"number":"310","id":"watersideRock","name":"水辺の岩"},{"number":"311","id":"wellStone","name":"石造りの井戸"},{"number":"312","id":"wellWood","name":"木造りの井戸"},{"number":"313","id":"window","name":"窓壁"},{"number":"314","id":"windowBrick","name":"レンガ枠の窓"},{"number":"315","id":"windowStone","name":"石枠の窓"},{"number":"316","id":"windowWood","name":"木枠の窓"},{"number":"317","id":"woodwall","name":"木の板壁"},{"number":"318","id":"woodwallAll","name":"木材・全面"},{"number":"319","id":"woodwallcorner","name":"木の板壁・角"},{"number":"320","id":"woodwallCounter","name":"木の板壁・店カウンター"},{"number":"321","id":"woodwallDoor","name":"木の板壁・扉"},{"number":"322","id":"woodwallDouble","name":"木材・両面"},{"number":"323","id":"woodwallPlain","name":"木材・装飾なし"},{"number":"324","id":"woodwallWindow","name":"木の板壁・窓"}];
 const pineAINumberByType=new Map(pineAINumberEntries.map(e=>[e.id,e]));
@@ -4580,7 +4623,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v98';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v99';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -4792,7 +4835,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v98',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v99',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -5311,7 +5354,7 @@ function poiSyncCameraModeUI(){
 }
 function togglePoiThirdPerson(){
  if(!poiWalkActive){
-  // v98: Editor camera is strictly overview <-> overhead.
+  // v99: Editor camera is strictly overview <-> overhead.
   // The AI screenshot mode is opened only by its dedicated button.
   if(pineAIActive)pineAISetActive(false);
   cameraTopDown=!cameraTopDown;
@@ -5421,7 +5464,7 @@ function poiWalkRoof(){
  if(hideUpper!==shouldHide||level!==poiWalkLevel){
   const floorChanged=level!==poiWalkLevel;
   hideUpper=shouldHide;level=poiWalkLevel;$('level').value=String(level);$('hideUpper').checked=shouldHide;
-  // v98: a doorway only switches cached roof visibility; rebuilding the entire
+  // v99: a doorway only switches cached roof visibility; rebuilding the entire
   // world mesh during the 175-ms movement animation caused a visible hitch.
   if(floorChanged||!poiWalkSceneVariants.has(level+':'+(hideUpper?1:0)))dirty=true;
   cursorDirty=true;
@@ -5766,38 +5809,11 @@ function guildInteriorDetails(m,visible){
  // Framed charter above the reception counter.
  const mapX=Math.round(g.cx)+.5,mapZ=g.north+1.04;
  if(solid(Math.round(g.cx),g.north)){
-  // v98: Framed fantasy-world map instead of a written charter.
-  // All detail is generated geometry: no new world objects or POI changes.
-  const ocean=[.27,.46,.53],land=[.68,.68,.44],coast=[.35,.46,.30],island=[.76,.70,.46];
+  // v99: single textured atlas plane (rendered with existing sign shader).
+  // Keep the physical frame, without coplanar triangles or overlapping geography.
   cube(m,mapX,baseY+.69,mapZ,1.30,.83,.085,timber);
-  cube(m,mapX,baseY+.73,mapZ+.051,1.12,.65,.018,parchment);
-  cube(m,mapX,baseY+.74,mapZ+.066,1.04,.57,.009,ocean);
-  // Latitude/longitude graticule beneath the continents.
-  for(const dx of [-.37,-.18,0,.18,.37])
-   cube(m,mapX+dx,baseY+.74,mapZ+.073,.006,.55,.004,[.38,.54,.56]);
-  for(const dy of [.57,.74,.91])
-   cube(m,mapX,baseY+dy,mapZ+.073,1.02,.006,.004,[.38,.54,.56]);
-  const continent=(pts,color=land)=>{
-   const cx=pts.reduce((sum,p)=>sum+p[0],0)/pts.length;
-   const cy=pts.reduce((sum,p)=>sum+p[1],0)/pts.length;
-   const c=[mapX+cx,baseY+cy,mapZ+.084];
-   for(let i=0;i<pts.length;i++){
-    const p=pts[i],q=pts[(i+1)%pts.length];
-    tri(m,c,[mapX+p[0],baseY+p[1],mapZ+.084],[mapX+q[0],baseY+q[1],mapZ+.084],color);
-   }
-  };
-  // Recognizable world atlas silhouette: Americas, Eurasia, Africa, India and Australia.
-  continent([[-.48,.95],[-.39,1.01],[-.29,.98],[-.25,.90],[-.31,.84],[-.29,.75],[-.37,.72],[-.40,.81],[-.48,.84]]);
-  continent([[-.34,.76],[-.25,.72],[-.21,.62],[-.24,.53],[-.28,.48],[-.29,.58],[-.36,.66]]);
-  continent([[-.11,.96],[-.03,1.02],[.09,1.00],[.15,.96],[.30,.98],[.48,.90],[.43,.81],[.32,.79],[.24,.84],[.16,.77],[.09,.82],[.00,.78],[-.08,.83]]);
-  continent([[-.05,.80],[.04,.78],[.13,.72],[.12,.62],[.05,.53],[-.01,.57],[-.07,.71]]);
-  continent([[.21,.81],[.28,.77],[.31,.69],[.27,.64],[.25,.70]]);
-  continent([[.33,.60],[.43,.62],[.48,.55],[.45,.49],[.37,.50]],island);
-  continent([[-.06,1.03],[-.01,1.07],[.07,1.06],[.04,1.02]],island);
-  for(const [dx,dy] of [[.43,.73],[.46,.68],[.16,.55],[-.43,.61]])
-   cube(m,mapX+dx,baseY+dy,mapZ+.087,.014,.022,.005,island);
-  // Raised wood frame with small brass corner fittings.
-  for(const dx of [-.59,.59])cube(m,mapX+dx,baseY+.72,mapZ+.079,.077,.82,.095,trim);
+  cube(m,mapX,baseY+.73,mapZ+.051,1.14,.65,.018,parchment);
+  for(const dx of [-.59,.59])cube(m,mapX+dx,baseY+.72,mapZ+.078,.077,.82,.095,trim);
   for(const dy of [.39,1.095])cube(m,mapX,baseY+dy,mapZ+.081,1.27,.072,.095,trim);
   for(const dx of [-.57,.57])for(const dy of [.41,1.08])
    cube(m,mapX+dx,baseY+dy,mapZ+.137,.037,.037,.010,brass);
@@ -5861,7 +5877,7 @@ function pineFinishPartitionTops(m,visible){
   cube(m,o.x+.5,y+1.382,o.z+.5,1.005,.008,1.005,[.54,.367,.227]);
  }
 }
-// v98: Baked floor contact shading and warm lantern bounce, using EXISTING
+// v99: Baked floor contact shading and warm lantern bounce, using EXISTING
 // floor triangles. No shadow maps, light textures, extra render passes or timers.
 function pineBakeFloorLighting(tmp,x,z,floor,nearby,lamps){
  if(!tmp.p.length)return;
@@ -5879,10 +5895,11 @@ function pineBakeFloorLighting(tmp,x,z,floor,nearby,lamps){
   for(const b of blockers){
    const distance=Math.hypot(px-b.x-.5,pz-b.z-.5);
    // Soft AO: narrow wall-foot shadow and smaller furniture contact patch.
-   const limit=b.wall?1.20:.83;
+   const limit=b.wall?1.40:1.10;
    if(distance<limit){
     const v=(limit-distance)/limit;
-    shade=Math.max(shade,(b.wall?.19:.135)*v*v);
+    // A soft but visible edge at normal tile resolution.
+    shade=Math.max(shade,(b.wall?.35:.29)*v);
    }
   }
   const lightIndex=i;
@@ -5893,9 +5910,9 @@ function pineBakeFloorLighting(tmp,x,z,floor,nearby,lamps){
    warm=Math.max(warm,r*r);
   }
   const dark=1-shade;
-  tmp.c[lightIndex]=Math.min(1,tmp.c[lightIndex]*dark+warm*.105);
-  tmp.c[lightIndex+1]=Math.min(1,tmp.c[lightIndex+1]*dark+warm*.063);
-  tmp.c[lightIndex+2]=Math.min(1,tmp.c[lightIndex+2]*dark+warm*.012);
+  tmp.c[lightIndex]=Math.min(1,tmp.c[lightIndex]*dark+warm*.17);
+  tmp.c[lightIndex+1]=Math.min(1,tmp.c[lightIndex+1]*dark+warm*.105);
+  tmp.c[lightIndex+2]=Math.min(1,tmp.c[lightIndex+2]*dark+warm*.022);
  }
 }
 function pineFloorLightingSources(visible){
@@ -6088,7 +6105,7 @@ function makeCursor(){
  }
  return upload(m);
 }
-// v98: Keep both roof visibility meshes resident while walking.
+// v99: Keep both roof visibility meshes resident while walking.
 // A doorway now swaps buffers instead of regenerating the full 3D city.
 const poiWalkSceneVariants=new Map();
 function poiClearSceneVariants(){
@@ -8420,7 +8437,7 @@ function pineDrawChecks(vp){
  }
  for(const [key,node] of pineCheckNodes)if(!present.has(key)){node.remove();pineCheckNodes.delete(key)}
 }
-// v98: One-time, narrowly scoped cleanup for the two yellow-checked outside
+// v99: One-time, narrowly scoped cleanup for the two yellow-checked outside
 // blocks shown on the guild SECOND FLOOR. Check marks carry the exact tile
 // coordinates; a screenshot alone is not used to guess them.
 // A failed guard does nothing, and original saved map is backed up verbatim.
@@ -8433,7 +8450,7 @@ function pineRemoveTwoCheckedOutdoorBlocks(){
  if(marks[0].x===marks[1].x&&marks[0].z===marks[1].z)return false;
  const targets=[];
  for(const p of marks){
-  // v98: the check was placed while viewing floor 2 (y=1), but these two
+  // v99: the check was placed while viewing floor 2 (y=1), but these two
   // freestanding blocks are on the ground floor (y=0) directly below it.
   // Do not delete floor tiles, stacked objects, roof or occupied upper tiles.
   const atGround=world.filter(o=>o.x===p.x&&o.z===p.z&&o.y===0&&!isFloor(o.type));
@@ -8446,7 +8463,7 @@ function pineRemoveTwoCheckedOutdoorBlocks(){
   targets.push(item);
  }
  // Save the pristine pre-edit snapshot before touching the user's existing map.
- const backupKey='pine-guild-two-checked-blocks-before-v98';
+ const backupKey='pine-guild-two-checked-blocks-before-v99';
  try{
   if(localStorage.getItem(backupKey)===null)
    localStorage.setItem(backupKey,JSON.stringify(data()));
@@ -8844,9 +8861,9 @@ function pineReadSavedPOIs(){
 const PINE_GUILD_PRIMARY_ID='poi-guild-primary-v87';
 const PINE_GUILD_SAVED_BACKUP='pine-guild-screenshot-before-v86';
 const PINE_OLD_POI_ARCHIVE='world-workshop-pois-before-guild-v87';
-// v98: preserve the historical "ギルド" POI and allow a separately named
+// v99: preserve the historical "ギルド" POI and allow a separately named
 // exact snapshot of the user's saved current guild. Never reconstruct from AI images.
-const PINE_ADVENTURERS_GUILD_ID='poi-adventurers-guild-v98';
+const PINE_ADVENTURERS_GUILD_ID='poi-adventurers-guild-v99';
 function pineInstallOnlyGuildPOI(){
  const existing=customPOIs.find(p=>p.id===PINE_GUILD_PRIMARY_ID);
  if(existing)return true; // Never reduce the user's POI list to one item.
