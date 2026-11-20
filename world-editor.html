@@ -4554,21 +4554,52 @@ function pineAIImagePreview(url,name){
  box.querySelector('#pineAIImageFilename').textContent=name+'（画像を長押しして保存。非対応なら画面キャプチャ）';
  box.querySelector('#pineAIImageShown').src=url;
 }
-async function pineAIExportImage(){
+function pineAISaveOneImage(cv,floor,index,total){
+ const name='ai-layout-y'+floor+'-'+(index+1)+'of'+total+'.png';
+ const data=cv.toDataURL('image/png');
+ if(window.PineFileSave&&typeof window.PineFileSave.savePng==='function'){
+  window.PineFileSave.savePng(name,data.slice(data.indexOf(',')+1));
+  toast('PNGの保存先を選んでください ('+(index+1)+'/'+total+')');
+  return;
+ }
+ const isWebView=/(?:;\s*wv\)|\bwv\b|Version\/4\.0.*Chrome)/i.test(navigator.userAgent);
+ if(isWebView){
+  pineAIImagePreview(data,name);
+  toast('画像を表示しました。保存に非対応の旧APKでは新APKが必要です');
+  return;
+ }
+ const link=document.createElement('a');link.href=data;link.download=name;
+ document.body.appendChild(link);link.click();link.remove();
+ toast('画像 '+(index+1)+'/'+total+' の保存を開始しました');
+}
+function pineAIImagePageChooser(pages,floor){
+ const existing=document.getElementById('pineAIPageChooser');if(existing)existing.remove();
+ const overlay=document.createElement('div');overlay.id='pineAIPageChooser';
+ overlay.style.cssText='position:fixed;inset:0;z-index:99998;background:rgba(10,24,29,.86);display:flex;align-items:center;justify-content:center;padding:12px';
+ const box=document.createElement('div');
+ box.style.cssText='max-height:90vh;overflow:auto;max-width:580px;width:100%;background:#e9f0e9;color:#183127;padding:18px;border-radius:10px';
+ const title=document.createElement('strong');title.textContent='AI解析画像は全'+pages.length+'ページです';
+ const help=document.createElement('p');
+ help.textContent='画像を1ページずつ保存して、すべてChatGPTに送ってください。各ページに同じマップと異なる配置一覧が入っています。';
+ help.style.cssText='font-size:13px;line-height:1.5';
+ box.append(title,help);
+ const buttons=document.createElement('div');buttons.style.cssText='display:flex;flex-wrap:wrap;gap:8px';
+ for(let i=0;i<pages.length;i++){
+  const btn=document.createElement('button');btn.textContent='画像 '+(i+1)+'/'+pages.length+' を保存';
+  btn.style.cssText='padding:9px;border:1px solid #729987;background:white;color:#17372a;border-radius:6px';
+  btn.onclick=()=>pineAISaveOneImage(pages[i],floor,i,pages.length);
+  buttons.append(btn);
+ }
+ const close=document.createElement('button');close.textContent='閉じる';close.style.cssText='padding:9px;margin-top:12px';
+ close.onclick=()=>overlay.remove();
+ box.append(buttons,close);overlay.append(box);document.body.appendChild(overlay);
+}
+function pineAIExportImage(){
  try{
-  const pages=pineAIImagePages(),isWebView=/(?:;\s*wv\)|\bwv\b|Version\/4\.0.*Chrome)/i.test(navigator.userAgent);
-  for(let i=0;i<pages.length;i++){
-   const name='ai-layout-y'+(poiWalkActive?poiWalkLevel:pineAILevel)+'-'+(i+1)+'of'+pages.length+'.png';
-   const data=pages[i].toDataURL('image/png');
-   if(window.PineFileSave&&typeof window.PineFileSave.savePng==='function'){
-    window.PineFileSave.savePng(name,data.substring(data.indexOf(',')+1));
-    toast(pages.length===1?'PNGの保存先を選んでください':'複数ページのためブラウザで全ページを保存してください');
-    break;
-   }
-   if(isWebView){pineAIImagePreview(data,name);toast('画像を表示しました');break}
-   const a=document.createElement('a');a.href=data;a.download=name;document.body.appendChild(a);a.click();a.remove();
-  }
-  if(!isWebView)toast('AI画像を生成しました');
+  toast('AI解析画像を生成しています');
+  const pages=pineAIImagePages(),floor=poiWalkActive?poiWalkLevel:pineAILevel;
+  if(pages.length===1)pineAISaveOneImage(pages[0],floor,0,1);
+  else pineAIImagePageChooser(pages,floor);
  }catch(e){console.error(e);toast('画像保存に失敗: '+e.message)}
 }
 
