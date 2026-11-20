@@ -585,17 +585,37 @@ header h1{letter-spacing:.015em;white-space:nowrap;flex-shrink:0}
  }
 }
 /* v65: compact device battery percentage following Undo / Redo in header. */
+/* v67: mobile-style battery glyph plus honest numeric reading. */
 header #batteryIndicator{
  display:inline-flex;align-items:center;justify-content:center;
- flex:none;min-width:42px;padding:6px 4px;
+ gap:6px;flex:none;min-width:72px;padding:5px 2px;
  font-size:12px;font-weight:750;font-variant-numeric:tabular-nums;
- color:#e5e7cf;white-space:nowrap;
+ color:#dcebdc;white-space:nowrap;
 }
-header #batteryIndicator.low{color:#ff9b8c}
-header #batteryIndicator.charging{color:#c0ecc5}
-@media(max-width:800px){header #batteryIndicator{font-size:11px;min-width:36px;padding:4px 2px}}
+header #batteryIndicator .batteryShape{
+ width:26px;height:14px;position:relative;display:block;flex:none;
+ border:1.5px solid #cde1ce;border-radius:3px;padding:2px;
+ background:rgba(11,31,21,.6);
+}
+header #batteryIndicator .batteryShape::after{
+ content:'';position:absolute;right:-4.8px;top:3px;
+ width:3px;height:5px;border-radius:0 2px 2px 0;background:#cde1ce;
+}
+header #batteryIndicator .batteryFill{
+ display:block;height:100%;width:var(--battery-fill,0%);
+ background:#58d58a;border-radius:1px;
+ transition:width .25s ease,background .25s ease;
+}
+header #batteryIndicator.low .batteryFill{background:#ec6d5f}
+header #batteryIndicator.low{color:#ffb7ad}
+header #batteryIndicator.charging .batteryFill{background:#79e69b}
+header #batteryIndicator.unknown .batteryFill{background:#536c5b}
+@media(max-width:800px){
+ header #batteryIndicator{font-size:11px;min-width:63px;gap:5px;padding:4px 1px}
+ header #batteryIndicator .batteryShape{width:23px;height:13px}
+}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v66）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません">--%</span></header>
+<div id="app"><header><h1>3Dワールド工房（v67）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -667,7 +687,9 @@ async function pineInitBatteryIndicator(){
   const update=()=>{
    if(!Number.isFinite(battery.level)||battery.level<0||battery.level>1)return;
    const percent=Math.round(battery.level*100);
-   element.textContent=percent+'%';
+   $('batteryPercent').textContent=percent+'%';
+   element.style.setProperty('--battery-fill',percent+'%');
+   element.classList.remove('unknown');
    element.classList.toggle('low',percent<=20&&!battery.charging);
    element.classList.toggle('charging',!!battery.charging);
    const label='バッテリー残量 '+percent+'%'+(battery.charging?'（充電中）':'');
