@@ -746,7 +746,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 #poiShopBuyPotion:not(:disabled){border-color:#ebca82;background:#81663ce8!important}
 #poiShopFeedback{min-height:1.4em}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v139）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v140）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -6333,7 +6333,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v139',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v140',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -6448,7 +6448,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v139';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v140';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -6662,7 +6662,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v139',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v140',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -8108,6 +8108,8 @@ function guildInteriorDetails(m,visible){
   for(const dx of [-.57,.57])for(const dy of [.49,1.31])
    cube(m,mapX+dx,baseY+dy,mapZ+.137,.037,.037,.010,brass);
  }
+ // The Game World guild explicitly authors its own writing materials.
+ if(facilitySite?.id==='base')return;
  // Remove the old automatic rear-wall quest board. The editable wall-mounted
  // board on the staff partition is the sole ground-floor quest noticeboard.
  // One tidy ledger and pencil cup on the reception counter. Do not scatter
@@ -11857,6 +11859,43 @@ function pineGuildSampleMap(){
   world:tiles,models:[],prefabs:[],checks:[],terrainHeights:[]};
 }
 
+// The authored Game World guild borrows the stock shell and stair chain, not the
+// sample's furniture. This transform never edits the sample or a saved Guild.
+function pineTownGuildGroundFloor(tiles){
+ if(!tiles)return null;
+ const inside=o=>o.x>7&&o.x<22&&o.z>6&&o.z<20;
+ const result=tiles.filter(o=>o.y!==0||!inside(o)||/^(?:grass|woodfloor|guildStair)/.test(o.type));
+ const place=(x,z,type,rot=0)=>result.push({x,z,y:0,type,rot});
+ // Records office and washroom open onto the staff aisle behind the desk.
+ for(let z=7;z<=12;z++)place(11,z,z===8?'woodwallDoor':'woodwall',z===8?3:0);
+ for(let x=8;x<=10;x++)place(x,12,'woodwall');
+ for(let z=7;z<=11;z++)place(18,z,z===8?'woodwallDoor':'woodwall',z===8?1:0);
+ for(let x=19;x<=21;x++)place(x,11,'woodwall');
+ // A clear public approach to the five-module reception, with two clerks
+ // facing its counter, not the exterior wall. The east flank is the staff entry.
+ for(let x=12;x<=16;x++)place(x,10,'counterWood');
+ for(const x of [13,15]){
+  place(x,9,'chairWood');
+  place(x,10,'poiLedgerPapers');
+  place(x,10,'poiPenHolder');
+ }
+ for(const [x,z,type,rot] of [
+  [8,7,'bookshelf',0],[9,9,'table',0],[8,9,'chairWood',3],
+  [8,11,'wardrobe',3],[9,9,'poiLedgerPapers',1],
+  [21,7,'guildLatrine',0],[21,9,'kitchenSink',1],
+  // The two-tile board uses continuous timber backing. The benches face
+  // inward from side walls; the crossing and the stair foot remain clear.
+  [10,12,'guildWallQuestBoard',0],
+  [8,14,'benchWood',3],[8,16,'benchWood',3],[21,16,'benchWood',1],
+  [19,14,'roundTableWood',0],[18,14,'chairWood',3],[20,14,'chairWood',1],
+  [9,19,'poiPottedPlant',0],[20,19,'poiPottedPlant',0],
+  // Attach to actual walls and keep the noticeboard's wall face free.
+  [8,12,'poiWallSconce',0],[11,9,'poiWallSconce',3],[18,10,'poiWallSconce',1],
+  [18,9,'poiWallSconce',3],[18,11,'poiWallSconce',0],[19,11,'poiWallSconce',0]
+ ])place(x,z,type,rot);
+ return result;
+}
+
 function buildFacilitySite(id){
  if(!FACILITY_SITES.some(site=>site.id===id))return null;
  const plans={
@@ -12160,7 +12199,7 @@ function buildFacilitySite(id){
  // the user's saved Adventurers Guild. Its doors face the new civic square.
  const addTownGuild=()=>{
   const ox=20,oz=-4,west=27,east=42,north=2,south=16,entry={x:34,z:16};
-  const guild=pineGuildDesignUpperFloors(pineGuildSampleMap().world);
+  const guild=pineTownGuildGroundFloor(pineGuildDesignUpperFloors(pineGuildSampleMap().world));
   if(!guild)return;
   const structure=guild.filter(o=>o.x>=7&&o.x<=22&&o.z>=6&&o.z<=20);
   const yard=guild.filter(o=>o.y===0&&o.z===21&&o.type==='lantern'||

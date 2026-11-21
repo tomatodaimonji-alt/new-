@@ -6,7 +6,7 @@ const site=api.buildFacilitySite('base'),g=site.buildings.find(b=>b.id==='townGu
 const norm=(x)=>JSON.parse(JSON.stringify(x));
 const at=(x,z,y)=>site.map.world.filter(o=>o.x===x&&o.z===z&&o.y===y);
 const key=(x,z,y)=>[x,z,y].join(',');
-test('built-in town guild copies and preserves each ordered stack, stair and upper roof from the exact same sample',()=>{
+test('built-in town guild preserves the stock shell, floors, stairs and upper layers, with new ground-level rooms',()=>{
  assert(g,'town guild is present');
  assert.deepEqual([g.x1,g.x2,g.z1,g.z2],[27,42,2,16]);
  assert.deepEqual(norm(g.entrance),{x:34,z:16});
@@ -18,7 +18,10 @@ test('built-in town guild copies and preserves each ordered stack, stair and upp
   !/^(?:grassMeadow|grassPebbles)$/.test(o.type));
  const target=site.map.world.filter(o=>o.x>=g.x1&&o.x<=g.x2&&o.z>=g.z1&&o.z<=g.z2);
  const canonical=entries=>Array.from(entries,o=>JSON.stringify([o.x,o.z,o.y,o.type,o.rot])).sort();
- assert.deepEqual(canonical(target),canonical(original.map(o=>({...o,x:o.x+20,z:o.z-4}))));
+ const protectedPart=(o,bounds)=>o.y!==0||o.x===bounds[0]||o.x===bounds[1]||o.z===bounds[2]||o.z===bounds[3]||
+  /^woodfloor|^guildStair/.test(o.type);
+ assert.deepEqual(canonical(target.filter(o=>protectedPart(o,[27,42,2,16]))),canonical(
+  original.filter(o=>protectedPart(o,[7,22,6,20])).map(o=>({...o,x:o.x+20,z:o.z-4}))));
  assert.equal(target.length,new Set(canonical(target)).size);
  assert.equal(target.filter(o=>o.type==='roofHip'&&o.y===3).length,240);
  assert.equal(target.filter(o=>o.type==='guildFacadeSign').length,1);

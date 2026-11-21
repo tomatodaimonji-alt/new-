@@ -116,7 +116,10 @@ function unpack(encoded){
  }
  return records;
 }
-test('all old buildings and standalone missions are byte-stable in their local geometry, apart from the authorized translations',()=>{
+// v140 reworks only the ground interior; guild-ground-v140 protects the stock
+// shell, footprint, stairs and every upper record against the original sample.
+const guildGroundV140Geom='4b9cb3184f8fbdb3a12c3eb8f7e8a011e1a57101d9ff8a12b64ac2e9c6e2f7d0';
+test('local geometry stays pinned after authorized translations and ground-floor Guild redesign',()=>{
  const moved={townGuild:[27,42,2,16],workshop:[55,64,6,16],cottage:[46,52,35,41],rowhouse:[52,58,23,29]};
  // Old house pins used absolute coordinates; undo only these exact translations.
  const canalTranslations={cottage:[12,1],rowhouse:[8,-13]};
@@ -126,7 +129,7 @@ test('all old buildings and standalone missions are byte-stable in their local g
   const b=site.buildings.find(v=>v.id===id);
   assert.ok(b,id+' is still present');
   if(moved[id])assert.deepEqual([b.x1,b.x2,b.z1,b.z2],moved[id],id+' exact relocation');
-  assert.equal(geometry(b,id==='townGuild'||id==='workshop',canalTranslations[id]),expected,id+' original stairs, doors, footprint, roof and ordered cell stacks');
+  assert.equal(geometry(b,id==='townGuild'||id==='workshop',canalTranslations[id]),id==='townGuild'?guildGroundV140Geom:expected,id+' original stairs, doors, footprint, roof and ordered cell stacks');
  }
  for(const [id,expected] of Object.entries(pin.standalone))assert.equal(digest(build(id)),expected,id+' standalone POI unchanged');
  assert.equal(digest(site.creek),pin.creek,'complete creek metadata unchanged');
