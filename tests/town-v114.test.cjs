@@ -263,14 +263,14 @@ function v113Digests(build){
  return out;
 }
 
-test('v114 adds four selectable routes and keeps base URL/identity but renames it to 拠点',()=>{
+test('v114 adds four selectable routes and keeps base URL/identity but shows the current game-world name',()=>{
  const ids=Array.from(sites,s=>s.id);
  assert.equal(new Set(ids).size,ids.length);
  for(const id of ['lodging','kitchen','workshop','base','artisan','stable','homes','toolshop']){
   assert.ok(ids.includes(id),id);
   assert.ok(build(id),id);
  }
- assert.equal(sites.find(s=>s.id==='base').name,'拠点');
+ assert.equal(sites.find(s=>s.id==='base').name,'ゲーム世界');
  assert.equal(build('not-a-poi'),null);
 });
 

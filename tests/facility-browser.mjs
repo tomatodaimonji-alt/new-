@@ -305,7 +305,7 @@ try{
   assert.equal(before?.id,id);
   assert.equal(before?.active,false);
   const raw=await desktop.evaluate(()=>window.__editorTest.data());
-  if(id==='base')assert.equal(await desktop.locator('#facilitySessionName').textContent(),'拠点');
+  if(id==='base')assert.equal(await desktop.locator('#facilitySessionName').textContent(),'ゲーム世界');
   assert.equal(before.buildings.length,id==='base'?9:id==='homes'?3:1);
   await desktop.locator('#poiWalkToggle').click();
   if(out)await desktop.screenshot({path:out+'/town-'+id+'.png'});
