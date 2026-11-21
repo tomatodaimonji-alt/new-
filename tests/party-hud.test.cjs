@@ -2,9 +2,9 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const html=fs.readFileSync(process.env.HTML||path.join(__dirname,'../world-editor.html'),'utf8');
 test('play UI has a rectangle for location/stars and only one real HP slot in four equal places, anchored above unchanged controls',()=>{
  assert.match(html,/<aside id="poiMiniHud" hidden[\s\S]*?<canvas id="poiMiniMap" width="144" height="144"[\s\S]*?<div id="poiLocationPanel">[\s\S]*?id="poiLocationName"[\s\S]*?id="poiLocationStars"[\s\S]*?<\/aside>/);
- assert.match(html,/<div id="poiWalkPad">\s*<section id="poiPartyHud" hidden[\s\S]*?data-party-slot="0"[\s\S]*?プレイヤー[\s\S]*?<progress id="poiPlayerHp"[\s\S]*?<\/section>\s*<div class="poiWalkDpad">/);
+ assert.match(html,/<div id="poiWalkPad">\s*<section id="poiPartyHud" hidden[\s\S]*?data-party-slot="0"[\s\S]*?プレイヤー[\s\S]*?<progress id="poiPlayerHp"[\s\S]*?<\/section>\s*<div id="poiHotbar"/);
  assert.equal((html.match(/data-party-slot="/g)||[]).length,1);
- assert.match(html,/#poiPartyHud\s*\{[^}]*bottom:calc\(100% \+ 6px\)[^}]*grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
+ assert.match(html,/#poiPartyHud\s*\{[^}]*bottom:calc\(100% \+ var\(--poi-hud-gap\) \* 2 \+ var\(--poi-hotbar-size\)\)[^}]*grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
  assert.match(html,/#poiMiniHud,#poiPartyHud\s*\{[^}]*pointer-events:none/);
  assert.match(html,/#viewWrap:has\(#pineAIMode:not\(\[hidden\]\)\) #poiPartyHud/);
  assert.doesNotMatch(html,/id="poiCombatHud"|攻撃力 '\+POI_PLAYER_ATTACK/);

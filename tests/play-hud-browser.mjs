@@ -43,7 +43,7 @@ const ai='#pineAIPlanCapture',safe='☆☆☆☆☆',outside='★☆☆☆☆';
 const controls=[pad,'[data-poi-dir=n]','[data-poi-dir=s]','[data-poi-dir=e]','[data-poi-dir=w]','#poiWalkAction'];
 const settle=page=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
 const confirmText=async (page,css,want)=>assert.equal((await page.locator(css).textContent()).trim(),want,css);
-const snapshot=async (page,name)=>{if(out){await settle(page);await page.screenshot({path:out+'/v123-'+name+'.png'});}};
+const snapshot=async (page,name)=>{if(out){await settle(page);await page.screenshot({path:out+'/v124-'+name+'.png'});}};
 async function initialize(browser,width,height,prefix='/',opts={}){
  const mobile=width<800,ctx=await browser.newContext({viewport:{width,height},deviceScaleFactor:1,isMobile:mobile,hasTouch:mobile});
  const page=await ctx.newPage(),errors=[];
@@ -94,11 +94,14 @@ async function geometry(page,width,height,duringDrawer=false){
  const locationBox=await box(page,'#poiLocationPanel');
  assert.ok(contained(name,locationBox)&&contained(stars,locationBox)&&name.x+name.width<=stars.x+1&&
   Math.abs((name.y+name.height/2)-(stars.y+stars.height/2))<=4,'location name and all stars fit side by side');
- assert.ok(walk.y-(left.y+left.height)>=-1&&walk.y-(left.y+left.height)<=20,'HP panel is immediately above unchanged D-pad');
+ const hotbar=await box(page,'#poiHotbar');
+ assert.ok(hotbar.y-(left.y+left.height)>=-1&&hotbar.y-(left.y+left.height)<=20,'HP panel is immediately above hotbar');
+ assert.ok(walk.y-(hotbar.y+hotbar.height)>=-1&&walk.y-(hotbar.y+hotbar.height)<=20,'hotbar is immediately above unchanged D-pad');
  assert.ok(!intersects(minimapOuter,left)&&!intersects(minimapOuter,walk),'mini/party/pad do not overlap');
  for(const [label,rect] of await buttons(page)){
   assert.ok(!intersects(minimapOuter,rect),'minimap obscures '+label+' at width '+width);
-  assert.ok(!intersects(left,rect),'party panel obscures '+label+' at width '+width);
+  assert.ok(!intersects(hotbar,rect),'hotbar obscures '+label+' at width '+width);
+  assert.ok(!intersects(left,rect),'party panel obscures '+label+' at width '+width+' '+JSON.stringify({left,rect}));
  }
  const grid=await page.locator(party).evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').map(parseFloat));
  assert.equal(grid.length,4,'four equal slot columns even with one player');

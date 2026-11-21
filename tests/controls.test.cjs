@@ -13,6 +13,7 @@ test('facility center attack can hit current-floor monsters without writing any 
  let now=810,saveCalls=0,avatarCalls=0,damages=[];
  const other={hp:55,x:3,z:1},active={hp:55,x:3,z:1};
  const ctx=vm.createContext({poiWalkActive:true,facilitySite:{},poiWalkLevel:1,
+  poiWalkActionWeapon:null,poiEquippedWeapon:()=>null,poiPlayerAttackDamage:()=>20,
   poiWalkFacing:0,poiWalkX:3,poiWalkZ:2,poiAttackReady:0,poiWalkActionStarted:0,
   performance:{now:()=>now},poiWalkAvatar:()=>avatarCalls++,poiSound(){},toast(){},terrainY:()=>0,
   poiMonsterStates:new Map([[{y:0},other],[{y:1},active]]),POI_PLAYER_ATTACK:20,
