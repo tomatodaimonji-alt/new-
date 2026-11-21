@@ -58,7 +58,7 @@ test('One door cue per actual threshold, matched to current floor including base
    facilitySite:{},pineGameActive:false,performance:{now:(()=>{let t=1000;return()=>t+=200})()},
    world:[{x:1,z:0,y:doorY,type}],poiWalkCanStep:()=>true,
    poiWalkPassableDoor:t=>t.endsWith('Door')||t.endsWith('DoorOpen')||t.endsWith('Entrance'),
-   poiSound:k=>result.push(k),poiWalkRoof(){},poiWalkAvatar(){},poiWalkStatus(){}
+   poiSound:k=>result.push(k),poiWalkRoof(){},poiWalkAvatar(){},poiWalkStatus(){},workshopResumeWrite(){}
   });
   vm.runInContext(between('function poiWalkStep(','function poiWalkAction(')+"poiWalkStep(1,0);poiWalkStep(1,0);",ctx);
   return result;

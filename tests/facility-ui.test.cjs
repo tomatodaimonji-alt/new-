@@ -4,7 +4,7 @@ const test=require('node:test');
 const html=readFileSync(process.env.HTML||'world-editor.html','utf8');
 const near=(anchor,n=1300)=>{const i=html.indexOf(anchor); assert(i>=0,anchor);return html.slice(i,i+n)};
 test('opens an editable facility with standard toolbar, without starting play',()=>{
- const boot=near('function facilityBoot(){');
+ const boot=near('function facilityBoot(');
  assert(boot.includes('facilitySession'));
  assert(!boot.includes('gameWorldMode'));
  assert(!boot.includes('poiWalkSet(true)'));

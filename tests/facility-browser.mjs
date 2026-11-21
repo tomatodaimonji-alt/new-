@@ -179,6 +179,10 @@ try{
     // The clerk/ledger stays on the desk, and the owner's suite is reached
     // from the staff side without going back outside or through the public WC.
     const confined=(x,z)=>ground.has(key(x,z));
+    // The 1F bench remains, and the player can now walk onto its tile.
+    const bench=localPoint([8,8]);
+    assert(raw.world.some(o=>o.y===0&&o.type==='benchWood'&&o.x===bench.x&&o.z===bench.z));
+    await walkLocal(8,8,confined);
     await walkLocal(4,9,confined);
     if(out&&id==='lodging')await desktop.screenshot({path:out+'/lodging-reception.png'});
     for(const [x,z] of [[5,7],[5,4],[5,2],[6,2],[7,2]])await walkLocal(x,z,confined);
