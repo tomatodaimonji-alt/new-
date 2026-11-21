@@ -38,11 +38,12 @@ test('food-hall marked checkout has supported paperwork and a dedicated stool on
 test('workshop work-order desk, supported paperwork and stool fit without blocking shop routes',()=>{
  for(const scope of ['workshop','base']){
   const {at,route}=local(scope,'workshop'),walk=route();
-  assert.equal(at(3,5).find(o=>o.type==='counterWood')?.rot,3);
-  assert.equal(at(3,5).find(o=>o.type==='poiLedgerPapers')?.rot,1);
-  assert.ok(at(2,5).some(o=>o.type==='stoolRound'));
-  assert.ok(!walk.has(key(2,5)));
+  for(const x of [3,4])assert.equal(at(x,7).find(o=>o.type==='counterWood')?.rot,0);
+  assert.equal(at(4,7).find(o=>o.type==='poiLedgerPapers')?.rot,2);
+  assert.ok(at(3,6).some(o=>o.type==='stoolRound'));
+  assert.ok(!walk.has(key(3,6)));
   assert.ok(at(5,1).some(o=>o.type==='displayShelf')&&at(4,1).some(o=>o.type==='table'));
-  for(const p of [[5,8],[4,8],[1,5],[4,5],[3,6],[4,2],[9,3],[8,6]])assert.ok(walk.has(key(...p)),scope+' route '+p);
+  assert.ok(at(1,4).some(o=>o.type==='table')&&at(1,7).some(o=>o.type==='benchWood'));
+  for(const p of [[5,8],[4,8],[1,5],[4,5],[4,6],[4,2],[9,3],[8,6]])assert.ok(walk.has(key(...p)),scope+' route '+p);
  }
 });

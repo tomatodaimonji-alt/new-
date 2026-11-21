@@ -30,7 +30,7 @@ test('cashier uses exactly the two screenshot marks and leaves a safe adjacent s
   assert.ok(at(9,4).every(o=>o.type!=='poiLedgerPapers')&&at(9,3).every(floor));
   const walk=route(5,9);
   assert.ok(!walk.has(key(8,8)), 'stool and chair tiles are physically occupied');
-  for(const p of [[6,7],[6,8],[8,7],[9,7],[9,8],[2,7],[12,8]])assert.ok(walk.has(key(...p)),scope+' reach '+p);
+  for(const p of [[6,7],[6,8],[8,7],[9,6],[9,8],[2,7],[12,8]])assert.ok(walk.has(key(...p)),scope+' reach '+p);
  }
 });
 test('kitchen has a coherent stone and serving-counter divider, two clear staff routes and no lost WC/cellar access',()=>{

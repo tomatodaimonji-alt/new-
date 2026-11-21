@@ -45,7 +45,7 @@ test('eight deterministic site IDs and exact and varied building footprints',()=
   const site=buildFacilitySite(id);
   assert.equal(JSON.stringify(site),JSON.stringify(buildFacilitySite(id)));
   if(id==='base'){
-   assert.equal(site.map.width,63);assert.equal(site.map.height,49);
+   assert.equal(site.map.width,72);assert.equal(site.map.height,56);
    assert.ok(site.map.world.length<3400);
    assert.deepEqual(Array.from(site.buildings,b=>b.id),buildingIds);
   }else{
@@ -71,8 +71,8 @@ test('eight deterministic site IDs and exact and varied building footprints',()=
 });
 test('toilets can be walked to, stairs are paired, and indoor routes start from paved or service entries',()=>{
  const expected={lodging:['0','1'],kitchen:['-1','0']};
- const assets={lodging:['bed','chest','wardrobe'],kitchen:['kitchenStove','kitchenCounter','kitchenSink','roundTableSet'],
-  workshop:['table','displayShelf','handcartLoaded'],artisan:['bed','kitchenStove','counterWood','poiLedgerPapers'],
+ const assets={lodging:['bed','chest','wardrobe'],kitchen:['kitchenStove','kitchenCounter','kitchenSink','roundTableWood'],
+  workshop:['table','displayShelf','counterWood'],artisan:['bed','kitchenStove','counterWood','poiLedgerPapers'],
   stable:['fenceWood','sack','crate','displayShelf'],cottage:['bed','fireplace','wardrobe'],
   rowhouse:['bed','table','poiLedgerPapers'],gardener:['bed','poiPottedPlant','basketProduce'],
   toolshop:['displayShelf','counterLuxury','poiLedgerPapers']};
@@ -98,7 +98,7 @@ test('toilets can be walked to, stairs are paired, and indoor routes start from 
    }
    for(const name of assets[fac])assert.ok(objs.some(o=>o.type===name),fac+' '+name);
    if(fac==='stable'){
-    assert.ok(objs.filter(o=>o.y===0&&door(o.type)&&o.z===entry.z).length>=2,'wide pair of stable doors');
+    assert.ok(objs.filter(o=>o.y===0&&door(o.type)&&o.z===entry.z).length>=2,'two passable tiles under the single loading bay');
     assert.ok(site.map.world.some(o=>o.type==='handcartLoaded'&&o.y===0&&
        o.x>=b.x1-5&&o.x<=b.x2+5&&o.z>=b.z1-5&&o.z<=b.z2+5&&!occupied(o)),'stable has receiving yard');
    }

@@ -648,7 +648,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
 #facilitySessionActions .row{margin:0}
 .facilityGroupLabel{margin:9px 4px 5px;font-size:11px;color:var(--muted)}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v113）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v114）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -1996,6 +1996,39 @@ function oldTownShopDetails(m,id,x,y,z){
  }
  return false;
 }
+function poiStableLoadingBayGeometry(m,x,y,z){
+ // A single wagon opening across two ground tiles, not two human doors.
+ // Only the outside jambs rise from the floor. No leaf or center mullion.
+ const oak=[.445,.290,.177],edge=[.586,.410,.255],beam=[.362,.230,.146];
+ const stone=[.55,.541,.470],metal=[.287,.243,.194];
+ const B=(dx,dy,dz,w,h,d,col)=>cube(m,x+dx,y+dy,z+dz,w,h,d,col);
+ for(const side of [-1,1]){
+  const at=side*.908;
+  B(at,0,0,.177,.126,.89,stone);
+  B(at,.126,0,.139,1.092,.95,oak);
+  for(const zz of [-.481,.481]){
+   B(at,.169,zz,.139,.968,.035,edge);
+   for(const yy of [.291,1.112])B(at,yy,zz+Math.sign(zz)*.021,.053,.055,.018,metal);
+  }
+ }
+ B(0,1.205,0,1.997,.187,1.001,beam);
+ for(const zz of [-.495,.495]){
+  B(0,1.226,zz,1.983,.047,.042,edge);
+  B(0,1.344,zz,1.983,.034,.047,oak);
+ }
+}
+function facilityStableLoadingBayPart(o){
+ if(!facilitySite||o.type!=='woodwallDoor'||o.y!==0)return 0;
+ const stable=facilitySite.buildings.find(p=>p.id==='stable');
+ if(!stable||!stable.entrance)return 0;
+ const {x,z}=stable.entrance,r=stable.turn||0,[dx,dz]=rot2(1,0,r);
+ const isPrimary=o.x===x&&o.z===z,isSecond=o.x===x+dx&&o.z===z+dz;
+ if((!isPrimary&&!isSecond)||(o.rot||0)!==r)return 0;
+ const cx=isPrimary?x+dx:x,cz=isPrimary?z+dz:z;
+ // Editing/deleting either tile restores the normal geometry immediately.
+ if(!world.some(p=>p.type==='woodwallDoor'&&p.x===cx&&p.z===cz&&p.y===0&&(p.rot||0)===r))return 0;
+ return isPrimary?1:2;
+}
 function facilityHasDiningStoneLeaf(o){
  // Scope to the graded WC door of the authored dining stamp, in either
  // site layout. Keep the ordinary stonewallDoor record and render intact.
@@ -2454,6 +2487,7 @@ case 'bushFern':{
 case 'rock':diamond(m,x,y+.22,z,.43,[.49,.56,.50]);break;
 case 'bush':diamond(m,x-.16,y+.23,z,.28,[.29,.56,.31]);diamond(m,x+.18,y+.29,z+.1,.30,[.35,.62,.35]);break;
 case 'poiDiningSign':poiDiningSignGeometry(m,x,y,z);break;
+case 'facilityStableWagonBayVisual':poiStableLoadingBayGeometry(m,x,y,z);break;
 case 'facilityCellarEntryVisual':poiCellarEntryGeometry(m,x,y,z);break;
 case 'facilityCellarFlightVisual':poiCellarFlightGeometry(m,x,y,z);break;
 case 'facilityWCStoneDoorVisual':matchedOpening(m,'stonewallDoor',x,y,z,true);break;
@@ -3526,7 +3560,16 @@ function roadTile(m,x,z,id,mask,area){
  }
 }
 
-function addFloorTile(m,x,z,kind,area=256,roadMask=0){if(ROAD_IDS.has(kind)){roadTile(m,x,z,kind,roadMask,area);return;}
+// Terrain tint is ambient in the base route, not a second terrain mesh or
+// a blanket of saved floor tiles. Exported props and accents remain editable.
+function pineBaseNatureTint(x,z){
+ const local=(cx,cz,rx,rz)=>Math.max(0,1-Math.hypot((x-cx)/rx,(z-cz)/rz));
+ const woods=Math.max(local(6,3,12,9),local(61,4,15,12),
+  local(68,20,13,24),local(7,52,17,12));
+ const meadow=Math.max(local(32,52,24,10),local(32,3,18,8));
+ return [meadow*.045-woods*.064,meadow*.047-woods*.093,meadow*.009-woods*.042];
+}
+function addFloorTile(m,x,z,kind,area=256,roadMask=0,ambientTint=null){if(ROAD_IDS.has(kind)){roadTile(m,x,z,kind,roadMask,area);return;}
 const r=.25+smoothSurfaceNoise(x*.16,z*.16)*.55+smoothSurfaceNoise(x*.42+13,z*.42-7)*.20;
 const c=kind==='earth'?[.43+r*.09,.35+r*.07,.25+r*.05]:kind==='moss'?[.33+r*.07,.49+r*.08,.31+r*.05]:kind==='stone'?[.55+r*.07,.58+r*.08,.53+r*.06]:kind==='woodfloor'?[.51+r*.05,.39+r*.07,.26+r*.04]:kind==='woodfloorLight'?[.70+r*.05,.55+r*.07,.37+r*.04]:kind==='woodfloorDark'?[.30+r*.05,.21+r*.04,.13+r*.03]:kind==='brickfloor'?[.40+r*.045,.23+r*.03,.19+r*.02]:
 kind==='basicfloor'?[.75+r*.045,.77+r*.035,.70+r*.035]:
@@ -3552,7 +3595,9 @@ kind==='grassMeadow'?[.36+r*.09,.54+r*.11,.29+r*.07]:
 kind==='ironfloor'?[.24,.28,.31]:kind==='mossfloor'?[.32,.41,.33]:
 kind==='plasterfloor'?[.63,.60,.53]:kind==='basicfloor'?[.51,.55,.51]:null;
 if(groutColor)c.splice(0,3,...groutColor);
-const x0=x+.006,x1=x+.994,z0=z+.006,z1=z+.994;
+if(ambientTint)for(let i=0;i<3;i++)c[i]+=ambientTint[i];
+const inset=ambientTint?0:.006;
+const x0=x+inset,x1=x+1-inset,z0=z+inset,z1=z+1-inset;
 quad(m,[x0,0,z0],[x0,0,z1],[x1,0,z1],[x1,0,z0],c);
 // Baked-in lightweight vegetation details: deterministic, sparse and non-colliding.
 const naturalGrass=new Set(['grass','grassMeadow','grassWild','grassForest','grassDry',
@@ -4167,7 +4212,8 @@ function connectedRoofGeometry(m,o,lookup){
 // Discrete architectural accents placed only along exterior wall faces.
 // Walls themselves are unchanged so legacy houses and saved files stay intact.
 function houseFacadeDetails(m,visible){
- const walls=visible.filter(o=>/^(?:plasterwall|woodwall|stonewall|brickwall)(?:Door|Window)$/.test(o.type));
+ const walls=visible.filter(o=>/^(?:plasterwall|woodwall|stonewall|brickwall)(?:Door|Window)$/.test(o.type)&&
+  !facilityStableLoadingBayPart(o));
  const all=new Map(visible.filter(o=>o.y>=0&&!isFloor(o.type)).map(o=>[o.x+','+o.z+','+o.y,o]));
  for(const o of walls){
   const type=o.type,material=type.startsWith('stone')?[.61,.60,.54]:
@@ -4867,7 +4913,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v113',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v114',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -4982,7 +5028,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v113';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v114';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -5194,7 +5240,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v113',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v114',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -6438,6 +6484,20 @@ function pineGuildFantasyRoof(m,cells){
  }
  return true;
 }
+function facilityHomeBedOffset(o,walls){
+ if(!facilitySite||o.y!==0)return null;
+ const owner=facilityFloorOwner(o.x,o.z,o.y);
+ if(!['artisan','cottage','rowhouse','gardener','toolshop'].includes(facilitySite.buildings[owner]?.id))return null;
+ const [dx,dz]=rot2(0,1,o.rot||0);
+ const behind=walls.layers.get(o.y)?.get((o.x-dx)+','+(o.z-dz));
+ if(!behind||!(isWallId(behind.type)||behind.type.endsWith('Window')))return null;
+ const frontX=o.x+dx,frontZ=o.z+dz;
+ if(facilityFloorOwner(frontX,frontZ,o.y)!==owner||
+    world.some(p=>p.x===frontX&&p.z===frontZ&&p.y===o.y&&!isFloor(p.type)))return null;
+ // The 1.50-tile bed otherwise buries 0.25 tiles (including the pillow)
+ // in a full-cell wall. Move only the draw origin into the empty foot area.
+ return {x:dx*.29,z:dz*.29};
+}
 function makeScene(){
  const m=mesh(),visible=world.filter(o=>{
   if(facilitySite&&!facilityObjectVisible(o))return false;
@@ -6465,7 +6525,8 @@ function makeScene(){
   }
   const kind=floors.get(x+','+z)||'grass';
   const tmp=mesh();
-  addFloorTile(tmp,x,z,kind,MAP_W*MAP_H,ROAD_DIAGONALS.has(kind)?roadDiagonalConnections(floors,x,z,kind):ROAD_IDS.has(kind)&&!kind.endsWith('Full')?roadConnections(floors,x,z,kind):0);
+  const ambientTint=facilitySite?.id==='base'&&!floors.has(x+','+z)?pineBaseNatureTint(x,z):null;
+  addFloorTile(tmp,x,z,kind,MAP_W*MAP_H,ROAD_DIAGONALS.has(kind)?roadDiagonalConnections(floors,x,z,kind):ROAD_IDS.has(kind)&&!kind.endsWith('Full')?roadConnections(floors,x,z,kind):0,ambientTint);
   if(floors.has(x+','+z))shoreline(tmp,x,z,floors);
   pineBakeFloorLighting(tmp,x,z,0,pineShadows,pineWarmLamps);
   shiftMesh(m,tmp,terrainY(x,z));
@@ -6529,6 +6590,7 @@ function makeScene(){
  for(const group of groups)if(!pineGuildFantasyRoof(m,group))residentialRoofGeometry(m,group,allRoofLookup,!!facilitySite&&!facilityUsesGuildRendering());
  for(const o of visible){
   if(isFloor(o.type)||RESIDENTIAL_ROOFS.has(o.type))continue;
+  const stableBay=facilityStableLoadingBayPart(o);
   if(AUTO_ROOFS.has(o.type)){const temp=mesh();connectedRoofGeometry(temp,o,roofs);shiftMesh(m,temp,terrainY(o.x,o.z))}
   else if(BRIDGE_IDS.has(o.type))bridgeConnectedGeometry(m,o,bridgeLookup);
   else if(o.type==='pineLandingCraft')pineLandingCraftGeometry(m,o.x+.5,o.z+.5);
@@ -6539,6 +6601,12 @@ function makeScene(){
    deco(m,'facilityCellarEntryVisual',o.x+.5,terrainY(o.x,o.z),o.z+.5,o.rot||0);
   else if(facilityHasDiningCellarPart(o,'guildStairUp',-1))
    deco(m,'facilityCellarFlightVisual',o.x+.5,o.y*1.4+terrainY(o.x,o.z),o.z+.5,o.rot||0);
+  else if(stableBay){
+   if(stableBay===1){
+    const [dx,dz]=rot2(.5,0,o.rot||0);
+    deco(m,'facilityStableWagonBayVisual',o.x+.5+dx,terrainY(o.x,o.z),o.z+.5+dz,o.rot||0);
+   }
+  }
   else if(facilityHasDiningStoneLeaf(o))
    deco(m,'facilityWCStoneDoorVisual',o.x+.5,o.y*1.4+terrainY(o.x,o.z),o.z+.5,o.rot||0);
   else if(o.type==='lantern'&&pineGuildStaffSconceAnchor(o)){}
@@ -6549,6 +6617,10 @@ function makeScene(){
   else if(o.type==='terrainStairs')elevationStairGeometry(m,o.x,o.z,o.y*1.4+terrainY(o.x,o.z),o.rot||0);
   else if(/^fence(Wood|Stone|Iron)/.test(o.type)&&connectedFenceGeometry(m,o,fenceLookup)){} 
   else if(PINE_TABLETOP_KINDS.has(o.type))pineDrawTabletopDecor(m,o,tabletopSupports,tabletopCeilings);
+  else if(o.type==='bed'){
+   const offset=facilityHomeBedOffset(o,wallLookup);
+   deco(m,o.type,o.x+.5+(offset?.x??0),o.y*1.4+terrainY(o.x,o.z),o.z+.5+(offset?.z??0),o.rot||0);
+  }
   else deco(m,o.type,o.x+.5,o.y*1.4+terrainY(o.x,o.z),o.z+.5,o.rot||0);
  }
  for(const o of visible)pineFinishInteriorWindow(m,o,wallLookup);
@@ -9508,8 +9580,8 @@ function buildFacilitySite(id){
      props:[
       // Street-facing work bench and a seat behind it, clear of the main aisle.
       [2,5,'counterWood',3],[2,5,'poiLedgerPapers',1],[1,5,'stoolRound'],
-      [4,1,'kitchenStove',2],[5,1,'kitchenSink',2],[6,1,'kitchenCounter',2],
-      [6,3,'bed',2],[5,2,'chest'],[5,5,'roundTableWood'],[6,5,'chairWood',1],
+      [4,1,'kitchenStove'],[5,1,'kitchenSink'],[6,1,'kitchenCounter'],
+      [6,3,'bed',1],[6,6,'chest',1],[5,5,'roundTableWood'],[6,5,'chairWood',1],
       [4,0,'poiWallSconce'],[7,4,'poiWallSconce',1],
       // Private 2×3 WC; the two back fixtures leave a walkable 2×2 square.
       [3,1,'woodwall'],[3,2,'woodwallDoor',3],[3,3,'woodwall'],
@@ -9556,9 +9628,13 @@ function buildFacilitySite(id){
       [5,4,'woodwall'],[6,4,'woodwallDoor',2],[7,4,'woodwall'],
       [3,5,'woodwall'],[3,6,'woodwallDoor',1],[3,7,'woodwall'],
       [1,5,'guildLatrine'],[2,5,'kitchenSink'],[1,4,'poiWallSconce'],
-      // Rear deliveries/store. Shelves do not cover the north windows.
-      [1,1,'crate'],[1,2,'sack'],[2,1,'displayShelf',2],[6,1,'displayShelf',2],
-      [7,1,'barrel'],[7,2,'crate'],[4,1,'wardrobe',2],[4,0,'poiWallSconce'],
+      // The owner's small bedroom opens from the east stock aisle only.
+      [4,1,'woodwall'],[4,2,'woodwallDoor',1],[4,3,'woodwall'],
+      [1,1,'wardrobe'],[2,1,'displayShelf'],[3,1,'bed'],
+      [4,1,'poiWallSconce',1],[4,0,'poiWallSconce'],
+      // All stock stays onsite, grouped east; the x6 route links both doors.
+      [5,1,'displayShelf'],[6,1,'displayShelf'],[7,1,'barrel'],
+      [7,2,'crate'],[7,3,'crate'],[5,3,'sack'],
       // Retail shelving and working cashier; x4 is the clear guest approach.
       [7,5,'displayShelf',1],[7,7,'displayShelf',1],[5,6,'counterLuxury',1],
       [5,6,'poiLedgerPapers',3],[6,6,'stoolRound'],[5,8,'poiWallSconce',2]]}
@@ -9573,14 +9649,14 @@ function buildFacilitySite(id){
     windows:[[2,0],[5,0],[0,2],[6,2],[2,6],[6,5]],
     props:[
      // Quiet rear bedroom and a straight front-to-rear passage.
-     [5,1,'bed',2],[5,2,'wardrobe',3],[4,1,'chest'],[5,4,'table'],[5,3,'chairWood',2],
-     [1,5,'fireplace',1],[2,5,'poiPottedPlant'],[6,4,'poiWallSconce',1],
+     [5,1,'bed'],[4,1,'wardrobe'],[5,5,'chest',1],[5,4,'table'],[5,3,'chairWood'],
+     [1,5,'fireplace',3],[6,4,'poiWallSconce',1],
      // Six-cell service nook: four clear cells plus a latrine and basin.
      [3,1,'woodwall'],[3,2,'woodwall'],[3,3,'woodwallDoor',3],
      [1,4,'woodwall'],[2,4,'woodwall'],[3,4,'woodwall'],
-     [1,1,'guildLatrine',1],[2,1,'kitchenSink',2],[0,3,'poiWallSconce',3]
+     [1,1,'guildLatrine'],[2,1,'kitchenSink'],[0,3,'poiWallSconce',3]
     ]}],
-   roofProps:[[1,5,1,'chimney']],facade:[],yards:[[2,7,'smallFlowerVase']]
+   roofProps:[[1,5,1,'chimney']],facade:[],yards:[[2,7,'smallFlowerVase'],[5,7,'poiPottedPlant']]
   },
   rowhouse:{
    w:7,d:7,door:[4,6],wall:'brickwall',roof:'roofSteep',roofs:[[2,6,5,6,'roofLean']],
@@ -9589,13 +9665,13 @@ function buildFacilitySite(id){
     windows:[[2,0],[5,0],[0,3],[6,2],[1,5],[6,4]],
     props:[
      // The projecting south porch opens into a long work/living room.
-     [1,1,'bed',2],[2,1,'bookshelf',2],[1,2,'wardrobe',1],
-     [1,3,'table'],[1,3,'poiLedgerPapers',1],[1,3,'poiPenHolder',1],
-     [2,3,'chairClassic',3],[1,4,'fireplace',1],[0,2,'poiWallSconce',3],
+     [2,1,'bed'],[1,3,'bookshelf',3],[4,4,'wardrobe',2],
+     [1,1,'table'],[1,1,'poiLedgerPapers',1],[1,1,'poiPenHolder',1],
+     [1,2,'chairClassic',2],[1,4,'fireplace',3],[0,2,'poiWallSconce',3],
      [1,5,'brickwall'],[5,5,'brickwall'],
      [3,1,'plasterwall'],[3,2,'plasterwallDoor',3],[3,3,'plasterwall'],
-     [3,4,'plasterwall'],[4,4,'plasterwall'],[5,4,'plasterwall'],
-     [4,1,'guildLatrine',2],[5,1,'kitchenSink',2],[6,3,'poiWallSconce',1]
+     [3,4,'plasterwall'],[5,4,'plasterwall'],
+     [4,1,'guildLatrine'],[5,1,'kitchenSink'],[6,3,'poiWallSconce',1]
     ]}],
    roofProps:[[1,4,1,'chimney']],facade:[],yards:[[1,6,'poiPottedPlant']]
   },
@@ -9606,14 +9682,14 @@ function buildFacilitySite(id){
     windows:[[3,0],[5,0],[0,3],[6,2],[4,6],[6,4]],
     props:[
      // Front entry, sleeping alcove and a potting table at the rear.
-     [1,2,'fireplace',1],[1,3,'bed',1],[1,5,'poiPottedPlant'],
-     [1,4,'wardrobe',1],[2,1,'woodwall'],[2,2,'table'],[2,2,'basketProduce'],
-     [2,3,'stoolRound'],[4,1,'displayShelf',2],[5,1,'chest'],
+     [1,2,'fireplace',3],[1,3,'bed',3],[1,5,'chest',3],
+     [1,4,'wardrobe',3],[2,1,'woodwall'],[5,2,'table'],[5,2,'basketProduce'],
+     [4,1,'displayShelf'],[5,1,'poiPottedPlant'],
      [3,1,'plasterwall'],[3,2,'plasterwall'],[3,3,'plasterwall'],[3,4,'plasterwallDoor',1],[3,5,'plasterwall'],
-     [5,3,'guildLatrine',3],[5,5,'kitchenSink',3],
+     [5,3,'guildLatrine',1],[5,5,'kitchenSink',1],
      [0,4,'poiWallSconce',3],[6,5,'poiWallSconce',1]
     ]}],
-   roofProps:[[1,2,1,'chimney']],facade:[],yards:[[1,7,'barrel'],[4,7,'smallFlowerVase']]
+   roofProps:[[1,2,1,'chimney']],facade:[],yards:[[1,7,'barrel'],[3,7,'stoolRound'],[4,7,'smallFlowerVase']]
   },
   lodging:{
    w:12,d:11,door:[5,10],wall:'plasterwall',roof:'roofDormer',
@@ -9673,10 +9749,11 @@ function buildFacilitySite(id){
       [1,4,'stonewall'],[2,4,'stonewall'],[3,4,'stonewall'],[4,4,'stonewallDoor'],
       [7,4,'stonewall'],[8,4,'stonewall'],[11,4,'stonewallDoor'],[12,4,'stonewall'],
       [10,3,'sack'],[12,3,'crate'],
-      // The middle and both edge aisles stay full-tile routes even with every seat occupied.
-      [6,6,'roundTableSet'],[10,6,'roundTableSet'],
-      [5,6,'chairWood',3],[7,6,'chairWood',1],[9,6,'chairWood',3],[11,6,'chairWood',1],
-      [6,5,'chairWood',0],[10,7,'chairWood',2],
+      // Two offset pairs keep a cross-aisle rather than filling the room with seating.
+      [5,6,'roundTableWood'],[5,6,'smallFlowerVase'],
+      [5,5,'chairWood'],[5,7,'chairWood',2],
+      [10,7,'roundTableWood'],[10,7,'mugCeramic'],
+      [9,7,'chairWood',3],[11,7,'chairWood',1],
       // The marked modules form the front cashier; east staff side still has a clear stance.
       [7,7,'counterWood',1],[7,8,'counterWood',1],[7,8,'poiLedgerPapers',3],
       [8,8,'stoolRound'],[8,9,'poiWallSconce',2],
@@ -9700,9 +9777,13 @@ function buildFacilitySite(id){
      floorAt:(x,z)=>x<=5||(x>=7&&z>=5&&z<=7)?'stone':'woodfloorDark',
      windows:[[3,0],[8,0],[0,2],[0,6],[2,9],[7,9],[10,2],[10,6]],
      props:[[2,1,'fireplace',2],[3,1,'table',2],[4,1,'table',2],[5,1,'displayShelf',2],
-      [1,1,'crate'],[2,3,'stoolRound'],[0,3,'poiWallSconce',3],[2,6,'table'],
-      [3,5,'counterWood',3],[3,5,'poiLedgerPapers',1],[2,5,'stoolRound'],
-      [3,7,'benchWood',1],[4,7,'handcartLoaded',2],[5,7,'crate'],[4,9,'poiWallSconce',2],
+      [1,1,'crate'],[2,3,'stoolRound'],[0,3,'poiWallSconce',3],
+      // Workbench row remains against the back wall; the prep bench and
+      // rest bench hug the side wall. Keep the center open for turning.
+      [1,4,'table',3],[1,4,'poiLedgerPapers',3],[1,7,'benchWood',3],[1,8,'crate'],
+      // Front desk faces guests at z8; staff approach it from the rear.
+      [3,7,'counterWood'],[4,7,'counterWood'],[4,7,'poiLedgerPapers',2],
+      [3,6,'stoolRound'],[4,9,'poiWallSconce',2],
       // The right wing has separate square storeroom and washroom interiors.
       [6,1,'woodwall'],[6,2,'woodwallDoor',3],[6,3,'woodwall'],[6,3,'poiWallSconce',3],
       [7,1,'displayShelf',2],[8,1,'crate'],[9,1,'sack'],[9,2,'barrel'],
@@ -9711,12 +9792,14 @@ function buildFacilitySite(id){
       [6,8,'woodwall'],[7,8,'woodwall'],[8,8,'woodwall'],[9,8,'woodwall'],
       [9,5,'kitchenSink',1],[9,7,'guildLatrine',1]]}
    ],
-   roofProps:[[2,1,1,'chimney']],facade:[],yards:[[3,10,'shopChestSign'],[7,10,'handcartEmpty'],[8,10,'poiStreetLamp']]
+   roofProps:[[2,1,1,'chimney']],facade:[],
+   yards:[[3,10,'shopChestSign'],[8,10,'poiStreetLamp'],[9,11,'handcartLoaded',1]],
+   yardFloors:[[7,10,9,11,'roadGravelFull']]
   }
  };
  const compound=id==='base',housing=id==='homes',plan=plans[id];
- const width=compound?63:housing?38:id==='stable'?22:plan.w+8;
- const height=compound?49:housing?20:id==='stable'?21:plan.d+8;
+ const width=compound?72:housing?38:id==='stable'?22:plan.w+8;
+ const height=compound?56:housing?20:id==='stable'?21:plan.d+8;
  const floors=new Map(),objects=[],buildings=[],insideGrade=new Set();
  const homeNames={cottage:'白壁の家',rowhouse:'レンガの家',gardener:'庭師の家'};
  const put=(x,z,type,y=0,rot=0)=>objects.push({x,z,y,type,rot});
@@ -9828,6 +9911,48 @@ function buildFacilitySite(id){
    [44,44,'bushFlower'],[58,42,'treeBirch'],[53,31,'bushFlower'],[61,37,'treeOak'],
    [42,24,'bushFern'],[52,26,'flowerField'],[42,9,'bushFlower'],[53,11,'treeBirch'],
    [6,31,'treeOak'],[15,30,'treeBirch']]);
+  // Expand the countryside to the east and south, not the town itself.
+  // Only selected path/surface cells and plants are explicit editable records.
+  const openPatch=(x,z,type)=>{
+   if(!floors.has(x+','+z+',0'))exterior(x,z,type);
+  };
+  const path=(x1,z1,x2,z2,type)=>{
+   for(let z=z1;z<=z2;z++)for(let x=x1;x<=x2;x++)openPatch(x,z,type);
+  };
+  path(18,47,20,52,'earth');path(19,53,19,53,'earth');
+  path(61,45,67,45,'earth');path(61,44,64,44,'grassTrampled');
+  path(61,46,64,46,'grassTrampled');path(67,42,67,44,'earth');
+  path(67,37,67,41,'grassTrampled');path(40,9,40,15,'grassTrampled');
+  for(const [x,z,t] of [
+   [17,47,'grassDry'],[21,47,'grassPatch'],[17,49,'grassTrampled'],[21,49,'grassDry'],
+   [18,53,'grassTrampled'],[20,53,'grassDry'],[19,54,'grassPatch'],
+   [62,43,'grassDry'],[65,44,'grassTrampled'],[65,46,'grassPatch'],
+   [66,45,'earth'],[68,42,'grassWild'],[66,40,'grassTrampled'],[68,38,'grassPebbles'],
+   [39,15,'grassPatch'],[41,13,'grassTrampled'],[39,10,'grassWild'],[40,8,'grassPatch'],
+   [5,4,'grassForest'],[9,3,'grassForest'],[56,5,'grassForest'],[65,11,'grassForest'],
+   [69,16,'grassForest'],[65,25,'grassForest'],[7,50,'grassForest'],[11,52,'grassForest'],
+   [26,50,'grassMeadow'],[30,53,'grassMeadow'],[39,50,'grassMeadow'],[43,54,'grassMeadow']
+  ])openPatch(x,z,t);
+  // Small groves rather than a tree wall around the map; gaps lead into
+  // quiet pockets. The broad southern clearing stays free of solid props.
+  const wild=(x,z,type)=>{
+   if(!insideGrade.has(groundKey(x,z))&&!floors.has(x+','+z+',0'))put(x,z,type);
+  };
+  for(const [x,z,t] of [
+   [2,2,'treeBirch'],[5,2,'treeOak'],[9,1,'treePine'],[11,4,'treeBirch'],
+   [5,5,'treeCedar'],[1,6,'treePine'],
+   [55,4,'treePine'],[58,2,'treeCedar'],[63,3,'treePine'],[64,7,'treeBirch'],
+   [67,8,'treeCedar'],[69,11,'treePine'],[65,14,'treeBirch'],[70,16,'treePine'],
+   [68,19,'treeCedar'],[62,22,'treeOak'],[65,24,'treeBirch'],[70,27,'treePine'],
+   [66,30,'treeCedar'],[62,32,'treeBirch'],[70,33,'treePine'],
+   [2,48,'treeOak'],[5,51,'treeBirch'],[8,48,'treePine'],[8,54,'treeCedar'],
+   [12,51,'treeBirch'],[15,54,'treePine'],
+   [3,4,'bushFern'],[10,5,'tallGrass'],[31,5,'flowerField'],[34,3,'tallGrass'],
+   [57,7,'bushFlower'],[67,13,'bushFern'],[68,24,'tallGrass'],[64,27,'bushFlower'],
+   [69,35,'tallGrass'],[63,39,'flowerField'],[69,48,'tallGrass'],
+   [23,50,'flowerField'],[29,51,'tallGrass'],[36,54,'flowerField'],
+   [43,52,'flowerField'],[48,50,'bushFlower'],[13,50,'bushFern']
+  ])wild(x,z,t);
   spawn={x:19,z:21};
  }else if(housing){
   stamp('cottage',3,4,0);stamp('rowhouse',15,6,0);stamp('gardener',27,4,1);

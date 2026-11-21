@@ -232,7 +232,7 @@ try{
     const visit=async mark=>await walk(desktop,await route(desktop,raw,(await snap(desktop)).position,
       (x,z)=>x===mark.x&&z===mark.z,null,occupiedAisle));
     // Exercise both sides of the cashier even when the seats are occupied.
-    for(const mark of [point(6,8),point(6,7),point(8,7)])await visit(mark);
+    for(const mark of [point(6,8),point(6,7),point(8,7),point(9,6),point(10,6)])await visit(mark);
     if(out&&id==='kitchen'){
      const canvas=desktop.locator('#view');
      for(let n=0;n<7;n++)await canvas.dispatchEvent('wheel',{deltaY:-1});
@@ -260,9 +260,11 @@ try{
    }
    if(id==='workshop'||(id==='base'&&index===2)){
     const point=(x,z)=>id==='base'?{x:b.x2-z,z:b.z1+x}:{x:b.x1+x,z:b.z1+z};
-    const counter=point(3,5),staff=point(2,5),customer=point(4,5);
+    const counter=point(4,7),staff=point(3,6),customer=point(4,8);
     for(const type of ['counterWood','poiLedgerPapers'])assert(raw.world.some(o=>o.y===0&&o.x===counter.x&&o.z===counter.z&&o.type===type),'work-order counter '+type);
     assert(raw.world.some(o=>o.y===0&&o.x===staff.x&&o.z===staff.z&&o.type==='stoolRound'),'work-order stool');
+    const apron=point(9,11);
+    assert(raw.world.some(o=>o.x===apron.x&&o.z===apron.z&&o.y===0&&o.type==='handcartLoaded'),'parked loaded cart outside');
     await walk(desktop,await route(desktop,raw,(await snap(desktop)).position,(x,z)=>x===customer.x&&z===customer.z,null,
      (x,z)=>x!==staff.x||z!==staff.z));
     if(out&&id==='workshop')await desktop.screenshot({path:out+'/workshop-counter.png'});
@@ -318,7 +320,27 @@ try{
    await walk(desktop,await route(desktop,raw,(await snap(desktop)).position,through,null,(x,z)=>!area.has(key(x,z))||through(x,z)));
    await walk(desktop,await route(desktop,raw,(await snap(desktop)).position,(x,z)=>inside(area,x,z),null,(x,z)=>area.has(key(x,z))));
    assert.equal((await snap(desktop)).hiddenRoof,before.buildings.indexOf(b));
+   if(out&&id==='stable')await desktop.screenshot({path:out+'/stable-open-loading-bay.png'});
+   if(out&&id==='homes')await desktop.screenshot({path:out+'/homes-interior-'+b.id+'.png'});
+   if(id==='toolshop'){
+    // Enter the bedroom from behind the shop, never through the WC or sales floor wall.
+    const shopZone=(x,z)=>area.has(key(x,z));
+    for(const [x,z] of [[6,4],[6,2],[4,2],[3,2],[4,2],[6,2],[6,4],[3,6]]){
+     await walk(desktop,await route(desktop,raw,(await snap(desktop)).position,
+      (a,b2)=>a===b.x1+x&&b2===b.z1+z,null,shopZone));
+     if(out&&x===3&&z===2)await desktop.screenshot({path:out+'/toolshop-private-room.png'});
+    }
+   }
    await walk(desktop,await route(desktop,raw,(await snap(desktop)).position,(x,z)=>!area.has(key(x,z))));
+  }
+  if(id==='base'){
+   // Take the same route a player can use without walls between town and trail.
+   const landscapeStops=[[34,53,'starter-meadow'],[67,38,'woodland-trail'],[19,42,'stable-lane']];
+   for(const [x,z,name] of landscapeStops){
+    await walk(desktop,await route(desktop,raw,(await snap(desktop)).position,(a,b)=>a===x&&b===z));
+    assert.equal((await snap(desktop)).hiddenRoof,null,name+' should be outdoors');
+    if(out)await desktop.screenshot({path:out+'/'+name+'.png'});
+   }
   }
   await expectStore(desktop);
   console.log('PASS: '+id+' new neighborhood geometry, entrances and save isolation');

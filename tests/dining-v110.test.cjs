@@ -41,7 +41,7 @@ test('seated chairs cannot block the full-tile dining loop, facilities or entry 
    assert.ok(at(col,z).length&&at(col,z).every(walkable),scope+' unobstructed lane '+[col,z]);
    assert.ok(hall.has(key(col,z)),scope+' can reach lane '+[col,z]+' without walking through chairs');
   }
-  const seated=[[5,6],[7,6],[6,5],[9,6],[11,6],[10,7]];
+  const seated=[[5,5],[5,7],[9,7],[11,7]];
   for(const p of seated)assert.ok(at(...p).some(o=>o.type==='chairWood')&&!hall.has(key(...p)));
   for(const z of [7,8])assert.ok(at(7,z).some(o=>o.type==='counterWood'&&o.rot%2===1));
   for(const p of [[6,7],[6,8],[8,7],[9,8],[2,7],[10,5],[10,1]])assert.ok(hall.has(key(...p)),scope+' reach '+p);
