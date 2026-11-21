@@ -49,8 +49,14 @@ test('outing leaves wash accessible on natural grade, with bounded static scener
  const walk=testWalker(site);
  for(const route of [expand([[70,38],[70,40],[69,40]]),expand([[70,38],[70,40],[71,40]])])
   for(let i=1;i<route.length;i++)assert(walk(...route[i],...route[i-1]));
- assert.deepEqual(site.spawn,{x:19,z:21});assert.equal(site.buildings.length,9);
- const east=site.map.world.filter(o=>o.x>=72);
+ assert.deepEqual(site.spawn,{x:19,z:21});assert.equal(site.buildings.length,10);
+ // The added guild and its apron are north of the outing, not part of its scenery budget.
+ const isGuild=o=>(o.x>=72&&o.x<=87&&o.z>=3&&o.z<=17)||
+  (o.y===0&&o.z===18&&o.x>=72&&o.x<=80&&o.type==='roadCutStoneFull')||
+  (o.y===0&&o.z>=19&&o.z<=24&&o.x>=78&&o.x<=80&&o.type==='roadCutStoneFull')||
+  (o.y===0&&o.type==='lantern'&&o.z===18&&(o.x===76||o.x===83))||
+  (o.y===0&&o.type==='benchWood'&&o.z===19&&(o.x===74||o.x===85));
+ const east=site.map.world.filter(o=>o.x>=72&&!isGuild(o));
  assert(east.length<=325,east.length);
  assert(east.every(o=>!/(?:mob|monster|villager|loot|reward|treasure|quest)/i.test(o.type)));
  assert(east.filter(o=>/^tree/.test(o.type)).length<=21);
@@ -63,7 +69,8 @@ test('older map records survive exactly, except the removed outdoor stair and bo
   '67,30:grassTrampled','67,31:grassTrampled','67,32:grassTrampled','71,31:grassForest',
   '71,25:grassWild','71,31:treeBirch','71,25:bushFern'
  ]);
- const legacy=site.map.world.filter(o=>o.x<72&&!additions.has(k(o.x,o.z)+':'+o.type)).map(o=>JSON.stringify(o)).sort();
+ const guildLane=o=>o.y===0&&o.x>=55&&o.x<=71&&(o.z===17||o.z===18)&&o.type==='roadCutStoneFull';
+ const legacy=site.map.world.filter(o=>o.x<72&&!guildLane(o)&&!additions.has(k(o.x,o.z)+':'+o.type)).map(o=>JSON.stringify(o)).sort();
  assert.equal(legacy.length,3317);
  const {createHash}=require('node:crypto');
  assert.equal(createHash('sha256').update(legacy.join('\n')).digest('hex'),'93610a3ad2e650e28db234429f34d0ec031947ea6a58ec8907adea3f3418fa2e');

@@ -64,7 +64,7 @@ test('Stable bay is scoped to the loading pair; removing either tile restores or
 });
 test('The outer facade trim draws no leftover posts or thresholds in the merged stable bay',()=>{
  const source=part('function facilityStableLoadingBayPart(','function facilityHasDiningStoneLeaf(')
-  +part('function houseFacadeDetails(','const BRIDGE_IDS=');
+  +part('function facilityLodgingFacade(','const BRIDGE_IDS=');
  const result=vm.runInNewContext(source+`
   const rot2=(x,z)=>[x,z],isFloor=()=>false,terrainY=()=>0;
   const mesh=()=>({p:[],n:[],c:[]});

@@ -11,7 +11,7 @@ test('a continuous narrow woodland creek leaves the base, trail, other routes an
  assert.ok(site.creek,'authored creek metadata missing');
  assert.deepEqual([site.map.width,site.map.height],[96,56]);
  const start=html.indexOf('  // Woodland creek:');
- const end=html.indexOf('  spawn={x:19,z:21};',start);
+ const end=html.indexOf('  // The built-in guild is a separate authored building',start);
  const baseline=html.slice(0,start)+html.slice(end);
  for(const id of ['lodging','kitchen','workshop','artisan','stable','homes','toolshop']) assert.deepEqual(run(html,id),run(baseline,id),id);
  const old=run(baseline,'base');

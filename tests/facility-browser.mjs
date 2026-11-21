@@ -151,7 +151,7 @@ try{
   assert(start.active);
   assert.deepEqual(start.position,{...start.spawn,level:0});
   assert.equal(start.hiddenRoof,null);
-  assert.equal(start.buildings.length,id==='base'?9:1);
+  assert.equal(start.buildings.length,id==='base'?10:1);
   assert(start.roofMeshes.every(count=>count>0));
   if(out)await desktop.screenshot({path:out+'/'+id+'.png'});
   if(id==='base'){
@@ -306,7 +306,7 @@ try{
   assert.equal(before?.active,false);
   const raw=await desktop.evaluate(()=>window.__editorTest.data());
   if(id==='base')assert.equal(await desktop.locator('#facilitySessionName').textContent(),'ゲーム世界');
-  assert.equal(before.buildings.length,id==='base'?9:id==='homes'?3:1);
+  assert.equal(before.buildings.length,id==='base'?10:id==='homes'?3:1);
   await desktop.locator('#poiWalkToggle').click();
   if(out)await desktop.screenshot({path:out+'/town-'+id+'.png'});
   for(const b of before.buildings.slice(id==='base'?3:0)){

@@ -7,11 +7,11 @@ const source=html.match(/const FACILITY_SITES[\s\S]*?(?=function facilityNavigat
 assert(source,'authored facility script not found');
 const {FACILITY_SITES,buildFacilitySite}=vm.runInNewContext(source+'\n;({FACILITY_SITES,buildFacilitySite})');
 const ids=['lodging','kitchen','workshop','artisan','stable','homes','toolshop','base'];
-const buildingIds=['lodging','kitchen','workshop','artisan','stable','cottage','rowhouse','gardener','toolshop'];
+const buildingIds=['lodging','kitchen','workshop','artisan','stable','cottage','rowhouse','gardener','toolshop','townGuild'];
 const key=(x,z,y)=>[x,z,y].join(',');
 const floorIds=/^(?:woodfloor(?:Dark|Light)?|stone|brickfloor|road(?:Cobble|CutStone|Gravel)Full|earth|plasterfloor|grass(?:Wild|Trampled|Flowers|Patch))$/;
 const door=t=>/Door$/.test(t);
-const walkable=t=>floorIds.test(t)||door(t)||['lantern','chairWood','chairClassic','stoolRound','benchWood','flowerField','bushFlower','guildStairUp','guildStairDown'].includes(t);
+const walkable=t=>floorIds.test(t)||door(t)||['lantern','chairWood','chairClassic','stoolRound','benchWood','guildFacadeSign','flowerField','bushFlower','guildStairUp','guildStairDown'].includes(t);
 const dirs=[[0,1],[-1,0],[0,-1],[1,0]];
 const sort=a=>a.map(o=>Array.isArray(o)?o.join(','):String(o)).sort().join(';');
 function explore({map,spawn}){
@@ -46,7 +46,7 @@ test('eight deterministic site IDs and exact and varied building footprints',()=
   assert.equal(JSON.stringify(site),JSON.stringify(buildFacilitySite(id)));
   if(id==='base'){
    assert.equal(site.map.width,96);assert.equal(site.map.height,56);
-   assert.ok(site.map.world.length<3670);
+   assert.ok(site.map.world.length<4950);
    assert.deepEqual(Array.from(site.buildings,b=>b.id),buildingIds);
   }else{
    assert.ok(site.map.width<=48&&site.map.height<=38&&site.map.world.length<2200);
@@ -70,12 +70,12 @@ test('eight deterministic site IDs and exact and varied building footprints',()=
  }
 });
 test('toilets can be walked to, stairs are paired, and indoor routes start from paved or service entries',()=>{
- const expected={lodging:['0','1'],kitchen:['-1','0']};
+ const expected={lodging:['0','1'],kitchen:['-1','0'],townGuild:['0','1','2']};
  const assets={lodging:['bed','chest','wardrobe'],kitchen:['kitchenStove','kitchenCounter','kitchenSink','roundTableWood'],
   workshop:['table','displayShelf','counterWood'],artisan:['bed','kitchenStove','counterWood','poiLedgerPapers'],
   stable:['fenceWood','sack','crate','displayShelf'],cottage:['bed','fireplace','wardrobe'],
   rowhouse:['bed','table','poiLedgerPapers'],gardener:['bed','poiPottedPlant','basketProduce'],
-  toolshop:['displayShelf','counterLuxury','poiLedgerPapers']};
+  toolshop:['displayShelf','counterLuxury','poiLedgerPapers'],townGuild:['guildFacadeSign','guildWallQuestBoard','bookshelf']};
  for(const id of ids){
   const site=buildFacilitySite(id),reachable=explore(site);
   for(const b of site.buildings){
@@ -109,7 +109,7 @@ test('toilets can be walked to, stairs are paired, and indoor routes start from 
 });
 test('base stamps are exact rotations and it has a well, signed inn and outdoor street lamps',()=>{
  const b=buildFacilitySite('base');
- assert.equal(b.buildings.length,9);
+ assert.equal(b.buildings.length,10);
  const bWorld=b.map.world;
  assert.ok(bWorld.some(o=>o.type==='wellStone'));
  assert.ok(bWorld.some(o=>o.type==='poiInnSign'&&o.y===0));
@@ -129,7 +129,9 @@ test('base stamps are exact rotations and it has a well, signed inn and outdoor 
 test('interior route lighting is wall-mounted and street lamps stay outside',()=>{
  for(const id of ids){
   const {map,buildings}=buildFacilitySite(id);
-  assert.ok(!map.world.some(o=>o.type==='lantern'));
+  const guild=buildings.find(b=>b.id==='townGuild');
+  assert.ok(map.world.filter(o=>o.type==='lantern').every(o=>
+   guild&&o.x>=guild.x1&&o.x<=guild.x2&&o.z>=guild.z1&&o.z<=guild.z2+1));
   const sconces=map.world.filter(o=>o.type==='poiWallSconce');
   assert.ok(sconces.length>=(id==='base'?25:id==='homes'?6:3),id);
   for(const s of sconces){

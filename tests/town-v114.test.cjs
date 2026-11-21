@@ -241,7 +241,7 @@ function v113Digests(build){
  const out={};
  for(const id of ['lodging','kitchen','workshop','artisan','stable','homes','toolshop','base']){
   const site=build(id),bounds=new Map(Array.from(site.buildings,b=>[b.id,b]));
-  const footprint=Array.from(site.buildings,({id,x1,x2,z1,z2,footprint,floorFootprints})=>({
+  const footprint=Array.from(site.buildings.filter(b=>b.id!=='townGuild'),({id,x1,x2,z1,z2,footprint,floorFootprints})=>({
    id,x1,x2,z1,z2,footprint:Array.from(footprint,coords).sort(),
    floorFootprints:Object.fromEntries(Object.entries(floorFootprints).map(([k,v])=>[k,Array.from(v,coords).sort()]))
   }));
@@ -301,7 +301,7 @@ function assertDoor(site,bld,available,reachable,label){
  return {mask,room,door};
 }
 
-const shape={artisan:[16,16,1],stable:[22,21,1],homes:[38,20,3],toolshop:[17,17,1],base:[96,56,9]};
+const shape={artisan:[16,16,1],stable:[22,21,1],homes:[38,20,3],toolshop:[17,17,1],base:[96,56,10]};
 test('all authored standalone and combined entrances connect to spawn and to a navigable interior',()=>{
  for(const [id,[width,height,siteCount]] of Object.entries(shape)){
   const site=build(id);

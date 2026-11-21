@@ -58,7 +58,7 @@ function unchangedLayoutDigest(scope){
   gardener:new Set(['4,6:oldTownFlowerBox'])
  };
  const data=[];
- for(const b of site.buildings){
+ for(const b of site.buildings.filter(b=>b.id!=='townGuild')){
   const {at,d,w}=entry(scope,id(b));
   const owned=new Set(Array.from(b.footprint,p=>p.x+','+p.z));
   const items=[];

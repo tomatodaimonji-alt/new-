@@ -29,7 +29,7 @@ test('Facility-only roof treatment uses coherent muted colors without changing g
   roofColors.push(on[0][1]);
  }
  for(let k=0;k<3;k++)assert(Math.max(...roofColors.map(c=>c[k]))-Math.min(...roofColors.map(c=>c[k]))<.15);
- assert.match(between('function facilityBuildRoofs(','function facilityVisibleRoofs('),/residentialRoofGeometry\(m,group,residential,!facilityUsesGuildRendering\(\)\)/);
+ assert.match(between('function facilityBuildRoofs(','function facilityVisibleRoofs('),/residentialRoofGeometry\(m,group,residential,!guildRoof\)/);
  assert.match(between('function makeScene(','function upload('),/if\(!pineGuildFantasyRoof\(m,group\)\)residentialRoofGeometry\(m,group,allRoofLookup,!!facilitySite&&!facilityUsesGuildRendering\(\)\)/);
 });
 test('The offline wooden cue uses filtered transients, not pitched sine sweeps; other effects unchanged in routing',()=>{
@@ -53,7 +53,7 @@ test('One door cue per actual threshold, matched to current floor including base
  const run=(type,doorY,playerY)=>{
   const result=[];
   const ctx=vm.createContext({
-   poiWalkActive:true,poiWalkX:0,poiWalkZ:0,poiWalkLevel:playerY,
+   poiShopIsOpen:()=>false,poiWalkActive:true,poiWalkX:0,poiWalkZ:0,poiWalkLevel:playerY,
    poiWalkFacing:0,poiWalkNextReady:0,poiWalkStarted:0,poiWalkFromX:0,poiWalkFromZ:0,POI_WALK_MS:175,
    facilitySite:{},pineGameActive:false,performance:{now:(()=>{let t=1000;return()=>t+=200})()},
    world:[{x:1,z:0,y:doorY,type}],poiWalkCanStep:()=>true,
