@@ -17,3 +17,7 @@ test('resting panels share the exact original D-pad surface without replacing se
  assert.match(css,/background-color:var\(--workshop-panel-surface\)!important/);
  assert.match(html,/#poiHotbar button\[aria-pressed="true"\][^{]*\{[^}]*background:/);
 });
+test('hotbar increases touch size while capping six slots within the split desktop editor',()=>{
+ assert.match(html,/--poi-hotbar-size:clamp\(34px,12\.6vw,46px\)/);
+ assert.match(html,/#app:not\(\.gameWorldMode\) #viewWrap\{--poi-hotbar-size:clamp\(42px,calc\(\(100vw - 550px\) \/ 6\),46px\)\}/);
+});

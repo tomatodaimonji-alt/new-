@@ -46,7 +46,7 @@ const bar='#poiHotbar',key='world-workshop-hotbar-v1',ai='#pineAIPlanCapture';
 const controls=[pad,'[data-poi-dir=n]','[data-poi-dir=s]','[data-poi-dir=e]','[data-poi-dir=w]','#poiWalkAction'];
 const settle=page=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
 const confirmText=async (page,css,want)=>assert.equal((await page.locator(css).textContent()).trim(),want,css);
-const snapshot=async (page,name)=>{if(out){await settle(page);await page.screenshot({path:out+'/v124-'+name+'.png'});}};
+const snapshot=async (page,name)=>{if(out){await settle(page);await page.screenshot({path:out+'/v127-'+name+'.png'});}};
 async function initialize(browser,width,height,prefix='/',opts={}){
  const mobile=width<800,ctx=await browser.newContext({viewport:{width,height},deviceScaleFactor:1,isMobile:mobile,hasTouch:mobile});
  const page=await ctx.newPage(),errors=[];
@@ -103,7 +103,7 @@ async function geometry(page,width,height,drawer=false){
  assert.equal(await slots.count(),6);
  const dims=await Promise.all(Array.from({length:6},(_,i)=>slot(page,i).boundingBox()));
  assert.ok(dims.every(a=>a&&contained(a,b)&&Math.abs(a.width-dims[0].width)<=1&&Math.abs(a.height-dims[0].height)<=1&&Math.abs(a.y-dims[0].y)<=1),'one row of equal square-ish slots');
- assert.ok(dims[0].width>=29,'small viewport still has usable touch targets');
+ assert.ok(dims[0].width>=40,'small viewport has an enlarged touch target');
  const partyCols=await page.locator(party).evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').map(parseFloat));
  assert.ok(partyCols.length===4&&partyCols.every(v=>Math.abs(v-partyCols[0])<1),'four-ready party row unchanged');
  assert.equal(await page.locator(party+' [data-party-slot]:visible').count(),1);
@@ -155,6 +155,8 @@ async function screen(browser,width,height,interactive=false){
    const old=await initialize(browser,width,height,'/baseline');
    try{
     await play(old.page,mobile);
+    const beforeSlot=await slot(old.page,0).boundingBox(),afterSlot=await slot(page,0).boundingBox();
+    assert.ok(afterSlot.width>=beforeSlot.width+3.5,'shortcuts actually enlarged on width '+width);
     for(const css of controls)for(const [k,v] of Object.entries(await box(old.page,css)))
      assert.ok(Math.abs(v-actual[css][k])<=1,'D-pad bounding box changed '+width+' '+css+' '+k);
    }finally{await old.ctx.close();}
