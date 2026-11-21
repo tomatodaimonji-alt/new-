@@ -91,7 +91,8 @@ async function buttons(page){
 const slot=(page,i)=>page.locator(bar+' button[data-hotbar-slot="'+i+'"]');
 const store=page=>page.evaluate(k=>JSON.parse(localStorage.getItem(k)),key);
 function observe(){
- const contexts=[],starts=[],nodes=new WeakMap();
+ const contexts=[],starts=[],nodes=new WeakMap(),bufferIds=new WeakMap();
+ let serial=0;
  const native=window.AudioContext;
  function param(p){
   const ops=[];
@@ -100,6 +101,20 @@ function observe(){
    p[method]=function(...args){ops.push([method,...args]);return original(...args);};
   }
   return ops;
+ }
+ function inspectPcm(buffer){
+  if(!buffer)return null;
+  if(!bufferIds.has(buffer))bufferIds.set(buffer,++serial);
+  const signal=buffer.getChannelData(0),rate=buffer.sampleRate;
+  const rms=(from,to)=>{
+   let n=0,sum=0;
+   for(let i=Math.floor(from*rate);i<Math.min(signal.length,Math.ceil(to*rate));i++){sum+=signal[i]*signal[i];n++;}
+   return Math.sqrt(sum/Math.max(1,n));
+  };
+  let peak=0,allFinite=true;
+  for(const sample of signal){peak=Math.max(peak,Math.abs(sample));allFinite&&=Number.isFinite(sample);}
+  return {id:bufferIds.get(buffer),channels:buffer.numberOfChannels,duration:buffer.duration,peak,allFinite,
+   head:rms(.004,.025),body:rms(.03,.065),sustain:rms(.10,.24),tail:rms(buffer.duration*.78,buffer.duration),last:signal.at(-1)};
  }
  function wrap(node,kind){
   const info={kind,next:null,gain:node.gain&&param(node.gain),frequency:node.frequency&&param(node.frequency)};
@@ -113,7 +128,9 @@ function observe(){
      kind:i.kind,type:n.type??null,hz:n.frequency?.value??null,q:n.Q?.value??null,volume:n.gain?.value??null,
      gain:i.gain?.slice(),frequency:i.frequency?.slice(),next:shape(i.next,depth-1)
     }:null;};
-    starts.push({kind,loop:node.loop??false,when:args[0]??null,shape:shape(node,6)});
+    const graph=shape(node,6);
+    const pcm=kind==='source'&&!node.loop&&graph.next?.kind==='gain'?inspectPcm(node.buffer):null;
+    starts.push({kind,loop:node.loop??false,when:args[0]??null,shape:graph,pcm});
     return start(...args);
    };
   }
@@ -138,8 +155,13 @@ const onset=n=>n.gain.find(v=>v[0]==='linearRampToValueAtTime')?.[2]-n.gain.find
 function sfx(records){
  return records.flatMap(r=>{
   const {shape}=r;
+  if(r.pcm){
+   const g=shape.next;exact(lastTarget(g.next),.90*.88,'PCM uses existing SE bus');
+   const pcmKind=r.pcm.duration<.2?'wood-pcm':'wet-pcm';
+   return [{hz:pcmKind,peak:g.volume,pcm:r.pcm,when:r.when}];
+  }
   if(r.kind==='source'&&!r.loop&&shape.next?.kind==='filter'){
-   const g=shape.next.next;exact(lastTarget(g.next),.90*.88,'SE bus');return [{hz:shape.next.hz,peak:peak(g),onset:onset(g),decay:decay(g),when:r.when}];
+   const g=shape.next.next;exact(lastTarget(g.next),.90*.88,'SE bus');return [{hz:shape.next.frequency?.[0]?.[1]??shape.next.hz,low:shape.next.frequency?.[1]?.[1],peak:peak(g),onset:onset(g),decay:decay(g),when:r.when}];
   }
   if(r.kind==='osc'&&shape.frequency.length===2){
    const g=shape.next;exact(lastTarget(g.next),.90*.88,'SE bus');return [{hz:shape.frequency[0][1],low:shape.frequency[1][1],peak:peak(g),onset:onset(g),decay:decay(g),when:r.when}];
@@ -150,7 +172,7 @@ function sfx(records){
 
 const swordIcon='#poiHotbar [data-hotbar-slot="1"] canvas[data-item-model="equipWoodSword"]';
 const attack='#poiWalkAction';
-const woodSwing=[940,1630,126],woodHit=[960,1480,185],handSwing=[790,1120,145],handHit=[1500,230],wetDeath=[930,116,1460,84,580];
+const woodSwing=[940,1630,126],woodHit=['wood-pcm'],handSwing=[790,1120,145],handHit=[1500,230],wetDeath=['wet-pcm'];
 async function activate(page){
  await press(page,'#enterGameWorld',true);
  await page.waitForFunction(()=>window.__editorTest.facility().active&&window.__comfort.contexts.some(c=>c.state==='running'));
@@ -216,12 +238,21 @@ async function soundCapture(page,weapon,expectHit,prev=false,expectDeath=false){
   // WebAudio quanta on a busy runner. The unit test pins the exact delay.
   const delay=segment[3].when-segment[0].when;
   assert.ok(delay>=.050&&delay<=.115,'wood contact follows its windup, got '+delay);
-  assert.ok(segment[3].decay>0&&segment[3].decay<=.055,'wood contact begins with a short dry tap, not a damp trail');
+  const {pcm}=segment[3];
+  assert.equal(pcm.channels,1);
+  assert.ok(pcm.allFinite&&Math.abs(pcm.peak-.88)<.002,'wood PCM is present, finite, and normalized without clipping');
+  assert.ok(Math.abs(pcm.duration-.132)<.0001,'one short dry impact buffer, not a long wet tail');
+  exact(segment[3].peak,.75,'wood impact gain');
+  assert.ok(pcm.head>.02&&pcm.tail<pcm.head*.25&&Math.abs(pcm.last)<1e-5,'wood pulse has sharp early energy and a clean tail');
  }
  if(expectDeath){
-  const wet=segment.slice(-wetDeath.length);
-  assert.ok(wet[0].when>=segment[expected.length].when-.008,'wet secondary tail cannot precede impact');
-  assert.ok(wet.every(v=>v.peak>0&&v.peak<=.5),'wet layers go through the established, bounded SE mix');
+  const wet=segment.at(-1);
+  assert.ok(Math.abs(wet.when-segment[expected.length].when-.018)<.010,'distinct wet texture follows the impact, not a weapon swing');
+  exact(wet.peak,.52,'wet texture gain through established SE levels');
+  assert.ok(wet.pcm.channels===1&&wet.pcm.allFinite&&Math.abs(wet.pcm.duration-.405)<.001&&
+    wet.pcm.peak>.35&&wet.pcm.peak<=1&&wet.pcm.sustain>.035&&Math.abs(wet.pcm.last)<1e-5,
+    'single strong wet texture with longer audible sustain, clean ending and no clipping');
+  if(weapon)assert.notEqual(wet.pcm.id,segment[3].pcm.id,'wet defeat buffer differs from cached dry wood material');
  }
  return segment.map(({when,...rest})=>({...rest,delay:Math.round((when-segment[0].when)*1e5)/1e5}));
 }
@@ -238,7 +269,14 @@ async function soundCase(browser,prefix,expectHit,prev=false){
   }else await activate(page);
   const bare=await soundCapture(page,false,expectHit,prev);
   await page.waitForTimeout(400);
-  if(!prev)await soundCapture(page,true,expectHit);
+  if(!prev){
+   const first=await soundCapture(page,true,expectHit);
+   if(expectHit){
+    await page.waitForTimeout(400);
+    const second=await soundCapture(page,true,true);
+    assert.equal(first[3].pcm.id,second[3].pcm.id,'repeat wood strikes reuse the very same native AudioBuffer');
+   }
+  }
   await unchanged(page);assert.deepEqual(errors,[]);
   return bare;
  }finally{await ctx.close();}

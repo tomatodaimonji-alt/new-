@@ -730,7 +730,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
 #app #viewWrap :is(#canvasTip,#cursorStatus,#toast,#pineAIControls,#pineAIDetail),
 body .modalBody{background-color:var(--workshop-panel-surface)!important}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v130）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v131）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -5152,12 +5152,44 @@ function poiAudioThud(when,startFrequency,endFrequency,duration,volume,attack=.0
  o.connect(g).connect(poiAudioEffects);o.start(when);poiAudioTransient.add(o);o.stop(when+duration+.015);
  o.onended=()=>{poiAudioTransient.delete(o);o.disconnect();g.disconnect()};
 }
+// Two short original impact samples are synthesized once, offline from
+// this render loop, and reused without decoding files or consuming game RNG.
+function poiPlayImpactBuffer(buffer,when,volume){
+ const ctx=poiAudioContext,source=ctx.createBufferSource(),gain=ctx.createGain();
+ source.buffer=buffer;gain.gain.value=volume;
+ source.connect(gain).connect(poiAudioEffects);
+ poiAudioTransient.add(source);source.start(when);source.stop(when+buffer.duration+.012);
+ source.onended=()=>{poiAudioTransient.delete(source);source.disconnect();gain.disconnect()};
+}
+let poiWoodImpactBuffer=null;
+function poiWoodImpact(){
+ if(poiWoodImpactBuffer)return poiWoodImpactBuffer;
+ const rate=24000,buffer=poiAudioContext.createBuffer(1,3168,rate),mono=buffer.getChannelData(0);
+ const modes=[[392,1,.023],[723,.42,.015],[1151,.33,.009],[1743,.15,.005]];
+ const tau=2*Math.PI;
+ let rng=0x414cf2d9,grain=0,grainLow=0,peak=0;
+ for(let i=0;i<mono.length;i++){
+  const t=i/rate;
+  rng=(Math.imul(rng,1664525)+1013904223)>>>0;
+  const noise=rng/2147483648-1;
+  grain+=(noise-grain)*.46;grainLow+=(grain-grainLow)*.11;
+  let sample=(grain-grainLow)*1.25*Math.exp(-t/.0047);
+  for(const [hz,strength,decay] of modes)sample+=strength*Math.exp(-t/decay)*Math.sin(tau*hz*t);
+  const reflection=t-.0108;
+  if(reflection>0)sample+=.27*Math.sin(tau*465*reflection)*Math.exp(-reflection/.013)*Math.min(1,reflection/.0007);
+  sample*=Math.min(1,t/.00072,(mono.length-1-i)/(rate*.014));
+  mono[i]=sample;peak=Math.max(peak,Math.abs(sample));
+ }
+ const scale=.88/(peak||1);
+ for(let i=0;i<mono.length;i++)mono[i]*=scale;
+ return poiWoodImpactBuffer=buffer;
+}
 // Weapon IDs are shared with the existing equipment catalog. These are
 // synthesized through the same effects bus; no sound files or frame polling.
 const POI_WEAPON_SE={
  equipStick:      {swing:[790,1220,108],impact:[445,730,150],weight:.82,cut:.92},
  equipClub:       {swing:[610,980,104],impact:[350,620,133],weight:1.20,cut:.78},
- equipWoodSword:  {swing:[940,1630,126],impact:[960,1480,185],material:'woodSword',weight:1,cut:1},
+ equipWoodSword:  {swing:[940,1630,126],material:'woodSword',weight:1,cut:1},
  equipStoneSword: {swing:[815,1270,112],impact:[660,1260,162],weight:1.10,cut:.86},
  equipIronSword:  {swing:[1100,1940,142],impact:[1060,1820,215],weight:.94,cut:1.08}
 };
@@ -5171,27 +5203,61 @@ function poiWeaponSound(kind,sound,now){
  }else{
   // Strike contact aligns with the blade crossing at 108 ms. The action
   // still checks the same target at button press, with no deferred game state.
-  const contact=now+POI_WEAPON_CONTACT_DELAY,[knock,edge,body]=sound.impact;
-  if(sound.material==='woodSword'){
-   // A sharp but rounded tap, a quieter grain click and short hollow wood resonance.
-   poiAudioNoiseBurst(contact,.041,knock,2.0,.44,.003);
-   poiAudioNoiseBurst(contact+.003,.029,edge,1.7,.18,.004);
-   poiAudioThud(contact,body,148,.078,.27,.004);
-   return;
-  }
+  const contact=now+POI_WEAPON_CONTACT_DELAY;
+  if(sound.material==='woodSword'){poiPlayImpactBuffer(poiWoodImpact(),contact,.75);return}
+  const [knock,edge,body]=sound.impact;
   poiAudioNoiseBurst(contact,.104,knock,1.14,.31*sound.weight,.008);
   poiAudioNoiseBurst(contact+.004,.079,edge,1.06,.21,.009);
   poiAudioThud(contact,body,73,.126,.24*sound.weight,.012);
  }
 }
+let poiDefeatWetBuffer=null;
 function poiDefeatSound(when){
- // The crush opens with a low plop, then smaller, staggered splashes fall in
- // pitch and trail off. Nothing is sampled; the bus limits summed transients.
- poiAudioNoiseBurst(when,.188,930,1.15,.37,.011,470);
- poiAudioThud(when+.004,116,45,.155,.28,.010);
- poiAudioNoiseBurst(when+.026,.136,1460,1.36,.23,.019,720);
- poiAudioThud(when+.072,84,43,.19,.14,.018);
- poiAudioNoiseBurst(when+.086,.226,580,1.08,.21,.030,270);
+ const ctx=poiAudioContext;
+ if(!poiDefeatWetBuffer){
+  const rate=ctx.sampleRate,buffer=ctx.createBuffer(1,Math.round(.405*rate),rate);
+  const out=buffer.getChannelData(0),dropNoise=new Float32Array(out.length),tau=Math.PI*2;
+  let seed=0x3f25a18b,soft=0,body=0,fast=0;
+  const onePole=hz=>1-Math.exp(-tau*hz/rate);
+  const low=onePole(125),mid=onePole(970),high=onePole(3100);
+  // Several independent falling bubbles/drops, not a repeated pitched ping.
+  // Tuple: onset, length, start/end pitch, ring weight, spray weight.
+  const drops=[
+   [.010,.070,230,74,.25,.19],[.035,.061,710,223,.22,.30],
+   [.057,.042,1110,471,.14,.31],[.084,.076,412,131,.21,.21],
+   [.112,.059,840,293,.15,.25],[.153,.041,1260,511,.13,.23],
+   [.185,.037,728,272,.10,.17],[.234,.045,960,399,.15,.16],
+   [.276,.026,1510,645,.075,.11],[.329,.035,1060,385,.060,.10]
+  ];
+  for(let i=0;i<out.length;i++){
+   seed^=seed<<13;seed^=seed>>>17;seed^=seed<<5;
+   const white=(seed>>>0)/2147483648-1;
+   soft+=(white-soft)*low;body+=(white-body)*mid;fast+=(white-fast)*high;
+   const t=i/rate,spray=fast-body,mud=body-soft;
+   // A wet, quick pressure release blooms into fraying mids, then leaves
+   // air between the individual droplets. Roll off the hiss, not the plop.
+   const pressure=t<.185?Math.min(1,t/.007)*Math.pow(1-t/.185,2.1):0;
+   const flutter=.70+.18*Math.sin(tau*(31*t-58*t*t))+.12*Math.sin(tau*71*t);
+   const crown=t>.016&&t<.148?Math.sin(Math.PI*(t-.016)/.132)**1.2:0;
+   out[i]=pressure*(mud*2.7+soft*1.22)*flutter+crown*spray*.88;
+   dropNoise[i]=mud*.65+spray;
+  }
+  for(const [at,len,start,end,ring,noise] of drops){
+   for(let i=Math.ceil(at*rate),stop=Math.ceil((at+len)*rate);i<stop;i++){
+    const t=Math.max(0,i/rate-at),f=Math.min(1,t/len),env=Math.min(1,t/.0035)*(1-f)**2.45;
+    const phase=tau*(start*t+(end-start)*t*f*.5);
+    const bubble=Math.sin(phase)+.22*Math.sin(phase*2.13+.8*Math.sin(phase*.32));
+    out[i]+=env*(bubble*ring+dropNoise[i]*noise);
+   }
+  }
+  let peak=0;
+  for(const v of out)peak=Math.max(peak,Math.abs(v));
+  // Set headroom before sending through the established SE gain/limiter.
+  const trim=peak>.86?.86/peak:1;
+  if(trim<1)for(let i=0;i<out.length;i++)out[i]*=trim;
+  poiDefeatWetBuffer=buffer;
+ }
+ poiPlayImpactBuffer(poiDefeatWetBuffer,when,.52);
 }
 function poiSound(kind,weapon=null,defeated=false){
  if(!poiWalkActive||!poiAudioEnabled||!poiAudioAllowed())return;
@@ -5477,7 +5543,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v130',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v131',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -5592,7 +5658,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v130';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v131';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -5804,7 +5870,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v130',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v131',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);

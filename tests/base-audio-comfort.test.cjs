@@ -12,9 +12,9 @@ function harness(id) {
  const mock=(kind)=>{const n={kind,gain:param(),Q:param(),frequency:param(),playbackRate:param(),
   connect(next){this.next=next;return next},start(t){this.startTime=t},stop(){this.stopped=true},
   disconnect(){this.disconnected=true}};nodes.push(n);return n};
- const context={currentTime:now,state:'running',sampleRate:48,createGain:()=>mock('gain'),
+ const context={currentTime:now,state:'running',sampleRate:24000,createGain:()=>mock('gain'),
   createOscillator:()=>mock('osc'),createBufferSource:()=>mock('noise'),createBiquadFilter:()=>mock('filter'),
-  createBuffer:()=>({getChannelData:()=>new Float32Array(96)}),
+  createBuffer:(_,count,sampleRate)=>{const mono=new Float32Array(count);return {duration:count/sampleRate,getChannelData:()=>mono}},
   suspend(){this.state='suspended';return Promise.resolve()}};
  const math=Object.create(Math);math.random=()=>.5;
  const writes=[],notes=[],timers=[];
@@ -35,6 +35,12 @@ function harness(id) {
  const fx=(kind,weapon,timing=false,defeated=false)=>{
   const start=nodes.length;run('poiSound('+JSON.stringify(kind)+','+JSON.stringify(weapon)+','+defeated+')');
   return nodes.slice(start).filter(n=>n.kind==='noise'||n.kind==='osc').map(n=>{
+   if(n.kind==='noise'&&n.next?.kind==='gain'){
+    assert.equal(n.next.next.kind,'effects');
+    const row=['buffer',Math.round(n.buffer.duration*1000),n.next.gain.value,0];
+    if(timing)row.push(+((n.startTime-now)*1000).toFixed(3));
+    return row;
+   }
    const f=n.next?.kind==='filter'?n.next:null,type=f?'filter':'osc';
    const g=(f||n).next.gain,peak=g.events.find(e=>e[0]==='peak');
    assert.equal((f||n).next.next.kind,'effects');
@@ -77,10 +83,10 @@ test('wooden sword has a distinct soft cut and woody contact scheduled at the bl
  const b=harness('base');
  const swing=b.fx('attack','equipWoodSword',true),hit=b.fx('hit','equipWoodSword',true);
  assert.deepEqual(swing.map(r=>r[1]),[940,1630,126]);
- assert.deepEqual(hit.map(r=>r[1]),[960,1480,185]);
+ assert.deepEqual(hit,[['buffer',132,.75,0,108]]);
  assert.equal(Math.min(...hit.map(r=>r[4])),108);
  assert.ok(swing[0][4]+swing[0][3]>70&&swing[0][4]+swing[0][3]<116,'air peaks during the swing');
- assert.ok([...swing,...hit].every(r=>r[2]<.48));
+ assert.ok(swing.every(r=>r[2]<.48));
  assert.deepEqual(b.fx('hit','unrecognizedWeapon'),b.fx('hit'));
 });
 test('existing weapon materials have different offscreen cue profiles and respect lifecycle and mute',()=>{
@@ -95,16 +101,28 @@ test('existing weapon materials have different offscreen cue profiles and respec
 });
 
 test('defeat adds one descending wet burst over genuine contact, never over an empty swing',()=>{
- const b=harness('base'),wet=[930,116,1460,84,580];
+ const b=harness('base');
  const wood=b.fx('hit','equipWoodSword',true);
  const lethal=b.fx('hit','equipWoodSword',true,true);
- assert.deepEqual(lethal.slice(0,3),wood,'preserve the wood layer on a killing blow');
- assert.deepEqual(lethal.slice(3).map(r=>r[1]),wet);
- assert.equal(lethal[3][4],126);
- assert.deepEqual(b.fx('hit',null,true,true).slice(2).map(r=>r[1]),wet);
+ assert.deepEqual(lethal.slice(0,1),wood,'preserve the wood layer on a killing blow');
+ assert.deepEqual(lethal.slice(1),[['buffer',405,.52,0,126]]);
+ assert.deepEqual(b.fx('hit',null,true,true).slice(2),[['buffer',405,.52,0,18]]);
  assert.deepEqual(b.fx('attack','equipWoodSword',true,true),b.fx('attack','equipWoodSword',true));
  b.run('poiAudioLevels.master=0');assert.deepEqual(b.fx('hit','equipWoodSword',true,true),[]);
  b.run('poiAudioLevels.master=85;document.hidden=true');
  assert.deepEqual(b.fx('hit',null,true,true),[]);
  b.run('poiAudioStop(true)');assert.equal(b.run('poiAudioTransient.size'),0);
+});
+
+test('wood sound uses one cached dry impulse with a short tail',()=>{
+ const b=harness('base');b.fx('hit','equipWoodSword');b.fx('hit','equipWoodSword');
+ const hits=b.nodes.filter(n=>n.kind==='noise'&&n.buffer?.duration===.132);
+ assert.equal(hits.length,2);
+ assert.equal(hits[0].buffer,hits[1].buffer);
+ const wave=hits[0].buffer.getChannelData(0);
+ const rms=a=>Math.sqrt(a.reduce((sum,v)=>sum+v*v,0)/a.length);
+ assert.ok(Math.max(...wave.map(Math.abs))>.85&&Math.max(...wave.map(Math.abs))<.90);
+ assert.ok(rms(wave.slice(120,720))>6*rms(wave.slice(-720)));
+ assert.equal(wave[0],0);
+ assert.ok(Math.abs(wave[wave.length-1])<.001);
 });
