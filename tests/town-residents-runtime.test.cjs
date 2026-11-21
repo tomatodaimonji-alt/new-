@@ -34,6 +34,7 @@ test('host service books a real bed once, reserves it against others and heals o
  x.poiTownResidentsFrame(0);
  assert.equal(x.poiTownPlayerService(),'book');
  assert.equal(x.poiTownRequestPlayerLodging().ok,true);
+ assert.equal(x.poiTownResidentsSnapshot().actors[0].motion.kind,'check-in-host');
  assert.equal(x.poiTownRequestPlayerLodging().reason,'booked');
  assert.equal(x.poiTownResidentsSnapshot().innBeds[0].occupant,'player');
  assert.equal(x.poiTownRestPlayer().ok,false);assert.equal(x.poiPlayerHP,46);
@@ -106,6 +107,8 @@ test('NPC shop needs a real working keeper and counter, buys one with NPC gold a
  x.world.push({...point(5,4),type:'poiLedgerPapers'});
  assert.equal(x.poiTownNpcShop(a,900,{plans:2}),true);
  assert.equal(a.activity,'buy-toolshop');assert.equal(a.coins,0);assert.equal(a.potions,1);
+ assert.equal(x.poiTownNpcMotion(a,1000,true).kind,'trade-buy');
+ assert.equal(x.poiTownResidentsSnapshot().actors.find(a=>a.id==='toolkeeper').activity,'work');
  assert.equal(x.poiTownNpcShop(a,1100,{plans:2}),true);assert.equal(a.potions,1);
  a.hp=34;assert(x.poiTownNpcEmergencyHeal(a));assert.equal(a.hp,64);assert.equal(a.potions,0);
  assert.equal(x.poiPlayerHP,46);

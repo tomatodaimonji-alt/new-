@@ -747,7 +747,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 #poiShopBuyPotion:not(:disabled){border-color:#ebca82;background:#81663ce8!important}
 #poiShopFeedback{min-height:1.4em}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v144）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v145）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -1261,6 +1261,7 @@ function characterHuman(m,x,y,z,villager,armPose=null){
   const start=m.p.length;
   cube(m,x+side*.272,y+.53,z,.135,.46,.17,villager?linen:skin);
   cube(m,x+side*.272,y+.49,z+.028,.145,.12,.17,skin);
+  if(m.townParts)m.townParts[side>0?'right':'left']=[start,m.p.length];
   const angle=armPose?.[side===1?'strike':'guard']||0;
   const sweep=side===1?(armPose?.sweep||0):0;
   if(angle||sweep){
@@ -2927,7 +2928,9 @@ case 'equipIronSword':{
  break;}
 case 'humanBare':case 'humanVillager':{
  // Keep the top of the head just under the 1.38-high doorway.
- const human=mesh();characterHuman(human,0,0,0,id==='humanVillager');
+ const human=mesh();if(m.townParts)human.townParts={};
+ characterHuman(human,0,0,0,id==='humanVillager');
+ if(m.townParts)for(const k of ['right','left'])m.townParts[k]=human.townParts[k].map(i=>i+m.p.length);
  for(let i=0;i<human.p.length;i+=3){
   m.p.push(x+human.p[i],y+human.p[i+1]*.90,z+human.p[i+2]);
   m.n.push(human.n[i],human.n[i+1],human.n[i+2]);
@@ -2937,7 +2940,13 @@ case 'humanBare':case 'humanVillager':{
 case 'humanMerchant':{
  // Brown tunic, pale apron, shoulder pack and money pouch: recognizable from above.
  const cloth=[.47,.30,.19],apron=[.73,.60,.39],skin=[.78,.58,.41],hair=[.29,.19,.12],bag=[.42,.27,.16];
- for(const s of [-1,1]){cube(m,x+s*.13,y,z,.13,.41,.18,[.30,.25,.20]);cube(m,x+s*.30,y+.53,z,.13,.40,.16,cloth);cube(m,x+s*.30,y+.20,z+.055,.13,.12,.14,skin)}
+ for(const s of [-1,1]){
+  cube(m,x+s*.13,y,z,.13,.41,.18,[.30,.25,.20]);
+  const start=m.p.length;
+  cube(m,x+s*.30,y+(m.townParts?.43:.53),z,.13,m.townParts?.50:.40,.16,cloth);
+  cube(m,x+s*.30,y+(m.townParts?.36:.20),z+(m.townParts?.036:.055),.13,.12,.14,skin);
+  if(m.townParts)m.townParts[s>0?'right':'left']=[start,m.p.length];
+ }
  cube(m,x,y+.43,z,.45,.57,.32,cloth);
  cube(m,x,y+.46,z+.174,.29,.40,.026,apron);
  cube(m,x,y+.96,z,.15,.13,.15,skin);
@@ -6544,6 +6553,7 @@ function poiTownRequestPlayerLodging(){
  // Validate a live staircase/door route before taking a reservation.
  if(!poiTownFindPath(POI_TOWN_INN.desk,bed.stand))return {ok:false,reason:'unreachable'};
  poiTownNpcBook={bedId:bed.id,rested:false,until:Math.floor(poiTownClockSnapshot().absoluteMinute/1440+1)*1440+POI_TOWN_WAKE};
+ poiTownNpcGesture(poiTownNpcActors.find(a=>a.role.id===POI_TOWN_INN.hostId),'check-in-host',poiTownMotionClock);
  return {ok:true,bed};
 }
 function poiTownRestPlayer(){
@@ -6696,6 +6706,7 @@ function poiTownNpcShop(a,now,budget){
  if(!records.some(o=>o.type==='counterLuxury'&&o.rot===1)||!records.some(o=>o.type==='poiLedgerPapers'))return false;
  if(!poiTownNpcMove(a,desk,'going-toolshop',now,budget)){poiTownNpcAct(a,'going-toolshop');return true}
  a.coins-=POI_ECONOMY_PRICE;a.potions=1;a.shopHoldUntil=now+1500;
+ poiTownNpcGesture(a,'trade-buy',now);poiTownNpcGesture(clerk,'trade-sell',now);
  poiTownNpcAct(a,'buy-toolshop');return true;
 }
 function poiTownNpcRoutine(a,clock,now,budget){
@@ -6707,6 +6718,7 @@ function poiTownNpcRoutine(a,clock,now,budget){
   a.bedId=null;a.restUntil=null;bed=null;
  }
  if(bed){
+  if(a.gestureKind==='check-in-guest'&&now-a.gestureAt<700)return;
   if(poiTownNpcMove(a,bed.stand,'going-inn-bed',now,budget)){
    a.hp=100;
    if(!traveler&&a.restUntil===null)a.restUntil=clock.absoluteMinute+20;
@@ -6722,7 +6734,11 @@ function poiTownNpcRoutine(a,clock,now,budget){
   poiTownNpcMove(a,POI_TOWN_INN.desk,'seek-inn',now,budget);poiTownNpcAct(a,'seek-inn');
   if(poiTownNpcHere(a,POI_TOWN_INN.desk)&&poiTownNpcHostReady()){
    const free=poiTownNpcFindBed(role.id);
-   if(free){a.bedId=free.id;a.restUntil=null;a.bedUntil=Math.floor(clock.absoluteMinute/1440+1)*1440+POI_TOWN_WAKE}
+   if(free){
+    a.bedId=free.id;a.restUntil=null;a.bedUntil=Math.floor(clock.absoluteMinute/1440+1)*1440+POI_TOWN_WAKE;
+    poiTownNpcGesture(a,'check-in-guest',now);
+    poiTownNpcGesture(poiTownNpcActors.find(r=>r.role.id===POI_TOWN_INN.hostId),'check-in-host',now);
+   }
   }
   return;
  }
@@ -6748,8 +6764,10 @@ function poiTownNpcRoutine(a,clock,now,budget){
  const done=poiTownNpcMove(a,work,working?'going-work':'errand',now,budget);
  poiTownNpcAct(a,working?(done?'work':'going-work'):'errand');
 }
+let poiTownMotionClock=0;
 function poiTownResidentsFrame(now){
  if(!poiTownNpcActive())return;
+ poiTownMotionClock=now;
  for(const a of poiTownNpcActors)if(a.target||a.hitAt!=null)poiTownNpcResolve(a,now);
  if(now<poiTownNpcNext)return;
  poiTownNpcNext=now+POI_TOWN_RESIDENT_TICK;
@@ -6762,16 +6780,56 @@ function poiTownResidentsFrame(now){
 function poiTownResidentsSnapshot(){
  return {actors:poiTownNpcActors.map(a=>({id:a.role.id,name:a.role.name,role:a.role.role,type:a.role.type,
   x:a.x,z:a.z,y:a.y,facing:a.facing,activity:a.activity,goal:a.goal??null,hp:a.hp,attacks:a.attacks,coins:a.coins,potions:a.potions,bedId:a.bedId,
-  swingAt:a.swingAt??null,hitAt:a.hitAt??null,lastHitAt:a.lastHitAt??null,hurtAt:a.hurtAt??null})),
+  swingAt:a.swingAt??null,hitAt:a.hitAt??null,lastHitAt:a.lastHitAt??null,hurtAt:a.hurtAt??null,motion:poiTownNpcMotion(a,poiTownMotionClock)})),
   encounters:[...poiMonsterStates].filter(([,s])=>s.townOwned).map(([o,s])=>({owner:s.townHunt,type:o.type,
    x:s.x,z:s.z,y:o.y,hp:s.hp,counterAt:s.counterAt??null,counterHitAt:s.counterHitAt??null})),
   innBeds:POI_TOWN_INN_BEDS.map(b=>({...b,occupant:poiTownNpcBedOwner(b)})),
   playerBedId:poiTownNpcBook?.bedId??null,playerService:poiTownPlayerService()};
 }
+function poiTownNpcMotion(a,now,near=poiTownNpcMotionNear(a)){
+ const age=(at)=>Number.isFinite(at)?now-at:Infinity;
+ let kind='idle',period=3300,gesture=false;
+ if(age(a.swingAt)>=0&&age(a.swingAt)<260)kind='swing',period=260;
+ else if(age(a.hurtAt)>=0&&age(a.hurtAt)<155)kind='hurt',period=155;
+ else if(a.gestureKind&&age(a.gestureAt)>=0&&age(a.gestureAt)<1120)kind=a.gestureKind,period=1120,gesture=true;
+ else if(a.activity==='sleep-home'||a.activity==='sleep-inn')kind='sleep',period=4600;
+ else if(a.activity==='rest-inn')kind='rest',period=3900;
+ else if(a.fromY===a.y&&age(a.moveAt)>=0&&age(a.moveAt)<340)kind='walk',period=340;
+ else if(a.activity==='work'){
+  kind=({workshopkeeper:'craft',diningkeeper:'serve',stablekeeper:'tend'})[a.role.id]||'write';
+  period=({craft:1350,serve:2350,tend:2120,write:1450})[kind];
+ }
+ let elapsed=gesture?age(a.gestureAt):kind==='walk'?age(a.moveAt):
+  kind==='swing'?age(a.swingAt):kind==='hurt'?age(a.hurtAt):now+(a.index||0)*233;
+ const phase=near?((elapsed%period)+period)%period/period:0;
+ const wave=.5+.5*Math.sin(phase*Math.PI*2);
+ const amount=near?(gesture||kind==='walk'?Math.sin(phase*Math.PI):wave):0;
+ return {kind,phase,amount,near};
+}
+function poiTownNpcMotionNear(a){
+ return a.y===poiWalkLevel&&Math.hypot(a.x-poiWalkX,a.z-poiWalkZ)<=13;
+}
+function poiTownNpcGesture(a,kind,now){
+ if(!a)return;
+ a.gestureKind=kind;a.gestureAt=now;poiTownNpcVersion++;
+}
+function poiTownNpcMotionAngles(m){
+ switch(m.kind){
+ case 'write':return {right:.79+.16*m.amount,left:.35,swivel:.11*Math.sin(m.phase*Math.PI*2),lean:.09};
+ case 'craft':return {right:.40+.64*m.amount,left:.44,swivel:-.13,lean:.075};
+ case 'serve':return {right:.46+.49*m.amount,left:.34+.30*m.amount,swivel:.14,lean:.045};
+ case 'tend':return {right:.31+.48*m.amount,left:.21+.31*m.amount,swivel:.19,lean:.11};
+ case 'check-in-host':return {right:1.18*m.amount,left:.21*m.amount,swivel:-.10*m.amount,lean:.065*m.amount};
+ case 'check-in-guest':return {right:0,left:1.02*m.amount,swivel:0,lean:.055*m.amount};
+ case 'trade-sell':return {right:1.35*m.amount,left:.32*m.amount,swivel:.07*m.amount,lean:.065*m.amount};
+ case 'trade-buy':return {right:0,left:.95*m.amount,swivel:0,lean:.06*m.amount};
+ default:return null;
+ }
+}
 const poiTownNpcModelCache=new Map();
 function poiTownNpcModel(type){
  if(!poiTownNpcModelCache.has(type)){
-  const m=mesh();if(type==='humanKnight')m.townParts={};
+  const m=mesh();if(['humanKnight','humanMerchant','humanVillager'].includes(type))m.townParts={};
   deco(m,type,0,0,0,0);poiTownNpcModelCache.set(type,m);
  }
  return poiTownNpcModelCache.get(type);
@@ -6780,8 +6838,9 @@ function poiTownResidentsDraw(now,vp){
  if(!poiTownNpcActive()||!poiTownNpcActors.length)return;
  const moving=a=>a.fromY===a.y&&Number.isFinite(a.moveAt)&&now-a.moveAt<340;
  const inTime=(at,max)=>Number.isFinite(at)&&now>=at&&now-at<max;
- const anim=poiTownNpcActors.some(a=>a.y===poiWalkLevel&&(moving(a)||inTime(a.swingAt,260)||inTime(a.hurtAt,155)));
- const key=poiTownNpcVersion+':'+poiWalkLevel+':'+(anim?Math.floor(now/54):'idle');
+ const nearActors=poiTownNpcActors.filter(poiTownNpcMotionNear);
+ const fast=nearActors.some(a=>moving(a)||inTime(a.swingAt,260)||inTime(a.hurtAt,155)||inTime(a.gestureAt,1120));
+ const key=poiTownNpcVersion+':'+poiWalkLevel+':'+(nearActors.length?Math.floor(now/(fast?54:125)):'idle');
  if(key!==poiTownNpcMeshKey){
   if(poiTownNpcMesh)gl.deleteBuffer(poiTownNpcMesh.buf);
   const m=mesh();
@@ -6790,32 +6849,40 @@ function poiTownResidentsDraw(now,vp){
    const sleeping=a.activity==='sleep-home'||a.activity==='sleep-inn'||a.activity==='rest-inn';
    const bed=sleeping?(POI_TOWN_INN_BEDS.find(b=>b.id===a.bedId)||a.role.bed):null;
    const p=bed||a,part=poiTownNpcModel(a.role.type);
-   const t=bed||!moving(a)?1:Math.max(0,Math.min(1,(now-a.moveAt)/340));
+   const near=poiTownNpcMotionNear(a),motion=poiTownNpcMotion(a,now,near);
+   const t=bed||!near||!moving(a)?1:Math.max(0,Math.min(1,(now-a.moveAt)/340));
    const x=t===1?p.x:a.fromX+(p.x-a.fromX)*t,z=t===1?p.z:a.fromZ+(p.z-a.fromZ)*t;
    const h=(x,z)=>p.y===0?(facilityCreekIndex?.bridgeHeight?.get(x+','+z)??terrainY(x,z)):terrainY(x,z);
    const ground=t===1?h(p.x,p.z):h(a.fromX,a.fromZ)*(1-t)+h(p.x,p.z)*t;
    const y=ground+p.y*1.4+(bed?.57:.025),r=[2,3,0,1][p.facing]||0;
-   const pose=!bed&&part.townParts&&inTime(a.swingAt,260)?poiWalkSwordPose(now-a.swingAt):null;
+   const parts=part.townParts,knight=!!parts?.sword;
+   const pose=near&&!bed&&knight&&inTime(a.swingAt,260)?poiWalkSwordPose(now-a.swingAt):null;
+   const roleMotion=near&&!pose?poiTownNpcMotionAngles(motion):null;
    const stride=bed?0:Math.sin(t*Math.PI)*.12;
-   const hurt=inTime(a.hurtAt,155)?(1-(now-a.hurtAt)/155)*.33:0;
-   const twist=pose?.twist||0,cs=Math.cos(twist),sn=Math.sin(twist),parts=part.townParts;
-   const arm=parts?characterArmRotation(pose?.strike||0,pose?.sweep||0):null;
-   const guard=pose?characterArmRotation(pose.guard*.58,0):null;
-   const wrist=parts?characterArmRotation(-(pose?.edgeTilt??.18),pose?.edgeYaw||0):null;
-   const grab=arm?arm(0,.43-.90,0):null;
+   const hurt=near&&inTime(a.hurtAt,155)?(1-(now-a.hurtAt)/155)*.33:0;
+   const twist=pose?.twist||0,cs=Math.cos(twist),sn=Math.sin(twist);
+   const axisX=knight?.32:a.role.type==='humanMerchant'?.30:.272;
+   const axisY=knight?.90:a.role.type==='humanMerchant'?.90:.869,axisZ=knight?.035:0;
+   const arm=parts?characterArmRotation(pose?.strike||roleMotion?.right||0,pose?.sweep||roleMotion?.swivel||0):null;
+   const guard=pose||roleMotion?characterArmRotation(pose?pose.guard*.58:roleMotion.left,0):null;
+   const wrist=knight?characterArmRotation(-(pose?.edgeTilt??.18),pose?.edgeYaw||0):null;
+   const grab=knight?arm(0,.43-.90,0):null;
+   const breath=near&&['idle','sleep','rest'].includes(motion.kind)?(motion.amount-.5)*.036:0;
+   const lean=roleMotion?.lean||0;
+   const leanX=Math.sin(r*Math.PI/2)*lean,leanZ=Math.cos(r*Math.PI/2)*lean;
    const inPart=(i,key)=>parts?.[key]&&i>=parts[key][0]&&i<parts[key][1];
    for(let i=0;i<part.p.length;i+=3){
     let px=part.p[i],py=part.p[i+1],pz=part.p[i+2],nx=part.n[i],ny=part.n[i+1],nz=part.n[i+2];
     if(!bed){
      if(inPart(i,'sword')){
       const w=wrist(px-.42,py-.17,pz-.09);
-      px=.32+grab[0]+w[0];py=.90+grab[1]+w[1];pz=.035+grab[2]+w[2]-(pose?0:stride*.35);
+      px=.32+grab[0]+w[0];py=.90+grab[1]+w[1];pz=.035+grab[2]+w[2]-(pose||roleMotion?0:stride*.35);
       [nx,ny,nz]=wrist(nx,ny,nz);
-     }else if(pose&&inPart(i,'right')){
-      const w=arm(px-.32,py-.90,pz-.035);px=.32+w[0];py=.90+w[1];pz=.035+w[2];
+     }else if((pose||roleMotion)&&inPart(i,'right')){
+      const w=arm(px-axisX,py-axisY,pz-axisZ);px=axisX+w[0];py=axisY+w[1];pz=axisZ+w[2];
       [nx,ny,nz]=arm(nx,ny,nz);
      }else if(guard&&(inPart(i,'left')||inPart(i,'shield'))){
-      const w=guard(px+.32,py-.90,pz-.035);px=-.32+w[0];py=.90+w[1];pz=.035+w[2];
+      const w=guard(px+axisX,py-axisY,pz-axisZ);px=-axisX+w[0];py=axisY+w[1];pz=axisZ+w[2];
       [nx,ny,nz]=guard(nx,ny,nz);
      }else if(py<.46&&Math.abs(px)<.24)pz+=px<0?-stride:stride;
      else if(!pose&&py<.76&&Math.abs(px)>.25)pz+=px<0?stride*.35:-stride*.35;
@@ -6823,7 +6890,9 @@ function poiTownResidentsDraw(now,vp){
     }
     const [xx,zz]=rot2(px*.88,bed?py*.88-.57:pz*.88,r);
     const [dx,dz]=rot2(nx,bed?ny:nz,r);
-    m.p.push(x+.5+xx,y+.88*(bed?-pz:py),z+.5+zz);
+    const chest=Math.max(0,Math.min(1,(py-.45)*2.1));
+    const bodyY=.88*(bed?-pz:py)+breath*chest;
+    m.p.push(x+.5+xx+leanX*chest,y+bodyY,z+.5+zz+leanZ*chest);
     m.n.push(dx,bed?-nz:ny,dz);
     m.c.push(Math.min(1,part.c[i]+hurt),part.c[i+1]*(1-hurt*.39),part.c[i+2]*(1-hurt*.35));
    }
@@ -6859,7 +6928,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v144',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v145',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -6974,7 +7043,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v144';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v145';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -7188,7 +7257,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v144',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v145',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -8356,6 +8425,11 @@ function poiShopClose(){if(poiShopIsOpen())$('poiShopDialog').close()}
 function poiShopPurchase(){
  if(!poiShopIsOpen()||!poiShopCheckout())return;
  const result=poiEconomyBuyPotion();
+ if(result.ok&&typeof poiTownNpcGesture==='function'){
+  const clerk=poiTownNpcActors.find(a=>a.role.id==='toolkeeper');
+  if(clerk?.activity==='work'&&poiTownNpcHere(clerk,clerk.role.work))
+   poiTownNpcGesture(clerk,'trade-sell',poiTownMotionClock);
+ }
  const reason={full:'回復薬はこれ以上持てません。',funds:'金貨が足りません。',storage:'保存できなかったため、購入を取り消しました。'};
  $('poiShopFeedback').textContent=result.ok?'回復薬を1個購入しました。':reason[result.reason]||'購入できません。';
  poiShopSync();

@@ -31,3 +31,14 @@ test('only the open, still-valid checkout can invoke a purchase',()=>{
  ctx.poiWalkX=44;ctx.poiShopPurchase();assert.equal(purchases(),1);
  assert.match(html,/function poiWalkAction\(\)\{\s*if\(!poiWalkActive\|\|poiShopIsOpen\(\)\)return;\s*if\(poiShopOpen\(\)\)return;/);
 });
+test('only a successful player purchase from a staffed counter triggers the sale motion',()=>{
+ const {ctx}=shop(),events=[],work={x:49,z:13,y:0},clerk={...work,role:{id:'toolkeeper',work},activity:'work'};
+ Object.assign(ctx,{poiTownNpcActors:[clerk],poiTownNpcHere:(a,b)=>a.x===b.x&&a.z===b.z&&a.y===b.y,
+  poiTownNpcGesture:(a,k,t)=>events.push([a.role.id,k,t]),poiTownMotionClock:199});
+ assert(ctx.poiShopOpen());ctx.poiShopPurchase();
+ assert.deepEqual(events,[['toolkeeper','trade-sell',199]]);
+ ctx.poiEconomyBuyPotion=()=>({ok:false,reason:'funds'});
+ ctx.poiShopPurchase();assert.equal(events.length,1);
+ ctx.poiEconomyBuyPotion=()=>({ok:true});clerk.activity='sleep-home';
+ ctx.poiShopPurchase();assert.equal(events.length,1);
+});
