@@ -1,0 +1,90 @@
+name: Player base pre-merge verification
+on:
+  push:
+    branches: [dot/workshop-player-base-verify]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  units:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify authored facilities
+        run: node --test tests/*.cjs
+  browser:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        area: [weapon, wild-slime, hotbar]
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser runner
+        run: |
+          npm install --no-save playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Verify Android-style start URLs and session restore
+        if: matrix.area == 'saves'
+        run: node tests/restart-browser.mjs
+      - name: Verify original Guild gallery, archive and upper preview
+        if: matrix.area == 'saves'
+        run: |
+          node tests/guild-poi-cleanup.mjs
+          FACILITY_SCREENSHOTS=facility-screenshots node tests/guild-upper-browser.mjs
+          node tests/guild-return-browser.mjs
+      - name: Verify POI opens, walks, exports and preserves saves
+        if: matrix.area == 'facilities'
+        run: FACILITY_SCREENSHOTS=facility-screenshots node tests/facility-browser.mjs
+      - name: Verify entrance guides and base music in a phone viewport
+        if: matrix.area == 'entrance-bgm'
+        run: FACILITY_SCREENSHOTS=facility-screenshots node tests/entrance-bgm-browser.mjs
+      - name: Walk to the woodland creek, check audio and protected saves
+        if: matrix.area == 'creek'
+        run: FACILITY_SCREENSHOTS=facility-screenshots node tests/creek-browser.mjs
+      - name: Open and leave the renamed game world using real controls
+        if: matrix.area == 'game-entry'
+        run: FACILITY_SCREENSHOTS=facility-screenshots node tests/game-world-entry-browser.mjs
+      - name: Walk the first outing with phone controls and verify saved position
+        if: matrix.area == 'exploration'
+        run: FACILITY_SCREENSHOTS=facility-screenshots node tests/exploration-browser.mjs
+      - name: Verify mobile party and location HUD
+        if: matrix.area == 'play-hud'
+        run: |
+          git fetch --no-tags --depth=1 origin e2c37fc990d41ef99c81b19158382feaf41fe576
+          git show FETCH_HEAD:world-editor.html > /tmp/workshop-v122.html
+          FACILITY_SCREENSHOTS=facility-screenshots node tests/play-hud-browser.mjs world-editor.html /tmp/workshop-v122.html
+      - name: Verify touch hotbar, responsive panels, equipment, and healing
+        if: matrix.area == 'hotbar'
+        run: |
+          git fetch --no-tags --depth=1 origin b64626206e4923491c234e4beebd29fc45317f24
+          git show FETCH_HEAD:world-editor.html > /tmp/workshop-v126.html
+          FACILITY_SCREENSHOTS=facility-screenshots node tests/hotbar-browser.mjs world-editor.html /tmp/workshop-v126.html
+      - name: Verify randomized wilderness slimes, floating health, fragments and protected saves
+        if: matrix.area == 'wild-slime'
+        run: FACILITY_SCREENSHOTS=facility-screenshots node tests/wild-slime-browser.mjs
+      - name: Verify real model icon and weapon sound in a phone viewport
+        if: matrix.area == 'weapon'
+        run: |
+          git fetch --no-tags --depth=1 origin 291a725e52436f071bc1d9328e348080f1f68a42
+          git show FETCH_HEAD:world-editor.html > /tmp/workshop-v128.html
+          FACILITY_SCREENSHOTS=facility-screenshots node tests/weapon-browser.mjs world-editor.html /tmp/workshop-v128.html
+      - name: Compare mobile viewport WebGL mesh budget to v128
+        if: matrix.area == 'mesh-budget'
+        run: |
+          git fetch --no-tags --depth=1 origin 291a725e52436f071bc1d9328e348080f1f68a42
+          git show FETCH_HEAD:world-editor.html > /tmp/workshop-v128.html
+          PERF_MESH_LIMIT=1.005 PERF_OBJECT_DELTA=0 node tests/perf-v114.mjs /tmp/workshop-v128.html world-editor.html
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: player-base-browser-screenshots-${{ matrix.area }}
+          path: facility-screenshots/

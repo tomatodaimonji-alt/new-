@@ -42,6 +42,21 @@ test('attack and contact route the same equipped weapon captured before the anim
   poiMonsterAt:()=>[{},actor],toast(){},terrainY:()=>0,poiDamageNumber(){},poiMonsterMeshDirty:false,pineGameActive:false});
  const js=extract('function poiWalkAction(', 'function poiWalkReset(');
  vm.runInContext(js+'\npoiWalkAction();',ctx);
- assert.deepEqual(calls,[['attack','equipWoodSword'],['hit','equipWoodSword']]);
+ assert.deepEqual(calls,[['attack','equipWoodSword'],['hit','equipWoodSword',false]]);
  assert.equal(actor.hp,22);
+});
+
+test('only a lethal contact requests the breakup cue; an empty swing and a rejected repeat do not',()=>{
+ const calls=[],actor={hp:35,x:4,z:2},obj={type:'monsterSlime'};
+ let now=500,broken=0;
+ const ctx=vm.createContext({poiWalkActive:true,facilitySite:{id:'base'},poiWalkLevel:0,
+  poiWalkActionWeapon:null,poiEquippedWeapon:()=>null,poiPlayerAttackDamage:()=>20,
+  poiWalkFacing:1,poiWalkX:3,poiWalkZ:2,poiAttackReady:0,poiWalkActionStarted:0,
+  performance:{now:()=>now},poiWalkAvatar(){},poiSound:(...args)=>calls.push(args),
+  poiMonsterAt:()=>actor.hp?[obj,actor]:null,poiMonsterBreak:()=>broken++,
+  toast(){},terrainY:()=>0,poiDamageNumber(){},poiMonsterMeshDirty:false,pineGameActive:false});
+ vm.runInContext(extract('function poiWalkAction(', 'function poiWalkReset('),ctx);
+ for(const ms of [500,600,820,1200]){now=ms;vm.runInContext('poiWalkAction()',ctx);}
+ assert.deepEqual(calls,[['attack',null],['hit',null,false],['attack',null],['hit',null,true],['attack',null]]);
+ assert.equal(actor.hp,0);assert.equal(broken,1);
 });

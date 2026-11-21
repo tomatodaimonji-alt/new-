@@ -12,9 +12,10 @@ const trigger='  spawn={x:19,z:21};';
 assert.equal(html.toString().split(trigger).length,2,'temporary QA monster anchor');
 const inject=bytes=>bytes.toString().replace(trigger,"  put(20,21,'monsterDragon');\n"+trigger);
 const combat=inject(html),oldCombat=baseline&&inject(baseline);
+const lethal=combat.replace("put(20,21,'monsterDragon')","put(20,21,'monsterSlime')");
 const server=createServer((req,res)=>{
  res.setHeader('Content-Type','text/html; charset=utf-8');
- res.end(req.url.startsWith('/seed')?'<!doctype html><title>Isolated fixtures</title>':req.url.startsWith('/baseline')?baseline:req.url.startsWith('/old-combat')?oldCombat:req.url.startsWith('/combat')?combat:html);
+ res.end(req.url.startsWith('/seed')?'<!doctype html><title>Isolated fixtures</title>':req.url.startsWith('/baseline')?baseline:req.url.startsWith('/old-combat')?oldCombat:req.url.startsWith('/lethal')?lethal:req.url.startsWith('/combat')?combat:html);
 });
 await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',resolve).once('error',reject));
 const origin='http://127.0.0.1:'+server.address().port;
@@ -132,15 +133,16 @@ const events=page=>page.evaluate(()=>window.__comfort.starts);
 const lastTarget=n=>n.gain.filter(v=>v[0]==='setTargetAtTime').at(-1)?.[1];
 const exact=(a,b,label)=>assert.ok(Math.abs(a-b)<1e-5,label+': expected '+b+', got '+a);
 const peak=n=>n.gain.find(v=>v[0]==='linearRampToValueAtTime')?.[1];
+const decay=n=>n.gain.find(v=>v[0]==='exponentialRampToValueAtTime')?.[2]-n.gain.find(v=>v[0]==='setValueAtTime')?.[2];
 const onset=n=>n.gain.find(v=>v[0]==='linearRampToValueAtTime')?.[2]-n.gain.find(v=>v[0]==='setValueAtTime')?.[2];
 function sfx(records){
  return records.flatMap(r=>{
   const {shape}=r;
   if(r.kind==='source'&&!r.loop&&shape.next?.kind==='filter'){
-   const g=shape.next.next;exact(lastTarget(g.next),.90*.88,'SE bus');return [{hz:shape.next.hz,peak:peak(g),onset:onset(g),when:r.when}];
+   const g=shape.next.next;exact(lastTarget(g.next),.90*.88,'SE bus');return [{hz:shape.next.hz,peak:peak(g),onset:onset(g),decay:decay(g),when:r.when}];
   }
   if(r.kind==='osc'&&shape.frequency.length===2){
-   const g=shape.next;exact(lastTarget(g.next),.90*.88,'SE bus');return [{hz:shape.frequency[0][1],low:shape.frequency[1][1],peak:peak(g),onset:onset(g),when:r.when}];
+   const g=shape.next;exact(lastTarget(g.next),.90*.88,'SE bus');return [{hz:shape.frequency[0][1],low:shape.frequency[1][1],peak:peak(g),onset:onset(g),decay:decay(g),when:r.when}];
   }
   return [];
  });
@@ -148,7 +150,7 @@ function sfx(records){
 
 const swordIcon='#poiHotbar [data-hotbar-slot="1"] canvas[data-item-model="equipWoodSword"]';
 const attack='#poiWalkAction';
-const woodSwing=[940,1630,126],woodHit=[515,870,195],handSwing=[790,1120,145],handHit=[1500,230];
+const woodSwing=[940,1630,126],woodHit=[960,1480,185],handSwing=[790,1120,145],handHit=[1500,230],wetDeath=[930,116,1460,84,580];
 async function activate(page){
  await press(page,'#enterGameWorld',true);
  await page.waitForFunction(()=>window.__editorTest.facility().active&&window.__comfort.contexts.some(c=>c.state==='running'));
@@ -200,17 +202,25 @@ function withoutHurt(records){
  // hurt layers without dropping any expected player swing or impact layer.
  return records.filter(r=>r.hz!==420&&!(r.hz===180&&r.low===52));
 }
-async function soundCapture(page,weapon,expectHit,prev=false){
+async function soundCapture(page,weapon,expectHit,prev=false,expectDeath=false){
  if(weapon)await page.keyboard.press('2');else await page.keyboard.press('1');
  const start=(await events(page)).length;
  await page.locator(attack).tap();
  const expected=prev?handSwing:(weapon?woodSwing:handSwing);
  const expectedHit=prev?handHit:(weapon?woodHit:handHit);
- const want=expectHit?[...expected,...expectedHit]:expected;
+ const want=expectHit?[...expected,...expectedHit,...(expectDeath?wetDeath:[])]:expected;
  const segment=withoutHurt(sfx((await events(page)).slice(start)));
  assert.deepEqual(segment.map(o=>o.hz),want,'real WebAudio sources for '+(weapon?'wood':'hand')+' '+(expectHit?'hit':'miss'));
- if(!prev&&weapon&&expectHit)assert.ok(Math.abs(segment[3].when-segment[0].when-.058)<.008,'wood contact starts around 108 ms vs first swing around 50 ms');
- return segment.map(({when,...rest},i)=>({...rest,delay:Math.round((when-segment[0].when)*1e5)/1e5}));
+ if(!prev&&weapon&&expectHit){
+  assert.ok(Math.abs(segment[3].when-segment[0].when-.058)<.008,'wood contact starts around 108 ms vs first swing around 50 ms');
+  assert.ok(segment[3].decay>0&&segment[3].decay<=.055,'wood contact begins with a short dry tap, not a damp trail');
+ }
+ if(expectDeath){
+  const wet=segment.slice(-wetDeath.length);
+  assert.ok(wet[0].when>=segment[expected.length].when-.008,'wet secondary tail cannot precede impact');
+  assert.ok(wet.every(v=>v.peak>0&&v.peak<=.5),'wet layers go through the established, bounded SE mix');
+ }
+ return segment.map(({when,...rest})=>({...rest,delay:Math.round((when-segment[0].when)*1e5)/1e5}));
 }
 async function soundCase(browser,prefix,expectHit,prev=false){
  const launch=expectHit?{x:19,z:21}:{};
@@ -230,6 +240,23 @@ async function soundCase(browser,prefix,expectHit,prev=false){
   return bare;
  }finally{await ctx.close();}
 }
+async function lethalCase(browser,weapon){
+ const {page,ctx,errors}=await initialize(browser,390,844,'/lethal',{x:19,z:21});
+ try{
+  assert.deepEqual((await state(page)).combat.actors.filter(a=>a.type==='monsterSlime').map(a=>[a.x,a.z,a.hp]),[[20,21,35]]);
+  // First punch allows real sound activation and puts the disposable slime
+  // below both finisher damages. No manual health writes or callback calls.
+  await page.locator(attack).tap();
+  await page.waitForFunction(()=>window.__comfort.contexts.some(c=>c.state==='running'));
+  assert.equal((await state(page)).combat.actors.find(a=>a.type==='monsterSlime')?.hp,15);
+  await page.waitForTimeout(400);
+  await soundCapture(page,weapon,true,false,true);
+  assert.ok(!(await state(page)).combat.actors.some(a=>a.type==='monsterSlime'&&a.hp>0),'wet sound accompanies an actual zero-HP death');
+  await page.waitForTimeout(400);
+  await soundCapture(page,weapon,false); // No repeating or miss-triggered wet burst after death.
+  await unchanged(page);assert.deepEqual(errors,[]);
+ }finally{await ctx.close();}
+}
 let browser;
 try{
  browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
@@ -237,11 +264,14 @@ try{
  await verifyIcon(browser);
  const bareMiss=await soundCase(browser,'/',false);
  const bareHit=await soundCase(browser,'/combat',true);
+ await lethalCase(browser,false);
+ await lethalCase(browser,true);
  if(baseline){
   for(const [now,old] of [[bareMiss,await soundCase(browser,'/baseline',false,true)],[bareHit,await soundCase(browser,'/old-combat',true,true)]]){
-   const clean=a=>a.map(({onset,...row})=>({...row,onset:Math.round(onset*1e5)/1e5}));
+   const round=x=>Math.round(x*1e5)/1e5;
+   const clean=a=>a.map(({onset,decay,...row})=>({...row,onset:round(onset),decay:round(decay)}));
    assert.deepEqual(clean(now),clean(old),'original bare audio envelope and timing remains exact');
   }
  }
- console.log('PASS real Chromium: model icon raster/cache and stable hotbar; actual wood/hand miss, hit and bare comparison; saves untouched');
+ console.log('PASS real Chromium: model icon raster/cache and stable hotbar; dry wood impacts, wet lethal-only bursts, original bare audio; saves untouched');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
