@@ -52,14 +52,22 @@ test('map raster leaves the shared glass visible behind terrain and at the edges
  const pixels=ops.filter(o=>o[0]==='fill');
  assert.equal(pixels.length,4,'no solid background fill over the shared panel');
  const alpha=pixels.map(o=>Number(o[1].match(/,([.\d]+)\)$/)?.[1]));
- assert(alpha[0]>=.40&&alpha[0]<=.58,'glass shows through ordinary terrain');
+ assert(alpha[0]>=.29&&alpha[0]<=.38,'glass shows through ordinary terrain');
  assert(alpha[1]>alpha[0]&&alpha[2]>alpha[0]&&alpha[3]>alpha[1],'roads, water and entrances remain distinct');
  assert(pixels.every((p,i)=>p.slice(2).every(Number.isInteger)&&(!i||pixels[i-1][2]+pixels[i-1][4]===p[2])),'translucent adjacent cells must not overlap');
  assert(ops.some(o=>o[0]==='outline'&&o[2]===map.ox&&o[3]===map.oy),'north-up map retains a ground-level boundary');
- assert.match(html,/#app #viewWrap :is\(#poiMiniMap,#poiLocationPanel\)\s*\{[^}]*backdrop-filter:var\(--workshop-panel-blur\)/);
+
 });
 
 test('minimap and attached location panel sit nearer the top-left but respect the display cutout',()=>{
- assert.match(html,/#poiMiniHud\s*\{[^}]*top:max\(5px,env\(safe-area-inset-top,0px\)\)[^}]*left:max\(5px,env\(safe-area-inset-left,0px\)\)/);
- assert.match(html,/#app #viewWrap :is\(#poiWalkPad,[^)]*#poiMiniMap,#poiLocationPanel[^)]*\)[\s\S]*?background-color:var\(--workshop-panel-surface\)/);
+ assert.match(html,/#poiMiniHud\s*\{[^}]*top:max\(5px,calc\(env\(safe-area-inset-top,0px\) - 46px\)\)[^}]*left:max\(5px,env\(safe-area-inset-left,0px\)\)/);
+ assert.match(html,/#poiMiniHud\s*\{[^}]*background:transparent!important[^}]*backdrop-filter:none/,'aside reset must beat the legacy important shade');
+});
+
+test('all four upper-left surfaces blend directly with the scene without a blur backing',()=>{
+ const css=html.match(/#app #viewWrap :is\(#poiMiniMap,#poiLocationPanel,#poiGoldHud,#poiClockHud\)\s*\{([^}]+)\}/)?.[1];
+ assert(css,'scope the flat alpha to the four upper-left surfaces');
+ assert.match(css,/background-color:var\(--workshop-panel-surface\)!important/);
+ assert.match(css,/backdrop-filter:none/);
+ assert.match(css,/box-shadow:0 1px 4px #07191045/);
 });

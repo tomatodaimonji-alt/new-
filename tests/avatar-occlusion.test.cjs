@@ -25,6 +25,6 @@ test('single world program dither is foreground/height gated and disabled before
  assert.match(frag,/gl_FragCoord\.w>uOcclusionInfo\.x/);
  assert.match(frag,/vWorldHeight>uOcclusionInfo\.y/);
  assert.match(frag,/smoothstep\([\s\S]*discard/);
- assert.match(render,/poiOcclusionBegin\(p,now\);[\s\S]*draw\(sceneMesh,p\.vp\);facilityDrawRoofs\(p\.vp\);poiDrawGameRoofs\(p\.vp\);[\s\S]*poiOcclusionEnd\(\);[\s\S]*poiDrawEditorGhostRoof[\s\S]*draw\(poiWalkMesh/);
+ assert.match(render,/poiOcclusionBegin\(p,now\);[\s\S]*poiDrawSceneOcclusion\(sceneMesh,p\.vp\);facilityDrawRoofs\(p\.vp\);poiDrawGameRoofs\(p\.vp\);[\s\S]*poiOcclusionEnd\(\);[\s\S]*poiDrawEditorGhostRoof[\s\S]*draw\(poiWalkMesh/);
  assert.doesNotMatch(block('function poiAvatarOcclusion(','function render()'),/makeScene\(|upload\(|readPixels\(/);
 });
