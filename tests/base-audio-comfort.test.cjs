@@ -32,8 +32,8 @@ function harness(id) {
   poiPianoKey=(...args)=>notes.push(args);
   poiAudioStart()
  `);
- const fx=(kind,weapon,timing=false)=>{
-  const start=nodes.length;run('poiSound('+JSON.stringify(kind)+','+JSON.stringify(weapon)+')');
+ const fx=(kind,weapon,timing=false,defeated=false)=>{
+  const start=nodes.length;run('poiSound('+JSON.stringify(kind)+','+JSON.stringify(weapon)+','+defeated+')');
   return nodes.slice(start).filter(n=>n.kind==='noise'||n.kind==='osc').map(n=>{
    const f=n.next?.kind==='filter'?n.next:null,type=f?'filter':'osc';
    const g=(f||n).next.gain,peak=g.events.find(e=>e[0]==='peak');
@@ -77,7 +77,7 @@ test('wooden sword has a distinct soft cut and woody contact scheduled at the bl
  const b=harness('base');
  const swing=b.fx('attack','equipWoodSword',true),hit=b.fx('hit','equipWoodSword',true);
  assert.deepEqual(swing.map(r=>r[1]),[940,1630,126]);
- assert.deepEqual(hit.map(r=>r[1]),[515,870,195]);
+ assert.deepEqual(hit.map(r=>r[1]),[960,1480,185]);
  assert.equal(Math.min(...hit.map(r=>r[4])),108);
  assert.ok(swing[0][4]+swing[0][3]>70&&swing[0][4]+swing[0][3]<116,'air peaks during the swing');
  assert.ok([...swing,...hit].every(r=>r[2]<.48));
@@ -92,4 +92,19 @@ test('existing weapon materials have different offscreen cue profiles and respec
  }
  b.run('poiAudioLevels.se=0');assert.deepEqual(b.fx('attack','equipWoodSword'),[]);
  b.run('poiAudioLevels.se=90;document.hidden=true');assert.deepEqual(b.fx('hit','equipWoodSword'),[]);
+});
+
+test('defeat adds one descending wet burst over genuine contact, never over an empty swing',()=>{
+ const b=harness('base'),wet=[930,116,1460,84,580];
+ const wood=b.fx('hit','equipWoodSword',true);
+ const lethal=b.fx('hit','equipWoodSword',true,true);
+ assert.deepEqual(lethal.slice(0,3),wood,'preserve the wood layer on a killing blow');
+ assert.deepEqual(lethal.slice(3).map(r=>r[1]),wet);
+ assert.equal(lethal[3][4],126);
+ assert.deepEqual(b.fx('hit',null,true,true).slice(2).map(r=>r[1]),wet);
+ assert.deepEqual(b.fx('attack','equipWoodSword',true,true),b.fx('attack','equipWoodSword',true));
+ b.run('poiAudioLevels.master=0');assert.deepEqual(b.fx('hit','equipWoodSword',true,true),[]);
+ b.run('poiAudioLevels.master=85;document.hidden=true');
+ assert.deepEqual(b.fx('hit',null,true,true),[]);
+ b.run('poiAudioStop(true)');assert.equal(b.run('poiAudioTransient.size'),0);
 });

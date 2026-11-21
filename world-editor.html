@@ -730,7 +730,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
 #app #viewWrap :is(#canvasTip,#cursorStatus,#toast,#pineAIControls,#pineAIDetail),
 body .modalBody{background-color:var(--workshop-panel-surface)!important}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v128）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v129）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -5130,9 +5130,13 @@ function poiAudioStop(suspend=false){
  for(const node of poiAudioAmbient){try{node.stop()}catch(e){}try{node.disconnect()}catch(e){}}
  poiAudioAmbient=[];
 }
-function poiAudioNoiseBurst(when,duration,frequency,q,peak,attack=.008){
+function poiAudioNoiseBurst(when,duration,frequency,q,peak,attack=.008,fallTo=0){
  const ctx=poiAudioContext,src=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),gain=ctx.createGain();
  src.buffer=poiAudioNoiseBuffer();filter.type='bandpass';filter.frequency.value=frequency;filter.Q.value=q;
+ if(fallTo>0){
+  filter.frequency.setValueAtTime(frequency,when);
+  filter.frequency.exponentialRampToValueAtTime(fallTo,when+duration*.82);
+ }
  gain.gain.setValueAtTime(.0001,when);
  gain.gain.linearRampToValueAtTime(peak,when+attack);
  gain.gain.exponentialRampToValueAtTime(.0001,when+duration);
@@ -5153,10 +5157,11 @@ function poiAudioThud(when,startFrequency,endFrequency,duration,volume,attack=.0
 const POI_WEAPON_SE={
  equipStick:      {swing:[790,1220,108],impact:[445,730,150],weight:.82,cut:.92},
  equipClub:       {swing:[610,980,104],impact:[350,620,133],weight:1.20,cut:.78},
- equipWoodSword:  {swing:[940,1630,126],impact:[515,870,195],weight:1,cut:1},
+ equipWoodSword:  {swing:[940,1630,126],impact:[960,1480,185],material:'woodSword',weight:1,cut:1},
  equipStoneSword: {swing:[815,1270,112],impact:[660,1260,162],weight:1.10,cut:.86},
  equipIronSword:  {swing:[1100,1940,142],impact:[1060,1820,215],weight:.94,cut:1.08}
 };
+const POI_WEAPON_CONTACT_DELAY=.108;
 function poiWeaponSound(kind,sound,now){
  if(kind==='attack'){
   const [air,edge,body]=sound.swing;
@@ -5166,13 +5171,29 @@ function poiWeaponSound(kind,sound,now){
  }else{
   // Strike contact aligns with the blade crossing at 108 ms. The action
   // still checks the same target at button press, with no deferred game state.
-  const contact=now+.108,[knock,edge,body]=sound.impact;
+  const contact=now+POI_WEAPON_CONTACT_DELAY,[knock,edge,body]=sound.impact;
+  if(sound.material==='woodSword'){
+   // A sharp but rounded tap, a quieter grain click and short hollow wood resonance.
+   poiAudioNoiseBurst(contact,.041,knock,2.0,.44,.003);
+   poiAudioNoiseBurst(contact+.003,.029,edge,1.7,.18,.004);
+   poiAudioThud(contact,body,148,.078,.27,.004);
+   return;
+  }
   poiAudioNoiseBurst(contact,.104,knock,1.14,.31*sound.weight,.008);
   poiAudioNoiseBurst(contact+.004,.079,edge,1.06,.21,.009);
   poiAudioThud(contact,body,73,.126,.24*sound.weight,.012);
  }
 }
-function poiSound(kind,weapon=null){
+function poiDefeatSound(when){
+ // The crush opens with a low plop, then smaller, staggered splashes fall in
+ // pitch and trail off. Nothing is sampled; the bus limits summed transients.
+ poiAudioNoiseBurst(when,.188,930,1.15,.37,.011,470);
+ poiAudioThud(when+.004,116,45,.155,.28,.010);
+ poiAudioNoiseBurst(when+.026,.136,1460,1.36,.23,.019,720);
+ poiAudioThud(when+.072,84,43,.19,.14,.018);
+ poiAudioNoiseBurst(when+.086,.226,580,1.08,.21,.030,270);
+}
+function poiSound(kind,weapon=null,defeated=false){
  if(!poiWalkActive||!poiAudioEnabled||!poiAudioAllowed())return;
  poiAudioStart();const ctx=poiAudioContext;if(!ctx||ctx.state!=='running')return;
  const now=ctx.currentTime;
@@ -5180,7 +5201,10 @@ function poiSound(kind,weapon=null){
   const weaponSound=(kind==='attack'||kind==='hit')&&Object.prototype.hasOwnProperty.call(POI_WEAPON_SE,weapon)
    ?POI_WEAPON_SE[weapon]:null;
   if(weaponSound){
-   if(poiAudioLevels.master>0&&poiAudioLevels.se>0)poiWeaponSound(kind,weaponSound,now);
+   if(poiAudioLevels.master>0&&poiAudioLevels.se>0){
+    poiWeaponSound(kind,weaponSound,now);
+    if(kind==='hit'&&defeated)poiDefeatSound(now+POI_WEAPON_CONTACT_DELAY+.018);
+   }
   }else if(kind==='door'){
    if(poiAudioLevels.master<=0||poiAudioLevels.se<=0)return;
    // Dry latch, a brief hinge scrape, then the loose plank seating.
@@ -5210,8 +5234,10 @@ function poiSound(kind,weapon=null){
    poiAudioNoiseBurst(now+.07,.15,2100,.7,.32);
    poiAudioThud(now+.04,180,70,.21,.26);
   }else if(kind==='hit'){
+   if(poiAudioLevels.master<=0||poiAudioLevels.se<=0)return;
    poiAudioNoiseBurst(now,.13,1500,.65,.68);
    poiAudioThud(now,230,75,.18,.40);
+   if(defeated)poiDefeatSound(now+.018);
   }else if(kind==='hurt'){
    poiAudioNoiseBurst(now,.19,420,.8,.42);
    poiAudioThud(now,180,52,.25,.46);
@@ -5451,7 +5477,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v128',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v129',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -5566,7 +5592,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v128';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v129';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -5778,7 +5804,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v128',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v129',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -6820,7 +6846,7 @@ function poiWalkAction(){
  const delta=[[0,-1],[1,0],[0,1],[-1,0]][poiWalkFacing];
  const x=poiWalkX+delta[0],z=poiWalkZ+delta[1];
  const monster=poiMonsterAt(x,z);
- if(monster){const [obj,state]=monster,amount=poiPlayerAttackDamage(poiWalkActionWeapon);state.hp=Math.max(0,state.hp-amount);poiSound('hit',poiWalkActionWeapon);poiDamageNumber(state.x+.5,state.z+.5,terrainY(state.x,state.z)+1.8+(facilitySite?poiWalkLevel*1.4:0),amount);if(!state.hp){poiMonsterBreak(obj,state,now);toast('モンスターを倒した')}poiMonsterMeshDirty=true;if(pineGameActive)pineGameSave(true);return}
+ if(monster){const [obj,state]=monster,amount=poiPlayerAttackDamage(poiWalkActionWeapon);state.hp=Math.max(0,state.hp-amount);poiSound('hit',poiWalkActionWeapon,state.hp===0);poiDamageNumber(state.x+.5,state.z+.5,terrainY(state.x,state.z)+1.8+(facilitySite?poiWalkLevel*1.4:0),amount);if(!state.hp){poiMonsterBreak(obj,state,now);toast('モンスターを倒した')}poiMonsterMeshDirty=true;if(pineGameActive)pineGameSave(true);return}
  // Interactions without an assigned action are intentionally silent.
 }
 function poiWalkReset(x,z){
