@@ -37,10 +37,11 @@ function connected(from,to){
  return false;
 }
 test('actual built map has eight distinct usable resident anchor pairs, including both paired inn stairs',()=>{
- assert.equal(roles.length,8);
+ const permanent=roles.filter(r=>r.role!=='visitor');
+ assert.equal(permanent.length,8);
  assert.equal(roles.filter(r=>r.role==='keeper').length,6);
- assert.equal(new Set(roles.map(r=>K(r.bed.x,r.bed.z,r.bed.y))).size,8);
- for(const r of roles){
+ assert.equal(new Set(permanent.map(r=>K(r.bed.x,r.bed.z,r.bed.y))).size,8);
+ for(const r of permanent){
   assert(at(r.bed).includes('bed'),r.id);
   assert.equal(r.bed.y,r.home.y,r.id);
   assert.equal(Math.abs(r.bed.x-r.home.x)+Math.abs(r.bed.z-r.home.z),1,r.id);

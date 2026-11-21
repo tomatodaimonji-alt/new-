@@ -6,9 +6,9 @@ const html=fs.readFileSync(process.env.HTML||path.join(__dirname,'../world-edito
 function capture(id){
  const begin=html.indexOf('const PINE_AUDIO_SETTINGS_KEY'),end=html.indexOf('const POI_PLAYER_MAX_HP',begin);
  const ctx=vm.createContext({window:{addEventListener(){}},document:{hidden:false,addEventListener(){}},
-  localStorage:{getItem(){return null}},facilitySite:id===null?null:{id},poiWalkActive:true,notes:[]});
+  localStorage:{getItem(){return null}},facilitySite:id===null?null:{id},poiWalkActive:true,poiWalkX:19,poiWalkZ:21,poiRegionAt:()=>({name:"拠点"}),notes:[]});
  vm.runInContext(html.slice(begin,end)+`
- poiAudioContext={currentTime:10,suspend(){return Promise.resolve()}};
+ poiAudioContext={currentTime:10,createGain(){return {gain:{value:0},connect(){}}},suspend(){return Promise.resolve()}};
  poiPianoKey=(...args)=>notes.push(args);
  `,ctx);
  return {notes:ctx.notes,run:s=>vm.runInContext(s,ctx)};

@@ -20,7 +20,7 @@ function harness(id) {
  const writes=[],notes=[],timers=[];
  const x=vm.createContext({console,Math:math,atob:data=>Buffer.from(data,'base64').toString('latin1'),localStorage:{getItem(){return null},setItem(...args){writes.push(args)}},
   facilitySite:id?{id,creek:{sound:{x:68,z:39}}}:null,facilityCreekIndex:{hasWater:true},
-  poiWalkX:68,poiWalkZ:39,poiWalkLevel:0,poiWalkActive:true,
+  poiWalkX:68,poiWalkZ:39,poiWalkLevel:0,poiWalkActive:true,poiRegionAt:()=>({name:"拠点"}),
   window:{addEventListener(){}},document:{hidden:false,addEventListener(){}},notes,context,mock,
   setInterval(fn,delay){timers.push(delay);return 1},clearInterval(){}});
  const run=(s)=>vm.runInContext(s,x);
@@ -30,7 +30,8 @@ function harness(id) {
   poiAudioAmbience=mock('ambience');poiAudioEffects=mock('effects');
   poiAudioApplyLevels();
   poiPianoKey=(...args)=>notes.push(args);
-  poiAudioStart()
+  poiAudioStart();
+  if(facilitySite?.id==='base')poiAudioMusicPhrase();
  `);
  const fx=(kind,weapon,timing=false,defeated=false)=>{
   const start=nodes.length;run('poiSound('+JSON.stringify(kind)+','+JSON.stringify(weapon)+','+defeated+')');
@@ -63,7 +64,7 @@ test('continuous wind/rustle are gone while the local creek, piano and mixer sta
   assert.equal(a.nodes.find(n=>n.kind==='ambience').gain.value,.39*68/100);
   assert.equal(a.nodes.find(n=>n.kind==='effects').gain.value,.90*90/100);
  }
- assert.deepEqual(b.notes.map(v=>Array.from(v)),[[130.8127826502993,10.09,.41]]);
+ assert.deepEqual(b.notes.map(v=>Array.from(v).slice(0,3)),[[130.8127826502993,10.09,.41]]);
  assert.deepEqual(b.timers,[200]);assert.deepEqual(k.timers,[8000]);
 });
 test('base footsteps and swings have warmer spectrum and rounded attacks; unrelated cues use the exact previous graph',()=>{

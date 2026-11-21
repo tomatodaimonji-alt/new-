@@ -46,10 +46,20 @@ test('map raster leaves the shared glass visible behind terrain and at the edges
  const g={fillStyle:'',strokeStyle:'',fillRect(...args){ops.push(['fill',this.fillStyle,...args]);},
   strokeRect(...args){ops.push(['outline',this.strokeStyle,...args]);},fillText(){}};
  const scope=run({document:{createElement:()=>({getContext:()=>g})},MAP_W:20,MAP_H:20,
-  world:[{x:10,z:10,y:0,type:'stone'}],isFloor:t=>t==='stone',isWallId:()=>false,
+  world:[{x:10,z:10,y:0,type:'stone'},{x:11,z:10,y:0,type:'earth'},{x:12,z:10,y:0,type:'water'},{x:13,z:10,y:0,type:'poiFortGate'}],isFloor:t=>t==='stone',isWallId:()=>false,
   poiWalkPassableDoor:()=>false,BRIDGE_IDS:new Set(),ROAD_IDS:new Set()});
  const map=scope.poiMiniDrawTopology(144,144,0);
- assert.deepEqual(ops.filter(o=>o[0]==='fill').map(o=>o[1]),['#597867'],'no solid background fill over the shared panel');
+ const pixels=ops.filter(o=>o[0]==='fill');
+ assert.equal(pixels.length,4,'no solid background fill over the shared panel');
+ const alpha=pixels.map(o=>Number(o[1].match(/,([.\d]+)\)$/)?.[1]));
+ assert(alpha[0]>=.40&&alpha[0]<=.58,'glass shows through ordinary terrain');
+ assert(alpha[1]>alpha[0]&&alpha[2]>alpha[0]&&alpha[3]>alpha[1],'roads, water and entrances remain distinct');
+ assert(pixels.every((p,i)=>p.slice(2).every(Number.isInteger)&&(!i||pixels[i-1][2]+pixels[i-1][4]===p[2])),'translucent adjacent cells must not overlap');
  assert(ops.some(o=>o[0]==='outline'&&o[2]===map.ox&&o[3]===map.oy),'north-up map retains a ground-level boundary');
  assert.match(html,/#app #viewWrap :is\(#poiMiniMap,#poiLocationPanel\)\s*\{[^}]*backdrop-filter:var\(--workshop-panel-blur\)/);
+});
+
+test('minimap and attached location panel sit nearer the top-left but respect the display cutout',()=>{
+ assert.match(html,/#poiMiniHud\s*\{[^}]*top:max\(5px,env\(safe-area-inset-top,0px\)\)[^}]*left:max\(5px,env\(safe-area-inset-left,0px\)\)/);
+ assert.match(html,/#app #viewWrap :is\(#poiWalkPad,[^)]*#poiMiniMap,#poiLocationPanel[^)]*\)[\s\S]*?background-color:var\(--workshop-panel-surface\)/);
 });
