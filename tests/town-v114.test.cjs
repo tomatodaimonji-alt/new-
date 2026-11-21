@@ -246,7 +246,14 @@ function v113Digests(build){
    floorFootprints:Object.fromEntries(Object.entries(floorFootprints).map(([k,v])=>[k,Array.from(v,coords).sort()]))
   }));
   const original=site.map.world.filter(o=>protectedIndoor(site,o,bounds)&&
-   (id!=='base'||o.y!==0||inRows(priorGroundRows,o.x,o.z))).map(records).sort();
+   (id!=='base'||o.y!==0||inRows(priorGroundRows,o.x,o.z))).map(records).map(record=>{
+    // v116 authorizes the stable threshold only in two views; normalize
+    // it back to its exact old material for the historical digest.
+    const entranceZ=id==='stable'?12:id==='base'?42:-1;
+    if(record[0]===10&&record[1]===entranceZ&&record[2]===0&&record[3]==='roadGravelFull'&&record[4]===0)
+      return [10,entranceZ,0,'earth',0];
+    return record;
+   }).sort();
   out[id]={footprints:hash(footprint),records:hash(original)};
   if(id==='base'){
    const roads=site.map.world.filter(o=>o.y===0&&movement.isFloor(o.type)&&inRows(priorRoadRows,o.x,o.z)).map(records).sort();

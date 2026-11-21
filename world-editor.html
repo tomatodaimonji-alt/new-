@@ -647,8 +647,13 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
 #facilitySessionActions p{margin:0 0 5px;font-size:11px}
 #facilitySessionActions .row{margin:0}
 .facilityGroupLabel{margin:9px 4px 5px;font-size:11px;color:var(--muted)}
+/* A quiet map pin: positioned over the existing threshold, never blocks input. */
+.facilityEntranceGuide{position:absolute;left:0;top:0;width:12px;height:12px;
+ z-index:1;pointer-events:none;color:#fff4c4;text-shadow:0 1px 2px #172924,0 0 3px #172924;
+ font:700 12px/12px system-ui;text-align:center}
+.facilityEntranceGuide[hidden]{display:none}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v115）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v116）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -4753,9 +4758,46 @@ function poiPianoKey(f,at,velocity=1){
   o.onended=()=>{poiAudioNotes.delete(o);o.disconnect();g.disconnect();if(multiple===1){filter.disconnect();bus.disconnect()}};
  }
 }
+/* Original 16-bar pastoral for the player base, MIDI pitch / beat / touch.
+ * The last G voicing resolves into the opening C on the same audio clock. */
+const POI_BASE_BEAT=60/56;
+const POI_BASE_SCORE=[
+ [[48,0,.41],[55,.43,.21],[64,.86,.36],[60,1.61,.24],[67,2.16,.33],[64,3.28,.24]],
+ [[47,0,.34],[55,.53,.21],[62,.92,.31],[59,1.62,.22],[67,2.16,.29],[62,3.23,.22]],
+ [[45,0,.38],[52,.46,.23],[60,.92,.34],[64,1.68,.28],[69,2.24,.34],[67,3.28,.25]],
+ [[41,0,.37],[53,.52,.23],[60,.94,.25],[65,1.44,.33],[64,2.64,.24]],
+ [[48,0,.35],[55,.51,.23],[64,.92,.36],[67,1.68,.31],[72,2.23,.36],[71,3.14,.24]],
+ [[40,0,.31],[55,.51,.18],[67,.87,.25],[71,1.51,.29],[76,2.14,.34],[74,3.26,.22]],
+ [[43,0,.38],[55,.53,.20],[62,.97,.25],[71,1.52,.31],[74,2.13,.35],[67,3.21,.24]],
+ [[43,0,.28],[50,.52,.20],[65,.97,.24],[62,1.53,.21],[59,2.32,.25]],
+ [[45,0,.36],[52,.53,.21],[69,.92,.34],[72,1.57,.33],[76,2.23,.34],[72,3.18,.23]],
+ [[41,0,.37],[53,.52,.20],[65,.93,.24],[69,1.62,.34],[72,2.18,.32],[69,3.32,.23]],
+ [[50,0,.35],[57,.51,.21],[65,.98,.29],[69,1.61,.31],[74,2.19,.34],[72,3.24,.24]],
+ [[43,0,.37],[55,.52,.22],[62,.97,.22],[67,1.51,.29],[71,2.15,.33],[69,3.16,.24]],
+ [[48,0,.37],[55,.55,.24],[67,.93,.34],[64,1.68,.29],[60,2.20,.31],[64,3.19,.22]],
+ [[41,0,.33],[53,.53,.22],[65,.91,.30],[60,1.63,.24],[69,2.19,.30],[65,3.22,.22]],
+ [[50,0,.32],[57,.48,.20],[65,.88,.29],[69,1.61,.29],[55,2.13,.29],[71,2.17,.28],[67,3.23,.22]],
+ [[43,0,.27],[55,.53,.19],[62,.91,.21],[67,1.55,.25],[59,2.16,.23]]
+].flatMap((bar,i)=>bar.map(([pitch,beat,touch])=>[440*2**((pitch-69)/12),(4*i+beat)*POI_BASE_BEAT,touch]));
+const POI_BASE_PERIOD=64*POI_BASE_BEAT;
+let poiBaseMusicStart=null,poiBaseMusicNote=0,poiBaseMusicCycle=0;
+function poiAudioBaseMusicPhrase(now){
+ if(poiBaseMusicStart===null){poiBaseMusicStart=now+.09;poiBaseMusicNote=poiBaseMusicCycle=0}
+ // Short look-ahead on the Web Audio clock; missed notes aren't replayed in a burst.
+ const cycle=Math.max(0,Math.floor((now-poiBaseMusicStart)/POI_BASE_PERIOD));
+ if(cycle>poiBaseMusicCycle){poiBaseMusicCycle=cycle;poiBaseMusicNote=0}
+ for(;;){
+  const [pitch,offset,touch]=POI_BASE_SCORE[poiBaseMusicNote];
+  const when=poiBaseMusicStart+poiBaseMusicCycle*POI_BASE_PERIOD+offset;
+  if(when>now+.38)break;
+  if(when>=now)poiPianoKey(pitch,when,touch);
+  if(++poiBaseMusicNote===POI_BASE_SCORE.length){poiBaseMusicNote=0;poiBaseMusicCycle++}
+ }
+}
 let poiMusicBars=0;
 function poiAudioMusicPhrase(){
  if(!poiWalkActive||!poiAudioEnabled||!poiAudioContext||!poiAudioAllowed())return;
+ if(facilitySite?.id==='base'){poiAudioBaseMusicPhrase(poiAudioContext.currentTime);return}
  const t=poiAudioContext.currentTime+.09;
  // Original slow post-apocalyptic felt-piano sketch. Long silences are intentional.
  // D minor / B flat / F maj7 / A minor; wind remains audible beneath it.
@@ -4792,7 +4834,7 @@ function poiAudioStart(wake=false){
   rustle.buffer=poiAudioNoiseBuffer();rustle.loop=true;
   rf.type='bandpass';rf.frequency.value=1450;rf.Q.value=.35;rg.gain.value=.05;
   rustle.connect(rf).connect(rg).connect(poiAudioAmbience);rustle.start();poiAudioAmbient.push(rustle);
-  poiAudioMusicPhrase();poiAudioInterval=setInterval(poiAudioMusicPhrase,8000);
+  poiAudioMusicPhrase();poiAudioInterval=setInterval(poiAudioMusicPhrase,facilitySite?.id==='base'?200:8000);
  }catch(e){console.warn('Audio unavailable',e)}
 }
 function poiAudioStop(suspend=false){
@@ -4809,6 +4851,7 @@ function poiAudioStop(suspend=false){
  if(poiAudioInterval!==null){clearInterval(poiAudioInterval);poiAudioInterval=null}
  for(const note of poiAudioNotes){try{note.stop()}catch(e){}}
  poiAudioNotes.clear();
+ poiBaseMusicStart=null;
  for(const node of poiAudioAmbient){try{node.stop()}catch(e){}try{node.disconnect()}catch(e){}}
  poiAudioAmbient=[];
 }
@@ -4927,7 +4970,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v115',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v116',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -5042,7 +5085,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v115';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v116';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -5254,7 +5297,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v115',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v116',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -6768,6 +6811,7 @@ function render(){
  drawSignOverlays(p.vp);draw(cursorMesh,p.vp);
  if(poiWalkActive){draw(poiWalkMesh,p.vp);poiMonsterRender(now,p.vp)}
  poiRenderDamageLabels(now,p.vp);pineDrawChecks(p.vp);
+ facilityDrawEntranceGuides(p);
  // Prepare the opposite visibility state before the next doorway crossing.
  // One extra build occurs on starting play or changing floors, not on doors.
  if(walking&&poiWalkSceneVariants.size===1){
@@ -9916,6 +9960,7 @@ function buildFacilitySite(id){
   pave(18,28,20,46,'earth');
   pave(17,29,17,34,'roadGravelFull');pave(21,31,21,36,'roadGravelFull');
   pave(9,44,18,46,'earth');pave(9,42,11,44,'earth');
+  exterior(10,42,'roadGravelFull'); // main stable doorstep only
   // Keep a quieter and less formal service yard next to the stable.
   pave(7,42,8,44,'roadGravelFull');pave(12,42,14,44,'roadGravelFull');
   pave(21,26,40,28,'roadGravelFull');
@@ -10007,6 +10052,7 @@ function buildFacilitySite(id){
  }else if(id==='stable'){
   stamp(id,4,3,0);
   pave(9,12,11,19,'earth');pave(9,18,13,19,'earth');
+  exterior(10,12,'roadGravelFull'); // same doorstep in the standalone stable
   landscape([[2,5,'treeOak'],[18,6,'treeBirch'],[18,14,'bushFern']]);
   spawn={x:10,z:19};
  }else{
@@ -10597,11 +10643,59 @@ function facilityVisibleRoofs(){
  const hidden=facilityHiddenRoof();
  return facilityRoofMeshes.flatMap(({count},i)=>count&&i!==hidden?[i]:[]);
 }
+function facilityCollectEntranceGuides(site,tiles){
+ if(!site||site.id==='guildsaved'||site.id==='guildrenewal')return [];
+ return site.buildings.flatMap((b,owner)=>{
+  if(!b.entrance||!Number.isInteger(b.turn))return [];
+  const {x:doorX,z:doorZ}=b.entrance;
+  const [dx,dz]=rot2(0,1,b.turn),x=doorX+dx,z=doorZ+dz;
+  const k=(o)=>o.x===doorX&&o.z===doorZ;
+  if(!tiles.some(o=>k(o)&&o.y===0&&o.type.endsWith('Door')&&(o.rot||0)===b.turn)||
+     !tiles.some(o=>k(o)&&facilityIsRoofPiece(o)&&o.type!=='chimney')||
+     site.buildings.some(o=>o.footprint.some(p=>p.x===x&&p.z===z)))return [];
+  return [{id:b.id,owner,x,z,doorX,doorZ}];
+ });
+}
+let facilityEntranceGuides=null,facilityEntranceNodes=[],facilityEntrancesOnScreen=false;
+function facilityDrawEntranceGuides(p){
+ if(!facilitySite||pineAIActive||!cameraTopDown||poiThirdPerson||facilityViewLevel()!==0||(!poiWalkActive&&hideUpper)){
+  if(facilityEntrancesOnScreen)for(const node of facilityEntranceNodes)node.hidden=true;
+  facilityEntrancesOnScreen=false;
+  return;
+ }
+ if(!facilityEntranceGuides)facilityEntranceGuides=facilityCollectEntranceGuides(facilitySite,world);
+ const hidden=poiWalkActive?facilityHiddenRoof():null;
+ const project=(x,z)=>poiWorldToScreen(p.vp,x+.5,terrainY(x,z)+.04,z+.5);
+ facilityEntranceGuides.forEach((g,i)=>{
+  let node=facilityEntranceNodes[i];
+  if(!node){
+   node=document.createElement('span');node.className='facilityEntranceGuide';
+   node.textContent='▲';node.setAttribute('aria-hidden','true');
+   $('viewWrap').append(node);facilityEntranceNodes[i]=node;
+  }
+  if(node.dataset.entrance!==g.id){
+   node.dataset.entrance=g.id;node.dataset.x=g.x;node.dataset.z=g.z;
+  }
+  const pin=project(g.x,g.z),door=project(g.doorX,g.doorZ);
+  const off=!pin||!door||g.owner===hidden||(poiWalkActive&&!facilityRoofMeshes[g.owner]?.count)||
+   pin.x<8||pin.x>p.w-8||pin.y<8||pin.y>p.h-8;
+  if(node.hidden!==off)node.hidden=off;
+  if(!off){
+   const {x,y}=pin;
+   const angle=Math.round(Math.atan2(door.y-y,door.x-x)*180/Math.PI+90);
+   const transform='translate('+Math.round(x-6)+'px,'+Math.round(y-6)+'px) rotate('+angle+'deg)';
+   if(node.style.transform!==transform)node.style.transform=transform;
+  }
+ });
+ for(let i=facilityEntranceGuides.length;i<facilityEntranceNodes.length;i++)facilityEntranceNodes[i].hidden=true;
+ facilityEntrancesOnScreen=facilityEntranceNodes.length>0;
+}
 function facilityDrawRoofs(vp){
  if(!facilitySite||!poiWalkActive)return;
  for(const i of facilityVisibleRoofs())draw(facilityRoofMeshes[i],vp);
 }
 function facilityInvalidateScenes(){
+ facilityEntranceGuides=null;
  for(const {mesh,signs} of facilityScenes.values()){
   gl.deleteBuffer(mesh.buf);for(const item of signs)gl.deleteBuffer(item.buf);
   if(sceneMesh===mesh){sceneMesh=null;signOverlays=[]}
