@@ -1,5 +1,6 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),{test}=require('node:test');
 const {createHash}=require('node:crypto');
+const canalHistory=require('./canal-history-fixture.cjs');
 const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const src=html.match(/const FACILITY_SITES[\s\S]*?(?=function facilityNavigate\()/)?.[0];
 assert(src,'authored Game World source');
@@ -83,8 +84,9 @@ const pin=
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const key=(x,z)=>x+','+z;
 const record=o=>JSON.stringify([o.x,o.z,o.y,o.type,o.rot]);
-function geometry(b,relative){
- const dx=relative?b.x1:0,dz=relative?b.z1:0,anchor=o=>[o.x-dx,o.z-dz];
+function geometry(b,relative,translation=[0,0]){
+ const [dx,dz]=relative?[b.x1,b.z1]:translation;
+ const anchor=o=>[o.x-dx,o.z-dz];
  const footprint=Array.from(b.footprint,anchor);
  const owned=new Set(Array.from(b.footprint,p=>key(p.x,p.z)));
  const floors=Object.entries(b.floorFootprints).map(([y,p])=>[y,Array.from(p,anchor)]);
@@ -114,15 +116,17 @@ function unpack(encoded){
  }
  return records;
 }
-test('all old buildings and standalone missions are byte-stable in their local geometry, apart from the two authorized translations',()=>{
- const moved={townGuild:[27,42,2,16],workshop:[55,64,6,16]};
+test('all old buildings and standalone missions are byte-stable in their local geometry, apart from the authorized translations',()=>{
+ const moved={townGuild:[27,42,2,16],workshop:[55,64,6,16],cottage:[46,52,35,41],rowhouse:[52,58,23,29]};
+ // Old house pins used absolute coordinates; undo only these exact translations.
+ const canalTranslations={cottage:[12,1],rowhouse:[8,-13]};
  assert.deepEqual([site.map.width,site.map.height,site.buildings.length],[96,56,10]);
  assert.deepEqual({...site.spawn},{x:19,z:21});
  for(const [id,expected] of Object.entries(pin.geom)){
   const b=site.buildings.find(v=>v.id===id);
   assert.ok(b,id+' is still present');
   if(moved[id])assert.deepEqual([b.x1,b.x2,b.z1,b.z2],moved[id],id+' exact relocation');
-  assert.equal(geometry(b,!!moved[id]),expected,id+' original stairs, doors, footprint, roof and ordered cell stacks');
+  assert.equal(geometry(b,id==='townGuild'||id==='workshop',canalTranslations[id]),expected,id+' original stairs, doors, footprint, roof and ordered cell stacks');
  }
  for(const [id,expected] of Object.entries(pin.standalone))assert.equal(digest(build(id)),expected,id+' standalone POI unchanged');
  assert.equal(digest(site.creek),pin.creek,'complete creek metadata unchanged');
@@ -131,12 +135,18 @@ test('all old buildings and standalone missions are byte-stable in their local g
 test('every v136 exterior record remains except the enumerated civic paving and scenic changes',()=>{
  const ownership=new Set(site.buildings.flatMap(b=>Array.from(b.footprint,p=>key(p.x,p.z))));
  const records=Array.from(site.map.world.filter(o=>!ownership.has(key(o.x,o.z))&&!rampart(o)),record);
- const present=new Set(records);
+ const live=new Set(records);
+ assert.equal(canalHistory.added.size,canalHistory.legacy.counts.add);
+ assert.equal(canalHistory.removed.size,canalHistory.legacy.counts.remove);
+ for(const r of canalHistory.added)assert.ok(live.has(r),'missing canal addition '+r);
+ for(const r of canalHistory.removed)assert.ok(!live.has(r),'obsolete v137 exterior record '+r);
+ const beforeCanal=canalHistory.prior(records);
+ const present=new Set(beforeCanal);
  const added=unpack(pin.deltaAdded),removed=unpack(pin.deltaRemoved);
  assert.equal(added.size,pin.counts.add);assert.equal(removed.size,pin.counts.remove);
  for(const r of added)assert.ok(present.has(r),'missing authorized addition '+r);
  for(const r of removed)assert.ok(!present.has(r),'obsolete relocation record still present '+r);
- const protectedRecords=records.filter(r=>!added.has(r)).sort();
+ const protectedRecords=beforeCanal.filter(r=>!added.has(r)).sort();
  assert.equal(protectedRecords.length,pin.counts.same);
  assert.equal(digest(protectedRecords),pin.outside,'all other exterior records preserved');
 });

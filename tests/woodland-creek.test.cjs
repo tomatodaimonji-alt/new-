@@ -74,7 +74,7 @@ test('creek bridge has one unified deck with an open underside and never affects
  assert(underside.length>0);
  assert(underside.every(([,y])=>y>.06),'arch must leave open air above the water center');
  assert(points.some(([,y])=>y===.14),'walkway top uses agreed avatar height');
- assert.match(html,/BRIDGE_IDS\.has\(o.type\)\)\{\s*if\(!facilityWoodlandBridgeGeometry\(m,o,bridgeLookup,floors\)\)/);
+ assert.match(html,/BRIDGE_IDS\.has\(o.type\)\)\{\s*if\(!facilityWoodlandBridgeGeometry\(m,o,bridgeLookup,floors\)&&!facilityCanalBridgeGeometry\(m,o,bridgeLookup,floors\)\)/);
 });
 test('creek water is seamless, subdued and cheap without changing other water materials',()=>{
  const n=html.indexOf('function facilityWoodlandWater('),e=html.indexOf('function roadRect(',n);
@@ -100,5 +100,5 @@ test('creek water is seamless, subdued and cheap without changing other water ma
   assert(color[0]>usual[0]&&color[1]>usual[1]&&color[1]-usual[1]<.045,'slightly lighter, not another material');
  }
  assert.equal(aa.p.length,a.p.length,'tint needs no extra geometry');
- assert.match(html,/if\(woodlandRiver\(x,z\)\)facilityWoodlandWater\(tmp,x,z,floors,creekWater,creekShoals\)/);
+ assert.match(html,/if\(woodlandRiver\(x,z\)\)facilityWoodlandWater\(tmp,x,z,floors,creekWater,creekShoals,canalWater\.has\(x\+'\,'\+z\)\)/);
 });

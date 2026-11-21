@@ -11,7 +11,7 @@ const buildingIds=['lodging','kitchen','workshop','artisan','stable','cottage','
 const key=(x,z,y)=>[x,z,y].join(',');
 const floorIds=/^(?:woodfloor(?:Dark|Light)?|stone|brickfloor|road(?:Cobble|CutStone|Gravel)Full|earth|plasterfloor|grass(?:Wild|Trampled|Flowers|Patch))$/;
 const door=t=>/Door$/.test(t);
-const walkable=t=>floorIds.test(t)||door(t)||['lantern','chairWood','chairClassic','stoolRound','benchWood','guildFacadeSign','flowerField','bushFlower','guildStairUp','guildStairDown'].includes(t);
+const walkable=t=>floorIds.test(t)||door(t)||['lantern','chairWood','chairClassic','stoolRound','benchWood','guildFacadeSign','poiCanalQuay','flowerField','bushFlower','guildStairUp','guildStairDown'].includes(t);
 const dirs=[[0,1],[-1,0],[0,-1],[1,0]];
 const sort=a=>a.map(o=>Array.isArray(o)?o.join(','):String(o)).sort().join(';');
 function explore({map,spawn}){
@@ -46,7 +46,7 @@ test('eight deterministic site IDs and exact and varied building footprints',()=
   assert.equal(JSON.stringify(site),JSON.stringify(buildFacilitySite(id)));
   if(id==='base'){
    assert.equal(site.map.width,96);assert.equal(site.map.height,56);
-   assert.ok(site.map.world.length<5180);
+   assert.ok(site.map.world.length<5300);
    assert.deepEqual(Array.from(site.buildings,b=>b.id),buildingIds);
   }else{
    assert.ok(site.map.width<=48&&site.map.height<=38&&site.map.world.length<2200);

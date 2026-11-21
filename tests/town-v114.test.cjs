@@ -20,12 +20,18 @@ const movement=vm.runInNewContext(`
  ${vehicleJS}
  ${extract('function poiWalkPassableDoor(', 'function poiWalkCamera(')}
  let MAP_W,MAP_H,world,poiWalkLevel;
- const facilitySite=true,poiWalkActive=false;
+ let facilitySite;const poiWalkActive=false;
  const validPos=(x,z)=>x>=0&&x<MAP_W&&z>=0&&z<MAP_H;
  const facilityValidLanding=(x,z,y)=>validPos(x,z)&&world.some(o=>o.x===x&&o.z===z&&o.y===y&&(isFloor(o.type)||o.type==='guildStairDown'||o.type==='guildStairUp'));
- const poiMonsterAt=()=>null;
+ const poiMonsterAt=()=>null,bridgeSpanElevation=()=>0;
+ const facilityFloorOwner=(x,z,y)=>{
+  const owner=facilitySite?.buildings.findIndex(b=>b.floorFootprints[y]?.some(p=>p.x===x&&p.z===z));
+  return owner>=0?owner:null;
+ };
  ({walkable(site,level=0){
    ({width:MAP_W,height:MAP_H,world}=site.map);poiWalkLevel=level;
+   facilitySite={...site,id:site.creek?'base':'standalone'};
+   facilityRefreshCreek();
    const out=new Set(),cells=new Map();
    for(const o of world)if(o.y===level){
     const k=o.x+','+o.z;if(!cells.has(k))cells.set(k,[]);cells.get(k).push(o);
@@ -287,8 +293,10 @@ test('protect unchanged v113 shells, cellar, footprints, town furnishings and pa
  for(const [id,current] of Object.entries(v113Digests(build))){
   if(id!=='base')assert.deepEqual(current,v113Expected[id],id+' protected legacy content');
  }
- const southRoads=base.map.world.filter(o=>o.y===0&&o.z>=28&&o.z<=45&&o.x>=3&&o.x<=60&&/^(?:road|earth)/.test(o.type))
-  .map(o=>JSON.stringify(records(o))).sort();
+ const southRoads=require('./canal-history-fixture.cjs').prior(base.map.world).filter(row=>{
+  const [x,z,y,type]=JSON.parse(row);
+  return y===0&&z>=28&&z<=45&&x>=3&&x<=60&&/^(?:road|earth)/.test(type);
+ }).sort();
  assert.equal(southRoads.length,377);
  assert.equal(require('node:crypto').createHash('sha256').update(southRoads.join('\n')).digest('hex'),
   'f3fd969a05be24183fede120e0757f59d4f4bc536a3e5f84d4701e075c79c537','v136 south roads remain exact');
@@ -363,7 +371,7 @@ test('new buildings serve distinct functions instead of duplicates',()=>{
 test('new entrance offsets and structures match their locations in the connected base',()=>{
  const base=build('base');
  const expectedDoors={artisan:[47,29],stable:[10,41],toolshop:[47,15],
-  cottage:[38,40],rowhouse:[48,42],gardener:[54,36]};
+  cottage:[50,41],rowhouse:[56,29],gardener:[54,36]};
  for(const [id,point] of Object.entries(expectedDoors)){
   const b=base.buildings.find(p=>p.id===id);
   assert.ok(b,id+' unavailable in base');

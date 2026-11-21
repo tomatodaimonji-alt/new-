@@ -23,7 +23,11 @@ test('frontages have distinct grounded details with correct rotated window orien
  for(const id of ids)for(const scope of [scene(id),'base']){
   const {site,at,b}=entry(scope,id);
   for(const [x,z,type] of expected[id]){
-   const o=at(x,z).find(p=>p.type===type);
+   // One crop moved out of the new pedestrian lane; the planter and
+   // second crop still use their exact original local window/plot records.
+   const cell=id==='gardener'&&scope==='base'&&x===0&&z===7
+    ?site.map.world.filter(o=>o.x===56&&o.z===41&&o.y===0):at(x,z);
+   const o=cell.find(p=>p.type===type);
    assert.ok(o,id+' '+scope+' '+type);
    assert.ok(o.x>=0&&o.x<site.map.width&&o.z>=0&&o.z<site.map.height);
    assert.ok(html.includes("'"+type+"'")||html.includes('"'+type.replace('Full','')+'"'),type+' is registered');
@@ -38,14 +42,37 @@ test('frontages have distinct grounded details with correct rotated window orien
 });
 test('every polished front leaves the original door, approach and its side steps uncluttered',()=>{
  const doorX={cottage:4,rowhouse:4,gardener:2,artisan:4,toolshop:4};
- const pass=o=>/^road|^grass|^woodfloor|^(earth|stone|brickfloor)$/.test(o.type);
+ const pass=o=>o.type==='poiCanalQuay'||/^road|^grass|^woodfloor|^(earth|stone|brickfloor)$/.test(o.type);
  for(const id of ids)for(const scope of [scene(id),'base']){
   const {at,b,d,xy}=entry(scope,id),x=doorX[id];
   assert.deepEqual(xy(x,d-1),[b.entrance.x,b.entrance.z]);
   assert.ok(at(x,d-1).some(o=>o.type.endsWith('wallDoor')));
   assert.ok(at(x,d-2).every(o=>pass(o)||o.type.endsWith('wallDoor')),id+' interior step');
-  for(const dx of [-1,0,1])assert.ok(at(x+dx,d).every(pass),id+' clear initial exterior step '+dx);
-  assert.ok(at(x,d+1).every(pass),id+' clear outward approach');
+  for(const dx of [-1,0,1]){
+   const frontage=at(x+dx,d);
+   if(scope==='base'&&id==='artisan'&&dx===1){
+    // A public quest board deliberately uses the east shoulder; the
+    // central entrance and opposite shoulder remain entirely open.
+    assert.ok(frontage.some(o=>o.type==='guildQuestBoard'));
+    assert.ok(frontage.every(o=>pass(o)||o.type==='guildQuestBoard'));
+   }else assert.ok(frontage.every(pass),id+' clear initial exterior step '+dx);
+  }
+  if(id==='rowhouse'&&scope==='base'){
+   // The outward frontage runs along the canal bank to the bridge one
+   // tile west; straight out is intentionally river, not a walk path.
+   assert.ok(at(x-1,d).every(pass));
+   for(const z of [d+1,d+2]){
+    const crossing=at(x-1,z);
+    assert.ok(crossing.some(o=>o.type==='river')&&crossing.some(o=>o.type==='bridgeStoneEnd'));
+   }
+  }else if(id==='gardener'&&scope==='base'){
+   // The neighboring cottage faces this real one-tile alley. It must
+   // connect in both directions, not continue through the cottage wall.
+   for(const z of [34,40]){
+    const lane=entry(scope,id).site.map.world.filter(o=>o.x===53&&o.z===z&&o.y===0);
+    assert.ok(lane.some(o=>o.type.startsWith('road'))&&lane.every(pass));
+   }
+  }else assert.ok(at(x,d+1).every(pass),id+' clear outward approach');
  }
 });
 function unchangedLayoutDigest(scope){
@@ -61,11 +88,14 @@ function unchangedLayoutDigest(scope){
  for(const b of site.buildings.filter(b=>b.id!=='townGuild')){
   const {at,d,w}=entry(scope,id(b));
   const owned=new Set(Array.from(b.footprint,p=>p.x+','+p.z));
-  // The relocated workshop is an exact translated stamp. Compare every
-  // object and bound back in its v114 coordinate frame instead of ignoring it.
-  const shift=scope==='base'&&b.id==='workshop'&&b.x1===55&&b.z1===6;
-  const canonical=o=>shift?{...o,x:o.x-28,z:o.z+5}:o;
-  const original=shift?{...b,x1:b.x1-28,x2:b.x2-28,z1:b.z1+5,z2:b.z2+5,
+  // Undo precisely the authored translations, retaining every previous wall,
+  // item and mask in the historical hashes.
+  const moves={workshop:[55,6,28,-5],cottage:[46,35,12,1],rowhouse:[52,23,8,-13]};
+  const move=scope==='base'?moves[b.id]:null;
+  const shift=move&&b.x1===move[0]&&b.z1===move[1];
+  const dx=shift?move[2]:0,dz=shift?move[3]:0;
+  const canonical=o=>shift?{...o,x:o.x-dx,z:o.z-dz}:o;
+  const original=shift?{...b,x1:b.x1-dx,x2:b.x2-dx,z1:b.z1-dz,z2:b.z2-dz,
    entrance:canonical(b.entrance),footprint:b.footprint.map(canonical),
    floorFootprints:Object.fromEntries(Object.entries(b.floorFootprints).map(([y,cells])=>[y,cells.map(canonical)]))}:b;
   const items=[];

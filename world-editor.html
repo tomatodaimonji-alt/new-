@@ -746,7 +746,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 #poiShopBuyPotion:not(:disabled){border-color:#ebca82;background:#81663ce8!important}
 #poiShopFeedback{min-height:1.4em}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v137）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v138）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -1059,6 +1059,7 @@ palette.push(
  {id:'poiFortCorner',name:'城壁・隅柱',cat:'decor',icon:'▣'},
  {id:'poiFortGate',name:'大城門・開門',cat:'decor',icon:'▣'}
 );
+palette.push({id:'poiCanalQuay',name:'運河・石の護岸',cat:'decor',icon:'▤'});
 const catalog=new Map(palette.map(p=>[p.id,p]));let selected='wall',mode='place',rotation=0,level=0,hideUpper=false,worldMaxLevel=0,world=[],models=[],prefabs=[],undoStack=[],redoStack=[],hover=null,dragPainting=false,yaw=Math.PI/4,zoom=1,panX=0,panZ=0,dirty=true,sceneMesh=null,cursorMesh=null,cursorDirty=true,modelParts=[],activeModelId=null;
 let pineObjectSelection=null,pineSelectedTile=null,pineMoveArmed=false;
 const byId=id=>catalog.get(id)||models.find(m=>m.id===id)||prefabs.find(p=>p.id===id);
@@ -3591,7 +3592,42 @@ function poiFortGeometry(m,id,x,y,z,rot=0){
  B(0,3.07,0,3.02,.115,1.02,rim);
  for(const sx of [-1.32,-.66,0,.66,1.32])B(sx,3.185,0,.33,.32,.77,stone);
 }
+function poiCanalQuayGeometry(m,x,y,z,rot=0){
+ // Precisely joins the next section. Only the outer rim of a dry bank is occupied.
+ const P=(a,b,c)=>{const [u,v]=rot2(a,c,rot);return [x+u,y+b,z+v]};
+ const B=(a,b,c,w,h,d,col)=>cube(m,...P(a,b,c),rot%2?d:w,h,rot%2?w:d,col);
+ const Q=(a,b,c,d,col)=>quad(m,P(...a),P(...b),P(...c),P(...d),col);
+ const block=[.47,.51,.47],cap=[.63,.65,.59],joint=[.36,.40,.36];
+ B(0,0,.453,1.002,.126,.142,block);
+ B(0,.126,.408,1.002,.052,.177,cap);
+ // Water-facing mortar and two shallow vertical joins, kept cheaper than separate stones.
+ Q([-.50,.055,.525],[.50,.055,.525],[.50,.068,.525],[-.50,.068,.525],joint);
+ for(const [at,lo,hi] of [[-.24,.018,.055],[.17,.065,.124]])
+  Q([at,lo,.525],[at+.016,lo,.525],[at+.016,hi,.525],[at,hi,.525],joint);
+}
+function poiFortCulvertGeometry(m,x,y,z,rot=0){
+ // Existing fort silhouette above a short masonry bore for water only.
+ const P=(a,b,c)=>{const [u,v]=rot2(a,c,rot);return [x+u,y+b,z+v]};
+ const B=(a,b,c,w,h,d,col)=>cube(m,...P(a,b,c),rot%2?d:w,h,rot%2?w:d,col);
+ const Q=(a,b,c,d,col)=>quad(m,P(...a),P(...b),P(...c),P(...d),col);
+ const stone=[.48,.50,.47],rim=[.63,.62,.56],dark=[.31,.35,.31],depth=.34;
+ B(0,.68,0,1.008,1.34,.68,stone);
+ B(0,2.02,0,1.008,.12,.733,rim);
+ for(const a of [-.33,.24])B(a,2.14,0,.28,.25,.66,stone);
+ for(const a of [-.432,.432])B(a,0,0,.144,.68,.68,stone);
+ const profile=(i,side)=>{
+  const a=i*Math.PI/8;return [.36*Math.cos(a),.16+.36*Math.sin(a),side*depth];
+ };
+ for(let i=0;i<8;i++){
+  const a=profile(i,1),b=profile(i+1,1),c=profile(i,-1),d=profile(i+1,-1);
+  const top=p=>[p[0],.68,p[2]],col=i%2?[.49,.51,.463]:[.53,.54,.49];
+  Q(b,a,top(a),top(b),col);
+  Q(c,d,top(d),top(c),col);
+  Q(a,b,d,c,dark);
+ }
+}
 function deco(m,id,x,y,z,r=0){
+ if(id==='poiCanalQuay'){poiCanalQuayGeometry(m,x,y,z,r);return}
  if(POI_FORT_PARTS.has(id)){poiFortGeometry(m,id,x,y,z,r);return}
  if(MATCHED_COUNTER_IDS.has(id)){
   if(!r){matchedCounter(m,id,x,y,z);return}
@@ -3698,7 +3734,7 @@ function shoreline(m,x,z,floors){
 
 // The authored woodland creek uses shared corners and fewer wave marks
 // than the general river tile. The surface remains an ordinary editable river.
-function facilityWoodlandWater(m,x,z,floors,creekWater,shoals){
+function facilityWoodlandWater(m,x,z,floors,creekWater,shoals,alongX=false){
  const color=(xx,zz)=>{
   let cover=0,shallow=0;
   for(const dx of [-1,0])for(const dz of [-1,0]){
@@ -3721,7 +3757,7 @@ function facilityWoodlandWater(m,x,z,floors,creekWater,shoals){
  if(n>.53){
   const px=x+.29+n*.36,pz=z+.27+surfaceNoise(x*15,z*33)*.34;
   const length=.10+n*.15;
-  const sideways=x>=76;
+  const sideways=alongX||x>=76;
   const point=(across,along)=>sideways?[px+along,.006,pz-across]:[px+across,.006,pz+along];
   quad(m,point(-.026,-length),point(-.006,length),
     point(.018,length),point(.006,-length),[.33,.49,.49]);
@@ -4990,7 +5026,28 @@ function facilityWoodlandBridgeGeometry(m,o,lookup,floors){
   return placed?.y===0&&placed.type===p.type&&placed.rot===p.rot&&floors.get(key(p))==='river';
  }))return false;
  if(o.x===east.x)return true;
- const x=west.x,z=west.z,L=z+.04,R=z+.96;
+ facilityRenderStoneFootbridge(m,west.x,west.z);
+ return true;
+}
+function facilityCanalBridgeGeometry(m,o,lookup,floors){
+ const pair=facilitySite?.id==='base'&&o.y===0?facilitySite.canal?.bridgePairs.find(
+  pair=>pair.some(p=>p.x===o.x&&p.z===o.z)):null;
+ if(!pair||!pair.every(p=>{
+  const k=p.x+','+p.z,a=lookup.get(k);
+  return a?.y===0&&a.type===p.type&&a.rot===p.rot&&floors.get(k)==='river';
+ }))return false;
+ if(o.z===pair[0].z){
+  const t=mesh();facilityRenderStoneFootbridge(t,0,0);
+  // Rotate the same stone span through 90 degrees about the crossing edge.
+  for(let i=0;i<t.p.length;i+=3){
+   m.p.push(o.x+1-t.p[i+2],t.p[i+1],o.z+t.p[i]);
+   m.n.push(-t.n[i+2],t.n[i+1],t.n[i]);m.c.push(t.c[i],t.c[i+1],t.c[i+2]);
+  }
+ }
+ return true;
+}
+function facilityRenderStoneFootbridge(m,x,z){
+ const L=z+.04,R=z+.96;
  const face=[.45,.46,.42],arch=[.56,.55,.50],soffit=[.36,.39,.36],cap=[.61,.60,.54];
  // Top rises gently from each trail bank; the curved masonry underside is
  // open above the running water rather than a solid barrier across it.
@@ -5260,7 +5317,9 @@ function poiCreekAudioSync(){
   poiCreekAudioStop();return;
  }
  const near=1-Math.min(1,Math.hypot(poiWalkX-anchor.x,poiWalkZ-anchor.z)/7);
- const level=.145*near*near;
+ const branch=facilitySite.canal?.sound;
+ const nearCanal=branch?1-Math.min(1,Math.hypot(poiWalkX-branch.x,poiWalkZ-branch.z)/5):0;
+ const level=.145*Math.max(near*near,.55*nearCanal*nearCanal);
  if(!poiCreekAudio){
   if(!level)return;
   const source=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),gain=ctx.createGain();
@@ -6267,7 +6326,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v137',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v138',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -6291,7 +6350,7 @@ function pineAIUpdateHeader(){
 
 /* v102: One-screenshot AI blueprint. Registry mirrored verbatim in src/editor/ai-object-numbers.json.
    This is read-only: never mutates world, saves, POIs, or the existing legacy AI exports. */
-const pineAINumberEntries=[{"number":"001","id":"ancientAltar","name":"古い祭壇"},{"number":"002","id":"archStone","name":"石造りアーチ"},{"number":"003","id":"balcony","name":"木製ベランダ"},{"number":"004","id":"barrel","name":"樽"},{"number":"005","id":"basketProduce","name":"野菜かご"},{"number":"006","id":"bathLuxury","name":"風呂・豪華な浴槽"},{"number":"007","id":"bathStone","name":"風呂・石造り浴槽"},{"number":"008","id":"bathWood","name":"風呂・木製浴槽"},{"number":"009","id":"bed","name":"ベッド"},{"number":"010","id":"bedLuxury","name":"豪華なベッド"},{"number":"011","id":"benchWood","name":"木製長椅子"},{"number":"012","id":"bookshelf","name":"本棚"},{"number":"013","id":"bowlClay","name":"土焼きの器"},{"number":"014","id":"breadBoard","name":"パンとまな板"},{"number":"015","id":"brickwall","name":"レンガの壁"},{"number":"016","id":"brickwallAll","name":"レンガ・全面"},{"number":"017","id":"brickwallcorner","name":"レンガの壁・角"},{"number":"018","id":"brickwallCounter","name":"レンガの壁・店カウンター"},{"number":"019","id":"brickwallDoor","name":"レンガの壁・扉"},{"number":"020","id":"brickwallDouble","name":"レンガ・両面"},{"number":"021","id":"brickwallPlain","name":"レンガ・装飾なし"},{"number":"022","id":"brickwallWindow","name":"レンガの壁・窓"},{"number":"023","id":"bridgeStone","name":"石橋・中央"},{"number":"024","id":"bridgeStoneEnd","name":"石橋・端"},{"number":"025","id":"bridgeWood","name":"木橋・中央"},{"number":"026","id":"bridgeWoodEnd","name":"木橋・端"},{"number":"027","id":"brokenPillar","name":"崩壊した石柱"},{"number":"028","id":"bush","name":"低木"},{"number":"029","id":"bushFern","name":"シダ"},{"number":"030","id":"bushFlower","name":"花の低木"},{"number":"031","id":"candleStand","name":"燭台"},{"number":"032","id":"chairClassic","name":"椅子"},{"number":"033","id":"chairWood","name":"木製椅子"},{"number":"034","id":"chest","name":"宝箱"},{"number":"035","id":"chimney","name":"レンガの煙突"},{"number":"036","id":"cliffEdge","name":"崖の端"},{"number":"037","id":"cliffFace","name":"崖の壁面"},{"number":"038","id":"corner","name":"角の壁"},{"number":"039","id":"counterLuxury","name":"高級木製カウンター"},{"number":"040","id":"counterStone","name":"石製カウンター"},{"number":"041","id":"counterWood","name":"木製カウンター"},{"number":"042","id":"crackedWall","name":"ひび割れた石壁"},{"number":"043","id":"crate","name":"木箱"},{"number":"044","id":"cropVegetable","name":"野菜の畑"},{"number":"045","id":"cropWheat","name":"麦の畑"},{"number":"046","id":"cupWood","name":"木のコップ"},{"number":"047","id":"displayShelf","name":"商品陳列棚"},{"number":"048","id":"door","name":"ドア枠"},{"number":"049","id":"doorIron","name":"鉄の扉"},{"number":"050","id":"doorStone","name":"石造りの扉枠"},{"number":"051","id":"doorWood","name":"木の扉"},{"number":"052","id":"equipClub","name":"棍棒"},{"number":"053","id":"equipIronSword","name":"鉄の剣"},{"number":"054","id":"equipStick","name":"木の棒"},{"number":"055","id":"equipStoneSword","name":"石の剣"},{"number":"056","id":"equipWoodSword","name":"木の剣"},{"number":"057","id":"exposedRoots","name":"木の根"},{"number":"058","id":"fallenLog","name":"倒木"},{"number":"059","id":"fenceIron","name":"鉄柵・直線"},{"number":"060","id":"fenceIronCorner","name":"鉄柵・角"},{"number":"061","id":"fenceIronEnd","name":"鉄柵・端"},{"number":"062","id":"fenceIronGate","name":"鉄の門扉"},{"number":"063","id":"fenceStone","name":"石柵・直線"},{"number":"064","id":"fenceStoneCorner","name":"石柵・角"},{"number":"065","id":"fenceStoneEnd","name":"石柵・端"},{"number":"066","id":"fenceStoneGate","name":"石の門扉"},{"number":"067","id":"fenceWood","name":"木柵・直線"},{"number":"068","id":"fenceWoodCorner","name":"木柵・角"},{"number":"069","id":"fenceWoodEnd","name":"木柵・端"},{"number":"070","id":"fenceWoodGate","name":"木の門扉"},{"number":"071","id":"fireplace","name":"暖炉"},{"number":"072","id":"flowerField","name":"花畑"},{"number":"073","id":"frameWoodBeam","name":"木製の梁"},{"number":"074","id":"frameWoodBrace","name":"斜め補強材"},{"number":"075","id":"frameWoodPost","name":"木製の柱"},{"number":"076","id":"giantMushroom","name":"巨大キノコ"},{"number":"077","id":"gravestone","name":"墓石"},{"number":"078","id":"guildFacadeSign","name":"冒険者ギルド・正面大型看板"},{"number":"079","id":"guildLatrine","name":"ギルド・陶器便器"},{"number":"080","id":"guildQuestBoard","name":"冒険者ギルド・依頼掲示板"},{"number":"081","id":"guildSign","name":"冒険者ギルド・紋章看板"},{"number":"082","id":"guildStairDown","name":"ギルド・下り階段"},{"number":"083","id":"guildStairUp","name":"ギルド・上り階段"},{"number":"084","id":"guildWallQuestBoard","name":"ギルド・壁掛け依頼掲示板"},{"number":"085","id":"handcartEmpty","name":"木製の荷車"},{"number":"086","id":"handcartLoaded","name":"荷積みの荷車"},{"number":"087","id":"humanBare","name":"裸の人間"},{"number":"088","id":"humanKnight","name":"騎士"},{"number":"089","id":"humanMerchant","name":"商人"},{"number":"090","id":"humanVillager","name":"村人"},{"number":"091","id":"innSign","name":"宿屋の看板（INN）"},{"number":"092","id":"ironGate","name":"鉄格子"},{"number":"093","id":"ironwall","name":"鉄板の壁"},{"number":"094","id":"ironwallAll","name":"鉄板・全面"},{"number":"095","id":"ironwallcorner","name":"鉄板の壁・角"},{"number":"096","id":"ironwallCounter","name":"鉄板の壁・店カウンター"},{"number":"097","id":"ironwallDoor","name":"鉄板の壁・扉"},{"number":"098","id":"ironwallDouble","name":"鉄板・両面"},{"number":"099","id":"ironwallPlain","name":"鉄板・装飾なし"},{"number":"100","id":"ironwallWindow","name":"鉄板の壁・窓"},{"number":"101","id":"jugClay","name":"水差し"},{"number":"102","id":"kitchenCounter","name":"キッチン・調理台"},{"number":"103","id":"kitchenSink","name":"キッチン・流し台"},{"number":"104","id":"kitchenStove","name":"キッチン・石のかまど"},{"number":"105","id":"lantern","name":"ランタン"},{"number":"106","id":"marketStallCloth","name":"布屋根の露店"},{"number":"107","id":"marketStallWood","name":"木屋根の屋台"},{"number":"108","id":"monsterDragon","name":"ドラゴン"},{"number":"109","id":"monsterGoblin","name":"ゴブリン"},{"number":"110","id":"monsterSkeleton","name":"ガイコツ"},{"number":"111","id":"monsterSlime","name":"スライム"},{"number":"112","id":"mosswall","name":"苔むした石壁"},{"number":"113","id":"mosswallAll","name":"苔むした石・全面"},{"number":"114","id":"mosswallcorner","name":"苔むした壁・角"},{"number":"115","id":"mosswallCounter","name":"苔むした壁・店カウンター"},{"number":"116","id":"mosswallDoor","name":"苔むした壁・扉"},{"number":"117","id":"mosswallDouble","name":"苔むした石・両面"},{"number":"118","id":"mosswallPlain","name":"苔むした石・装飾なし"},{"number":"119","id":"mosswallWindow","name":"苔むした壁・窓"},{"number":"120","id":"mugCeramic","name":"陶器のマグ"},{"number":"121","id":"mushroomPatch","name":"キノコ群"},{"number":"122","id":"oldTownAwning","name":"旧市街・布の庇"},{"number":"123","id":"oldTownBlueDoor","name":"旧市街・淡青店舗入口"},{"number":"124","id":"oldTownBlueShop","name":"旧市街・Blueの店先"},{"number":"125","id":"oldTownBlueWall","name":"旧市街・淡青壁"},{"number":"126","id":"oldTownBlueWindow","name":"旧市街・淡青窓付き外壁"},{"number":"127","id":"oldTownCreamDoor","name":"旧市街・クリーム店舗入口"},{"number":"128","id":"oldTownCreamShop","name":"旧市街・Creamの店先"},{"number":"129","id":"oldTownCreamWall","name":"旧市街・クリーム壁"},{"number":"130","id":"oldTownCreamWindow","name":"旧市街・クリーム窓付き外壁"},{"number":"131","id":"oldTownFlowerBox","name":"旧市街・窓辺の花箱"},{"number":"132","id":"oldTownMintDoor","name":"旧市街・薄緑店舗入口"},{"number":"133","id":"oldTownMintShop","name":"旧市街・Mintの店先"},{"number":"134","id":"oldTownMintWall","name":"旧市街・薄緑壁"},{"number":"135","id":"oldTownMintWindow","name":"旧市街・薄緑窓付き外壁"},{"number":"136","id":"oldTownOchreDoor","name":"旧市街・黄店舗入口"},{"number":"137","id":"oldTownOchreShop","name":"旧市街・Ochreの店先"},{"number":"138","id":"oldTownOchreWall","name":"旧市街・黄壁"},{"number":"139","id":"oldTownOchreWindow","name":"旧市街・黄窓付き外壁"},{"number":"140","id":"oldTownQuay","name":"旧市街・連続する石の護岸"},{"number":"141","id":"oldTownRoseDoor","name":"旧市街・赤桃店舗入口"},{"number":"142","id":"oldTownRoseShop","name":"旧市街・Roseの店先"},{"number":"143","id":"oldTownRoseWall","name":"旧市街・赤桃壁"},{"number":"144","id":"oldTownRoseWindow","name":"旧市街・赤桃窓付き外壁"},{"number":"145","id":"oldTownSandDoor","name":"旧市街・砂色店舗入口"},{"number":"146","id":"oldTownSandShop","name":"旧市街・Sandの店先"},{"number":"147","id":"oldTownSandWall","name":"旧市街・砂色壁"},{"number":"148","id":"oldTownSandWindow","name":"旧市街・砂色窓付き外壁"},{"number":"149","id":"oldTownShop","name":"旧市街・店舗ショーウィンドウ"},{"number":"150","id":"oldTownShutters","name":"旧市街・開いた雨戸"},{"number":"151","id":"oldTownSign","name":"旧市街・吊り看板"},{"number":"152","id":"oldTownStreetLamp","name":"旧市街・壁付街灯"},{"number":"153","id":"oldTownTower","name":"旧市街・小塔"},{"number":"154","id":"pillar","name":"柱"},{"number":"155","id":"pineHarborBollard","name":"港・係船柱"},{"number":"156","id":"pineHarborFender","name":"港・防舷材"},{"number":"157","id":"pineHarborLamp","name":"港・照明灯"},{"number":"158","id":"pineHarborPallet","name":"港・荷役パレット"},{"number":"159","id":"pineHarborPier","name":"港・木造歩行桟橋"},{"number":"160","id":"pineHarborQuay","name":"港・コンクリート岸壁"},{"number":"161","id":"pineHarborSign","name":"港・航路標識"},{"number":"162","id":"pineLandingCraft","name":"兵員輸送艇・20人乗り（18×8）"},{"number":"163","id":"pineSuperAC","name":"空調室外機"},{"number":"164","id":"pineSuperAccent","name":"スーパー緑色アクセント壁"},{"number":"165","id":"pineSuperBayEnd","name":"駐車枠・奥の白線"},{"number":"166","id":"pineSuperBollard","name":"車止め"},{"number":"167","id":"pineSuperCar","name":"放置車両"},{"number":"168","id":"pineSuperCarMini","name":"放置車・軽ハッチ"},{"number":"169","id":"pineSuperCarPickup","name":"放置車・荷台付き"},{"number":"170","id":"pineSuperCarSUV","name":"放置車・SUV"},{"number":"171","id":"pineSuperCart","name":"カート置場"},{"number":"172","id":"pineSuperCarVan","name":"放置車・ワンボックス"},{"number":"173","id":"pineSuperCheckout","name":"レジ台"},{"number":"174","id":"pineSuperCooler","name":"壁面冷蔵ケース"},{"number":"175","id":"pineSuperCorner","name":"スーパー外壁コーナー"},{"number":"176","id":"pineSuperCurb","name":"縁石"},{"number":"177","id":"pineSuperDoor","name":"自動ガラス入口"},{"number":"178","id":"pineSuperFreezer","name":"冷凍平ケース"},{"number":"179","id":"pineSuperFreshCase","name":"精肉・鮮魚対面ケース"},{"number":"180","id":"pineSuperGlass","name":"ガラス正面壁"},{"number":"181","id":"pineSuperLogo","name":"PINE MART 大型看板"},{"number":"182","id":"pineSuperPacking","name":"レジ横サッカー台"},{"number":"183","id":"pineSuperProduce","name":"青果平台"},{"number":"184","id":"pineSuperProduceSlope","name":"青果・傾斜陳列台"},{"number":"185","id":"pineSuperRack","name":"業務用棚"},{"number":"186","id":"pineSuperRegisterGate","name":"レジ通路ゲート"},{"number":"187","id":"pineSuperRoof","name":"スーパー平屋フラット屋根"},{"number":"188","id":"pineSuperShelf","name":"ゴンドラ棚"},{"number":"189","id":"pineSuperShelfEmpty","name":"スーパー・空の棚"},{"number":"190","id":"pineSuperShelfEnd","name":"売り場棚の端末"},{"number":"191","id":"pineSuperShelfSparse","name":"スーパー・残りわずかな棚"},{"number":"192","id":"pineSuperShelfStocked","name":"スーパー・食品が残る棚"},{"number":"193","id":"pineSuperShutter","name":"荷受けシャッター"},{"number":"194","id":"pineSuperSign","name":"看板"},{"number":"195","id":"pineSuperStripe","name":"駐車区画線"},{"number":"196","id":"pineSuperWall","name":"スーパー彩色外壁"},{"number":"197","id":"plasterwall","name":"白い漆喰壁"},{"number":"198","id":"plasterwallAll","name":"漆喰・全面"},{"number":"199","id":"plasterwallcorner","name":"漆喰の壁・角"},{"number":"200","id":"plasterwallCounter","name":"漆喰の壁・店カウンター"},{"number":"201","id":"plasterwallDoor","name":"漆喰の壁・扉"},{"number":"202","id":"plasterwallDouble","name":"漆喰・両面"},{"number":"203","id":"plasterwallPlain","name":"漆喰・装飾なし"},{"number":"204","id":"plasterwallWindow","name":"漆喰の壁・窓"},{"number":"205","id":"plateCeramic","name":"陶器皿"},{"number":"206","id":"plateWood","name":"木皿"},{"number":"207","id":"rewardChest","name":"ダンジョン報酬の豪華宝箱"},{"number":"208","id":"rock","name":"大岩"},{"number":"209","id":"rockBasalt","name":"玄武岩"},{"number":"210","id":"rockCliff","name":"大きな岩塊"},{"number":"211","id":"rockCluster","name":"岩の集まり"},{"number":"212","id":"rockGranite","name":"花崗岩"},{"number":"213","id":"rockMossy","name":"苔むした岩"},{"number":"214","id":"rockSandstone","name":"砂岩"},{"number":"215","id":"roof","name":"屋根"},{"number":"216","id":"roofCorner","name":"屋根・角"},{"number":"217","id":"roofCross","name":"住宅・交差切妻屋根"},{"number":"218","id":"roofDormer","name":"住宅・屋根窓付き"},{"number":"219","id":"roofHip","name":"住宅・寄棟屋根"},{"number":"220","id":"roofLean","name":"住宅・片流れ屋根"},{"number":"221","id":"roofPlank","name":"木板屋根"},{"number":"222","id":"roofPlankEnd","name":"木板屋根・端"},{"number":"223","id":"roofPlankRidge","name":"木板屋根・棟"},{"number":"224","id":"roofRuin","name":"崩れた屋根"},{"number":"225","id":"roofSteep","name":"住宅・急勾配切妻屋根"},{"number":"226","id":"roofThatch","name":"茅葺き屋根"},{"number":"227","id":"roofThatchEnd","name":"茅葺き屋根・端"},{"number":"228","id":"roofThatchRidge","name":"茅葺き屋根・棟"},{"number":"229","id":"roofThatchThick","name":"住宅・厚い茅葺き"},{"number":"230","id":"roofTile","name":"瓦屋根"},{"number":"231","id":"roofTileEnd","name":"瓦屋根・端"},{"number":"232","id":"roofTileRidge","name":"瓦屋根・棟"},{"number":"233","id":"roundTableSet","name":"食器付き丸テーブル"},{"number":"234","id":"roundTableStone","name":"石の丸テーブル"},{"number":"235","id":"roundTableWood","name":"木の丸テーブル"},{"number":"236","id":"rubble","name":"瓦礫"},{"number":"237","id":"ruinDoorBroken","name":"壊れた扉"},{"number":"238","id":"ruinDoorHanging","name":"外れかけた木扉"},{"number":"239","id":"ruinFloorCrack","name":"ひび割れた床"},{"number":"240","id":"ruinFloorHole","name":"穴のある床"},{"number":"241","id":"ruinRoofCollapse","name":"崩れ落ちた屋根"},{"number":"242","id":"ruinRoofHole","name":"穴の開いた屋根"},{"number":"243","id":"ruinStonePost","name":"折れた石柱"},{"number":"244","id":"ruinWallJagged","name":"崩れた壁・半壊"},{"number":"245","id":"ruinWallLow","name":"崩れた壁・低"},{"number":"246","id":"ruinWindowEmpty","name":"枠だけ残った窓"},{"number":"247","id":"ruinWindowShattered","name":"割れた窓"},{"number":"248","id":"ruinWoodPost","name":"折れた木柱"},{"number":"249","id":"sack","name":"麻袋"},{"number":"250","id":"sarcophagus","name":"石棺"},{"number":"251","id":"sheepWool","name":"羊"},{"number":"252","id":"shopBagSign","name":"道具屋の看板・袋"},{"number":"253","id":"shopChestSign","name":"道具屋の看板・宝箱"},{"number":"254","id":"shopCounter","name":"店カウンター"},{"number":"255","id":"shopHerbSign","name":"道具屋の看板・薬草"},{"number":"256","id":"slopeGrass","name":"草地の斜面"},{"number":"257","id":"slopeStone","name":"岩の斜面"},{"number":"258","id":"smallFlowerVase","name":"小さな花瓶"},{"number":"259","id":"stairDown","name":"地下への階段"},{"number":"260","id":"stairs","name":"階段"},{"number":"261","id":"stairSpiral","name":"螺旋階段"},{"number":"262","id":"stairStraight","name":"直線階段"},{"number":"263","id":"stairSwitchback","name":"折り返し階段"},{"number":"264","id":"stonewall","name":"石積みの壁"},{"number":"265","id":"stonewallAll","name":"石積み・全面"},{"number":"266","id":"stonewallcorner","name":"石積みの壁・角"},{"number":"267","id":"stonewallCounter","name":"石積みの壁・店カウンター"},{"number":"268","id":"stonewallDoor","name":"石積みの壁・扉"},{"number":"269","id":"stonewallDouble","name":"石積み・両面"},{"number":"270","id":"stonewallPlain","name":"石積み・装飾なし"},{"number":"271","id":"stonewallWindow","name":"石積みの壁・窓"},{"number":"272","id":"stoolRound","name":"丸椅子"},{"number":"273","id":"streamBank","name":"小川の岸"},{"number":"274","id":"streamBend","name":"曲がった岸"},{"number":"275","id":"streamFord","name":"渡りやすい浅瀬"},{"number":"276","id":"streamShallow","name":"浅瀬"},{"number":"277","id":"table","name":"木の机"},{"number":"278","id":"tallGrass","name":"背の高い草"},{"number":"279","id":"terrainStairs","name":"段差を上る石段"},{"number":"280","id":"terrainStep","name":"土の段差"},{"number":"281","id":"timberWall","name":"木骨組み漆喰壁"},{"number":"282","id":"towerBattlement","name":"塔の胸壁"},{"number":"283","id":"towerPillar","name":"塔の石柱"},{"number":"284","id":"towerSpire","name":"尖塔屋根"},{"number":"285","id":"towerWall","name":"塔の円弧石壁"},{"number":"286","id":"towerWindow","name":"塔の小窓"},{"number":"287","id":"treeAutumn","name":"紅葉した木"},{"number":"288","id":"treeBamboo","name":"竹"},{"number":"289","id":"treeBirch","name":"白樺"},{"number":"290","id":"treeBranch","name":"枝のある木 ③"},{"number":"291","id":"treeCedar","name":"杉"},{"number":"292","id":"treeCherry","name":"桜"},{"number":"293","id":"treeDead","name":"枯れ木"},{"number":"294","id":"treeMaple","name":"カエデ"},{"number":"295","id":"treeOak","name":"大きな広葉樹"},{"number":"296","id":"treePine","name":"針葉樹"},{"number":"297","id":"treeRound","name":"丸い広葉樹 ①"},{"number":"298","id":"treeStump","name":"切り株"},{"number":"299","id":"treeWillow","name":"柳"},{"number":"300","id":"vineWall","name":"つる植物"},{"number":"301","id":"wall","name":"壁"},{"number":"302","id":"wallAll","name":"基本素材・全面"},{"number":"303","id":"wallcorner","name":"基本の壁・角"},{"number":"304","id":"wallCounter","name":"基本の壁・店カウンター"},{"number":"305","id":"wallDoor","name":"基本の壁・扉"},{"number":"306","id":"wallDouble","name":"基本素材・両面"},{"number":"307","id":"wallPlain","name":"基本素材・装飾なし"},{"number":"308","id":"wallWindow","name":"基本の壁・窓"},{"number":"309","id":"wardrobe","name":"タンス"},{"number":"310","id":"watersideRock","name":"水辺の岩"},{"number":"311","id":"wellStone","name":"石造りの井戸"},{"number":"312","id":"wellWood","name":"木造りの井戸"},{"number":"313","id":"window","name":"窓壁"},{"number":"314","id":"windowBrick","name":"レンガ枠の窓"},{"number":"315","id":"windowStone","name":"石枠の窓"},{"number":"316","id":"windowWood","name":"木枠の窓"},{"number":"317","id":"woodwall","name":"木の板壁"},{"number":"318","id":"woodwallAll","name":"木材・全面"},{"number":"319","id":"woodwallcorner","name":"木の板壁・角"},{"number":"320","id":"woodwallCounter","name":"木の板壁・店カウンター"},{"number":"321","id":"woodwallDoor","name":"木の板壁・扉"},{"number":"322","id":"woodwallDouble","name":"木材・両面"},{"number":"323","id":"woodwallPlain","name":"木材・装飾なし"},{"number":"324","id":"woodwallWindow","name":"木の板壁・窓"},{"number":"325","id":"poiInnSign","name":"宿屋の吊り看板"},{"number":"326","id":"poiStreetLamp","name":"柱付きの街灯"},{"number":"327","id":"poiWallSconce","name":"壁掛けの灯り"},{"number":"328","id":"poiLedgerPapers","name":"帳簿と書類"},{"number":"329","id":"poiPenHolder","name":"羽根ペン立て"},{"number":"330","id":"poiPottedPlant","name":"観葉植物"},{"number":"331","id":"poiDiningSign","name":"食堂の吊り看板"},{"number":"332","id":"poiFortWall","name":"城壁・石積み"},{"number":"333","id":"poiFortBoundary","name":"城壁・外寄せ"},{"number":"334","id":"poiFortCorner","name":"城壁・隅柱"},{"number":"335","id":"poiFortGate","name":"大城門・開門"}];
+const pineAINumberEntries=[{"number":"001","id":"ancientAltar","name":"古い祭壇"},{"number":"002","id":"archStone","name":"石造りアーチ"},{"number":"003","id":"balcony","name":"木製ベランダ"},{"number":"004","id":"barrel","name":"樽"},{"number":"005","id":"basketProduce","name":"野菜かご"},{"number":"006","id":"bathLuxury","name":"風呂・豪華な浴槽"},{"number":"007","id":"bathStone","name":"風呂・石造り浴槽"},{"number":"008","id":"bathWood","name":"風呂・木製浴槽"},{"number":"009","id":"bed","name":"ベッド"},{"number":"010","id":"bedLuxury","name":"豪華なベッド"},{"number":"011","id":"benchWood","name":"木製長椅子"},{"number":"012","id":"bookshelf","name":"本棚"},{"number":"013","id":"bowlClay","name":"土焼きの器"},{"number":"014","id":"breadBoard","name":"パンとまな板"},{"number":"015","id":"brickwall","name":"レンガの壁"},{"number":"016","id":"brickwallAll","name":"レンガ・全面"},{"number":"017","id":"brickwallcorner","name":"レンガの壁・角"},{"number":"018","id":"brickwallCounter","name":"レンガの壁・店カウンター"},{"number":"019","id":"brickwallDoor","name":"レンガの壁・扉"},{"number":"020","id":"brickwallDouble","name":"レンガ・両面"},{"number":"021","id":"brickwallPlain","name":"レンガ・装飾なし"},{"number":"022","id":"brickwallWindow","name":"レンガの壁・窓"},{"number":"023","id":"bridgeStone","name":"石橋・中央"},{"number":"024","id":"bridgeStoneEnd","name":"石橋・端"},{"number":"025","id":"bridgeWood","name":"木橋・中央"},{"number":"026","id":"bridgeWoodEnd","name":"木橋・端"},{"number":"027","id":"brokenPillar","name":"崩壊した石柱"},{"number":"028","id":"bush","name":"低木"},{"number":"029","id":"bushFern","name":"シダ"},{"number":"030","id":"bushFlower","name":"花の低木"},{"number":"031","id":"candleStand","name":"燭台"},{"number":"032","id":"chairClassic","name":"椅子"},{"number":"033","id":"chairWood","name":"木製椅子"},{"number":"034","id":"chest","name":"宝箱"},{"number":"035","id":"chimney","name":"レンガの煙突"},{"number":"036","id":"cliffEdge","name":"崖の端"},{"number":"037","id":"cliffFace","name":"崖の壁面"},{"number":"038","id":"corner","name":"角の壁"},{"number":"039","id":"counterLuxury","name":"高級木製カウンター"},{"number":"040","id":"counterStone","name":"石製カウンター"},{"number":"041","id":"counterWood","name":"木製カウンター"},{"number":"042","id":"crackedWall","name":"ひび割れた石壁"},{"number":"043","id":"crate","name":"木箱"},{"number":"044","id":"cropVegetable","name":"野菜の畑"},{"number":"045","id":"cropWheat","name":"麦の畑"},{"number":"046","id":"cupWood","name":"木のコップ"},{"number":"047","id":"displayShelf","name":"商品陳列棚"},{"number":"048","id":"door","name":"ドア枠"},{"number":"049","id":"doorIron","name":"鉄の扉"},{"number":"050","id":"doorStone","name":"石造りの扉枠"},{"number":"051","id":"doorWood","name":"木の扉"},{"number":"052","id":"equipClub","name":"棍棒"},{"number":"053","id":"equipIronSword","name":"鉄の剣"},{"number":"054","id":"equipStick","name":"木の棒"},{"number":"055","id":"equipStoneSword","name":"石の剣"},{"number":"056","id":"equipWoodSword","name":"木の剣"},{"number":"057","id":"exposedRoots","name":"木の根"},{"number":"058","id":"fallenLog","name":"倒木"},{"number":"059","id":"fenceIron","name":"鉄柵・直線"},{"number":"060","id":"fenceIronCorner","name":"鉄柵・角"},{"number":"061","id":"fenceIronEnd","name":"鉄柵・端"},{"number":"062","id":"fenceIronGate","name":"鉄の門扉"},{"number":"063","id":"fenceStone","name":"石柵・直線"},{"number":"064","id":"fenceStoneCorner","name":"石柵・角"},{"number":"065","id":"fenceStoneEnd","name":"石柵・端"},{"number":"066","id":"fenceStoneGate","name":"石の門扉"},{"number":"067","id":"fenceWood","name":"木柵・直線"},{"number":"068","id":"fenceWoodCorner","name":"木柵・角"},{"number":"069","id":"fenceWoodEnd","name":"木柵・端"},{"number":"070","id":"fenceWoodGate","name":"木の門扉"},{"number":"071","id":"fireplace","name":"暖炉"},{"number":"072","id":"flowerField","name":"花畑"},{"number":"073","id":"frameWoodBeam","name":"木製の梁"},{"number":"074","id":"frameWoodBrace","name":"斜め補強材"},{"number":"075","id":"frameWoodPost","name":"木製の柱"},{"number":"076","id":"giantMushroom","name":"巨大キノコ"},{"number":"077","id":"gravestone","name":"墓石"},{"number":"078","id":"guildFacadeSign","name":"冒険者ギルド・正面大型看板"},{"number":"079","id":"guildLatrine","name":"ギルド・陶器便器"},{"number":"080","id":"guildQuestBoard","name":"冒険者ギルド・依頼掲示板"},{"number":"081","id":"guildSign","name":"冒険者ギルド・紋章看板"},{"number":"082","id":"guildStairDown","name":"ギルド・下り階段"},{"number":"083","id":"guildStairUp","name":"ギルド・上り階段"},{"number":"084","id":"guildWallQuestBoard","name":"ギルド・壁掛け依頼掲示板"},{"number":"085","id":"handcartEmpty","name":"木製の荷車"},{"number":"086","id":"handcartLoaded","name":"荷積みの荷車"},{"number":"087","id":"humanBare","name":"裸の人間"},{"number":"088","id":"humanKnight","name":"騎士"},{"number":"089","id":"humanMerchant","name":"商人"},{"number":"090","id":"humanVillager","name":"村人"},{"number":"091","id":"innSign","name":"宿屋の看板（INN）"},{"number":"092","id":"ironGate","name":"鉄格子"},{"number":"093","id":"ironwall","name":"鉄板の壁"},{"number":"094","id":"ironwallAll","name":"鉄板・全面"},{"number":"095","id":"ironwallcorner","name":"鉄板の壁・角"},{"number":"096","id":"ironwallCounter","name":"鉄板の壁・店カウンター"},{"number":"097","id":"ironwallDoor","name":"鉄板の壁・扉"},{"number":"098","id":"ironwallDouble","name":"鉄板・両面"},{"number":"099","id":"ironwallPlain","name":"鉄板・装飾なし"},{"number":"100","id":"ironwallWindow","name":"鉄板の壁・窓"},{"number":"101","id":"jugClay","name":"水差し"},{"number":"102","id":"kitchenCounter","name":"キッチン・調理台"},{"number":"103","id":"kitchenSink","name":"キッチン・流し台"},{"number":"104","id":"kitchenStove","name":"キッチン・石のかまど"},{"number":"105","id":"lantern","name":"ランタン"},{"number":"106","id":"marketStallCloth","name":"布屋根の露店"},{"number":"107","id":"marketStallWood","name":"木屋根の屋台"},{"number":"108","id":"monsterDragon","name":"ドラゴン"},{"number":"109","id":"monsterGoblin","name":"ゴブリン"},{"number":"110","id":"monsterSkeleton","name":"ガイコツ"},{"number":"111","id":"monsterSlime","name":"スライム"},{"number":"112","id":"mosswall","name":"苔むした石壁"},{"number":"113","id":"mosswallAll","name":"苔むした石・全面"},{"number":"114","id":"mosswallcorner","name":"苔むした壁・角"},{"number":"115","id":"mosswallCounter","name":"苔むした壁・店カウンター"},{"number":"116","id":"mosswallDoor","name":"苔むした壁・扉"},{"number":"117","id":"mosswallDouble","name":"苔むした石・両面"},{"number":"118","id":"mosswallPlain","name":"苔むした石・装飾なし"},{"number":"119","id":"mosswallWindow","name":"苔むした壁・窓"},{"number":"120","id":"mugCeramic","name":"陶器のマグ"},{"number":"121","id":"mushroomPatch","name":"キノコ群"},{"number":"122","id":"oldTownAwning","name":"旧市街・布の庇"},{"number":"123","id":"oldTownBlueDoor","name":"旧市街・淡青店舗入口"},{"number":"124","id":"oldTownBlueShop","name":"旧市街・Blueの店先"},{"number":"125","id":"oldTownBlueWall","name":"旧市街・淡青壁"},{"number":"126","id":"oldTownBlueWindow","name":"旧市街・淡青窓付き外壁"},{"number":"127","id":"oldTownCreamDoor","name":"旧市街・クリーム店舗入口"},{"number":"128","id":"oldTownCreamShop","name":"旧市街・Creamの店先"},{"number":"129","id":"oldTownCreamWall","name":"旧市街・クリーム壁"},{"number":"130","id":"oldTownCreamWindow","name":"旧市街・クリーム窓付き外壁"},{"number":"131","id":"oldTownFlowerBox","name":"旧市街・窓辺の花箱"},{"number":"132","id":"oldTownMintDoor","name":"旧市街・薄緑店舗入口"},{"number":"133","id":"oldTownMintShop","name":"旧市街・Mintの店先"},{"number":"134","id":"oldTownMintWall","name":"旧市街・薄緑壁"},{"number":"135","id":"oldTownMintWindow","name":"旧市街・薄緑窓付き外壁"},{"number":"136","id":"oldTownOchreDoor","name":"旧市街・黄店舗入口"},{"number":"137","id":"oldTownOchreShop","name":"旧市街・Ochreの店先"},{"number":"138","id":"oldTownOchreWall","name":"旧市街・黄壁"},{"number":"139","id":"oldTownOchreWindow","name":"旧市街・黄窓付き外壁"},{"number":"140","id":"oldTownQuay","name":"旧市街・連続する石の護岸"},{"number":"141","id":"oldTownRoseDoor","name":"旧市街・赤桃店舗入口"},{"number":"142","id":"oldTownRoseShop","name":"旧市街・Roseの店先"},{"number":"143","id":"oldTownRoseWall","name":"旧市街・赤桃壁"},{"number":"144","id":"oldTownRoseWindow","name":"旧市街・赤桃窓付き外壁"},{"number":"145","id":"oldTownSandDoor","name":"旧市街・砂色店舗入口"},{"number":"146","id":"oldTownSandShop","name":"旧市街・Sandの店先"},{"number":"147","id":"oldTownSandWall","name":"旧市街・砂色壁"},{"number":"148","id":"oldTownSandWindow","name":"旧市街・砂色窓付き外壁"},{"number":"149","id":"oldTownShop","name":"旧市街・店舗ショーウィンドウ"},{"number":"150","id":"oldTownShutters","name":"旧市街・開いた雨戸"},{"number":"151","id":"oldTownSign","name":"旧市街・吊り看板"},{"number":"152","id":"oldTownStreetLamp","name":"旧市街・壁付街灯"},{"number":"153","id":"oldTownTower","name":"旧市街・小塔"},{"number":"154","id":"pillar","name":"柱"},{"number":"155","id":"pineHarborBollard","name":"港・係船柱"},{"number":"156","id":"pineHarborFender","name":"港・防舷材"},{"number":"157","id":"pineHarborLamp","name":"港・照明灯"},{"number":"158","id":"pineHarborPallet","name":"港・荷役パレット"},{"number":"159","id":"pineHarborPier","name":"港・木造歩行桟橋"},{"number":"160","id":"pineHarborQuay","name":"港・コンクリート岸壁"},{"number":"161","id":"pineHarborSign","name":"港・航路標識"},{"number":"162","id":"pineLandingCraft","name":"兵員輸送艇・20人乗り（18×8）"},{"number":"163","id":"pineSuperAC","name":"空調室外機"},{"number":"164","id":"pineSuperAccent","name":"スーパー緑色アクセント壁"},{"number":"165","id":"pineSuperBayEnd","name":"駐車枠・奥の白線"},{"number":"166","id":"pineSuperBollard","name":"車止め"},{"number":"167","id":"pineSuperCar","name":"放置車両"},{"number":"168","id":"pineSuperCarMini","name":"放置車・軽ハッチ"},{"number":"169","id":"pineSuperCarPickup","name":"放置車・荷台付き"},{"number":"170","id":"pineSuperCarSUV","name":"放置車・SUV"},{"number":"171","id":"pineSuperCart","name":"カート置場"},{"number":"172","id":"pineSuperCarVan","name":"放置車・ワンボックス"},{"number":"173","id":"pineSuperCheckout","name":"レジ台"},{"number":"174","id":"pineSuperCooler","name":"壁面冷蔵ケース"},{"number":"175","id":"pineSuperCorner","name":"スーパー外壁コーナー"},{"number":"176","id":"pineSuperCurb","name":"縁石"},{"number":"177","id":"pineSuperDoor","name":"自動ガラス入口"},{"number":"178","id":"pineSuperFreezer","name":"冷凍平ケース"},{"number":"179","id":"pineSuperFreshCase","name":"精肉・鮮魚対面ケース"},{"number":"180","id":"pineSuperGlass","name":"ガラス正面壁"},{"number":"181","id":"pineSuperLogo","name":"PINE MART 大型看板"},{"number":"182","id":"pineSuperPacking","name":"レジ横サッカー台"},{"number":"183","id":"pineSuperProduce","name":"青果平台"},{"number":"184","id":"pineSuperProduceSlope","name":"青果・傾斜陳列台"},{"number":"185","id":"pineSuperRack","name":"業務用棚"},{"number":"186","id":"pineSuperRegisterGate","name":"レジ通路ゲート"},{"number":"187","id":"pineSuperRoof","name":"スーパー平屋フラット屋根"},{"number":"188","id":"pineSuperShelf","name":"ゴンドラ棚"},{"number":"189","id":"pineSuperShelfEmpty","name":"スーパー・空の棚"},{"number":"190","id":"pineSuperShelfEnd","name":"売り場棚の端末"},{"number":"191","id":"pineSuperShelfSparse","name":"スーパー・残りわずかな棚"},{"number":"192","id":"pineSuperShelfStocked","name":"スーパー・食品が残る棚"},{"number":"193","id":"pineSuperShutter","name":"荷受けシャッター"},{"number":"194","id":"pineSuperSign","name":"看板"},{"number":"195","id":"pineSuperStripe","name":"駐車区画線"},{"number":"196","id":"pineSuperWall","name":"スーパー彩色外壁"},{"number":"197","id":"plasterwall","name":"白い漆喰壁"},{"number":"198","id":"plasterwallAll","name":"漆喰・全面"},{"number":"199","id":"plasterwallcorner","name":"漆喰の壁・角"},{"number":"200","id":"plasterwallCounter","name":"漆喰の壁・店カウンター"},{"number":"201","id":"plasterwallDoor","name":"漆喰の壁・扉"},{"number":"202","id":"plasterwallDouble","name":"漆喰・両面"},{"number":"203","id":"plasterwallPlain","name":"漆喰・装飾なし"},{"number":"204","id":"plasterwallWindow","name":"漆喰の壁・窓"},{"number":"205","id":"plateCeramic","name":"陶器皿"},{"number":"206","id":"plateWood","name":"木皿"},{"number":"207","id":"rewardChest","name":"ダンジョン報酬の豪華宝箱"},{"number":"208","id":"rock","name":"大岩"},{"number":"209","id":"rockBasalt","name":"玄武岩"},{"number":"210","id":"rockCliff","name":"大きな岩塊"},{"number":"211","id":"rockCluster","name":"岩の集まり"},{"number":"212","id":"rockGranite","name":"花崗岩"},{"number":"213","id":"rockMossy","name":"苔むした岩"},{"number":"214","id":"rockSandstone","name":"砂岩"},{"number":"215","id":"roof","name":"屋根"},{"number":"216","id":"roofCorner","name":"屋根・角"},{"number":"217","id":"roofCross","name":"住宅・交差切妻屋根"},{"number":"218","id":"roofDormer","name":"住宅・屋根窓付き"},{"number":"219","id":"roofHip","name":"住宅・寄棟屋根"},{"number":"220","id":"roofLean","name":"住宅・片流れ屋根"},{"number":"221","id":"roofPlank","name":"木板屋根"},{"number":"222","id":"roofPlankEnd","name":"木板屋根・端"},{"number":"223","id":"roofPlankRidge","name":"木板屋根・棟"},{"number":"224","id":"roofRuin","name":"崩れた屋根"},{"number":"225","id":"roofSteep","name":"住宅・急勾配切妻屋根"},{"number":"226","id":"roofThatch","name":"茅葺き屋根"},{"number":"227","id":"roofThatchEnd","name":"茅葺き屋根・端"},{"number":"228","id":"roofThatchRidge","name":"茅葺き屋根・棟"},{"number":"229","id":"roofThatchThick","name":"住宅・厚い茅葺き"},{"number":"230","id":"roofTile","name":"瓦屋根"},{"number":"231","id":"roofTileEnd","name":"瓦屋根・端"},{"number":"232","id":"roofTileRidge","name":"瓦屋根・棟"},{"number":"233","id":"roundTableSet","name":"食器付き丸テーブル"},{"number":"234","id":"roundTableStone","name":"石の丸テーブル"},{"number":"235","id":"roundTableWood","name":"木の丸テーブル"},{"number":"236","id":"rubble","name":"瓦礫"},{"number":"237","id":"ruinDoorBroken","name":"壊れた扉"},{"number":"238","id":"ruinDoorHanging","name":"外れかけた木扉"},{"number":"239","id":"ruinFloorCrack","name":"ひび割れた床"},{"number":"240","id":"ruinFloorHole","name":"穴のある床"},{"number":"241","id":"ruinRoofCollapse","name":"崩れ落ちた屋根"},{"number":"242","id":"ruinRoofHole","name":"穴の開いた屋根"},{"number":"243","id":"ruinStonePost","name":"折れた石柱"},{"number":"244","id":"ruinWallJagged","name":"崩れた壁・半壊"},{"number":"245","id":"ruinWallLow","name":"崩れた壁・低"},{"number":"246","id":"ruinWindowEmpty","name":"枠だけ残った窓"},{"number":"247","id":"ruinWindowShattered","name":"割れた窓"},{"number":"248","id":"ruinWoodPost","name":"折れた木柱"},{"number":"249","id":"sack","name":"麻袋"},{"number":"250","id":"sarcophagus","name":"石棺"},{"number":"251","id":"sheepWool","name":"羊"},{"number":"252","id":"shopBagSign","name":"道具屋の看板・袋"},{"number":"253","id":"shopChestSign","name":"道具屋の看板・宝箱"},{"number":"254","id":"shopCounter","name":"店カウンター"},{"number":"255","id":"shopHerbSign","name":"道具屋の看板・薬草"},{"number":"256","id":"slopeGrass","name":"草地の斜面"},{"number":"257","id":"slopeStone","name":"岩の斜面"},{"number":"258","id":"smallFlowerVase","name":"小さな花瓶"},{"number":"259","id":"stairDown","name":"地下への階段"},{"number":"260","id":"stairs","name":"階段"},{"number":"261","id":"stairSpiral","name":"螺旋階段"},{"number":"262","id":"stairStraight","name":"直線階段"},{"number":"263","id":"stairSwitchback","name":"折り返し階段"},{"number":"264","id":"stonewall","name":"石積みの壁"},{"number":"265","id":"stonewallAll","name":"石積み・全面"},{"number":"266","id":"stonewallcorner","name":"石積みの壁・角"},{"number":"267","id":"stonewallCounter","name":"石積みの壁・店カウンター"},{"number":"268","id":"stonewallDoor","name":"石積みの壁・扉"},{"number":"269","id":"stonewallDouble","name":"石積み・両面"},{"number":"270","id":"stonewallPlain","name":"石積み・装飾なし"},{"number":"271","id":"stonewallWindow","name":"石積みの壁・窓"},{"number":"272","id":"stoolRound","name":"丸椅子"},{"number":"273","id":"streamBank","name":"小川の岸"},{"number":"274","id":"streamBend","name":"曲がった岸"},{"number":"275","id":"streamFord","name":"渡りやすい浅瀬"},{"number":"276","id":"streamShallow","name":"浅瀬"},{"number":"277","id":"table","name":"木の机"},{"number":"278","id":"tallGrass","name":"背の高い草"},{"number":"279","id":"terrainStairs","name":"段差を上る石段"},{"number":"280","id":"terrainStep","name":"土の段差"},{"number":"281","id":"timberWall","name":"木骨組み漆喰壁"},{"number":"282","id":"towerBattlement","name":"塔の胸壁"},{"number":"283","id":"towerPillar","name":"塔の石柱"},{"number":"284","id":"towerSpire","name":"尖塔屋根"},{"number":"285","id":"towerWall","name":"塔の円弧石壁"},{"number":"286","id":"towerWindow","name":"塔の小窓"},{"number":"287","id":"treeAutumn","name":"紅葉した木"},{"number":"288","id":"treeBamboo","name":"竹"},{"number":"289","id":"treeBirch","name":"白樺"},{"number":"290","id":"treeBranch","name":"枝のある木 ③"},{"number":"291","id":"treeCedar","name":"杉"},{"number":"292","id":"treeCherry","name":"桜"},{"number":"293","id":"treeDead","name":"枯れ木"},{"number":"294","id":"treeMaple","name":"カエデ"},{"number":"295","id":"treeOak","name":"大きな広葉樹"},{"number":"296","id":"treePine","name":"針葉樹"},{"number":"297","id":"treeRound","name":"丸い広葉樹 ①"},{"number":"298","id":"treeStump","name":"切り株"},{"number":"299","id":"treeWillow","name":"柳"},{"number":"300","id":"vineWall","name":"つる植物"},{"number":"301","id":"wall","name":"壁"},{"number":"302","id":"wallAll","name":"基本素材・全面"},{"number":"303","id":"wallcorner","name":"基本の壁・角"},{"number":"304","id":"wallCounter","name":"基本の壁・店カウンター"},{"number":"305","id":"wallDoor","name":"基本の壁・扉"},{"number":"306","id":"wallDouble","name":"基本素材・両面"},{"number":"307","id":"wallPlain","name":"基本素材・装飾なし"},{"number":"308","id":"wallWindow","name":"基本の壁・窓"},{"number":"309","id":"wardrobe","name":"タンス"},{"number":"310","id":"watersideRock","name":"水辺の岩"},{"number":"311","id":"wellStone","name":"石造りの井戸"},{"number":"312","id":"wellWood","name":"木造りの井戸"},{"number":"313","id":"window","name":"窓壁"},{"number":"314","id":"windowBrick","name":"レンガ枠の窓"},{"number":"315","id":"windowStone","name":"石枠の窓"},{"number":"316","id":"windowWood","name":"木枠の窓"},{"number":"317","id":"woodwall","name":"木の板壁"},{"number":"318","id":"woodwallAll","name":"木材・全面"},{"number":"319","id":"woodwallcorner","name":"木の板壁・角"},{"number":"320","id":"woodwallCounter","name":"木の板壁・店カウンター"},{"number":"321","id":"woodwallDoor","name":"木の板壁・扉"},{"number":"322","id":"woodwallDouble","name":"木材・両面"},{"number":"323","id":"woodwallPlain","name":"木材・装飾なし"},{"number":"324","id":"woodwallWindow","name":"木の板壁・窓"},{"number":"325","id":"poiInnSign","name":"宿屋の吊り看板"},{"number":"326","id":"poiStreetLamp","name":"柱付きの街灯"},{"number":"327","id":"poiWallSconce","name":"壁掛けの灯り"},{"number":"328","id":"poiLedgerPapers","name":"帳簿と書類"},{"number":"329","id":"poiPenHolder","name":"羽根ペン立て"},{"number":"330","id":"poiPottedPlant","name":"観葉植物"},{"number":"331","id":"poiDiningSign","name":"食堂の吊り看板"},{"number":"332","id":"poiFortWall","name":"城壁・石積み"},{"number":"333","id":"poiFortBoundary","name":"城壁・外寄せ"},{"number":"334","id":"poiFortCorner","name":"城壁・隅柱"},{"number":"335","id":"poiFortGate","name":"大城門・開門"},{"number":"336","id":"poiCanalQuay","name":"運河・石の護岸"}];
 const pineAINumberByType=new Map(pineAINumberEntries.map(e=>[e.id,e]));
 function pineAIPlanCapture(){
  pineAICaptureGeneration++;
@@ -6382,7 +6441,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v137';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v138';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -6596,7 +6655,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v137',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v138',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -7499,8 +7558,10 @@ function facilityRefreshCreek(){
  facilityCreekIndex=null;
  if(!creek)return;
  const water=new Set(),river=new Set(),parts=new Map(),shallows=new Map();
- const key=(x,z)=>x+','+z,authored=new Set(creek.deep.map(p=>key(p.x,p.z)));
- const wanted=new Map(creek.crossings.map(p=>[key(p.x,p.z),p]));
+ const canal=facilitySite.canal,key=(x,z)=>x+','+z;
+ const authored=new Set([...creek.deep,...(canal?.water||[])].map(p=>key(p.x,p.z)));
+ const pairs=[creek.crossings,...(canal?.bridgePairs||[])];
+ const wanted=new Map(pairs.flat().map(p=>[key(p.x,p.z),p]));
  const safeShallow=new Map((creek.shallows||[]).map(p=>[key(p.x,p.z),p.type]));
  for(const o of world){
   if(o.y!==0)continue;
@@ -7512,7 +7573,8 @@ function facilityRefreshCreek(){
   if(part&&part.type===o.type&&part.rot===(o.rot||0))parts.set(k,o);
   if(safeShallow.get(k)===o.type)shallows.set(k,o.type);
  }
- if(parts.size!==wanted.size||[...wanted.keys()].some(k=>!river.has(k)))parts.clear();
+ for(const pair of pairs)if(pair.some(p=>{const k=key(p.x,p.z);return !parts.has(k)||!river.has(k)}))
+  for(const {x,z} of pair)parts.delete(key(x,z));
  // Don't treat the approved structure as an intact creek deck if either part or riverbed is edited.
  const bridgeHeight=new Map();
  for(const [k,o] of parts)bridgeHeight.set(k,bridgeSpanElevation(o,parts)+.15);
@@ -7557,6 +7619,7 @@ function poiWalkCanStep(x,z,fromX,fromZ){
  return !cell.some(o=>{
   if(isFloor(o.type)||poiWalkPassableDoor(o.type)||nonBlocking.has(o.type)||o.type==='guildStairUp'||o.type==='guildStairDown')return false;
   if(o===deck||creek?.shallows.get(key)===o.type)return false;
+  if(o.type==='poiCanalQuay')return false;
   if(o.type==='poiFortGate'||(o.type==='poiFortBoundary'&&facilitySite?.id==='base'&&z===0))return false;
   // Only the foot-level loose stone and fern props are soft footing in
   // this public landscape. Keep separate boulder, log and tree assets solid.
@@ -8416,6 +8479,10 @@ function makeScene(){
  const townGuildWood=(x,z,type)=>inTownGuild(x,z)&&/^woodfloor(?:Light|Dark)?$/.test(type);
  const floors=new Map(world.filter(o=>o.y===0&&isFloor(o.type)).map(o=>[o.x+','+o.z,o.type]));
  const creekWater=facilitySite?.id==='base'?facilityCreekIndex?.water:null;
+ const canal=facilitySite?.id==='base'?facilitySite.canal:null;
+ const canalWater=new Set((canal?.water||[]).map(({x,z})=>x+','+z));
+ const canalQuays=new Set(canal?visible.filter(o=>o.y===0&&o.type==='poiCanalQuay').map(o=>o.x+','+o.z):[]);
+ const canalCulverts=new Set((canal?.culverts||[]).map(({x,z})=>x+','+z));
  const creekShoals=creekWater?new Set((facilitySite.creek?.shoals||[]).map(({x,z})=>x+','+z)):null;
  const woodlandRiver=(x,z)=>{const key=x+','+z;return creekWater?.has(key)&&floors.get(key)==='river'};
  const baseGrass=facilitySite?.id==='base'?new Array((MAP_W+1)*(MAP_H+1)):null;
@@ -8441,11 +8508,11 @@ function makeScene(){
   const tmp=mesh();
   const ambientTint=floors.has(x+','+z)?null:groundCorner;
   const eastBlend=groundCorner&&x>=72&&Object.prototype.hasOwnProperty.call(PINE_EAST_NATURE_TONES,kind)?groundCorner:null;
-  if(woodlandRiver(x,z))facilityWoodlandWater(tmp,x,z,floors,creekWater,creekShoals);
+  if(woodlandRiver(x,z))facilityWoodlandWater(tmp,x,z,floors,creekWater,creekShoals,canalWater.has(x+','+z));
   else{
    if(townGuildWood(x,z,kind))pineDrawTownGuildFloor(tmp,x,z,kind);
    else addFloorTile(tmp,x,z,kind,MAP_W*MAP_H,ROAD_DIAGONALS.has(kind)?roadDiagonalConnections(floors,x,z,kind):ROAD_IDS.has(kind)&&!kind.endsWith('Full')?roadConnections(floors,x,z,kind):0,ambientTint||eastBlend);
-   if(!(creekWater&&x>=67&&facilityWoodlandBank(tmp,x,z,kind,woodlandRiver,groundCorner))&&floors.has(x+','+z))shoreline(tmp,x,z,floors);
+   if(!canalQuays.has(x+','+z)&&!(creekWater&&x>=67&&facilityWoodlandBank(tmp,x,z,kind,woodlandRiver,groundCorner))&&floors.has(x+','+z))shoreline(tmp,x,z,floors);
   }
   pineBakeFloorLighting(tmp,x,z,0,pineShadows,pineWarmLamps);
   shiftMesh(m,tmp,terrainY(x,z));
@@ -8513,8 +8580,11 @@ function makeScene(){
   const stableBay=facilityStableLoadingBayPart(o);
   if(AUTO_ROOFS.has(o.type)){const temp=mesh();connectedRoofGeometry(temp,o,roofs);shiftMesh(m,temp,terrainY(o.x,o.z))}
   else if(BRIDGE_IDS.has(o.type)){
-   if(!facilityWoodlandBridgeGeometry(m,o,bridgeLookup,floors))bridgeConnectedGeometry(m,o,bridgeLookup);
+   if(!facilityWoodlandBridgeGeometry(m,o,bridgeLookup,floors)&&!facilityCanalBridgeGeometry(m,o,bridgeLookup,floors))
+    bridgeConnectedGeometry(m,o,bridgeLookup);
   }
+  else if(o.type==='poiFortWall'&&o.y===0&&canalCulverts.has(o.x+','+o.z)&&floors.get(o.x+','+o.z)==='river')
+   poiFortCulvertGeometry(m,o.x+.5,terrainY(o.x,o.z),o.z+.5,o.rot);
   else if(o.type==='pineLandingCraft')pineLandingCraftGeometry(m,o.x+.5,o.z+.5);
   else if(o.type.startsWith('pineHarbor'))pineHarborGeometry(m,o);
   else if(o.type.startsWith('pineSuper'))pineSupermarketGeometry(m,o);
@@ -9123,7 +9193,7 @@ const OBJECT_GROUPS=[
   {id:'bridges',label:'木橋・石橋',icon:'bridgeWood',items:['bridgeWood','bridgeWoodEnd','bridgeStone','bridgeStoneEnd']}
  ]},
  {id:'pineHarbor',label:'PINE・港湾と船着場',icon:'pineHarborPier',subgroups:[
-  {id:'harborDecks',label:'桟橋・岸壁',icon:'pineHarborQuay',items:['pineHarborPier','pineHarborQuay']},
+  {id:'harborDecks',label:'桟橋・岸壁',icon:'pineHarborQuay',items:['pineHarborPier','pineHarborQuay','poiCanalQuay']},
   {id:'harborFittings',label:'係留・荷役・照明',icon:'pineHarborBollard',items:['pineHarborBollard','pineHarborFender','pineHarborLamp','pineHarborPallet','pineHarborSign']},
   {id:'harborVessels',label:'大型輸送艇',icon:'pineLandingCraft',items:['pineLandingCraft']}
  ]},
@@ -11954,7 +12024,7 @@ function buildFacilitySite(id){
  const width=compound?96:housing?38:id==='stable'?22:plan.w+8;
  const height=compound?56:housing?20:id==='stable'?21:plan.d+8;
  const floors=new Map(),objects=[],buildings=[],insideGrade=new Set(),terrainHeights=[];
- let creek;
+ let creek,canal;
  const homeNames={cottage:'白壁の家',rowhouse:'レンガの家',gardener:'庭師の家'};
  const put=(x,z,type,y=0,rot=0)=>objects.push({x,z,y,type,rot});
  const floor=(x,z,type,rot=0,y=0)=>floors.set(x+','+z+','+y,{x,z,y,type,rot});
@@ -12052,8 +12122,8 @@ function buildFacilitySite(id){
   stamp('workshop',55,6,1);
   stamp('artisan',43,22,0);
   stamp('stable',4,33,0);
-  stamp('cottage',34,34,0);
-  stamp('rowhouse',44,36,0);
+  stamp('cottage',46,35,0);
+  stamp('rowhouse',52,23,0);
   stamp('gardener',54,34,1);
   stamp('toolshop',43,7,0);
   addTownGuild();
@@ -12092,7 +12162,7 @@ function buildFacilitySite(id){
   pave(51,35,53,45,'roadGravelFull');
   pave(36,42,36,43,'roadCobbleFull');pave(50,43,50,44,'roadCobbleFull');
   landscape([[32,37,'treeBirch'],[34,42,'bushFlower'],[41,41,'flowerField'],
-   [44,44,'bushFlower'],[58,42,'treeBirch'],[53,31,'bushFlower'],[61,37,'treeOak'],
+   [44,44,'bushFlower'],[58,42,'treeBirch'],[59,30,'bushFlower'],[61,37,'treeOak'],
    [42,24,'bushFern'],[52,26,'flowerField'],[42,9,'bushFlower'],[53,11,'treeBirch'],
    [6,31,'treeOak'],[15,30,'treeBirch']]);
   // The old well square remains intact. Its east side opens into a
@@ -12140,7 +12210,7 @@ function buildFacilitySite(id){
    [54,3,'treePine'],[58,2,'treeCedar'],[63,3,'treePine'],[65,8,'treeBirch'],
    [67,8,'treeCedar'],[69,11,'treePine'],[65,14,'treeBirch'],[70,16,'treePine'],
    [68,19,'treeCedar'],[64,22,'treeOak'],[65,24,'treeBirch'],[70,27,'treePine'],
-   [66,30,'treeCedar'],[64,32,'treeBirch'],[70,33,'treePine'],
+   [66,30,'treeCedar'],[64,34,'treeBirch'],[70,33,'treePine'],
    [2,48,'treeOak'],[5,51,'treeBirch'],[8,48,'treePine'],[8,54,'treeCedar'],
    [12,51,'treeBirch'],[15,54,'treePine'],
    [3,4,'bushFern'],[10,5,'tallGrass'],[31,5,'flowerField'],[34,3,'tallGrass'],
@@ -12156,7 +12226,7 @@ function buildFacilitySite(id){
    [67,36,'grassTrampled'],[67,35,'grassTrampled'],[66,34,'grassTrampled'],
    [67,34,'grassPatch'],[67,33,'grassTrampled'],[66,33,'grassMeadow'],
    [65,33,'grassPatch','benchWood',1],[65,34,'grassMeadow','bushFern'],
-   [66,32,'grassMeadow','flowerField'],[68,33,'grassMeadow','tallGrass'],
+   [65,35,'grassMeadow','flowerField'],[68,33,'grassMeadow','tallGrass'],
    [65,31,'grassForest'],
    [22,53,'grassMeadow'],[23,52,'grassPatch'],[24,53,'grassMeadow','tallGrass'],
    [27,54,'grassMeadow','flowerField'],
@@ -12188,7 +12258,7 @@ function buildFacilitySite(id){
   exterior(71,39,'grassWild');exterior(71,40,'roadCutStoneFull');
   // Gravel and scattered mossy rocks/ferns accent the bends, not the walking line.
   for(const [x,z,type,prop,rot=0] of [
-   [70,29,'grassPebbles','watersideRock',1],[68,32,'moss','bushFern'],
+   [70,29,'grassPebbles','watersideRock',1],[66,34,'moss','bushFern'],
    [68,34,'grassPebbles','watersideRock',2],[70,37,'grassPebbles','watersideRock',3],
    [71,41,'grassWild','tallGrass',2],[70,41,'grassPebbles','watersideRock'],
    [68,43,'moss','bushFern',1],[69,44,'grassPebbles','watersideRock',2],
@@ -12266,6 +12336,40 @@ function buildFacilitySite(id){
    [92,54,'grassWild','tallGrass'],[94,51,'grassPebbles','watersideRock',3],
    [95,54,'grassWild','tallGrass',1]
   ]){openPatch(x,z,f);put(x,z,p,0,rot);}
+  // The east residential quarter opens from a narrow, lived-in lane onto
+  // a two-tile branch of the woodland creek. Keep both historic land routes.
+  const canalWater=[],canalBridges=[55,67].map(x=>[
+   {x,z:31,type:'bridgeStoneEnd',rot:2},{x,z:32,type:'bridgeStoneEnd',rot:0}]);
+  pave(48,30,61,30,'roadCobbleFull');
+  pave(48,33,61,33,'roadCobbleFull');
+  pave(50,31,51,32,'roadCutStoneFull');
+  pave(51,24,51,30,'roadGravelFull');
+  pave(53,33,53,40,'roadCobbleFull');
+  pave(50,42,50,45,'roadCobbleFull');
+  pave(53,30,54,30,'roadBrickFull');
+  // Preserve the gardener's supplies, but keep the one-cell passage clear
+  // from the bridge to the door and through to the southern road.
+  for(const [x,z,type,nx,nz] of [[53,34,'cropVegetable',56,41],[53,38,'smallFlowerVase',56,42]]){
+   const prop=objects.find(o=>o.x===x&&o.z===z&&o.y===0&&o.type===type);
+   if(prop){prop.x=nx;prop.z=nz;}
+  }
+  exterior(56,41,'earth');
+  for(let x=52;x<=68;x++)for(const z of [31,32]){
+   if(insideGrade.has(groundKey(x,z))||objects.some(o=>o.x===x&&o.z===z&&o.y===0))
+    throw Error('水路が建物や配置物と重なっています: '+x+','+z);
+   exterior(x,z,'river');canalWater.push({x,z});
+  }
+  for(const pair of canalBridges)for(const {x,z,type,rot} of pair)put(x,z,type,0,rot);
+  for(let x=52;x<=61;x++)if(x!==55){
+   put(x,30,'poiCanalQuay');put(x,33,'poiCanalQuay',0,2);
+  }
+  for(const z of [31,32])put(51,z,'poiCanalQuay',0,3);
+  // The bench and knapsacks sit in a lay-by, off the bridge and door approaches.
+  put(48,30,'guildQuestBoard');put(49,30,'benchWood');put(50,30,'sack',0,1);
+  put(48,34,'crate',0,1);put(49,34,'poiPottedPlant');
+  put(60,33,'poiStreetLamp');put(60,30,'smallFlowerVase');
+  canal={water:canalWater,bridgePairs:canalBridges,sound:{x:56,z:31},
+   culverts:[{x:62,z:31},{x:62,z:32}]};
   // Town ramparts use the edge of the northern map row, leaving the
   // inn's existing rear lane inside the masonry. The fort is open only at
   // the south cart gate and the east forestry gate; no loading transition.
@@ -12317,7 +12421,7 @@ function buildFacilitySite(id){
   spawn={x:center,z:front+2};
  }
  return {map:{format:'forest-world-v1',version:1,size:width,width,height,terrainHeights,
-  models:[],prefabs:[],checks:[],world:[...floors.values(),...objects]},spawn,buildings,...(creek?{creek}:{})};
+  models:[],prefabs:[],checks:[],world:[...floors.values(),...objects]},spawn,buildings,...(creek?{creek}:{}),...(canal?{canal}:{})};
 }
 function workshopResumeDecode(raw){
  if(typeof raw!=='string'||raw.length>1600)return null;
@@ -12335,7 +12439,7 @@ function workshopResumeDecode(raw){
   Number.isInteger(p.y)&&p.y>=-1&&p.y<=MAX_LEVEL&&Number.isInteger(p.facing)&&p.facing>=0&&p.facing<4
   ?{x:p.x,z:p.z,y:p.y,facing:p.facing}:null;
  return {version:1,route:d.route,id:d.route==='facility'?d.id:null,play:d.play===true,position,
-  ...(d.route==='facility'&&d.id==='base'&&d.townLayout===2?{townLayout:2}:{}),
+  ...(d.route==='facility'&&d.id==='base'&&(d.townLayout===2||d.townLayout===3)?{townLayout:d.townLayout}:{}),
   tag:typeof d.tag==='string'&&/^(empty|[a-f0-9]{8})$/.test(d.tag)?d.tag:null,
   view:view(d.view),editorView:view(d.editorView)};
 }
@@ -12367,7 +12471,7 @@ function workshopResumeWrite(override,seed=false){
  if(!workshopResumeReady||(workshopResumeLeaving&&!override))return;
  const route=facilitySite?'facility':pineGameActive?'adventure':poiWalkActive?'map-play':'editor';
  const record=override||{version:1,route,id:facilitySite?.id??null,play:poiWalkActive,
-  ...(facilitySite?.id==='base'?{townLayout:2}:{}),
+  ...(facilitySite?.id==='base'?{townLayout:3}:{}),
   tag:route==='editor'||route==='map-play'?workshopResumeTag:null,
   position:poiWalkActive?{x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,facing:poiWalkFacing}:null,
   view:workshopResumeView(),editorView:facilitySite&&facilityEditView?workshopResumeView(facilityEditView):null};
@@ -12424,7 +12528,13 @@ function workshopResumeRestorePosition(p){
 }
 function workshopResumeTownPosition(s){
  const p=s.position;
- if(!p||s.townLayout===2)return p;
+ if(!p||s.townLayout===3)return p;
+ // Translate only the actual old house cells, retaining facing and floor.
+ if(p.y===0&&p.x>=34&&p.x<=40&&p.z>=34&&p.z<=40)
+  return {...p,x:p.x+12,z:p.z+1};
+ if(p.y===0&&p.x>=44&&p.x<=50&&p.z>=36&&p.z<=42&&(p.z!==42||p.x>=45&&p.x<=49))
+  return {...p,x:p.x+8,z:p.z-13};
+ if(s.townLayout===2)return p;
  // Translate a v136 building checkpoint before testing collision. Several
  // old workshop cells are now valid guild cells but are not the same room.
  if(p.y>=0&&p.y<=2&&p.x>=72&&p.x<=87&&p.z>=3&&p.z<=17)

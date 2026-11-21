@@ -38,6 +38,6 @@ test('fort parts append stable IDs to both AI diagram registries',()=>{
  const live=JSON.parse(source.match(/const pineAINumberEntries=(\[[^\n]+\]);/)[1]);
  const registry=require('../src/editor/ai-object-numbers.json').objects;
  require('node:assert/strict').deepEqual(live,registry);
- require('node:assert/strict').deepEqual(live.slice(331).map(({id,number})=>[id,number]),
+ require('node:assert/strict').deepEqual(live.slice(331,335).map(({id,number})=>[id,number]),
   [['poiFortWall','332'],['poiFortBoundary','333'],['poiFortCorner','334'],['poiFortGate','335']]);
 });

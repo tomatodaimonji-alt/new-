@@ -16,9 +16,11 @@ function expand(points){
 const palettes=new Set(['earth','moss','river','grassTrampled','grassPebbles','grassWild','grassForest','grassPatch','stone','roadCutStoneFull']);
 const k=(x,z)=>x+','+z;
 function testWalker(site){
+ const water=[...site.creek.deep,...(site.canal?.water||[])];
+ const spans=[...site.creek.crossings,...(site.canal?.bridgePairs||[]).flat()];
  const ctx=vm.createContext({facilitySite:{id:'base',...site},world:site.map.world,
-  facilityCreekIndex:{water:new Set(site.creek.deep.map(({x,z})=>k(x,z))),
-   parts:new Map(site.creek.crossings.map(({x,z,type})=>[k(x,z),site.map.world.find(o=>o.x===x&&o.z===z&&o.type===type)])),
+  facilityCreekIndex:{water:new Set(water.map(({x,z})=>k(x,z))),
+   parts:new Map(spans.map(({x,z,type})=>[k(x,z),site.map.world.find(o=>o.x===x&&o.z===z&&o.type===type)])),
    terrace:new Set(),shallows:new Map()},
   poiWalkLevel:0,poiWalkActive:true,validPos:(x,z)=>x>=0&&x<site.map.width&&z>=0&&z<site.map.height,
   isWallId:t=>t.startsWith('stonewall'),isFloor:t=>palettes.has(t),pineSuperVehicleType:()=>false,
@@ -59,8 +61,9 @@ test('outing leaves wash accessible on natural grade, with bounded static scener
  assert(site.creek.deep.some(o=>o.x===95&&o.z>=51),'water continues to the southeast map edge, not an inland dead end');
 });
 test('every v136 eastern trail and creek record survives the town redesign exactly',()=>{
- const preserved=site.map.world.filter(o=>o.x>=67&&o.z>=26)
-  .map(o=>JSON.stringify([o.x,o.z,o.y,o.type,o.rot])).sort();
+ const preserved=require('./canal-history-fixture.cjs').prior(site.map.world).filter(row=>{
+  const [x,z]=JSON.parse(row);return x>=67&&z>=26;
+ }).sort();
  assert.equal(preserved.length,398);
  const {createHash}=require('node:crypto');
  assert.equal(createHash('sha256').update(preserved.join('\n')).digest('hex'),

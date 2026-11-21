@@ -48,7 +48,7 @@ async function setup(browser,id,start,{legacy=false}={}){
  await page.goto(origin+'/seed');
  await page.evaluate(({fixtures,resumeKey,id,start,legacy})=>{
   for(const [k,v] of Object.entries(fixtures))localStorage.setItem(k,v);
-  if(start)localStorage.setItem(resumeKey,JSON.stringify({version:1,route:'facility',id,play:true,position:{y:0,facing:0,...start},...(legacy?{}:{townLayout:2}),
+  if(start)localStorage.setItem(resumeKey,JSON.stringify({version:1,route:'facility',id,play:true,position:{y:0,facing:0,...start},...(legacy?{}:{townLayout:3}),
    view:{yaw:.24,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:Math.PI,orbitPitch:.35,orbitDistance:10}}));
  },{fixtures,resumeKey,id,start,legacy});
  await page.goto(origin+'/'+(start?'?resume=1&test=1':'?facility='+id+'&test=1'));
@@ -150,8 +150,8 @@ async function legacyResume(browser){
  try{
   assert.deepEqual(await pos(page),{x:34,z:15,level:0},'old eastern guild resume moves to matching centered interior tile');
   const snapshot=()=>page.evaluate(k=>JSON.parse(localStorage.getItem(k)),resumeKey);
-  await page.waitForFunction(k=>JSON.parse(localStorage.getItem(k))?.townLayout===2,resumeKey);
-  assert.equal((await snapshot()).townLayout,2,'migration version stored');
+  await page.waitForFunction(k=>JSON.parse(localStorage.getItem(k))?.townLayout===3,resumeKey);
+  assert.equal((await snapshot()).townLayout,3,'migration version stored');
   await signVisibility(page,false);
   await page.reload();
   await page.waitForFunction(()=>window.__editorTest?.facility?.().mode==='play');
