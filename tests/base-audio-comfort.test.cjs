@@ -100,13 +100,13 @@ test('existing weapon materials have different offscreen cue profiles and respec
  b.run('poiAudioLevels.se=90;document.hidden=true');assert.deepEqual(b.fx('hit','equipWoodSword'),[]);
 });
 
-test('defeat adds one descending wet burst over genuine contact, never over an empty swing',()=>{
+test('defeat adds one common crack-and-tear cue over genuine contact, never over an empty swing',()=>{
  const b=harness('base');
  const wood=b.fx('hit','equipWoodSword',true);
  const lethal=b.fx('hit','equipWoodSword',true,true);
  assert.deepEqual(lethal.slice(0,1),wood,'preserve the wood layer on a killing blow');
- assert.deepEqual(lethal.slice(1),[['buffer',867,.80,0,126]]);
- assert.deepEqual(b.fx('hit',null,true,true).slice(2),[['buffer',867,.80,0,18]]);
+ assert.deepEqual(lethal.slice(1),[['buffer',636,.80,0,126]]);
+ assert.deepEqual(b.fx('hit',null,true,true).slice(2),[['buffer',636,.80,0,18]]);
  assert.deepEqual(b.fx('attack','equipWoodSword',true,true),b.fx('attack','equipWoodSword',true));
  b.run('poiAudioLevels.master=0');assert.deepEqual(b.fx('hit','equipWoodSword',true,true),[]);
  b.run('poiAudioLevels.master=85;document.hidden=true');

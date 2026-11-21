@@ -11,11 +11,11 @@ function load(){
  vm.runInContext(html.slice(a,b),ctx);
  return {buffers,use:id=>ctx.poiRecordedFoley(id)};
 }
-test('exact remastered recorded Foley B+B is embedded in offline HTML, cached per cue and never fetched',()=>{
+test('exact recorded combat Foley is embedded in offline HTML, cached per cue and never fetched',()=>{
  const {buffers,use}=load();
  for(const [id,count,digest,peak] of [
   ['wood',6048,'dbde51a5692c23eed2e7a5f65e0482457c4e9bb509180a71e6ec3f003b182012',30146],
-  ['defeat',20808,'7fe72efca8e582c4798277937006cbb5107e933bf7d27b848f727e2cbeb52587',30146]
+  ['defeat',15264,'60149cfd167a33f946065b7cbd3186e8d710b4658d2afabfba0e29c7c285d09a',29654]
  ]){
   const b=use(id);assert.equal(use(id),b);
   assert.deepEqual([b.channels,b.length,b.sampleRate],[1,count,24000]);
@@ -34,10 +34,10 @@ test('recorded cues retain exact swing/contact separation and defeat-only guard'
  assert.match(html,/kind==='hit'&&defeated\)poiDefeatSound\(now\+POI_WEAPON_CONTACT_DELAY\+\.018\)/);
 });
 
-test('defeat has audible later droplets and leaves headroom with the wooden strike',()=>{
+test('common breakup tail settles without clipping over the wood strike',()=>{
  const {use}=load(),wood=use('wood').data,wet=use('defeat').data;
- const tail=wet.slice(14160,17520),rms=Math.sqrt(tail.reduce((s,v)=>s+v*v,0)/tail.length);
- assert.ok(rms>.025,'the .59s to .73s settling tail has audible energy');
+ assert.equal(wet.length,15264,'replaces rather than layers the old watery cue');
+ assert.ok(wet.slice(6500,12500).some(x=>Math.abs(x)>.05),'the closing thud carries signal');
  for(const offset of [384,408,432,456,480]){
   let peak=0;
   for(let i=0;i<wet.length+offset;i++)peak=Math.max(peak,Math.abs((wood[i]||0)*.78+(wet[i-offset]||0)*.80));

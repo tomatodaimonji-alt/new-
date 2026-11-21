@@ -13,9 +13,10 @@ assert.equal(html.toString().split(trigger).length,2,'temporary QA monster ancho
 const inject=bytes=>bytes.toString().replace(trigger,"  put(20,21,'monsterDragon');\n"+trigger);
 const combat=inject(html),oldCombat=baseline&&inject(baseline);
 const lethal=combat.replace("put(20,21,'monsterDragon')","put(20,21,'monsterSlime')");
+const lethalGoblin=combat.replace("put(20,21,'monsterDragon')","put(20,21,'monsterGoblin')");
 const server=createServer((req,res)=>{
  res.setHeader('Content-Type','text/html; charset=utf-8');
- res.end(req.url.startsWith('/seed')?'<!doctype html><title>Isolated fixtures</title>':req.url.startsWith('/baseline')?baseline:req.url.startsWith('/old-combat')?oldCombat:req.url.startsWith('/lethal')?lethal:req.url.startsWith('/combat')?combat:html);
+ res.end(req.url.startsWith('/seed')?'<!doctype html><title>Isolated fixtures</title>':req.url.startsWith('/baseline')?baseline:req.url.startsWith('/old-combat')?oldCombat:req.url.startsWith('/lethal-goblin')?lethalGoblin:req.url.startsWith('/lethal')?lethal:req.url.startsWith('/combat')?combat:html);
 });
 await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',resolve).once('error',reject));
 const origin='http://127.0.0.1:'+server.address().port;
@@ -127,7 +128,7 @@ function observe(){
   let peak=0,allFinite=true;
   for(const sample of signal){peak=Math.max(peak,Math.abs(sample));allFinite&&=Number.isFinite(sample);}
   const result={id:++serial,channels:buffer.numberOfChannels,frames:signal.length,rate,duration:buffer.duration,
-   peak,allFinite,exact16,head:rms(.004,.025),body:rms(.03,.065),sustain:rms(.10,.24),remainingAfterOldTail:rms(.59,.73),tail:rms(buffer.duration*.78,buffer.duration),last:signal.at(-1)};
+   peak,allFinite,exact16,head:rms(.004,.025),body:rms(.03,.065),sustain:rms(.10,.24),tail:rms(buffer.duration*.78,buffer.duration),last:signal.at(-1)};
   buffers.set(buffer,result);
   digests.push(crypto.subtle.digest('SHA-256',bytes).then(hash=>{
    result.sha256=Array.from(new Uint8Array(hash),x=>x.toString(16).padStart(2,'0')).join('');
@@ -175,7 +176,7 @@ function sfx(records){
   const {shape}=r;
   if(r.pcm){
    const g=shape.next;exact(lastTarget(g.next),.90*.88,'PCM uses existing SE bus');
-   const pcmKind=r.pcm.duration<.4?'wood-pcm':'wet-pcm';
+   const pcmKind=r.pcm.frames===approved.wood.frames?'wood-pcm':'defeat-pcm';
    return [{hz:pcmKind,peak:g.volume,pcm:r.pcm,when:r.when,clock:r.clock}];
   }
   if(r.kind==='source'&&!r.loop&&shape.next?.kind==='filter'){
@@ -193,7 +194,7 @@ const attack='#poiWalkAction';
 // PCM-data SHA-256 from the owner-approved WAVs (RIFF headers excluded).
 const approved={
  wood:{frames:6048,duration:.252,peak:30146,sha:'dbde51a5692c23eed2e7a5f65e0482457c4e9bb509180a71e6ec3f003b182012'},
- wet:{frames:20808,duration:.867,peak:30146,sha:'7fe72efca8e582c4798277937006cbb5107e933bf7d27b848f727e2cbeb52587'}
+ defeat:{frames:15264,duration:.636,peak:29654,sha:'60149cfd167a33f946065b7cbd3186e8d710b4658d2afabfba0e29c7c285d09a'}
 };
 function approvedPcm(pcm,key){
  assert.deepEqual([pcm.channels,pcm.rate,pcm.frames],[1,24000,approved[key].frames],'approved mono 24k frame count '+key);
@@ -202,7 +203,7 @@ function approvedPcm(pcm,key){
  exact(pcm.duration,approved[key].duration,'exact clip length '+key);
  exact(pcm.peak,approved[key].peak/32768,'native decoded peak '+key);
 }
-const woodSwing=[940,1630,126],woodHit=['wood-pcm'],handSwing=[790,1120,145],handHit=[1500,230],wetDeath=['wet-pcm'];
+const woodSwing=[940,1630,126],woodHit=['wood-pcm'],handSwing=[790,1120,145],handHit=[1500,230],defeatLayers=['defeat-pcm'];
 async function activate(page){
  await press(page,'#enterGameWorld',true);
  await page.waitForFunction(()=>window.__editorTest.facility().active&&window.__comfort.contexts.some(c=>c.state==='running'));
@@ -261,7 +262,7 @@ async function soundCapture(page,weapon,expectHit,prev=false,expectDeath=false){
  const impactOnly=!prev&&weapon&&expectHit;
  const swing=impactOnly?[]:(weapon?woodSwing:handSwing);
  const hit=weapon?woodHit:handHit;
- const want=expectHit?[...swing,...hit,...(expectDeath?wetDeath:[])]:swing;
+ const want=expectHit?[...swing,...hit,...(expectDeath?defeatLayers:[])]:swing;
  const segment=withoutHurt(sfx((await events(page)).slice(start)));
  assert.deepEqual(segment.map(o=>o.hz),want,'real WebAudio sources for '+(weapon?'wood':'hand')+' '+(expectHit?'hit':'miss'));
  if(impactOnly){
@@ -273,12 +274,11 @@ async function soundCapture(page,weapon,expectHit,prev=false,expectDeath=false){
   exact(contact.peak,.78,'wood impact gain');
  }
  if(expectDeath){
-  const wet=segment.at(-1);
-  assert.ok(Math.abs(wet.when-segment[swing.length].when-.018)<.010,'distinct wet texture follows the contact, never a pre-swing');
-  exact(wet.peak,.80,'wet texture gain through established SE levels');
-  approvedPcm(wet.pcm,'wet');
-  assert.ok(wet.pcm.remainingAfterOldTail>.025,'decoded splatter has actual energy after the v133 clip ended, not zero padding');
-  if(weapon)assert.notEqual(wet.pcm.id,segment[0].pcm.id,'wet defeat buffer differs from cached dry wood material');
+  const defeated=segment.at(-1);
+  assert.ok(Math.abs(defeated.when-segment[swing.length].when-.018)<.010,'common defeat texture follows contact, never a pre-swing');
+  exact(defeated.peak,.80,'defeat texture gain through established SE levels');
+  approvedPcm(defeated.pcm,'defeat');
+  if(weapon)assert.notEqual(defeated.pcm.id,segment[0].pcm.id,'common defeat buffer differs from cached dry wood material');
  }
  return segment.map(({when,...rest})=>({...rest,delay:Math.round((when-segment[0].when)*1e5)/1e5}));
 }
@@ -311,21 +311,30 @@ async function soundCase(browser,prefix,expectHit,prev=false){
   return bare;
  }finally{await ctx.close();}
 }
-async function lethalCase(browser,weapon){
- const {page,ctx,errors,offline}=await initialize(browser,390,844,'/lethal',{x:19,z:21});
+async function lethalCase(browser,weapon,species='monsterSlime'){
+ const humanType=species==='monsterGoblin';
+ const {page,ctx,errors,offline}=await initialize(browser,390,844,humanType?'/lethal-goblin':'/lethal',{x:19,z:21});
  try{
-  assert.deepEqual((await state(page)).combat.actors.filter(a=>a.type==='monsterSlime').map(a=>[a.x,a.z,a.hp]),[[20,21,35]]);
-  // First punch allows real sound activation and puts the disposable slime
-  // below both finisher damages. No manual health writes or callback calls.
+  const full=humanType?55:35;
+  const live=async()=> (await state(page)).combat.actors.find(a=>a.type===species);
+  const initial=await live();assert.deepEqual([initial.x,initial.z,initial.hp],[20,21,full]);
+  // Real bare punch warms audio and damages both species without manually
+  // changing health. A stronger goblin then takes its first nonlethal wood hit.
   await page.locator(attack).tap();
   await page.waitForFunction(()=>window.__comfort.contexts.some(c=>c.state==='running'));
-  assert.equal((await state(page)).combat.actors.find(a=>a.type==='monsterSlime')?.hp,15);
+  assert.equal((await live())?.hp,full-20);
   await page.waitForTimeout(400);
-  await soundCapture(page,weapon,true,false,true);
-  assert.ok(!(await state(page)).combat.actors.some(a=>a.type==='monsterSlime'&&a.hp>0),'wet sound accompanies an actual zero-HP death');
+  if(humanType){
+   await soundCapture(page,weapon,true);
+   assert.equal((await live())?.hp,7);
+   await page.waitForTimeout(400);
+  }
+  const kill=await soundCapture(page,weapon,true,false,true);
+  assert.ok(!(await live())?.hp,'common defeat sound accompanies actual '+species+' zero HP');
   await page.waitForTimeout(400);
-  await soundCapture(page,weapon,false); // No repeating or miss-triggered wet burst after death.
+  await soundCapture(page,weapon,false); // Sound cannot replay on an empty follow-up swing.
   await unchanged(page);offline();assert.deepEqual(errors,[]);
+  return kill.at(-1).pcm.sha256;
  }finally{await ctx.close();}
 }
 let browser;
@@ -335,8 +344,9 @@ try{
  await verifyIcon(browser);
  const bareMiss=await soundCase(browser,'/',false);
  const bareHit=await soundCase(browser,'/combat',true);
- await lethalCase(browser,false);
- await lethalCase(browser,true);
+ const slime=await lethalCase(browser,false);
+ const goblin=await lethalCase(browser,true,'monsterGoblin');
+ assert.equal(slime,goblin,'same exact common defeat PCM on both species');
  if(baseline){
   for(const [now,old] of [[bareMiss,await soundCase(browser,'/baseline',false,true)],[bareHit,await soundCase(browser,'/old-combat',true,true)]]){
    const round=x=>Math.round(x*1e5)/1e5;
@@ -345,5 +355,5 @@ try{
    assert.deepEqual(clean(now),clean(old),'original bare audio envelope and timing remains exact');
   }
  }
- console.log('PASS offline Chromium: approved exact WAV PCM, wood hit without pre-swing / lethal-only wet sounds, original hand/audio routing, cached icon, saves untouched');
+ console.log('PASS offline Chromium: approved exact WAV PCM, wood hit without pre-swing / lethal-only common horror sounds, original hand/audio routing, cached icon, saves untouched');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
