@@ -52,7 +52,8 @@ const snapshot=async (page,name)=>{if(out){await settle(page);await page.screens
 async function initialize(browser,width,height,prefix='/',opts={}){
  const mobile=width<800,ctx=await browser.newContext({viewport:{width,height},deviceScaleFactor:1,isMobile:mobile,hasTouch:mobile});
  await ctx.addInitScript(observe);
- const page=await ctx.newPage(),errors=[];
+ const page=await ctx.newPage(),errors=[],requests=[];
+ page.on('request',req=>requests.push({url:req.url(),type:req.resourceType()}));
  page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(12000);
  const {id='base',mode='facility',x,z,y=0,legacy}=opts;
  await page.goto(origin+'/seed');
@@ -66,7 +67,12 @@ async function initialize(browser,width,height,prefix='/',opts={}){
  if(mode==='facility')await page.waitForFunction(id=>window.__editorTest?.facility?.().id===id,id);
  else await page.locator('#poiWalkPad.active').waitFor({state:'visible'});
  await settle(page);
- return {page,ctx,errors,mobile};
+ const documentRoots=[origin+'/seed',origin+prefix+query];
+ for(const req of requests)assert.ok(req.type==='document'&&documentRoots.includes(req.url),'self-contained boot must not fetch assets: '+req.url);
+ requests.length=0;
+ await ctx.setOffline(true);
+ await page.waitForFunction(()=>navigator.onLine===false);
+ return {page,ctx,errors,mobile,offline:()=>assert.deepEqual(requests,[],'no network fetch required for input, sounds, or icon')};
 }
 async function press(page,css,mobile){
  const loc=page.locator(css);
@@ -91,7 +97,7 @@ async function buttons(page){
 const slot=(page,i)=>page.locator(bar+' button[data-hotbar-slot="'+i+'"]');
 const store=page=>page.evaluate(k=>JSON.parse(localStorage.getItem(k)),key);
 function observe(){
- const contexts=[],starts=[],nodes=new WeakMap(),bufferIds=new WeakMap();
+ const contexts=[],starts=[],nodes=new WeakMap(),buffers=new WeakMap(),digests=[];
  let serial=0;
  const native=window.AudioContext;
  function param(p){
@@ -104,8 +110,15 @@ function observe(){
  }
  function inspectPcm(buffer){
   if(!buffer)return null;
-  if(!bufferIds.has(buffer))bufferIds.set(buffer,++serial);
+  if(buffers.has(buffer))return buffers.get(buffer);
   const signal=buffer.getChannelData(0),rate=buffer.sampleRate;
+  const bytes=new Uint8Array(signal.length*2),dv=new DataView(bytes.buffer);
+  let exact16=true;
+  for(let i=0;i<signal.length;i++){
+   const signed16=signal[i]*32768;
+   exact16&&=Number.isInteger(signed16)&&signed16>=-32768&&signed16<=32767;
+   dv.setInt16(i*2,Math.round(signed16),true);
+  }
   const rms=(from,to)=>{
    let n=0,sum=0;
    for(let i=Math.floor(from*rate);i<Math.min(signal.length,Math.ceil(to*rate));i++){sum+=signal[i]*signal[i];n++;}
@@ -113,8 +126,13 @@ function observe(){
   };
   let peak=0,allFinite=true;
   for(const sample of signal){peak=Math.max(peak,Math.abs(sample));allFinite&&=Number.isFinite(sample);}
-  return {id:bufferIds.get(buffer),channels:buffer.numberOfChannels,duration:buffer.duration,peak,allFinite,
-   head:rms(.004,.025),body:rms(.03,.065),sustain:rms(.10,.24),tail:rms(buffer.duration*.78,buffer.duration),last:signal.at(-1)};
+  const result={id:++serial,channels:buffer.numberOfChannels,frames:signal.length,rate,duration:buffer.duration,
+   peak,allFinite,exact16,head:rms(.004,.025),body:rms(.03,.065),sustain:rms(.10,.24),tail:rms(buffer.duration*.78,buffer.duration),last:signal.at(-1)};
+  buffers.set(buffer,result);
+  digests.push(crypto.subtle.digest('SHA-256',bytes).then(hash=>{
+   result.sha256=Array.from(new Uint8Array(hash),x=>x.toString(16).padStart(2,'0')).join('');
+  }));
+  return result;
  }
  function wrap(node,kind){
   const info={kind,next:null,gain:node.gain&&param(node.gain),frequency:node.frequency&&param(node.frequency)};
@@ -144,9 +162,9 @@ function observe(){
   createGain(){return wrap(super.createGain(),'gain');}
  }
  window.AudioContext=Spy;
- window.__comfort={contexts,starts};
+ window.__comfort={contexts,starts,digests};
 }
-const events=page=>page.evaluate(()=>window.__comfort.starts);
+const events=page=>page.evaluate(async()=>{await Promise.all(window.__comfort.digests);return window.__comfort.starts;});
 const lastTarget=n=>n.gain.filter(v=>v[0]==='setTargetAtTime').at(-1)?.[1];
 const exact=(a,b,label)=>assert.ok(Math.abs(a-b)<1e-5,label+': expected '+b+', got '+a);
 const peak=n=>n.gain.find(v=>v[0]==='linearRampToValueAtTime')?.[1];
@@ -157,7 +175,7 @@ function sfx(records){
   const {shape}=r;
   if(r.pcm){
    const g=shape.next;exact(lastTarget(g.next),.90*.88,'PCM uses existing SE bus');
-   const pcmKind=r.pcm.duration<.2?'wood-pcm':'wet-pcm';
+   const pcmKind=r.pcm.duration<.4?'wood-pcm':'wet-pcm';
    return [{hz:pcmKind,peak:g.volume,pcm:r.pcm,when:r.when}];
   }
   if(r.kind==='source'&&!r.loop&&shape.next?.kind==='filter'){
@@ -172,6 +190,18 @@ function sfx(records){
 
 const swordIcon='#poiHotbar [data-hotbar-slot="1"] canvas[data-item-model="equipWoodSword"]';
 const attack='#poiWalkAction';
+// PCM-data SHA-256 from the owner-approved WAVs (RIFF headers excluded).
+const approved={
+ wood:{frames:6192,duration:.258,peak:24572,sha:'68135caf9ea6b388b5a1fe311d18236bc7ddef04a4abe4da86802aeee74777f0'},
+ wet:{frames:13200,duration:.55,peak:17063,sha:'014aeabc35f1f164f3f0f52d90daceadae5d04dc07ec4d9bdf12150ae4185ecc'}
+};
+function approvedPcm(pcm,key){
+ assert.deepEqual([pcm.channels,pcm.rate,pcm.frames],[1,24000,approved[key].frames],'approved mono 24k frame count '+key);
+ assert.ok(pcm.allFinite&&pcm.exact16,'decoded integers converted exactly to native PCM '+key);
+ assert.equal(pcm.sha256,approved[key].sha,'every decoded sample matches the selected WAV '+key);
+ exact(pcm.duration,approved[key].duration,'exact clip length '+key);
+ exact(pcm.peak,approved[key].peak/32768,'native decoded peak '+key);
+}
 const woodSwing=[940,1630,126],woodHit=['wood-pcm'],handSwing=[790,1120,145],handHit=[1500,230],wetDeath=['wet-pcm'];
 async function activate(page){
  await press(page,'#enterGameWorld',true);
@@ -194,7 +224,7 @@ async function iconModel(page){
 }
 const onSurface=(inside,outside)=>inside.x>=outside.x-1&&inside.y>=outside.y-1&&inside.x+inside.width<=outside.x+outside.width+1&&inside.y+inside.height<=outside.y+outside.height+1;
 async function verifyIcon(browser){
- const {page,ctx,errors}=await initialize(browser,320,740);
+ const {page,ctx,errors,offline}=await initialize(browser,320,740);
  try{
   await activate(page);
   const model=await iconModel(page),old=(await slot(page,1).boundingBox());
@@ -216,7 +246,7 @@ async function verifyIcon(browser){
   await activate(page);
   assert.equal(await page.locator(swordIcon).evaluate((el,first)=>el===first,original),true,'cached icon reused on subsequent Play');
   await snapshot(page,'320-unselected-model');
-  await unchanged(page);assert.deepEqual(errors,[]);
+  await unchanged(page);offline();assert.deepEqual(errors,[]);
  }finally{await ctx.close();}
 }
 function withoutHurt(records){
@@ -239,26 +269,21 @@ async function soundCapture(page,weapon,expectHit,prev=false,expectDeath=false){
   const delay=segment[3].when-segment[0].when;
   assert.ok(delay>=.050&&delay<=.115,'wood contact follows its windup, got '+delay);
   const {pcm}=segment[3];
-  assert.equal(pcm.channels,1);
-  assert.ok(pcm.allFinite&&Math.abs(pcm.peak-.88)<.002,'wood PCM is present, finite, and normalized without clipping');
-  assert.ok(Math.abs(pcm.duration-.132)<.0001,'one short dry impact buffer, not a long wet tail');
+  approvedPcm(pcm,'wood');
   exact(segment[3].peak,.75,'wood impact gain');
-  assert.ok(pcm.head>.02&&pcm.tail<pcm.head*.25&&Math.abs(pcm.last)<1e-5,'wood pulse has sharp early energy and a clean tail');
  }
  if(expectDeath){
   const wet=segment.at(-1);
   assert.ok(Math.abs(wet.when-segment[expected.length].when-.018)<.010,'distinct wet texture follows the impact, not a weapon swing');
-  exact(wet.peak,.52,'wet texture gain through established SE levels');
-  assert.ok(wet.pcm.channels===1&&wet.pcm.allFinite&&Math.abs(wet.pcm.duration-.405)<.001&&
-    wet.pcm.peak>.35&&wet.pcm.peak<=1&&wet.pcm.sustain>.035&&Math.abs(wet.pcm.last)<1e-5,
-    'single strong wet texture with longer audible sustain, clean ending and no clipping');
+  exact(wet.peak,.90,'wet texture gain through established SE levels');
+  approvedPcm(wet.pcm,'wet');
   if(weapon)assert.notEqual(wet.pcm.id,segment[3].pcm.id,'wet defeat buffer differs from cached dry wood material');
  }
  return segment.map(({when,...rest})=>({...rest,delay:Math.round((when-segment[0].when)*1e5)/1e5}));
 }
 async function soundCase(browser,prefix,expectHit,prev=false){
  const launch=expectHit?{x:19,z:21}:{};
- const {page,ctx,errors}=await initialize(browser,390,844,prefix,launch);
+ const {page,ctx,errors,offline}=await initialize(browser,390,844,prefix,launch);
  try{
   if(expectHit){
    // A real action kicks the established Web Audio gesture path. A disposable
@@ -277,12 +302,12 @@ async function soundCase(browser,prefix,expectHit,prev=false){
     assert.equal(first[3].pcm.id,second[3].pcm.id,'repeat wood strikes reuse the very same native AudioBuffer');
    }
   }
-  await unchanged(page);assert.deepEqual(errors,[]);
+  await unchanged(page);offline();assert.deepEqual(errors,[]);
   return bare;
  }finally{await ctx.close();}
 }
 async function lethalCase(browser,weapon){
- const {page,ctx,errors}=await initialize(browser,390,844,'/lethal',{x:19,z:21});
+ const {page,ctx,errors,offline}=await initialize(browser,390,844,'/lethal',{x:19,z:21});
  try{
   assert.deepEqual((await state(page)).combat.actors.filter(a=>a.type==='monsterSlime').map(a=>[a.x,a.z,a.hp]),[[20,21,35]]);
   // First punch allows real sound activation and puts the disposable slime
@@ -295,7 +320,7 @@ async function lethalCase(browser,weapon){
   assert.ok(!(await state(page)).combat.actors.some(a=>a.type==='monsterSlime'&&a.hp>0),'wet sound accompanies an actual zero-HP death');
   await page.waitForTimeout(400);
   await soundCapture(page,weapon,false); // No repeating or miss-triggered wet burst after death.
-  await unchanged(page);assert.deepEqual(errors,[]);
+  await unchanged(page);offline();assert.deepEqual(errors,[]);
  }finally{await ctx.close();}
 }
 let browser;
@@ -315,5 +340,5 @@ try{
    assert.deepEqual(clean(now),clean(old),'original bare audio envelope and timing remains exact');
   }
  }
- console.log('PASS real Chromium: model icon raster/cache and stable hotbar; dry wood impacts, wet lethal-only bursts, original bare audio; saves untouched');
+ console.log('PASS offline Chromium: approved exact WAV PCM, dry wood / lethal-only wet sounds, original hand/audio routing, cached icon, saves untouched');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}

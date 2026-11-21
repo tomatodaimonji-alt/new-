@@ -18,7 +18,7 @@ function harness(id) {
   suspend(){this.state='suspended';return Promise.resolve()}};
  const math=Object.create(Math);math.random=()=>.5;
  const writes=[],notes=[],timers=[];
- const x=vm.createContext({console,Math:math,localStorage:{getItem(){return null},setItem(...args){writes.push(args)}},
+ const x=vm.createContext({console,Math:math,atob:data=>Buffer.from(data,'base64').toString('latin1'),localStorage:{getItem(){return null},setItem(...args){writes.push(args)}},
   facilitySite:id?{id,creek:{sound:{x:68,z:39}}}:null,facilityCreekIndex:{hasWater:true},
   poiWalkX:68,poiWalkZ:39,poiWalkLevel:0,poiWalkActive:true,
   window:{addEventListener(){}},document:{hidden:false,addEventListener(){}},notes,context,mock,
@@ -83,7 +83,7 @@ test('wooden sword has a distinct soft cut and woody contact scheduled at the bl
  const b=harness('base');
  const swing=b.fx('attack','equipWoodSword',true),hit=b.fx('hit','equipWoodSword',true);
  assert.deepEqual(swing.map(r=>r[1]),[940,1630,126]);
- assert.deepEqual(hit,[['buffer',132,.75,0,108]]);
+ assert.deepEqual(hit,[['buffer',258,.75,0,108]]);
  assert.equal(Math.min(...hit.map(r=>r[4])),108);
  assert.ok(swing[0][4]+swing[0][3]>70&&swing[0][4]+swing[0][3]<116,'air peaks during the swing');
  assert.ok(swing.every(r=>r[2]<.48));
@@ -105,8 +105,8 @@ test('defeat adds one descending wet burst over genuine contact, never over an e
  const wood=b.fx('hit','equipWoodSword',true);
  const lethal=b.fx('hit','equipWoodSword',true,true);
  assert.deepEqual(lethal.slice(0,1),wood,'preserve the wood layer on a killing blow');
- assert.deepEqual(lethal.slice(1),[['buffer',405,.52,0,126]]);
- assert.deepEqual(b.fx('hit',null,true,true).slice(2),[['buffer',405,.52,0,18]]);
+ assert.deepEqual(lethal.slice(1),[['buffer',550,.90,0,126]]);
+ assert.deepEqual(b.fx('hit',null,true,true).slice(2),[['buffer',550,.90,0,18]]);
  assert.deepEqual(b.fx('attack','equipWoodSword',true,true),b.fx('attack','equipWoodSword',true));
  b.run('poiAudioLevels.master=0');assert.deepEqual(b.fx('hit','equipWoodSword',true,true),[]);
  b.run('poiAudioLevels.master=85;document.hidden=true');
@@ -116,12 +116,12 @@ test('defeat adds one descending wet burst over genuine contact, never over an e
 
 test('wood sound uses one cached dry impulse with a short tail',()=>{
  const b=harness('base');b.fx('hit','equipWoodSword');b.fx('hit','equipWoodSword');
- const hits=b.nodes.filter(n=>n.kind==='noise'&&n.buffer?.duration===.132);
+ const hits=b.nodes.filter(n=>n.kind==='noise'&&n.buffer?.duration===.258);
  assert.equal(hits.length,2);
  assert.equal(hits[0].buffer,hits[1].buffer);
  const wave=hits[0].buffer.getChannelData(0);
  const rms=a=>Math.sqrt(a.reduce((sum,v)=>sum+v*v,0)/a.length);
- assert.ok(Math.max(...wave.map(Math.abs))>.85&&Math.max(...wave.map(Math.abs))<.90);
+ assert.equal(Math.max(...wave.map(Math.abs)),24572/32768);
  assert.ok(rms(wave.slice(120,720))>6*rms(wave.slice(-720)));
  assert.equal(wave[0],0);
  assert.ok(Math.abs(wave[wave.length-1])<.001);
