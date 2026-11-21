@@ -51,10 +51,10 @@ test('outing leaves wash accessible on natural grade, with bounded static scener
   for(let i=1;i<route.length;i++)assert(walk(...route[i],...route[i-1]));
  assert.deepEqual(site.spawn,{x:19,z:21});assert.equal(site.buildings.length,9);
  const east=site.map.world.filter(o=>o.x>=72);
- assert(east.length<=260,east.length);
+ assert(east.length<=325,east.length);
  assert(east.every(o=>!/(?:mob|monster|villager|loot|reward|treasure|quest)/i.test(o.type)));
  assert(east.filter(o=>/^tree/.test(o.type)).length<=21);
- assert(site.creek.deep.some(o=>o.z===55&&o.x>=72),'water continues to the south map edge, not an inland dead end');
+ assert(site.creek.deep.some(o=>o.x===95&&o.z>=51),'water continues to the southeast map edge, not an inland dead end');
 });
 test('older map records survive exactly, except the removed outdoor stair and bounded new stitching',()=>{
  const additions=new Set([

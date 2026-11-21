@@ -27,10 +27,10 @@ test('a continuous narrow woodland creek leaves the base, trail, other routes an
   for(const [dx,dz] of [[0,1],[0,-1],[1,0],[-1,0]])stack.push({x:x+dx,z:z+dz});
  }
  assert.equal(reached.size,cells.size,'cardinally connected bends');
- assert(cells.size>=42&&cells.size<=52);
- assert(Object.values(Object.groupBy(site.creek.deep,o=>o.z)).every(row=>row.length<=2));
+ assert(cells.size>=74&&cells.size<=90);
+ assert(Object.values(Object.groupBy(site.creek.deep.filter(o=>o.x<76),o=>o.z)).every(row=>row.length<=2));
  assert(site.creek.deep.some(o=>o.x===73&&o.z===27),'water emerges between mossy stones');
- assert(site.creek.deep.some(o=>o.z===55),'water exits at the south edge');
+ assert(site.creek.deep.some(o=>o.x===95),'water exits at the southeast edge');
  for(const {x,z} of site.creek.deep)assert(site.map.world.some(o=>o.x===x&&o.z===z&&o.y===0&&o.type==='river'));
  for(const [x,z] of [[67,38],[70,38],[71,38],[70,39],[69,40]])assert(!cells.has(key(x,z)));
 });
@@ -78,8 +78,8 @@ test('creek water is seamless, subdued and cheap without changing other water ma
  const items=new Map([['68,38','river'],['69,38','river']]);
  const ctx=vm.createContext({items,Map,Set,surfaceNoise:(x,z)=>Math.abs(Math.sin(x*5+z*3)),near:new Set(items.keys())});
  const primitive=html.slice(html.indexOf('function tri('),html.indexOf('function diamond('));
- const draw=vm.runInContext(primitive+html.slice(n,e)+`;((x,z)=>{
- const m={p:[],n:[],c:[]};facilityWoodlandWater(m,x,z,items,near);return m;
+ const draw=vm.runInContext(primitive+html.slice(n,e)+`;((x,z,shoals)=>{
+ const m={p:[],n:[],c:[]};facilityWoodlandWater(m,x,z,items,near,shoals);return m;
  })`,ctx);
  const [a,b]=[draw(68,38),draw(69,38)];
  for(const m of [a,b]){
@@ -88,5 +88,13 @@ test('creek water is seamless, subdued and cheap without changing other water ma
  }
  const edge=(m,x,z)=>{for(let i=0;i<18;i+=3)if(m.p[i]===x&&m.p[i+2]===z)return Array.from(m.c.slice(i,i+3));return null;};
  for(const z of [38,39])assert.deepEqual(edge(a,69,z),edge(b,69,z),'neighboring tiles share both geometry and color at the edge');
- assert.match(html,/if\(woodlandRiver\(x,z\)\)facilityWoodlandWater/);
+ const shoal=new Set(['68,38']);
+ const [aa,bb]=[draw(68,38,shoal),draw(69,38,shoal)];
+ for(const z of [38,39]){
+  const color=edge(aa,69,z),usual=edge(a,69,z);
+  assert.deepEqual(color,edge(bb,69,z),'shoal tint is shared across the tile edge');
+  assert(color[0]>usual[0]&&color[1]>usual[1]&&color[1]-usual[1]<.045,'slightly lighter, not another material');
+ }
+ assert.equal(aa.p.length,a.p.length,'tint needs no extra geometry');
+ assert.match(html,/if\(woodlandRiver\(x,z\)\)facilityWoodlandWater\(tmp,x,z,floors,creekWater,creekShoals\)/);
 });

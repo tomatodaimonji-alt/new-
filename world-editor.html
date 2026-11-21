@@ -653,7 +653,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
  font:700 12px/12px system-ui;text-align:center}
 .facilityEntranceGuide[hidden]{display:none}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v121）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v122）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -3484,15 +3484,20 @@ function shoreline(m,x,z,floors){
 
 // The authored woodland creek uses shared corners and fewer wave marks
 // than the general river tile. The surface remains an ordinary editable river.
-function facilityWoodlandWater(m,x,z,floors,creekWater){
+function facilityWoodlandWater(m,x,z,floors,creekWater,shoals){
  const color=(xx,zz)=>{
-  let cover=0;
+  let cover=0,shallow=0;
   for(const dx of [-1,0])for(const dz of [-1,0]){
    const k=(xx+dx)+','+(zz+dz);
-   if(creekWater.has(k)&&floors.get(k)==='river')cover++;
+   if(creekWater.has(k)&&floors.get(k)==='river'){
+    cover++;if(shoals?.has(k))shallow++;
+   }
   }
   const n=surfaceNoise(xx*17+1,zz*11+6),edge=(4-cover)/3;
-  return [.19+.073*edge+.014*n,.39+.037*edge+.018*n,.394+.024*edge+.021*n];
+  // Gravel beneath the inside of selected bends lightens shared vertices,
+  // not whole tiles. It remains ordinary non-wadeable river underneath.
+  const s=Math.min(shallow,2);
+  return [.19+.073*edge+.014*n+.026*s,.39+.037*edge+.018*n+.031*s,.394+.024*edge+.021*n+.007*s];
  };
  const a=color(x,z),b=color(x,z+1),c=color(x+1,z+1),d=color(x+1,z);
  quad(m,[x,0,z],[x,0,z+1],[x+1,0,z+1],[x+1,0,z],a);
@@ -3502,8 +3507,10 @@ function facilityWoodlandWater(m,x,z,floors,creekWater){
  if(n>.53){
   const px=x+.29+n*.36,pz=z+.27+surfaceNoise(x*15,z*33)*.34;
   const length=.10+n*.15;
-  quad(m,[px-.026,.006,pz-length],[px-.006,.006,pz+length],
-    [px+.018,.006,pz+length],[px+.006,.006,pz-length],[.33,.49,.49]);
+  const sideways=x>=76;
+  const point=(across,along)=>sideways?[px+along,.006,pz-across]:[px+across,.006,pz+along];
+  quad(m,point(-.026,-length),point(-.006,length),
+    point(.018,length),point(.006,-length),[.33,.49,.49]);
  }
 }
 function facilityWoodlandBank(m,x,z,kind,woodlandRiver,groundCorner=pineBaseGrassCorner){
@@ -5134,7 +5141,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v121',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v122',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -5249,7 +5256,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v121';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v122';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -5461,7 +5468,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v121',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v122',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -6233,6 +6240,10 @@ function poiWalkCanStep(x,z,fromX,fromZ){
  return !cell.some(o=>{
   if(isFloor(o.type)||poiWalkPassableDoor(o.type)||nonBlocking.has(o.type)||o.type==='guildStairUp'||o.type==='guildStairDown')return false;
   if(o===deck||creek?.shallows.get(key)===o.type)return false;
+  // Only the foot-level loose stone and fern props are soft footing in
+  // this public landscape. Keep separate boulder, log and tree assets solid.
+  if((o.type==='rubble'||o.type==='bushFern')&&poiWalkLevel===0&&
+     facilitySite?.id==='base'&&facilityFloorOwner(x,z,0)===null)return false;
   if(hasDoor&&(isWallId(o.type)||/(?:wall|Wall|Frame|Trim|Lintel|Facade)/.test(o.type)))return false;
   return true;
  });
@@ -6920,6 +6931,7 @@ function makeScene(){
  const {blockers:pineShadows,lamps:pineWarmLamps}=pineFloorLightingSources(visible);
  const floors=new Map(world.filter(o=>o.y===0&&isFloor(o.type)).map(o=>[o.x+','+o.z,o.type]));
  const creekWater=facilitySite?.id==='base'?facilityCreekIndex?.water:null;
+ const creekShoals=creekWater?new Set((facilitySite.creek?.shoals||[]).map(({x,z})=>x+','+z)):null;
  const woodlandRiver=(x,z)=>{const key=x+','+z;return creekWater?.has(key)&&floors.get(key)==='river'};
  const baseGrass=facilitySite?.id==='base'?new Array((MAP_W+1)*(MAP_H+1)):null;
  const groundCorner=baseGrass?(x,z)=>{
@@ -6944,7 +6956,7 @@ function makeScene(){
   const tmp=mesh();
   const ambientTint=floors.has(x+','+z)?null:groundCorner;
   const eastBlend=groundCorner&&x>=72&&Object.prototype.hasOwnProperty.call(PINE_EAST_NATURE_TONES,kind)?groundCorner:null;
-  if(woodlandRiver(x,z))facilityWoodlandWater(tmp,x,z,floors,creekWater);
+  if(woodlandRiver(x,z))facilityWoodlandWater(tmp,x,z,floors,creekWater,creekShoals);
   else{
    addFloorTile(tmp,x,z,kind,MAP_W*MAP_H,ROAD_DIAGONALS.has(kind)?roadDiagonalConnections(floors,x,z,kind):ROAD_IDS.has(kind)&&!kind.endsWith('Full')?roadConnections(floors,x,z,kind):0,ambientTint||eastBlend);
    if(!(creekWater&&x>=67&&facilityWoodlandBank(tmp,x,z,kind,woodlandRiver,groundCorner))&&floors.has(x+','+z))shoreline(tmp,x,z,floors);
@@ -10452,8 +10464,14 @@ function buildFacilitySite(id){
    [27,73],[28,72,73],[29,71,72],[30,70,71],[31,69,70],[32,69],[33,69],[34,69,70],[35,70],
    [36,69,70],[37,68,69],[38,68,69],[39,68,69],[40,68],
    [41,68,69],[42,69,70],[43,69,70],[44,70],[45,70,71],[46,71],[47,70,71],[48,70,71],
-   [49,71,72],[50,72,73],[51,73,74],[52,74],[53,74,75],[54,75],[55,75]
+   [49,71,72],[50,72,73],[51,73,74],[52,74],[53,74,75]
   ])for(let x=west;x<=east;x++){exterior(x,z,'river');deep.push({x,z});}
+  // After the wooded creek corridor, the meadow stretch bends east to its outlet.
+  for(const [x,north,south=north] of [
+   [76,53],[77,53],[78,53,54],[79,53,54],[80,52,53],[81,51,52],[82,51],
+   [83,50,51],[84,50,51],[85,51],[86,51,52],[87,52],[88,52,53],
+   [89,53,54],[90,53,54],[91,53],[92,52,53],[93,52],[94,52,53],[95,52,53]
+  ])for(let z=north;z<=south;z++){exterior(x,z,'river');deep.push({x,z});}
   for(const {x,z,type,rot} of crossings)put(x,z,type,0,rot);
   openPatch(70,38,'grassPebbles');openPatch(71,38,'grassPebbles');
   openPatch(70,39,'grassTrampled');openPatch(69,40,'roadCutStoneFull');openPatch(70,40,'grassPebbles');
@@ -10467,7 +10485,9 @@ function buildFacilitySite(id){
    [68,43,'moss','bushFern',1],[69,44,'grassPebbles','watersideRock',2],
    [70,49,'grassPebbles','watersideRock',1]
   ]){openPatch(x,z,type);put(x,z,prop,0,rot);}
-  creek={deep,crossings,shallows:[],wash:{x:69,z:40},terrace:[],sound:{x:68,z:39}};
+  creek={deep,crossings,shallows:[],wash:{x:69,z:40},terrace:[],sound:{x:68,z:39},
+   shoals:[[81,52],[83,51],[86,52],[88,52],[91,53],[94,53]].map(([x,z])=>({x,z})),
+   gravelBanks:[[86,50],[87,51],[88,51],[81,53],[82,52],[82,53],[91,52],[93,53]].map(([x,z])=>({x,z}))};
   // East outing: long public trail around the thicket, quiet northern shortcut.
   const trace=(points,material)=>{
    let [x,z]=points[0];openPatch(x,z,material);
@@ -10523,6 +10543,20 @@ function buildFacilitySite(id){
    if(floors.has(x+','+z+',0'))continue;
    openPatch(x,z,f);put(x,z,p,0,r);
   }
+  // The downstream bank wanders around the shrine grove and rejoins the
+  // watchtower trail. Gravel shoulders follow the slow inside of its bends.
+  trace([[81,44],[83,44],[83,48],[84,48],[84,49],[90,49],[90,42],[87,42],[87,39],[86,39]],'grassTrampled');
+  for(const {x,z} of creek.gravelBanks)openPatch(x,z,'grassPebbles');
+  for(const [x,z,f,p,rot=0] of [
+   [76,54,'grassWild','tallGrass',1],[77,51,'grassWild','bushFern',2],
+   [80,54,'grassPatch','watersideRock',1],[83,52,'grassWild','tallGrass'],
+   [84,53,'grassPebbles','rubble',2],[85,50,'grassWild','bushFlower',1],
+   [85,54,'grassWild','rockMossy',3],[87,48,'grassWild','flowerField'],
+   [88,54,'grassWild','tallGrass',2],[89,51,'grassWild','watersideRock',1],
+   [90,50,'grassWild','tallGrass',2],[92,50,'grassMeadow','bushFern',2],
+   [92,54,'grassWild','tallGrass'],[94,51,'grassPebbles','watersideRock',3],
+   [95,54,'grassWild','tallGrass',1]
+  ]){openPatch(x,z,f);put(x,z,p,0,rot);}
   spawn={x:19,z:21};
  }else if(housing){
   stamp('cottage',3,4,0);stamp('rowhouse',15,6,0);stamp('gardener',27,4,1);
