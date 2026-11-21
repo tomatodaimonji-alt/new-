@@ -29,8 +29,8 @@ test('Facility-only roof treatment uses coherent muted colors without changing g
   roofColors.push(on[0][1]);
  }
  for(let k=0;k<3;k++)assert(Math.max(...roofColors.map(c=>c[k]))-Math.min(...roofColors.map(c=>c[k]))<.15);
- assert.match(between('function facilityBuildRoofs(','function facilityVisibleRoofs('),/residentialRoofGeometry\(m,group,residential,facilitySite.id!=='guildrenewal'\)/);
- assert.match(between('function makeScene(','function upload('),/if\(!pineGuildFantasyRoof\(m,group\)\)residentialRoofGeometry\(m,group,allRoofLookup,!!facilitySite&&facilitySite.id!=='guildrenewal'\)/);
+ assert.match(between('function facilityBuildRoofs(','function facilityVisibleRoofs('),/residentialRoofGeometry\(m,group,residential,!facilityUsesGuildRendering\(\)\)/);
+ assert.match(between('function makeScene(','function upload('),/if\(!pineGuildFantasyRoof\(m,group\)\)residentialRoofGeometry\(m,group,allRoofLookup,!!facilitySite&&!facilityUsesGuildRendering\(\)\)/);
 });
 test('The offline wooden cue uses filtered transients, not pitched sine sweeps; other effects unchanged in routing',()=>{
  const events=[];
@@ -67,4 +67,26 @@ test('One door cue per actual threshold, matched to current floor including base
  assert.deepEqual(run('stonewallDoor',0,-1),['step','step']);
  assert.deepEqual(run('stonewallDoor',-1,-1),['door','step']);
  assert.deepEqual(run('woodwallDoorOpen',0,0),['step','step']);
+});
+
+test('The new routes share authored roof colors and the recovered Guild does not',()=>{
+ const script=between('function facilityUsesGuildRendering(','function facilityHiddenRoof(')+
+  between('function facilityBuildRoofs(','function facilityVisibleRoofs(');
+ const run=(id,fullGuild=false)=>{
+  const drawn=[],roof={x:1,z:1,y:1,type:'roofSteep'};
+  vm.runInNewContext(script+';facilityBuildRoofs();',{
+   facilitySite:{id,buildings:[{}]},facilityRoofMeshes:[],
+   world:[roof],AUTO_ROOFS:new Set(),RESIDENTIAL_ROOFS:new Set(['roofSteep']),
+   facilityIsRoofPiece:()=>true,facilityRoofOwner:()=>0,residentialRoofComponents:o=>[o],mesh:()=>({}),
+   pineGuildFantasyRoof(){drawn.push('special-guild');return fullGuild},
+   residentialRoofGeometry(m,group,lookup,useMuted){drawn.push(useMuted)},upload:()=>({count:1}),
+  });
+  return drawn;
+ };
+ for(const id of ['lodging','kitchen','workshop','artisan','stable','homes','toolshop','base'])
+  assert.deepEqual(run(id),[true],id);
+ assert.deepEqual(run('guildrenewal',true),['special-guild']);
+ assert.deepEqual(run('guildrenewal',false),['special-guild',false]);
+ assert.deepEqual(run('guildsaved',true),['special-guild']);
+ assert.deepEqual(run('guildsaved',false),['special-guild',false]);
 });

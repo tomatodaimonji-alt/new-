@@ -21,17 +21,17 @@ function local(scope,id){
  }
  return {at,route,b};
 }
-test('food-hall marked service counter has supported paperwork and a dedicated stool on its staff side',()=>{
+test('food-hall marked checkout has supported paperwork and a dedicated stool on its staff side',()=>{
  for(const scope of ['kitchen','base']){
   const {at,route}=local(scope,'kitchen');
-  assert.ok(at(9,4).some(o=>o.type==='counterWood'));
-  assert.equal(at(9,4).find(o=>o.type==='poiLedgerPapers')?.rot,2);
-  assert.ok(at(9,3).some(o=>o.type==='stoolRound'));
+  assert.ok(at(7,8).some(o=>o.type==='counterWood'));
+  assert.equal(at(7,8).find(o=>o.type==='poiLedgerPapers')?.rot,3);
+  assert.ok(at(8,8).some(o=>o.type==='stoolRound'));
   assert.ok(at(10,4).some(o=>o.type==='counterWood'));
-  assert.ok(at(7,8).some(o=>o.type==='counterWood'), 'unmarked entry counter unchanged');
+  assert.ok(at(9,4).some(o=>o.type==='counterWood'), 'serving counter stays behind');
   const walk=route();
-  assert.ok(!walk.has(key(9,3)), 'occupied stool counted as obstacle');
-  for(const col of [4,8,12])for(let z=5;z<=8;z++)assert.ok(walk.has(key(col,z)),scope+' aisle '+[col,z]);
+  assert.ok(!walk.has(key(8,8)), 'occupied stool counted as obstacle');
+  for(const col of [4,8,12])for(let z=5;z<=(col===8?7:8);z++)assert.ok(walk.has(key(col,z)),scope+' aisle '+[col,z]);
   for(const p of [[2,7],[6,8],[8,7],[10,5],[10,1],[9,2]])assert.ok(walk.has(key(...p)),scope+' route '+p);
  }
 });

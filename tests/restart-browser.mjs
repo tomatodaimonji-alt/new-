@@ -47,7 +47,7 @@ try{
  assert(changed,'base spawn has no reachable adjacent cell');
  assert.deepEqual((await resume(page)).position,{x:changed.x,z:changed.z,y:0,facing:(await resume(page)).position.facing});
  page=await open(ctx,page,'',errors); // Android cold launch URL
- assert.equal(await page.locator('#facilitySessionName').textContent(),'プレイヤー拠点');
+ assert.equal(await page.locator('#facilitySessionName').textContent(),'拠点');
  assert.equal(await page.locator('#poiWalkToggle').getAttribute('aria-pressed'),'true');
  assert.equal((await resume(page)).position.x,changed.x);
  assert.equal((await resume(page)).position.z,changed.z);

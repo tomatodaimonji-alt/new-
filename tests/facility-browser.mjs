@@ -108,7 +108,7 @@ try{
  await desktop.goto(origin+'/?test=1');
  assert((await desktop.evaluate(()=>window.__editorTest?.state()))?.glLink,'WebGL init');
  await desktop.locator('#poiSampleCategories .categoryRow').click();
- assert.equal(await desktop.locator('[data-facility-id]').count(),4,'built-in POI entries');
+ assert.equal(await desktop.locator('[data-facility-id]').count(),8,'built-in POI entries');
  assert.equal(await desktop.locator('#poiSampleCategories button:not([data-guild-renewal])').filter({hasText:'冒険者ギルド'}).count(),1,'one existing guild still selectable beside the separate preview action');
  await expectStore(desktop);
  for(const id of idList){
@@ -151,10 +151,25 @@ try{
   assert(start.active);
   assert.deepEqual(start.position,{...start.spawn,level:0});
   assert.equal(start.hiddenRoof,null);
-  assert.equal(start.buildings.length,id==='base'?3:1);
+  assert.equal(start.buildings.length,id==='base'?9:1);
   assert(start.roofMeshes.every(count=>count>0));
   if(out)await desktop.screenshot({path:out+'/'+id+'.png'});
-  for(const [index,b] of start.buildings.entries()){
+  if(id==='base'){
+   const westBench={x:16,z:17},eastBench={x:23,z:18};
+   for(const bench of [westBench,eastBench]){
+    assert(raw.world.some(o=>o.x===bench.x&&o.z===bench.z&&o.y===0&&o.type==='benchWood'));
+    assert(raw.world.some(o=>o.x===bench.x&&o.z===bench.z&&o.y===0&&o.type==='roadCutStoneFull'));
+   }
+   // Capture the bench from the side, without the player standing inside it.
+   if(out){
+    await walk(desktop,await route(desktop,raw,start.position,(x,z)=>x===16&&z===19));
+    const canvas=desktop.locator('#view');
+    for(let n=0;n<7;n++)await canvas.dispatchEvent('wheel',{deltaY:-1});
+    await desktop.screenshot({path:out+'/base-plaza-bench.png'});
+    for(let n=0;n<7;n++)await canvas.dispatchEvent('wheel',{deltaY:1});
+   }
+  }
+  for(const [index,b] of start.buildings.slice(0,id==='base'?3:1).entries()){
    const beforeStep=await snap(desktop);
    const ground=footprint(b);
    const boxArea=(b.x2-b.x1+1)*(b.z2-b.z1+1);
@@ -205,14 +220,34 @@ try{
     const approach=point(10,1);
     const before=await snap(desktop);
     const chairTiles=new Set(raw.world.filter(o=>o.y===0&&['chairWood','stoolRound'].includes(o.type)).map(o=>key(o.x,o.z)));
-    const staff=point(9,3),counter=point(9,4);
-    assert(raw.world.some(o=>o.y===0&&o.x===staff.x&&o.z===staff.z&&o.type==='stoolRound'),'marked counter staff stool');
-    for(const type of ['counterWood','poiLedgerPapers'])assert(raw.world.some(o=>o.y===0&&o.x===counter.x&&o.z===counter.z&&o.type===type),'marked counter '+type);
-    // Walk to the entry desk and stair using only paths that remain open
-    // with the chairs (normally intentionally passable) treated as occupied.
-    for(const mark of [point(6,8),point(8,8),approach])
-     await walk(desktop,await route(desktop,raw,(await snap(desktop)).position,
-      (x,z)=>x===mark.x&&z===mark.z,null,(x,z)=>!chairTiles.has(key(x,z))));
+    const at=([x,z],type)=>{
+     const mark=point(x,z);
+     return raw.world.some(o=>o.y===0&&o.x===mark.x&&o.z===mark.z&&o.type===type);
+    };
+    assert(at([8,8],'stoolRound'),'marked cashier staff stool');
+    for(const type of ['counterWood','poiLedgerPapers'])assert(at([7,8],type),'marked cashier '+type);
+    assert(at([7,7],'counterWood'),'second marked cashier tile');
+    assert(!at([9,4],'poiLedgerPapers'),'serving counter still furnished as a till');
+    const occupiedAisle=(x,z)=>ground.has(key(x,z))&&!chairTiles.has(key(x,z));
+    const visit=async mark=>await walk(desktop,await route(desktop,raw,(await snap(desktop)).position,
+      (x,z)=>x===mark.x&&z===mark.z,null,occupiedAisle));
+    // Exercise both sides of the cashier even when the seats are occupied.
+    for(const mark of [point(6,8),point(6,7),point(8,7)])await visit(mark);
+    if(out&&id==='kitchen'){
+     const canvas=desktop.locator('#view');
+     for(let n=0;n<7;n++)await canvas.dispatchEvent('wheel',{deltaY:-1});
+     await desktop.screenshot({path:out+'/kitchen-cashier.png'});
+     for(let n=0;n<7;n++)await canvas.dispatchEvent('wheel',{deltaY:1});
+    }
+    // Push through each staff door with actual key presses, including the east
+    // door on the route to the unchanged stair aperture.
+    for(const x of [4,11]){
+     assert(at([x,4],'stonewallDoor'),'staff door '+x);
+     const path=[point(x,5),point(x,4),point(x,3)];
+     await visit(path[0]);
+     await walk(desktop,path.map(p=>({...p,level:0})));
+    }
+    await visit(approach);
     if(out&&id==='kitchen'){
      const canvas=desktop.locator('#view');
      for(let n=0;n<11;n++)await canvas.dispatchEvent('wheel',{deltaY:-1});
@@ -260,6 +295,33 @@ try{
   assert(restored?.world.some(o=>o.x===2&&o.z===2&&o.type==='stonewall'));
   await expectStore(desktop);
   console.log('PASS: '+id+' navigation, rendering, walking, JSON, storage and reload');
+ }
+ // Each new site has its own editor route and can be walked from a real entrance.
+ for(const id of ['artisan','stable','homes','toolshop','base']){
+  await desktop.goto(origin+'/?facility='+id+'&test=1');
+  const before=await snap(desktop);
+  assert.equal(before?.id,id);
+  assert.equal(before?.active,false);
+  const raw=await desktop.evaluate(()=>window.__editorTest.data());
+  if(id==='base')assert.equal(await desktop.locator('#facilitySessionName').textContent(),'拠点');
+  assert.equal(before.buildings.length,id==='base'?9:id==='homes'?3:1);
+  await desktop.locator('#poiWalkToggle').click();
+  if(out)await desktop.screenshot({path:out+'/town-'+id+'.png'});
+  for(const b of before.buildings.slice(id==='base'?3:0)){
+   const area=footprint(b);
+   const exteriorDoors=raw.world.filter(o=>o.y===0&&o.type.endsWith('wallDoor')&&area.has(key(o.x,o.z))&&
+    dirs.some(([dx,dz])=>!area.has(key(o.x+dx,o.z+dz))));
+   assert(exteriorDoors.length>0,id+' missing exterior door');
+   const insideOther=(x,z)=>before.buildings.some(bb=>inside(footprint(bb),x,z));
+   await walk(desktop,await route(desktop,raw,(await snap(desktop)).position,(x,z)=>!insideOther(x,z)));
+   const through=(x,z)=>exteriorDoors.some(o=>o.x===x&&o.z===z);
+   await walk(desktop,await route(desktop,raw,(await snap(desktop)).position,through,null,(x,z)=>!area.has(key(x,z))||through(x,z)));
+   await walk(desktop,await route(desktop,raw,(await snap(desktop)).position,(x,z)=>inside(area,x,z),null,(x,z)=>area.has(key(x,z))));
+   assert.equal((await snap(desktop)).hiddenRoof,before.buildings.indexOf(b));
+   await walk(desktop,await route(desktop,raw,(await snap(desktop)).position,(x,z)=>!area.has(key(x,z))));
+  }
+  await expectStore(desktop);
+  console.log('PASS: '+id+' new neighborhood geometry, entrances and save isolation');
  }
  // Force editor reload on browser Back (launch default disables BFCache) with a
  // legacy snapshot that normal v102 boot would install and persist automatically.

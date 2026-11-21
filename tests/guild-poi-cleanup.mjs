@@ -50,7 +50,7 @@ try{
  const lists=await page.locator('#poiSampleCategories .poiSampleEntry >span:nth-child(2)').allTextContents();
  assert.equal(lists.filter(v=>v.startsWith('冒険者ギルド')).length,1);
  assert.equal(lists.filter(v=>v.startsWith('ギルド')).length,1);
- assert.equal(await page.locator('[data-facility-id]').count(),4);
+ assert.equal(await page.locator('[data-facility-id]').count(),8);
  const archives=page.locator('#poiDuplicateBackups');
  assert(await archives.isVisible());
  await archives.locator('summary').click();

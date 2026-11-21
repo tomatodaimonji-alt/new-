@@ -37,14 +37,14 @@ test('dining hall grows only toward the old exterior, with matching stone toilet
 test('seated chairs cannot block the full-tile dining loop, facilities or entry counter',()=>{
  for(const scope of ['kitchen','base']){
   const {at,route}=plan(scope),hall=route(0,5,9);
-  for(const col of [4,8,12])for(let z=5;z<=8;z++){
+  for(const col of [4,8,12])for(let z=5;z<=(col===8?7:8);z++){
    assert.ok(at(col,z).length&&at(col,z).every(walkable),scope+' unobstructed lane '+[col,z]);
    assert.ok(hall.has(key(col,z)),scope+' can reach lane '+[col,z]+' without walking through chairs');
   }
   const seated=[[5,6],[7,6],[6,5],[9,6],[11,6],[10,7]];
   for(const p of seated)assert.ok(at(...p).some(o=>o.type==='chairWood')&&!hall.has(key(...p)));
   for(const z of [7,8])assert.ok(at(7,z).some(o=>o.type==='counterWood'&&o.rot%2===1));
-  for(const p of [[6,7],[6,8],[8,7],[8,8],[2,7],[10,5],[10,1]])assert.ok(hall.has(key(...p)),scope+' reach '+p);
+  for(const p of [[6,7],[6,8],[8,7],[9,8],[2,7],[10,5],[10,1]])assert.ok(hall.has(key(...p)),scope+' reach '+p);
  }
 });
 test('cellar corner stair holes and approach are aligned in both directions',()=>{
