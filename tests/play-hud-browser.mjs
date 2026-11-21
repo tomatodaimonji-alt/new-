@@ -43,7 +43,7 @@ const ai='#pineAIPlanCapture',safe='☆☆☆☆☆',outside='★☆☆☆☆';
 const controls=[pad,'[data-poi-dir=n]','[data-poi-dir=s]','[data-poi-dir=e]','[data-poi-dir=w]','#poiWalkAction'];
 const settle=page=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
 const confirmText=async (page,css,want)=>assert.equal((await page.locator(css).textContent()).trim(),want,css);
-const snapshot=async (page,name)=>{if(out){await settle(page);await page.screenshot({path:out+'/v124-'+name+'.png'});}};
+const snapshot=async (page,name)=>{if(out){await settle(page);await page.screenshot({path:out+'/v126-'+name+'.png'});}};
 async function initialize(browser,width,height,prefix='/',opts={}){
  const mobile=width<800,ctx=await browser.newContext({viewport:{width,height},deviceScaleFactor:1,isMobile:mobile,hasTouch:mobile});
  const page=await ctx.newPage(),errors=[];
@@ -90,6 +90,19 @@ async function geometry(page,width,height,duringDrawer=false){
  assert.ok(minimapOuter.x<=viewport.x+15&&minimapOuter.y<=viewport.y+32,'radar touches upper left margin');
  assert.ok(left.x<=viewport.x+viewport.width*.16&&left.x<walk.x+8&&radar.width>=70&&radar.width<=132,'left-aligned player and compact square radar');
  assert.ok(Math.abs(radar.width-radar.height)<=1,'radar is square');
+ const glass=async selector=>page.locator(selector).evaluate(el=>{
+  const s=getComputedStyle(el);return [s.backgroundColor,s.backdropFilter,s.opacity];
+ });
+ const dpadGlass=await glass(pad);
+ assert.deepEqual(dpadGlass,['rgba(22, 46, 39, 0.54)','blur(5px)','1']);
+ for(const panel of ['#poiMiniMap','#poiLocationPanel'])
+  assert.deepEqual(await glass(panel),dpadGlass,panel+' shares the control glass while keeping its text opaque');
+ const alpha=await page.locator('#poiMiniMap').evaluate(cv=>{
+  const ctx=cv.getContext('2d'),{width,height}=cv;
+  const pixels=ctx.getImageData(0,0,width,height).data;
+  return [pixels[3],pixels.some((v,i)=>i%4===3&&v===255)];
+ });
+ assert.deepEqual(alpha,[0,true],'painted raster is transparent at the edge while keeping readable marks');
  assert.ok(name.y>=radar.y+radar.height-1&&stars.y>=name.y,'location text and difficulty sit below the radar');
  const locationBox=await box(page,'#poiLocationPanel');
  assert.ok(contained(name,locationBox)&&contained(stars,locationBox)&&name.x+name.width<=stars.x+1&&

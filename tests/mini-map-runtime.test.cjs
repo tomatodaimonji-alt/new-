@@ -19,7 +19,7 @@ test('explicit town coverage does not grant zero-risk rating to the similarly na
 });
 test('mini map follows the active floor and hides for editor/AI while reusing static map on movement/turns',()=>{
  const labels=[];
- const mkCtx=()=>({fillRect(){},beginPath(){},arc(){},fill(){},stroke(){},fillText(s){labels.push(s)},clearRect(){},drawImage(){}});
+ const mkCtx=()=>({fillRect(){},strokeRect(){},beginPath(){},arc(){},fill(){},stroke(){},fillText(s){labels.push(s)},clearRect(){},drawImage(){}});
  const mkCanvas=()=>({width:144,height:144,getContext:()=>mkCtx()});
  const els={poiMiniHud:{hidden:true},poiMiniMap:mkCanvas(),poiLocationName:{textContent:''},
   poiLocationStars:{textContent:'',setAttribute(){}}};
@@ -40,4 +40,16 @@ test('mini map follows the active floor and hides for editor/AI while reusing st
  scope.poiWalkLevel=0;scope.poiMiniUpdate();assert.equal(scope.poiMiniSnapshot().topologyBuilds,builds+1);
  scope.poiMiniInvalidate();scope.poiMiniUpdate();assert.equal(scope.poiMiniSnapshot().topologyBuilds,builds+2);
  scope.poiWalkActive=false;scope.poiMiniUpdate();assert(els.poiMiniHud.hidden);
+});
+test('map raster leaves the shared glass visible behind terrain and at the edges',()=>{
+ const ops=[];
+ const g={fillStyle:'',strokeStyle:'',fillRect(...args){ops.push(['fill',this.fillStyle,...args]);},
+  strokeRect(...args){ops.push(['outline',this.strokeStyle,...args]);},fillText(){}};
+ const scope=run({document:{createElement:()=>({getContext:()=>g})},MAP_W:20,MAP_H:20,
+  world:[{x:10,z:10,y:0,type:'stone'}],isFloor:t=>t==='stone',isWallId:()=>false,
+  poiWalkPassableDoor:()=>false,BRIDGE_IDS:new Set(),ROAD_IDS:new Set()});
+ const map=scope.poiMiniDrawTopology(144,144,0);
+ assert.deepEqual(ops.filter(o=>o[0]==='fill').map(o=>o[1]),['#597867'],'no solid background fill over the shared panel');
+ assert(ops.some(o=>o[0]==='outline'&&o[2]===map.ox&&o[3]===map.oy),'north-up map retains a ground-level boundary');
+ assert.match(html,/#app #viewWrap :is\(#poiMiniMap,#poiLocationPanel\)\s*\{[^}]*backdrop-filter:var\(--workshop-panel-blur\)/);
 });
