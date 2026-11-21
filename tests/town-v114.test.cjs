@@ -170,15 +170,15 @@ const v113Expected={
  },
  "homes": {
   "footprints": "ab05997bbc64a45c4778ea7395aab15ccedab50539cc00947e9dee120b500b6e",
-  "records": "0d7e18ba66ddd61b869b9040877e3ef2695f6da86a5fa58fa9a15385deeb5685"
+  "records": "9dc3e68056c6cd916f8569a812a9b5b5d91ab14ab962a63fbf9df9d3fc4289b0"
  },
  "toolshop": {
   "footprints": "cddd82d7db8364d9bdb143ed4b65804b23656b197ad3d5a5591023fcb3d7f960",
-  "records": "c54172a2b8848bd496ce35c0c3d117222d656eeb4d6f25856bcd2634d561336f"
+  "records": "4d3a2d55b1d6afea9e6027b0ec6bdc2cc0c1c7bcf441ee354e095ce8075b4d59"
  },
  "base": {
   "footprints": "5a94754411125b601836fdc8f199292929e3c1b2d8fa63ea94e34e705ddae2a6",
-  "records": "882cc391133ba53b1abd46fd3807ba5cd22197f53e1237f8b3bec63868d40351",
+  "records": "201fe8add6aba66425e29d03f4599e4713141a8355c6294683d3c8c46a07060a",
   "roads": "2f2e126fbdb831de22f10c14c38eed15026b23e9bed29c77d804f1c516a59008"
  }
 };
@@ -203,6 +203,17 @@ const remodeled={
   '2,3:stoolRound','3,7:stoolRound','4,1:displayShelf','5,1:chest','5,1:poiPottedPlant','5,2:basketProduce','5,2:table',
   '5,3:guildLatrine','5,5:kitchenSink'])
 };
+// v115 frontage deltas are restricted to exact authored coordinates, types and turns.
+const frontages={
+ artisan:new Set(['2,7:oldTownShutters:0','6,7:oldTownAwning:0']),
+ toolshop:new Set(['1,9:shopChestSign:0','2,8:oldTownAwning:0','2,9:shopChestSign:0','5,8:oldTownStreetLamp:0']),
+ cottage:new Set(['1,7:benchWood:0','1,7:roadGravelFull:0','2,6:oldTownFlowerBox:0','2,7:roadGravelFull:0','2,7:smallFlowerVase:0',
+  '5,7:poiPottedPlant:0','6,7:poiPottedPlant:0']),
+ rowhouse:new Set(['1,6:poiPottedPlant:0','1,7:poiPottedPlant:0','1,7:roadBrickFull:0','2,7:roadBrickFull:0','3,6:oldTownStreetLamp:0']),
+ gardener:new Set(['0,10:roadGravelFull:0','0,10:stoolRound:0','0,7:cropVegetable:0','0,7:earth:0','0,8:cropVegetable:1',
+  '0,8:earth:0','0,9:barrel:0','0,9:roadGravelFull:0','1,7:barrel:0','3,7:stoolRound:0',
+  '4,6:oldTownFlowerBox:0'])
+};
 function inRows(rows,x,z){return rows[z]?.some(([a,b])=>x>=a&&x<=b)??false;}
 function localPos(o,b){
  if(b.turn===1)return [o.z-b.z1,b.x2-o.x];
@@ -211,6 +222,10 @@ function localPos(o,b){
 }
 function protectedIndoor(site,o,bounds){
  if(o.y!==0)return true;
+ for(const [id,edited] of Object.entries(frontages)){
+  const b=bounds.get(id);
+  if(b&&edited.has(key(...localPos(o,b))+':'+o.type+':'+((o.rot-b.turn+4)%4)))return false;
+ }
  const kitchen=bounds.get('kitchen'),workshop=bounds.get('workshop');
  if(kitchen&&seatKinds.has(o.type)&&roomSeats.has(key(...localPos(o,kitchen))))return false;
  if(workshop&&workshopProps.has(key(...localPos(o,workshop))+':'+o.type))return false;

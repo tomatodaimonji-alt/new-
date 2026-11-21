@@ -12,8 +12,14 @@ function build(text,id){
  return JSON.parse(JSON.stringify(vm.runInNewContext(text.slice(i,j)+';buildFacilitySite('+JSON.stringify(id)+')')));
 }
 const before=build(orig,'base'),after=build(html,'base');
+const v115Marker='  // Small east-side rest glade and staggered grass shoulders along the meadow.';
+const polishStart=html.indexOf(v115Marker,markerStart);
+assert(polishStart>markerStart&&polishStart<end,'expected separately bounded v115 landscape polish');
+const legacyTerrain=build(html.slice(0,polishStart)+html.slice(end),'base');
 const keys=before.map.world.map(o=>JSON.stringify(o)),original=new Set(keys),changed=new Set(after.map.world.map(o=>JSON.stringify(o)));
-const extra=after.map.world.filter(o=>!original.has(JSON.stringify(o)));
+const extra=legacyTerrain.map.world.filter(o=>!original.has(JSON.stringify(o)));
+const oldFull=new Set(legacyTerrain.map.world.map(o=>JSON.stringify(o)));
+const polish=after.map.world.filter(o=>!oldFull.has(JSON.stringify(o)));
 const terrain=new Set(['earth','grass','grassForest','grassWild','grassMeadow','grassTrampled','grassDry','grassFlowers','grassPebbles','grassPatch','stone','moss','woodfloor','woodfloorLight','woodfloorDark','brickfloor','roadGravelFull','roadCobbleFull','roadCutStoneFull']);
 const nonSolid=new Set(['flowerField','bushFlower','tallGrass','lantern','chairWood','chairClassic','stoolRound','benchWood']);
 const point=(x,z)=>x+','+z;
@@ -34,6 +40,9 @@ test('landscape adds groves and field paths with a small editable budget and has
  assert(extra.some(o=>o.x===66&&o.z===45&&o.type==='earth'));
  assert(!extra.some(o=>/wall|fence/i.test(o.type)));
  assert(!nonTerrain.some(o=>o.x>=24&&o.x<=45&&o.z>=51&&o.z<=54&&/^tree/.test(o.type)));
+ for(const k of oldFull)assert(changed.has(k),k);
+ assert.ok(polish.length<=30,'east-side rest glade and meadow small extra record budget');
+ assert.ok(!polish.some(o=>/^tree|wall|fence/i.test(o.type)),'polish cannot plant more trees or seal the open meadow');
 });
 test('continuous outdoor collision routes connect the town to wide meadow and forest openings',()=>{
  const walls=new Set();
@@ -50,6 +59,8 @@ test('continuous outdoor collision routes connect the town to wide meadow and fo
 });
 test('ambient color is scoped to implicit grade-only base grass and leaves scatter unchanged',()=>{
  assert.match(html,/function pineBaseNatureTint\(/);
- assert.match(html,/facilitySite\?\.id==='base'&&!floors\.has\(x\+','\+z\)\?pineBaseNatureTint\(x,z\):null/);
+ assert.match(html,/const baseGrass=facilitySite\?\.id==='base'\?new Array\(\(MAP_W\+1\)\*\(MAP_H\+1\)\):null/);
+ assert.match(html,/const ambientTint=floors\.has\(x\+','\+z\)\?null:groundCorner;/);
+ assert.match(html,/const a=ambientTint\(x0,z0\),b=ambientTint\(x0,z1\),d=ambientTint\(x1,z0\),e=ambientTint\(x1,z1\)/);
  assert.match(html,/kind==='grass'\? \(n>\.72\?1:0\)/);
 });

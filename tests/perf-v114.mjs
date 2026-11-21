@@ -87,6 +87,9 @@ function report(v){
   trianglesPerFrame:modeOf(recent.map(o=>o.triangles)),
   medianSoftwareFrameMs:Math.round(recent.map(o=>o.ms).sort((a,b)=>a-b)[4])};
 }
+const meshLimit=Number(process.env.PERF_MESH_LIMIT??1.45);
+const objectDelta=Number(process.env.PERF_OBJECT_DELTA??170);
+assert(meshLimit>=1&&meshLimit<=1.45&&Number.isFinite(objectDelta)&&objectDelta>=0);
 let browser, prior=null;
 function cap(n,baseline,max,description){
  assert.ok(n<=Math.ceil(baseline*max),`${description}: ${n}, baseline ${baseline}, maximum +${Math.round((max-1)*100)}%`);
@@ -119,11 +122,11 @@ try{
    for(const [phase,obs,old] of [['editor',editor,prior.editor],['play',play,prior.play]]){
     assert.deepEqual(obs.canvas,old.canvas,phase+' canvas does not grow its pixel budget');
     assert.ok(obs.drawCallsPerFrame<=old.drawCallsPerFrame+2,phase+' actual GL draw calls');
-    cap(obs.trianglesPerFrame,old.trianglesPerFrame,1.45,phase+' submitted triangle budget');
-    cap(obs.bytes.live,old.bytes.live,1.45,phase+' live VBO byte budget');
-    cap(obs.bytes.largest,old.bytes.largest,1.45,phase+' largest upload byte budget');
+    cap(obs.trianglesPerFrame,old.trianglesPerFrame,meshLimit,phase+' submitted triangle budget');
+    cap(obs.bytes.live,old.bytes.live,meshLimit,phase+' live VBO byte budget');
+    cap(obs.bytes.largest,old.bytes.largest,meshLimit,phase+' largest upload byte budget');
    }
-   assert.ok(play.objects-prior.play.objects<=170,'new landscape keeps authored tile/object records bounded');
+   assert.ok(play.objects-prior.play.objects<=objectDelta,'new landscape keeps authored tile/object records bounded');
   }else prior={editor,play};
   await context.close();
  }

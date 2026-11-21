@@ -648,7 +648,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
 #facilitySessionActions .row{margin:0}
 .facilityGroupLabel{margin:9px 4px 5px;font-size:11px;color:var(--muted)}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v114）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v115）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -3566,8 +3566,17 @@ function pineBaseNatureTint(x,z){
  const local=(cx,cz,rx,rz)=>Math.max(0,1-Math.hypot((x-cx)/rx,(z-cz)/rz));
  const woods=Math.max(local(6,3,12,9),local(61,4,15,12),
   local(68,20,13,24),local(7,52,17,12));
- const meadow=Math.max(local(32,52,24,10),local(32,3,18,8));
- return [meadow*.045-woods*.064,meadow*.047-woods*.093,meadow*.009-woods*.042];
+ const meadow=Math.max(local(32,52,24,10),local(32,3,18,8),local(66,34,6,8)*.44);
+ const understory=(smoothSurfaceNoise(x*.18+21,z*.18-31)-.5)*woods;
+ const meadowEdge=(smoothSurfaceNoise(x*.21-5,z*.13+18)-.5)*meadow;
+ return [meadow*.048-woods*.061+understory*.023+meadowEdge*.030,
+  meadow*.047-woods*.087+understory*.017+meadowEdge*.019,
+  meadow*.010-woods*.038+understory*.011];
+}
+function pineBaseGrassCorner(x,z){
+ const r=.25+smoothSurfaceNoise(x*.16,z*.16)*.55+smoothSurfaceNoise(x*.42+13,z*.42-7)*.20;
+ const [red,green,blue]=pineBaseNatureTint(x,z);
+ return [.33+r*.13+red,.56+r*.12+green,.30+r*.09+blue];
 }
 function addFloorTile(m,x,z,kind,area=256,roadMask=0,ambientTint=null){if(ROAD_IDS.has(kind)){roadTile(m,x,z,kind,roadMask,area);return;}
 const r=.25+smoothSurfaceNoise(x*.16,z*.16)*.55+smoothSurfaceNoise(x*.42+13,z*.42-7)*.20;
@@ -3595,10 +3604,15 @@ kind==='grassMeadow'?[.36+r*.09,.54+r*.11,.29+r*.07]:
 kind==='ironfloor'?[.24,.28,.31]:kind==='mossfloor'?[.32,.41,.33]:
 kind==='plasterfloor'?[.63,.60,.53]:kind==='basicfloor'?[.51,.55,.51]:null;
 if(groutColor)c.splice(0,3,...groutColor);
-if(ambientTint)for(let i=0;i<3;i++)c[i]+=ambientTint[i];
 const inset=ambientTint?0:.006;
 const x0=x+inset,x1=x+1-inset,z0=z+inset,z1=z+1-inset;
 quad(m,[x0,0,z0],[x0,0,z1],[x1,0,z1],[x1,0,z0],c);
+// Same quad and vertex count: neighboring ambient grass tiles share edge colors.
+if(ambientTint){
+ const a=ambientTint(x0,z0),b=ambientTint(x0,z1),d=ambientTint(x1,z0),e=ambientTint(x1,z1);
+ const offset=m.c.length-18,colors=[a,b,e,a,e,d];
+ for(let i=0;i<6;i++)for(let j=0;j<3;j++)m.c[offset+i*3+j]=colors[i][j];
+}
 // Baked-in lightweight vegetation details: deterministic, sparse and non-colliding.
 const naturalGrass=new Set(['grass','grassMeadow','grassWild','grassForest','grassDry',
  'grassTuft','grassFlowers','grassPebbles','grassPatch','grassWeeds','grassTrampled']);
@@ -4913,7 +4927,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v114',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v115',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -5028,7 +5042,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v114';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v115';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -5240,7 +5254,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v114',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v115',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -6509,6 +6523,11 @@ function makeScene(){
  });
  const {blockers:pineShadows,lamps:pineWarmLamps}=pineFloorLightingSources(visible);
  const floors=new Map(world.filter(o=>o.y===0&&isFloor(o.type)).map(o=>[o.x+','+o.z,o.type]));
+ const baseGrass=facilitySite?.id==='base'?new Array((MAP_W+1)*(MAP_H+1)):null;
+ const groundCorner=baseGrass?(x,z)=>{
+  const i=z*(MAP_W+1)+x;
+  return baseGrass[i]||(baseGrass[i]=pineBaseGrassCorner(x,z));
+ }:null;
  if(!facilitySite||facilityViewLevel()>=0)for(let z=0;z<MAP_H;z++)for(let x=0;x<MAP_W;x++){
   if(facilitySite&&facilityStairOpenings.has(facilityCellKey(x,z,0))){
    const h=terrainY(x,z);
@@ -6525,7 +6544,7 @@ function makeScene(){
   }
   const kind=floors.get(x+','+z)||'grass';
   const tmp=mesh();
-  const ambientTint=facilitySite?.id==='base'&&!floors.has(x+','+z)?pineBaseNatureTint(x,z):null;
+  const ambientTint=floors.has(x+','+z)?null:groundCorner;
   addFloorTile(tmp,x,z,kind,MAP_W*MAP_H,ROAD_DIAGONALS.has(kind)?roadDiagonalConnections(floors,x,z,kind):ROAD_IDS.has(kind)&&!kind.endsWith('Full')?roadConnections(floors,x,z,kind):0,ambientTint);
   if(floors.has(x+','+z))shoreline(tmp,x,z,floors);
   pineBakeFloorLighting(tmp,x,z,0,pineShadows,pineWarmLamps);
@@ -9588,7 +9607,7 @@ function buildFacilitySite(id){
       [1,4,'woodwall'],[2,4,'woodwall'],[3,4,'woodwall'],
       [1,1,'guildLatrine'],[2,1,'kitchenSink'],[2,4,'poiWallSconce',2]]}
    ],
-   roofProps:[[4,1,1,'chimney']],facade:[],
+   roofProps:[[4,1,1,'chimney']],facade:[[2,7,'oldTownShutters'],[6,7,'oldTownAwning']],
    yards:[[2,8,'shopBagSign'],[6,8,'poiPottedPlant']]
   },
   stable:{
@@ -9639,8 +9658,8 @@ function buildFacilitySite(id){
       [7,5,'displayShelf',1],[7,7,'displayShelf',1],[5,6,'counterLuxury',1],
       [5,6,'poiLedgerPapers',3],[6,6,'stoolRound'],[5,8,'poiWallSconce',2]]}
    ],
-   roofProps:[],facade:[],
-   yards:[[2,9,'shopChestSign'],[6,9,'poiStreetLamp'],[7,9,'crate']]
+   roofProps:[],facade:[[2,8,'oldTownAwning'],[5,8,'oldTownStreetLamp']],
+   yards:[[1,9,'shopChestSign'],[6,9,'poiStreetLamp'],[7,9,'crate']]
   },
   cottage:{
    w:7,d:7,door:[4,6],wall:'plasterwall',roof:'roofDormer',roofs:[],
@@ -9656,7 +9675,8 @@ function buildFacilitySite(id){
      [1,4,'woodwall'],[2,4,'woodwall'],[3,4,'woodwall'],
      [1,1,'guildLatrine'],[2,1,'kitchenSink'],[0,3,'poiWallSconce',3]
     ]}],
-   roofProps:[[1,5,1,'chimney']],facade:[],yards:[[2,7,'smallFlowerVase'],[5,7,'poiPottedPlant']]
+   roofProps:[[1,5,1,'chimney']],facade:[[2,6,'oldTownFlowerBox']],
+   yards:[[1,7,'benchWood'],[6,7,'poiPottedPlant']],yardFloors:[[1,7,2,7,'roadGravelFull']]
   },
   rowhouse:{
    w:7,d:7,door:[4,6],wall:'brickwall',roof:'roofSteep',roofs:[[2,6,5,6,'roofLean']],
@@ -9673,7 +9693,8 @@ function buildFacilitySite(id){
      [3,4,'plasterwall'],[5,4,'plasterwall'],
      [4,1,'guildLatrine'],[5,1,'kitchenSink'],[6,3,'poiWallSconce',1]
     ]}],
-   roofProps:[[1,4,1,'chimney']],facade:[],yards:[[1,6,'poiPottedPlant']]
+   roofProps:[[1,4,1,'chimney']],facade:[[3,6,'oldTownStreetLamp']],
+   yards:[[1,7,'poiPottedPlant']],yardFloors:[[1,7,2,7,'roadBrickFull']]
   },
   gardener:{
    w:7,d:7,door:[2,6],wall:'woodwall',roof:'roofThatchThick',roofs:[[0,1,1,6,'roofLean']],
@@ -9689,7 +9710,9 @@ function buildFacilitySite(id){
      [5,3,'guildLatrine',1],[5,5,'kitchenSink',1],
      [0,4,'poiWallSconce',3],[6,5,'poiWallSconce',1]
     ]}],
-   roofProps:[[1,2,1,'chimney']],facade:[],yards:[[1,7,'barrel'],[3,7,'stoolRound'],[4,7,'smallFlowerVase']]
+   roofProps:[[1,2,1,'chimney']],facade:[[4,6,'oldTownFlowerBox']],
+   yards:[[0,7,'cropVegetable'],[0,8,'cropVegetable',1],[0,9,'barrel'],[0,10,'stoolRound'],[4,7,'smallFlowerVase']],
+   yardFloors:[[0,7,0,8,'earth'],[0,9,0,10,'roadGravelFull']]
   },
   lodging:{
    w:12,d:11,door:[5,10],wall:'plasterwall',roof:'roofDormer',
@@ -9953,6 +9976,24 @@ function buildFacilitySite(id){
    [23,50,'flowerField'],[29,51,'tallGrass'],[36,54,'flowerField'],
    [43,52,'flowerField'],[48,50,'bushFlower'],[13,50,'bushFern']
   ])wild(x,z,t);
+  // Small east-side rest glade and staggered grass shoulders along the meadow.
+  // Never replace the existing town/trail floors or place on existing props.
+  const dressed=new Set(objects.filter(o=>o.y===0).map(o=>groundKey(o.x,o.z)));
+  for(const [x,z,t,prop,rot=0] of [
+   [67,36,'grassTrampled'],[67,35,'grassTrampled'],[66,34,'grassTrampled'],
+   [67,34,'grassPatch'],[67,33,'grassTrampled'],[66,33,'grassMeadow'],
+   [65,33,'grassPatch','benchWood',1],[65,34,'grassMeadow','bushFern'],
+   [66,32,'grassMeadow','flowerField'],[68,33,'grassMeadow','tallGrass'],
+   [65,31,'grassForest'],
+   [22,53,'grassMeadow'],[23,52,'grassPatch'],[24,53,'grassMeadow','tallGrass'],
+   [27,54,'grassMeadow','flowerField'],
+   [38,52,'grassMeadow'],[40,51,'grassWild','tallGrass'],[41,52,'grassMeadow'],
+   [13,53,'grassWild','bushFern'],[16,53,'grassMeadow']
+  ]){
+   if(dressed.has(groundKey(x,z))||floors.has(x+','+z+',0')||insideGrade.has(groundKey(x,z)))continue;
+   openPatch(x,z,t);
+   if(prop)put(x,z,prop,0,rot);
+  }
   spawn={x:19,z:21};
  }else if(housing){
   stamp('cottage',3,4,0);stamp('rowhouse',15,6,0);stamp('gardener',27,4,1);
