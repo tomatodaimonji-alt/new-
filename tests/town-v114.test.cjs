@@ -280,8 +280,18 @@ test('protect unchanged v113 shells, cellar, footprints, town furnishings and pa
  const westBench=base.map.world.filter(o=>o.x===16&&o.z===17&&o.type==='benchWood');
  assert.equal(westBench.length,1,'one western bench');
  assert.deepEqual(records(westBench[0]),[16,17,0,'benchWood',1],'west bench is grounded');
- for(const [id,current] of Object.entries(v113Digests(build)))
-  assert.deepEqual(current,v113Expected[id],id+' protected legacy content');
+ // Keep all original hashes for the unaffected standalone POIs. The
+ // public base alone was redesigned, so its immutable southern roads get
+ // an independent projection from exact v136; all building interiors and
+ // the relocated workshop are still checked by house-polish.test.
+ for(const [id,current] of Object.entries(v113Digests(build))){
+  if(id!=='base')assert.deepEqual(current,v113Expected[id],id+' protected legacy content');
+ }
+ const southRoads=base.map.world.filter(o=>o.y===0&&o.z>=28&&o.z<=45&&o.x>=3&&o.x<=60&&/^(?:road|earth)/.test(o.type))
+  .map(o=>JSON.stringify(records(o))).sort();
+ assert.equal(southRoads.length,377);
+ assert.equal(require('node:crypto').createHash('sha256').update(southRoads.join('\n')).digest('hex'),
+  'f3fd969a05be24183fede120e0757f59d4f4bc536a3e5f84d4701e075c79c537','v136 south roads remain exact');
 });
 
 function assertDoor(site,bld,available,reachable,label){

@@ -50,28 +50,19 @@ test('outing leaves wash accessible on natural grade, with bounded static scener
  for(const route of [expand([[70,38],[70,40],[69,40]]),expand([[70,38],[70,40],[71,40]])])
   for(let i=1;i<route.length;i++)assert(walk(...route[i],...route[i-1]));
  assert.deepEqual(site.spawn,{x:19,z:21});assert.equal(site.buildings.length,10);
- // The added guild and its apron are north of the outing, not part of its scenery budget.
- const isGuild=o=>(o.x>=72&&o.x<=87&&o.z>=3&&o.z<=17)||
-  (o.y===0&&o.z===18&&o.x>=72&&o.x<=80&&o.type==='roadCutStoneFull')||
-  (o.y===0&&o.z>=19&&o.z<=24&&o.x>=78&&o.x<=80&&o.type==='roadCutStoneFull')||
-  (o.y===0&&o.type==='lantern'&&o.z===18&&(o.x===76||o.x===83))||
-  (o.y===0&&o.type==='benchWood'&&o.z===19&&(o.x===74||o.x===85));
- const east=site.map.world.filter(o=>o.x>=72&&!isGuild(o));
+ // v137 returns the old northeast guild parcel to the open landscape;
+ // no exception for guild assets inside the outing area is needed now.
+ const east=site.map.world.filter(o=>o.x>=72);
  assert(east.length<=325,east.length);
  assert(east.every(o=>!/(?:mob|monster|villager|loot|reward|treasure|quest)/i.test(o.type)));
  assert(east.filter(o=>/^tree/.test(o.type)).length<=21);
  assert(site.creek.deep.some(o=>o.x===95&&o.z>=51),'water continues to the southeast map edge, not an inland dead end');
 });
-test('older map records survive exactly, except the removed outdoor stair and bounded new stitching',()=>{
- const additions=new Set([
-  '71,49:river','71,26:grassTrampled','70,26:grassTrampled','69,26:grassTrampled','68,26:grassTrampled',
-  '68,27:grassTrampled','68,28:grassTrampled','68,29:grassTrampled','68,30:grassTrampled',
-  '67,30:grassTrampled','67,31:grassTrampled','67,32:grassTrampled','71,31:grassForest',
-  '71,25:grassWild','71,31:treeBirch','71,25:bushFern'
- ]);
- const guildLane=o=>o.y===0&&o.x>=55&&o.x<=71&&(o.z===17||o.z===18)&&o.type==='roadCutStoneFull';
- const legacy=site.map.world.filter(o=>o.x<72&&!guildLane(o)&&!additions.has(k(o.x,o.z)+':'+o.type)).map(o=>JSON.stringify(o)).sort();
- assert.equal(legacy.length,3317);
+test('every v136 eastern trail and creek record survives the town redesign exactly',()=>{
+ const preserved=site.map.world.filter(o=>o.x>=67&&o.z>=26)
+  .map(o=>JSON.stringify([o.x,o.z,o.y,o.type,o.rot])).sort();
+ assert.equal(preserved.length,398);
  const {createHash}=require('node:crypto');
- assert.equal(createHash('sha256').update(legacy.join('\n')).digest('hex'),'93610a3ad2e650e28db234429f34d0ec031947ea6a58ec8907adea3f3418fa2e');
+ assert.equal(createHash('sha256').update(preserved.join('\n')).digest('hex'),
+  '93d599c975027d62976924b027b3bb60e2bbebca91a7331fa4c527e03a145de5');
 });

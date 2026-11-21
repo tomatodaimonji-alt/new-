@@ -24,8 +24,8 @@ test('wild spawn candidate excludes roads, deep water, obstructions, landmarks a
  x.poiWalkX=77;x.poiWalkZ=36;assert.equal(choose(),null,'inside old watchtower');
  x.poiWalkX=55;x.poiWalkZ=43;assert.equal(choose(),null,'inside expanded town boundary');
  x.poiWalkX=60;x.poiWalkZ=45;assert.equal(x.poiWildPlayerOutside(),false);
- x.poiWalkX=61;assert.equal(x.poiWildPlayerOutside(),true);
- assert.equal(x.poiWildMobMayMove({x:61,z:45},60,45),false);
+ x.poiWalkX=63;assert.equal(x.poiWildPlayerOutside(),true);
+ assert.equal(x.poiWildMobMayMove({x:63,z:45},61,45),false);
 });
 test('foreground outside time spawns weak transient slimes only, capped and reset without writing world',()=>{
  const x=setup(),initial=x.world,back=x.poiAudioAllowed;let now=0;

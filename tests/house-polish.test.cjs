@@ -61,13 +61,20 @@ function unchangedLayoutDigest(scope){
  for(const b of site.buildings.filter(b=>b.id!=='townGuild')){
   const {at,d,w}=entry(scope,id(b));
   const owned=new Set(Array.from(b.footprint,p=>p.x+','+p.z));
+  // The relocated workshop is an exact translated stamp. Compare every
+  // object and bound back in its v114 coordinate frame instead of ignoring it.
+  const shift=scope==='base'&&b.id==='workshop'&&b.x1===55&&b.z1===6;
+  const canonical=o=>shift?{...o,x:o.x-28,z:o.z+5}:o;
+  const original=shift?{...b,x1:b.x1-28,x2:b.x2-28,z1:b.z1+5,z2:b.z2+5,
+   entrance:canonical(b.entrance),footprint:b.footprint.map(canonical),
+   floorFootprints:Object.fromEntries(Object.entries(b.floorFootprints).map(([y,cells])=>[y,cells.map(canonical)]))}:b;
   const items=[];
   for(let x=0;x<w;x++)for(let z=0;z<d;z++)for(let y=-1;y<=4;y++)for(const o of at(x,z,y)){
    if(!owned.has(o.x+','+o.z))continue;
    if(!y&&allowed[id(b)]?.has(x+','+z+':'+o.type))continue;
-   items.push(JSON.stringify(o));
+   items.push(JSON.stringify(canonical(o)));
   }
-  data.push([b,items.sort()]);
+  data.push([original,items.sort()]);
  }
  return require('node:crypto').createHash('sha256').update(JSON.stringify(data)).digest('hex');
 }

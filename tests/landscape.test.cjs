@@ -57,7 +57,7 @@ test('continuous outdoor collision routes connect the town to wide meadow and fo
   if(x<0||z<0||x>=after.map.width||z>=after.map.height||reached.has(k)||walls.has(k))continue;
   reached.add(k);q.push({x,z});
  }
- for(const k of ['19,54','34,53','43,53','67,45','68,35','71,38','60,3','32,3','1,49'])assert(reached.has(k),k);
+ for(const k of ['19,54','34,53','43,53','67,45','68,35','71,38','60,3','10,3','1,49'])assert(reached.has(k),k);
  assert(reached.size>2450,reached.size);
 });
 test('ambient color is scoped to implicit grade-only base grass and leaves scatter unchanged',()=>{
