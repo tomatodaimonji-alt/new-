@@ -653,7 +653,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
  font:700 12px/12px system-ui;text-align:center}
 .facilityEntranceGuide[hidden]{display:none}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v120）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v121）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -5134,7 +5134,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v120',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v121',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -5249,7 +5249,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v120';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v121';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -5461,7 +5461,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v120',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v121',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -6635,13 +6635,13 @@ function pineBakeFloorLighting(tmp,x,z,floor,nearby,lamps){
   const px=tmp.p[i],pz=tmp.p[i+2];
   let shade=0;
   for(const b of blockers){
-   const distance=Math.hypot(px-b.x-.5,pz-b.z-.5);
-   // Soft AO: narrow wall-foot shadow and smaller furniture contact patch.
-   const limit=b.wall?1.40:1.10;
+   const distance=b.tree?Math.hypot(px-b.x-.68,pz-b.z-.33):Math.hypot(px-b.x-.5,pz-b.z-.5);
+   // Soft AO: wall/furniture contact, plus a low-contrast offset tree shadow.
+   const limit=b.tree?1.02+b.tree*.63:b.wall?1.40:1.10;
    if(distance<limit){
     const v=(limit-distance)/limit;
     // A soft but visible edge at normal tile resolution.
-    shade=Math.max(shade,(b.wall?.35:.29)*v);
+    shade=Math.max(shade,b.tree?.33*v*v:(b.wall?.35:.29)*v);
    }
   }
   const lightIndex=i;
@@ -6666,13 +6666,15 @@ function pineFloorLightingSources(visible){
   if(isFloor(o.type))continue;
   if(o.type==='lantern'||o.type==='poiStreetLamp'||o.type==='poiWallSconce'){lamps.push(o);continue}
   if(o.type==='guildFacadeSign'||o.type.startsWith('roof')||RESIDENTIAL_ROOFS.has(o.type)||AUTO_ROOFS.has(o.type))continue;
-  if(o.type.startsWith('monster')||o.type.startsWith('human')||large.has(o.type))continue;
+  if(o.type.startsWith('monster')||o.type.startsWith('human'))continue;
+  const tree=large.has(o.type)?pineBaseTreeProfile(o)?.w:0;
+  if(large.has(o.type)&&!tree)continue;
   const wall=isWallId(o.type)||/(?:Wall|wall|Fence|fence|Door|door)$/.test(o.type);
   const furniture=/^(?:bed|chair|stool|bench|table|roundTable|bookshelf|wardrobe|counter|crate|barrel|chest|displayShelf|guildLatrine|kitchen)/.test(o.type);
-  if(!wall&&!furniture)continue;
+  if(!wall&&!furniture&&!tree)continue;
   const key=o.x+','+o.z+','+o.y;
   if(!blockers.has(key))blockers.set(key,[]);
-  blockers.get(key).push({x:o.x,z:o.z,wall});
+  blockers.get(key).push({x:o.x,z:o.z,wall,tree});
  }
  return {blockers,lamps};
 }
@@ -6765,6 +6767,117 @@ function facilityHomeBedOffset(o,walls){
  // The 1.50-tile bed otherwise buries 0.25 tiles (including the pillow)
  // in a full-cell wall. Move only the draw origin into the empty foot area.
  return {x:dx*.29,z:dz*.29};
+}
+const PINE_BASE_TREE_PROFILES=Object.freeze({
+ treeBirch:{h:2.78,r:.108,w:.78,bark:[.78,.76,.68],leaf:[.38,.55,.25]},
+ treeOak:{h:2.84,r:.191,w:1.04,bark:[.36,.27,.19],leaf:[.29,.45,.23]},
+ treePine:{h:3.13,r:.135,w:.88,bark:[.42,.29,.19],leaf:[.23,.39,.29]},
+ treeCedar:{h:3.30,r:.139,w:.73,bark:[.37,.26,.19],leaf:[.21,.38,.28]},
+ treeWillow:{h:2.65,r:.127,w:1.04,bark:[.36,.32,.22],leaf:[.38,.49,.24]}
+});
+function pineBaseTreeProfile(o){
+ return facilitySite?.id==='base'&&o.y===0&&Object.prototype.hasOwnProperty.call(PINE_BASE_TREE_PROFILES,o.type)
+  ?PINE_BASE_TREE_PROFILES[o.type]:null;
+}
+function pineDrawBaseTree(m,o){
+ const profile=pineBaseTreeProfile(o);
+ if(!profile)return false;
+ const {h,r,w,bark,leaf}=profile,ox=o.x+.5,oz=o.z+.5,y=terrainY(o.x,o.z),from=m.p.length;
+ const birch=o.type==='treeBirch',oak=o.type==='treeOak',pine=o.type==='treePine',
+  cedar=o.type==='treeCedar',willow=o.type==='treeWillow',evergreen=pine||cedar;
+ const seed=i=>surfaceNoise(o.x*17+i*29,o.z*23+i*37);
+ const yaw=(o.rot||0)*Math.PI/2+seed(1)*Math.PI*2;
+ const height=h*(.91+seed(2)*.17),spread=w*(.89+seed(3)*.18);
+ const lx=(seed(4)-.5)*.25,lz=(seed(5)-.5)*.25;
+ const wood=(a,s)=>bark.map((c,i)=>c*Math.max(.50,a+s*(i===2?.11:.08)));
+ const branch=(a,b,r1,r2,shade)=>naturalBranch(m,...a,...b,r1,r2,wood(shade,seed(6)));
+ const origin=f=>[ox+lx*f,y+height*f,oz+lz*f];
+ // Buttress collar tapers into the trunk; offset polygon rings keep it out
+ // of the straight-cylinder silhouette. Birch scars share the bark faces.
+ const rings=[[0,1.53],[.062,1.04],[.39,.82],[.72,.51],[.96,.092]];
+ const sides=6,points=rings.map(([f,scale],j)=>Array.from({length:sides},(_,i)=>{
+  const a=yaw+i*Math.PI*2/sides,rr=r*scale*(.86+seed(10+i)*.28);
+  const [x,yy,z]=origin(f);
+  return [x+Math.cos(a)*rr,yy,z+Math.sin(a)*rr];
+ }));
+ for(let j=0;j<rings.length-1;j++)for(let i=0;i<sides;i++){
+  const k=(i+1)%sides,a=points[j][i],b=points[j][k],c=points[j+1][k],d=points[j+1][i];
+  quad(m,b,a,d,c,wood((birch?.84:.72)+seed(20+i)*.24,seed(30+j+i)));
+  if(birch&&j>0&&(i+j)%2===0){
+   const scar=(u,v)=>{
+    const p=a.map((p,a)=>p+(b[a]-p)*u),q=d.map((p,a)=>p+(c[a]-p)*u);
+    const out=p.map((p,a)=>p+(q[a]-p)*v),ang=yaw+(i+.5)*Math.PI*2/sides;
+    out[0]+=Math.cos(ang)*.003;out[2]+=Math.sin(ang)*.003;return out;
+   };
+   const spot=.22+seed(83+j*6+i)*.46;
+   quad(m,scar(.79,spot+.014),scar(.18,spot),scar(.24,spot+.065),scar(.83,spot+.047),[.25,.25,.22]);
+  }
+ }
+ for(let j=0;j<3;j++){
+  const a=yaw+j*Math.PI*2/3+seed(40+j)*.62,rr=r*(1.8+seed(43+j)*.55);
+  branch([ox, y+r*.72,oz],[ox+Math.cos(a)*rr,y,oz+Math.sin(a)*rr],r*.49,r*.13,.74);
+ }
+ // Small angular clusters with shadowed undersides; no billboards or extra
+ // draw call. Needle whorls have a higher tip than deciduous foliage lobes.
+ const lobe=(x,yy,z,rx,ry,rz,j,needle=false)=>{
+  const faceCount=6,phase=yaw+j*1.7,middle=[],shoulder=[];
+  for(let i=0;i<faceCount;i++){
+   const a=phase+i*Math.PI*2/faceCount,n=seed(100+j*11+i),f=.81+n*.32;
+   const x0=Math.cos(a)*rx*f,z0=Math.sin(a)*rz*f;
+   middle.push([x+x0,yy+ry*(needle?-.20+(n-.5)*.40:(n-.5)*.26),z+z0]);
+   shoulder.push([x+x0*(needle?.52+n*.17:.73),yy+ry*(.50+n*.34),z+z0*(needle?.51+n*.15:.73)]);
+  }
+  const top=[x+Math.cos(phase)*rx*.14,yy+ry*(needle?1.30:.97),z+Math.sin(phase)*rz*.15];
+  const tip=[x,yy-ry*(needle?.41:.77),z];
+  for(let i=0;i<faceCount;i++){
+   const k=(i+1)%faceCount,a=seed(250+j*8+i);
+   const color=(light)=>leaf.map((v,c)=>v*light+(c===0?seed(510+j)*.046:c===1?seed(510+j)*.033:0));
+   tri(m,tip,middle[i],middle[k],color(.70+a*.13));
+   quad(m,middle[k],middle[i],shoulder[i],shoulder[k],color(.88+a*.22));
+   tri(m,shoulder[k],shoulder[i],top,color(.97+a*.20));
+  }
+ };
+ if(evergreen){
+  // Cedars carry foliage down the trunk and compress their top whorls.
+  // Fixed upper-whorl depth lets the foliage overlap instead of tapering
+  // into detached diamond tiers; pine retains a higher and wider canopy.
+  const levels=cedar?[.36,.464,.570,.674,.774,.864]:[.46,.565,.670,.777,.875];
+  for(let j=0;j<levels.length;j++){
+   const f=levels[j]+(seed(601+j)-.5)*.035,xx=ox+lx*f,zz=oz+lz*f;
+   const a=yaw+j*2.31+seed(611+j)*.43;
+   const size=spread*(1-j*(pine?.158:.138))*(.92+seed(621+j)*.16);
+   const richness=(cedar?.42:.39)+seed(631+j)*.09-j*.019;
+   if(j<3){
+    const arm=[xx+Math.cos(a)*size*.67,y+height*f-size*.10,zz+Math.sin(a)*size*.67];
+    branch(origin(f-.057),arm,r*.42,r*.071,.90);
+   }
+   lobe(xx+Math.cos(a)*size*(.16+seed(641+j)*.16),y+height*f,
+    zz+Math.sin(a)*size*(.16+seed(651+j)*.17),size,richness,
+    size*(pine?.82:.88),j,true);
+  }
+ }else{
+  const count=5;
+  for(let j=0;j<count;j++){
+   const a=yaw+j*2.399+seed(50+j)*.41;
+   const outward=spread*((willow?.63:oak?.59:.48)+seed(60+j)*.19),f=(willow?.65:oak?.62:.64)+seed(70+j)*.23;
+   const tip=[ox+Math.cos(a)*outward,y+height*f,oz+Math.sin(a)*outward];
+   branch(origin((willow?.41:.44)+j*.038),tip,r*(oak?.55:.46),r*.075,1);
+   const rx=spread*((willow?.52:oak?.58:.46)+seed(80+j)*.11);
+   lobe(tip[0],tip[1]+(willow?.035:.115),tip[2],rx,spread*(willow?.42:oak?.40:.46),rx*.88,j);
+   if(willow){
+    const hang=rx*.70,leafTint=leaf.map(c=>c*(.81+seed(570+j)*.17));
+    for(let k=0;k<2;k++){
+     const b=a+(k-.5)*.83,xx=tip[0]+Math.cos(b)*hang,zz=tip[2]+Math.sin(b)*hang;
+     tri(m,[xx-.060,tip[1]+.04,zz],[xx+.055,tip[1]-.08,zz+.048],
+      [xx+Math.cos(b)*.13,tip[1]-.43-seed(580+j+k)*.18,zz+Math.sin(b)*.18],leafTint);
+    }
+   }
+  }
+  lobe(ox+lx*.83,y+height*.87,oz+lz*.83,spread*.47,spread*.40,spread*.43,6);
+ }
+ // Root tips meet the local tile surface. Tapered meshes may overrun it.
+ for(let i=from+1;i<m.p.length;i+=3)m.p[i]=Math.max(y,m.p[i]);
+ return true;
 }
 function pineDrawEastNature(m,o){
  if(facilitySite?.id!=='base'||o.x<72||o.y!==0)return false;
@@ -6931,7 +7044,7 @@ function makeScene(){
    const offset=facilityHomeBedOffset(o,wallLookup);
    deco(m,o.type,o.x+.5+(offset?.x??0),o.y*1.4+terrainY(o.x,o.z),o.z+.5+(offset?.z??0),o.rot||0);
   }
-  else if(!pineDrawEastNature(m,o))deco(m,o.type,o.x+.5,o.y*1.4+terrainY(o.x,o.z),o.z+.5,o.rot||0);
+  else if(!pineDrawBaseTree(m,o)&&!pineDrawEastNature(m,o))deco(m,o.type,o.x+.5,o.y*1.4+terrainY(o.x,o.z),o.z+.5,o.rot||0);
  }
  for(const o of visible)pineFinishInteriorWindow(m,o,wallLookup);
  pineFinishPartitionTops(m,visible);
