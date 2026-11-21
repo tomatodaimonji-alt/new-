@@ -653,7 +653,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
  font:700 12px/12px system-ui;text-align:center}
 .facilityEntranceGuide[hidden]{display:none}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v116）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v117）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -3482,6 +3482,49 @@ function shoreline(m,x,z,floors){
  }
 }
 
+// The authored woodland creek uses shared corners and fewer wave marks
+// than the general river tile. The surface remains an ordinary editable river.
+function facilityWoodlandWater(m,x,z,floors,creekWater){
+ const color=(xx,zz)=>{
+  let cover=0;
+  for(const dx of [-1,0])for(const dz of [-1,0]){
+   const k=(xx+dx)+','+(zz+dz);
+   if(creekWater.has(k)&&floors.get(k)==='river')cover++;
+  }
+  const n=surfaceNoise(xx*17+1,zz*11+6),edge=(4-cover)/3;
+  return [.19+.073*edge+.014*n,.39+.037*edge+.018*n,.394+.024*edge+.021*n];
+ };
+ const a=color(x,z),b=color(x,z+1),c=color(x+1,z+1),d=color(x+1,z);
+ quad(m,[x,0,z],[x,0,z+1],[x+1,0,z+1],[x+1,0,z],a);
+ const start=m.c.length-18,colors=[a,b,c,a,c,d];
+ for(let i=0;i<6;i++)for(let j=0;j<3;j++)m.c[start+i*3+j]=colors[i][j];
+ const n=surfaceNoise(x*43+9,z*23+5);
+ if(n>.53){
+  const px=x+.29+n*.36,pz=z+.27+surfaceNoise(x*15,z*33)*.34;
+  const length=.10+n*.15;
+  quad(m,[px-.026,.006,pz-length],[px-.006,.006,pz+length],
+    [px+.018,.006,pz+length],[px+.006,.006,pz-length],[.33,.49,.49]);
+ }
+}
+function facilityWoodlandBank(m,x,z,kind,woodlandRiver){
+ let touched=false;
+ for(const [dx,dz] of [[0,-1],[1,0],[0,1],[-1,0]]){
+  if(!woodlandRiver(x+dx,z+dz))continue;
+  touched=true;
+  if(!kind.startsWith('grass')&&kind!=='moss')continue;
+  const edge=(dx===1?[[x+1,z],[x+1,z+1]]:dx===-1?[[x,z+1],[x,z]]:
+   dz===1?[[x+1,z+1],[x,z+1]]:[[x,z],[x+1,z]]);
+  const depth=p=>.18+surfaceNoise(p[0]*11+4,p[1]*13+5)*.17;
+  const inner=p=>[p[0]-dx*depth(p),.012,p[1]-dz*depth(p)];
+  const [a,b]=edge,f=[.42,.43,.32];
+  quad(m,[a[0],.012,a[1]],inner(a),inner(b),[b[0],.012,b[1]],f);
+  const start=m.c.length-18,colors=[f,pineBaseGrassCorner(...a),pineBaseGrassCorner(...b),
+    f,pineBaseGrassCorner(...b),f];
+  for(let i=0;i<6;i++)for(let j=0;j<3;j++)m.c[start+i*3+j]=colors[i][j];
+ }
+ return touched;
+}
+
 function roadRect(m,x,z,l,t,r,b,h,c){
  quad(m,[x+l,h,z+t],[x+l,h,z+b],[x+r,h,z+b],[x+r,h,z+t],c);
 }
@@ -4587,6 +4630,46 @@ function pineLandingCraftGeometry(m,cx=0,cz=0){
  // Deck safety stripe, minimal low-poly markings.
  for(const z of [-2.96,2.96])B(0,.84,z,7.9,.02,.12,mark);
 }
+// The two authored end tiles form one low stone span. Regular palette and
+// edited/partial bridges still use the ordinary bridge renderer.
+function facilityWoodlandBridgeGeometry(m,o,lookup,floors){
+ const pair=facilitySite?.id==='base'?facilitySite.creek?.crossings:null;
+ if(o.y!==0||pair?.length!==2)return false;
+ const [west,east]=pair,key=p=>p.x+','+p.z;
+ if(!pair.some(p=>p.x===o.x&&p.z===o.z)||!pair.every(p=>{
+  const placed=lookup.get(key(p));
+  return placed?.y===0&&placed.type===p.type&&placed.rot===p.rot&&floors.get(key(p))==='river';
+ }))return false;
+ if(o.x===east.x)return true;
+ const x=west.x,z=west.z,L=z+.04,R=z+.96;
+ const face=[.45,.46,.42],arch=[.56,.55,.50],soffit=[.36,.39,.36],cap=[.61,.60,.54];
+ // Top rises gently from each trail bank; the curved masonry underside is
+ // open above the running water rather than a solid barrier across it.
+ const lanes=12;
+ const section=u=>{
+  const shape=Math.max(0,1-((u-1)/.88)**2);
+  return {x:x+u,high:Math.min(.14,.035+.39*Math.min(u,2-u)),low:.101*Math.sqrt(shape)};
+ };
+ for(let i=0;i<lanes;i++){
+  const a=section(2*i/lanes),b=section(2*(i+1)/lanes);
+  quad(m,[a.x,a.high,L],[a.x,a.high,R],[b.x,b.high,R],[b.x,b.high,L],cap.map(v=>v*(i%2?.97:1)));
+  quad(m,[a.x,a.low,R],[a.x,a.low,L],[b.x,b.low,L],[b.x,b.low,R],soffit);
+  quad(m,[a.x,a.low,L],[a.x,a.high,L],[b.x,b.high,L],[b.x,b.low,L],i%2?face:arch);
+  quad(m,[b.x,b.low,R],[b.x,b.high,R],[a.x,a.high,R],[a.x,a.low,R],i%2?face:arch);
+ }
+ // Low moss-toned parapets, dressed capstones, and stone end posts;
+ // the ends stay completely unobstructed on the actual walking axis.
+ for(const side of [z+.098,z+.902]){
+  cube(m,x+1,.131,side,1.58,.205,.109,face);
+  for(const [dx,t] of [[.18,.92],[.58,1],[1,1],[1.42,.94],[1.82,.90]])
+   cube(m,x+dx,.323,side,.35,.049,.145,cap.map(v=>v*t));
+  for(const dx of [.185,1.815]){
+   cube(m,x+dx,.09,side,.145,.29,.152,arch);
+   cube(m,x+dx,.37,side,.171,.045,.173,cap);
+  }
+ }
+ return true;
+}
 function bridgeConnectedGeometry(m,o,lookup){
  const r=bridgeDirection(o.rot),wood=o.type.startsWith('bridgeWood'),end=o.type.endsWith('End');
  const axis=r%2===0,side=axis?[[1,0],[-1,0]]:[[0,1],[0,-1]];
@@ -4813,6 +4896,42 @@ function poiAudioMusicPhrase(){
  poiPianoKey(chord[1],t+2.8,.48);
  poiPianoKey(chord[3],t+5.4,.42);
 }
+let poiCreekAudio=null;
+function poiCreekAudioStop(){
+ if(!poiCreekAudio)return;
+ const {source,filter,gain,release}=poiCreekAudio;poiCreekAudio=null;
+ if(release!==null)clearTimeout(release);
+ try{source.stop()}catch(e){}
+ for(const node of [source,filter,gain])node.disconnect();
+}
+function poiCreekAudioSync(){
+ const anchor=facilitySite?.id==='base'?facilitySite.creek?.sound:null;
+ const ctx=poiAudioContext;
+ if(!anchor||!facilityCreekIndex?.hasWater||!ctx||!poiWalkActive||poiWalkLevel!==0||!poiAudioEnabled||!poiAudioAllowed()){
+  poiCreekAudioStop();return;
+ }
+ const near=1-Math.min(1,Math.hypot(poiWalkX-anchor.x,poiWalkZ-anchor.z)/7);
+ const level=.18*near*near;
+ if(!poiCreekAudio){
+  if(!level)return;
+  const source=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),gain=ctx.createGain();
+  source.buffer=poiAudioNoiseBuffer();source.loop=true;source.playbackRate.value=1.29;
+  filter.type='bandpass';filter.frequency.value=1050;filter.Q.value=.55;
+  gain.gain.value=0;source.connect(filter).connect(gain).connect(poiAudioAmbience);
+  source.start();poiCreekAudio={source,filter,gain,level:0,release:null};
+ }
+ if(level!==poiCreekAudio.level){
+  poiCreekAudio.level=level;
+  poiCreekAudio.gain.gain.setTargetAtTime(level,ctx.currentTime,.16);
+ }
+ const audio=poiCreekAudio;
+ if(level>0&&audio.release!==null){clearTimeout(audio.release);audio.release=null}
+ else if(level===0&&audio.release===null){
+  audio.release=setTimeout(()=>{
+   if(poiCreekAudio===audio&&audio.level===0)poiCreekAudioStop();
+  },850);
+ }
+}
 function poiAudioStart(wake=false){
  if(!poiAudioEnabled||!poiWalkActive||!poiAudioAllowed())return;
  try{
@@ -4820,6 +4939,7 @@ function poiAudioStart(wake=false){
   const ctx=poiAudioContext;
   if(wake||ctx.state!=='running')ctx.resume().catch(()=>{});
   if(wake)poiAudioApplyLevels();
+  poiCreekAudioSync();
   if(poiAudioAmbient.length)return;
   // Long soft wind and leafy rustle. No remote media/network required.
   const wind=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),g=ctx.createGain();
@@ -4838,6 +4958,7 @@ function poiAudioStart(wake=false){
  }catch(e){console.warn('Audio unavailable',e)}
 }
 function poiAudioStop(suspend=false){
+ poiCreekAudioStop();
  if(suspend&&poiAudioContext){
   poiAudioApplyLevels();
   // Resume, if requested immediately afterwards, is queued on this same
@@ -4970,7 +5091,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v116',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v117',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -5085,7 +5206,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v116';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v117';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -5297,7 +5418,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v116',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v117',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -5943,7 +6064,7 @@ function poiWalkAvatar(now=performance.now()){
  const t=Math.max(0,Math.min(1,(now-poiWalkStarted)/POI_WALK_MS)),smooth=t;
  const x=poiWalkViewX+.5;
  const z=poiWalkViewZ+.5;
- const y=terrainY(poiWalkX,poiWalkZ)+poiWalkLevel*1.4+.03;
+ const y=poiCreekPlayerHeight(now)+poiWalkLevel*1.4+.03;
  const walking=t<1&&(poiWalkFromX!==poiWalkX||poiWalkFromZ!==poiWalkZ);
  const stride=walking?Math.sin(t*Math.PI)*.12:0;
  const actionPhase=Math.max(0,1-(now-poiWalkActionStarted)/260);
@@ -6005,7 +6126,43 @@ function poiWalkPassableDoor(type){
   type==='ruinDoorHanging'||/(?:Door|DoorOpen|Entrance)$/.test(type)||
   /^oldTown(?:Cream|Ochre|Rose|Mint|Blue|Sand)Shop$/.test(type);
 }
-function poiWalkCanStep(x,z){
+let facilityCreekIndex=null;
+function facilityRefreshCreek(){
+ const creek=facilitySite?.id==='base'?facilitySite.creek:null;
+ facilityCreekIndex=null;
+ if(!creek)return;
+ const water=new Set(),river=new Set(),parts=new Map(),shallows=new Map();
+ const key=(x,z)=>x+','+z,authored=new Set(creek.deep.map(p=>key(p.x,p.z)));
+ const wanted=new Map(creek.crossings.map(p=>[key(p.x,p.z),p]));
+ const safeShallow=new Map((creek.shallows||[]).map(p=>[key(p.x,p.z),p.type]));
+ for(const o of world){
+  if(o.y!==0)continue;
+  const k=key(o.x,o.z);
+  if(authored.has(k)&&['river','water','lake','sea'].includes(o.type)){
+   water.add(k);if(o.type==='river')river.add(k);
+  }
+  const part=wanted.get(k);
+  if(part&&part.type===o.type&&part.rot===(o.rot||0))parts.set(k,o);
+  if(safeShallow.get(k)===o.type)shallows.set(k,o.type);
+ }
+ if(parts.size!==wanted.size||[...wanted.keys()].some(k=>!river.has(k)))parts.clear();
+ // Don't treat the approved structure as an intact creek deck if either part or riverbed is edited.
+ const bridgeHeight=new Map();
+ for(const [k,o] of parts)bridgeHeight.set(k,bridgeSpanElevation(o,parts)+.15);
+ const terrace=new Set((creek.terrace||[]).map(({x,z})=>key(x,z)));
+ facilityCreekIndex={water,parts,shallows,terrace,bridgeHeight,hasWater:water.size>0};
+}
+function poiCreekPlayerHeight(now){
+ const height=poiCreekWalkHeight(poiWalkX,poiWalkZ);
+ if(poiWalkLevel!==0||!facilityCreekIndex?.parts.size||
+    !(facilityCreekIndex.parts.has(poiWalkX+','+poiWalkZ)||facilityCreekIndex.parts.has(poiWalkFromX+','+poiWalkFromZ)))return height;
+ const t=Math.max(0,Math.min(1,(now-poiWalkStarted)/POI_WALK_MS));
+ return poiCreekWalkHeight(poiWalkFromX,poiWalkFromZ)*(1-t)+height*t;
+}
+function poiCreekWalkHeight(x,z){
+ return (poiWalkLevel===0?facilityCreekIndex?.bridgeHeight.get(x+','+z):null)??terrainY(x,z);
+}
+function poiWalkCanStep(x,z,fromX,fromZ){
  if(!validPos(x,z))return false;
  // Vehicles occupy more than one tile and cannot be walked through.
  if(world.some(o=>pineSuperVehicleType(o.type)&&Math.abs(o.x-x)<=1&&Math.abs(o.z-z)<=1))return false;
@@ -6018,11 +6175,21 @@ function poiWalkCanStep(x,z){
  if(facilitySite&&poiWalkLevel!==0&&!facilityValidLanding(x,z,poiWalkLevel))return false;
  if(!facilitySite&&poiWalkLevel>0&&!cell.some(o=>isFloor(o.type)||o.type==='guildStairDown'||o.type==='guildStairUp'))return false;
  if(poiWalkActive&&poiMonsterAt(x,z))return false;
+ const creek=poiWalkLevel===0&&facilitySite?.id==='base'&&facilitySite.creek?facilityCreekIndex:null;
+ const key=x+','+z,deck=creek?.parts.get(key);
+ if(creek?.water.has(key)&&!deck)return false;
+ if(creek&&Number.isInteger(fromX)&&Number.isInteger(fromZ)){
+  const fromKey=fromX+','+fromZ;
+  if((creek.terrace.has(key)||creek.terrace.has(fromKey))&&!terrainPassable(fromX,fromZ,x,z))return false;
+  const crossing=deck||creek.parts.get(fromKey);
+  if(crossing&&((crossing.rot%2===1)?fromZ!==z:fromX!==x))return false;
+ }
  const hasDoor=cell.some(o=>poiWalkPassableDoor(o.type));
  // A door shares its cell with wall/trim pieces in some saved maps.
  // Those wall pieces must not seal the entrance; unrelated obstacles still block.
  return !cell.some(o=>{
   if(isFloor(o.type)||poiWalkPassableDoor(o.type)||nonBlocking.has(o.type)||o.type==='guildStairUp'||o.type==='guildStairDown')return false;
+  if(o===deck||creek?.shallows.get(key)===o.type)return false;
   if(hasDoor&&(isWallId(o.type)||/(?:wall|Wall|Frame|Trim|Lintel|Facade)/.test(o.type)))return false;
   return true;
  });
@@ -6040,7 +6207,7 @@ function poiWalkStep(dx,dz){
  const now=performance.now();
  if(now<poiWalkNextReady)return;
  poiWalkFacing=dx===1?1:dx===-1?3:dz===-1?0:2;
- if(!poiWalkCanStep(poiWalkX+dx,poiWalkZ+dz)){poiWalkAvatar();return}
+ if(!poiWalkCanStep(poiWalkX+dx,poiWalkZ+dz,poiWalkX,poiWalkZ)){poiWalkAvatar();return}
  poiWalkFromX=poiWalkX;poiWalkFromZ=poiWalkZ;poiWalkX+=dx;poiWalkZ+=dz;
 
   const stairCell=world.filter(o=>o.x===poiWalkX&&o.z===poiWalkZ&&o.y===poiWalkLevel);
@@ -6060,6 +6227,7 @@ function poiWalkStep(dx,dz){
  const isDoor=stairCell.some(({type})=>poiWalkPassableDoor(type)&&
   (type==='door'||/Door$/.test(type)));
  poiWalkStarted=now;poiWalkNextReady=now+POI_WALK_MS;
+ if(facilitySite?.id==='base'&&facilitySite.creek)poiCreekAudioSync();
  poiSound(isDoor?'door':'step');poiWalkRoof();poiWalkAvatar(poiWalkStarted);poiWalkStatus();if(pineGameActive){workshopAdventureResumeQuiet=false;pineGameSave()}workshopResumeWrite();
 }
 function poiWalkAction(){
@@ -6078,7 +6246,7 @@ function poiWalkAction(){
 function poiWalkReset(x,z){
  if(facilitySite){$('app').classList.remove('facilityCellar');poiMonsterMeshDirty=true}
  poiWalkLevel=0;poiWalkX=x;poiWalkZ=z;poiWalkFromX=x;poiWalkFromZ=z;poiWalkViewX=x;poiWalkViewZ=z;poiWalkStarted=-10000;poiWalkNextReady=0;
- if(poiWalkActive){poiWalkRoof();poiWalkAvatar();poiWalkCamera();poiWalkStatus()}
+ if(poiWalkActive){poiCreekAudioSync();poiWalkRoof();poiWalkAvatar();poiWalkCamera();poiWalkStatus()}
 }
 function poiWalkSpawnNearCenter(){
  const cx=Math.floor((MAP_W-1)/2),cz=Math.floor((MAP_H-1)/2);
@@ -6566,6 +6734,8 @@ function makeScene(){
  });
  const {blockers:pineShadows,lamps:pineWarmLamps}=pineFloorLightingSources(visible);
  const floors=new Map(world.filter(o=>o.y===0&&isFloor(o.type)).map(o=>[o.x+','+o.z,o.type]));
+ const creekWater=facilitySite?.id==='base'?facilityCreekIndex?.water:null;
+ const woodlandRiver=(x,z)=>{const key=x+','+z;return creekWater?.has(key)&&floors.get(key)==='river'};
  const baseGrass=facilitySite?.id==='base'?new Array((MAP_W+1)*(MAP_H+1)):null;
  const groundCorner=baseGrass?(x,z)=>{
   const i=z*(MAP_W+1)+x;
@@ -6588,8 +6758,11 @@ function makeScene(){
   const kind=floors.get(x+','+z)||'grass';
   const tmp=mesh();
   const ambientTint=floors.has(x+','+z)?null:groundCorner;
-  addFloorTile(tmp,x,z,kind,MAP_W*MAP_H,ROAD_DIAGONALS.has(kind)?roadDiagonalConnections(floors,x,z,kind):ROAD_IDS.has(kind)&&!kind.endsWith('Full')?roadConnections(floors,x,z,kind):0,ambientTint);
-  if(floors.has(x+','+z))shoreline(tmp,x,z,floors);
+  if(woodlandRiver(x,z))facilityWoodlandWater(tmp,x,z,floors,creekWater);
+  else{
+   addFloorTile(tmp,x,z,kind,MAP_W*MAP_H,ROAD_DIAGONALS.has(kind)?roadDiagonalConnections(floors,x,z,kind):ROAD_IDS.has(kind)&&!kind.endsWith('Full')?roadConnections(floors,x,z,kind):0,ambientTint);
+   if(!(creekWater&&x>=67&&z>=28&&z<=49&&facilityWoodlandBank(tmp,x,z,kind,woodlandRiver))&&floors.has(x+','+z))shoreline(tmp,x,z,floors);
+  }
   pineBakeFloorLighting(tmp,x,z,0,pineShadows,pineWarmLamps);
   shiftMesh(m,tmp,terrainY(x,z));
   const isWater=['river','water','lake','sea'].includes(kind);
@@ -6654,7 +6827,9 @@ function makeScene(){
   if(isFloor(o.type)||RESIDENTIAL_ROOFS.has(o.type))continue;
   const stableBay=facilityStableLoadingBayPart(o);
   if(AUTO_ROOFS.has(o.type)){const temp=mesh();connectedRoofGeometry(temp,o,roofs);shiftMesh(m,temp,terrainY(o.x,o.z))}
-  else if(BRIDGE_IDS.has(o.type))bridgeConnectedGeometry(m,o,bridgeLookup);
+  else if(BRIDGE_IDS.has(o.type)){
+   if(!facilityWoodlandBridgeGeometry(m,o,bridgeLookup,floors))bridgeConnectedGeometry(m,o,bridgeLookup);
+  }
   else if(o.type==='pineLandingCraft')pineLandingCraftGeometry(m,o.x+.5,o.z+.5);
   else if(o.type.startsWith('pineHarbor'))pineHarborGeometry(m,o);
   else if(o.type.startsWith('pineSuper'))pineSupermarketGeometry(m,o);
@@ -6723,7 +6898,7 @@ function parameters(){
  if(poiWalkActive&&poiThirdPerson){
   // Independent orbit camera: walking changes the avatar's direction, not the camera.
   const x=poiWalkViewX+.5,z=poiWalkViewZ+.5;
-  const ground=terrainY(poiWalkX,poiWalkZ)+poiWalkLevel*1.4;
+  const ground=poiCreekPlayerHeight(performance.now())+poiWalkLevel*1.4;
   const horizontal=poiCameraDistance*Math.cos(poiCameraPitch);
   const eye=[x-horizontal*Math.sin(poiCameraYaw),ground+1.1+poiCameraDistance*Math.sin(poiCameraPitch),z-horizontal*Math.cos(poiCameraYaw)];
   const target=[x,ground+1.1,z];
@@ -9867,7 +10042,8 @@ function buildFacilitySite(id){
  const compound=id==='base',housing=id==='homes',plan=plans[id];
  const width=compound?72:housing?38:id==='stable'?22:plan.w+8;
  const height=compound?56:housing?20:id==='stable'?21:plan.d+8;
- const floors=new Map(),objects=[],buildings=[],insideGrade=new Set();
+ const floors=new Map(),objects=[],buildings=[],insideGrade=new Set(),terrainHeights=[];
+ let creek;
  const homeNames={cottage:'白壁の家',rowhouse:'レンガの家',gardener:'庭師の家'};
  const put=(x,z,type,y=0,rot=0)=>objects.push({x,z,y,type,rot});
  const floor=(x,z,type,rot=0,y=0)=>floors.set(x+','+z+','+y,{x,z,y,type,rot});
@@ -10039,6 +10215,30 @@ function buildFacilitySite(id){
    openPatch(x,z,t);
    if(prop)put(x,z,prop,0,rot);
   }
+  // Woodland creek: static riverbed, two-span footbridge and east-bank wash stones.
+  const deep=[],crossings=[{x:68,z:38,type:'bridgeStoneEnd',rot:3},{x:69,z:38,type:'bridgeStoneEnd',rot:1}];
+  for(const [z,west,east=west] of [
+   [29,71],[30,70,71],[31,69,70],[32,69],[33,69],[34,69,70],[35,70],
+   [36,69,70],[37,68,69],[38,68,69],[39,68,69],[40,68],
+   [41,68,69],[42,69,70],[43,69,70],[44,70],[45,70,71],[46,71],[47,70,71],[48,70,71]
+  ])for(let x=west;x<=east;x++){exterior(x,z,'river');deep.push({x,z});}
+  for(const {x,z,type,rot} of crossings)put(x,z,type,0,rot);
+  openPatch(70,38,'grassPebbles');openPatch(71,38,'grassPebbles');
+  openPatch(70,39,'grassTrampled');openPatch(69,40,'roadCutStoneFull');openPatch(70,40,'grassPebbles');
+  put(70,40,'terrainStairs',0,1);
+  for(const z of [39,40]){
+   exterior(71,z,z===39?'grassWild':'roadCutStoneFull');
+   terrainHeights.push({x:71,z,h:1});
+  }
+  // Gravel and scattered mossy rocks/ferns accent the bends, not the walking line.
+  for(const [x,z,type,prop,rot=0] of [
+   [70,29,'grassPebbles','watersideRock',1],[68,32,'moss','bushFern'],
+   [68,34,'grassPebbles','watersideRock',2],[70,37,'grassPebbles','watersideRock',3],
+   [71,41,'grassWild','tallGrass',2],[70,41,'grassPebbles','watersideRock'],
+   [68,43,'moss','bushFern',1],[69,44,'grassPebbles','watersideRock',2],
+   [70,49,'grassPebbles','watersideRock',1]
+  ]){openPatch(x,z,type);put(x,z,prop,0,rot);}
+  creek={deep,crossings,shallows:[{x:70,z:40,type:'terrainStairs'}],wash:{x:69,z:40},terrace:[{x:71,z:39},{x:71,z:40}],sound:{x:68,z:39}};
   spawn={x:19,z:21};
  }else if(housing){
   stamp('cottage',3,4,0);stamp('rowhouse',15,6,0);stamp('gardener',27,4,1);
@@ -10065,8 +10265,8 @@ function buildFacilitySite(id){
    [width-2,front-1,'bushFern'],[1,front+2,'flowerField'],[width-2,front+2,'flowerField']]);
   spawn={x:center,z:front+2};
  }
- return {map:{format:'forest-world-v1',version:1,size:width,width,height,terrainHeights:[],
-  models:[],prefabs:[],checks:[],world:[...floors.values(),...objects]},spawn,buildings};
+ return {map:{format:'forest-world-v1',version:1,size:width,width,height,terrainHeights,
+  models:[],prefabs:[],checks:[],world:[...floors.values(),...objects]},spawn,buildings,...(creek?{creek}:{})};
 }
 function workshopResumeDecode(raw){
  if(typeof raw!=='string'||raw.length>1600)return null;
@@ -10162,7 +10362,7 @@ function workshopResumeRestorePosition(p){
  poiWalkLevel=prior;
  if(!valid)return false;
  poiWalkReset(p.x,p.z);
- poiWalkLevel=level=p.y;poiWalkFacing=p.facing;$('level').value=String(level);
+ poiWalkLevel=level=p.y;poiCreekAudioSync();poiWalkFacing=p.facing;$('level').value=String(level);
  if(facilitySite){
   $('app').classList.toggle('facilityCellar',p.y<0);poiMonsterMeshDirty=true;
  }else poiWalkRoof();
@@ -10277,6 +10477,7 @@ function facilityPrepareFloorMasks(){
  facilityRefreshStairs();
 }
 function facilityRefreshStairs(){
+ facilityRefreshCreek();
  const stairs=new Set(world.filter(o=>o.type==='guildStairUp')
   .map(o=>facilityCellKey(o.x,o.z,o.y)));
  facilityStairOpenings=new Set(world.filter(o=>o.type==='guildStairDown'&&
@@ -10794,6 +10995,7 @@ function facilityBoot(resume){
    position:{x:poiWalkX,z:poiWalkZ,level:poiWalkLevel},hiddenRoof:facilityHiddenRoof(),
    visibleRoofs:facilityVisibleRoofs(),signIds:signOverlays.map(o=>o.id),roofMeshes:facilityRoofMeshes.map(({count})=>count),
    sceneLayer:facilityViewLevel()<0?'cellar':'surface',sceneCutOwner:facilitySceneCutOwner(),
+   creekAudio:{active:!!poiCreekAudio,level:poiCreekAudio?.level||0},
    visibleLayers:[...new Set(world.filter(o=>isFloor(o.type)&&facilityObjectVisible(o)&&
     !facilityStairOpenings.has(facilityCellKey(o.x,o.z,o.y))).map(o=>o.y))].sort((a,b)=>a-b),
    active:poiWalkActive,guildRenewalSource:facilitySite.guildRenewalSource??null,

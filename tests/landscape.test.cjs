@@ -3,19 +3,21 @@ const fs=require('node:fs'),vm=require('node:vm');
 const test=require('node:test');
 const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const marker='  // Expand the countryside to the east and south, not the town itself.';
-const markerStart=html.indexOf(marker),end=html.indexOf('  spawn={x:19,z:21};',markerStart);
+const markerStart=html.indexOf(marker),end=html.indexOf('  // Woodland creek:',markerStart);
+const spawn=html.indexOf('  spawn={x:19,z:21};',end);
+const preCreek=html.slice(0,end)+html.slice(spawn);
 assert(markerStart>=0&&end>markerStart,'missing authored nature section');
-const orig=html.slice(0,markerStart)+html.slice(end);
+const orig=html.slice(0,markerStart)+html.slice(spawn);
 function build(text,id){
  const i=text.indexOf('const FACILITY_SITES=Object.freeze('),j=text.indexOf('function workshopResumeDecode(',i);
  assert(i>=0&&j>i);
  return JSON.parse(JSON.stringify(vm.runInNewContext(text.slice(i,j)+';buildFacilitySite('+JSON.stringify(id)+')')));
 }
-const before=build(orig,'base'),after=build(html,'base');
+const before=build(orig,'base'),after=build(preCreek,'base'),modern=build(html,'base');
 const v115Marker='  // Small east-side rest glade and staggered grass shoulders along the meadow.';
 const polishStart=html.indexOf(v115Marker,markerStart);
 assert(polishStart>markerStart&&polishStart<end,'expected separately bounded v115 landscape polish');
-const legacyTerrain=build(html.slice(0,polishStart)+html.slice(end),'base');
+const legacyTerrain=build(html.slice(0,polishStart)+html.slice(spawn),'base');
 const keys=before.map.world.map(o=>JSON.stringify(o)),original=new Set(keys),changed=new Set(after.map.world.map(o=>JSON.stringify(o)));
 const extra=legacyTerrain.map.world.filter(o=>!original.has(JSON.stringify(o)));
 const oldFull=new Set(legacyTerrain.map.world.map(o=>JSON.stringify(o)));
@@ -47,14 +49,15 @@ test('landscape adds groves and field paths with a small editable budget and has
 test('continuous outdoor collision routes connect the town to wide meadow and forest openings',()=>{
  const walls=new Set();
  for(const b of after.buildings)for(const p of b.footprint)walls.add(point(p.x,p.z));
- for(const o of after.map.world)if(o.y===0&&!terrain.has(o.type)&&!nonSolid.has(o.type))walls.add(point(o.x,o.z));
+ for(const o of modern.map.world)if(o.y===0&&!terrain.has(o.type)&&!nonSolid.has(o.type))walls.add(point(o.x,o.z));
+ for(const {x,z} of modern.creek.crossings)walls.delete(point(x,z));
  const start=after.spawn, q=[start], reached=new Set([point(start.x,start.z)]);
  for(let i=0;i<q.length;i++)for(const [dx,dz] of [[0,1],[0,-1],[1,0],[-1,0]]){
   const x=q[i].x+dx,z=q[i].z+dz,k=point(x,z);
   if(x<0||z<0||x>=after.map.width||z>=after.map.height||reached.has(k)||walls.has(k))continue;
   reached.add(k);q.push({x,z});
  }
- for(const k of ['19,54','34,53','43,53','67,45','68,35','60,3','32,3','1,49'])assert(reached.has(k),k);
+ for(const k of ['19,54','34,53','43,53','67,45','68,35','71,38','60,3','32,3','1,49'])assert(reached.has(k),k);
  assert(reached.size>2450,reached.size);
 });
 test('ambient color is scoped to implicit grade-only base grass and leaves scatter unchanged',()=>{

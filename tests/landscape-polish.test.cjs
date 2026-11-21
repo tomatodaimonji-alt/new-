@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),test=require('node:test');
 const after=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const a=after.indexOf('  // Small east-side rest glade and staggered grass shoulders');
-const b=after.indexOf('  spawn={x:19,z:21};',a+1);
+const b=after.indexOf('  // Woodland creek:',a+1);
 assert(a>=0&&b>a,'missing landscape dressing block');
 const before=after.slice(0,a)+after.slice(b);
 function parse(html,id){
