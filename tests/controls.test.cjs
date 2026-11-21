@@ -32,7 +32,7 @@ test('facility center attack can hit current-floor monsters without writing any 
  assert.equal(saveCalls,0);
 });
 
-test('attack and contact route the same equipped weapon captured before the animation',()=>{
+test('wood contact uses the captured equipment and no synthetic swing before contact',()=>{
  const calls=[],actor={hp:50,x:4,z:2};
  let chosen='equipWoodSword';
  const ctx=vm.createContext({poiWalkActive:true,facilitySite:{id:'base'},poiWalkLevel:0,
@@ -42,7 +42,7 @@ test('attack and contact route the same equipped weapon captured before the anim
   poiMonsterAt:()=>[{},actor],toast(){},terrainY:()=>0,poiDamageNumber(){},poiMonsterMeshDirty:false,pineGameActive:false});
  const js=extract('function poiWalkAction(', 'function poiWalkReset(');
  vm.runInContext(js+'\npoiWalkAction();',ctx);
- assert.deepEqual(calls,[['attack','equipWoodSword'],['hit','equipWoodSword',false]]);
+ assert.deepEqual(calls,[['hit','equipWoodSword',false]]);
  assert.equal(actor.hp,22);
 });
 
@@ -59,4 +59,19 @@ test('only a lethal contact requests the breakup cue; an empty swing and a rejec
  for(const ms of [500,600,820,1200]){now=ms;vm.runInContext('poiWalkAction()',ctx);}
  assert.deepEqual(calls,[['attack',null],['hit',null,false],['attack',null],['hit',null,true],['attack',null]]);
  assert.equal(actor.hp,0);assert.equal(broken,1);
+});
+
+test('wood empty swing keeps air only; a finishing contact requests wood then recorded defeat only',()=>{
+ const calls=[],actor={hp:15,x:4,z:2},obj={type:'monsterSlime'};
+ let now=500,target=null,breaks=0;
+ const ctx=vm.createContext({poiWalkActive:true,facilitySite:{id:'base'},poiWalkLevel:0,
+  poiWalkActionWeapon:null,poiEquippedWeapon:()=>'equipWoodSword',poiPlayerAttackDamage:()=>28,
+  poiWalkFacing:1,poiWalkX:3,poiWalkZ:2,poiAttackReady:0,poiWalkActionStarted:0,
+  performance:{now:()=>now},poiWalkAvatar(){},poiSound:(...args)=>calls.push(args),
+  poiMonsterAt:()=>target,poiMonsterBreak:()=>breaks++,toast(){},terrainY:()=>0,poiDamageNumber(){},
+  poiMonsterMeshDirty:false,pineGameActive:false});
+ vm.runInContext(extract('function poiWalkAction(', 'function poiWalkReset('),ctx);
+ vm.runInContext('poiWalkAction()',ctx);now=820;target=[obj,actor];vm.runInContext('poiWalkAction()',ctx);
+ assert.deepEqual(calls,[['attack','equipWoodSword'],['hit','equipWoodSword',true]]);
+ assert.equal(actor.hp,0);assert.equal(breaks,1);
 });

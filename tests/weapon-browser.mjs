@@ -134,7 +134,7 @@ function observe(){
   }));
   return result;
  }
- function wrap(node,kind){
+ function wrap(node,kind,ctx){
   const info={kind,next:null,gain:node.gain&&param(node.gain),frequency:node.frequency&&param(node.frequency)};
   nodes.set(node,info);
   const connect=node.connect.bind(node);
@@ -146,9 +146,9 @@ function observe(){
      kind:i.kind,type:n.type??null,hz:n.frequency?.value??null,q:n.Q?.value??null,volume:n.gain?.value??null,
      gain:i.gain?.slice(),frequency:i.frequency?.slice(),next:shape(i.next,depth-1)
     }:null;};
-    const graph=shape(node,6);
+    const clock=ctx.currentTime,graph=shape(node,6);
     const pcm=kind==='source'&&!node.loop&&graph.next?.kind==='gain'?inspectPcm(node.buffer):null;
-    starts.push({kind,loop:node.loop??false,when:args[0]??null,shape:graph,pcm});
+    starts.push({kind,loop:node.loop??false,when:args[0]??null,shape:graph,pcm,clock});
     return start(...args);
    };
   }
@@ -156,10 +156,10 @@ function observe(){
  }
  class Spy extends native{
   constructor(...a){super(...a);contexts.push(this);}
-  createOscillator(){return wrap(super.createOscillator(),'osc');}
-  createBufferSource(){return wrap(super.createBufferSource(),'source');}
-  createBiquadFilter(){return wrap(super.createBiquadFilter(),'filter');}
-  createGain(){return wrap(super.createGain(),'gain');}
+  createOscillator(){return wrap(super.createOscillator(),'osc',this);}
+  createBufferSource(){return wrap(super.createBufferSource(),'source',this);}
+  createBiquadFilter(){return wrap(super.createBiquadFilter(),'filter',this);}
+  createGain(){return wrap(super.createGain(),'gain',this);}
  }
  window.AudioContext=Spy;
  window.__comfort={contexts,starts,digests};
@@ -176,7 +176,7 @@ function sfx(records){
   if(r.pcm){
    const g=shape.next;exact(lastTarget(g.next),.90*.88,'PCM uses existing SE bus');
    const pcmKind=r.pcm.duration<.4?'wood-pcm':'wet-pcm';
-   return [{hz:pcmKind,peak:g.volume,pcm:r.pcm,when:r.when}];
+   return [{hz:pcmKind,peak:g.volume,pcm:r.pcm,when:r.when,clock:r.clock}];
   }
   if(r.kind==='source'&&!r.loop&&shape.next?.kind==='filter'){
    const g=shape.next.next;exact(lastTarget(g.next),.90*.88,'SE bus');return [{hz:shape.next.frequency?.[0]?.[1]??shape.next.hz,low:shape.next.frequency?.[1]?.[1],peak:peak(g),onset:onset(g),decay:decay(g),when:r.when}];
@@ -192,8 +192,8 @@ const swordIcon='#poiHotbar [data-hotbar-slot="1"] canvas[data-item-model="equip
 const attack='#poiWalkAction';
 // PCM-data SHA-256 from the owner-approved WAVs (RIFF headers excluded).
 const approved={
- wood:{frames:6192,duration:.258,peak:24572,sha:'68135caf9ea6b388b5a1fe311d18236bc7ddef04a4abe4da86802aeee74777f0'},
- wet:{frames:13200,duration:.55,peak:17063,sha:'014aeabc35f1f164f3f0f52d90daceadae5d04dc07ec4d9bdf12150ae4185ecc'}
+ wood:{frames:5568,duration:.232,peak:28999,sha:'5c17aa94957de450ca20b65a609c43f53518241161bcad0132c41d4d4bf6dbae'},
+ wet:{frames:13680,duration:.570,peak:29326,sha:'1a49f600444177ccd10f7eaa6c209e58cebc71e7df99dd7aaaf9b4c4279fd002'}
 };
 function approvedPcm(pcm,key){
  assert.deepEqual([pcm.channels,pcm.rate,pcm.frames],[1,24000,approved[key].frames],'approved mono 24k frame count '+key);
@@ -258,26 +258,26 @@ async function soundCapture(page,weapon,expectHit,prev=false,expectDeath=false){
  if(weapon)await page.keyboard.press('2');else await page.keyboard.press('1');
  const start=(await events(page)).length;
  await page.locator(attack).tap();
- const expected=prev?handSwing:(weapon?woodSwing:handSwing);
- const expectedHit=prev?handHit:(weapon?woodHit:handHit);
- const want=expectHit?[...expected,...expectedHit,...(expectDeath?wetDeath:[])]:expected;
+ const impactOnly=!prev&&weapon&&expectHit;
+ const swing=impactOnly?[]:(weapon?woodSwing:handSwing);
+ const hit=weapon?woodHit:handHit;
+ const want=expectHit?[...swing,...hit,...(expectDeath?wetDeath:[])]:swing;
  const segment=withoutHurt(sfx((await events(page)).slice(start)));
  assert.deepEqual(segment.map(o=>o.hz),want,'real WebAudio sources for '+(weapon?'wood':'hand')+' '+(expectHit?'hit':'miss'));
- if(!prev&&weapon&&expectHit){
-  // Separate audio scheduling calls can land in different 128-frame
-  // WebAudio quanta on a busy runner. The unit test pins the exact delay.
-  const delay=segment[3].when-segment[0].when;
-  assert.ok(delay>=.050&&delay<=.115,'wood contact follows its windup, got '+delay);
-  const {pcm}=segment[3];
-  approvedPcm(pcm,'wood');
-  exact(segment[3].peak,.75,'wood impact gain');
+ if(impactOnly){
+  const contact=segment[0],delay=contact.when-contact.clock;
+  // Exact 108ms is pinned by unit tests. The native audio clock may advance
+  // while decoding a new buffer; guard against early/no-delay scheduling.
+  assert.ok(delay>=.060&&delay<=.120,'wood contact remains scheduled near 108 ms, got '+delay);
+  approvedPcm(contact.pcm,'wood');
+  exact(contact.peak,.72,'wood impact gain');
  }
  if(expectDeath){
   const wet=segment.at(-1);
-  assert.ok(Math.abs(wet.when-segment[expected.length].when-.018)<.010,'distinct wet texture follows the impact, not a weapon swing');
-  exact(wet.peak,.90,'wet texture gain through established SE levels');
+  assert.ok(Math.abs(wet.when-segment[swing.length].when-.018)<.010,'distinct wet texture follows the contact, never a pre-swing');
+  exact(wet.peak,.65,'wet texture gain through established SE levels');
   approvedPcm(wet.pcm,'wet');
-  if(weapon)assert.notEqual(wet.pcm.id,segment[3].pcm.id,'wet defeat buffer differs from cached dry wood material');
+  if(weapon)assert.notEqual(wet.pcm.id,segment[0].pcm.id,'wet defeat buffer differs from cached dry wood material');
  }
  return segment.map(({when,...rest})=>({...rest,delay:Math.round((when-segment[0].when)*1e5)/1e5}));
 }
@@ -295,11 +295,15 @@ async function soundCase(browser,prefix,expectHit,prev=false){
   const bare=await soundCapture(page,false,expectHit,prev);
   await page.waitForTimeout(400);
   if(!prev){
+   const hp=async()=> (await state(page)).combat.actors.find(a=>a.type==='monsterDragon')?.hp;
+   const before=expectHit?await hp():null;
    const first=await soundCapture(page,true,expectHit);
    if(expectHit){
+    assert.equal(await hp(),before-28,'one sword hit applies one unchanged damage event');
     await page.waitForTimeout(400);
     const second=await soundCapture(page,true,true);
-    assert.equal(first[3].pcm.id,second[3].pcm.id,'repeat wood strikes reuse the very same native AudioBuffer');
+    assert.equal(await hp(),before-56,'second sword hit is one further real damage event');
+    assert.equal(first[0].pcm.id,second[0].pcm.id,'repeat wood strikes reuse the very same native AudioBuffer');
    }
   }
   await unchanged(page);offline();assert.deepEqual(errors,[]);
@@ -340,5 +344,5 @@ try{
    assert.deepEqual(clean(now),clean(old),'original bare audio envelope and timing remains exact');
   }
  }
- console.log('PASS offline Chromium: approved exact WAV PCM, dry wood / lethal-only wet sounds, original hand/audio routing, cached icon, saves untouched');
+ console.log('PASS offline Chromium: approved exact WAV PCM, wood hit without pre-swing / lethal-only wet sounds, original hand/audio routing, cached icon, saves untouched');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
