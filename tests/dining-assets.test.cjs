@@ -18,7 +18,7 @@ test('Distinct dining sign is editable and AI-coded without changing historical 
  assert(xs.some(x=>x>.08)&&xs.some(x=>x<-.08),'artwork on both faces');
 });
 test('Cellar surround is native render-only with clear upper approach',()=>{
- assert.match(html,/if\(facilitySite&&o.type==='guildStairDown'&&o.y===0&&facilityStairOpenings.has\(facilityCellKey\(o.x,o.z,o.y\)\)\)/);
+ assert.match(html,/else if\(facilityHasDiningCellarPart\(o,'guildStairDown',0\)\)/);
  assert.match(html,/world.filter\(o=>o.type==='guildStairDown'&&\s+stairs.has/);
  const m=vm.runInNewContext(extract('function tri(m,','function naturalCrown(')+
  extract('function poiCellarEntryGeometry(','function poiPottedPlantGeometry(')+`
@@ -28,7 +28,7 @@ test('Cellar surround is native render-only with clear upper approach',()=>{
  for(let i=0;i<m.p.length;i+=3)assert(
    !(Math.abs(m.p[i])<.34&&m.p[i+2]<-.35&&m.p[i+1]>.045),
    'must keep the upper approach at -Z open');
- assert(m.p.some((y,i)=>i%3===1&&y>.46),'visible parapet');
+ assert(m.p.some((y,i)=>i%3===1&&y>.46),'visible wall-side handrail');
 });
 test('Only opted-in authored WC stone leaves use cool mineral colors; generic stone door untouched',()=>{
  assert.match(html,/else if\(facilityHasDiningStoneLeaf\(o\)\)/);

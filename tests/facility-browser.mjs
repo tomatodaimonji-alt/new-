@@ -204,18 +204,33 @@ try{
     const point=(x,z)=>id==='base'?{x:b.x1+z,z:b.z2-x}:{x:b.x1+x,z:b.z1+z};
     const approach=point(10,1);
     const before=await snap(desktop);
-    const chairTiles=new Set(raw.world.filter(o=>o.y===0&&o.type==='chairWood').map(o=>key(o.x,o.z)));
+    const chairTiles=new Set(raw.world.filter(o=>o.y===0&&['chairWood','stoolRound'].includes(o.type)).map(o=>key(o.x,o.z)));
+    const staff=point(9,3),counter=point(9,4);
+    assert(raw.world.some(o=>o.y===0&&o.x===staff.x&&o.z===staff.z&&o.type==='stoolRound'),'marked counter staff stool');
+    for(const type of ['counterWood','poiLedgerPapers'])assert(raw.world.some(o=>o.y===0&&o.x===counter.x&&o.z===counter.z&&o.type===type),'marked counter '+type);
     // Walk to the entry desk and stair using only paths that remain open
     // with the chairs (normally intentionally passable) treated as occupied.
     for(const mark of [point(6,8),point(8,8),approach])
      await walk(desktop,await route(desktop,raw,(await snap(desktop)).position,
       (x,z)=>x===mark.x&&z===mark.z,null,(x,z)=>!chairTiles.has(key(x,z))));
-    if(out&&id==='kitchen')await desktop.screenshot({path:out+'/kitchen-cellar-approach.png'});
+    if(out&&id==='kitchen'){
+     const canvas=desktop.locator('#view');
+     for(let n=0;n<11;n++)await canvas.dispatchEvent('wheel',{deltaY:-1});
+     await desktop.screenshot({path:out+'/kitchen-cellar-approach.png'});
+     for(let n=0;n<10;n++)await canvas.dispatchEvent('wheel',{deltaY:1});
+    }
     assert.equal(before.position.level,0);
     const annex=id==='base'?{x:b.x1+4,z:b.z2-8}:{x:b.x1+8,z:b.z1+4};
     await staircase(desktop,raw,ground,-1,id+'-'+index,out,annex);
    }
    if(id==='workshop'||(id==='base'&&index===2)){
+    const point=(x,z)=>id==='base'?{x:b.x2-z,z:b.z1+x}:{x:b.x1+x,z:b.z1+z};
+    const counter=point(3,5),staff=point(2,5),customer=point(4,5);
+    for(const type of ['counterWood','poiLedgerPapers'])assert(raw.world.some(o=>o.y===0&&o.x===counter.x&&o.z===counter.z&&o.type===type),'work-order counter '+type);
+    assert(raw.world.some(o=>o.y===0&&o.x===staff.x&&o.z===staff.z&&o.type==='stoolRound'),'work-order stool');
+    await walk(desktop,await route(desktop,raw,(await snap(desktop)).position,(x,z)=>x===customer.x&&z===customer.z,null,
+     (x,z)=>x!==staff.x||z!==staff.z));
+    if(out&&id==='workshop')await desktop.screenshot({path:out+'/workshop-counter.png'});
     const annex=id==='base'?{x:b.x2-3,z:b.z1+9}:{x:b.x1+9,z:b.z1+3};
     await walk(desktop,await route(desktop,raw,(await snap(desktop)).position,(x,z)=>x===annex.x&&z===annex.z));
    }
