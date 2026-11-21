@@ -663,7 +663,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
 #app.facilityPreview header h1{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .facilityGroupLabel{margin:9px 4px 5px;font-size:11px;color:var(--muted)}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v105）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v106）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -4636,7 +4636,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v105',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v106',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -4751,7 +4751,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v105';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v106';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -4963,7 +4963,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v105',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v106',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -5842,6 +5842,9 @@ function wallFaceState(o,lookup){
 // Guild details are inferred from the reception counter and the existing
 // floor tiles. This also decorates older saved guild layouts without resetting them.
 function guildBounds(objects=world){
+ // Built-in facilities are not guilds. Their countertops and stone walls can
+ // resemble a guild to the legacy decoration heuristic, even below grade.
+ if(facilitySite)return null;
  const counters=objects.filter(o=>o.y===0&&o.type==='counterWood');
  if(counters.length<3)return null;
  const cx=counters.reduce((n,o)=>n+o.x,0)/counters.length;
@@ -9141,20 +9144,31 @@ function buildFacilitySite(id){
    levels:[
     {y:0,rooms:[[2,0,8,9],[0,2,1,7],[9,4,10,8]],floor:'woodfloorLight',
      windows:[[3,0],[7,0],[1,2],[0,4],[1,7],[3,9],[7,9],[10,5],[10,8]],
-     props:[[3,1,'bookshelf'],[3,3,'fireplace',3],[4,1,'wardrobe'],[7,1,'chest'],
-      [1,3,'chest'],[1,5,'benchWood',1],[5,0,'poiWallSconce',0],[8,2,'poiWallSconce',1],[6,3,'guildStairUp'],
-      [4,7,'counterWood'],[7,7,'table'],[7,8,'chairWood',2],[6,9,'poiWallSconce',2],
-      [8,4,'woodwall'],[8,5,'woodwallDoor',3],[8,6,'woodwall'],
-      [9,6,'woodwall'],[9,6,'poiWallSconce',2],[9,5,'guildLatrine'],[9,7,'bathWood',1]]},
+     props:[
+      // Bridge the four exterior shoulders with solid blocks from the inside.
+      [2,2,'plasterwall'],[2,7,'plasterwall'],[8,4,'plasterwall'],[8,8,'plasterwall'],
+      // Occupant's locked-off room in the west wing; the hearth serves the public hall.
+      [3,2,'woodwall'],[4,2,'woodwall'],[4,3,'woodwall'],[4,4,'woodwallDoor',3],[4,5,'woodwall'],
+      [1,5,'woodwall'],[2,5,'woodwall'],[3,5,'woodwall'],
+      [1,3,'bed',1],[1,4,'wardrobe',3],[3,3,'table'],[4,3,'poiWallSconce',1],
+      [3,1,'bookshelf',0],[5,1,'fireplace',0],[7,2,'guildStairUp',2],
+      [5,0,'poiWallSconce',0],[8,2,'poiWallSconce',1],
+      // A staffed desk has working room behind and standing room in front.
+      [3,7,'counterWood'],[4,7,'counterWood'],[1,6,'benchWood',3],
+      [2,7,'poiWallSconce',2],[6,9,'poiWallSconce',2],
+      // A floored washroom with a toilet, basin and a clear 2×2 aisle.
+      [6,4,'woodwall'],[7,4,'woodwall'],[6,5,'woodwall'],[6,6,'woodwallDoor',3],[6,7,'woodwall'],
+      [6,8,'woodwall'],[7,8,'woodwall'],[8,4,'poiWallSconce',0],
+      [9,5,'guildLatrine',1],[9,7,'kitchenSink',1]]},
     {y:1,rooms:[[2,0,8,7],[0,2,1,5]],floor:'woodfloorLight',
      windows:[[3,0],[7,0],[0,3],[2,7],[5,7],[8,5]],
      // The main corridor connects two sleeping chambers, a wash nook and the landing.
      props:[[3,1,'bed',2],[7,1,'bed',2],[4,1,'chest'],[5,1,'woodwall'],
       [5,2,'woodwallDoor',3],[5,3,'woodwall'],[3,6,'bed',2],[7,6,'bed',2],
-      [4,6,'chest'],[5,6,'benchWood'],[6,3,'guildStairDown'],[6,0,'poiWallSconce',0],
-      [1,3,'wardrobe',1],[1,4,'chest'],[8,4,'poiWallSconce',1],[6,7,'poiWallSconce',2]],holes:[[6,3]]}
+      [4,6,'chest'],[5,6,'benchWood'],[7,2,'guildStairDown',2],[6,0,'poiWallSconce',0],
+      [1,3,'wardrobe',1],[1,4,'chest'],[8,4,'poiWallSconce',1],[6,7,'poiWallSconce',2]],holes:[[7,2]]}
    ],
-   roofProps:[[3,3,2,'chimney']],facade:[[4,9,'poiInnSign']],yards:[[7,10,'basketProduce'],[8,10,'poiStreetLamp']]
+   roofProps:[[5,1,2,'chimney']],facade:[[4,9,'poiInnSign']],yards:[[7,10,'basketProduce'],[8,10,'poiStreetLamp']]
   },
   kitchen:{
    w:12,d:10,door:[5,9],wall:'stonewall',roof:'roofHip',
@@ -9273,7 +9287,6 @@ function buildFacilitySite(id){
  return {map:{format:'forest-world-v1',version:1,size:width,width,height,terrainHeights:[],
   models:[],prefabs:[],checks:[],world:[...floors.values(),...objects]},spawn,buildings};
 }
-
 function facilityNavigate(id){
  const url=new URL(location.href);
  // Keep browser Back read-only too, including when BFCache is unavailable.
@@ -9423,7 +9436,7 @@ function facilityBoot(){
  const app=$('app');
  app.classList.add('gameWorldMode','facilityPreview');
  $('palette').inert=true;$('inspector').inert=true;$('quickTools').inert=true;$('mobileTabs').inert=true;
- const name='探索：'+facilitySite.name;app.querySelector('header h1').textContent=name+'（v105）';document.title=name;
+ const name='探索：'+facilitySite.name;app.querySelector('header h1').textContent=name+'（v106）';document.title=name;
  $('facilityExport').hidden=false;
  facilityPrepareFloorMasks();
  const compatible=facilityExportMap(facilitySite.map);
@@ -9443,7 +9456,7 @@ function facilityBoot(){
   facility:()=>({id:facilitySite.id,
    spawn:{...facilitySite.spawn},buildings:facilitySite.buildings.map(r=>({...r})),
    position:{x:poiWalkX,z:poiWalkZ,level:poiWalkLevel},hiddenRoof:facilityHiddenRoof(),
-   visibleRoofs:facilityVisibleRoofs(),roofMeshes:facilityRoofMeshes.map(({count})=>count),
+   visibleRoofs:facilityVisibleRoofs(),signIds:signOverlays.map(o=>o.id),roofMeshes:facilityRoofMeshes.map(({count})=>count),
    sceneLayer:poiWalkLevel<0?'cellar':'surface',sceneCutOwner:facilitySceneCutOwner(),
    visibleLayers:[...new Set(world.filter(o=>isFloor(o.type)&&facilityObjectVisible(o)&&
     !facilityStairOpenings.has(facilityCellKey(o.x,o.z,o.y))).map(o=>o.y))].sort((a,b)=>a-b),

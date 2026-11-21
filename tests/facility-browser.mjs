@@ -75,7 +75,7 @@ async function staircase(page,map,area,delta,id,out,annex=null){
  const reached=await snap(page);
  assert.equal(reached.position.level,target);
  assert.equal(reached.sceneLayer,target<0?'cellar':'surface');
- if(target<0){assert.deepEqual(reached.visibleRoofs,[]);assert.deepEqual(reached.visibleLayers,[-1]);}
+ if(target<0){assert.deepEqual(reached.visibleRoofs,[]);assert.deepEqual(reached.visibleLayers,[-1]);assert(!reached.signIds.includes('pineGuildWorldMap'),'guild atlas leaked into cellar');}
  // Get off the landing before re-entering its matching staircase.
  const next=dirs.map(([dx,dz])=>[stairs.x+dx,stairs.z+dz]).filter(([x,z])=>map.world.some(o=>o.x===x&&o.z===z&&o.y===target&&!stair(o.type)));
  const clear=await route(page,map,reached.position,(x,z)=>next.some(([a,b])=>x===a&&z===b));
@@ -156,6 +156,12 @@ try{
    assert(toilet,'missing toilet at '+id+'/'+index);
    await walk(desktop,await route(desktop,raw,interior.position,(x,z)=>
     ground.has(key(x,z))&&Math.abs(x-toilet.x)+Math.abs(z-toilet.z)===1));
+   if(id==='lodging'||(id==='base'&&index===0)){
+    for(const [lx,lz] of [[7,6],[4,6],[4,8],[3,4]]){
+     await walk(desktop,await route(desktop,raw,(await snap(desktop)).position,(x,z)=>x===b.x1+lx&&z===b.z1+lz));
+    }
+    if(out&&id==='lodging')await desktop.screenshot({path:out+'/lodging-ground.png'});
+   }
    if(b.floorFootprints['1'])await staircase(desktop,raw,ground,1,id+'-'+index,out);
    if(b.floorFootprints['-1']){
     const annex=id==='base'?{x:b.x1+4,z:b.z2-8}:{x:b.x1+8,z:b.z1+4};
