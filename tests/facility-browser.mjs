@@ -29,7 +29,7 @@ const dirs=[[0,-1],[0,1],[-1,0],[1,0]];
 const footprint=(b,y=0)=>new Set((b.floorFootprints[String(y)]||[]).map(p=>key(p.x,p.z)));
 const inside=(area,x,z)=>area.has(key(x,z))&&dirs.every(([a,b])=>area.has(key(x+a,z+b)));
 const stair=t=>t==='guildStairUp'||t==='guildStairDown';
-async function route(page,map,start,check,transition=null){
+async function route(page,map,start,check,transition=null,stay=()=>true){
  const blockedByStair=new Set(map.world.filter(o=>o.y===start.level&&stair(o.type)).map(o=>key(o.x,o.z)));
  const allowed=await page.evaluate(({width,height})=>{
   const result=[];
@@ -48,7 +48,7 @@ async function route(page,map,start,check,transition=null){
   }
   for(const [dx,dz] of dirs){
    const x=here.x+dx,z=here.z+dz,k=key(x,z);
-   if(!pass.has(k)||prev.has(k)||(blockedByStair.has(k)&&!(transition!==null&&check(x,z))))continue;
+   if(!pass.has(k)||!stay(x,z)||prev.has(k)||(blockedByStair.has(k)&&!(transition!==null&&check(x,z))))continue;
    prev.set(k,here);q.push({x,z});
   }
  }
@@ -64,7 +64,7 @@ async function walk(page,steps){
   await page.waitForTimeout(185);from=point;
  }
 }
-async function staircase(page,map,area,delta,id,out,annex=null){
+async function staircase(page,map,area,delta,id,out,annex=null,bedrooms=[]){
  const here=await snap(page),target=here.position.level+delta;
  const startType=delta>0?'guildStairUp':'guildStairDown';
  const reverseType=delta>0?'guildStairDown':'guildStairUp';
@@ -82,6 +82,11 @@ async function staircase(page,map,area,delta,id,out,annex=null){
  assert(clear?.length>1,id+' no usable landing');
  await walk(page,clear);
  if(annex)await walk(page,await route(page,map,(await snap(page)).position,(x,z)=>x===annex.x&&z===annex.z));
+ for(const [i,room] of bedrooms.entries()){
+  for(const point of [room.door,room.free])
+   await walk(page,await route(page,map,(await snap(page)).position,(x,z)=>x===point.x&&z===point.z));
+  if(out&&id==='lodging-0')await page.screenshot({path:out+'/lodging-bedroom-'+(i+1)+'.png'});
+ }
  if(out)await page.screenshot({path:out+'/'+id+'-floor-'+target+'.png'});
  await walk(page,await route(page,map,(await snap(page)).position,hit,here.position.level));
 }
@@ -163,13 +168,34 @@ try{
    assert(toilet,'missing toilet at '+id+'/'+index);
    await walk(desktop,await route(desktop,raw,interior.position,(x,z)=>
     ground.has(key(x,z))&&Math.abs(x-toilet.x)+Math.abs(z-toilet.z)===1));
-   if(id==='lodging'||(id==='base'&&index===0)){
-    for(const [lx,lz] of [[7,6],[4,6],[4,8],[3,4]]){
-     await walk(desktop,await route(desktop,raw,(await snap(desktop)).position,(x,z)=>x===b.x1+lx&&z===b.z1+lz));
-    }
+   const isInn=id==='lodging'||(id==='base'&&index===0);
+   const localPoint=([lx,lz])=>({x:b.x1+lx,z:b.z1+lz});
+   const walkLocal=async (lx,lz,stay)=>{
+    const point=localPoint([lx,lz]);
+    return walk(desktop,await route(desktop,raw,(await snap(desktop)).position,
+     (x,z)=>x===point.x&&z===point.z,null,stay));
+   };
+   if(isInn){
+    // The clerk/ledger stays on the desk, and the owner's suite is reached
+    // from the staff side without going back outside or through the public WC.
+    const confined=(x,z)=>ground.has(key(x,z));
+    await walkLocal(4,9,confined);
+    if(out&&id==='lodging')await desktop.screenshot({path:out+'/lodging-reception.png'});
+    for(const [x,z] of [[5,7],[5,4],[5,2],[6,2],[7,2]])await walkLocal(x,z,confined);
     if(out&&id==='lodging')await desktop.screenshot({path:out+'/lodging-ground.png'});
+    for(const [x,z] of [[6,2],[5,2],[5,0],[5,-1],[5,0],[5,2],[5,4]])
+     await walkLocal(x,z,(xx,zz)=>confined(xx,zz)||(xx===b.x1+5&&zz===b.z1-1));
+    const upper=footprint(b,1);
+    assert.deepEqual([...upper].sort(),[...ground].sort(),'upstairs must cover downstairs');
+    const floor=new Set(raw.world.filter(o=>o.y===1&&/^woodfloor/.test(o.type)).map(o=>key(o.x,o.z)));
+    const open=[...upper].filter(p=>!floor.has(p));
+    assert.deepEqual(open,[key(b.x1+10,b.z1+6)],'unexpected views through missing upper floor');
    }
-   if(b.floorFootprints['1'])await staircase(desktop,raw,ground,1,id+'-'+index,out);
+   if(b.floorFootprints['1']){
+    const bedrooms=isInn?[[[4,4],[4,2]],[[7,4],[7,2]],[[5,6],[5,8]]].map(([door,free])=>
+     ({door:localPoint(door),free:localPoint(free)})):[];
+    await staircase(desktop,raw,ground,1,id+'-'+index,out,null,bedrooms);
+   }
    if(b.floorFootprints['-1']){
     const annex=id==='base'?{x:b.x1+4,z:b.z2-8}:{x:b.x1+8,z:b.z1+4};
     await staircase(desktop,raw,ground,-1,id+'-'+index,out,annex);
@@ -232,6 +258,21 @@ try{
  const shell=async p=>p.locator('header h1,#undo,#redo,#quickTools button:not([hidden]),#poiGameTools button:not([hidden]),#mobileTabs button')
   .evaluateAll(nodes=>nodes.filter(e=>e.getClientRects().length>0).map(e=>[e.id,e.id?e.textContent.trim():e.tagName]));
  const normalShell=await shell(mobile);
+ const commonControls=['#poiWalkPad','[data-poi-dir="n"]','[data-poi-dir="s"]','[data-poi-dir="e"]','[data-poi-dir="w"]','#poiWalkAction'];
+ const playControls=async()=>{
+  const bounds={};
+  for(const css of commonControls){
+   const loc=mobile.locator(css);assert(await loc.isVisible(),css+' not visible');
+   const box=await loc.boundingBox();assert(box&&box.x>=0&&box.y>=0&&box.x+box.width<=390&&box.y+box.height<=844,css+' overflowed');
+   bounds[css]=Object.fromEntries(Object.entries(box).map(([k,v])=>[k,Math.round(v)]));
+  }
+  const action=mobile.locator('#poiWalkAction');
+  return {bounds,label:(await action.innerText()).replace(/\s+/g,' '),aria:await action.getAttribute('aria-label')};
+ };
+ await mobile.locator('#poiWalkToggle').tap();
+ const normalPlay=await playControls();
+ assert.match(normalPlay.label,/攻撃.*決定/);
+ await mobile.locator('#poiWalkToggle').tap();
  await mobile.goto(origin+'/?facility=base&test=1');
  assert.equal((await snap(mobile)).id,'base');
  assert.equal((await snap(mobile)).active,false);
@@ -239,13 +280,10 @@ try{
  if(out)await mobile.screenshot({path:out+'/mobile-editor.png'});
  await mobile.locator('#enterGameWorld').tap();
  assert.equal((await snap(mobile)).active,true);
- for(const css of ['#poiWalkToggle','[data-poi-dir="n"]']){
-  const loc=mobile.locator(css);assert(await loc.isVisible(),css+' not visible');
-  const box=await loc.boundingBox();assert(box.x>=0&&box.y>=0&&box.x+box.width<=390&&box.y+box.height<=844,css+' overflowed');
- }
- const pad=await mobile.locator('#poiWalkPad').boundingBox();
- const north=await mobile.locator('[data-poi-dir="n"]').boundingBox();
- assert(pad.height<=180&&north.width>=44&&north.height>=44,'compact touch controls');
+ assert.deepEqual(await playControls(),normalPlay,'facility must use the ordinary pad and center action dimensions and labels');
+ const actionBefore=(await snap(mobile)).combat.actionAt;
+ await mobile.locator('#poiWalkAction').tap();
+ assert((await snap(mobile)).combat.actionAt>actionBefore,'facility center tap did not dispatch the shared action');
  const mobileStart=(await snap(mobile)).position;
  const controls=[['n',0,-1],['s',0,1],['e',1,0],['w',-1,0]];
  let touched=false;
@@ -278,6 +316,25 @@ try{
  await scratch.locator('#redo').click();assert.equal(await count(),beforeEdit+1);
  await scratch.locator('#poiWalkToggle').click();assert((await snap(scratch)).active);
  await scratch.locator('#poiWalkToggle').click();assert.equal(await count(),beforeEdit+1);
+ // Exercise the real object-category UI, then target the same coordinate
+ // that the scenery picker delivers. The existing desk must not be replaced.
+ const baseState=await snap(scratch),inn=baseState.buildings[0];
+ const desk={x:inn.x1+4,z:inn.z1+8};
+ const decorations=scratch.locator('#decorList');
+ for(const label of ['オブジェクト','装飾品','帳簿・筆記具'])
+  await decorations.locator('.categoryRow').filter({hasText:label}).first().click();
+ assert(await decorations.getByRole('button',{name:'帳簿と書類',exact:true}).isVisible(),'missing papers in decorative palette');
+ const allAt=async ({x,z})=>scratch.evaluate(([x,z])=>window.__editorTest.data().world.filter(o=>o.x===x&&o.z===z&&o.y===0),[x,z]);
+ const furnished=await allAt(desk);
+ assert(furnished.some(o=>o.type==='counterWood')&&furnished.some(o=>o.type==='poiLedgerPapers'));
+ const desk2={x:desk.x+1,z:desk.z};
+ await decorations.getByRole('button',{name:'帳簿と書類',exact:true}).click();
+ await scratch.evaluate(({x,z})=>window.__editorTest.place(x,z),desk2);
+ assert((await allAt(desk2)).some(o=>o.type==='counterWood')&&(await allAt(desk2)).some(o=>o.type==='poiLedgerPapers'));
+ await scratch.locator('#undo').click();
+ assert(!(await allAt(desk2)).some(o=>o.type==='poiLedgerPapers'),'decoration undo retained new decor');
+ await scratch.locator('#redo').click();
+ assert((await allAt(desk2)).some(o=>o.type==='poiLedgerPapers'),'decoration redo lost new decor');
  const [scratchFile]=await Promise.all([scratch.waitForEvent('download'),scratch.locator('#facilityExport').click()]);
  assert.equal(JSON.parse(readFileSync(await scratchFile.path(),'utf8')).world.filter(o=>o.x===0&&o.z===0).length,beforeEdit+1);
  await expectStore(scratch);

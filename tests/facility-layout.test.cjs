@@ -145,30 +145,29 @@ test('inn 1F walls have no diagonal-only joints',()=>{
   }
  }
 });
-test('inn washroom has 2×2 clear floor, sink and toilet, with no tub',()=>{
+test('inn public washroom preserves 2×2 clear area and no tub; private owner water room is separate',()=>{
  for(const scope of ['lodging','base']){
   const {b,at,local,reachable}=groundInn(scope);
-  for(const [x,z] of [[7,5],[8,5],[7,6],[8,6]]){
+  for(const [x,z] of [[1,6],[2,6],[1,7],[2,7]]){
    assert.ok(at(x,z).some(o=>floorIds.test(o.type))&&at(x,z).every(o=>floorIds.test(o.type)));
    assert.ok(reachable.has(key(b.x1+x,b.z1+z,0)));
   }
-  assert.ok(at(9,5).some(o=>o.type==='guildLatrine')&&at(9,7).some(o=>o.type==='kitchenSink'));
-  assert.ok(!local.some(o=>o.y===0&&o.type==='bathWood'));
+  assert.ok(at(1,5).some(o=>o.type==='guildLatrine')&&at(2,5).some(o=>o.type==='kitchenSink'));
+  assert.deepEqual(Array.from(local.filter(o=>o.y===0&&o.type==='bathWood'),o=>[o.x,o.z]),[[8,3]]);
  }
 });
-test('inn ground fixtures have access, edge stair remains paired, hearth has aligned chimney and wall',()=>{
+test('inn has a matched edge stair, accessible counter and wall-backed hearth with aligned chimney',()=>{
  for(const scope of ['lodging','base']){
   const {b,at,local,reachable}=groundInn(scope);
   const has=(x,z,y,t)=>at(x,z,y).some(o=>o.type===t);
   const visit=(x,z,y)=>reachable.has(key(b.x1+x,b.z1+z,y));
-  assert.ok(has(5,1,0,'fireplace')&&has(5,1,2,'chimney')&&has(5,0,0,'plasterwall'));
-  assert.ok(has(7,2,0,'guildStairUp')&&has(7,2,1,'guildStairDown')&&has(8,2,0,'plasterwall'));
-  assert.ok(visit(7,3,1)&&visit(7,2,0)&&visit(7,2,1));
+  assert.ok(has(8,5,0,'fireplace')&&has(8,5,2,'chimney')&&has(8,4,0,'woodwall'));
+  assert.ok(has(10,6,0,'guildStairUp')&&has(10,6,1,'guildStairDown')&&has(11,6,0,'plasterwall'));
+  assert.ok(visit(10,5,1)&&visit(10,7,1)&&visit(10,6,0)&&visit(10,6,1));
   assert.equal(local.filter(o=>o.y===0&&o.type==='counterWood').length,2);
-  for(const x of [3,4])assert.ok(has(x,7,0,'counterWood')&&visit(x,6,0)&&visit(x,8,0));
-  assert.ok(has(4,4,0,'woodwallDoor')&&has(1,3,0,'bed')&&has(1,4,0,'wardrobe')&&has(3,3,0,'table')&&visit(3,4,0));
-  const bench=at(1,6).find(o=>o.type==='benchWood');
-  assert.ok(bench&&bench.rot===3&&visit(2,6,0)&&at(2,6).every(o=>floorIds.test(o.type)));
+  for(const x of [4,5])assert.ok(has(x,8,0,'counterWood')&&visit(x,7,0)&&visit(x,9,0));
+  const bench=at(8,8).find(o=>o.type==='benchWood');
+  assert.ok(bench&&bench.rot===0&&visit(8,9,0)&&at(8,9).every(o=>floorIds.test(o.type)));
  }
 });
 test('all built-in facility floors use cardinal wall joins and rooms of at least four tiles',()=>{
