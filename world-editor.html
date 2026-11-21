@@ -756,7 +756,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 #poiShopBuyPotion:not(:disabled){border-color:#ebca82;background:#81663ce8!important}
 #poiShopFeedback{min-height:1.4em}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v148）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v149）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -6081,6 +6081,39 @@ function poiHealSound(now){
  for(const [pitch,delay,duration,volume] of [[523.25,.012,.39,.12],[659.25,.079,.41,.10],[783.99,.150,.45,.085]])
   poiAudioTone(pitch,now+delay,duration,volume,'sine',poiAudioEffects,.018);
 }
+// BEGIN ITEM FOLEY
+function poiItemSound(kind,material,now){
+ if(poiAudioLevels.master<=0||poiAudioLevels.se<=0)return;
+ const air=(t,d,hz,q,volume,attack)=>poiAudioNoiseBurst(t,d,hz,q,volume,attack);
+ const tick=(t,p,d,v)=>poiAudioTone(p,t,d,v,'sine',poiAudioEffects,.002);
+ if(kind==='enemy-loot'){
+  // Loose coins strike and settle in two quick clusters after the defeat hit.
+  const t=now+.205;
+  air(t,.052,2730,1.15,.14,.004);
+  tick(t+.006,1610,.072,.046);tick(t+.042,2140,.088,.033);
+  air(t+.042,.058,1690,1.34,.096,.006);
+ }else if(kind==='inventory-drop'){
+  if(material==='equipWoodSword'){
+   poiAudioThud(now,174,87,.122,.22,.009);
+   air(now+.003,.073,730,1.75,.23,.004);
+   air(now+.038,.062,1030,.83,.085,.006);
+  }else{
+   air(now,.105,1680,.86,.17,.011);
+   air(now+.041,.086,650,1.04,.13,.008);
+   poiAudioThud(now+.035,125,66,.098,.11,.011);
+  }
+ }else if(kind==='item-pickup'){
+  // A dry lift/pouch brush, and one coin-ring only for currency.
+  air(now,.086,material==='coin'?1310:1830,.88,.135,.011);
+  if(material==='coin'){
+   tick(now+.013,1990,.116,.070);tick(now+.040,2510,.099,.027);
+  }else{
+   air(now+.039,.055,material==='equipWoodSword'?810:1260,1.3,.12,.007);
+   poiAudioThud(now+.052,material==='equipWoodSword'?182:132,74,.062,.095,.007);
+  }
+ }
+}
+// END ITEM FOLEY
 function poiSound(kind,weapon=null,defeated=false){
  if(!poiWalkActive||!poiAudioEnabled||!poiAudioAllowed())return;
  poiAudioStart();const ctx=poiAudioContext;if(!ctx||ctx.state!=='running')return;
@@ -6093,6 +6126,8 @@ function poiSound(kind,weapon=null,defeated=false){
     poiWeaponSound(kind,weaponSound,now);
     if(kind==='hit'&&defeated)poiDefeatSound(now+POI_WEAPON_CONTACT_DELAY+.018);
    }
+  }else if(kind==='enemy-loot'||kind==='inventory-drop'||kind==='item-pickup'){
+   poiItemSound(kind,weapon,now);
   }else if(kind==='heal'){
    poiHealSound(now);
   }else if(kind==='door'){
@@ -6243,6 +6278,7 @@ function poiEconomyDrop(obj,state){
  if(!prior&&poiEconomyDrops.size>=24)poiEconomyDrops.delete(poiEconomyDrops.keys().next().value);
  const amount=Math.min(POI_ECONOMY_GOLD_MAX,(prior?.amount||0)+POI_ECONOMY_COIN);
  poiEconomyDrops.set(key,{x,z,amount});poiEconomyMeshDirty=true;
+ if(!state.townOwned&&amount!==(prior?.amount||0)&&typeof poiSound==='function')poiSound('enemy-loot','coin');
 }
 function poiEconomyCollect(x,z){
  if(!poiEconomyAllowed())return false;
@@ -6255,7 +6291,7 @@ function poiEconomyCollect(x,z){
  if(cache)next.claimedCaches=[...new Set([...(kit.claimedCaches||[]),cache.id])];
  if(!poiEconomyWrite(next)){toast('コインを保存できませんでした');return false}
  poiEconomyDrops.delete(key);poiEconomyCaches.delete(key);poiEconomyMeshDirty=true;
- poiEconomyRefresh();toast('コイン +'+amount);return true;
+ poiEconomyRefresh();if(typeof poiSound==='function')poiSound('item-pickup','coin');toast('コイン +'+amount);return true;
 }
 function poiEconomySnapshot(){
  return {gold:poiEconomyGold(),potions:poiHotbarHasKit()?poiHotbarRead().potions:0,
@@ -6335,6 +6371,7 @@ function poiInventoryDrop(slot){
  if(type===POI_INVENTORY_SWORD)poiHotbarEmptySlot=slot;
  poiEconomyRefresh();
  if(kit.weapon!==next.weapon)poiWalkAvatar();
+ if(typeof poiSound==='function')poiSound('inventory-drop',type);
  return result(true,null);
 }
 function poiInventoryPickup(x,z){
@@ -6351,7 +6388,7 @@ function poiInventoryPickup(x,z){
  if(!poiEconomyWrite(next)){toast('アイテムを保存できませんでした');return false}
  if(sword&&poiHotbarEmptySlot===0)poiHotbarEmptySlot=2;
  if(!sword&&poiHotbarEmptySlot===1)poiHotbarEmptySlot=2;
- poiEconomyRefresh();toast(sword?'木の剣を拾った':'薬草を拾った');return true;
+ poiEconomyRefresh();if(typeof poiSound==='function')poiSound('item-pickup',item.type);toast(sword?'木の剣を拾った':'薬草を拾った');return true;
 }
 function poiInventoryReleaseMesh(){
  if(poiInventoryMesh)gl.deleteBuffer(poiInventoryMesh.buf);
@@ -7283,7 +7320,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v148',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v149',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -7398,7 +7435,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v148';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v149';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -7612,7 +7649,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v148',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v149',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
