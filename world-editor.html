@@ -730,7 +730,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
 #app #viewWrap :is(#canvasTip,#cursorStatus,#toast,#pineAIControls,#pineAIDetail),
 body .modalBody{background-color:var(--workshop-panel-surface)!important}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v129）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v130）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -5477,7 +5477,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v129',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v130',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -5592,7 +5592,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v129';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v130';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -5804,7 +5804,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v129',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v130',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -6527,7 +6527,8 @@ function poiWalkAvatar(now=performance.now()){
  }
  poiWalkMesh=upload(m);
 }
-const POI_MONSTER_BREAK_MS=720,POI_MONSTER_BREAK_LIMIT=3;
+const POI_MONSTER_BREAK_MS=11310,POI_MONSTER_BREAK_LIMIT=5;
+const POI_MONSTER_FLIGHT_MS=760,POI_MONSTER_FADE_AT=10760;
 const poiMonsterBreaks=[],poiMonsterFragmentTemplates=new Map();
 function poiMonsterPose(obj,s,now){
  const t=Math.max(0,Math.min(1,(now-s.moveStarted)/380)),e=t*t*(3-2*t);
@@ -6558,44 +6559,101 @@ function poiMonsterFragmentTemplate(type){
   const faces=part.p.length/9;if(!faces)return [];
   cx/=faces;cy/=faces;cz/=faces;
   const a=i<5?((i+.5)/5*2-1)*Math.PI:1.2;
-  const speed=i===5?.65:1.35+(i%3)*.21;
-  return [{part,cx,cy,cz,vx:Math.cos(a)*speed,vz:Math.sin(a)*speed,vy:2.15+i%3*.30,spin:(i%2?1:-1)*(2.5+i*.24)}];
+  return [{part,cx,cy,cz,heading:a,spin:(i%2?1:-1)*(2.5+i*.24)}];
  });
  poiMonsterFragmentTemplates.set(type,parts);return parts;
 }
-function poiMonsterBreak(obj,state,now){
- const parts=poiMonsterFragmentTemplate(obj.type);
- if(!parts.length)return;
+function poiMonsterBreak(obj,state,now,random=Math.random){
+ const template=poiMonsterFragmentTemplate(obj.type);
+ if(!template.length)return;
+ const pose=poiMonsterPose(obj,state,now),facing=state.facing||0,angle=random()*Math.PI*2;
+ // The sampled landing paths often cross the same few cells. Reuse the
+ // collision results so even a break beside a wall only scans each tile once.
+ const checkedCells=new Map();
+ const canLand=(x,z)=>{
+  const key=x+','+z;
+  if(!checkedCells.has(key)){
+   const allowed=validPos(x,z)&&!(obj.y===0&&facilityCreekIndex?.water.has(key))&&
+    ((x===state.x&&z===state.z)||poiWalkCanStep(x,z));
+   checkedCells.set(key,allowed);
+  }
+  return checkedCells.get(key);
+ };
+ const parts=template.map((chunk,i)=>{
+  const [fromX,fromZ]=rot2(chunk.cx,chunk.cz,facing);
+  const nominal=i===0?.18+random()*.17:i===1?.92+random()*.20:.40+random()*.67;
+  const heading=angle+chunk.heading+(random()-.5)*.65;
+  let dx=0,dz=0;
+  const clear=(a,b)=>{
+   for(const t of [.4,.75,1]){
+    const x=Math.floor(pose.x+a*t),z=Math.floor(pose.z+b*t);
+    if(!canLand(x,z))return false;
+   }
+   return true;
+  };
+  for(const [turn,length] of [[0,nominal],[.68,nominal],[-.68,nominal],[1.9,nominal],[-1.9,nominal],[0,nominal*.5]]){
+   const a=Math.cos(heading+turn)*length,b=Math.sin(heading+turn)*length;
+   if(clear(a,b)){dx=a;dz=b;break}
+  }
+  const restScale=.59+random()*.20;
+  const yaw=chunk.spin*(.40+random()*.38),tilt=(random()-.5)*1.75;
+  const tc=Math.cos(tilt),ts=Math.sin(tilt);
+  let bottom=Infinity;
+  for(let j=0;j<chunk.part.p.length;j+=3){
+   bottom=Math.min(bottom,(chunk.part.p[j]-chunk.cx)*ts+(chunk.part.p[j+1]-chunk.cy)*tc);
+  }
+  const ground=terrainY(Math.floor(pose.x+dx),Math.floor(pose.z+dz))+(facilitySite?obj.y*1.4:0);
+  return {...chunk,fromX,fromZ,dx,dz,ground,centerY:ground+.016-bottom*restScale,
+   restScale,yaw,tilt,lift:.35+random()*.38,bounce:.04+random()*.09};
+ });
  if(poiMonsterBreaks.length>=POI_MONSTER_BREAK_LIMIT)poiMonsterBreaks.shift();
- poiMonsterBreaks.push({...poiMonsterPose(obj,state,now),parts,start:now,floor:obj.y,facing:state.facing||0});
+ poiMonsterBreaks.push({...pose,type:obj.type,parts,start:now,floor:obj.y,facing,settled:null});
  poiMonsterMeshDirty=true;
 }
 function poiMonsterClearBreaks(){
  if(!poiMonsterBreaks.length)return;
  poiMonsterBreaks.length=0;poiMonsterMeshDirty=true;
 }
+function poiMonsterBreakPhase(elapsed){
+ return elapsed<POI_MONSTER_FLIGHT_MS?'flight':elapsed<POI_MONSTER_FADE_AT?'settled':'fade';
+}
+function poiMonsterBreakSnapshot(now){
+ return poiMonsterBreaks.map(e=>({type:e.type,floor:e.floor,x:e.x,z:e.z,age:Math.max(0,now-e.start),
+  phase:poiMonsterBreakPhase(now-e.start),parts:e.parts.map(p=>({x:e.x+p.dx,y:p.ground,z:e.z+p.dz}))}));
+}
+function poiMonsterAppendDebris(m,e,t,fade=1){
+ const ease=1-Math.pow(1-t,1.65);
+ for(const c of e.parts){
+  const a=c.yaw*ease,cos=Math.cos(a),sin=Math.sin(a),tilt=c.tilt*ease;
+  const tc=Math.cos(tilt),ts=Math.sin(tilt);
+  const lift=4*t*(1-t)*c.lift+Math.max(0,Math.sin((t-.66)*Math.PI/.34))*c.bounce*(t>.66?1:0);
+  const mx=e.x+c.fromX+(c.dx-c.fromX)*ease,mz=e.z+c.fromZ+(c.dz-c.fromZ)*ease;
+  const start=e.y+c.cy;
+  const my=start+(c.centerY-start)*t+lift;
+  const size=(1+(c.restScale-1)*ease)*fade,part=c.part;
+  for(let i=0;i<part.p.length;i+=3){
+   const px=part.p[i]-c.cx,py=part.p[i+1]-c.cy,pz=part.p[i+2]-c.cz;
+   const tx=px*tc-py*ts,ty=px*ts+py*tc;
+   const [x,z]=rot2(tx*cos-pz*sin,tx*sin+pz*cos,e.facing);
+   const nx=part.n[i],ny=part.n[i+1],nz=part.n[i+2];
+   const nt=nx*tc-ny*ts,nq=nx*ts+ny*tc;
+   const [a,b]=rot2(nt*cos-nz*sin,nt*sin+nz*cos,e.facing);
+   m.p.push(mx+x*size,my+ty*size,mz+z*size);
+   m.n.push(a,nq,b);m.c.push(part.c[i],part.c[i+1],part.c[i+2]);
+  }
+ }
+}
 function poiMonsterDrawBreaks(m,now){
  for(const effect of poiMonsterBreaks){
   if(facilitySite&&effect.floor!==poiWalkLevel)continue;
-  const t=Math.max(0,(now-effect.start)*.001),life=Math.min(1,t/(POI_MONSTER_BREAK_MS*.001));
-  const scale=1-Math.max(0,(life-.58)/.42);
-  for(const c of effect.parts){
-   const turn=t*c.spin,cos=Math.cos(turn),sin=Math.sin(turn),tilt=t*c.spin*.47;
-   const tc=Math.cos(tilt),ts=Math.sin(tilt);
-   const arc=Math.max(-c.cy+.05,c.vy*t-4.8*t*t);
-   const [cx,cz]=rot2(c.cx+c.vx*t,c.cz+c.vz*t,effect.facing);
-   const part=c.part,rotate=(a,b,d)=>{
-    const p=a*tc-b*ts,q=a*ts+b*tc;
-    return [p*cos-d*sin,q,p*sin+d*cos];
-   };
-   for(let i=0;i<part.p.length;i+=3){
-    const [px,py,pz]=rotate(part.p[i]-c.cx,part.p[i+1]-c.cy,part.p[i+2]-c.cz);
-    const [nx,ny,nz]=rotate(part.n[i],part.n[i+1],part.n[i+2]);
-    const [rx,rz]=rot2(px,pz,effect.facing),[a,b]=rot2(nx,nz,effect.facing);
-    m.p.push(effect.x+cx+rx*scale,effect.y+c.cy+arc+py*scale,effect.z+cz+rz*scale);
-    m.n.push(a,ny,b);m.c.push(part.c[i],part.c[i+1],part.c[i+2]);
-   }
+  const age=now-effect.start,phase=poiMonsterBreakPhase(age);
+  if(age>=POI_MONSTER_FLIGHT_MS&&!effect.settled){
+   effect.settled=mesh();poiMonsterAppendDebris(effect.settled,effect,1);
   }
+  if(phase==='settled'){
+   for(const channel of ['p','n','c'])m[channel].push(...effect.settled[channel]);
+  }else if(phase==='flight')poiMonsterAppendDebris(m,effect,Math.max(0,age/POI_MONSTER_FLIGHT_MS));
+  else poiMonsterAppendDebris(m,effect,1,Math.max(0,1-(age-POI_MONSTER_FADE_AT)/(POI_MONSTER_BREAK_MS-POI_MONSTER_FADE_AT)));
  }
 }
 function poiMonsterRender(now,vp){
@@ -6603,7 +6661,8 @@ function poiMonsterRender(now,vp){
  for(let i=poiMonsterBreaks.length-1;i>=0;i--)if(now-poiMonsterBreaks[i].start>=POI_MONSTER_BREAK_MS){
   poiMonsterBreaks.splice(i,1);poiMonsterMeshDirty=true;
  }
- const animate=poiMonsterBreaks.some(effect=>!facilitySite||effect.floor===poiWalkLevel)||
+ const animate=poiMonsterBreaks.some(effect=>(!facilitySite||effect.floor===poiWalkLevel)&&
+  (!effect.settled||poiMonsterBreakPhase(now-effect.start)==='fade'))||
   [...poiMonsterStates.values()].some(s=>s.hp>0&&now-s.moveStarted<450);
  if(!poiMonsterMesh||poiMonsterMeshDirty||(animate&&now-poiMonsterMeshLast>48)){
   const m=mesh();
@@ -11901,7 +11960,7 @@ function facilityBoot(resume,playOnOpen=false){
     !facilityStairOpenings.has(facilityCellKey(o.x,o.z,o.y))).map(o=>o.y))].sort((a,b)=>a-b),
    active:poiWalkActive,guildRenewalSource:facilitySite.guildRenewalSource??null,
    wildSpawn:poiWildSnapshot(),
-   combat:{playerHP:poiPlayerHP,actionAt:poiWalkActionStarted,effects:poiMonsterBreaks.length,actors:[...poiMonsterStates].map(([o,s])=>
+   combat:{playerHP:poiPlayerHP,actionAt:poiWalkActionStarted,effects:poiMonsterBreaks.length,debris:poiMonsterBreakSnapshot(performance.now()),actors:[...poiMonsterStates].map(([o,s])=>
     ({type:o.type,x:s.x,z:s.z,level:o.y,hp:s.hp,wildSpawn:!!s.wildSpawn}))}})
  };
  refreshPalette();updateStats();updateSelected();showEntireMap();

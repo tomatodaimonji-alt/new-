@@ -92,7 +92,7 @@ async function faceAndSwing(page,style){
 }
 async function capture(page,name){
  if(!out)return;
- await page.screenshot({path:out+'/v128-'+name+'.png'});
+ await page.screenshot({path:out+'/v130-'+name+'.png'});
 }
 function assertNoSlime(info){
  assert.equal(info.combat.actors.filter(x=>x.wildSpawn&&x.hp>0).length,0);
@@ -166,8 +166,11 @@ async function encounter(browser){
   assert.ok(!after.actors.some(a=>a.wildSpawn&&a.hp>0),'true hit killed the temporary slime');
   assert.equal(after.effects,1,'the real death starts one transient WebGL scatter burst');
   await page.waitForFunction(()=>!document.querySelector('#poiEnemyHud .poiEnemyHealth'));
-  await capture(page,'wild-slime-after-defeat');
-  await page.waitForFunction(()=>window.__editorTest.facility().combat.effects===0);
+  await page.waitForTimeout(1150);
+  const resting=(await state(page)).combat;
+  assert.equal(resting.effects,1,'slime fragments remain after the former 720ms cutoff');
+  assert.ok(resting.debris.some(d=>d.type==='monsterSlime'&&d.phase==='settled'&&d.parts.length>=3),'actual slime fragments are resting, not stationary fake actors');
+  await capture(page,'wild-slime-settled-fragments');
   assert.deepEqual(await page.evaluate(()=>window.__editorTest.data()),oldMap,'spawn/combat never enters editor/save geometry');
   await unchanged(page);
   await page.reload();

@@ -6,12 +6,12 @@ function harness(){
  const draws=[],renders=[],calls=[];
  const ctx=vm.createContext({renders,world:[],facilitySite:{id:'base'},poiWalkLevel:0,poiWalkActive:true,
   poiMonsterStates:new Map(),poiMonsterMesh:null,poiMonsterMeshLast:-10000,poiMonsterMeshDirty:true,
-  gl:{deleteBuffer(){}},mesh:()=>({p:[],n:[],c:[]}),terrainY:()=>0,rot2:(x,z)=>[x,z],
+  gl:{deleteBuffer(){}},mesh:()=>({p:[],n:[],c:[]}),terrainY:(x,z)=>z===22?.4:0,validPos:(x,z)=>x>=0&&z>=0&&x<96&&z<56,poiWalkCanStep:(x,z)=>x!==12,facilityCreekIndex:{water:new Set(['10,20'])},rot2:(x,z)=>[x,z],
   deco(m,id){
    calls.push(id);
    for(let i=0;i<12;i++){
     const c=Math.cos(i*Math.PI/6),s=Math.sin(i*Math.PI/6);
-    m.p.push(c*.5,.25,s*.5,c*.4,.45,s*.4,c*.45,.38,s*.45);
+    m.p.push(c*.5,.06,s*.5,c*.4,i<2?.45:.24,s*.4,c*.45,.19,s*.45);
     m.n.push(c,0,s,c,0,s,c,0,s);
     m.c.push(.4,.7,.9,.4,.7,.9,.4,.7,.9);
    }
@@ -30,15 +30,40 @@ test('a dying slime reuses its colored model triangles, scatters, and vanishes f
  const q=renders.at(-1);assert.equal(q.p.length,p.p.length);
  assert.notDeepEqual(q.p,p.p);
  assert(Math.max(...q.p.filter((_,i)=>i%3===1))>Math.max(...p.p.filter((_,i)=>i%3===1))+.1);
- run('poiMonsterRender(900,null)');assert.equal(renders.at(-1).p.length,0);
+ run('poiMonsterRender(900,null)');const settled=renders.at(-1);
+ assert.equal(settled.p.length,p.p.length);
+ const count=renders.length;
+ run('poiMonsterRender(4200,null);poiMonsterRender(9900,null)');
+ assert.equal(renders.length,count,'static debris must reuse the same batch');
+ assert.equal(run('poiMonsterBreakSnapshot(9900)[0].phase'),'settled');
+ run('poiMonsterRender(11050,null)');assert.equal(run('poiMonsterBreakSnapshot(11050)[0].phase'),'fade');
+ run('poiMonsterRender(12000,null)');assert.equal(renders.at(-1).p.length,0);
 });
 test('short effects are capped, floor-specific, and cleared without game-world mutation',()=>{
  const {ctx,run,renders,calls}=harness();
  run("for(let i=0;i<8;i++)poiMonsterBreak({type:'monsterSlime',y:-1,x:i,z:1},{x:i,z:1,moveStarted:-10000},0);poiMonsterRender(0,null)");
  assert.equal(renders.at(-1).p.length,0,'another floor must not show it');
  ctx.poiWalkLevel=-1;
- run('poiMonsterRender(100,null)');assert.equal(renders.at(-1).p.length,108*3);
+ run('poiMonsterRender(100,null)');assert.equal(renders.at(-1).p.length,108*5);
  assert.deepEqual(calls,['monsterSlime']);
  run('poiMonsterClearBreaks();poiMonsterRender(101,null)');assert.equal(renders.at(-1).p.length,0);
  assert.deepEqual(ctx.world,[]);
+});
+
+test('all creature shapes persist and use settled locations near the center or within roughly a tile, never blocked terrain',()=>{
+ const {run,calls}=harness();
+ run(`['monsterSlime','monsterGoblin','monsterSkeleton','monsterDragon','monsterSlime'].forEach((type,i)=>{
+  poiMonsterBreak({type,x:11,z:20,y:0},{x:11,z:20,moveStarted:-10000},0,()=>i/5);
+ });poiMonsterRender(900,null)`);
+ assert.deepEqual(calls,['monsterSlime','monsterGoblin','monsterSkeleton','monsterDragon']);
+ const snapshot=JSON.parse(run('JSON.stringify(poiMonsterBreakSnapshot(900))'));
+ for(const effect of snapshot){
+  assert(effect.parts.some(p=>Math.hypot(p.x-effect.x,p.z-effect.z)<.5),'center breakup');
+  assert(effect.parts.some(p=>Math.hypot(p.x-effect.x,p.z-effect.z)>.65),'outer breakup');
+  for(const {x,z} of effect.parts){
+   assert(Math.hypot(x-effect.x,z-effect.z)<=1.25);
+   assert.notEqual(Math.floor(x),12,'wall');assert.notEqual(Math.floor(x)+','+Math.floor(z),'10,20','deep creek');
+  }
+ }
+ assert.notDeepEqual(snapshot[0].parts,snapshot[4].parts,'same monster type lands a little differently each time');
 });
