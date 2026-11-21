@@ -32,13 +32,15 @@ function harness(id) {
   poiPianoKey=(...args)=>notes.push(args);
   poiAudioStart()
  `);
- const fx=kind=>{
-  const start=nodes.length;run('poiSound('+JSON.stringify(kind)+')');
+ const fx=(kind,weapon,timing=false)=>{
+  const start=nodes.length;run('poiSound('+JSON.stringify(kind)+','+JSON.stringify(weapon)+')');
   return nodes.slice(start).filter(n=>n.kind==='noise'||n.kind==='osc').map(n=>{
    const f=n.next?.kind==='filter'?n.next:null,type=f?'filter':'osc';
    const g=(f||n).next.gain,peak=g.events.find(e=>e[0]==='peak');
    assert.equal((f||n).next.next.kind,'effects');
-   return [type,f?.frequency.value??n.frequency.events[0][1],peak[1],+((peak[2]-n.startTime)*1000).toFixed(3)];
+   const row=[type,f?.frequency.value??n.frequency.events[0][1],peak[1],+((peak[2]-n.startTime)*1000).toFixed(3)];
+   if(timing)row.push(+((n.startTime-now)*1000).toFixed(3));
+   return row;
   });
  };
  return {nodes,now,notes,timers,writes,fx,run,wind:()=>nodes.find(n=>n.kind==='filter'&&n.type==='lowpass').next.gain.value,
@@ -69,4 +71,25 @@ test('base footsteps and swings have warmer spectrum and rounded attacks; unrela
  assert.equal(b.run('poiAudioTransient.size'),0);
  assert.equal(b.run('poiCreekAudio===null'),true);
  assert.deepEqual(b.writes,[]);
+});
+
+test('wooden sword has a distinct soft cut and woody contact scheduled at the blade crossing',()=>{
+ const b=harness('base');
+ const swing=b.fx('attack','equipWoodSword',true),hit=b.fx('hit','equipWoodSword',true);
+ assert.deepEqual(swing.map(r=>r[1]),[940,1630,126]);
+ assert.deepEqual(hit.map(r=>r[1]),[515,870,195]);
+ assert.equal(Math.min(...hit.map(r=>r[4])),108);
+ assert.ok(swing[0][4]+swing[0][3]>70&&swing[0][4]+swing[0][3]<116,'air peaks during the swing');
+ assert.ok([...swing,...hit].every(r=>r[2]<.48));
+ assert.deepEqual(b.fx('hit','unrecognizedWeapon'),b.fx('hit'));
+});
+test('existing weapon materials have different offscreen cue profiles and respect lifecycle and mute',()=>{
+ const b=harness('base');
+ const weapons=['equipStick','equipClub','equipWoodSword','equipStoneSword','equipIronSword'];
+ for(const kind of ['attack','hit']){
+  const spectra=weapons.map(id=>JSON.stringify(b.fx(kind,id).map(r=>r[1])));
+  assert.equal(new Set(spectra).size,weapons.length);
+ }
+ b.run('poiAudioLevels.se=0');assert.deepEqual(b.fx('attack','equipWoodSword'),[]);
+ b.run('poiAudioLevels.se=90;document.hidden=true');assert.deepEqual(b.fx('hit','equipWoodSword'),[]);
 });

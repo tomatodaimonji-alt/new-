@@ -31,3 +31,17 @@ test('facility center attack can hit current-floor monsters without writing any 
  assert.equal(active.hp,15);
  assert.equal(saveCalls,0);
 });
+
+test('attack and contact route the same equipped weapon captured before the animation',()=>{
+ const calls=[],actor={hp:50,x:4,z:2};
+ let chosen='equipWoodSword';
+ const ctx=vm.createContext({poiWalkActive:true,facilitySite:{id:'base'},poiWalkLevel:0,
+  poiWalkActionWeapon:null,poiEquippedWeapon:()=>chosen,poiPlayerAttackDamage:weapon=>weapon==='equipWoodSword'?28:20,
+  poiWalkFacing:1,poiWalkX:3,poiWalkZ:2,poiAttackReady:0,poiWalkActionStarted:0,
+  performance:{now:()=>500},poiWalkAvatar:()=>{chosen=null},poiSound:(...args)=>calls.push(args),
+  poiMonsterAt:()=>[{},actor],toast(){},terrainY:()=>0,poiDamageNumber(){},poiMonsterMeshDirty:false,pineGameActive:false});
+ const js=extract('function poiWalkAction(', 'function poiWalkReset(');
+ vm.runInContext(js+'\npoiWalkAction();',ctx);
+ assert.deepEqual(calls,[['attack','equipWoodSword'],['hit','equipWoodSword']]);
+ assert.equal(actor.hp,22);
+});

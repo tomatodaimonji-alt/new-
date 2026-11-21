@@ -3,15 +3,16 @@ const html=fs.readFileSync(process.env.HTML||path.join(__dirname,'../world-edito
 function harness(saved=null){
  const uis={poiPartyHud:{},poiPlayerHp:{},poiPlayerHpValue:{},poiHotbar:{}};
  const slots=Array.from({length:6},(_,i)=>({
-  dataset:{hotbarSlot:String(i)},icon:{},count:{},attrs:{},
+  dataset:{hotbarSlot:String(i)},icon:{replaceChildren(child){this.firstChild=child;}},count:{},attrs:{},
   querySelector(k){return k==='.hotbar-icon'?this.icon:this.count},
   setAttribute(k,v){this.attrs[k]=v},removeAttribute(k){delete this.attrs[k]}
  }));
- const log=[];
+ const log=[],art=[];
  const x=vm.createContext({
   $:key=>uis[key]||null,poiWalkActive:true,pineAIActive:false,facilitySite:{id:'base'},poiPlayerHP:100,
   POI_PLAYER_MAX_HP:100,POI_PLAYER_ATTACK:20,poiWalkAvatar:()=>{},
-  document:{querySelectorAll:()=>slots},toast:s=>log.push(s),localStorage:{
+  document:{querySelectorAll:()=>slots,createElement:tag=>({tag,dataset:{}})},
+  drawWallThumbnail:(cv,id,options)=>{art.push({cv,id,options});return true;},toast:s=>log.push(s),localStorage:{
    getItem:k=>{assert.equal(k,'world-workshop-hotbar-v1');return saved;},
    setItem:(k,v)=>{assert.equal(k,'world-workshop-hotbar-v1');saved=v;}
   }
@@ -21,7 +22,7 @@ function harness(saved=null){
  const c=html.indexOf('function poiCombatHud('),d=html.indexOf('function poiDamageNumber(',c);
  const run=s=>vm.runInContext(s,x);
  run(html.slice(a,b)+html.slice(c,d));
- return {run,uis,slots,log,stored:()=>JSON.parse(saved)};
+ return {run,uis,slots,log,art,stored:()=>JSON.parse(saved)};
 }
 test('six slots show sword and three recovery potions, begin unarmed, and update numeric HP',()=>{
  const {run,uis,slots,stored}=harness();
@@ -68,4 +69,16 @@ test('loads valid empty stock, does not heal or spend extra, and supports resele
  run('poiHotbarUse(0);poiCombatHud()');
  assert.equal(uis.poiPlayerHpValue.textContent,'35/100');
  assert.deepEqual(stored(),{version:1,weapon:null,potions:0});
+});
+
+test('wooden sword uses one cached transparent rendering from the same catalogue renderer',()=>{
+ const {run,slots,art}=harness();
+ run('poiHotbarRender()');
+ const icon=slots[1].icon.firstChild;
+ assert.equal(icon.tag,'canvas');assert.equal(icon.dataset.itemModel,'equipWoodSword');
+ assert.deepEqual([icon.width,icon.height],[96,96]);
+ assert.equal(art[0].id,'equipWoodSword');
+ assert.deepEqual({...art[0].options},{transparent:true,fit:true,rot:0});
+ run('poiHotbarUse(1);poiHotbarUse(0);poiPlayerHP=50;poiHotbarUse(2)');
+ assert.equal(art.length,1);assert.equal(slots[1].icon.firstChild,icon);
 });

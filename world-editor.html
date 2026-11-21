@@ -720,7 +720,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
 #app #viewWrap :is(#canvasTip,#cursorStatus,#toast,#pineAIControls,#pineAIDetail),
 body .modalBody{background-color:var(--workshop-panel-surface)!important}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v124）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v125）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -1215,14 +1215,14 @@ function characterHuman(m,x,y,z,villager,armPose=null){
   const start=m.p.length;
   cube(m,x+side*.272,y+.53,z,.135,.46,.17,villager?linen:skin);
   cube(m,x+side*.272,y+.49,z+.028,.145,.12,.17,skin);
-  const angle=armPose?.[side===1?'strike':'guard'];
-  if(angle){
-   const cs=Math.cos(angle),sn=Math.sin(angle),shoulder=y+.965;
+  const angle=armPose?.[side===1?'strike':'guard']||0;
+  const sweep=side===1?(armPose?.sweep||0):0;
+  if(angle||sweep){
+   const rotate=characterArmRotation(angle,sweep),shoulder=y+.965,pivotX=x+side*.272;
    for(let i=start;i<m.p.length;i+=3){
-    const a=m.p[i+1]-shoulder,b=m.p[i+2]-z;
-    m.p[i+1]=shoulder+a*cs+b*sn;m.p[i+2]=z+b*cs-a*sn;
-    const ny=m.n[i+1],nz=m.n[i+2];
-    m.n[i+1]=ny*cs+nz*sn;m.n[i+2]=nz*cs-ny*sn;
+    const [a,b,c]=rotate(m.p[i]-pivotX,m.p[i+1]-shoulder,m.p[i+2]-z);
+    m.p[i]=pivotX+a;m.p[i+1]=shoulder+b;m.p[i+2]=z+c;
+    [m.n[i],m.n[i+1],m.n[i+2]]=rotate(m.n[i],m.n[i+1],m.n[i+2]);
    }
   }
  }
@@ -1247,6 +1247,13 @@ function characterHuman(m,x,y,z,villager,armPose=null){
 // coordinates rotate through deco() just like the existing furniture pieces.
 const EXPANSION_IDS=new Set(["roofTile","roofThatch","roofPlank","roofTileRidge","roofThatchRidge","roofPlankRidge","roofTileEnd","roofThatchEnd","roofPlankEnd","roofCorner","chimney","archStone","timberWall","balcony","roofRuin","fallenLog","exposedRoots","mushroomPatch","giantMushroom","vineWall","watersideRock","flowerField","tallGrass","bedLuxury","chairWood","chairClassic","stoolRound","benchWood","bookshelf","wardrobe","fireplace","lantern","candleStand","barrel","crate","sack","displayShelf","brokenPillar","crackedWall","ironGate","gravestone","sarcophagus","stairDown","ancientAltar","rubble"]);
 // Faceted ring loft: rounded silhouettes built from light-weight triangle meshes.
+function characterArmRotation(pitch,sweep){
+ const cp=Math.cos(pitch),sp=Math.sin(pitch),cy=Math.cos(sweep),sy=Math.sin(sweep);
+ return (x,y,z)=>{
+  const f=z*cp-y*sp;
+  return [x*cy+f*sy,y*cp+z*sp,f*cy-x*sy];
+ };
+}
 function roundStack(m,x,y,z,levels,sides,baseColor,capTop=true){
  const rings=levels.map(([h,rx,rz])=>Array.from({length:sides},(_,i)=>{const a=2*Math.PI*i/sides;return [x+Math.cos(a)*rx,y+h,z+Math.sin(a)*rz]}));
  for(let k=0;k<rings.length-1;k++)for(let i=0;i<sides;i++){
@@ -5131,12 +5138,40 @@ function poiAudioThud(when,startFrequency,endFrequency,duration,volume,attack=.0
  o.connect(g).connect(poiAudioEffects);o.start(when);poiAudioTransient.add(o);o.stop(when+duration+.015);
  o.onended=()=>{poiAudioTransient.delete(o);o.disconnect();g.disconnect()};
 }
-function poiSound(kind){
+// Weapon IDs are shared with the existing equipment catalog. These are
+// synthesized through the same effects bus; no sound files or frame polling.
+const POI_WEAPON_SE={
+ equipStick:      {swing:[790,1220,108],impact:[445,730,150],weight:.82,cut:.92},
+ equipClub:       {swing:[610,980,104],impact:[350,620,133],weight:1.20,cut:.78},
+ equipWoodSword:  {swing:[940,1630,126],impact:[515,870,195],weight:1,cut:1},
+ equipStoneSword: {swing:[815,1270,112],impact:[660,1260,162],weight:1.10,cut:.86},
+ equipIronSword:  {swing:[1100,1940,142],impact:[1060,1820,215],weight:.94,cut:1.08}
+};
+function poiWeaponSound(kind,sound,now){
+ if(kind==='attack'){
+  const [air,edge,body]=sound.swing;
+  poiAudioNoiseBurst(now+.050,.132,air,.91,.36*sound.cut,.048);
+  poiAudioNoiseBurst(now+.078,.084,edge,1.22,.17*sound.cut,.027);
+  poiAudioThud(now+.059,body,62,.13,.15*sound.weight,.035);
+ }else{
+  // Strike contact aligns with the blade crossing at 108 ms. The action
+  // still checks the same target at button press, with no deferred game state.
+  const contact=now+.108,[knock,edge,body]=sound.impact;
+  poiAudioNoiseBurst(contact,.104,knock,1.14,.31*sound.weight,.008);
+  poiAudioNoiseBurst(contact+.004,.079,edge,1.06,.21,.009);
+  poiAudioThud(contact,body,73,.126,.24*sound.weight,.012);
+ }
+}
+function poiSound(kind,weapon=null){
  if(!poiWalkActive||!poiAudioEnabled||!poiAudioAllowed())return;
  poiAudioStart();const ctx=poiAudioContext;if(!ctx||ctx.state!=='running')return;
  const now=ctx.currentTime;
  try{
-  if(kind==='door'){
+  const weaponSound=(kind==='attack'||kind==='hit')&&Object.prototype.hasOwnProperty.call(POI_WEAPON_SE,weapon)
+   ?POI_WEAPON_SE[weapon]:null;
+  if(weaponSound){
+   if(poiAudioLevels.master>0&&poiAudioLevels.se>0)poiWeaponSound(kind,weaponSound,now);
+  }else if(kind==='door'){
    if(poiAudioLevels.master<=0||poiAudioLevels.se<=0)return;
    // Dry latch, a brief hinge scrape, then the loose plank seating.
    // These are broadband filtered, not oscillator pitches; the effects bus
@@ -5197,7 +5232,7 @@ function poiIsMonster(type){return Object.prototype.hasOwnProperty.call(POI_MONS
 // Quick inventory belongs to Game World play; never change a map or a POI to store it.
 const POI_HOTBAR_KEY='world-workshop-hotbar-v1';
 const POI_HOTBAR_POTION_MAX=3,POI_HOTBAR_HEAL=30,POI_HOTBAR_SWORD_BONUS=8;
-let poiHotbarState=null;
+let poiHotbarState=null,poiWoodSwordIcon=null;
 function poiHotbarHasKit(){return facilitySite?.id==='base'}
 function poiHotbarRead(){
  if(poiHotbarState)return poiHotbarState;
@@ -5212,6 +5247,13 @@ function poiHotbarSave(){
 }
 function poiEquippedWeapon(){return poiHotbarHasKit()?poiHotbarRead().weapon:null}
 function poiPlayerAttackDamage(weapon=poiEquippedWeapon()){return POI_PLAYER_ATTACK+(weapon==='equipWoodSword'?POI_HOTBAR_SWORD_BONUS:0)}
+function poiHotbarSwordIcon(){
+ if(poiWoodSwordIcon)return poiWoodSwordIcon;
+ const cv=document.createElement('canvas');
+ cv.width=cv.height=96;cv.dataset.itemModel='equipWoodSword';
+ if(drawWallThumbnail(cv,'equipWoodSword',{transparent:true,fit:true,rot:0}))poiWoodSwordIcon=cv;
+ return poiWoodSwordIcon;
+}
 function poiHotbarRender(){
  if(!$('poiHotbar'))return;
  const kit=poiHotbarHasKit()?poiHotbarRead():null;
@@ -5225,7 +5267,9 @@ function poiHotbarRender(){
   else button.removeAttribute('aria-pressed');
   button.disabled=!slot||(i===2&&!kit.potions);
   button.setAttribute('aria-disabled',String(button.disabled));
-  button.querySelector('.hotbar-icon').textContent=slot?.[1]||'';
+  const icon=button.querySelector('.hotbar-icon'),preview=kit&&i===1?poiHotbarSwordIcon():null;
+  if(preview){if(icon.firstChild!==preview)icon.replaceChildren(preview)}
+  else{const glyph=slot?.[1]||'';if(icon.textContent!==glyph||icon.firstElementChild)icon.textContent=glyph}
   button.querySelector('.hotbar-count').textContent=kit&&i===2?String(kit.potions):'';
  }
 }
@@ -5291,7 +5335,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v124',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v125',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -5406,7 +5450,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v124';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v125';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -5618,7 +5662,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v124',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v125',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -6271,6 +6315,22 @@ function poiWalkPunchPose(ms){
  }
  return {strike,guard,twist};
 }
+// Shoulder winds out and back, crosses the forward attack direction at
+// 108 ms, then follows the blade down across the opposite side.
+const POI_SWORD_POSES=[
+ [0,0,0,0,.18,0,0],
+ [56,2.48,1.04,-.26,.51,2.05,.30],
+ [108,1.62,.035,.13,1.41,.02,.66],
+ [159,1.18,-1.05,.37,1.92,-1.31,.43],
+ [260,0,0,0,.18,0,0]
+];
+function poiWalkSwordPose(ms){
+ if(ms<=0||ms>=260)return null;
+ const i=POI_SWORD_POSES.findIndex(p=>p[0]>=ms);
+ const a=POI_SWORD_POSES[i-1],b=POI_SWORD_POSES[i],t=(ms-a[0])/(b[0]-a[0]),k=t*t*(3-2*t);
+ const [strike,sweep,twist,edgeTilt,edgeYaw,guard]=a.slice(1).map((v,j)=>v+(b[j+1]-v)*k);
+ return {strike,sweep,twist,edgeTilt,edgeYaw,guard};
+}
 let poiWalkActionWeapon,poiWalkAttackPosePending=false;
 function poiWalkAvatar(now=performance.now()){
  if(poiWalkMesh){gl.deleteBuffer(poiWalkMesh.buf);poiWalkMesh=null}
@@ -6280,26 +6340,24 @@ function poiWalkAvatar(now=performance.now()){
  const held=ms>=0&&ms<260&&poiWalkActionWeapon!==undefined?poiWalkActionWeapon:
   typeof poiEquippedWeapon==='function'?poiEquippedWeapon():null;
  const weapon=EQUIPMENT_IDS.includes(held)?held:null;
- const unarmed=weapon?null:poiWalkPunchPose(ms);
- characterHuman(body,0,0,0,false,unarmed);
+ const pose=weapon?poiWalkSwordPose(ms):poiWalkPunchPose(ms);
+ characterHuman(body,0,0,0,false,pose);
  const t=Math.max(0,Math.min(1,(now-poiWalkStarted)/POI_WALK_MS)),smooth=t;
  const x=poiWalkViewX+.5;
  const z=poiWalkViewZ+.5;
  const y=poiCreekPlayerHeight(now)+poiWalkLevel*1.4+.03;
  const walking=t<1&&(poiWalkFromX!==poiWalkX||poiWalkFromZ!==poiWalkZ);
  const stride=walking?Math.sin(t*Math.PI)*.12:0;
- const actionPhase=weapon&&ms>=0?Math.max(0,1-ms/260):0;
- const twist=unarmed?.twist||0,twistC=Math.cos(twist),twistS=Math.sin(twist);
+ const twist=pose?.twist||0,twistC=Math.cos(twist),twistS=Math.sin(twist);
  const r=[2,3,0,1][poiWalkFacing];
  for(let i=0;i<body.p.length;i+=3){
   const lx=body.p[i],ly=body.p[i+1],lz=body.p[i+2];
   const swing=ly<.54&&Math.abs(lx)<.22?(lx<0?-stride:stride):
     ly>.45&&ly<.85&&Math.abs(lx)>.23?(lx<0?stride:-stride)*.36:0;
-  const punch=actionPhase>0&&ly>.45&&ly<.85&&lx>.23?actionPhase*.40:0;
   const c=ly>.49?twistC:1,s=ly>.49?twistS:0;
   // Legs stay planted; the torso leads the shoulder through the punch.
-  const armSwing=unarmed&&ly>.45&&Math.abs(lx)>.23?0:swing;
-  const localZ=lz+armSwing+punch;
+  const armSwing=pose&&ly>.45&&Math.abs(lx)>.23?0:swing;
+  const localZ=lz+armSwing;
   const [rx,rz]=rot2(lx*c-localZ*s,localZ*c+lx*s,r);
   m.p.push(x+rx,y+ly*.90,z+rz);
   const [nx,nz]=rot2(body.n[i]*c-body.n[i+2]*s,body.n[i+2]*c+body.n[i]*s,r);
@@ -6308,14 +6366,21 @@ function poiWalkAvatar(now=performance.now()){
  }
  if(weapon){
   const prop=mesh();deco(prop,weapon,0,0,0,0);
-  const angle=.18+actionPhase*.46,cs=Math.cos(angle),sn=Math.sin(angle);
+  // Grip uses the same shoulder transform and torso turn as the fist
+  // geometry. The only independent motion is wrist orientation.
+  const arm=characterArmRotation(pose?.strike||0,pose?.sweep||0);
+  const [hx,hy,hz]=arm(0,.55-.965,.028);
+  const handZ=hz-(pose?0:stride*.36);
+  const gx=(.272+hx)*twistC-handZ*twistS,gz=handZ*twistC+(.272+hx)*twistS;
+  const gy=(.965+hy)*.90;
+  const wrist=characterArmRotation(-(pose?.edgeTilt??.18),pose?.edgeYaw||0);
   for(let i=0;i<prop.p.length;i+=3){
-   const ly=(prop.p[i+1]-.25)*.68,lz=prop.p[i+2]*.53;
-   const [px,pz]=rot2(.272+prop.p[i]*.58,.03-stride*.36+actionPhase*.40+ly*sn+lz*cs,r);
-   const ny=prop.n[i+1]/.68,nz=prop.n[i+2]/.53,nx=prop.n[i]/.58;
-   const [dx,dz]=rot2(nx,ny*sn+nz*cs,r),dy=ny*cs-nz*sn,n=Math.hypot(dx,dy,dz)||1;
-   m.p.push(x+px,y+.55*.90+ly*cs-lz*sn,z+pz);
-   m.n.push(dx/n,dy/n,dz/n);m.c.push(prop.c[i],prop.c[i+1],prop.c[i+2]);
+   const [wx,wy,wz]=wrist(prop.p[i]*.58,(prop.p[i+1]-.25)*.68,prop.p[i+2]*.53);
+   const [px,pz]=rot2(gx+wx,gz+wz,r);
+   const [nx,ny,nz]=wrist(prop.n[i]/.58,prop.n[i+1]/.68,prop.n[i+2]/.53);
+   const [dx,dz]=rot2(nx,nz,r),n=Math.hypot(dx,ny,dz)||1;
+   m.p.push(x+px,y+gy+wy,z+pz);
+   m.n.push(dx/n,ny/n,dz/n);m.c.push(prop.c[i],prop.c[i+1],prop.c[i+2]);
   }
  }
  poiWalkMesh=upload(m);
@@ -6563,11 +6628,11 @@ function poiWalkAction(){
  // The hit check below is independent of the visible animation.
  if(pineGameActive)workshopAdventureResumeQuiet=false;
  poiWalkActionWeapon=poiEquippedWeapon();
- poiAttackReady=now+300;poiWalkActionStarted=now;poiWalkAvatar(now);poiSound('attack');
+ poiAttackReady=now+300;poiWalkActionStarted=now;poiWalkAvatar(now);poiSound('attack',poiWalkActionWeapon);
  const delta=[[0,-1],[1,0],[0,1],[-1,0]][poiWalkFacing];
  const x=poiWalkX+delta[0],z=poiWalkZ+delta[1];
  const monster=poiMonsterAt(x,z);
- if(monster){const [obj,state]=monster,amount=poiPlayerAttackDamage(poiWalkActionWeapon);state.hp=Math.max(0,state.hp-amount);poiSound('hit');poiDamageNumber(state.x+.5,state.z+.5,terrainY(state.x,state.z)+1.8+(facilitySite?poiWalkLevel*1.4:0),amount);if(!state.hp)toast('モンスターを倒した');poiMonsterMeshDirty=true;if(pineGameActive)pineGameSave(true);return}
+ if(monster){const [obj,state]=monster,amount=poiPlayerAttackDamage(poiWalkActionWeapon);state.hp=Math.max(0,state.hp-amount);poiSound('hit',poiWalkActionWeapon);poiDamageNumber(state.x+.5,state.z+.5,terrainY(state.x,state.z)+1.8+(facilitySite?poiWalkLevel*1.4:0),amount);if(!state.hp)toast('モンスターを倒した');poiMonsterMeshDirty=true;if(pineGameActive)pineGameSave(true);return}
  // Interactions without an assigned action are intentionally silent.
 }
 function poiWalkReset(x,z){
@@ -7728,14 +7793,31 @@ const WALL_CHOICES=[
  ['wall','基本素材','標準的な明るい石の建材'],['stonewall','石積み','重厚な石造り'],['woodwall','木材','縦板と補強材'],
  ['brickwall','レンガ','赤いレンガ積み'],['plasterwall','漆喰','白壁と木枠'],['mosswall','苔むした石','古びた石と苔'],['ironwall','鉄板','金属パネルと鋲']
 ];
-function drawWallThumbnail(cv,id){
- const g=cv.getContext('2d');if(!g)return;
- const w=cv.width,h=cv.height;g.fillStyle='#263c32';g.fillRect(0,0,w,h);
- const m=mesh();if(isFloor(id))addFloorTile(m,-.5,-.5,id,256,ROAD_IDS.has(id)&&!id.endsWith('Full')?5:0);else if(id==='pineLandingCraft')pineLandingCraftGeometry(m,0,0);else if(id.startsWith('pineHarbor'))pineHarborGeometry(m,{x:0,z:0,y:0,type:id,rot:0});else deco(m,id,0,0,0,rotation);
+function drawWallThumbnail(cv,id,{transparent=false,fit=false,rot=rotation}={}){
+ const g=cv.getContext('2d');if(!g)return false;
+ const w=cv.width,h=cv.height;
+ if(transparent)g.clearRect(0,0,w,h);
+ else{g.fillStyle='#263c32';g.fillRect(0,0,w,h)}
+ const m=mesh();if(isFloor(id))addFloorTile(m,-.5,-.5,id,256,ROAD_IDS.has(id)&&!id.endsWith('Full')?5:0);else if(id==='pineLandingCraft')pineLandingCraftGeometry(m,0,0);else if(id.startsWith('pineHarbor'))pineHarborGeometry(m,{x:0,z:0,y:0,type:id,rot:0});else deco(m,id,0,0,0,rot);
  const faces=[];
- const project=(x,y,z)=>id==='pineLandingCraft'?
+ let project=(x,y,z)=>id==='pineLandingCraft'?
   [w/2+(x-z)*w*.045,h*.55+(x+z)*h*.030-y*h*.070]:
   [w/2+(x-z)*w*.30,(isFloor(id)?h*.51:h*.83)+(x+z)*h*.16-y*h*.38];
+ if(fit&&m.p.length){
+  // A tight three-quarter crop, tilted in image space without touching the mesh.
+  const c=Math.cos(.40),s=Math.sin(.40);
+  const view=(x,y,z)=>{
+   const u=x-.46*z,v=(x+z)*.21-y;
+   return [u*c-v*s,u*s+v*c];
+  };
+  let l=Infinity,t=Infinity,r=-Infinity,b=-Infinity;
+  for(let i=0;i<m.p.length;i+=3){
+   const [u,v]=view(m.p[i],m.p[i+1],m.p[i+2]);
+   l=Math.min(l,u);r=Math.max(r,u);t=Math.min(t,v);b=Math.max(b,v);
+  }
+  const scale=.86*Math.min(w/Math.max(.001,r-l),h/Math.max(.001,b-t)),cx=(l+r)*.5,cy=(t+b)*.5;
+  project=(x,y,z)=>{const [u,v]=view(x,y,z);return [w*.5+(u-cx)*scale,h*.5+(v-cy)*scale]};
+ }
  for(let i=0;i<m.p.length;i+=9){
   const p1=project(m.p[i],m.p[i+1],m.p[i+2]),p2=project(m.p[i+3],m.p[i+4],m.p[i+5]),p3=project(m.p[i+6],m.p[i+7],m.p[i+8]);
   const xx=(m.p[i]+m.p[i+3]+m.p[i+6])/3,yy=(m.p[i+1]+m.p[i+4]+m.p[i+7])/3,zz=(m.p[i+2]+m.p[i+5]+m.p[i+8])/3;
@@ -7746,6 +7828,7 @@ function drawWallThumbnail(cv,id){
  faces.sort((a,b)=>a.depth-b.depth);
  for(const f of faces){g.beginPath();g.moveTo(...f.p[0]);g.lineTo(...f.p[1]);g.lineTo(...f.p[2]);g.closePath();g.fillStyle=f.color;g.fill()}
  if(SIGN_TYPES.includes(id)){const art=makeSignArtwork(id);g.drawImage(art,w*.35,h*.23,w*.41,h*.31)}
+ return faces.length>0;
 }
 
 const NATURAL_FLOORS=[
