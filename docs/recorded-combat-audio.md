@@ -1,6 +1,6 @@
 # Recorded combat audio in world-editor.html
 
-Starting in v132, the game uses the two *B* edits selected in the Foley audition. v133 remasters the same CC0 recordings, aligning the two wood transients and layering more recorded flecks into the wet tail. Each edit is assembled from recordings individually marked [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) on its Freesound source page. These are sound effects created from recordings of objects and materials, not sampled from a commercial game.
+Starting in v132, the game uses the two *B* edits selected in the Foley audition. v133 remasters the same CC0 recordings, aligning the two wood transients and layering more recorded flecks into the wet tail. v134 emphasizes the single wooden crack and extends the burst with irregular recorded drops landing through the tail. Each edit is assembled from recordings individually marked [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) on its Freesound source page. These are sound effects created from recordings of objects and materials, not sampled from a commercial game.
 
 | Game cue | Source recordings |
 |---|---|
@@ -11,5 +11,5 @@ The prepared mono edits were trimmed, filtered and layered. The HTML holds the c
 
 | Cue | Frames | PCM SHA-256 |
 |---|---:|---|
-| Wood | 5568 | `5c17aa94957de450ca20b65a609c43f53518241161bcad0132c41d4d4bf6dbae` |
-| Defeat | 13680 | `1a49f600444177ccd10f7eaa6c209e58cebc71e7df99dd7aaaf9b4c4279fd002` |
+| Wood | 6048 | `dbde51a5692c23eed2e7a5f65e0482457c4e9bb509180a71e6ec3f003b182012` |
+| Defeat | 20808 | `7fe72efca8e582c4798277937006cbb5107e933bf7d27b848f727e2cbeb52587` |

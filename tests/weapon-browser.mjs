@@ -127,7 +127,7 @@ function observe(){
   let peak=0,allFinite=true;
   for(const sample of signal){peak=Math.max(peak,Math.abs(sample));allFinite&&=Number.isFinite(sample);}
   const result={id:++serial,channels:buffer.numberOfChannels,frames:signal.length,rate,duration:buffer.duration,
-   peak,allFinite,exact16,head:rms(.004,.025),body:rms(.03,.065),sustain:rms(.10,.24),tail:rms(buffer.duration*.78,buffer.duration),last:signal.at(-1)};
+   peak,allFinite,exact16,head:rms(.004,.025),body:rms(.03,.065),sustain:rms(.10,.24),remainingAfterOldTail:rms(.59,.73),tail:rms(buffer.duration*.78,buffer.duration),last:signal.at(-1)};
   buffers.set(buffer,result);
   digests.push(crypto.subtle.digest('SHA-256',bytes).then(hash=>{
    result.sha256=Array.from(new Uint8Array(hash),x=>x.toString(16).padStart(2,'0')).join('');
@@ -192,8 +192,8 @@ const swordIcon='#poiHotbar [data-hotbar-slot="1"] canvas[data-item-model="equip
 const attack='#poiWalkAction';
 // PCM-data SHA-256 from the owner-approved WAVs (RIFF headers excluded).
 const approved={
- wood:{frames:5568,duration:.232,peak:28999,sha:'5c17aa94957de450ca20b65a609c43f53518241161bcad0132c41d4d4bf6dbae'},
- wet:{frames:13680,duration:.570,peak:29326,sha:'1a49f600444177ccd10f7eaa6c209e58cebc71e7df99dd7aaaf9b4c4279fd002'}
+ wood:{frames:6048,duration:.252,peak:30146,sha:'dbde51a5692c23eed2e7a5f65e0482457c4e9bb509180a71e6ec3f003b182012'},
+ wet:{frames:20808,duration:.867,peak:30146,sha:'7fe72efca8e582c4798277937006cbb5107e933bf7d27b848f727e2cbeb52587'}
 };
 function approvedPcm(pcm,key){
  assert.deepEqual([pcm.channels,pcm.rate,pcm.frames],[1,24000,approved[key].frames],'approved mono 24k frame count '+key);
@@ -270,13 +270,14 @@ async function soundCapture(page,weapon,expectHit,prev=false,expectDeath=false){
   // while decoding a new buffer; guard against early/no-delay scheduling.
   assert.ok(delay>=.060&&delay<=.120,'wood contact remains scheduled near 108 ms, got '+delay);
   approvedPcm(contact.pcm,'wood');
-  exact(contact.peak,.72,'wood impact gain');
+  exact(contact.peak,.78,'wood impact gain');
  }
  if(expectDeath){
   const wet=segment.at(-1);
   assert.ok(Math.abs(wet.when-segment[swing.length].when-.018)<.010,'distinct wet texture follows the contact, never a pre-swing');
-  exact(wet.peak,.65,'wet texture gain through established SE levels');
+  exact(wet.peak,.80,'wet texture gain through established SE levels');
   approvedPcm(wet.pcm,'wet');
+  assert.ok(wet.pcm.remainingAfterOldTail>.025,'decoded splatter has actual energy after the v133 clip ended, not zero padding');
   if(weapon)assert.notEqual(wet.pcm.id,segment[0].pcm.id,'wet defeat buffer differs from cached dry wood material');
  }
  return segment.map(({when,...rest})=>({...rest,delay:Math.round((when-segment[0].when)*1e5)/1e5}));

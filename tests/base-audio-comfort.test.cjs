@@ -83,7 +83,7 @@ test('wooden sword has a distinct soft cut and woody contact scheduled at the bl
  const b=harness('base');
  const swing=b.fx('attack','equipWoodSword',true),hit=b.fx('hit','equipWoodSword',true);
  assert.deepEqual(swing.map(r=>r[1]),[940,1630,126]);
- assert.deepEqual(hit,[['buffer',232,.72,0,108]]);
+ assert.deepEqual(hit,[['buffer',252,.78,0,108]]);
  assert.equal(Math.min(...hit.map(r=>r[4])),108);
  assert.ok(swing[0][4]+swing[0][3]>70&&swing[0][4]+swing[0][3]<116,'air peaks during the swing');
  assert.ok(swing.every(r=>r[2]<.48));
@@ -105,8 +105,8 @@ test('defeat adds one descending wet burst over genuine contact, never over an e
  const wood=b.fx('hit','equipWoodSword',true);
  const lethal=b.fx('hit','equipWoodSword',true,true);
  assert.deepEqual(lethal.slice(0,1),wood,'preserve the wood layer on a killing blow');
- assert.deepEqual(lethal.slice(1),[['buffer',570,.65,0,126]]);
- assert.deepEqual(b.fx('hit',null,true,true).slice(2),[['buffer',570,.65,0,18]]);
+ assert.deepEqual(lethal.slice(1),[['buffer',867,.80,0,126]]);
+ assert.deepEqual(b.fx('hit',null,true,true).slice(2),[['buffer',867,.80,0,18]]);
  assert.deepEqual(b.fx('attack','equipWoodSword',true,true),b.fx('attack','equipWoodSword',true));
  b.run('poiAudioLevels.master=0');assert.deepEqual(b.fx('hit','equipWoodSword',true,true),[]);
  b.run('poiAudioLevels.master=85;document.hidden=true');
@@ -116,12 +116,12 @@ test('defeat adds one descending wet burst over genuine contact, never over an e
 
 test('wood sound uses one cached dry impulse with a short tail',()=>{
  const b=harness('base');b.fx('hit','equipWoodSword');b.fx('hit','equipWoodSword');
- const hits=b.nodes.filter(n=>n.kind==='noise'&&n.buffer?.duration===.232);
+ const hits=b.nodes.filter(n=>n.kind==='noise'&&n.buffer?.duration===.252);
  assert.equal(hits.length,2);
  assert.equal(hits[0].buffer,hits[1].buffer);
  const wave=hits[0].buffer.getChannelData(0);
  const rms=a=>Math.sqrt(a.reduce((sum,v)=>sum+v*v,0)/a.length);
- assert.equal(Math.max(...wave.map(Math.abs)),28999/32768);
+ assert.equal(Math.max(...wave.map(Math.abs)),30146/32768);
  assert.ok(rms(wave.slice(120,720))>6*rms(wave.slice(-720)));
  assert.equal(wave[0],0);
  assert.ok(Math.abs(wave[wave.length-1])<.001);
