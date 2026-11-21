@@ -11,7 +11,7 @@ const orig=html.slice(0,markerStart)+html.slice(spawn);
 function build(text,id){
  const i=text.indexOf('const FACILITY_SITES=Object.freeze('),j=text.indexOf('function workshopResumeDecode(',i);
  assert(i>=0&&j>i);
- return JSON.parse(JSON.stringify(vm.runInNewContext(text.slice(i,j)+';buildFacilitySite('+JSON.stringify(id)+')')));
+ return JSON.parse(JSON.stringify(vm.runInNewContext(text.slice(i,j)+';buildFacilitySiteLegacyFrame('+JSON.stringify(id)+')')));
 }
 const before=build(orig,'base'),after=build(preCreek,'base'),modern=build(html,'base');
 const v115Marker='  // Small east-side rest glade and staggered grass shoulders along the meadow.';

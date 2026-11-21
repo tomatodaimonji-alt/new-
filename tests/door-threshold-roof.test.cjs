@@ -13,28 +13,28 @@ const setup=(id,site=build(id))=>{
 test('cutaway begins on each genuine exterior doorway, not on pavement or a window',()=>{
  const site=build('base'),{hidden,c}=setup('base',site);
  for(const [id,inside,door,outside] of [
-  ['artisan',[47,28],[47,29],[47,30]],['townGuild',[34,15],[34,16],[34,17]],
-  ['lodging',[19,2],[19,1],[19,0]],['toolshop',[47,14],[47,15],[47,16]],
-  ['rowhouse',[56,28],[56,29],[56,30]]]){
+  ['artisan',[59,40],[59,41],[59,42]],['townGuild',[46,27],[46,28],[46,29]],
+  ['lodging',[31,14],[31,13],[31,12]],['toolshop',[59,26],[59,27],[59,28]],
+  ['rowhouse',[68,40],[68,41],[68,42]]]){
   const owner=site.buildings.findIndex(b=>b.id===id);
   assert.equal(hidden(...outside),null,id+' just outside');
   assert.equal(hidden(...door),owner,id+' on door tile');
   assert.equal(hidden(...inside),owner,id+' inside');
   assert.equal(hidden(...outside),null,id+' exiting restores');
  }
- assert.equal(hidden(30,16),null,'guild window tile is not a doorway');
- assert.equal(hidden(19,47),null,'open town gate has no building cutaway');
+ assert.equal(hidden(42,28),null,'guild window tile is not a doorway');
+ assert.equal(hidden(31,59),null,'open town gate has no building cutaway');
  c.poiWalkActive=false;
- assert.equal(hidden(34,16),null,'editor preview is untouched');
+ assert.equal(hidden(46,28),null,'editor preview is untouched');
 });
 test('usable door on a different floor is respected after an edit; no stale entrance cache',()=>{
  const site=build('base'),{c,hidden}=setup('base',site);
  const owner=site.buildings.findIndex(b=>b.id==='townGuild');
- assert.equal(hidden(34,16,1),null);
- c.world=[...c.world,{x:34,z:16,y:1,type:'stonewallDoor',rot:0}];c.facilityRefreshStairs();
- assert.equal(hidden(34,16,1),owner);
- c.world=c.world.filter(o=>!(o.x===34&&o.z===16&&o.y===1&&o.type==='stonewallDoor'));c.facilityRefreshStairs();
- assert.equal(hidden(34,16,1),null);
+ assert.equal(hidden(46,28,1),null);
+ c.world=[...c.world,{x:46,z:28,y:1,type:'stonewallDoor',rot:0}];c.facilityRefreshStairs();
+ assert.equal(hidden(46,28,1),owner);
+ c.world=c.world.filter(o=>!(o.x===46&&o.z===28&&o.y===1&&o.type==='stonewallDoor'));c.facilityRefreshStairs();
+ assert.equal(hidden(46,28,1),null);
 });
 test('standalone sample and saved guild recognize the exterior door without relaxing perimeter walls',()=>{
  const base=build('base'),g=base.buildings.find(b=>b.id==='townGuild'),dx=g.x1-7,dz=g.z1-6;

@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const html=fs.readFileSync(process.env.HTML||path.join(__dirname,'../world-editor.html'),'utf8');
 function load(s){
  const a=s.indexOf('const FACILITY_SITES=Object.freeze('),b=s.indexOf('function workshopResumeDecode(',a);
- return vm.runInNewContext(s.slice(a,b)+';buildFacilitySite');
+ return vm.runInNewContext(s.slice(a,b)+';buildFacilitySiteLegacyFrame');
 }
 const original=html.replace(/  \/\/ Open grassland outside the rampart\.[\s\S]*?(?=  spawn=\{x:19,z:21\};)/,'');
 const outside=(x,z)=>z>47||x<1||x>66||z>20&&x>62||z<4&&x>46;

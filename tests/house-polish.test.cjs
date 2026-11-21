@@ -2,7 +2,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('nod
 const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const source=html.match(/const FACILITY_SITES[\s\S]*?(?=function facilityNavigate\()/)?.[0];
 assert(source);
-const build=vm.runInNewContext(source+'\n;buildFacilitySite');
+const build=vm.runInNewContext(source+'\n;buildFacilitySiteLegacyFrame');
 const ids=['cottage','rowhouse','gardener','artisan','toolshop'];
 const scene=id=>id==='artisan'||id==='toolshop'?id:'homes';
 function entry(scope,id){

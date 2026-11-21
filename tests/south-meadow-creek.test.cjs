@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const html=fs.readFileSync(process.env.HTML||path.join(__dirname,'../world-editor.html'),'utf8');
 const a=html.indexOf('const FACILITY_SITES=Object.freeze('),b=html.indexOf('function workshopResumeDecode(',a);
-const build=(id)=>JSON.parse(JSON.stringify(vm.runInNewContext(html.slice(a,b)+';buildFacilitySite('+JSON.stringify(id)+')')));
+const build=(id)=>JSON.parse(JSON.stringify(vm.runInNewContext(html.slice(a,b)+';buildFacilitySiteLegacyFrame('+JSON.stringify(id)+')')));
 const site=build('base'),{creek,map}=site,key=(x,z)=>x+','+z;
 const water=new Set(creek.deep.map(p=>key(p.x,p.z)));
 const dirs=[[1,0],[0,1],[-1,0],[0,-1]];

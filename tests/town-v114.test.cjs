@@ -9,7 +9,7 @@ function extract(a,b){
  return html.slice(i,j);
 }
 const buildingJS=extract('const FACILITY_SITES=', 'function workshopResumeDecode(');
-const {sites,build}=vm.runInNewContext(buildingJS+';({sites:FACILITY_SITES,build:buildFacilitySite})');
+const {sites,build}=vm.runInNewContext(buildingJS+';({sites:FACILITY_SITES,build:buildFacilitySiteLegacyFrame})');
 const floorJS=html.match(/^function isFloor\(t\)\{.*\}$/m)?.[0];
 const vehicleJS=html.match(/^function pineSuperVehicleType\(t\)\{.*\}$/m)?.[0];
 assert(floorJS&&vehicleJS);
@@ -293,7 +293,7 @@ test('protect unchanged v113 shells, cellar, footprints, town furnishings and pa
  for(const [id,current] of Object.entries(v113Digests(build))){
   if(id!=='base')assert.deepEqual(current,v113Expected[id],id+' protected legacy content');
  }
- const southRoads=require('./canal-history-fixture.cjs').prior(base.map.world).filter(row=>{
+ const southRoads=require('./canal-history-fixture.cjs').prior(require('./town-frame-history.cjs').prior(base.map.world)).filter(row=>{
   const [x,z,y,type]=JSON.parse(row);
   return y===0&&z>=28&&z<=45&&x>=3&&x<=60&&/^(?:road|earth)/.test(type);
  }).sort();

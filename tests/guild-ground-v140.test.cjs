@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const html=fs.readFileSync(process.env.HTML||path.join(__dirname,'../world-editor.html'),'utf8');
 const src=html.match(/const FACILITY_SITES[\s\S]*?(?=function facilityNavigate\()/)[0];
-const {sample,design,build}=vm.runInNewContext(src+';({build:buildFacilitySite,sample:pineGuildSampleMap,design:pineGuildDesignUpperFloors})');
+const {sample,design,build}=vm.runInNewContext(src+';({build:buildFacilitySiteLegacyFrame,sample:pineGuildSampleMap,design:pineGuildDesignUpperFloors})');
 const site=build('base'),guild=site.buildings.find(b=>b.id==='townGuild');
 const loc=JSON.parse(JSON.stringify(site.map.world.filter(o=>o.x>=guild.x1&&o.x<=guild.x2&&o.z>=guild.z1&&o.z<=guild.z2).map(o=>({...o,x:o.x-20,z:o.z+4}))));
 const inside=o=>o.x>7&&o.x<22&&o.z>6&&o.z<20;

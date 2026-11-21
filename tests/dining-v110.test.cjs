@@ -31,7 +31,7 @@ test('dining hall grows only toward the old exterior, with matching stone toilet
   assert.equal(at(1,6).find(o=>o.type==='guildLatrine')?.rot,3);
   assert.ok(at(4,9).some(o=>o.type==='poiDiningSign'&&o.rot===0)&&at(4,9).some(o=>o.type==='stonewall'));
   assert.ok(at(5,9).some(o=>o.type==='stonewallDoor'&&o.rot===0));
-  if(scope==='base')assert.deepEqual(world(5,9),[11,17]);
+  if(scope==='base')assert.deepEqual(world(5,9),[23,29]);
  }
 });
 test('seated chairs cannot block the full-tile dining loop, facilities or entry counter',()=>{

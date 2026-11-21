@@ -2,10 +2,11 @@ const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/st
 const {createHash}=require('node:crypto');
 const canalHistory=require('./canal-history-fixture.cjs');
 const outsideHistory=require('./outside-history-fixture.cjs');
+const gateHistory=require('./town-frame-history.cjs');
 const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const src=html.match(/const FACILITY_SITES[\s\S]*?(?=function facilityNavigate\()/)?.[0];
 assert(src,'authored Game World source');
-const build=vm.runInNewContext(src+';buildFacilitySite');
+const build=vm.runInNewContext(src+';buildFacilitySiteLegacyFrame');
 const site=build('base');
 // Canonical hashes pinned from the exact shipped v136 map. The exterior
 // additions/removals below enumerate individual authored changes by type,
@@ -138,7 +139,7 @@ test('local geometry stays pinned after authorized translations and ground-floor
 });
 test('every v136 exterior record remains except the enumerated civic paving and scenic changes',()=>{
  const ownership=new Set(site.buildings.flatMap(b=>Array.from(b.footprint,p=>key(p.x,p.z))));
- const records=outsideHistory.prior(site.map.world.filter(o=>!ownership.has(key(o.x,o.z))&&!rampart(o)));
+ const records=outsideHistory.prior(gateHistory.prior(site.map.world).filter(r=>{const [x,z,y,type,rot]=JSON.parse(r);return !ownership.has(key(x,z))&&!rampart({x,z,y,type,rot})}));
  const live=new Set(records);
  assert.equal(canalHistory.added.size,canalHistory.legacy.counts.add);
  assert.equal(canalHistory.removed.size,canalHistory.legacy.counts.remove);
@@ -156,8 +157,8 @@ test('every v136 exterior record remains except the enumerated civic paving and 
 });
 
 test('open grassland alters only enumerated non-structural exterior planting and styles',()=>{
- const {pinned,record,added,removed}=outsideHistory;
- const records=site.map.world.map(record),present=new Set(records);
+ const {pinned,added,removed}=outsideHistory;
+ const records=gateHistory.prior(site.map.world),present=new Set(records);
  assert.equal(present.size,records.length,'unique authored records');
  const outside=(x,z)=>z>47||x<1||x>66||(z>20&&x>62)||(z<4&&x>46);
  const cells=new Set(site.creek.deep.map(o=>key(o.x,o.z)));

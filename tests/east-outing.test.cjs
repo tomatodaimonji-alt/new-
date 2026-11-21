@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),test=require('node:test');
 const html=fs.readFileSync(process.env.HTML||path.join(__dirname,'../world-editor.html'),'utf8');
 const slice=(a,b)=>html.slice(html.indexOf(a),html.indexOf(b,html.indexOf(a)+1));
-const site=JSON.parse(JSON.stringify(vm.runInNewContext(slice('const FACILITY_SITES=Object.freeze(','function workshopResumeDecode(')+';buildFacilitySite("base")')));
+const site=JSON.parse(JSON.stringify(vm.runInNewContext(slice('const FACILITY_SITES=Object.freeze(','function workshopResumeDecode(')+';buildFacilitySiteLegacyFrame("base")')));
 const main=[[67,33],[67,38],[73,38],[73,42],[76,42],[76,44],[81,44],[81,39],[86,39],[86,38],[86,36]];
 const shrine=[[78,44],[78,45]];
 const shortcut=[[86,36],[86,28],[76,28],[76,26],[68,26],[68,30],[67,30],[67,33]];

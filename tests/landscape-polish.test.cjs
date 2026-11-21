@@ -10,7 +10,7 @@ assert(a>=0&&b>a,'missing landscape dressing block');
 const before=after.slice(0,a)+after.slice(b);
 function parse(html,id){
  const a=html.indexOf('const FACILITY_SITES=Object.freeze('),b=html.indexOf('function workshopResumeDecode(',a);
- return JSON.parse(JSON.stringify(vm.runInNewContext(html.slice(a,b)+';buildFacilitySite('+JSON.stringify(id)+')')));
+ return JSON.parse(JSON.stringify(vm.runInNewContext(html.slice(a,b)+';buildFacilitySiteLegacyFrame('+JSON.stringify(id)+')')));
 }
 test('a lightly furnished eastern rest glade leaves existing town and trail intact',()=>{
  const a=parse(before,'base'),b=parse(after,'base'),saved=new Set(a.map.world.map(JSON.stringify));

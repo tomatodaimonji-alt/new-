@@ -3,7 +3,7 @@ const html=fs.readFileSync(process.env.HTML||path.join(__dirname,'../world-edito
 function run(s,id){
  const a=s.indexOf('const FACILITY_SITES=Object.freeze('),b=s.indexOf('function workshopResumeDecode(',a);
  assert(a>=0&&b>a);
- return JSON.parse(JSON.stringify(vm.runInNewContext(s.slice(a,b)+';buildFacilitySite('+JSON.stringify(id)+')')));
+ return JSON.parse(JSON.stringify(vm.runInNewContext(s.slice(a,b)+';buildFacilitySiteLegacyFrame('+JSON.stringify(id)+')')));
 }
 const key=(x,z)=>x+','+z;
 test('a continuous narrow woodland creek leaves the base, trail, other routes and building stamps intact',()=>{
@@ -100,5 +100,5 @@ test('creek water is seamless, subdued and cheap without changing other water ma
   assert(color[0]>usual[0]&&color[1]>usual[1]&&color[1]-usual[1]<.045,'slightly lighter, not another material');
  }
  assert.equal(aa.p.length,a.p.length,'tint needs no extra geometry');
- assert.match(html,/if\(woodlandRiver\(x,z\)\)facilityWoodlandWater\(tmp,x,z,floors,creekWater,creekShoals,canalWater\.has\(x\+'\,'\+z\)\)/);
+ assert.match(html,/if\(woodlandRiver\(x,z\)\)facilityWoodlandWater\(tmp,x,z,floors,creekWater,creekShoals,canalWater\.has\(x\+'\,'\+z\),x-baseOffset\)/);
 });

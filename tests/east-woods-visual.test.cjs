@@ -13,6 +13,8 @@ test('outdoor meadow has continuous seeded grass, light path shoulders, and pres
  assert.deepEqual(sample,scope.pineEastGroundColor(85,28,new Map([['84,27','woodfloor']])));
  const path=scope.pineEastGroundColor(85,28,new Map([['84,27','earth'],['85,27','earth']]));
  assert(path[0]>sample[0]&&path[1]<sample[1]);
+ assert.deepEqual(scope.pineEastGroundColor(97,40,new Map([['96,39','earth'],['97,39','earth']]),12),path,
+  'visual meadow and path shoulders stay in the authored frame after padding the map');
  for(let z=0;z<56;z++)for(let x=67;x<=96;x++){
   const col=scope.pineEastGroundColor(x,z,empty),adj=scope.pineEastGroundColor(x-1,z,empty);
   assert(col.every((c,i)=>c>=.19&&c<=.7&&Math.abs(c-adj[i])<.13));

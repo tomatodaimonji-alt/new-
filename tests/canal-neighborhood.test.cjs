@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const html=fs.readFileSync('world-editor.html','utf8');
+const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const block=(a,b)=>{const i=html.indexOf(a),j=html.indexOf(b,i+1);assert(i>=0&&j>i,a);return html.slice(i,j)};
-const build=vm.runInNewContext(block('const FACILITY_SITES=','function workshopResumeDecode(')+';buildFacilitySite');
+const build=vm.runInNewContext(block('const FACILITY_SITES=','function workshopResumeDecode(')+';buildFacilitySiteLegacyFrame');
 const site=build('base'),at=(x,z)=>site.map.world.filter(o=>o.x===x&&o.z===z&&o.y===0);
 const ctx=vm.createContext({facilitySite:{...site,id:'base'},world:site.map.world,poiWalkLevel:0,poiWalkActive:true,
  validPos:(x,z)=>x>=0&&x<96&&z>=0&&z<56,terrainY:()=>0,poiIsMonster:()=>false,poiMonsterAt:()=>null,

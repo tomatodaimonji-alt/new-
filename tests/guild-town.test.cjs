@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
 const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const src=html.match(/const FACILITY_SITES[\s\S]*?(?=function facilityNavigate\()/)[0];
-const api=vm.runInNewContext(src+'\n;({buildFacilitySite,sample:typeof pineGuildSampleMap==="function"?pineGuildSampleMap:null,design:typeof pineGuildDesignUpperFloors==="function"?pineGuildDesignUpperFloors:null})');
+const api=vm.runInNewContext(src+'\n;({buildFacilitySite:buildFacilitySiteLegacyFrame,sample:typeof pineGuildSampleMap==="function"?pineGuildSampleMap:null,design:typeof pineGuildDesignUpperFloors==="function"?pineGuildDesignUpperFloors:null})');
 const site=api.buildFacilitySite('base'),g=site.buildings.find(b=>b.id==='townGuild');
 const norm=(x)=>JSON.parse(JSON.stringify(x));
 const at=(x,z,y)=>site.map.world.filter(o=>o.x===x&&o.z===z&&o.y===y);
@@ -109,15 +109,15 @@ test('only legacy Game World checkpoints translate a former building position',(
  assert.equal(migrate({position:null}),null);
 });
 
-test('fort rampart closes the town while south and east streets pass through the masonry gates',()=>{
+test('four streets pass through the rampart at intentional wide masonry openings',()=>{
  const perimeter=site.map.world.filter(o=>/^poiFort/.test(o.type));
  const atFort=(x,z)=>perimeter.find(o=>o.x===x&&o.z===z);
  const gates=perimeter.filter(o=>o.type==='poiFortGate');
- assert.deepEqual(norm(gates.map(({x,z,y,rot})=>[x,z,y,rot]).sort()),[[19,47,0,0],[62,45,0,3]]);
+ assert.deepEqual(norm(gates.map(({x,z,y,rot})=>[x,z,y,rot]).sort()),[[1,27,0,1],[12,0,0,2],[19,47,0,0],[62,45,0,3]]);
  assert.equal(new Set(perimeter.map(o=>key(o.x,o.z,o.y))).size,perimeter.length);
  for(const [ax,az,bx,bz] of [[1,0,46,0],[46,0,46,4],[46,4,66,4],[66,4,66,20],[62,20,66,20],[62,20,62,47],[1,47,62,47],[1,0,1,47]]){
   for(let z=az;z<=bz;z++)for(let x=ax;x<=bx;x++){
-   if(z===47&&(x===18||x===20)||x===62&&(z===44||z===46))assert(!atFort(x,z),'open shoulder');
+   if(z===47&&(x===18||x===20)||x===62&&(z===44||z===46)||z===0&&(x===11||x===13)||x===1&&(z===26||z===28))assert(!atFort(x,z),'open shoulder');
    else assert(atFort(x,z),x+','+z+' rampart');
   }
  }
