@@ -746,7 +746,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 #poiShopBuyPotion:not(:disabled){border-color:#ebca82;background:#81663ce8!important}
 #poiShopFeedback{min-height:1.4em}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v138）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v139）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -3565,7 +3565,7 @@ function poiFortGeometry(m,id,x,y,z,rot=0){
   }
   return;
  }
- const inner=1.22,archY=1.41,archRise=1.09,outer=1.50,outerRise=1.44;
+ const inner=1.22,archY=1.41,archRise=1.09;
  for(const sign of [-1,1]){
   const pier=sign*1.36;
   B(pier,0,0,.28,archY,.96,stone);
@@ -3575,19 +3575,26 @@ function poiFortGeometry(m,id,x,y,z,rot=0){
   B(sign*1.235,0,-.22,.061,1.34,.65,[.38,.27,.18]);
   for(const band of [.24,.92])B(sign*1.221,band,-.22,.052,.055,.61,[.24,.28,.27]);
  }
- // Face and soffit use the same contiguous arch wedges. Only the lowest
- // shoulder nosing is near head height; the middle rises to 2.50 tiles.
- const depth=.46;
- const p=(i,out,side)=>{const a=i*Math.PI/12;
-  return [Math.cos(a)*(out?outer:inner),archY+Math.sin(a)*(out?outerRise:archRise),side*depth];
+ // Build the same inner arch as a single through-opening. The upper
+ // masonry fills both spandrels right to the adjacent fort wall and cap.
+ const depth=.46,shoulder=1.503,top=2.81;
+ const arch=Array.from({length:13},(_,i)=>{
+  const a=i*Math.PI/12;return [-Math.cos(a)*inner,archY+Math.sin(a)*archRise];
+ });
+ const strips=[[-shoulder,archY],...arch,[shoulder,archY]];
+ const face=(a,b,loA,loB,hiA,hiB,col)=>{
+  Q([a,loA,depth],[b,loB,depth],[b,hiB,depth],[a,hiA,depth],col);
+  Q([b,loB,-depth],[a,loA,-depth],[a,hiA,-depth],[b,hiB,-depth],col.map(v=>v*.85));
  };
- for(let i=0;i<12;i++){
-  const shade=i===5||i===6?rim:i%2?warm:stone;
-  Q(p(i,false,1),p(i,true,1),p(i+1,true,1),p(i+1,false,1),shade);
-  Q(p(i+1,false,-1),p(i+1,true,-1),p(i,true,-1),p(i,false,-1),shade.map(v=>v*.84));
-  Q(p(i+1,false,1),p(i+1,false,-1),p(i,false,-1),p(i,false,1),dark);
-  Q(p(i,true,1),p(i,true,-1),p(i+1,true,-1),p(i+1,true,1),rim);
+ for(let i=0;i+1<strips.length;i++){
+  const [a,h]=strips[i],[b,k]=strips[i+1],ha=h+.15,hb=k+.15;
+  const band=i===6||i===7?rim:i%2?warm:stone;
+  face(a,b,h,k,ha,hb,band);
+  face(a,b,ha,hb,top,top,stone.map(v=>v*(.98+(i%3)*.014)));
+  Q([a,h,depth],[a,h,-depth],[b,k,-depth],[b,k,depth],dark);
  }
+ Q([-shoulder,archY,-depth],[-shoulder,archY,depth],[-shoulder,top,depth],[-shoulder,top,-depth],stone);
+ Q([shoulder,archY,depth],[shoulder,archY,-depth],[shoulder,top,-depth],[shoulder,top,depth],stone);
  B(0,2.81,0,2.96,.26,.93,stone);
  B(0,3.07,0,3.02,.115,1.02,rim);
  for(const sx of [-1.32,-.66,0,.66,1.32])B(sx,3.185,0,.33,.32,.77,stone);
@@ -6326,7 +6333,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v138',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v139',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -6441,7 +6448,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v138';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v139';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -6655,7 +6662,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v138',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v139',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -7237,10 +7244,12 @@ function poiGameRoofHiddenAt(x,z){
 }
 function poiWalkIndoor(){
  if(facilitySite)return facilityHiddenRoof()!==null;
- // Indoor bounds for both supermarket and user-editable pitched-roof buildings.
- // Exterior wall cells count as the transition; the first step inside clears the roof.
+ // A covered, walkable door is already the threshold on custom play maps.
  const roofs=world.filter(o=>o.y>0&&(AUTO_ROOFS.has(o.type)||RESIDENTIAL_ROOFS.has(o.type)||o.type==='pineSuperRoof'));
  if(!roofs.length)return false;
+ const onTile=o=>o.x===poiWalkX&&o.z===poiWalkZ;
+ if(roofs.some(o=>onTile(o)&&o.y>poiWalkLevel)&&world.some(o=>onTile(o)&&o.y===poiWalkLevel&&poiWalkPassableDoor(o.type)))
+  return true;
  const cells=new Set(roofs.map(o=>o.x+','+o.z));
  if(!cells.has(poiWalkX+','+poiWalkZ))return false;
  // Avoid treating open roofed porches as indoor spaces.
@@ -8622,11 +8631,39 @@ function makeScene(){
  return upload(m);
 }
 function upload(m){const n=m.p.length/3,data=new Float32Array(n*9);for(let i=0;i<n;i++){const a=i*9,b=i*3;for(let j=0;j<3;j++){data[a+j]=m.p[b+j];data[a+3+j]=m.n[b+j];data[a+6+j]=m.c[b+j]}}const vbo=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vbo);gl.bufferData(gl.ARRAY_BUFFER,data,gl.STATIC_DRAW);return{buf:vbo,count:n}}
-const VERT='precision highp float;attribute vec3 aPos;attribute vec3 aNorm;attribute vec3 aCol;uniform mat4 uMVP;varying vec3 vCol;void main(){gl_Position=uMVP*vec4(aPos,1.0);float l=.60+.40*max(dot(normalize(aNorm),normalize(vec3(-.4,1.0,.35))),0.0);vCol=aCol*l;}';
-const FRAG='precision mediump float;varying vec3 vCol;void main(){gl_FragColor=vec4(pow(max(vCol,vec3(0.0)),vec3(.92)),1.0);}';
+const POI_OCCLUSION_OPACITY=.16;
+const VERT='precision highp float;attribute vec3 aPos;attribute vec3 aNorm;attribute vec3 aCol;uniform mat4 uMVP;varying vec3 vCol;varying mediump float vWorldHeight;void main(){gl_Position=uMVP*vec4(aPos,1.0);vWorldHeight=aPos.y;float l=.60+.40*max(dot(normalize(aNorm),normalize(vec3(-.4,1.0,.35))),0.0);vCol=aCol*l;}';
+const FRAG=`precision mediump float;
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+#define OCCP highp
+#else
+#define OCCP mediump
+#endif
+varying vec3 vCol;
+varying mediump float vWorldHeight;
+uniform OCCP vec4 uOcclusionShape;
+uniform OCCP vec4 uOcclusionInfo;
+float workshopDither2(vec2 p){return 2.0*p.x+3.0*p.y-4.0*p.x*p.y;}
+void main(){
+ if(uOcclusionInfo.w>0.0&&gl_FragCoord.w>uOcclusionInfo.x&&vWorldHeight>uOcclusionInfo.y){
+  OCCP vec2 fromFoot=gl_FragCoord.xy*uOcclusionInfo.w-uOcclusionShape.xy;
+  OCCP vec2 axis=uOcclusionShape.zw-uOcclusionShape.xy;
+  OCCP float t=clamp(dot(fromFoot,axis)/max(dot(axis,axis),0.0001),0.0,1.0);
+  OCCP float d=length(fromFoot-axis*t)/uOcclusionInfo.z;
+  if(d<1.0){
+   vec2 cell=mod(floor(gl_FragCoord.xy),4.0);
+   float bit=(4.0*workshopDither2(mod(cell,2.0))+workshopDither2(floor(cell*.5))+.5)/16.0;
+   // Same holes for any overlapping scene surfaces; no blend ordering.
+   float keep=mix(${POI_OCCLUSION_OPACITY},1.0,smoothstep(.66,1.0,d));
+   if(bit>keep)discard;
+  }
+ }
+ gl_FragColor=vec4(pow(max(vCol,vec3(0.0)),vec3(.92)),1.0);
+}`;
 function sh(t,src){const s=gl.createShader(t);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s}
 let program;try{program=gl.createProgram();gl.attachShader(program,sh(gl.VERTEX_SHADER,VERT));gl.attachShader(program,sh(gl.FRAGMENT_SHADER,FRAG));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program))}catch(e){$('canvasTip').textContent='WebGLシェーダーエラー: '+e.message;return}
-gl.useProgram(program);gl.enable(gl.DEPTH_TEST);gl.depthMask(true);gl.depthFunc(gl.LESS);gl.clearColor(0,0,0,0);const loc={p:gl.getAttribLocation(program,'aPos'),n:gl.getAttribLocation(program,'aNorm'),c:gl.getAttribLocation(program,'aCol'),mvp:gl.getUniformLocation(program,'uMVP')};
+gl.useProgram(program);gl.enable(gl.DEPTH_TEST);gl.depthMask(true);gl.depthFunc(gl.LESS);gl.clearColor(0,0,0,0);const loc={p:gl.getAttribLocation(program,'aPos'),n:gl.getAttribLocation(program,'aNorm'),c:gl.getAttribLocation(program,'aCol'),mvp:gl.getUniformLocation(program,'uMVP'),
+ occlusionShape:gl.getUniformLocation(program,'uOcclusionShape'),occlusionInfo:gl.getUniformLocation(program,'uOcclusionInfo')};
 try{initSignProgram()}catch(e){console.warn('2D sign textures unavailable',e)}
 function mult(a,b){const c=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++)for(let k=0;k<4;k++)c[j*4+i]+=a[k*4+i]*b[j*4+k];return c}
 function ortho(l,r,b,t,n,f){return new Float32Array([2/(r-l),0,0,0,0,2/(t-b),0,0,0,0,-2/(f-n),0,-(r+l)/(r-l),-(t+b)/(t-b),-(f+n)/(f-n),1])}
@@ -8760,6 +8797,36 @@ function poiClearSceneVariants(){
  poiWalkSceneVariants.clear();
  return {oldMeshes,oldSigns};
 }
+let poiOcclusionFrame={active:false};
+function poiAvatarOcclusion(p,now){
+ if(!poiWalkActive||!poiThirdPerson||cameraTopDown||pineAIActive)return {active:false};
+ const vp=p.vp,width=canvas.width,height=canvas.height;
+ if(width<2||height<2)return {active:false};
+ const x=poiWalkViewX+.5,z=poiWalkViewZ+.5,ground=poiCreekPlayerHeight(now)+poiWalkLevel*1.4+.03;
+ const project=(px,y,pz)=>{
+  const w=vp[3]*px+vp[7]*y+vp[11]*pz+vp[15];
+  if(w<.06)return null;
+  return [(1+(vp[0]*px+vp[4]*y+vp[8]*pz+vp[12])/w)*width/2,
+   (1+(vp[1]*px+vp[5]*y+vp[9]*pz+vp[13])/w)*height/2,
+   w,(1+(vp[2]*px+vp[6]*y+vp[10]*pz+vp[14])/w)/2];
+ };
+ const foot=project(x,ground+.20,z),head=project(x,ground+1.19,z),body=project(x,ground+.69,z);
+ const side=project(x+Math.cos(poiCameraYaw)*.49,ground+.69,z-Math.sin(poiCameraYaw)*.49);
+ if(!foot||!head||!body||!side)return {active:false};
+ const radius=Math.max(3,Math.min(height*.21,Math.hypot(side[0]-body[0],side[1]-body[1])));
+ return {active:true,foot:foot.slice(0,2),head:head.slice(0,2),centerDepth:body[3],
+  depthGate:1/Math.max(.06,body[2]-.09),ground:ground+.165,radius,width,height,opacity:POI_OCCLUSION_OPACITY};
+}
+function poiOcclusionBegin(p,now){
+ const mask=poiOcclusionFrame=poiAvatarOcclusion(p,now);
+ if(!mask.active)return;
+ const {foot,head,depthGate,ground,radius,height}=mask,inv=1/height;
+ gl.uniform4f(loc.occlusionShape,foot[0]*inv,foot[1]*inv,head[0]*inv,head[1]*inv);
+ gl.uniform4f(loc.occlusionInfo,depthGate,ground,radius*inv,inv);
+}
+function poiOcclusionEnd(){
+ if(poiOcclusionFrame.active)gl.uniform4f(loc.occlusionInfo,0,0,0,0);
+}
 function render(){
  requestAnimationFrame(render);
  const now=performance.now();poiWalkFrame(now);const p=parameters();
@@ -8784,7 +8851,10 @@ function render(){
  }
  if(cursorDirty){if(cursorMesh)gl.deleteBuffer(cursorMesh.buf);cursorMesh=makeCursor();cursorDirty=false}
  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
- draw(sceneMesh,p.vp);facilityDrawRoofs(p.vp);poiDrawGameRoofs(p.vp);poiDrawEditorGhostRoof(p.vp);
+ poiOcclusionBegin(p,now);
+ draw(sceneMesh,p.vp);facilityDrawRoofs(p.vp);poiDrawGameRoofs(p.vp);
+ poiOcclusionEnd();
+ poiDrawEditorGhostRoof(p.vp);
  drawSignOverlays(p.vp);draw(cursorMesh,p.vp);
  if(poiWalkActive){poiEconomyDraw(p.vp);draw(poiWalkMesh,p.vp);poiMonsterRender(now,p.vp)}
  poiRenderEnemyHealth(now,p.vp);poiRenderDamageLabels(now,p.vp);pineDrawChecks(p.vp);
@@ -12649,6 +12719,7 @@ function pineDownloadWorkshopMapJSON(name,content,floorNote=''){
  }catch(e){fallback()}
 }
 const facilityCellKey=(x,z,y)=>x+','+z+','+y;
+let facilityDoorTiles=new Set();
 function facilityPrepareFloorMasks(){
  const pack=points=>new Set(points.map(({x,z})=>x+','+z));
  facilityFloorMasks=facilitySite.buildings.map(b=>({
@@ -12659,8 +12730,12 @@ function facilityPrepareFloorMasks(){
 }
 function facilityRefreshStairs(){
  facilityRefreshCreek();
- const stairs=new Set(world.filter(o=>o.type==='guildStairUp')
-  .map(o=>facilityCellKey(o.x,o.z,o.y)));
+ // This index refreshes on load and editor commits, not on camera frames.
+ const stairs=new Set();facilityDoorTiles=new Set();
+ for(const o of world){
+  if(o.type==='guildStairUp')stairs.add(facilityCellKey(o.x,o.z,o.y));
+  if(poiWalkPassableDoor(o.type))facilityDoorTiles.add(facilityCellKey(o.x,o.z,o.y));
+ }
  facilityStairOpenings=new Set(world.filter(o=>o.type==='guildStairDown'&&
   stairs.has(facilityCellKey(o.x,o.z,o.y-1))).map(o=>facilityCellKey(o.x,o.z,o.y)));
 }
@@ -12679,6 +12754,12 @@ function facilityValidLanding(x,z,y){
 function facilityUsesGuildRendering(){return facilitySite?.id==='guildrenewal'||facilitySite?.id==='guildsaved'}
 function facilityHiddenRoof(){
  if(!facilitySite||!poiWalkActive)return null;
+ if(facilityDoorTiles.has(facilityCellKey(poiWalkX,poiWalkZ,poiWalkLevel))){
+  const owner=facilityFloorOwner(poiWalkX,poiWalkZ,poiWalkLevel);
+  // The tile must be an actual door belonging to this floor, not just an
+  // entrance guide on the next tile, a window, or the outdoor fort gate.
+  if(owner!==null)return owner;
+ }
  if(facilitySite.id==='guildrenewal'){
   if(poiWalkX<=7||poiWalkX>=22||poiWalkZ<=6||poiWalkZ>=20)return null;
   return facilityFloorOwner(poiWalkX,poiWalkZ,poiWalkLevel);
@@ -13047,7 +13128,7 @@ function facilityBoot(resume,playOnOpen=false){
    visibleLayers:[...new Set(world.filter(o=>isFloor(o.type)&&facilityObjectVisible(o)&&
     !facilityStairOpenings.has(facilityCellKey(o.x,o.z,o.y))).map(o=>o.y))].sort((a,b)=>a-b),
    active:poiWalkActive,guildRenewalSource:facilitySite.guildRenewalSource??null,
-   wildSpawn:poiWildSnapshot(),economy:poiEconomySnapshot(),
+   wildSpawn:poiWildSnapshot(),economy:poiEconomySnapshot(),occlusion:poiOcclusionFrame,
    combat:{playerHP:poiPlayerHP,actionAt:poiWalkActionStarted,effects:poiMonsterBreaks.length,debris:poiMonsterBreakSnapshot(performance.now()),actors:[...poiMonsterStates].map(([o,s])=>
     ({type:o.type,x:s.x,z:s.z,level:o.y,hp:s.hp,wildSpawn:!!s.wildSpawn}))}})
  };
