@@ -109,7 +109,7 @@ try{
  assert((await desktop.evaluate(()=>window.__editorTest?.state()))?.glLink,'WebGL init');
  await desktop.locator('#poiSampleCategories .categoryRow').click();
  assert.equal(await desktop.locator('[data-facility-id]').count(),4,'built-in POI entries');
- assert.equal(await desktop.locator('#poiSampleCategories button').filter({hasText:'冒険者ギルド'}).count(),1,'existing guild still selectable');
+ assert.equal(await desktop.locator('#poiSampleCategories button:not([data-guild-renewal])').filter({hasText:'冒険者ギルド'}).count(),1,'one existing guild still selectable beside the separate preview action');
  await expectStore(desktop);
  for(const id of idList){
   if(id==='lodging') await desktop.locator('[data-facility-id="lodging"]').click();

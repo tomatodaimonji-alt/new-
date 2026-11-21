@@ -29,8 +29,8 @@ test('Facility-only roof treatment uses coherent muted colors without changing g
   roofColors.push(on[0][1]);
  }
  for(let k=0;k<3;k++)assert(Math.max(...roofColors.map(c=>c[k]))-Math.min(...roofColors.map(c=>c[k]))<.15);
- assert.match(between('function facilityBuildRoofs(','function facilityVisibleRoofs('),/residentialRoofGeometry\(m,group,residential,true\)/);
- assert.match(between('function makeScene(','function upload('),/if\(!pineGuildFantasyRoof\(m,group\)\)residentialRoofGeometry\(m,group,allRoofLookup,!!facilitySite\)/);
+ assert.match(between('function facilityBuildRoofs(','function facilityVisibleRoofs('),/residentialRoofGeometry\(m,group,residential,facilitySite.id!=='guildrenewal'\)/);
+ assert.match(between('function makeScene(','function upload('),/if\(!pineGuildFantasyRoof\(m,group\)\)residentialRoofGeometry\(m,group,allRoofLookup,!!facilitySite&&facilitySite.id!=='guildrenewal'\)/);
 });
 test('The offline wooden cue uses filtered transients, not pitched sine sweeps; other effects unchanged in routing',()=>{
  const events=[];
