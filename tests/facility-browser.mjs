@@ -23,29 +23,39 @@ const fixture={
 };
 const step=(page,dx,dz)=>page.keyboard.press(dx===1?'ArrowRight':dx===-1?'ArrowLeft':dz===1?'ArrowDown':'ArrowUp');
 const snap=async page=>page.evaluate(()=>window.__editorTest?.facility?.()??null);
-const inside=(b,x,z)=>x>b.x1&&x<b.x2&&z>b.z1&&z<b.z2;
-function route(map,start,check){
- const id=(x,z)=>x+','+z;
- const taken=new Set();
- const open=new Set(['woodfloor','stone','earth','grass','sand','chairWood','chairClassic','stoolRound','flowerField','bushFlower','tallGrass','lantern','woodfloorLight','woodfloorDark','brickfloor','roadCobbleFull','roadCutStoneFull','roadGravelFull','grassWild']);
- for(const o of map.world)if(o.y===0&&!open.has(o.type)&&!/(?:Door|DoorOpen|Entrance)$/.test(o.type))taken.add(id(o.x,o.z));
- const q=[start],prev=new Map([[id(start.x,start.z),null]]);
+const xy=({x,z})=>({x,z});
+const key=(x,z)=>x+','+z;
+const dirs=[[0,-1],[0,1],[-1,0],[1,0]];
+const footprint=(b,y=0)=>new Set((b.floorFootprints[String(y)]||[]).map(p=>key(p.x,p.z)));
+const inside=(area,x,z)=>area.has(key(x,z))&&dirs.every(([a,b])=>area.has(key(x+a,z+b)));
+const stair=t=>t==='guildStairUp'||t==='guildStairDown';
+async function route(page,map,start,check,transition=null){
+ const blockedByStair=new Set(map.world.filter(o=>o.y===start.level&&stair(o.type)).map(o=>key(o.x,o.z)));
+ const allowed=await page.evaluate(({width,height})=>{
+  const result=[];
+  for(let z=0;z<height;z++)for(let x=0;x<width;x++)if(window.__editorTest.canStep(x,z))result.push(x+','+z);
+  return result;
+ },{width:map.width,height:map.height});
+ const pass=new Set(allowed);
+ const q=[xy(start)],prev=new Map([[key(start.x,start.z),null]]);
  for(let i=0;i<q.length;i++){
   const here=q[i];
   if(check(here.x,here.z)){
-   const out=[];for(let at=here;at;at=prev.get(id(at.x,at.z)))out.push(at);
-   return out.reverse();
+   const out=[];for(let at=here;at;at=prev.get(key(at.x,at.z)))out.push({...at,level:start.level});
+   out.reverse();
+   if(transition!==null)out.at(-1).level=transition;
+   return out;
   }
-  for(const [dx,dz] of [[0,-1],[0,1],[-1,0],[1,0]]){
-   const x=here.x+dx,z=here.z+dz,k=id(x,z);
-   if(x<0||z<0||x>=map.width||z>=map.height||prev.has(k)||taken.has(k))continue;
+  for(const [dx,dz] of dirs){
+   const x=here.x+dx,z=here.z+dz,k=key(x,z);
+   if(!pass.has(k)||prev.has(k)||(blockedByStair.has(k)&&!(transition!==null&&check(x,z))))continue;
    prev.set(k,here);q.push({x,z});
   }
  }
  return null;
 }
 async function walk(page,steps){
- assert(steps?.length>1,'no eligible walking route');
+ assert(steps?.length,'no eligible walking route');
  let from=steps[0];
  for(const point of steps.slice(1)){
   await step(page,point.x-from.x,point.z-from.z);
@@ -53,6 +63,27 @@ async function walk(page,steps){
   assert.deepEqual(found.position,point,'walking failed at '+JSON.stringify(point));
   await page.waitForTimeout(185);from=point;
  }
+}
+async function staircase(page,map,area,delta,id,out,annex=null){
+ const here=await snap(page),target=here.position.level+delta;
+ const startType=delta>0?'guildStairUp':'guildStairDown';
+ const reverseType=delta>0?'guildStairDown':'guildStairUp';
+ const stairs=map.world.find(o=>o.y===here.position.level&&o.type===startType&&area.has(key(o.x,o.z))&&map.world.some(p=>p.x===o.x&&p.z===o.z&&p.y===target&&p.type===reverseType));
+ assert(stairs,id+' missing connecting stair');
+ const hit=(x,z)=>x===stairs.x&&z===stairs.z;
+ await walk(page,await route(page,map,here.position,hit,target));
+ const reached=await snap(page);
+ assert.equal(reached.position.level,target);
+ assert.equal(reached.sceneLayer,target<0?'cellar':'surface');
+ if(target<0){assert.deepEqual(reached.visibleRoofs,[]);assert.deepEqual(reached.visibleLayers,[-1]);}
+ // Get off the landing before re-entering its matching staircase.
+ const next=dirs.map(([dx,dz])=>[stairs.x+dx,stairs.z+dz]).filter(([x,z])=>map.world.some(o=>o.x===x&&o.z===z&&o.y===target&&!stair(o.type)));
+ const clear=await route(page,map,reached.position,(x,z)=>next.some(([a,b])=>x===a&&z===b));
+ assert(clear?.length>1,id+' no usable landing');
+ await walk(page,clear);
+ if(annex)await walk(page,await route(page,map,(await snap(page)).position,(x,z)=>x===annex.x&&z===annex.z));
+ if(out)await page.screenshot({path:out+'/'+id+'-floor-'+target+'.png'});
+ await walk(page,await route(page,map,(await snap(page)).position,hit,here.position.level));
 }
 const expectStore=async page=>assert.deepEqual(await page.evaluate(keys=>Object.fromEntries(keys.map(k=>[k,localStorage.getItem(k)])),Object.keys(fixture)),fixture);
 async function seed(page){
@@ -81,31 +112,69 @@ try{
   const start=await snap(desktop);
   assert(start,'preview was not active');
   assert.equal(start.id,id);
-  assert.deepEqual(start.position,start.spawn);
+  assert.deepEqual(start.position,{...start.spawn,level:0});
   assert.equal(start.hiddenRoof,null);
   await expectStore(desktop);
   const [download]=await Promise.all([desktop.waitForEvent('download'),desktop.locator('#facilityExport').click()]);
   assert.equal(download.suggestedFilename(),'workshop-facility-'+id+'.json');
   const exported=JSON.parse(readFileSync(await download.path(),'utf8'));
   assert.equal(exported.format,'forest-world-v1');
+  assert(exported.world.every(o=>o.y>=0),'v1 export would not import');
+  const offset=['kitchen','base'].includes(id)?1:0;
+  assert.deepEqual(exported.workshopFacility,{version:1,floorOffset:offset,groundY:offset});
+  const raw=await desktop.evaluate(()=>window.__editorTest.data());
+  assert.equal(raw.world.some(o=>o.y===-1),offset===1);
+  const sign=['lodging','base'].includes(id);
+  assert.equal(raw.world.some(o=>o.type==='poiInnSign'),sign);
+  assert(raw.world.some(o=>o.type==='poiStreetLamp'));
+  assert(raw.world.filter(o=>/latrine/i.test(o.type)).length>=(id==='base'?3:1));
+  if(id==='base'){
+   // Open today’s downloadable file through the actual existing v1 editor.
+   const importer=await browser.newPage({viewport:{width:1210,height:800}});
+   await importer.goto(origin+'/?test=1');
+   await importer.locator('#openJson').click();
+   await importer.locator('#jsonText').fill(JSON.stringify(exported));
+   await importer.locator('#importJson').click();
+   const imported=await importer.evaluate(()=>window.__editorTest.data());
+   assert(imported.world.some(o=>o.type==='poiInnSign')&&imported.world.some(o=>o.type==='poiStreetLamp'));
+   assert(imported.world.some(o=>o.y===0&&o.type==='guildStairUp'));
+   await importer.close();
+  }
   assert(exported.world.length>40&&exported.width<=128);
   assert.equal(start.buildings.length,id==='base'?3:1);
   assert(start.roofMeshes.every(count=>count>0));
   if(out)await desktop.screenshot({path:out+'/'+id+'.png'});
   for(const [index,b] of start.buildings.entries()){
    const beforeStep=await snap(desktop);
-   await walk(desktop,route(exported,beforeStep.position,(x,z)=>inside(b,x,z)));
-   assert.equal((await snap(desktop)).hiddenRoof,index,'wrong roof hidden at building '+index);
+   const ground=footprint(b);
+   assert(ground.size<(b.x2-b.x1+1)*(b.z2-b.z1+1),'regular rectangle '+id+'/'+index);
+   await walk(desktop,await route(desktop,raw,beforeStep.position,(x,z)=>inside(ground,x,z)));
+   let interior=await snap(desktop);
+   assert.equal(interior.hiddenRoof,index,'wrong roof hidden at building '+index);
+   assert.deepEqual(interior.visibleRoofs,start.buildings.map((_,i)=>i).filter(i=>i!==index),'neighbor roof disappeared');
+   const toilet=raw.world.find(o=>o.y===0&&/latrine/i.test(o.type)&&ground.has(key(o.x,o.z)));
+   assert(toilet,'missing toilet at '+id+'/'+index);
+   await walk(desktop,await route(desktop,raw,interior.position,(x,z)=>
+    ground.has(key(x,z))&&Math.abs(x-toilet.x)+Math.abs(z-toilet.z)===1));
+   if(b.floorFootprints['1'])await staircase(desktop,raw,ground,1,id+'-'+index,out);
+   if(b.floorFootprints['-1']){
+    const annex=id==='base'?{x:b.x1+4,z:b.z2-8}:{x:b.x1+8,z:b.z1+4};
+    await staircase(desktop,raw,ground,-1,id+'-'+index,out,annex);
+   }
+   if(id==='workshop'||(id==='base'&&index===2)){
+    const annex=id==='base'?{x:b.x2-4,z:b.z1+9}:{x:b.x1+9,z:b.z1+4};
+    await walk(desktop,await route(desktop,raw,(await snap(desktop)).position,(x,z)=>x===annex.x&&z===annex.z));
+   }
    if(out&&id==='base')await desktop.screenshot({path:out+'/base-room-'+index+'.png'});
    if(id==='base') {
     const here=await snap(desktop);
-    await walk(desktop,route(exported,here.position,(x,z)=>here.buildings.every(other=>!inside(other,x,z))));
+    await walk(desktop,await route(desktop,raw,here.position,(x,z)=>here.buildings.every(other=>!inside(footprint(other),x,z))));
     assert.equal((await snap(desktop)).hiddenRoof,null,'roof did not restore');
    }
   }
   await expectStore(desktop);
   await desktop.reload();
-  assert.deepEqual((await snap(desktop)).position,start.spawn);
+  assert.deepEqual((await snap(desktop)).position,{...start.spawn,level:0});
   assert.equal((await snap(desktop)).hiddenRoof,null);
   await expectStore(desktop);
   await desktop.locator('#returnEditorWorld').click();
@@ -150,8 +219,16 @@ try{
  const north=await mobile.locator('[data-poi-dir="n"]').boundingBox();
  assert(pad.height<=180&&north.width>=44&&north.height>=44,'compact touch controls');
  const mobileStart=(await snap(mobile)).position;
- await mobile.locator('[data-poi-dir="n"]').tap();
- assert.deepEqual((await snap(mobile)).position,{x:mobileStart.x,z:mobileStart.z-1},'touch movement');
+ const controls=[['n',0,-1],['s',0,1],['e',1,0],['w',-1,0]];
+ let touched=false;
+ for(const [dir,dx,dz] of controls){
+  const x=mobileStart.x+dx,z=mobileStart.z+dz;
+  if(!(await mobile.evaluate(([a,b])=>window.__editorTest.canStep(a,b),[x,z])))continue;
+  await mobile.locator('[data-poi-dir="'+dir+'"]').tap();
+  assert.deepEqual((await snap(mobile)).position,{x,z,level:0},'touch movement');
+  touched=true;break;
+ }
+ assert(touched,'no legal movement from base spawn');
  if(out)await mobile.screenshot({path:out+'/mobile.png'});
  await expectStore(mobile);
  assert.deepEqual(errors,[],'page errors');
