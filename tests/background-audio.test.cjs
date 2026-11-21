@@ -21,12 +21,12 @@ function audioHarness(){
   createBuffer(){return {getChannelData:()=>new Float32Array(24)}}
   suspend(){this.state='suspended';return Promise.resolve()}resume(){this.state='running';return Promise.resolve()}
  }
- const activeTimers=new Set();let timerId=0;const settingWrites=[];
+ const activeTimers=new Set();let timerId=0,wildPauses=0;const settingWrites=[];
  const window=events({AudioContext}),document=events({hidden:false});
  const ctx=vm.createContext({window,document,localStorage:{getItem(){return null},setItem(...a){settingWrites.push(a)}},
-  console,facilitySite:null,poiWalkActive:false,setInterval(fn){activeTimers.add(++timerId);return timerId},clearInterval(id){activeTimers.delete(id)}});
+  console,facilitySite:null,poiWalkActive:false,poiWildPause(){wildPauses++;},setInterval(fn){activeTimers.add(++timerId);return timerId},clearInterval(id){activeTimers.delete(id)}});
  vm.runInContext(html.slice(begin,end),ctx);
- return {window,document,sources,activeTimers,settingWrites,
+ return {window,document,sources,activeTimers,settingWrites,wildPauses:()=>wildPauses,
   eval:(s)=>vm.runInContext(s,ctx), situation:()=>vm.runInContext(
   '({context:poiAudioContext?.state,ambient:poiAudioAmbient.length,music:poiAudioNotes.size,master:poiAudioMaster?.gain.value,levels:JSON.stringify(poiAudioLevels),effects:typeof poiAudioTransient==="undefined"?null:poiAudioTransient.size})',ctx)};
 }
@@ -59,6 +59,7 @@ test('pagehide and native background guards are independent and cannot restart e
  h.window.__workshopAudioForeground(true);assert.equal(h.activeTimers.size,0,'pagehide still blocks');
  h.window.dispatch('pageshow');assert.equal(h.activeTimers.size,1);
  h.window.__workshopAudioForeground(false);assert.equal(h.activeTimers.size,0);
+ assert.equal(h.wildPauses(),1,'native pause also disarms the wilderness frame timer');
  h.document.dispatch('visibilitychange');assert.equal(h.activeTimers.size,0,'native pause still blocks');
  h.eval('poiWalkActive=false;poiAudioStop()');
  h.window.__workshopAudioForeground(true);assert.equal(h.activeTimers.size,0);
