@@ -49,14 +49,14 @@ function harness(id) {
    return row;
   });
  };
- return {nodes,now,notes,timers,writes,fx,run,wind:()=>nodes.find(n=>n.kind==='filter'&&n.type==='lowpass').next.gain.value,
-  rustle:()=>nodes.find(n=>n.kind==='filter'&&n.frequency.value===1450).next.gain.value,
+ return {nodes,now,notes,timers,writes,fx,run,wind:()=>nodes.find(n=>n.kind==='filter'&&n.type==='lowpass')?.next.gain.value,
+  rustle:()=>nodes.find(n=>n.kind==='filter'&&n.frequency.value===1450)?.next.gain.value,
   creek:()=>nodes.find(n=>n.kind==='filter'&&n.frequency.value===1050)?.next.gain.value};
 }
-test('base ambience has a small reduction while the piano, global mixer and stock ambience stay intact',()=>{
+test('continuous wind/rustle are gone while the local creek, piano and mixer stay intact',()=>{
  const b=harness('base'),k=harness('kitchen'),e=harness(null);
- assert.deepEqual([b.wind(),b.rustle(),b.creek()],[.14,.039,.145]);
- for(const a of [k,e])assert.deepEqual([a.wind(),a.rustle(),a.creek()],[.17,.05,undefined]);
+ assert.deepEqual([b.wind(),b.rustle(),b.creek()],[undefined,undefined,.145]);
+ for(const a of [k,e])assert.deepEqual([a.wind(),a.rustle(),a.creek()],[undefined,undefined,undefined]);
  for(const a of [b,k,e]){
   assert.deepEqual(a.writes,[]);
   assert.equal(a.nodes.find(n=>n.kind==='music').gain.value,.38*68/100);

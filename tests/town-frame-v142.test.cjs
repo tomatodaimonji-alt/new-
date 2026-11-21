@@ -22,19 +22,22 @@ function inverse(value){
 const tuple=o=>JSON.stringify([o.x,o.z,o.y,o.type,o.rot]);
 
 const history=require('./town-frame-history.cjs');
-test('108×68 public builder moves the complete old town, creek, canal, heights and spawn by exactly +12, +12',()=>{
- assert.deepEqual([live.townOffset,live.map.size,live.map.width,live.map.height],[12,108,108,68]);
- const {townOffset,map:{world,...map},...meta}=inverse(live);
+test('the previous 108×68 frame preserves its complete +12, +12 translation from v141',()=>{
+ // Independently pinned v144 original-record guard confirms no old cells
+ // change as the public builder gains the new eastern/southern margin.
+ const framed=require('./town-frame-v144-projection.cjs').originalFrame(live);
+ assert.equal(framed.townOffset,12);
+ const {townOffset,map:{world,...map},...meta}=inverse(framed);
  map.size=96;map.width=96;map.height=56;
  assert.equal(digest({map,...meta}),prior.metadata,'all v141 metadata translated with no other edits');
- assert.equal(new Set(live.map.world.map(tuple)).size,world.length,'no duplicate live rows');
+ assert.equal(new Set(framed.map.world.map(tuple)).size,world.length,'no duplicate live rows');
  const marginSet=new Set(history.fixture.addedMargin.map(r=>JSON.stringify(r)));
- const liveRecords=new Set(live.map.world.map(tuple));
+ const liveRecords=new Set(framed.map.world.map(tuple));
  for(const row of history.fixture.addedMargin){
   assert(row[0]<12||row[1]<12||row[0]===12&&row[1]>=38&&row[1]<=40,'margin only');
   assert(liveRecords.has(JSON.stringify(row)),'new exterior margin: '+row);
  }
- const interior=live.map.world.filter(o=>!marginSet.has(tuple(o))).map(inverse);
+ const interior=framed.map.world.filter(o=>!marginSet.has(tuple(o))).map(inverse);
  const present=new Set(interior.map(tuple));
  for(const r of history.added)assert(present.has(r),'intentional approach/gate row '+r);
  for(const r of history.removed)assert(!present.has(r),'replaced wall row '+r);

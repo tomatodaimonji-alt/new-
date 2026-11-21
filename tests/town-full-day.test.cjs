@@ -6,7 +6,7 @@ const world=site.map.world,worldBefore=JSON.stringify(world),inside=new Set(site
 const water=new Set([...site.creek.deep,...site.canal.water].map(o=>o.x+','+o.z));
 const parts=new Map([site.creek.crossings,...site.canal.bridgePairs].flat().map(o=>[o.x+','+o.z,o]));
 let ms=0;const x={world,MAP_W:site.map.width,MAP_H:site.map.height,facilitySite:{...site,id:'base'},poiWalkActive:true,poiWalkLevel:0,
- poiWalkX:31,poiWalkZ:33,poiWalkFacing:0,pineAIActive:false,poiMonsterStates:new Map(),poiMonsterMeshDirty:false,
+ poiWalkX:41,poiWalkZ:43,poiWalkFacing:0,pineAIActive:false,poiMonsterStates:new Map(),poiMonsterMeshDirty:false,
  poiAudioAllowed:()=>true,poiMonsterAt:()=>null,terrainLevel:()=>0,terrainPassable:()=>true,isWallId:t=>/wall/.test(t),
  validPos:(x,z)=>x>=0&&x<site.map.width&&z>=0&&z<site.map.height,facilityFloorOwner:(x,z)=>inside.has(x+','+z)?0:null,
  facilityCreekIndex:{water,parts,shallows:new Map()},POI_MONSTER_STATS:{monsterSlime:{hp:35,attack:6}},
@@ -17,10 +17,10 @@ let ms=0;const x={world,MAP_W:site.map.width,MAP_H:site.map.height,facilitySite:
  }};
 vm.createContext(x);vm.runInContext(cut('function poiWalkPassableDoor(','let facilityCreekIndex=')+cut('function isFloor(','// Tabletop decor')+cut('const POI_SAFE_TOWN=','const poiMiniStatic=')+cut('const POI_WILD_MAX=','function poiMonsterCanMove(')+cut('const POI_TOWN_RESIDENT_ROLES=','let cameraTopDown='),x);
 const phases=new Map();
-for(ms=0;ms<15*60*500;ms+=380){
+for(ms=0;ms<15*60*500;ms+=95){
  x.poiTownResidentsFrame(ms);
  for(const a of x.poiTownResidentsSnapshot().actors){let seen=phases.get(a.id);if(!seen){seen=new Map();phases.set(a.id,seen)}
-  if(!seen.has(a.activity))seen.set(a.activity,{minute:x.poiTownClockSnapshot().minute,hp:a.hp,x:a.x,z:a.z,y:a.y});
+  if(!seen.has(a.activity)||(a.activity==='fight'&&a.hp<seen.get('fight').hp))seen.set(a.activity,{minute:x.poiTownClockSnapshot().minute,hp:a.hp,x:a.x,z:a.z,y:a.y});
  }
 }
 
@@ -34,8 +34,8 @@ for(const a of [own,traveler]){
  assert.equal(a.get('rest-inn').hp,100);
  assert.equal(a.get('rest-inn').y,1);
 }
-assert.equal(own.get('buy-toolshop').x,59);
-assert.equal(own.get('buy-toolshop').z,25);
+assert.equal(own.get('buy-toolshop').x,69);
+assert.equal(own.get('buy-toolshop').z,35);
 assert(own.has('sleep-home')&&!own.has('sleep-inn'));
 assert(traveler.has('sleep-inn')&&!traveler.has('sleep-home'));
 assert.equal(JSON.stringify(world),worldBefore,'simulation never edits the built world');

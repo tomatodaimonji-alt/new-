@@ -42,17 +42,31 @@ test('host service books a real bed once, reserves it against others and heals o
  assert.equal(x.poiTownRestPlayer().ok,true);assert.equal(x.poiPlayerHP,100);
  assert.equal(x.poiTownPlayerService(),null);
 });
-test('adventurer trades actual blows with a slime then reports HP without changing the map or coins',()=>{
+test('adventurer and independent counter resolve at visible contact, not at windup',()=>{
  const x=setup(),obj={type:'monsterSlime',y:0};
- const slime={x:8,z:2,hp:35,townOwned:true,townHunt:'adventurer'};
+ const slime={x:8,z:2,hp:35,townOwned:true,townHunt:'adventurer',nextAttack:0};
  x.poiMonsterStates.set(obj,slime);
  const a={role:{id:'adventurer'},x:7,z:2,y:0,facing:0,hp:100,attacks:0,attackAt:0,target:obj};
  assert(x.poiTownNpcFight(a,0,{plans:2}));
- assert.equal(a.activity,'fight');assert.equal(slime.hp,22);assert.equal(a.hp,94);
- assert(x.poiTownNpcFight(a,500,{plans:2}));assert.equal(a.attacks,1);
- assert(x.poiTownNpcFight(a,800,{plans:2}));
- assert(x.poiTownNpcFight(a,1600,{plans:2}));
- assert.equal(a.attacks,3);assert.equal(a.coins,3);assert.equal(slime.hp,0);assert.equal(a.hp,88);assert.equal(a.target,null);
+ assert.equal(a.activity,'fight');assert.equal(a.facing,1);assert.equal(a.swingAt,0);
+ assert.equal(slime.hp,35);assert.equal(a.hp,100);
+ x.poiTownNpcResolve(a,107);assert.equal(slime.hp,35);
+ x.poiTownNpcResolve(a,108);assert.equal(slime.hp,22);assert.equal(a.hp,100);
+ x.poiTownNpcResolve(a,169);assert.equal(a.hp,100);
+ x.poiTownNpcResolve(a,170);assert.equal(a.hp,94);
+ x.poiTownNpcFight(a,800,{plans:2});x.poiTownNpcResolve(a,908);
+ assert.equal(slime.hp,9);assert.equal(a.attacks,2);
+ x.poiTownNpcFight(a,1600,{plans:2});x.poiTownNpcResolve(a,1708);
+ assert.equal(a.attacks,3);assert.equal(a.coins,3);assert.equal(slime.hp,0);assert.equal(a.target,null);
+});
+test('a moving or removed target is not hit through air; the player HP remains independent',()=>{
+ const x=setup(),obj={type:'monsterSlime',y:0},slime={x:8,z:2,hp:35,townOwned:true,townHunt:'adventurer',nextAttack:0};
+ x.poiMonsterStates.set(obj,slime);
+ const a={role:{id:'adventurer'},x:7,z:2,y:0,facing:0,hp:100,attacks:0,attackAt:0,target:obj};
+ x.poiTownNpcFight(a,0,{plans:2});slime.z++;
+ x.poiTownNpcResolve(a,108);x.poiTownNpcResolve(a,170);
+ assert.equal(slime.hp,35);assert.equal(a.hp,100);assert.equal(x.poiPlayerHP,46);
+ assert.equal(a.hitAt,null);assert.equal(slime.counterHitAt,null);
 });
 test('healthy traveler checks in before night; a resident gives back a healed spare room and goes home',()=>{
  const x=setup(),bed=x.POI_TOWN_INN_BEDS[0];

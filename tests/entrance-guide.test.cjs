@@ -4,7 +4,7 @@ const extract=(a,b)=>{const i=html.indexOf(a),j=html.indexOf(b,i+1);assert(i>=0&
 const ids=['base','lodging','kitchen','workshop','artisan','stable','toolshop','homes'];
 const build=vm.runInNewContext(extract('const FACILITY_SITES=','function workshopResumeDecode(')+';buildFacilitySite');
 test('stable doorstep has a single gravel threshold on the retained earth approach',()=>{
- for(const [id,x,z] of [['base',22,54],['stable',10,12]]){
+ for(const [id,x,z] of [['base',32,64],['stable',10,12]]){
   const {map}=build(id);const at=(x,z)=>map.world.filter(o=>o.x===x&&o.z===z&&o.y===0).map(o=>o.type);
   assert.deepEqual(Array.from(at(x,z)),['roadGravelFull']);
   assert.deepEqual(Array.from(at(x,z+1)),['earth']);

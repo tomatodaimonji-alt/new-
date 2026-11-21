@@ -45,8 +45,8 @@ test('eight deterministic site IDs and exact and varied building footprints',()=
   const site=buildFacilitySite(id);
   assert.equal(JSON.stringify(site),JSON.stringify(buildFacilitySite(id)));
   if(id==='base'){
-   assert.equal(site.map.width,108);assert.equal(site.map.height,68);
-   assert.ok(site.map.world.length<5380);
+   assert.equal(site.map.width,128);assert.equal(site.map.height,96);
+   assert.ok(site.map.world.filter(({x,z})=>x>=10&&x<118&&z>=10&&z<78).length<5380);
    assert.deepEqual(Array.from(site.buildings,b=>b.id),buildingIds);
   }else{
    assert.ok(site.map.width<=48&&site.map.height<=38&&site.map.world.length<2200);

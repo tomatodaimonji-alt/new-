@@ -28,9 +28,9 @@ function audioHarness(){
  vm.runInContext(html.slice(begin,end),ctx);
  return {window,document,sources,activeTimers,settingWrites,wildPauses:()=>wildPauses,
   eval:(s)=>vm.runInContext(s,ctx), situation:()=>vm.runInContext(
-  '({context:poiAudioContext?.state,ambient:poiAudioAmbient.length,music:poiAudioNotes.size,master:poiAudioMaster?.gain.value,levels:JSON.stringify(poiAudioLevels),effects:typeof poiAudioTransient==="undefined"?null:poiAudioTransient.size})',ctx)};
+  '({context:poiAudioContext?.state,music:poiAudioNotes.size,master:poiAudioMaster?.gain.value,levels:JSON.stringify(poiAudioLevels),effects:typeof poiAudioTransient==="undefined"?null:poiAudioTransient.size})',ctx)};
 }
-test('background cancels current and scheduled audio, keeps settings, restarts only one ambient loop',()=>{
+test('background cancels current and scheduled audio, keeps settings, restarts only one music scheduler',()=>{
  const h=audioHarness();
  h.eval('poiWalkActive=true;poiAudioStart();poiSound("attack")');
  assert.equal(h.activeTimers.size,1);

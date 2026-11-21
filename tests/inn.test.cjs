@@ -34,7 +34,7 @@ test('larger upper footprint covers every lower tile except the single matched s
   const [p]=holes;
   assert.ok(at(...p,0).some(o=>o.type==='guildStairUp')&&at(...p,1).some(o=>o.type==='guildStairDown'));
   assert.equal(map.filter(o=>o.y===1&&o.type==='guildStairDown').length,1);
-  assert.equal(b.z2,scope==='base'?23:13);
+  assert.equal(b.z2,scope==='base'?33:13);
  }
 });
 test('every upstairs bedroom is a separate four-plus-tile room with exactly one real door to an enclosed common hall',()=>{

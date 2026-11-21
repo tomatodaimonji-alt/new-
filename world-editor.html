@@ -747,7 +747,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 #poiShopBuyPotion:not(:disabled){border-color:#ebca82;background:#81663ce8!important}
 #poiShopFeedback{min-height:1.4em}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v143）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v144）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -2960,14 +2960,22 @@ case 'humanKnight':{
  cube(m,x,y+1.07,z,.38,.38,.36,steel);
  cube(m,x,y+1.25,z+.184,.28,.080,.025,shade);
  cube(m,x,y+1.40,z,.40,.14,.39,bright);
- for(const s of [-1,1]){cube(m,x+s*.335,y+.78,z,.22,.23,.30,bright);cube(m,x+s*.32,y+.35,z+.035,.13,.39,.16,steel)}
+ for(const s of [-1,1]){
+  const start=m.p.length;
+  cube(m,x+s*.335,y+.78,z,.22,.23,.30,bright);cube(m,x+s*.32,y+.35,z+.035,.13,.39,.16,steel);
+  if(m.townParts)m.townParts[s>0?'right':'left']=[start,m.p.length];
+ }
  // Sword and shield are distinct silhouette elements.
+ const sword=m.p.length;
  cube(m,x+.42,y+.11,z+.09,.09,.87,.085,bright);
  cube(m,x+.42,y+.87,z+.09,.29,.09,.16,gold);
  cube(m,x+.42,y+.07,z+.09,.12,.20,.12,[.38,.26,.17]);
+ if(m.townParts)m.townParts.sword=[sword,m.p.length];
+ const shield=m.p.length;
  cube(m,x-.43,y+.44,z+.16,.34,.52,.14,shade);
  cube(m,x-.43,y+.51,z+.238,.21,.32,.024,blue);
  cube(m,x-.43,y+.56,z+.254,.07,.17,.018,gold);
+ if(m.townParts)m.townParts.shield=[shield,m.p.length];
  break;}
 case 'monsterSkeleton':{
  // Bone body with conspicuous ribs, hollow eyes and jaw.
@@ -5186,7 +5194,7 @@ const POI_WALK_MS=175;
 // v40: original offline soundscape and layered game sound design.
 const PINE_AUDIO_SETTINGS_KEY='world-workshop-audio-v2';
 let poiAudioContext=null,poiAudioMaster=null,poiAudioMusic=null,poiAudioAmbience=null,poiAudioEffects=null;
-let poiAudioAmbient=[],poiAudioInterval=null,poiAudioNoise=null,poiAudioEnabled=true,poiAudioNotes=new Set();
+let poiAudioInterval=null,poiAudioNoise=null,poiAudioEnabled=true,poiAudioNotes=new Set();
 const poiAudioTransient=new Set();
 let poiAudioPageHidden=false,poiAudioNativeForeground=true;
 function poiAudioAllowed(){return !document.hidden&&!poiAudioPageHidden&&poiAudioNativeForeground}
@@ -5320,7 +5328,7 @@ function poiAudioMusicPhrase(){
  if(facilitySite?.id==='base'){poiAudioBaseMusicPhrase(poiAudioContext.currentTime);return}
  const t=poiAudioContext.currentTime+.09;
  // Original slow post-apocalyptic felt-piano sketch. Long silences are intentional.
- // D minor / B flat / F maj7 / A minor; wind remains audible beneath it.
+ // D minor / B flat / F maj7 / A minor.
  const progression=[
   [146.83,174.61,220.00,293.66],
   [116.54,174.61,233.08,293.66],
@@ -5379,22 +5387,9 @@ function poiAudioStart(wake=false){
   if(wake||ctx.state!=='running')ctx.resume().catch(()=>{});
   if(wake)poiAudioApplyLevels();
   poiCreekAudioSync();
-  if(poiAudioAmbient.length)return;
-  // Set the base's outdoor bed behind the music without changing either slider.
-  const baseMix=facilitySite?.id==='base';
-  // Long soft wind and leafy rustle. No remote media/network required.
-  const wind=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),g=ctx.createGain();
-  wind.buffer=poiAudioNoiseBuffer();wind.loop=true;
-  filter.type='lowpass';filter.frequency.value=550;g.gain.value=baseMix ? .14 : .17;
-  wind.connect(filter).connect(g).connect(poiAudioAmbience);
-  wind.start();poiAudioAmbient.push(wind);
-  const lfo=ctx.createOscillator(),lg=ctx.createGain();
-  lfo.type='sine';lfo.frequency.value=.11;lg.gain.value=baseMix ? .044 : .055;
-  lfo.connect(lg).connect(g.gain);lfo.start();poiAudioAmbient.push(lfo);
-  const rustle=ctx.createBufferSource(),rf=ctx.createBiquadFilter(),rg=ctx.createGain();
-  rustle.buffer=poiAudioNoiseBuffer();rustle.loop=true;
-  rf.type='bandpass';rf.frequency.value=1450;rf.Q.value=.35;rg.gain.value=baseMix ? .039 : .05;
-  rustle.connect(rf).connect(rg).connect(poiAudioAmbience);rustle.start();poiAudioAmbient.push(rustle);
+  // Only the scheduled music and positional water are continuous.
+  // Use the timer, not a wind-source count, to guard repeated foreground signals.
+  if(poiAudioInterval!==null)return;
   poiAudioMusicPhrase();poiAudioInterval=setInterval(poiAudioMusicPhrase,facilitySite?.id==='base'?200:8000);
  }catch(e){console.warn('Audio unavailable',e)}
 }
@@ -5414,8 +5409,6 @@ function poiAudioStop(suspend=false){
  for(const note of poiAudioNotes){try{note.stop()}catch(e){}}
  poiAudioNotes.clear();
  poiBaseMusicStart=null;
- for(const node of poiAudioAmbient){try{node.stop()}catch(e){}try{node.disconnect()}catch(e){}}
- poiAudioAmbient=[];
 }
 function poiAudioNoiseBurst(when,duration,frequency,q,peak,attack=.008,fallTo=0){
  const ctx=poiAudioContext,src=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),gain=ctx.createGain();
@@ -6377,34 +6370,34 @@ function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMo
 // Facing is the walking convention: 0=N, 1=E, 2=S, 3=W.
 const POI_TOWN_RESIDENT_ROLES=Object.freeze([
  {id:'guildkeeper',name:'ギルド受付係',role:'keeper',type:'humanMerchant',homeBuilding:'cottage',workBuilding:'townGuild',
-  work:{x:46,z:17,y:0,facing:2},public:{x:46,z:19,y:0,facing:0},
-  home:{x:63,z:49,y:0,facing:0},bed:{x:63,z:48,y:0,facing:0}},
+  work:{x:56,z:27,y:0,facing:2},public:{x:56,z:29,y:0,facing:0},
+  home:{x:73,z:59,y:0,facing:0},bed:{x:73,z:58,y:0,facing:0}},
  {id:'innkeeper',name:'宿屋の主人',role:'keeper',type:'humanMerchant',homeBuilding:'lodging',workBuilding:'lodging',
-  work:{x:31,z:20,y:0,facing:2},public:{x:31,z:22,y:0,facing:0},
-  home:{x:30,z:15,y:0,facing:3},bed:{x:29,z:15,y:0,facing:0}},
+  work:{x:41,z:30,y:0,facing:2},public:{x:41,z:32,y:0,facing:0},
+  home:{x:40,z:25,y:0,facing:3},bed:{x:39,z:25,y:0,facing:0}},
  {id:'diningkeeper',name:'食堂の主人',role:'keeper',type:'humanMerchant',homeBuilding:'artisan',workBuilding:'kitchen',
-  work:{x:21,z:26,y:0,facing:2},public:{x:22,z:28,y:0,facing:0},
-  home:{x:60,z:37,y:0,facing:1},bed:{x:61,z:37,y:0,facing:1}},
+  work:{x:31,z:36,y:0,facing:2},public:{x:32,z:38,y:0,facing:0},
+  home:{x:70,z:47,y:0,facing:1},bed:{x:71,z:47,y:0,facing:1}},
  {id:'workshopkeeper',name:'工房の職人',role:'keeper',type:'humanVillager',homeBuilding:'gardener',workBuilding:'workshop',
-  work:{x:70,z:22,y:0,facing:3},public:{x:68,z:22,y:0,facing:1},
-  home:{x:69,z:48,y:0,facing:0},bed:{x:69,z:47,y:0,facing:0}},
+  work:{x:80,z:32,y:0,facing:3},public:{x:78,z:32,y:0,facing:1},
+  home:{x:79,z:58,y:0,facing:0},bed:{x:79,z:57,y:0,facing:0}},
  {id:'toolkeeper',name:'道具屋の店主',role:'keeper',type:'humanMerchant',homeBuilding:'toolshop',workBuilding:'toolshop',
-  work:{x:61,z:25,y:0,facing:3},public:{x:59,z:25,y:0,facing:1},
-  home:{x:58,z:21,y:0,facing:0},bed:{x:58,z:20,y:0,facing:0}},
+  work:{x:71,z:35,y:0,facing:3},public:{x:69,z:35,y:0,facing:1},
+  home:{x:68,z:31,y:0,facing:0},bed:{x:68,z:30,y:0,facing:0}},
  {id:'stablekeeper',name:'厩舎番',role:'keeper',type:'humanVillager',homeBuilding:'lodging',workBuilding:'stable',
-  work:{x:25,z:51,y:0,facing:2},public:{x:24,z:51,y:0,facing:1},
-  home:{x:34,z:16,y:1,facing:0},bed:{x:34,z:15,y:1,facing:2}},
+  work:{x:35,z:61,y:0,facing:2},public:{x:34,z:61,y:0,facing:1},
+  home:{x:44,z:26,y:1,facing:0},bed:{x:44,z:25,y:1,facing:2}},
  {id:'resadventurer',name:'街に住む冒険者',role:'adventurer',type:'humanKnight',homeBuilding:'rowhouse',workBuilding:null,
-  work:{x:35,z:62,y:0,facing:2},public:{x:48,z:30,y:0,facing:2},
-  home:{x:66,z:37,y:0,facing:0},bed:{x:66,z:36,y:0,facing:0}},
+  work:{x:45,z:72,y:0,facing:2},public:{x:58,z:40,y:0,facing:2},
+  home:{x:76,z:47,y:0,facing:0},bed:{x:76,z:46,y:0,facing:0}},
  {id:'guestadventurer',name:'旅の冒険者',role:'adventurer',type:'humanKnight',homeBuilding:'lodging',workBuilding:null,
-  work:{x:78,z:57,y:0,facing:1},public:{x:44,z:30,y:0,facing:2},
-  home:{x:29,z:16,y:1,facing:0},bed:{x:29,z:15,y:1,facing:2}}
+  work:{x:88,z:67,y:0,facing:1},public:{x:54,z:40,y:0,facing:2},
+  home:{x:39,z:26,y:1,facing:0},bed:{x:39,z:25,y:1,facing:2}}
 ]);
-const POI_TOWN_INN=Object.freeze({hostId:'innkeeper',desk:{x:31,z:22,y:0,facing:0},beds:Object.freeze([
- {id:'inn-west',x:29,z:15,y:1,facing:2,residentId:'guestadventurer',stand:{x:29,z:16,y:1,facing:0}},
- {id:'inn-east',x:34,z:15,y:1,facing:2,residentId:'stablekeeper',stand:{x:34,z:16,y:1,facing:0}},
- {id:'inn-south',x:30,z:21,y:1,facing:2,residentId:null,stand:{x:30,z:20,y:1,facing:2}}
+const POI_TOWN_INN=Object.freeze({hostId:'innkeeper',desk:{x:41,z:32,y:0,facing:0},beds:Object.freeze([
+ {id:'inn-west',x:39,z:25,y:1,facing:2,residentId:'guestadventurer',stand:{x:39,z:26,y:1,facing:0}},
+ {id:'inn-east',x:44,z:25,y:1,facing:2,residentId:'stablekeeper',stand:{x:44,z:26,y:1,facing:0}},
+ {id:'inn-south',x:40,z:31,y:1,facing:2,residentId:null,stand:{x:40,z:30,y:1,facing:2}}
 ])});
 const POI_TOWN_INN_BEDS=POI_TOWN_INN.beds;
 
@@ -6509,10 +6502,16 @@ function poiTownNpcInit(clock){
  if(poiTownNpcActors.length)return;
  poiTownNpcActors=POI_TOWN_RESIDENT_ROLES.map((role,index)=>{
   const night=clock.minute<POI_TOWN_WAKE||clock.minute>=20*60;
-  const traveler=role.role==='adventurer'&&POI_TOWN_INN_BEDS.some(b=>b.residentId===role.id);
-  const start=night&&!traveler?role.home:role.role==='keeper'?role.work:role.public||role.home;
+  const assigned=role.role==='adventurer'&&POI_TOWN_INN_BEDS.find(b=>b.residentId===role.id);
+  // Like the residents' private beds, an assigned guest room can be
+  // reconstructed after a cold evening launch; no clerk or spare room is used.
+  const bed=assigned&&(clock.minute<POI_TOWN_WAKE||clock.minute>=POI_TOWN_CLOSE)&&
+   poiTownNpcExistsBed(assigned)&&poiTownNpcStance(assigned.stand)?assigned:null;
+  const start=bed?.stand||(night&&!assigned?role.home:role.role==='keeper'?role.work:role.public||role.home);
   const p=poiTownNpcStance(start)?start:role.home;
-  return {role,...p,index,hp:100,activity:'idle',attacks:0,coins:0,potions:0,bedId:null,path:null,nextPlan:0,attackAt:0,encounterAt:0};
+  const morning=clock.absoluteMinute-clock.minute+POI_TOWN_WAKE+(clock.minute>=POI_TOWN_WAKE?1440:0);
+  return {role,...p,index,hp:100,activity:'idle',attacks:0,coins:0,potions:0,bedId:bed?.id??null,
+   bedUntil:bed?morning:null,restUntil:null,path:null,nextPlan:0,attackAt:0,encounterAt:0};
  });
  poiTownNpcVersion++;
 }
@@ -6600,22 +6599,76 @@ function poiTownNpcPickTarget(a,now){
  }
  return null;
 }
+const POI_TOWN_SWING_CONTACT=108,POI_TOWN_COUNTER_CONTACT=170;
+function poiTownNpcCombatNear(x,z,y){
+ return y===poiWalkLevel&&Math.hypot(x-poiWalkX,z-poiWalkZ)<=9;
+}
+function poiTownNpcMelee(a,state){
+ return a.y===0&&Math.abs(state.x-a.x)+Math.abs(state.z-a.z)===1;
+}
+function poiTownNpcFaces(ax,az,bx,bz){return bx>ax?1:bx<ax?3:bz>az?2:0}
+function poiTownNpcResolve(a,now){
+ const obj=a.target,state=obj&&poiMonsterStates.get(obj);
+ if(!state?.townOwned||state.townHunt!==a.role.id||state.hp<=0){
+  a.hitAt=null;
+  if(obj)poiTownNpcReleaseHunt(a);
+  return;
+ }
+ if(Number.isFinite(a.hitAt)&&now>=a.hitAt){
+  const recent=now-a.hitAt<340;
+  a.hitAt=null;
+  if(recent&&poiTownNpcMelee(a,state)&&a.facing===poiTownNpcFaces(a.x,a.z,state.x,state.z)){
+   a.attacks++;a.lastHitAt=now;state.townHurtAt=now;state.hp=Math.max(0,state.hp-13);poiMonsterMeshDirty=true;
+   if(poiTownNpcCombatNear(state.x,state.z,0)){
+    if(typeof poiDamageNumber==='function')poiDamageNumber(state.x+.5,state.z+.5,terrainY(state.x,state.z)+1.20,13);
+    if(typeof poiSound==='function')poiSound('hit','equipWoodSword',state.hp===0);
+    if(!state.hp&&typeof poiMonsterBreak==='function')poiMonsterBreak(obj,state,now);
+   }
+   if(!state.hp){
+    a.coins=Math.min(99,(a.coins||0)+POI_ECONOMY_COIN);poiTownNpcReleaseHunt(a);return;
+   }
+  }
+ }
+ if(Number.isFinite(state.counterHitAt)&&now>=state.counterHitAt){
+  const recent=now-state.counterHitAt<340;
+  state.counterHitAt=null;
+  if(recent&&poiTownNpcMelee(a,state)&&a.x===state.counterTargetX&&a.z===state.counterTargetZ){
+   const amount=POI_MONSTER_STATS.monsterSlime.attack||6;
+   a.hp=Math.max(1,a.hp-amount);a.hurtAt=now;poiTownNpcEmergencyHeal(a);
+   if(poiTownNpcCombatNear(a.x,a.z,a.y)){
+    if(typeof poiDamageNumber==='function')poiDamageNumber(a.x+.5,a.z+.5,terrainY(a.x,a.z)+1.56,amount);
+    if(typeof poiSound==='function')poiSound('hurt');
+   }
+  }
+ }
+}
+function poiTownNpcPreyAdvance(a,s,now){
+ if(a.y!==0||s.counterHitAt!=null||now<(s.nextMove||0)||Math.hypot(s.x-a.x,s.z-a.z)>6)return;
+ s.nextMove=now+750;
+ const dx=a.x-s.x,dz=a.z-s.z;
+ for(const [sx,sz] of [[Math.sign(dx),0],[0,Math.sign(dz)]].filter(p=>p[0]||p[1])
+    .sort((p,q)=>Math.abs(q[0]*dx+q[1]*dz)-Math.abs(p[0]*dx+p[1]*dz))){
+  const x=s.x+sx,z=s.z+sz,k=x+','+z;
+  if((x===a.x&&z===a.z)||(x===poiWalkX&&z===poiWalkZ&&poiWalkLevel===0)||
+     !poiWildExterior(x,z)||facilityCreekIndex?.water.has(k)||
+     !poiTownNpcHere(poiTownNpcNextTile({...s,y:0},x,z,poiTownNpcGraph()),{x,z,y:0})||
+     [...poiMonsterStates.values()].some(o=>o!==s&&o.hp>0&&o.x===x&&o.z===z))continue;
+  s.fromX=s.x;s.fromZ=s.z;s.facing=[2,1,0,3][poiTownNpcFaces(s.x,s.z,x,z)];
+  s.x=x;s.z=z;s.moveStarted=now;poiMonsterMeshDirty=true;return;
+ }
+}
 function poiTownNpcFight(a,now,budget){
  const obj=a.target,state=obj&&poiMonsterStates.get(obj);
  if(!state?.townOwned||state.townHunt!==a.role.id||state.hp<=0){poiTownNpcReleaseHunt(a);return false}
- const d=Math.abs(state.x-a.x)+Math.abs(state.z-a.z);
- if(d===1&&a.y===0){
-  poiTownNpcAct(a,'fight');
-  poiTownNpcFace(a,state.x>a.x?1:state.x<a.x?3:state.z>a.z?2:0);
-  if(now>=a.attackAt){
-   a.attackAt=now+760;a.attacks++;
-   state.hp=Math.max(0,state.hp-13);
-   if(state.hp>0){
-    a.hp=Math.max(1,a.hp-(POI_MONSTER_STATS.monsterSlime.attack||6));poiTownNpcEmergencyHeal(a);
-   }else{
-    a.coins=Math.min(99,(a.coins||0)+POI_ECONOMY_COIN);
-    poiMonsterMeshDirty=true;poiTownNpcReleaseHunt(a);
-   }
+ if(!poiTownNpcMelee(a,state))poiTownNpcPreyAdvance(a,state,now);
+ if(poiTownNpcMelee(a,state)){
+  poiTownNpcAct(a,'fight');poiTownNpcFace(a,poiTownNpcFaces(a.x,a.z,state.x,state.z));
+  if(now>=(a.attackAt||0)){
+   a.attackAt=now+760;a.swingAt=now;a.hitAt=now+POI_TOWN_SWING_CONTACT;
+  }
+  if(now>=(state.nextAttack||0)){
+   state.nextAttack=now+1120;state.counterAt=now;state.counterHitAt=now+POI_TOWN_COUNTER_CONTACT;
+   state.counterTargetX=a.x;state.counterTargetZ=a.z;poiMonsterMeshDirty=true;
   }
   return true;
  }
@@ -6623,8 +6676,11 @@ function poiTownNpcFight(a,now,budget){
   .filter(p=>poiWildExterior(p.x,p.z)&&poiTownNpcStance(p))
   .sort((p,q)=>(Math.abs(p.x-a.x)+Math.abs(p.z-a.z))-(Math.abs(q.x-a.x)+Math.abs(q.z-a.z)));
  if(!options.length){poiTownNpcReleaseHunt(a);return false}
- poiTownNpcAct(a,'hunt');poiTownNpcMove(a,options[0],'hunt',now,budget);
- if(a.nextPlan>now&&!a.path?.length&&!poiTownNpcHere(a,options[0])){poiTownNpcReleaseHunt(a);return false}
+ poiTownNpcAct(a,'hunt');
+ if(a.target===obj&&a.nextPlan>now&&!a.path?.length&&!poiTownNpcHere(a,a.goal)&&options.length>1){
+  const i=options.findIndex(p=>poiTownNpcHere(p,a.goal));
+  poiTownNpcMove(a,options[(i+1)%options.length],'hunt',now,budget);
+ }else poiTownNpcMove(a,options[0],'hunt',now,budget);
  return true;
 }
 function poiTownNpcEmergencyHeal(a){
@@ -6693,7 +6749,9 @@ function poiTownNpcRoutine(a,clock,now,budget){
  poiTownNpcAct(a,working?(done?'work':'going-work'):'errand');
 }
 function poiTownResidentsFrame(now){
- if(!poiTownNpcActive()||now<poiTownNpcNext)return;
+ if(!poiTownNpcActive())return;
+ for(const a of poiTownNpcActors)if(a.target||a.hitAt!=null)poiTownNpcResolve(a,now);
+ if(now<poiTownNpcNext)return;
  poiTownNpcNext=now+POI_TOWN_RESIDENT_TICK;
  const clock=poiTownClockSnapshot();if(!clock)return;
  if(poiTownNpcBook&&clock.absoluteMinute>=poiTownNpcBook.until)poiTownNpcBook=null;
@@ -6703,20 +6761,27 @@ function poiTownResidentsFrame(now){
 }
 function poiTownResidentsSnapshot(){
  return {actors:poiTownNpcActors.map(a=>({id:a.role.id,name:a.role.name,role:a.role.role,type:a.role.type,
-  x:a.x,z:a.z,y:a.y,facing:a.facing,activity:a.activity,goal:a.goal??null,hp:a.hp,attacks:a.attacks,coins:a.coins,potions:a.potions,bedId:a.bedId})),
+  x:a.x,z:a.z,y:a.y,facing:a.facing,activity:a.activity,goal:a.goal??null,hp:a.hp,attacks:a.attacks,coins:a.coins,potions:a.potions,bedId:a.bedId,
+  swingAt:a.swingAt??null,hitAt:a.hitAt??null,lastHitAt:a.lastHitAt??null,hurtAt:a.hurtAt??null})),
+  encounters:[...poiMonsterStates].filter(([,s])=>s.townOwned).map(([o,s])=>({owner:s.townHunt,type:o.type,
+   x:s.x,z:s.z,y:o.y,hp:s.hp,counterAt:s.counterAt??null,counterHitAt:s.counterHitAt??null})),
   innBeds:POI_TOWN_INN_BEDS.map(b=>({...b,occupant:poiTownNpcBedOwner(b)})),
   playerBedId:poiTownNpcBook?.bedId??null,playerService:poiTownPlayerService()};
 }
 const poiTownNpcModelCache=new Map();
 function poiTownNpcModel(type){
- if(!poiTownNpcModelCache.has(type)){const m=mesh();deco(m,type,0,0,0,0);poiTownNpcModelCache.set(type,m)}
+ if(!poiTownNpcModelCache.has(type)){
+  const m=mesh();if(type==='humanKnight')m.townParts={};
+  deco(m,type,0,0,0,0);poiTownNpcModelCache.set(type,m);
+ }
  return poiTownNpcModelCache.get(type);
 }
 function poiTownResidentsDraw(now,vp){
  if(!poiTownNpcActive()||!poiTownNpcActors.length)return;
  const moving=a=>a.fromY===a.y&&Number.isFinite(a.moveAt)&&now-a.moveAt<340;
- const anim=poiTownNpcActors.some(a=>a.y===poiWalkLevel&&moving(a));
- const key=poiTownNpcVersion+':'+poiWalkLevel+':'+(anim?Math.floor(now/82):'idle');
+ const inTime=(at,max)=>Number.isFinite(at)&&now>=at&&now-at<max;
+ const anim=poiTownNpcActors.some(a=>a.y===poiWalkLevel&&(moving(a)||inTime(a.swingAt,260)||inTime(a.hurtAt,155)));
+ const key=poiTownNpcVersion+':'+poiWalkLevel+':'+(anim?Math.floor(now/54):'idle');
  if(key!==poiTownNpcMeshKey){
   if(poiTownNpcMesh)gl.deleteBuffer(poiTownNpcMesh.buf);
   const m=mesh();
@@ -6730,13 +6795,37 @@ function poiTownResidentsDraw(now,vp){
    const h=(x,z)=>p.y===0?(facilityCreekIndex?.bridgeHeight?.get(x+','+z)??terrainY(x,z)):terrainY(x,z);
    const ground=t===1?h(p.x,p.z):h(a.fromX,a.fromZ)*(1-t)+h(p.x,p.z)*t;
    const y=ground+p.y*1.4+(bed?.57:.025),r=[2,3,0,1][p.facing]||0;
+   const pose=!bed&&part.townParts&&inTime(a.swingAt,260)?poiWalkSwordPose(now-a.swingAt):null;
+   const stride=bed?0:Math.sin(t*Math.PI)*.12;
+   const hurt=inTime(a.hurtAt,155)?(1-(now-a.hurtAt)/155)*.33:0;
+   const twist=pose?.twist||0,cs=Math.cos(twist),sn=Math.sin(twist),parts=part.townParts;
+   const arm=parts?characterArmRotation(pose?.strike||0,pose?.sweep||0):null;
+   const guard=pose?characterArmRotation(pose.guard*.58,0):null;
+   const wrist=parts?characterArmRotation(-(pose?.edgeTilt??.18),pose?.edgeYaw||0):null;
+   const grab=arm?arm(0,.43-.90,0):null;
+   const inPart=(i,key)=>parts?.[key]&&i>=parts[key][0]&&i<parts[key][1];
    for(let i=0;i<part.p.length;i+=3){
-    const px=part.p[i]*.88,py=part.p[i+1]*.88,pz=part.p[i+2]*.88;
-    const [xx,zz]=rot2(px,bed?py-.57:pz,r);
-    const [nx,nz]=rot2(part.n[i],bed?part.n[i+1]:part.n[i+2],r);
-    m.p.push(x+.5+xx,y+(bed?-pz:py),z+.5+zz);
-    m.n.push(nx,bed?-part.n[i+2]:part.n[i+1],nz);
-    m.c.push(part.c[i],part.c[i+1],part.c[i+2]);
+    let px=part.p[i],py=part.p[i+1],pz=part.p[i+2],nx=part.n[i],ny=part.n[i+1],nz=part.n[i+2];
+    if(!bed){
+     if(inPart(i,'sword')){
+      const w=wrist(px-.42,py-.17,pz-.09);
+      px=.32+grab[0]+w[0];py=.90+grab[1]+w[1];pz=.035+grab[2]+w[2]-(pose?0:stride*.35);
+      [nx,ny,nz]=wrist(nx,ny,nz);
+     }else if(pose&&inPart(i,'right')){
+      const w=arm(px-.32,py-.90,pz-.035);px=.32+w[0];py=.90+w[1];pz=.035+w[2];
+      [nx,ny,nz]=arm(nx,ny,nz);
+     }else if(guard&&(inPart(i,'left')||inPart(i,'shield'))){
+      const w=guard(px+.32,py-.90,pz-.035);px=-.32+w[0];py=.90+w[1];pz=.035+w[2];
+      [nx,ny,nz]=guard(nx,ny,nz);
+     }else if(py<.46&&Math.abs(px)<.24)pz+=px<0?-stride:stride;
+     else if(!pose&&py<.76&&Math.abs(px)>.25)pz+=px<0?stride*.35:-stride*.35;
+     if(pose&&py>.45){[px,pz]=[px*cs-pz*sn,pz*cs+px*sn];[nx,nz]=[nx*cs-nz*sn,nz*cs+nx*sn]}
+    }
+    const [xx,zz]=rot2(px*.88,bed?py*.88-.57:pz*.88,r);
+    const [dx,dz]=rot2(nx,bed?ny:nz,r);
+    m.p.push(x+.5+xx,y+.88*(bed?-pz:py),z+.5+zz);
+    m.n.push(dx,bed?-nz:ny,dz);
+    m.c.push(Math.min(1,part.c[i]+hurt),part.c[i+1]*(1-hurt*.39),part.c[i+2]*(1-hurt*.35));
    }
   }
   poiTownNpcMesh=m.p.length?upload(m):null;poiTownNpcMeshKey=key;
@@ -6770,7 +6859,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v143',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v144',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -6885,7 +6974,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v143';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v144';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -7099,7 +7188,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v143',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v144',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -7829,10 +7918,14 @@ const POI_MONSTER_FLIGHT_MS=760,POI_MONSTER_FADE_AT=10760;
 const poiMonsterBreaks=[],poiMonsterFragmentTemplates=new Map();
 function poiMonsterPose(obj,s,now){
  const t=Math.max(0,Math.min(1,(now-s.moveStarted)/380)),e=t*t*(3-2*t);
- const x=(s.fromX??s.x)+(s.x-(s.fromX??s.x))*e;
- const z=(s.fromZ??s.z)+(s.z-(s.fromZ??s.z))*e;
+ let x=(s.fromX??s.x)+(s.x-(s.fromX??s.x))*e;
+ let z=(s.fromZ??s.z)+(s.z-(s.fromZ??s.z))*e;
  const moving=t<1&&((s.fromX??s.x)!==s.x||(s.fromZ??s.z)!==s.z);
- const bounce=moving?.10*Math.sin(t*Math.PI):.02*Math.sin(now*.003+obj.x);
+ let bounce=moving?.10*Math.sin(t*Math.PI):.02*Math.sin(now*.003+obj.x);
+ if(s.townOwned&&Number.isFinite(s.counterAt)&&now>=s.counterAt&&now-s.counterAt<340){
+  const hop=Math.sin(Math.PI*(now-s.counterAt)/340);
+  x+=(s.counterTargetX-s.x)*.33*hop;z+=(s.counterTargetZ-s.z)*.33*hop;bounce+=.27*hop;
+ }
  return {x:x+.5,y:terrainY(s.x,s.z)+bounce+(facilitySite?obj.y*1.4:0),z:z+.5};
 }
 function poiMonsterFragmentTemplate(type){
@@ -7960,7 +8053,8 @@ function poiMonsterRender(now,vp){
  }
  const animate=poiMonsterBreaks.some(effect=>(!facilitySite||effect.floor===poiWalkLevel)&&
   (!effect.settled||poiMonsterBreakPhase(now-effect.start)==='fade'))||
-  [...poiMonsterStates.values()].some(s=>s.hp>0&&now-s.moveStarted<450);
+  [...poiMonsterStates.values()].some(s=>s.hp>0&&(now-s.moveStarted<450||
+   (s.townOwned&&(now-s.counterAt<390||now-s.townHurtAt<158))));
  if(!poiMonsterMesh||poiMonsterMeshDirty||(animate&&now-poiMonsterMeshLast>48)){
   const m=mesh();
   for(const [obj,s] of poiMonsterStates){
@@ -7968,12 +8062,13 @@ function poiMonsterRender(now,vp){
    const {x:cx,y,z:cz}=poiMonsterPose(obj,s,now),part=mesh();
    deco(part,obj.type,cx,y,cz,0);
    const facing=s.facing||0;
+   const flash=s.townOwned&&Number.isFinite(s.townHurtAt)?Math.max(0,1-(now-s.townHurtAt)/115)*.26:0;
    for(let i=0;i<part.p.length;i+=3){
     const [px,pz]=rot2(part.p[i]-cx,part.p[i+2]-cz,facing);
     const [nx,nz]=rot2(part.n[i],part.n[i+2],facing);
     m.p.push(cx+px,part.p[i+1],cz+pz);
     m.n.push(nx,part.n[i+1],nz);
-    m.c.push(part.c[i],part.c[i+1],part.c[i+2]);
+    m.c.push(Math.min(1,part.c[i]+flash),part.c[i+1]*(1-flash*.44),part.c[i+2]*(1-flash*.37));
    }
   }
   poiMonsterDrawBreaks(m,now);
@@ -12427,9 +12522,9 @@ function buildFacilitySite(id){
  const legacy=buildFacilitySiteLegacyFrame(id);
  if(id!=='base'||!legacy)return legacy;
  const townOffset=12,axes=new Set(['x','z','x1','x2','z1','z2']);
- const shift=value=>Array.isArray(value)?value.map(shift):value&&typeof value==='object'?
-  Object.fromEntries(Object.entries(value).map(([key,v])=>[key,axes.has(key)&&typeof v==='number'?v+townOffset:shift(v)])):value;
- const site=shift(legacy),map=site.map,world=map.world;
+ const shift=(value,by)=>Array.isArray(value)?value.map(v=>shift(v,by)):value&&typeof value==='object'?
+  Object.fromEntries(Object.entries(value).map(([key,v])=>[key,axes.has(key)&&typeof v==='number'?v+by:shift(v,by)])):value;
+ const site=shift(legacy,townOffset),map=site.map,world=map.world;
  map.width+=townOffset;map.height+=townOffset;map.size=map.width;
  const add=(x,z,type,rot=0)=>world.push({x,z,y:0,type,rot});
  // The old world fits untouched beyond the north and west additions.
@@ -12447,7 +12542,76 @@ function buildFacilitySite(id){
   [5,45,'rockMossy',2],[9,53,'flowerField'],[7,64,'tallGrass'],
   [76,4,'tallGrass'],[87,6,'flowerField'],[92,8,'grassMeadow']
  ])add(x,z,type,rot);
- return {...site,townOffset};
+ const margin=10,expanded=shift(site,margin);
+ extendTownWorldOutside(expanded,margin);
+ return {...expanded,townOffset:townOffset+margin};
+}
+
+// Four-sided exterior extension; authored locations all lie outside the translated v143 map.
+function extendTownWorldOutside(site,margin){
+ const map=site.map,oldEast=map.width+margin,oldSouth=map.height+margin;
+ map.width=map.size=128;map.height=96;
+ const outside=(x,z)=>(x<margin||z<margin||x>=oldEast||z>=oldSouth)&&
+  x>=0&&z>=0&&x<map.width&&z<map.height;
+ const surfaces=new Map(),land=(x,z,type)=>{
+  const key=x+','+z;
+  if(outside(x,z)&&!surfaces.has(key))surfaces.set(key,{x,z,y:0,type,rot:0});
+ };
+ for(const [x,north,south] of [
+  [118,74,75],[119,74,75],[120,75,76],[121,75,76],[122,76,77],
+  [123,76,77],[124,77,78],[125,77,78],[126,78,79],[127,78,79]
+ ])for(let z=north;z<=south;z++){land(x,z,'river');site.creek.deep.push({x,z});}
+ const trace=(points,type)=>{
+  let [x,z]=points[0];land(x,z,type);
+  for(const [xx,zz] of points.slice(1)){
+   while(x!==xx||z!==zz){x+=Math.sign(xx-x);z+=Math.sign(zz-z);land(x,z,type);}
+  }
+ };
+ // Join the old grass paths in every direction without writing to the old map.
+ trace([[34,10],[34,4],[39,4],[39,2]],'earth');
+ trace([[10,49],[4,49],[4,43],[2,43]],'earth');
+ trace([[41,77],[41,84],[57,84],[57,88],[76,88],[76,91],[97,91],[97,85],[112,85]],'earth');
+ trace([[117,66],[124,66],[124,72]],'earth');
+ trace([[34,4],[26,4],[26,7],[18,7]],'grassTrampled');
+ trace([[4,49],[4,63],[7,63],[7,75]],'grassTrampled');
+ trace([[41,84],[35,84],[35,88],[29,88]],'grassTrampled');
+ trace([[124,66],[124,57],[121,57],[121,51]],'grassTrampled');
+ trace([[112,85],[117,85],[117,82],[122,82]],'grassTrampled');
+ for(const [x,z,t] of [
+  [33,8,'grassPebbles'],[35,5,'grassTrampled'],[31,5,'grassMeadow'],[24,6,'grassMeadow'],
+  [8,48,'grassTrampled'],[6,50,'grassTrampled'],[3,52,'grassMeadow'],[5,63,'grassMeadow'],
+  [40,80,'grassTrampled'],[42,83,'grassTrampled'],[49,85,'grassMeadow'],[56,87,'grassMeadow'],
+  [61,89,'grassTrampled'],[73,87,'grassMeadow'],[87,92,'grassMeadow'],[98,90,'grassPebbles'],
+  [108,86,'grassPebbles'],[113,86,'grassTrampled'],[117,81,'grassMeadow'],[123,82,'grassPebbles'],
+  [119,65,'grassTrampled'],[123,67,'grassTrampled'],[123,72,'grassPebbles'],[122,75,'grassPebbles'],
+  [120,77,'grassPebbles'],[124,79,'grassPebbles'],[126,80,'grassPebbles']
+ ])land(x,z,t);
+ const occupied=new Set();
+ const detail=(x,z,type,rot=0)=>{
+  const key=x+','+z;
+  if(outside(x,z)&&!surfaces.has(key)&&!occupied.has(key)){
+   occupied.add(key);map.world.push({x,z,y:0,type,rot});
+  }
+ };
+ for(const [x,z,t,r=0] of [
+  [16,4,'treeBirch'],[21,3,'treePine'],[29,7,'treeBirch'],[42,5,'treeCedar'],
+  [49,4,'treeBirch'],[52,6,'treeOak'],[78,4,'treePine'],[91,4,'treeBirch'],
+  [30,2,'flowerField'],[37,8,'tallGrass'],[45,2,'flowerField'],[65,5,'rockMossy',1],
+  [4,22,'treePine'],[6,27,'treeBirch'],[5,38,'treeCedar'],[8,57,'treeBirch'],
+  [4,70,'treeOak'],[5,78,'treeCedar'],[6,34,'flowerField'],[6,46,'tallGrass'],
+  [6,52,'flowerField'],[2,60,'rockMossy',2],[4,75,'tallGrass'],
+  [30,82,'treeBirch'],[26,85,'treeCedar'],[41,91,'treeOak'],[53,94,'treeBirch'],
+  [66,81,'treeBirch'],[73,83,'treePine'],[83,84,'treeCedar'],[91,94,'treeBirch'],
+  [102,79,'treeBirch'],[108,82,'treePine'],[115,91,'treeOak'],[120,88,'treeBirch'],
+  [35,81,'flowerField'],[44,87,'tallGrass'],[54,91,'flowerField'],[64,93,'rockMossy',2],
+  [72,89,'tallGrass'],[80,94,'flowerField'],[90,85,'bushFlower'],
+  [104,91,'tallGrass'],[105,83,'flowerField'],[110,88,'rockCluster',1],
+  [120,47,'treeBirch'],[125,56,'treePine'],[119,61,'treeBirch'],[126,70,'treeWillow'],
+  [120,54,'flowerField'],[122,63,'tallGrass'],[120,72,'watersideRock',3],[125,76,'tallGrass'],
+  [124,85,'flowerField'],[126,83,'watersideRock',1],[126,92,'treeBirch'],
+  [122,29,'treePine'],[125,39,'treeBirch'],[120,41,'flowerField']
+ ])detail(x,z,t,r);
+ map.world.push(...surfaces.values());
 }
 
 function buildFacilitySiteLegacyFrame(id){
@@ -13127,7 +13291,7 @@ function workshopResumeDecode(raw){
   Number.isInteger(p.y)&&p.y>=-1&&p.y<=MAX_LEVEL&&Number.isInteger(p.facing)&&p.facing>=0&&p.facing<4
   ?{x:p.x,z:p.z,y:p.y,facing:p.facing}:null;
  return {version:1,route:d.route,id:d.route==='facility'?d.id:null,play:d.play===true,position,
-  ...(d.route==='facility'&&d.id==='base'&&([2,3,4].includes(d.townLayout))?{townLayout:d.townLayout}:{}),
+  ...(d.route==='facility'&&d.id==='base'&&([2,3,4,5].includes(d.townLayout))?{townLayout:d.townLayout}:{}),
   tag:typeof d.tag==='string'&&/^(empty|[a-f0-9]{8})$/.test(d.tag)?d.tag:null,
   view:view(d.view),editorView:view(d.editorView)};
 }
@@ -13159,7 +13323,7 @@ function workshopResumeWrite(override,seed=false){
  if(!workshopResumeReady||(workshopResumeLeaving&&!override))return;
  const route=facilitySite?'facility':pineGameActive?'adventure':poiWalkActive?'map-play':'editor';
  const record=override||{version:1,route,id:facilitySite?.id??null,play:poiWalkActive,
-  ...(facilitySite?.id==='base'?{townLayout:facilitySite.townOffset?4:3}:{}),
+  ...(facilitySite?.id==='base'?{townLayout:facilitySite.map.width===128&&facilitySite.map.height===96?5:facilitySite.townOffset?4:3}:{}),
   tag:route==='editor'||route==='map-play'?workshopResumeTag:null,
   position:poiWalkActive?{x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,facing:poiWalkFacing}:null,
   view:workshopResumeView(),editorView:facilitySite&&facilityEditView?workshopResumeView(facilityEditView):null};
@@ -13215,14 +13379,17 @@ function workshopResumeRestorePosition(p){
  return true;
 }
 function workshopResumeTownPosition(s,offset=0){
- if(!s.position||s.townLayout===4)return s.position;
- const p=workshopResumeEarlierTownPosition(s);if(!offset)return p;
- return {...p,x:p.x+offset,z:p.z+offset};
+ if(!s.position||s.townLayout>=5)return s.position;
+ const padded=s.townLayout===4,p=padded?s.position:workshopResumeEarlierTownPosition(s);
+ const shift=padded?Math.max(0,offset-12):offset;
+ return shift?{...p,x:p.x+shift,z:p.z+shift}:p;
 }
 function workshopResumeTownView(s,v,width,height,offset){
- if(!v||!offset||s.townLayout===4)return v;
+ if(!v||!offset||s.townLayout>=5)return v;
  // Editor pans are relative to the map center rather than to world origin.
- return {...v,panX:v.panX+offset-(width-96)/2,panZ:v.panZ+offset-(height-56)/2};
+ const padded=s.townLayout===4,oldW=padded?108:96,oldH=padded?68:56,shift=padded?offset-12:offset;
+ if(padded&&width===oldW&&height===oldH)return v;
+ return {...v,panX:v.panX+shift-(width-oldW)/2,panZ:v.panZ+shift-(height-oldH)/2};
 }
 function workshopResumeEarlierTownPosition(s){
  const p=s.position;
