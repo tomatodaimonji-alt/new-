@@ -1,14 +1,14 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const block=(a,b)=>{const i=h.indexOf(a),j=h.indexOf(b,i+1);assert(i>=0&&j>i,'missing '+a);return h.slice(i,j)};
-test('forest floor has continuous seeded moss, worn earth and leaf tones but preserves west and non-natural floors',()=>{
+test('outdoor meadow has continuous seeded grass, light path shoulders, and preserves town and non-natural floors',()=>{
  const scope={};
  vm.createContext(scope);
- vm.runInContext(block('function surfaceNoise(','function roadConnections(')+block('function pineBaseNatureTint(','function addFloorTile('),scope);
+ vm.runInContext(block('function surfaceNoise(','function roadConnections(')+block('function pineBaseNatureTint(','function addFloorTile(')+block('function pineOutsideMeadowCell(','function buildFacilitySite('),scope);
  const empty=new Map();
- assert.deepEqual(scope.pineEastGroundColor(65,40,empty),scope.pineBaseGrassCorner(65,40));
+ assert.deepEqual(scope.pineEastGroundColor(44,40,empty),scope.pineBaseGrassCorner(44,40));
  const sample=scope.pineEastGroundColor(85,28,empty),base=scope.pineBaseGrassCorner(85,28);
- assert.notDeepEqual(sample,base);assert(sample[1]<base[1]);
+ assert.notDeepEqual(sample,base);assert(sample[1]>.58&&sample[1]>sample[0]+.10);
  assert.deepEqual(sample,scope.pineEastGroundColor(85,28,empty));
  assert.deepEqual(sample,scope.pineEastGroundColor(85,28,new Map([['84,27','woodfloor']])));
  const path=scope.pineEastGroundColor(85,28,new Map([['84,27','earth'],['85,27','earth']]));

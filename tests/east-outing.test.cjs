@@ -61,7 +61,7 @@ test('outing leaves wash accessible on natural grade, with bounded static scener
  assert(site.creek.deep.some(o=>o.x===95&&o.z>=51),'water continues to the southeast map edge, not an inland dead end');
 });
 test('every v136 eastern trail and creek record survives the town redesign exactly',()=>{
- const preserved=require('./canal-history-fixture.cjs').prior(site.map.world).filter(row=>{
+ const preserved=require('./canal-history-fixture.cjs').prior(require('./outside-history-fixture.cjs').prior(site.map.world)).filter(row=>{
   const [x,z]=JSON.parse(row);return x>=67&&z>=26;
  }).sort();
  assert.equal(preserved.length,398);

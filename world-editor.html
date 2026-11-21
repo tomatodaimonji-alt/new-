@@ -746,7 +746,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 #poiShopBuyPotion:not(:disabled){border-color:#ebca82;background:#81663ce8!important}
 #poiShopFeedback{min-height:1.4em}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v140）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v141）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -3901,7 +3901,26 @@ function pineEastGroundColor(x,z,floors){
  const soft=(a,b,v)=>{const f=Math.max(0,Math.min(1,(v-a)/(b-a)));return f*f*(3-2*f)};
  const near=(cx,cz,rx,rz)=>1-soft(.15,1,Math.hypot((x-cx)/rx,(z-cz)/rz));
  const west=pineBaseGrassCorner(x,z),east=soft(66,81,x);
- if(!east)return west;
+ // Shared corners transition softly across the rampart, without adding
+ // slopes or reclassifying ponds, paths and man-made floor tiles.
+ let outside=0;
+ for(const dx of [-1,0])for(const dz of [-1,0])if(pineOutsideMeadowCell(x+dx,z+dz))outside+=.25;
+ const blend=(old)=>{
+  if(!outside)return old;
+  const grain=smoothSurfaceNoise(x*.128+7,z*.141-3);
+  const dry=smoothSurfaceNoise(x*.37-12,z*.35+23);
+  const meadow=[.398+grain*.071+dry*.032,.57+grain*.067+dry*.021,.292+grain*.046+dry*.016];
+  for(const dx of [-1,0])for(const dz of [-1,0]){
+   const kind=floors.get((x+dx)+','+(z+dz));
+   if(kind==='earth'||kind==='grassTrampled'||kind==='grassPebbles'){
+    const target=PINE_EAST_NATURE_TONES[kind];
+    for(let i=0;i<3;i++)meadow[i]+=(target[i]-meadow[i])*.055;
+   }
+  }
+  return old.map((v,i)=>v+(meadow[i]-v)*outside);
+ };
+ if(outside===1)return blend(west);
+ if(!east)return blend(west);
  const broad=smoothSurfaceNoise(x*.091+34,z*.114-13),fine=smoothSurfaceNoise(x*.33-13,z*.34+37);
  const shade=Math.max(near(82,26,13,13),near(94,36,11,17),near(87,51,12,10));
  const open=Math.max(near(73,37,10,6),near(80,43,9,7),near(91,14,12,10));
@@ -3920,7 +3939,7 @@ function pineEastGroundColor(x,z,floors){
   const tone=PINE_EAST_NATURE_TONES[floors.get((x+dx)+','+(z+dz))];
   if(tone)for(let i=0;i<3;i++)local[i]+=(tone[i]-local[i])*.21*edits;
  }
- return west.map((v,i)=>v+(local[i]-v)*east);
+ return blend(west.map((v,i)=>v+(local[i]-v)*east));
 }
 function addFloorTile(m,x,z,kind,area=256,roadMask=0,ambientTint=null){if(ROAD_IDS.has(kind)){roadTile(m,x,z,kind,roadMask,area);return;}
 const r=.25+smoothSurfaceNoise(x*.16,z*.16)*.55+smoothSurfaceNoise(x*.42+13,z*.42-7)*.20;
@@ -6219,12 +6238,19 @@ function poiRenderEnemyHealth(now,vp){
 function poiMonsterAt(x,z){for(const [obj,state] of poiMonsterStates){if((!facilitySite||obj.y===poiWalkLevel)&&state.hp>0&&state.x===x&&state.z===z)return [obj,state]}return null}
 const POI_WILD_MAX=3;
 const POI_WILD_LANDMARKS=[[84,34,88,38],[77,45,79,47]];
+const POI_WILD_GATES=[
+ {threshold:[18,47,20,47],approach:[15,48,25,52],meadow:[10,49,39,55]},
+ {threshold:[62,44,62,46],approach:[63,42,68,49],meadow:[63,40,67,53]}
+];
+const POI_WILD_GATE_PASSABLE=new Set(['flowerField','bushFlower','tallGrass','bushFern','rubble',
+ 'chairWood','chairClassic','stoolRound','benchWood','lantern']);
+const POI_WILD_WATER=new Set(['water','river','lake','sea']);
 const POI_WILD_SURFACE=new Set(['grass','grassTuft','grassMeadow','grassWild','grassForest','grassDry',
  'grassFlowers','grassWeeds','grassPebbles','grassPatch','moss']);
 const poiWildActors=new Set();
-let poiWildLastFrame=null,poiWildRemaining=0,poiWildTerrain=null,poiWildTerrainWorld=null;
+let poiWildLastFrame=null,poiWildRemaining=0,poiWildTerrain=null,poiWildGateBlocked=null,poiWildTerrainWorld=null;
 function poiWildPause(){poiWildLastFrame=null}
-function poiWildInvalidate(){poiWildTerrain=null;poiWildTerrainWorld=null}
+function poiWildInvalidate(){poiWildTerrain=null;poiWildGateBlocked=null;poiWildTerrainWorld=null}
 function poiWildClear(){
  for(const actor of poiWildActors)poiMonsterStates.delete(actor);
  if(poiWildActors.size)poiMonsterMeshDirty=true;
@@ -6234,7 +6260,7 @@ function poiWildZone(rects,x,z,margin=0){
  return rects.some(([a,b,c,d])=>x>=a-margin&&x<=c+margin&&z>=b-margin&&z<=d+margin);
 }
 function poiWildExterior(x,z,buffer=0){
- return validPos(x,z)&&!poiWildZone(POI_SAFE_TOWN,x,z,buffer)&&
+ return validPos(x,z)&&!POI_WILD_GATES.some(g=>poiWildZone([g.threshold],x,z))&&!poiWildZone(POI_SAFE_TOWN,x,z,buffer)&&
   !poiWildZone(POI_WILD_LANDMARKS,x,z)&&facilityFloorOwner(x,z,0)===null;
 }
 function poiWildActive(){
@@ -6247,11 +6273,42 @@ function poiWildMobMayMove(state,x,z){
 }
 function poiWildSpawnTerrain(){
  if(poiWildTerrain&&poiWildTerrainWorld===world)return poiWildTerrain;
- poiWildTerrainWorld=world;poiWildTerrain=new Set();
- for(const o of world)if(o.y===0&&!POI_WILD_SURFACE.has(o.type))poiWildTerrain.add(o.x+','+o.z);
+ poiWildTerrainWorld=world;poiWildTerrain=new Set();poiWildGateBlocked=new Set();
+ for(const o of world){
+  if(o.y!==0)continue;
+  const k=o.x+','+o.z;
+  if(!POI_WILD_SURFACE.has(o.type))poiWildTerrain.add(k);
+  if(POI_WILD_WATER.has(o.type)||(!isFloor(o.type)&&!POI_WILD_GATE_PASSABLE.has(o.type)))poiWildGateBlocked.add(k);
+ }
  return poiWildTerrain;
 }
+function poiWildGateApproach(){return POI_WILD_GATES.find(g=>poiWildZone([g.approach],poiWalkX,poiWalkZ))}
+function poiWildGatePick(rng,gate=poiWildGateApproach()){
+ if(!gate)return null;
+ const [fx,fz]=typeof poiThirdPerson!=='undefined'&&poiThirdPerson
+  ?[Math.sin(poiCameraYaw),Math.cos(poiCameraYaw)]:[[0,-1],[1,0],[0,1],[-1,0]][poiWalkFacing]||[0,-1];
+ const blocked=poiWildSpawnTerrain(),water=facilityCreekIndex?.water;
+ const x0=poiWalkX,z0=poiWalkZ,queue=[[x0,z0,0]],visited=new Set([x0+','+z0]),choices=[];
+ // Only search when the timer matures. Roads let the search reach the
+ // meadow, but are never spawn points; water and obstacles split regions.
+ for(let i=0;i<queue.length;i++){
+  const [x,z,steps]=queue[i],dx=x-x0,dz=z-z0,d=Math.hypot(dx,dz),key=x+','+z;
+  if(d>=4.5&&d<=10&&(dx*fx+dz*fz)/d<=.38&&poiWildZone([gate.meadow],x,z)&&
+     poiWildExterior(x,z,3)&&!blocked.has(key)&&terrainLevel(x,z)===0&&!poiMonsterAt(x,z))choices.push({x,z});
+  if(steps>=12)continue;
+  for(const [a,b] of [[1,0],[-1,0],[0,1],[0,-1]]){
+   const nx=x+a,nz=z+b,k=nx+','+nz;
+   if(visited.has(k)||!poiWildExterior(nx,nz)||poiWildGateBlocked.has(k)||water?.has(k)||
+      !terrainPassable(x,z,nx,nz))continue;
+   visited.add(k);queue.push([nx,nz,steps+1]);
+  }
+ }
+ return choices.length?choices[Math.min(choices.length-1,Math.floor(rng()*choices.length))]:null;
+}
 function poiWildPick(rng){
+ const gate=poiWildGateApproach();
+ // Never fall back to a point across the river if this meadow is blocked.
+ if(gate)return poiWildGatePick(rng,gate);
  const [fx,fz]=[[0,-1],[1,0],[0,1],[-1,0]][poiWalkFacing]||[0,-1],blocked=poiWildSpawnTerrain();
  for(let i=0;i<24;i++){
   const angle=rng()*Math.PI*2,radius=7+rng()*4.5;
@@ -6333,7 +6390,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v140',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v141',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -6448,7 +6505,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v140';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v141';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -6662,7 +6719,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v140',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v141',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -11896,6 +11953,10 @@ function pineTownGuildGroundFloor(tiles){
  return result;
 }
 
+// Grade outside the Game World rampart, not the town's named safe-area list.
+function pineOutsideMeadowCell(x,z){
+ return z>47||x<1||x>66||(z>20&&x>62)||(z<4&&x>46);
+}
 function buildFacilitySite(id){
  if(!FACILITY_SITES.some(site=>site.id===id))return null;
  const plans={
@@ -12502,6 +12563,22 @@ function buildFacilitySite(id){
   for(const {x,z,type,rot} of fort.values()){
    if(insideGrade.has(groundKey(x,z)))throw Error('城壁の配置が施設と重なっています');
    put(x,z,type,0,rot);
+  }
+  // Open grassland outside the rampart. Keep a few silhouette trees at
+  // distant landmarks, not by either gate. No structural object is changed.
+  const keepTrees=new Set(['0,6','5,51','70,27','73,34','84,27','88,41','86,46','92,45','79,52']);
+  for(let i=objects.length-1;i>=0;i--){
+   const o=objects[i];
+   if(o.y===0&&/^tree/.test(o.type)&&pineOutsideMeadowCell(o.x,o.z)&&!keepTrees.has(groundKey(o.x,o.z)))objects.splice(i,1);
+  }
+  for(const o of floors.values())if(o.y===0&&o.type==='grassForest'&&pineOutsideMeadowCell(o.x,o.z)&&
+    !keepTrees.has(groundKey(o.x,o.z)))o.type='grassMeadow';
+  for(const [x,z,type] of [
+   [31,49,'tallGrass'],[35,52,'flowerField'],[45,54,'flowerField'],[56,51,'tallGrass'],
+   [64,53,'flowerField'],[73,43,'tallGrass'],[78,36,'flowerField'],[90,34,'tallGrass']
+  ]){
+   if(pineOutsideMeadowCell(x,z)&&!insideGrade.has(groundKey(x,z))&&
+      !floors.has(x+','+z+',0')&&!objects.some(o=>o.x===x&&o.z===z&&o.y===0))put(x,z,type);
   }
   spawn={x:19,z:21};
  }else if(housing){

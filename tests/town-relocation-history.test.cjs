@@ -1,6 +1,7 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),{test}=require('node:test');
 const {createHash}=require('node:crypto');
 const canalHistory=require('./canal-history-fixture.cjs');
+const outsideHistory=require('./outside-history-fixture.cjs');
 const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const src=html.match(/const FACILITY_SITES[\s\S]*?(?=function facilityNavigate\()/)?.[0];
 assert(src,'authored Game World source');
@@ -137,7 +138,7 @@ test('local geometry stays pinned after authorized translations and ground-floor
 });
 test('every v136 exterior record remains except the enumerated civic paving and scenic changes',()=>{
  const ownership=new Set(site.buildings.flatMap(b=>Array.from(b.footprint,p=>key(p.x,p.z))));
- const records=Array.from(site.map.world.filter(o=>!ownership.has(key(o.x,o.z))&&!rampart(o)),record);
+ const records=outsideHistory.prior(site.map.world.filter(o=>!ownership.has(key(o.x,o.z))&&!rampart(o)));
  const live=new Set(records);
  assert.equal(canalHistory.added.size,canalHistory.legacy.counts.add);
  assert.equal(canalHistory.removed.size,canalHistory.legacy.counts.remove);
@@ -152,4 +153,24 @@ test('every v136 exterior record remains except the enumerated civic paving and 
  const protectedRecords=beforeCanal.filter(r=>!added.has(r)).sort();
  assert.equal(protectedRecords.length,pin.counts.same);
  assert.equal(digest(protectedRecords),pin.outside,'all other exterior records preserved');
+});
+
+test('open grassland alters only enumerated non-structural exterior planting and styles',()=>{
+ const {pinned,record,added,removed}=outsideHistory;
+ const records=site.map.world.map(record),present=new Set(records);
+ assert.equal(present.size,records.length,'unique authored records');
+ const outside=(x,z)=>z>47||x<1||x>66||(z>20&&x>62)||(z<4&&x>46);
+ const cells=new Set(site.creek.deep.map(o=>key(o.x,o.z)));
+ const buildingCells=new Set(site.buildings.flatMap(b=>b.footprint.map(o=>key(o.x,o.z))));
+ for(const [entries,expected,allowed] of [
+  [added,true,/^(?:grassMeadow|flowerField|bushFlower|tallGrass)$/],
+  [removed,false,/^(?:grassForest|tree\w+)$/]
+ ])for(const r of entries){
+  const [x,z,y,type,rot]=JSON.parse(r);
+  assert.equal(present.has(r),expected,'intentional grassland delta '+r);
+  assert(y===0&&rot===0&&outside(x,z)&&!cells.has(key(x,z))&&!buildingCells.has(key(x,z))&&allowed.test(type),r);
+ }
+ const preserved=Array.from(present).filter(r=>!added.has(r)).sort();
+ assert.equal(preserved.length,pinned.count);
+ assert.equal(digest(preserved),pinned.hash,'all other exact v140 world records preserved');
 });

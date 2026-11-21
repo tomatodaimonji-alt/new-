@@ -52,3 +52,29 @@ test('live slimes release their transient slot when the player has traveled far 
  assert.equal(x.poiMonsterStates.size,0);
  assert.equal(x.poiMonsterMeshDirty,true);
 });
+test('both narrow gate approaches offer reachable side-on meadow tiles without changing the distant solver',()=>{
+ const x=setup(),rng=()=>0;
+ const pos=(a,b,face)=>Object.assign(x,{poiWalkX:a,poiWalkZ:b,poiWalkFacing:face});
+ const restricted=(range,grass)=>{
+  const {x1,z1,x2,z2}=range;
+  x.world=[];
+  for(let z=z1;z<=z2;z++)for(let xx=x1;xx<=x2;xx++)
+   if(!grass.some(p=>p[0]===xx&&p[1]===z))x.world.push({x:xx,z,y:0,type:'earth'});
+  x.poiWildInvalidate();
+ };
+ pos(19,49,2);
+ restricted({x1:6,z1:47,x2:33,z2:55},[[24,51]]);
+ assert.deepEqual({...x.poiWildPick(rng)},{x:24,z:51});
+ x.world.push({x:24,z:51,y:0,type:'poiFortWall'});
+ x.poiWildInvalidate();assert.equal(x.poiWildGatePick(rng),null);
+ pos(64,45,1);
+ restricted({x1:62,z1:34,x2:80,z2:55},[[66,50]]);
+ assert.deepEqual({...x.poiWildPick(rng)},{x:66,z:50});
+ x.facilityCreekIndex.water.add('66,50');assert.equal(x.poiWildGatePick(rng),null);
+ assert.equal(x.poiWildPick(rng),null,'near east gate does not fall back across water');
+ x.facilityCreekIndex.water.clear();
+ pos(19,47,2);assert.equal(x.poiWildPlayerOutside(),false);
+ assert.equal(x.poiWildMobMayMove({x:19,z:48},19,47),false);
+ for(const [a,b] of [[18,47],[20,47],[62,44],[62,45],[62,46]]){pos(a,b,1);assert.equal(x.poiWildPlayerOutside(),false);}
+ pos(81,31,0);x.world=[];x.poiWildInvalidate();assert.deepEqual({...x.poiWildPick(rng)},{x:88,z:31});
+});
