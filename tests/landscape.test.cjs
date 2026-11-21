@@ -26,7 +26,7 @@ const terrain=new Set(['earth','grass','grassForest','grassWild','grassMeadow','
 const nonSolid=new Set(['flowerField','bushFlower','tallGrass','lantern','chairWood','chairClassic','stoolRound','benchWood']);
 const point=(x,z)=>x+','+z;
 test('landscape does not move or replace any authored town placement',()=>{
- assert.deepEqual([after.map.width,after.map.height],[72,56]);
+ assert.deepEqual([after.map.width,after.map.height],[96,56]);
  assert.deepEqual(after.spawn,before.spawn);assert.deepEqual(after.buildings,before.buildings);
  for(const k of keys)assert(changed.has(k),k);
  for(const id of ['lodging','kitchen','workshop','homes','stable','toolshop','artisan'])

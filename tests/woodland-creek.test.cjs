@@ -9,7 +9,7 @@ const key=(x,z)=>x+','+z;
 test('a continuous narrow woodland creek leaves the base, trail, other routes and building stamps intact',()=>{
  const site=run(html,'base');
  assert.ok(site.creek,'authored creek metadata missing');
- assert.deepEqual([site.map.width,site.map.height],[72,56]);
+ assert.deepEqual([site.map.width,site.map.height],[96,56]);
  const start=html.indexOf('  // Woodland creek:');
  const end=html.indexOf('  spawn={x:19,z:21};',start);
  const baseline=html.slice(0,start)+html.slice(end);
@@ -27,13 +27,14 @@ test('a continuous narrow woodland creek leaves the base, trail, other routes an
   for(const [dx,dz] of [[0,1],[0,-1],[1,0],[-1,0]])stack.push({x:x+dx,z:z+dz});
  }
  assert.equal(reached.size,cells.size,'cardinally connected bends');
- assert(cells.size>=24&&cells.size<=44);
+ assert(cells.size>=42&&cells.size<=52);
  assert(Object.values(Object.groupBy(site.creek.deep,o=>o.z)).every(row=>row.length<=2));
- assert(site.creek.deep.filter(o=>o.x===71).length>=2,'water enters and leaves at map edge');
+ assert(site.creek.deep.some(o=>o.x===73&&o.z===27),'water emerges between mossy stones');
+ assert(site.creek.deep.some(o=>o.z===55),'water exits at the south edge');
  for(const {x,z} of site.creek.deep)assert(site.map.world.some(o=>o.x===x&&o.z===z&&o.y===0&&o.type==='river'));
  for(const [x,z] of [[67,38],[70,38],[71,38],[70,39],[69,40]])assert(!cells.has(key(x,z)));
 });
-test('level trail crosses low stone deck; dry wash apron has solid access and small terraced stone stair',()=>{
+test('level trail crosses low stone deck; dry wash apron has solid access without outdoor stair or raised terrain',()=>{
  const {creek,map}=run(html,'base');
  assert.ok(creek);
  assert.deepEqual(creek.crossings,[
@@ -44,10 +45,10 @@ test('level trail crosses low stone deck; dry wash apron has solid access and sm
  assert.deepEqual(creek.wash,{x:69,z:40});
  assert.deepEqual(creek.sound,{x:68,z:39});
  assert(map.world.some(o=>o.x===69&&o.z===40&&o.y===0&&o.type==='roadCutStoneFull'));
- assert(map.world.some(o=>o.x===70&&o.z===40&&o.y===0&&o.type==='terrainStairs'&&o.rot===1));
- assert.deepEqual(map.terrainHeights,[{x:71,z:39,h:1},{x:71,z:40,h:1}]);
+ assert(!map.world.some(o=>o.x===70&&o.z===40&&o.y===0&&o.type==='terrainStairs'));
+ assert.deepEqual(map.terrainHeights,[]);
  for(const x of [70,71])assert(map.world.some(o=>o.x===x&&o.z===38&&o.y===0&&o.type==='grassPebbles'));
- assert.equal(map.world.filter(o=>o.z===38&&o.y===0&&o.x>=67).length,7);
+ assert.equal(map.world.filter(o=>o.z===38&&o.y===0&&o.x>=67&&o.x<=71).length,7);
 });
 test('creek bridge has one unified deck with an open underside and never affects ordinary placements',()=>{
  const a=html.indexOf('function facilityWoodlandBridgeGeometry('),b=html.indexOf('function bridgeConnectedGeometry(',a);

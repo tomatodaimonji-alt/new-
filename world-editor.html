@@ -653,7 +653,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
  font:700 12px/12px system-ui;text-align:center}
 .facilityEntranceGuide[hidden]{display:none}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v119）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v120）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -3506,7 +3506,7 @@ function facilityWoodlandWater(m,x,z,floors,creekWater){
     [px+.018,.006,pz+length],[px+.006,.006,pz-length],[.33,.49,.49]);
  }
 }
-function facilityWoodlandBank(m,x,z,kind,woodlandRiver){
+function facilityWoodlandBank(m,x,z,kind,woodlandRiver,groundCorner=pineBaseGrassCorner){
  let touched=false;
  for(const [dx,dz] of [[0,-1],[1,0],[0,1],[-1,0]]){
   if(!woodlandRiver(x+dx,z+dz))continue;
@@ -3518,8 +3518,8 @@ function facilityWoodlandBank(m,x,z,kind,woodlandRiver){
   const inner=p=>[p[0]-dx*depth(p),.012,p[1]-dz*depth(p)];
   const [a,b]=edge,f=[.42,.43,.32];
   quad(m,[a[0],.012,a[1]],inner(a),inner(b),[b[0],.012,b[1]],f);
-  const start=m.c.length-18,colors=[f,pineBaseGrassCorner(...a),pineBaseGrassCorner(...b),
-    f,pineBaseGrassCorner(...b),f];
+  const start=m.c.length-18,colors=[f,groundCorner(...a),groundCorner(...b),
+    f,groundCorner(...b),f];
   for(let i=0;i<6;i++)for(let j=0;j<3;j++)m.c[start+i*3+j]=colors[i][j];
  }
  return touched;
@@ -3625,6 +3625,38 @@ function pineBaseGrassCorner(x,z){
  const r=.25+smoothSurfaceNoise(x*.16,z*.16)*.55+smoothSurfaceNoise(x*.42+13,z*.42-7)*.20;
  const [red,green,blue]=pineBaseNatureTint(x,z);
  return [.33+r*.13+red,.56+r*.12+green,.30+r*.09+blue];
+}
+// Route-local baked color field. Sampling shared corners removes square borders
+// without another mesh, height changes, or a blanket of authored floor records.
+const PINE_EAST_NATURE_TONES={
+ earth:[.50,.37,.284],grassTrampled:[.48,.47,.31],grassPebbles:[.50,.48,.39],
+ moss:[.35,.42,.27],grassForest:[.34,.41,.26],grassWild:[.40,.48,.30],
+ grassMeadow:[.46,.53,.34],grassDry:[.51,.52,.35],grassPatch:[.46,.45,.31]
+};
+function pineEastGroundColor(x,z,floors){
+ const soft=(a,b,v)=>{const f=Math.max(0,Math.min(1,(v-a)/(b-a)));return f*f*(3-2*f)};
+ const near=(cx,cz,rx,rz)=>1-soft(.15,1,Math.hypot((x-cx)/rx,(z-cz)/rz));
+ const west=pineBaseGrassCorner(x,z),east=soft(66,81,x);
+ if(!east)return west;
+ const broad=smoothSurfaceNoise(x*.091+34,z*.114-13),fine=smoothSurfaceNoise(x*.33-13,z*.34+37);
+ const shade=Math.max(near(82,26,13,13),near(94,36,11,17),near(87,51,12,10));
+ const open=Math.max(near(73,37,10,6),near(80,43,9,7),near(91,14,12,10));
+ const litter=soft(.28,.73,broad+shade*.26-open*.20);
+ const moss=soft(.33,.76,(1-broad)*.60+fine*.40+shade*.18-open*.13);
+ const grass=[.39+fine*.075,.48+fine*.079+open*.021,.305+fine*.041];
+ const leaf=[.45+fine*.048,.374+fine*.048,.267+fine*.041];
+ const damp=[.32+fine*.06,.40+fine*.053,.263+fine*.044];
+ const local=grass.map((v,i)=>{
+  const litterMix=v+(leaf[i]-v)*litter*.86;
+  return litterMix+(damp[i]-litterMix)*moss*.64;
+ });
+ for(let i=0;i<3;i++)local[i]-=shade*(i===1?.026:.013);
+ const edits=soft(71,77,x);
+ if(edits)for(let dx=-1;dx<=0;dx++)for(let dz=-1;dz<=0;dz++){
+  const tone=PINE_EAST_NATURE_TONES[floors.get((x+dx)+','+(z+dz))];
+  if(tone)for(let i=0;i<3;i++)local[i]+=(tone[i]-local[i])*.21*edits;
+ }
+ return west.map((v,i)=>v+(local[i]-v)*east);
 }
 function addFloorTile(m,x,z,kind,area=256,roadMask=0,ambientTint=null){if(ROAD_IDS.has(kind)){roadTile(m,x,z,kind,roadMask,area);return;}
 const r=.25+smoothSurfaceNoise(x*.16,z*.16)*.55+smoothSurfaceNoise(x*.42+13,z*.42-7)*.20;
@@ -5102,7 +5134,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v119',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v120',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -5217,7 +5249,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v119';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v120';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -5429,7 +5461,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v119',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v120',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -6734,6 +6766,35 @@ function facilityHomeBedOffset(o,walls){
  // in a full-cell wall. Move only the draw origin into the empty foot area.
  return {x:dx*.29,z:dz*.29};
 }
+function pineDrawEastNature(m,o){
+ if(facilitySite?.id!=='base'||o.x<72||o.y!==0)return false;
+ const tree=/^tree(?:Birch|Oak|Pine|Cedar|Willow|Round|Branch|Autumn|Maple|Dead|Stump)$/.test(o.type);
+ const rock=/^(?:rock(?:Granite|Sandstone|Basalt|Mossy|Cluster|Cliff)?|watersideRock)$/.test(o.type);
+ if(!tree&&!rock)return false;
+ const x=o.x+.5,z=o.z+.5,y=terrainY(o.x,o.z),start=m.p.length;
+ deco(m,o.type,x,y,z,o.rot||0);
+ const s=(salt)=>surfaceNoise(o.x*11+salt*19,o.z*13+salt*31);
+ // Scale about the root and vary the lean only above ground. Geometry and
+ // movement still refer to the original authored tile and asset identifier.
+ const sx=tree?.81+s(1)*.21:.65+s(1)*.27;
+ const sy=tree?.81+s(2)*.36:.58+s(2)*.37;
+ const sz=tree?.83+s(3)*.20:.67+s(3)*.30;
+ const lean=tree?(s(4)-.5)*.14:(s(4)-.5)*.23;
+ const light=.91+s(5)*.14;
+ let lowest=0,minY=Infinity;
+ for(let i=start+1;i<m.p.length;i+=3)minY=Math.min(minY,m.p[i]);
+ if(minY>y&&Number.isFinite(minY))lowest=minY-y;
+ for(let i=start;i<m.p.length;i+=3){
+  const h=m.p[i+1]-y-lowest;
+  m.p[i]=x+(m.p[i]-x)*sx+Math.max(0,h)*lean;
+  m.p[i+1]=y+h*sy;
+  m.p[i+2]=z+(m.p[i+2]-z)*sz;
+  const nx=m.n[i]/sx,ny=(m.n[i+1]-nx*lean)/sy,nz=m.n[i+2]/sz,n=Math.hypot(nx,ny,nz)||1;
+  m.n[i]=nx/n;m.n[i+1]=ny/n;m.n[i+2]=nz/n;
+  m.c[i]*=light;m.c[i+1]*=light*(tree?.97:1);m.c[i+2]*=light;
+ }
+ return true;
+}
 function makeScene(){
  const m=mesh(),visible=world.filter(o=>{
   if(facilitySite&&!facilityObjectVisible(o))return false;
@@ -6750,7 +6811,7 @@ function makeScene(){
  const baseGrass=facilitySite?.id==='base'?new Array((MAP_W+1)*(MAP_H+1)):null;
  const groundCorner=baseGrass?(x,z)=>{
   const i=z*(MAP_W+1)+x;
-  return baseGrass[i]||(baseGrass[i]=pineBaseGrassCorner(x,z));
+  return baseGrass[i]||(baseGrass[i]=pineEastGroundColor(x,z,floors));
  }:null;
  if(!facilitySite||facilityViewLevel()>=0)for(let z=0;z<MAP_H;z++)for(let x=0;x<MAP_W;x++){
   if(facilitySite&&facilityStairOpenings.has(facilityCellKey(x,z,0))){
@@ -6769,10 +6830,11 @@ function makeScene(){
   const kind=floors.get(x+','+z)||'grass';
   const tmp=mesh();
   const ambientTint=floors.has(x+','+z)?null:groundCorner;
+  const eastBlend=groundCorner&&x>=72&&Object.prototype.hasOwnProperty.call(PINE_EAST_NATURE_TONES,kind)?groundCorner:null;
   if(woodlandRiver(x,z))facilityWoodlandWater(tmp,x,z,floors,creekWater);
   else{
-   addFloorTile(tmp,x,z,kind,MAP_W*MAP_H,ROAD_DIAGONALS.has(kind)?roadDiagonalConnections(floors,x,z,kind):ROAD_IDS.has(kind)&&!kind.endsWith('Full')?roadConnections(floors,x,z,kind):0,ambientTint);
-   if(!(creekWater&&x>=67&&z>=28&&z<=49&&facilityWoodlandBank(tmp,x,z,kind,woodlandRiver))&&floors.has(x+','+z))shoreline(tmp,x,z,floors);
+   addFloorTile(tmp,x,z,kind,MAP_W*MAP_H,ROAD_DIAGONALS.has(kind)?roadDiagonalConnections(floors,x,z,kind):ROAD_IDS.has(kind)&&!kind.endsWith('Full')?roadConnections(floors,x,z,kind):0,ambientTint||eastBlend);
+   if(!(creekWater&&x>=67&&facilityWoodlandBank(tmp,x,z,kind,woodlandRiver,groundCorner))&&floors.has(x+','+z))shoreline(tmp,x,z,floors);
   }
   pineBakeFloorLighting(tmp,x,z,0,pineShadows,pineWarmLamps);
   shiftMesh(m,tmp,terrainY(x,z));
@@ -6869,7 +6931,7 @@ function makeScene(){
    const offset=facilityHomeBedOffset(o,wallLookup);
    deco(m,o.type,o.x+.5+(offset?.x??0),o.y*1.4+terrainY(o.x,o.z),o.z+.5+(offset?.z??0),o.rot||0);
   }
-  else deco(m,o.type,o.x+.5,o.y*1.4+terrainY(o.x,o.z),o.z+.5,o.rot||0);
+  else if(!pineDrawEastNature(m,o))deco(m,o.type,o.x+.5,o.y*1.4+terrainY(o.x,o.z),o.z+.5,o.rot||0);
  }
  for(const o of visible)pineFinishInteriorWindow(m,o,wallLookup);
  pineFinishPartitionTops(m,visible);
@@ -6900,6 +6962,49 @@ function perspective(fov,aspect,near,far){
  const f=1/Math.tan(fov/2);
  return new Float32Array([f/aspect,0,0,0,0,f,0,0,0,0,(far+near)/(near-far),-1,0,0,2*far*near/(near-far),0]);
 }
+let facilityWatchtowerCameraWalls=null;
+function facilityWatchtowerCameraEye(target,desired){
+ const [x,,z]=target;
+ if(facilitySite?.id!=='base'||x<80||x>92||z<30||z>43)return desired;
+ if(!facilityWatchtowerCameraWalls)facilityWatchtowerCameraWalls=world.flatMap(o=>{
+  if(o.x<84||o.x>88||o.z<34||o.z>38||o.y<0||o.y>2||
+   (o.x>84&&o.x<88&&o.z>34&&o.z<38)||poiWalkPassableDoor(o.type))return [];
+  const height={towerWindow:1.38,towerBattlement:1.30,crackedWall:1.43,ruinWallJagged:1.25,ruinWallLow:.73}[o.type]||
+   (isWallId(o.type)?1.4:0);
+  if(!height)return [];
+  const base=o.y*1.4+terrainY(o.x,o.z),pad=.062;
+  return [[[o.x-pad,base-pad,o.z-pad],[o.x+1+pad,base+height+pad,o.z+1+pad]]];
+ });
+ const ray=desired.map((v,i)=>v-target[i]),distance=Math.hypot(...ray);
+ const clip=vector=>{
+  let closest=1;
+  for(const [min,max] of facilityWatchtowerCameraWalls){
+   let near=0,far=1;
+   for(let i=0;i<3;i++){
+    if(Math.abs(vector[i])<1e-7){
+     if(target[i]<min[i]||target[i]>max[i]){near=1;far=0;break}
+     continue;
+    }
+    const a=(min[i]-target[i])/vector[i],b=(max[i]-target[i])/vector[i];
+    near=Math.max(near,Math.min(a,b));far=Math.min(far,Math.max(a,b));
+    if(near>far)break;
+   }
+   if(near>1e-6&&near<=far&&near<closest)closest=near;
+  }
+  return closest===1?1:Math.max(closest*.5,closest-.235/distance);
+ };
+ let chosen=ray,fraction=clip(ray);
+ if(fraction===1)return desired;
+ // A compressed eye can enter the avatar at the threshold. Keep the
+ // pitch/distance preference and try nearby clear angles in fixed order.
+ if(fraction*distance<1.8)for(const bend of [.65,-.65,1.3,-1.3,2.1,-2.1,Math.PI]){
+  const c=Math.cos(bend),s=Math.sin(bend),candidate=[ray[0]*c-ray[2]*s,ray[1],ray[0]*s+ray[2]*c];
+  const next=clip(candidate);
+  if(next>fraction){chosen=candidate;fraction=next}
+  if(fraction*distance>=1.8)break;
+ }
+ return target.map((v,i)=>v+fraction*chosen[i]);
+}
 function parameters(){
  const q=layout(),halfH=9/zoom,halfW=halfH*q.aspect;
  const centerX=MAP_W/2+panX,centerZ=MAP_H/2+panZ;
@@ -6911,9 +7016,11 @@ function parameters(){
   const x=poiWalkViewX+.5,z=poiWalkViewZ+.5;
   const ground=poiCreekPlayerHeight(performance.now())+poiWalkLevel*1.4;
   const horizontal=poiCameraDistance*Math.cos(poiCameraPitch);
-  const eye=[x-horizontal*Math.sin(poiCameraYaw),ground+1.1+poiCameraDistance*Math.sin(poiCameraPitch),z-horizontal*Math.cos(poiCameraYaw)];
+  const desired=[x-horizontal*Math.sin(poiCameraYaw),ground+1.1+poiCameraDistance*Math.sin(poiCameraPitch),z-horizontal*Math.cos(poiCameraYaw)];
   const target=[x,ground+1.1,z];
-  return{...q,halfH,halfW,centerX,centerZ,elev,targetY,vp:mult(perspective(Math.PI/3,Math.max(.1,q.aspect),.45,Math.max(90,sceneReach*1.6+18)),look(eye,target))};
+  const eye=facilityWatchtowerCameraEye(target,desired);
+  const near=eye!==desired&&Math.hypot(...eye.map((v,i)=>v-target[i]))<1.8 ? .08 : .45;
+  return{...q,halfH,halfW,centerX,centerZ,elev,targetY,vp:mult(perspective(Math.PI/3,Math.max(.1,q.aspect),near,Math.max(90,sceneReach*1.6+18)),look(eye,target))};
  }
  const cameraDistance=Math.max(80,sceneReach*1.6+24);
  const eye=[centerX+cameraDistance*Math.sin(yaw)*Math.cos(elev),targetY+cameraDistance*Math.sin(elev),centerZ+cameraDistance*Math.cos(yaw)*Math.cos(elev)];
@@ -10051,7 +10158,7 @@ function buildFacilitySite(id){
   }
  };
  const compound=id==='base',housing=id==='homes',plan=plans[id];
- const width=compound?72:housing?38:id==='stable'?22:plan.w+8;
+ const width=compound?96:housing?38:id==='stable'?22:plan.w+8;
  const height=compound?56:housing?20:id==='stable'?21:plan.d+8;
  const floors=new Map(),objects=[],buildings=[],insideGrade=new Set(),terrainHeights=[];
  let creek;
@@ -10229,18 +10336,16 @@ function buildFacilitySite(id){
   // Woodland creek: static riverbed, two-span footbridge and east-bank wash stones.
   const deep=[],crossings=[{x:68,z:38,type:'bridgeStoneEnd',rot:3},{x:69,z:38,type:'bridgeStoneEnd',rot:1}];
   for(const [z,west,east=west] of [
-   [29,71],[30,70,71],[31,69,70],[32,69],[33,69],[34,69,70],[35,70],
+   [27,73],[28,72,73],[29,71,72],[30,70,71],[31,69,70],[32,69],[33,69],[34,69,70],[35,70],
    [36,69,70],[37,68,69],[38,68,69],[39,68,69],[40,68],
-   [41,68,69],[42,69,70],[43,69,70],[44,70],[45,70,71],[46,71],[47,70,71],[48,70,71]
+   [41,68,69],[42,69,70],[43,69,70],[44,70],[45,70,71],[46,71],[47,70,71],[48,70,71],
+   [49,71,72],[50,72,73],[51,73,74],[52,74],[53,74,75],[54,75],[55,75]
   ])for(let x=west;x<=east;x++){exterior(x,z,'river');deep.push({x,z});}
   for(const {x,z,type,rot} of crossings)put(x,z,type,0,rot);
   openPatch(70,38,'grassPebbles');openPatch(71,38,'grassPebbles');
   openPatch(70,39,'grassTrampled');openPatch(69,40,'roadCutStoneFull');openPatch(70,40,'grassPebbles');
-  put(70,40,'terrainStairs',0,1);
-  for(const z of [39,40]){
-   exterior(71,z,z===39?'grassWild':'roadCutStoneFull');
-   terrainHeights.push({x:71,z,h:1});
-  }
+  // Flush stone apron and surrounding bank are all at natural grade.
+  exterior(71,39,'grassWild');exterior(71,40,'roadCutStoneFull');
   // Gravel and scattered mossy rocks/ferns accent the bends, not the walking line.
   for(const [x,z,type,prop,rot=0] of [
    [70,29,'grassPebbles','watersideRock',1],[68,32,'moss','bushFern'],
@@ -10249,7 +10354,62 @@ function buildFacilitySite(id){
    [68,43,'moss','bushFern',1],[69,44,'grassPebbles','watersideRock',2],
    [70,49,'grassPebbles','watersideRock',1]
   ]){openPatch(x,z,type);put(x,z,prop,0,rot);}
-  creek={deep,crossings,shallows:[{x:70,z:40,type:'terrainStairs'}],wash:{x:69,z:40},terrace:[{x:71,z:39},{x:71,z:40}],sound:{x:68,z:39}};
+  creek={deep,crossings,shallows:[],wash:{x:69,z:40},terrace:[],sound:{x:68,z:39}};
+  // East outing: long public trail around the thicket, quiet northern shortcut.
+  const trace=(points,material)=>{
+   let [x,z]=points[0];openPatch(x,z,material);
+   for(const [xx,zz] of points.slice(1)){
+    while(x!==xx||z!==zz){x+=Math.sign(xx-x);z+=Math.sign(zz-z);openPatch(x,z,material);}
+   }
+  };
+  trace([[71,38],[73,38],[73,42],[76,42],[76,44],[81,44],[81,39],[86,39],[86,38]],'earth');
+  trace([[86,34],[86,28],[76,28],[76,26],[68,26],[68,30],[67,30],[67,33]],'grassTrampled');
+  trace([[78,44],[78,45]],'roadCutStoneFull');
+  // A roofless old watchtower: lower arch and passage intact, one breached
+  // upper corner and a broken parapet. The rear passage opens onto the byway.
+  for(let z=34;z<=38;z++)for(let x=84;x<=88;x++){
+   if(x===86&&(z===34||z===38))exterior(x,z,'roadCutStoneFull');
+   else exterior(x,z,(x+z)%4===0?'moss':'stone');
+   if(x!==84&&x!==88&&z!==34&&z!==38)continue;
+   const face=z===38?0:x===84?1:z===34?2:3;
+   if(x===86&&(z===34||z===38)){
+    if(z===38)put(x,z,'ruinDoorBroken');
+   }else put(x,z,x===84&&z===36?'crackedWall':'stonewall',0,face);
+   if(x===88&&z===34){put(x,z,'ruinWallJagged',1,face);continue;}
+   const mid=(x===86||z===36);
+   put(x,z,mid?'towerWindow':'stonewall',1,face);
+   if(x===88&&z===35){put(x,z,'ruinWallLow',2,face);continue;}
+   put(x,z,'towerBattlement',2,face);
+  }
+  put(85,35,'rubble',0,2);put(87,37,'brokenPillar');
+  // Local raised stones stay cosmetic and deliberately flank the shrine apron.
+  pave(77,45,79,47,'roadCutStoneFull');
+  put(78,46,'ancientAltar',0,2);
+  put(77,46,'brokenPillar',0,1);put(79,46,'brokenPillar',0,3);
+  put(77,47,'ruinWallLow');put(78,47,'ruinWallLow');put(79,47,'ruinWallJagged');
+  // Open copses and bank clusters leave sight lines between the three stops.
+  for(const [x,z,f,p,r=0] of [
+   [72,27,'grassPebbles','rockMossy',1],[74,27,'moss','rockCluster',2],
+   [75,29,'grassWild','bushFern',2],[71,31,'grassForest','treeBirch'],
+   [73,34,'grassForest','treeCedar'],[72,36,'grassWild','tallGrass'],
+   [75,38,'moss','rockGranite',1],[76,37,'grassForest','treePine'],
+   [78,37,'grassForest','treeBirch'],[79,39,'moss','treeOak'],
+   [77,40,'grassForest','fallenLog'],[75,41,'grassWild','bushFern'],
+   [74,45,'grassForest','treeWillow'],[75,48,'grassPebbles','watersideRock',2],
+   [77,49,'grassForest','treeBirch'],[80,48,'grassWild','bushFlower'],
+   [82,46,'grassForest','treeCedar'],[80,42,'grassWild','tallGrass'],
+   [84,41,'grassPebbles','rubble',1],[88,41,'grassForest','treeOak'],
+   [91,38,'grassForest','treePine'],[90,32,'grassForest','treeBirch'],
+   [90,26,'grassMeadow','flowerField'],[88,29,'grassWild','bushFern'],
+   [84,27,'grassForest','treeCedar'],[81,26,'grassWild','rockMossy'],
+   [78,25,'grassForest','treeBirch'],[75,24,'grassMeadow','tallGrass'],
+   [71,25,'grassWild','bushFern'],[70,26,'grassPebbles','rockCluster'],
+   [86,46,'grassForest','treeWillow'],[92,45,'grassForest','treePine'],
+   [79,52,'grassForest','treeBirch'],[73,53,'grassWild','bushFern']
+  ]){
+   if(floors.has(x+','+z+',0'))continue;
+   openPatch(x,z,f);put(x,z,p,0,r);
+  }
   spawn={x:19,z:21};
  }else if(housing){
   stamp('cottage',3,4,0);stamp('rowhouse',15,6,0);stamp('gardener',27,4,1);
@@ -10914,6 +11074,7 @@ function facilityDrawRoofs(vp){
  for(const i of facilityVisibleRoofs())draw(facilityRoofMeshes[i],vp);
 }
 function facilityInvalidateScenes(){
+ facilityWatchtowerCameraWalls=null;
  facilityEntranceGuides=null;
  for(const {mesh,signs} of facilityScenes.values()){
   gl.deleteBuffer(mesh.buf);for(const item of signs)gl.deleteBuffer(item.buf);

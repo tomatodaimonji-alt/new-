@@ -246,7 +246,7 @@ function v113Digests(build){
    floorFootprints:Object.fromEntries(Object.entries(floorFootprints).map(([k,v])=>[k,Array.from(v,coords).sort()]))
   }));
   const original=site.map.world.filter(o=>protectedIndoor(site,o,bounds)&&
-   (id!=='base'||o.y!==0||inRows(priorGroundRows,o.x,o.z))).map(records).map(record=>{
+   (id!=='base'||(o.x<72&&(o.y!==0||inRows(priorGroundRows,o.x,o.z))))).map(records).map(record=>{
     // v116 authorizes the stable threshold only in two views; normalize
     // it back to its exact old material for the historical digest.
     const entranceZ=id==='stable'?12:id==='base'?42:-1;
@@ -301,7 +301,7 @@ function assertDoor(site,bld,available,reachable,label){
  return {mask,room,door};
 }
 
-const shape={artisan:[16,16,1],stable:[22,21,1],homes:[38,20,3],toolshop:[17,17,1],base:[72,56,9]};
+const shape={artisan:[16,16,1],stable:[22,21,1],homes:[38,20,3],toolshop:[17,17,1],base:[96,56,9]};
 test('all authored standalone and combined entrances connect to spawn and to a navigable interior',()=>{
  for(const [id,[width,height,siteCount]] of Object.entries(shape)){
   const site=build(id);

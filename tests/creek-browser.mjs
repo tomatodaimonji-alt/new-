@@ -120,19 +120,20 @@ try{
  }
  await press(page,'ArrowRight',70,38);
  await press(page,'ArrowDown',70,39);
- await blocked(page,'ArrowRight',70,39,'cannot bypass the stairs at the terrace edge');
- await press(page,'ArrowDown',70,40);
+ await press(page,'ArrowRight',71,39);
+ await press(page,'ArrowDown',71,40);
+ await press(page,'ArrowLeft',70,40);
  await press(page,'ArrowLeft',69,40);
  assert.equal(await canStep(page,[68,40]),false,'wash apron is playable but the neighboring water is not');
- const wash=await page.evaluate(()=>window.__editorTest.data().world
-  .find(o=>o.x===70&&o.z===40&&o.y===0&&o.type==='terrainStairs'));
- assert.ok(wash&&wash.rot===1,'visible usable bankside stair');
+ const wash=await page.evaluate(()=>{
+  const {world,terrainHeights}=window.__editorTest.data();
+  return {surface:world.find(o=>o.x===69&&o.z===40&&o.y===0)?.type,
+   stairs:world.some(o=>o.x>=69&&o.x<=71&&o.z>=39&&o.z<=40&&o.y===0&&o.type==='terrainStairs'),
+   levels:terrainHeights.filter(o=>o.x>=69&&o.x<=71&&o.z>=39&&o.z<=40)};
+ });
+ assert.deepEqual(wash,{surface:'roadCutStoneFull',stairs:false,levels:[]},'flat stone wash apron without outdoor stairs');
  if(out){await paint(page);await page.screenshot({path:out+'/creek-stone-wash-apron.png'});}
  await press(page,'ArrowRight',70,40);
- await press(page,'ArrowRight',71,40);
- assert.ok(await page.evaluate(()=>window.__editorTest.data().terrainHeights.some(p=>p.x===71&&p.z===40&&p.h===1)),
-  'stone steps actually reach an elevated bank tile');
- await press(page,'ArrowLeft',70,40);
  await press(page,'ArrowUp',70,39);
  await press(page,'ArrowUp',70,38);
  await press(page,'ArrowLeft',69,38);
@@ -165,7 +166,7 @@ try{
  assert.deepEqual(await audio(page),{active:false,level:0},'silent creek releases its source in the same session');
  await saves(page);
  assert.deepEqual(errors,[]);
- console.log('PASS: genuine dry/east-west crossing, deep-water collision, wash stairs, near/far and background ambience, save bytes untouched');
+ console.log('PASS: genuine dry/east-west crossing, deep-water collision, flat wash access, near/far and background ambience, save bytes untouched');
  await context.close();
 }finally{
  await browser?.close();
