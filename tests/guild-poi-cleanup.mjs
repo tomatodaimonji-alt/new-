@@ -78,7 +78,7 @@ try{
  await preview.goto(origin+'/?facility=base&test=1');
  assert.equal(await state(preview,key),serialization);
  assert.equal(await state(preview,backup),null);
- await preview.locator('#returnEditorWorld').click();
+ await preview.locator('#facilityExit').click();
  await preview.waitForURL(url=>url.searchParams.has('facility-return'));
  assert.equal(await state(preview,key),serialization);
  assert.equal(await state(preview,backup),null);

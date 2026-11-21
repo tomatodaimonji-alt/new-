@@ -96,7 +96,7 @@ test('a malformed primary is never rewritten by cleanup and disables all legacy 
   assert.equal(mem.get(ACTIVE),input);
   assert.deepEqual(writes,[]);
  }
- assert.match(html,/function pineStorePOIs\(entries\)\{\s*if\(!pinePOIStorageWritable\)return false;/);
+ assert.match(html,/function pineStorePOIs\(entries\)\{\s*if\((?:facilitySite\|\|)?!pinePOIStorageWritable\)return false;/);
 });
 
 test('non-importable target maps are never removed or substituted',()=>{

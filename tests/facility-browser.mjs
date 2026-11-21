@@ -109,11 +109,11 @@ try{
  for(const id of idList){
   if(id==='lodging') await desktop.locator('[data-facility-id="lodging"]').click();
   else await desktop.goto(origin+'/?facility='+id+'&test=1');
-  const start=await snap(desktop);
-  assert(start,'preview was not active');
-  assert.equal(start.id,id);
-  assert.deepEqual(start.position,{...start.spawn,level:0});
-  assert.equal(start.hiddenRoof,null);
+  const editing=await snap(desktop);
+  assert(editing&&editing.id===id&&!editing.active,'POI must open in the editor, not walk mode');
+  assert(await desktop.locator('#quickTools').isVisible(),'missing regular placement tools');
+  assert(await desktop.locator('#undo').isVisible(),'missing regular undo');
+  assert(!(await desktop.locator('#poiWalkPad').isVisible()),'walk pad shown before Play');
   await expectStore(desktop);
   const [download]=await Promise.all([desktop.waitForEvent('download'),desktop.locator('#facilityExport').click()]);
   assert.equal(download.suggestedFilename(),'workshop-facility-'+id+'.json');
@@ -141,13 +141,20 @@ try{
    await importer.close();
   }
   assert(exported.world.length>40&&exported.width<=128);
+  await desktop.locator('#poiWalkToggle').click();
+  const start=await snap(desktop);
+  assert(start.active);
+  assert.deepEqual(start.position,{...start.spawn,level:0});
+  assert.equal(start.hiddenRoof,null);
   assert.equal(start.buildings.length,id==='base'?3:1);
   assert(start.roofMeshes.every(count=>count>0));
   if(out)await desktop.screenshot({path:out+'/'+id+'.png'});
   for(const [index,b] of start.buildings.entries()){
    const beforeStep=await snap(desktop);
    const ground=footprint(b);
-   assert(ground.size<(b.x2-b.x1+1)*(b.z2-b.z1+1),'regular rectangle '+id+'/'+index);
+   const boxArea=(b.x2-b.x1+1)*(b.z2-b.z1+1);
+   if(id==='lodging'||(id==='base'&&index===0))assert(ground.size<boxArea,'inn lost irregular outline');
+   else assert.equal(ground.size,boxArea,'lost regular rectangular envelope '+id+'/'+index);
    await walk(desktop,await route(desktop,raw,beforeStep.position,(x,z)=>inside(ground,x,z)));
    let interior=await snap(desktop);
    assert.equal(interior.hiddenRoof,index,'wrong roof hidden at building '+index);
@@ -168,7 +175,7 @@ try{
     await staircase(desktop,raw,ground,-1,id+'-'+index,out,annex);
    }
    if(id==='workshop'||(id==='base'&&index===2)){
-    const annex=id==='base'?{x:b.x2-4,z:b.z1+9}:{x:b.x1+9,z:b.z1+4};
+    const annex=id==='base'?{x:b.x2-3,z:b.z1+9}:{x:b.x1+9,z:b.z1+3};
     await walk(desktop,await route(desktop,raw,(await snap(desktop)).position,(x,z)=>x===annex.x&&z===annex.z));
    }
    if(out&&id==='base')await desktop.screenshot({path:out+'/base-room-'+index+'.png'});
@@ -180,10 +187,16 @@ try{
   }
   await expectStore(desktop);
   await desktop.reload();
-  assert.deepEqual((await snap(desktop)).position,{...start.spawn,level:0});
-  assert.equal((await snap(desktop)).hiddenRoof,null);
+  assert.equal((await snap(desktop)).active,false);
+  await desktop.locator('#poiWalkToggle').click();
+  const afterReload=await snap(desktop);
+  assert(afterReload.active);
+  assert.deepEqual(afterReload.position,{...start.spawn,level:0});
+  assert.equal(afterReload.hiddenRoof,null);
+  await desktop.locator('#poiWalkToggle').click();
+  assert.equal((await snap(desktop)).active,false);
   await expectStore(desktop);
-  await desktop.locator('#returnEditorWorld').click();
+  await desktop.locator('#facilityExit').click();
   await desktop.waitForURL(url=>!url.searchParams.has('facility'));
   await desktop.waitForFunction(()=>window.__editorTest?.state?.().glLink===true);
   assert.equal(await snap(desktop),null);
@@ -215,9 +228,18 @@ try{
  const mobile=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:1});
  mobile.on('pageerror',e=>errors.push(e.message));
  await seed(mobile);
+ await mobile.goto(origin+'/?test=1');
+ const shell=async p=>p.locator('header h1,#undo,#redo,#quickTools button:not([hidden]),#poiGameTools button:not([hidden]),#mobileTabs button')
+  .evaluateAll(nodes=>nodes.filter(e=>e.getClientRects().length>0).map(e=>[e.id,e.id?e.textContent.trim():e.tagName]));
+ const normalShell=await shell(mobile);
  await mobile.goto(origin+'/?facility=base&test=1');
  assert.equal((await snap(mobile)).id,'base');
- for(const css of ['#returnEditorWorld','#facilityExport','[data-poi-dir="n"]']){
+ assert.equal((await snap(mobile)).active,false);
+ assert.deepEqual(await shell(mobile),normalShell,'facility entry must keep ordinary upper/lower editor controls');
+ if(out)await mobile.screenshot({path:out+'/mobile-editor.png'});
+ await mobile.locator('#enterGameWorld').tap();
+ assert.equal((await snap(mobile)).active,true);
+ for(const css of ['#poiWalkToggle','[data-poi-dir="n"]']){
   const loc=mobile.locator(css);assert(await loc.isVisible(),css+' not visible');
   const box=await loc.boundingBox();assert(box.x>=0&&box.y>=0&&box.x+box.width<=390&&box.y+box.height<=844,css+' overflowed');
  }
@@ -238,6 +260,31 @@ try{
  if(out)await mobile.screenshot({path:out+'/mobile.png'});
  await expectStore(mobile);
  assert.deepEqual(errors,[],'page errors');
+ const scratch=await browser.newPage({viewport:{width:1210,height:800}});
+ await seed(scratch);
+ await scratch.goto(origin+'/?facility=base&test=1');
+ const count=async()=>scratch.evaluate(()=>window.__editorTest.data().world.filter(o=>o.x===0&&o.z===0).length);
+ const beforeEdit=await count();
+ assert.equal(await scratch.locator('#facilityCellarOption').count(),1,'cellar option not retained in editor');
+ assert(await scratch.locator('#level option[value="9"]').isDisabled(),'cellar export needs one level of headroom');
+ await scratch.locator('#openJson').click();
+ await scratch.locator('#jsonText').fill(JSON.stringify(map(0)));
+ await scratch.locator('#importJson').click();
+ assert.equal(await count(),beforeEdit,'whole-map import changed the isolated facility');
+ await scratch.locator('#closeJson').click();
+ await scratch.evaluate(()=>window.__editorTest.place(0,0));
+ assert.equal(await count(),beforeEdit+1,'facility edit not applied');
+ await scratch.locator('#undo').click();assert.equal(await count(),beforeEdit);
+ await scratch.locator('#redo').click();assert.equal(await count(),beforeEdit+1);
+ await scratch.locator('#poiWalkToggle').click();assert((await snap(scratch)).active);
+ await scratch.locator('#poiWalkToggle').click();assert.equal(await count(),beforeEdit+1);
+ const [scratchFile]=await Promise.all([scratch.waitForEvent('download'),scratch.locator('#facilityExport').click()]);
+ assert.equal(JSON.parse(readFileSync(await scratchFile.path(),'utf8')).world.filter(o=>o.x===0&&o.z===0).length,beforeEdit+1);
+ await expectStore(scratch);
+ scratch.once('dialog',d=>d.accept());
+ await scratch.reload();assert.equal(await count(),beforeEdit,'temporary edit appeared in the original or template after reload');
+ await expectStore(scratch);
+ console.log('PASS: ordinary mobile editor shell and temporary edit/undo/redo/export without any original-save change');
  console.log('PASS: New POI discovery, WebGL, four preview routes and exports, real keyboard door passage and roof switching, reload, return, unchanged save bytes, mobile controls.');
 }finally{
  await browser?.close();await new Promise(resolve=>server.close(resolve));
