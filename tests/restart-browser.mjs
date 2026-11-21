@@ -84,6 +84,26 @@ try{
  assert.deepEqual((await state(page)).position,{x:innPoint.x,z:innPoint.z,level:1});
  assert.match(await page.locator('#poiWalkCoords').textContent(),/2階/);
  await expectStorage(page);
+ page=await open(ctx,page,'?facility=kitchen&test=1',errors);
+ await page.evaluate(()=>{
+  const C=window.AudioContext||window.webkitAudioContext;
+  if(!C)throw Error('Web Audio unavailable');
+  const {suspend}=C.prototype;
+  C.prototype.suspend=function(){window.__workshopTestContext=this;return suspend.call(this)};
+  let hidden=false;
+  Object.defineProperty(document,'hidden',{configurable:true,get:()=>hidden});
+  window.__workshopSetHidden=value=>{hidden=value;document.dispatchEvent(new Event('visibilitychange'))};
+ });
+ await page.locator('#poiWalkToggle').click();
+ await page.evaluate(()=>window.__workshopSetHidden(true));
+ await page.waitForFunction(()=>window.__workshopTestContext?.state==='suspended');
+ await page.evaluate(()=>window.__workshopSetHidden(false));
+ await page.waitForFunction(()=>window.__workshopTestContext?.state==='running');
+ await page.locator('#poiWalkToggle').click();
+ await page.evaluate(()=>{window.__workshopSetHidden(true);window.__workshopSetHidden(false)});
+ await page.waitForFunction(()=>window.__workshopTestContext?.state==='suspended');
+ await expectStorage(page);
+ console.log('PASS: real Web Audio suspends on hide, resumes in play, and stays suspended in editor.');
  assert.deepEqual(errors,[]);
  console.log('PASS: previous POI play and position after cold and updater restart, explicit route/return, invalid target fallback, byte-identical original saves.');
 }finally{

@@ -35,10 +35,10 @@ test('Facility-only roof treatment uses coherent muted colors without changing g
 test('The offline wooden cue uses filtered transients, not pitched sine sweeps; other effects unchanged in routing',()=>{
  const events=[];
  const ctx=vm.createContext({poiWalkActive:true,poiAudioEnabled:true,poiAudioLevels:{master:85,se:70},
-   poiAudioStart(){},poiAudioContext:{state:'running',currentTime:1},
+   poiAudioStart(){},poiAudioAllowed:()=>true,poiAudioContext:{state:'running',currentTime:1},
    poiAudioNoiseBurst(...args){events.push(['noise',...args]);},
    poiAudioThud(...args){events.push(['sine',...args]);},console});
- vm.runInContext(between('function poiSound(','// No audio on/off')+"poiSound('door');",ctx);
+ vm.runInContext(between('function poiSound(','function poiAudioSyncLifecycle(')+"poiSound('door');",ctx);
  assert(events.length>=3&&events.length<=6);
  assert(events.every(([kind,at,duration,freq,q,peak])=>kind==='noise'&&at>=1&&at+duration<1.35&&freq>70&&freq<4500&&peak<=.4));
  assert(events.some(([,at,duration,freq])=>at>=1.08&&freq<450&&duration>.055),'wood panel seating thud');

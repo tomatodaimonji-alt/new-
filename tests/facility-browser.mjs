@@ -201,6 +201,17 @@ try{
     await staircase(desktop,raw,ground,1,id+'-'+index,out,null,bedrooms);
    }
    if(b.floorFootprints['-1']){
+    const point=(x,z)=>id==='base'?{x:b.x1+z,z:b.z2-x}:{x:b.x1+x,z:b.z1+z};
+    const approach=point(10,1);
+    const before=await snap(desktop);
+    const chairTiles=new Set(raw.world.filter(o=>o.y===0&&o.type==='chairWood').map(o=>key(o.x,o.z)));
+    // Walk to the entry desk and stair using only paths that remain open
+    // with the chairs (normally intentionally passable) treated as occupied.
+    for(const mark of [point(6,8),point(8,8),approach])
+     await walk(desktop,await route(desktop,raw,(await snap(desktop)).position,
+      (x,z)=>x===mark.x&&z===mark.z,null,(x,z)=>!chairTiles.has(key(x,z))));
+    if(out&&id==='kitchen')await desktop.screenshot({path:out+'/kitchen-cellar-approach.png'});
+    assert.equal(before.position.level,0);
     const annex=id==='base'?{x:b.x1+4,z:b.z2-8}:{x:b.x1+8,z:b.z1+4};
     await staircase(desktop,raw,ground,-1,id+'-'+index,out,annex);
    }
@@ -339,6 +350,20 @@ try{
  assert(!(await allAt(desk2)).some(o=>o.type==='poiLedgerPapers'),'decoration undo retained new decor');
  await scratch.locator('#redo').click();
  assert((await allAt(desk2)).some(o=>o.type==='poiLedgerPapers'),'decoration redo lost new decor');
+ // The second bottom Check press clears annotations, never map objects.
+ const snapshotData=()=>scratch.evaluate(()=>window.__editorTest.data());
+ await scratch.locator('#pineCheckMode').click();
+ await scratch.evaluate(()=>{window.__editorTest.check(2,2);window.__editorTest.check(3,3)});
+ const marked=await snapshotData();
+ assert.equal(marked.checks.length,2);
+ await scratch.locator('#pineCheckMode').click();
+ const afterClear=await snapshotData();
+ assert.equal(afterClear.checks.length,0);
+ assert.deepEqual(afterClear.world,marked.world);
+ await scratch.locator('#undo').click();
+ assert.deepEqual((await snapshotData()).checks,marked.checks);
+ await scratch.locator('#redo').click();
+ assert.equal((await snapshotData()).checks.length,0);
  const [scratchFile]=await Promise.all([scratch.waitForEvent('download'),scratch.locator('#facilityExport').click()]);
  assert.equal(JSON.parse(readFileSync(await scratchFile.path(),'utf8')).world.filter(o=>o.x===0&&o.z===0).length,beforeEdit+1);
  await expectStore(scratch);
