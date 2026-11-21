@@ -653,7 +653,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
  font:700 12px/12px system-ui;text-align:center}
 .facilityEntranceGuide[hidden]{display:none}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v118）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v119）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -4911,7 +4911,7 @@ function poiCreekAudioSync(){
   poiCreekAudioStop();return;
  }
  const near=1-Math.min(1,Math.hypot(poiWalkX-anchor.x,poiWalkZ-anchor.z)/7);
- const level=.18*near*near;
+ const level=.145*near*near;
  if(!poiCreekAudio){
   if(!level)return;
   const source=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),gain=ctx.createGain();
@@ -4941,18 +4941,20 @@ function poiAudioStart(wake=false){
   if(wake)poiAudioApplyLevels();
   poiCreekAudioSync();
   if(poiAudioAmbient.length)return;
+  // Set the base's outdoor bed behind the music without changing either slider.
+  const baseMix=facilitySite?.id==='base';
   // Long soft wind and leafy rustle. No remote media/network required.
   const wind=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),g=ctx.createGain();
   wind.buffer=poiAudioNoiseBuffer();wind.loop=true;
-  filter.type='lowpass';filter.frequency.value=550;g.gain.value=.17;
+  filter.type='lowpass';filter.frequency.value=550;g.gain.value=baseMix ? .14 : .17;
   wind.connect(filter).connect(g).connect(poiAudioAmbience);
   wind.start();poiAudioAmbient.push(wind);
   const lfo=ctx.createOscillator(),lg=ctx.createGain();
-  lfo.type='sine';lfo.frequency.value=.11;lg.gain.value=.055;
+  lfo.type='sine';lfo.frequency.value=.11;lg.gain.value=baseMix ? .044 : .055;
   lfo.connect(lg).connect(g.gain);lfo.start();poiAudioAmbient.push(lfo);
   const rustle=ctx.createBufferSource(),rf=ctx.createBiquadFilter(),rg=ctx.createGain();
   rustle.buffer=poiAudioNoiseBuffer();rustle.loop=true;
-  rf.type='bandpass';rf.frequency.value=1450;rf.Q.value=.35;rg.gain.value=.05;
+  rf.type='bandpass';rf.frequency.value=1450;rf.Q.value=.35;rg.gain.value=baseMix ? .039 : .05;
   rustle.connect(rf).connect(rg).connect(poiAudioAmbience);rustle.start();poiAudioAmbient.push(rustle);
   poiAudioMusicPhrase();poiAudioInterval=setInterval(poiAudioMusicPhrase,facilitySite?.id==='base'?200:8000);
  }catch(e){console.warn('Audio unavailable',e)}
@@ -4976,20 +4978,20 @@ function poiAudioStop(suspend=false){
  for(const node of poiAudioAmbient){try{node.stop()}catch(e){}try{node.disconnect()}catch(e){}}
  poiAudioAmbient=[];
 }
-function poiAudioNoiseBurst(when,duration,frequency,q,peak){
+function poiAudioNoiseBurst(when,duration,frequency,q,peak,attack=.008){
  const ctx=poiAudioContext,src=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),gain=ctx.createGain();
  src.buffer=poiAudioNoiseBuffer();filter.type='bandpass';filter.frequency.value=frequency;filter.Q.value=q;
  gain.gain.setValueAtTime(.0001,when);
- gain.gain.linearRampToValueAtTime(peak,when+.008);
+ gain.gain.linearRampToValueAtTime(peak,when+attack);
  gain.gain.exponentialRampToValueAtTime(.0001,when+duration);
  src.connect(filter).connect(gain).connect(poiAudioEffects);
  src.start(when);poiAudioTransient.add(src);src.stop(when+duration+.01);
  src.onended=()=>{poiAudioTransient.delete(src);src.disconnect();filter.disconnect();gain.disconnect()};
 }
-function poiAudioThud(when,startFrequency,endFrequency,duration,volume){
+function poiAudioThud(when,startFrequency,endFrequency,duration,volume,attack=.008){
  const ctx=poiAudioContext,o=ctx.createOscillator(),g=ctx.createGain();
  o.type='sine';o.frequency.setValueAtTime(startFrequency,when);o.frequency.exponentialRampToValueAtTime(endFrequency,when+duration);
- g.gain.setValueAtTime(.0001,when);g.gain.linearRampToValueAtTime(volume,when+.008);
+ g.gain.setValueAtTime(.0001,when);g.gain.linearRampToValueAtTime(volume,when+attack);
  g.gain.exponentialRampToValueAtTime(.0001,when+duration);
  o.connect(g).connect(poiAudioEffects);o.start(when);poiAudioTransient.add(o);o.stop(when+duration+.015);
  o.onended=()=>{poiAudioTransient.delete(o);o.disconnect();g.disconnect()};
@@ -5009,6 +5011,15 @@ function poiSound(kind){
    poiAudioNoiseBurst(now+.025,.112,845*grain,1.9,.15);
    poiAudioNoiseBurst(now+.116,.132,195*grain,.72,.38);
    poiAudioNoiseBurst(now+.123,.061,555*grain,1.15,.18);
+  }else if(facilitySite?.id==='base'&&kind==='step'){
+   // Muted sole against earth: a short low brush and a rounded heel.
+   poiAudioNoiseBurst(now,.135,460+Math.random()*180,.84,.29,.022);
+   poiAudioThud(now,90+Math.random()*20,52,.135,.145,.016);
+  }else if(facilitySite?.id==='base'&&kind==='attack'){
+   // Keep the swing distinct: darker brush, softer trailing air, low body.
+   poiAudioNoiseBurst(now,.27,790,.68,.41,.028);
+   poiAudioNoiseBurst(now+.065,.17,1120,.84,.18,.026);
+   poiAudioThud(now+.04,145,60,.22,.20,.019);
   }else if(kind==='step'){
    // Short filtered gravel/soil crunch plus sole impact; alternate tone subtly.
    poiAudioNoiseBurst(now,.12,650+Math.random()*320,.7,.40);
@@ -5091,7 +5102,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v118',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v119',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -5206,7 +5217,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v118';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v119';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -5418,7 +5429,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v118',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v119',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
