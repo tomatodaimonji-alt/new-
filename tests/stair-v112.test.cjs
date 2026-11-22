@@ -14,7 +14,7 @@ test('Shaft lining stays below grade instead of creating tall black boxes',()=>{
  assert(lining.length>=3);
  assert(lining.every(o=>o.y+o.h<5));
  assert(lining.some(o=>o.y+o.h>4.8),'no disconnected lining lip');
- assert.match(html,/poiCellarShaftLining\(m,x\+\.5,h,z\+\.5\)/);
+ assert.match(html,/poiCellarShaftLining\((?:m|grade),x\+\.5,h,z\+\.5\)/);
 });
 test('Stair aperture has a clear axis and only one sparse light handrail',()=>{
  const entry=build('poiCellarEntryGeometry(m,0,0,0)');

@@ -83,11 +83,11 @@ test('roof and named safe area are scoped to the destination guild',()=>{
  }
 });
 
-test('moving between guild floors holds only one large guild cutaway while keeping other authored views',()=>{
+test('moving between guild floors holds only one legacy cutaway in an unsupported or edited world',()=>{
  const a=html.indexOf('function facilityRenderScene('),b=html.indexOf('function facilityBuildRoofs(',a);
  assert(a>=0&&b>a);
  const deleted=[],c=vm.createContext({poiWalkLevel:0,facilitySite:{id:'base',buildings:[{id:'toolshop'},{id:'townGuild'}]},
-  facilityVisibilityOwner:()=>1,facilityScenes:new Map([['surface:null:0',{mesh:{buf:'keep'},signs:[]}]]),
+  facilitySurface:null,facilitySharedSurfaceAllowed:()=>false,facilityVisibilityOwner:()=>1,facilityScenes:new Map([['surface:null:0',{mesh:{buf:'keep'},signs:[]}]]),
   makeScene:()=>({buf:'new'}),signProgram:false,gl:{deleteBuffer:b=>deleted.push(b)}});
  vm.runInContext(html.slice(a,b)+'\nfacilityRenderScene()',c);
  assert(c.facilityScenes.has('surface:1:0'));

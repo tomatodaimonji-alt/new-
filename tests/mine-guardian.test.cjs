@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),vm=require(
 const h=fs.readFileSync(process.env.HTML||path.join(__dirname,'..','world-editor.html'),'utf8');
 function setup(blocked=[]){
  const m=h.match(/\/\/ BEGIN SLIME ATTACK\n([\s\S]*?)\/\/ END SLIME ATTACK/);assert.ok(m);
- const obj={type:'monsterMineGuard',x:40,z:40,y:-1},s={x:40,z:40,hp:120,nextAttack:0},hits=[];
+ const obj={type:'monsterMineGuard',x:40,z:40,y:-1},s={x:40,z:40,hp:140,nextAttack:0},hits=[];
  const c=vm.createContext({facilitySite:{id:'base',mine:{guardian:{type:'monsterMineGuard',x:40,z:40,y:-1},bounds:{x1:35,x2:47,z1:35,z2:48},chamber:{x1:38,x2:45,z1:37,z2:42}}},poiWalkActive:true,pineAIActive:false,poiWalkLevel:-1,poiWalkX:41,poiWalkZ:40,
   poiAudioAllowed:()=>true,poiPlayerDying:()=>false,poiMonsterStates:new Map([[obj,s]]),poiMonsterMeshDirty:false,
   poiMonsterCanMove:(x,z)=>!blocked.some(([a,b])=>x===a&&z===b),poiWalkCanStep:(x,z)=>!blocked.some(([a,b])=>x===a&&z===b),poiMobHitPlayer:(_o,t)=>hits.push(t)&&false});
@@ -83,7 +83,7 @@ test('while sliding melee follows the nearer visible tile but movement reserves 
  const start=h.indexOf('function poiMonsterAt('),end=h.indexOf('\n',start);
  const c=vm.createContext({poiWalkLevel:-1,facilitySite:{id:'base'},performance:{now:()=>200},poiMonsterStates:new Map()});
  const actor={type:'monsterMineGuard',y:-1};
- c.poiMonsterStates.set(actor,{hp:120,x:41,z:40,fromX:40,fromZ:40,moveStarted:100,guardSlideUntil:950,guardMoveMs:850});
+ c.poiMonsterStates.set(actor,{hp:140,x:41,z:40,fromX:40,fromZ:40,moveStarted:100,guardSlideUntil:950,guardMoveMs:850});
  const stop=h.indexOf('\nfunction ',end);
  vm.runInContext(h.slice(start,stop),c);
  assert.equal(c.poiMonsterAt(40,40)?.[0],actor);assert.equal(c.poiMonsterAt(41,40),null);
@@ -94,4 +94,13 @@ test('while sliding melee follows the nearer visible tile but movement reserves 
  c.performance.now=()=>950;assert.equal(c.poiMonsterAt(40,40,true),null);
  const move=h.slice(h.indexOf('function poiWalkCanStep('),h.indexOf('const POI_SAFE_TOWN='));
  assert.match(move,/poiMonsterAt\(x,z,true\)/);
+});
+test('the same mine monster is named ゴーレム, remains AI object 340, and has 140 HP / 18 damage',()=>{
+ const config=h.match(/const POI_MONSTER_STATS=([^;]+);/);
+ assert.deepEqual(vm.runInNewContext('JSON.stringify(('+config[1]+').monsterMineGuard)'),JSON.stringify({hp:140,attack:18}));
+ assert.match(h,/\{id:'monsterMineGuard',name:'ゴーレム'/);
+ assert.match(h,/"number":"340","id":"monsterMineGuard","name":"ゴーレム"/);
+ const external=require('../src/editor/ai-object-numbers.json').objects.find(o=>o.id==='monsterMineGuard');
+ assert.deepEqual(external,{number:'340',id:'monsterMineGuard',name:'ゴーレム'});
+ assert.doesNotMatch(h,/鉱山の番人/);
 });

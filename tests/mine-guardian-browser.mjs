@@ -140,7 +140,7 @@ function assertSweep(w){
 }
 async function finishGuard(page){
  await page.keyboard.press('ArrowUp'); // facing north into the actual blocking guard, not teleporting
- for(const hp of [92,64,36,8,0]){
+ for(const hp of [112,84,56,28,0]){
   await page.locator(action).tap();
   await page.waitForFunction(hp=>window.__editorTest.facility().combat.actors.some(a=>a.type==='monsterMineGuard'&&a.hp===hp),hp,{timeout:6500});
   if(hp)await page.waitForTimeout(315);
@@ -150,7 +150,7 @@ async function combat(browser){
  const {ctx,page,errors}=await launch(browser,'base',{x:120,z:56},{width:390,height:700,level:-1,facing:0,kit:bladeKit});
  try{
   const map=await readMap(page),url=page.url(),first=await state(page);
-  assert.equal(actor(first).hp,120);
+  assert.equal(actor(first).hp,140);
   assert.equal(actor(first).level,-1);
   assert.equal(first.inventory.weapon,'equipWoodSword');
   const warning=await waitMark(page);
@@ -196,7 +196,7 @@ async function combat(browser){
   await page.waitForFunction(()=>window.__editorTest?.facility?.().active);
   assert.equal((await state(page)).economy.gold,21);
   assert.ok((await readKit(page)).claimedCaches.includes('mine-guardian'));
-  assert.equal(actor(await state(page)).hp,120,'authored enemy may respawn, first reward does not');
+  assert.equal(actor(await state(page)).hp,140,'authored enemy may respawn, first reward does not');
   await finishGuard(page);
   assert.equal((await state(page)).economy.gold,21,'no second reward after loading same playthrough');
   assert.equal(page.url(),url);
@@ -228,13 +228,14 @@ async function movingGuardian(browser){
   assert.ok(!resting.move);
   await move(page,'s');await move(page,'s');await move(page,'e',true,true);
   await page.keyboard.press('ArrowRight');
-  for(const hp of [92,64,36,8,0]){
+  for(const hp of [112,84,56,28,0]){
    await page.locator(action).tap();
    await page.waitForFunction(hp=>window.__editorTest.facility().combat.actors.some(a=>a.type==='monsterMineGuard'&&a.hp===hp),hp,{timeout:6500});
    if(hp)await page.waitForTimeout(315);
   }
   assert.equal((await state(page)).economy.gold,21,'authored one-time reward still earned after guardian walks');
   assert.ok((await readKit(page)).claimedCaches.includes('mine-guardian'));
+  await page.locator('#poiMessageLog .poiMessageLine').filter({hasText:/ゴーレムを倒した/}).waitFor({state:'visible'});
   assert.deepEqual(await readMap(page),authored,'walking does not rewrite the authored map');
   await unchanged(page);assert.deepEqual(errors,[]);
  }finally{await ctx.close();}
