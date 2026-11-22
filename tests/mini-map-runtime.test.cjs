@@ -71,3 +71,23 @@ test('all four upper-left surfaces blend directly with the scene without a blur 
  assert.match(css,/backdrop-filter:none/);
  assert.match(css,/box-shadow:0 1px 4px #07191045/);
 });
+test('accepting the mine quest repaints only the dynamic minimap at the authored destination',()=>{
+ const outlines=[],draws=[];
+ const g={fillRect(){},strokeRect(){},beginPath(){},arc(){},fill(){},stroke(){},fillText(){},
+  clearRect(){draws.push(1)},drawImage(){},moveTo(x,z){outlines.push([x,z])},lineTo(){},closePath(){}};
+ const mk=()=>({width:144,height:144,getContext:()=>g});
+ let quests=[];
+ const els={poiMiniHud:{},poiMiniMap:mk(),poiLocationName:{},poiLocationStars:{setAttribute(){}}};
+ const scope=run({$:id=>els[id],document:{createElement:mk},facilitySite:{id:'base',mine:{entrance:{x:116,z:64,y:0}}},
+  poiQuestMiniTargets:()=>quests,poiWalkActive:true,pineAIActive:false,pineGameActive:false,
+  poiWalkLevel:0,poiWalkFacing:0,poiWalkX:22,poiWalkZ:26,MAP_W:128,MAP_H:96,world:[],
+  isFloor:()=>false,isWallId:()=>false,poiWalkPassableDoor:()=>false,BRIDGE_IDS:new Set(),ROAD_IDS:new Set()});
+ scope.poiMiniUpdate();assert.equal(outlines.length,0);
+ quests=[{id:'mine-survey',x:116,z:64,y:0}];scope.poiMiniUpdate();
+ const s=134/128;
+ assert.deepEqual(outlines,[[5+116.5*s,(144-96*s)/2+3+64.5*s-5.5]]);
+ assert.equal(scope.poiMiniSnapshot().topologyBuilds,1);assert.equal(draws.length,2);
+ scope.poiMiniUpdate();assert.equal(draws.length,2);
+ scope.poiWalkLevel=-1;scope.poiMiniUpdate();assert.equal(outlines.length,1,'no marker below ground');
+ scope.poiWalkLevel=0;quests=[];scope.poiMiniUpdate();assert.equal(outlines.length,1);
+});

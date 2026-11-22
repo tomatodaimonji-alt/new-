@@ -695,6 +695,8 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
  max-height:var(--poi-npc-menu-room, min(210px,40dvh));overflow-y:auto;overscroll-behavior:contain;
  pointer-events:auto;touch-action:pan-y}
 #poiNpcMenu[hidden]{display:none}
+#poiNpcMenu[data-quest-list]{grid-template-columns:minmax(0,1fr);padding:4px}
+#poiQuestListTitle{padding:2px 4px;color:#decba5;font-weight:750}
 /* The read-only NPC bag occupies the same play-pad space as the player bag. */
 #viewWrap:has(#poiNpcInventory:not([hidden])) :is(#quickTools,#poiGameTools){visibility:hidden}
 #poiNpcInventory{pointer-events:auto;-webkit-backdrop-filter:var(--workshop-panel-blur);backdrop-filter:var(--workshop-panel-blur)}
@@ -1009,7 +1011,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v180）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v181）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -6773,6 +6775,29 @@ function poiGoldBagDecode(raw){
   !POI_GOLD_BAG_DEFAULT.every(id=>raw.includes(id)))return null;
  return raw.every((id,i)=>id===i)?null:raw.slice();
 }
+const POI_QUESTS=Object.freeze([{id:'mine-survey',label:'廃坑の調査',description:'町の東にある廃坑の入口を調べる。'}]);
+function poiQuestDecode(value){
+ if(!Array.isArray(value))return null;
+ const ids=POI_QUESTS.filter(q=>value.includes(q.id)).map(q=>q.id);
+ return ids.length?ids:null;
+}
+function poiQuestAccepted(id){return !!poiHotbarHasKit()&&!!poiHotbarRead().quests?.includes(id)}
+function poiQuestsForClerk(){
+ return facilitySite?.id==='base'&&facilitySite.mine?.entrance?POI_QUESTS:[];
+}
+function poiQuestMiniTargets(){
+ if(!poiWalkActive||pineAIActive||!poiQuestsForClerk().length)return [];
+ const e=facilitySite.mine.entrance;
+ return poiWalkLevel===e.y&&poiQuestAccepted('mine-survey')?[{id:'mine-survey',x:e.x,z:e.z,y:e.y}]:[];
+}
+function poiQuestAccept(id,actor,now){
+ const result=reason=>({ok:reason===null,reason});
+ if(actor?.role?.id!=='guildkeeper'||poiTownDialogueTarget(now)!==actor||!poiQuestsForClerk().some(q=>q.id===id))return result('unavailable');
+ const kit=poiHotbarRead();if(kit.quests?.includes(id))return result('already');
+ if(!poiEconomyWrite({...kit,quests:[...(kit.quests||[]),id]}))return result('storage');
+ if(typeof poiMiniUpdate==='function')poiMiniUpdate();
+ return result(null);
+}
 function poiHotbarHasKit(){return facilitySite?.id==='base'}
 function poiHotbarRead(){
  if(poiHotbarState)return poiHotbarState;
@@ -6785,6 +6810,7 @@ function poiHotbarRead(){
  const worn=poiArmorDecode(saved.worn);if(worn)kit.worn=worn;
  const npcTrade=poiNpcTradeDecode(saved.npcTrade);if(npcTrade)kit.npcTrade=npcTrade;
  const goldBagOrder=poiGoldBagDecode(saved.goldBagOrder);if(goldBagOrder)kit.goldBagOrder=goldBagOrder;
+ const quests=poiQuestDecode(saved.quests);if(quests)kit.quests=quests;
  if(Number.isSafeInteger(saved.gold)&&saved.gold>=0&&saved.gold<=POI_ECONOMY_GOLD_MAX&&saved.gold)kit.gold=saved.gold;
  if(Array.isArray(saved.claimedCaches)){
   const claims=POI_ECONOMY_CACHES.filter(({id})=>saved.claimedCaches.includes(id)).map(({id})=>id);
@@ -6810,9 +6836,9 @@ function poiHotbarRead(){
 function poiHotbarSave(kit=poiHotbarState){
  if(typeof poiGameResetDeparture!=='undefined'&&(poiGameResetDeparture||poiGameResetBlocked))return false;
  try{
-  const {weapon,potions,gold,claimedCaches,sword,drops,slots,towerFind,kitchenChest,worn,npcTrade,goldBagOrder}=kit;
+  const {weapon,potions,gold,claimedCaches,sword,drops,slots,towerFind,kitchenChest,worn,npcTrade,goldBagOrder,quests}=kit;
   localStorage.setItem(POI_HOTBAR_KEY,JSON.stringify({version:1,weapon,potions:Math.min(potions,POI_HOTBAR_POTION_MAX),
-   ...(gold?{gold}:{}),...(claimedCaches?.length?{claimedCaches}:{}),...(towerFind?{towerFind}:{}),...(kitchenChest?{kitchenChest}:{}),...(worn?{worn}:{}),...(npcTrade?{npcTrade}:{}),...(goldBagOrder?{goldBagOrder}:{}),
+   ...(gold?{gold}:{}),...(claimedCaches?.length?{claimedCaches}:{}),...(towerFind?{towerFind}:{}),...(kitchenChest?{kitchenChest}:{}),...(worn?{worn}:{}),...(npcTrade?{npcTrade}:{}),...(goldBagOrder?{goldBagOrder}:{}),...(quests?.length?{quests}:{}),
    ...(sword===false?{sword}:{}),...(drops?.length?{drops}:{}),...(slots?{slots}:{})}));
   return true;
  }catch(_e){return false}
@@ -9099,7 +9125,7 @@ const POI_NPC_EXTRA_SPEECH=Object.freeze({
  workshopkeeper:['手に馴染んだ道具ほど、大切に使いたいものだ。'],
  stablekeeper:['今日は馬の調子もいい。外は歩きやすそうだね。']
 });
-const POI_NPC_MENU_LABELS={talk:'話す',status:'状態',request:'依頼',shop:'買い物する',stay:'泊まる',sell:'アイテムを売る',
+const POI_NPC_MENU_LABELS={talk:'話す',status:'状態',request:'依頼',quest:'クエスト','quest-accept':'受ける',shop:'買い物する',stay:'泊まる',sell:'アイテムを売る',
  buy:'アイテムを買う',recruit:'仲間になってほしい',back:'戻る',confirm:'はい'};
 function poiNpcMenuActive(){return !!poiTownDialogue&&!poiTownDialogue.sleeping}
 function poiTownNpcSleeping(a){return /^(?:sleep-|rest-inn$)/.test(a.activity||'')}
@@ -9121,7 +9147,10 @@ function poiNpcAtWork(actor){
 function poiNpcMenuRows(d){
  if(d.sleeping)return [];
  const row=id=>({id,label:POI_NPC_MENU_LABELS[id]});
- if(d.page==='root')return ['talk','status','request','back'].map(row);
+ const quests=d.actor.role.id==='guildkeeper'&&typeof poiQuestsForClerk==='function'?poiQuestsForClerk():[];
+ if(d.page==='root')return ['talk','status','request',...(quests.length?['quest']:[]),'back'].map(row);
+ if(d.page==='quest')return [...quests.map(q=>({id:'quest:'+q.id,label:q.label+(poiQuestAccepted(q.id)?'（受注済み）':''),quest:q})),row('back')];
+ if(d.page==='quest-detail')return [...(d.questId&&!poiQuestAccepted(d.questId)?['quest-accept']:[]),'back'].map(row);
  if(d.page==='status')return ['back'].map(row);
  if(d.page==='request'){
   const service=poiNpcMenuService(d.actor);
@@ -9215,7 +9244,7 @@ function poiNpcInventorySync(actor=null){
 function poiNpcMenuMark(){
  const menu=$('poiNpcMenu'),d=poiTownDialogue;
  if(!menu||!d)return;
- const choices=[...menu.children];
+ const choices=[...menu.children].filter(el=>el.id!=='poiQuestListTitle');
  for(const [i,b] of choices.entries()){
   if(i===d.index)b.setAttribute('aria-current','true');else b.removeAttribute('aria-current');
  }
@@ -9227,15 +9256,19 @@ function poiNpcMenuMark(){
    const map=mini&&!mini.hidden?mini.getBoundingClientRect():null;
    const stop=map&&map.right>bounds.left&&map.left<bounds.right?Math.max(edge,map.bottom+3):edge;
    // Keep the choices above the speech card, below the mini HUD when room permits.
-   const room=bounds.bottom-stop,compact=bounds.width>=176&&room>=32&&room<75;
+   const questList=d.page==='quest';
+   const room=bounds.bottom-stop,compact=!questList&&bounds.width>=176&&room>=32&&room<75;
    menu.toggleAttribute('data-compact',compact);
-   const top=room>=(compact?32:42)?stop:edge;
+   const top=room>=(questList?90:compact?32:42)?stop:edge;
    menu.style.setProperty('--poi-npc-menu-room',Math.max(0,Math.min(215,Math.floor(bounds.bottom-top)))+'px');
   }
   const a=target.getBoundingClientRect(),b=menu.getBoundingClientRect();
   if(a.bottom>b.bottom-3)menu.scrollTop+=a.bottom-b.bottom+3;
   if(a.top<b.top+3)menu.scrollTop+=a.top-b.top-3;
  }
+}
+function poiQuestListHeading(){
+ const title=document.createElement('strong');title.id='poiQuestListTitle';title.textContent='クエスト一覧';return title;
 }
 function poiNpcMenuRender(now){
  const d=poiTownDialogue;if(!d)return;
@@ -9248,7 +9281,8 @@ function poiNpcMenuRender(now){
  const inspecting=d.page==='status'&&!d.sleeping;
  poiNpcInventorySync(inspecting?d.actor:null);
  menu.hidden=d.sleeping||inspecting;
- menu.replaceChildren(...(inspecting?[]:d.rows).map(r=>{
+ menu.toggleAttribute('data-quest-list',d.page==='quest');
+ menu.replaceChildren(...(d.page==='quest'?[poiQuestListHeading()]:[]),...(inspecting?[]:d.rows).map(r=>{
   const b=document.createElement('button');b.type='button';b.dataset.npcAction=r.id;
   if(r.offer?.canTrade===false)b.dataset.npcUnavailable='';
   b.textContent=r.label;return b;
@@ -9265,8 +9299,8 @@ function poiNpcMenuBack(now=performance.now()){
  const d=poiTownDialogue;
  if(!d)return false;
  if(d.sleeping||d.page==='root'){poiTownDialogueClose();poiShopSync();return true}
- d.page=d.page==='confirm'?d.pending.page:['buy','sell','shop'].includes(d.page)?'request':'root';
- d.pending=null;d.index=0;d.text=d.topic;
+ d.page=d.page==='quest-detail'?'quest':d.page==='confirm'?d.pending.page:['buy','sell','shop'].includes(d.page)?'request':'root';
+ d.pending=null;d.questId=null;d.index=0;d.text=d.page==='quest'?'どのクエストを見ますか？':d.topic;
  poiNpcMenuRender(now);return true;
 }
 function poiNpcTradeMessage(reason){
@@ -9282,6 +9316,16 @@ function poiNpcMenuChoose(id,now=performance.now()){
  if(id==='talk'){
   const topics=POI_NPC_EXTRA_SPEECH[d.actor.role.id]||['夕方になると門の外は暗くなる。帰り道は覚えておくといいよ。','町へ戻ると、ようやく一息つけるね。'];
   d.topic=d.text=topics[(d.topicIndex++)%topics.length];
+ }else if(id==='quest'){
+  d.page='quest';d.index=0;d.text='どのクエストを見ますか？';
+ }else if(row.quest){
+  d.questId=row.quest.id;d.page='quest-detail';d.index=0;
+  d.text=poiQuestAccepted(row.quest.id)?'受注済み。ミニマップに目印があります。':row.quest.description||row.quest.label;
+ }else if(id==='quest-accept'){
+  const result=poiQuestAccept(d.questId,d.actor,now);
+  if(result.ok||result.reason==='already'){
+   d.questId=null;d.page='quest';d.index=0;d.text='受注しました。ミニマップに目印を付けました。';
+  }else d.text=result.reason==='storage'?'保存できなかったため、受注していません。':'今は受注できません。';
  }else if(id==='status'){
   d.page='status';d.index=0;d.text=d.topic;
  }else if(id==='request'||id==='shop'||id==='buy'||id==='sell'){
@@ -9357,7 +9401,7 @@ function poiTownDialogueClose(){
  if(!poiTownDialogue)return false;
  poiTownDialogue=null;
  const menu=$('poiNpcMenu');
- if(menu){menu.hidden=true;menu.replaceChildren?.()}
+ if(menu){menu.hidden=true;menu.removeAttribute?.('data-quest-list');menu.replaceChildren?.()}
  poiNpcInventorySync();
  if(typeof poiMessageEndSpeech==='function')poiMessageEndSpeech();
  return true;
@@ -9680,7 +9724,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v180',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v181',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -9795,7 +9839,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v180';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v181';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -10010,7 +10054,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v180',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v181',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -11164,6 +11208,12 @@ function poiMiniDrawTopology(width,height,floor,site=null){
  if(floor!==0){g.textAlign='left';g.fillText(floor<0?'B'+(-floor):(floor+1)+'F',5,12)}
  return {layer,scale,ox,oy,world,width,height,floor,mapW:MAP_W,mapH:MAP_H};
 }
+function poiMiniQuestMark(g,x,z){
+ // A cool, outlined diamond, distinct from the warm circular player marker.
+ const r=5.5;
+ g.beginPath();g.moveTo(x,z-r);g.lineTo(x+r,z);g.lineTo(x,z+r);g.lineTo(x-r,z);g.closePath();
+ g.fillStyle='#9de9dd';g.strokeStyle='#183b3b';g.lineWidth=1.6;g.fill();g.stroke();
+}
 function poiMiniUpdate(){
  const hud=$('poiMiniHud'),cv=$('poiMiniMap');
  if(!hud||!cv)return;
@@ -11181,8 +11231,11 @@ function poiMiniUpdate(){
   poiMiniBuilds++;
  }
  const area=poiRegionAt(facilitySite,poiWalkX,poiWalkZ,pineGameActive,floor);
+ const quests=facilitySite?.id==='base'&&floor===0&&typeof poiQuestMiniTargets==='function'?
+  poiQuestMiniTargets().filter(q=>q.y===floor&&Number.isInteger(q.x)&&Number.isInteger(q.z)&&q.x>=0&&q.x<MAP_W&&q.z>=0&&q.z<MAP_H):[];
+ const questKey=quests.map(q=>q.x+','+q.z).join(';');
  const last=poiMiniLast;
- if(last?.x===poiWalkX&&last.z===poiWalkZ&&last.level===floor&&last.facing===poiWalkFacing&&last.location===area.name&&last.stars===area.stars)return;
+ if(last?.questKey===questKey&&last.x===poiWalkX&&last.z===poiWalkZ&&last.level===floor&&last.facing===poiWalkFacing&&last.location===area.name&&last.stars===area.stars)return;
  if(last?.location!==area.name){const label=$('poiLocationName');label.textContent=area.name;label.title=area.name}
  if(last?.stars!==area.stars){
   const stars=$('poiLocationStars');stars.textContent=area.stars;
@@ -11190,12 +11243,13 @@ function poiMiniUpdate(){
  }
  const {layer,scale,ox,oy}=map;
  g.clearRect(0,0,width,height);g.drawImage(layer,0,0);
+ for(const q of quests)poiMiniQuestMark(g,ox+(q.x+.5)*scale,oy+(q.z+.5)*scale);
  const x=ox+(poiWalkX+.5)*scale,z=oy+(poiWalkZ+.5)*scale;
  const [dx,dz]=[[0,-1],[1,0],[0,1],[-1,0]][poiWalkFacing]||[0,-1];
  g.fillStyle='#ffde7f';g.strokeStyle='#17241e';g.lineWidth=1.7;
  g.beginPath();g.arc(x+dx*4.2,z+dz*4.2,1.55,0,Math.PI*2);g.fill();
  g.beginPath();g.arc(x,z,3.25,0,Math.PI*2);g.fill();g.stroke();
- poiMiniLast={location:area.name,stars:area.stars,x:poiWalkX,z:poiWalkZ,level:floor,facing:poiWalkFacing};
+ poiMiniLast={location:area.name,stars:area.stars,x:poiWalkX,z:poiWalkZ,level:floor,facing:poiWalkFacing,questKey};
 }
 const POI_TOWN_CLOCK_KEY='world-workshop-town-clock-v1',POI_TOWN_MINUTE_MS=500;
 let poiTownClockGameMs=480*POI_TOWN_MINUTE_MS,poiTownClockLast=null,poiTownClockSaved=null,poiTownClockLoaded=false;

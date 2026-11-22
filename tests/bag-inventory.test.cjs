@@ -232,3 +232,23 @@ test('hotbar-to-bag is atomic and does not treat old overflow as capacity; trans
  f.fail(false);assert.equal(c.poiQuickTransferStorage('hotbar',0).ok,true);
  assert.equal(c.poiEquippedWeapon(),null);assert.equal(c.poiChestSlotAt(0).type,'equipWoodSword');
 });
+test('mine quest acceptance is the only durable write, preserves the kit, and updates its real entry marker',()=>{
+ const original={version:1,weapon:null,potions:3,gold:12,claimedCaches:['glade']};
+ const f=fixture(original),c=f.ctx,actor={role:{id:'guildkeeper'}};
+ c.facilitySite.mine={entrance:{x:116,z:64,y:0}};
+ c.poiTownDialogueTarget=()=>actor;let paints=0;c.poiMiniUpdate=()=>paints++;
+ assert.equal(c.poiQuestsForClerk()[0].label,'廃坑の調査');
+ assert.equal(c.poiQuestMiniTargets().length,0);assert.equal(f.writes(),0);
+ assert.equal(c.poiQuestAccept('mine-survey',{role:{id:'stablekeeper'}},100).reason,'unavailable');
+ assert.equal(c.poiQuestAccept('unknown',actor,100).reason,'unavailable');
+ f.fail(true);assert.equal(c.poiQuestAccept('mine-survey',actor,100).reason,'storage');
+ assert.equal(paints,0);assert.equal(f.writes(),0);assert.deepEqual(f.raw(),original);
+ f.fail(false);assert.equal(c.poiQuestAccept('mine-survey',actor,100).ok,true);
+ assert.deepEqual(f.raw(),{...original,quests:['mine-survey']});
+ assert.deepEqual(JSON.parse(JSON.stringify(c.poiQuestMiniTargets())),[{id:'mine-survey',x:116,z:64,y:0}]);
+ c.poiWalkLevel=-1;assert.equal(c.poiQuestMiniTargets().length,0);
+ assert.equal(c.poiQuestAccept('mine-survey',actor,100).reason,'already');
+ assert.equal(paints,1);assert.equal(f.writes(),1);
+ const restored=fixture(f.raw());assert.equal(restored.ctx.poiQuestAccepted('mine-survey'),true);
+ assert.equal(restored.writes(),0);
+});

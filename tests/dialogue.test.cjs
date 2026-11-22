@@ -134,3 +134,25 @@ test('bookable inn stays nested inside requests and viewing status does not book
  f.run("poiNpcMenuChoose('stay',105)");assert.equal(reservations,1);
  assert.match(f.run('poiTownDialogueSnapshot().text'),/南の客室/);
 });
+test('only the guild clerk offers a quest; list, back, and confirmed accept remain separate',()=>{
+ const f=fixture(),calls=[];let accepted=false;
+ f.actor.role.id='toolkeeper';f.c.poiQuestsForClerk=()=>[{id:'mine-survey',label:'廃坑の調査'}];
+ f.c.poiQuestAccepted=()=>accepted;
+ f.c.poiQuestAccept=(id,actor)=>{calls.push([id,actor]);accepted=true;return {ok:true}};
+ f.run('poiTownDialogueAction(100)');
+ assert.equal(f.run("poiTownDialogueSnapshot().actions.some(a=>a.id==='quest')"),false);
+ f.run('poiTownDialogueClose()');f.actor.role.id='guildkeeper';f.run('poiTownDialogueAction(101)');
+ assert.equal(f.run("poiNpcMenuChoose('quest',102)"),true);
+ assert.equal(f.run('poiTownDialogueSnapshot().menu'),'quest');
+ assert.equal(f.run("poiNpcMenuChoose('quest:mine-survey',103)"),true);
+ assert.equal(f.run('poiTownDialogueSnapshot().menu'),'quest-detail');
+ assert.equal(f.run("poiNpcMenuChoose('back',104)"),true);assert.equal(calls.length,0);
+ f.run("poiNpcMenuChoose('quest:mine-survey',105)");f.run("poiNpcMenuChoose('quest-accept',106)");
+ assert.deepEqual(calls,[['mine-survey',f.actor]]);
+ assert.equal(f.run('poiTownDialogueSnapshot().menu'),'quest');
+ assert.match(f.run('poiTownDialogueSnapshot().actions[0].label'),/受注済み/);
+ f.run("poiNpcMenuChoose('quest:mine-survey',107)");
+ assert.equal(f.run("poiTownDialogueSnapshot().actions.some(a=>a.id==='quest-accept')"),false);
+ f.run("poiNpcMenuChoose('back',108)");f.run("poiNpcMenuChoose('back',109)");
+ assert.equal(f.run('poiTownDialogueSnapshot().menu'),'root');assert.equal(calls.length,1);
+});
