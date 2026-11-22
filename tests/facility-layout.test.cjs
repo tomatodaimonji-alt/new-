@@ -1,3 +1,4 @@
+const {kitchenChestAddedV162}=require('./kitchen-chest-history.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
@@ -120,10 +121,11 @@ test('base stamps are exact rotations and it has a well, signed inn and outdoor 
   const single=buildFacilitySite(id),dst=b.buildings.find(x=>x.id===src.id);
   assert.ok(dst,'base counterpart: '+src.id);
   const w=src.x2-src.x1+1,d=src.z2-src.z1+1;
-  const stamp=(map,region)=>Array.from(map.world.filter(o=>region.footprint.some(p=>p.x===o.x&&p.z===o.z)),
+  const stamp=(map,region,baseOffset=null)=>Array.from(map.world.filter(o=>region.footprint.some(p=>p.x===o.x&&p.z===o.z)&&
+   !(baseOffset!==null&&kitchenChestAddedV162(o,baseOffset))),
     o=>[o.x-region.x1,o.z-region.z1,o.y,o.type,o.rot]);
   const turns=[(x,z)=>[x,z],(x,z)=>[d-1-z,x],(x,z)=>[w-1-x,d-1-z],(x,z)=>[z,w-1-x]];
-  assert.ok(turns.some((turn,r)=>sort(stamp(single.map,src).map(([x,z,y,t,q])=>[...turn(x,z),y,t,(q+r)%4]))===sort(stamp(b.map,dst))),id);
+  assert.ok(turns.some((turn,r)=>sort(stamp(single.map,src).map(([x,z,y,t,q])=>[...turn(x,z),y,t,(q+r)%4]))===sort(stamp(b.map,dst,b.townOffset))),id);
  }
 });
 test('interior route lighting is wall-mounted and street lamps stay outside',()=>{

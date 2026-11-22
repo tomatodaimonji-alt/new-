@@ -53,7 +53,7 @@ test('One door cue per actual threshold, matched to current floor including base
  const run=(type,doorY,playerY)=>{
   const result=[];
   const ctx=vm.createContext({
-   poiShopIsOpen:()=>false,poiWalkActive:true,poiWalkX:0,poiWalkZ:0,poiWalkLevel:playerY,
+   poiChestIsOpen:()=>false,poiShopIsOpen:()=>false,poiWalkActive:true,poiWalkX:0,poiWalkZ:0,poiWalkLevel:playerY,
    poiWalkFacing:0,poiWalkNextReady:0,poiWalkStarted:0,poiWalkFromX:0,poiWalkFromZ:0,POI_WALK_MS:175,
    facilitySite:{},pineGameActive:false,performance:{now:(()=>{let t=1000;return()=>t+=200})()},
    world:[{x:1,z:0,y:doorY,type}],poiWalkCanStep:()=>true,

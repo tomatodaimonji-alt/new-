@@ -18,7 +18,7 @@ test('each cue is downstream of its successful spawn, write, and claim only',()=
  const slice=(a,b)=>html.slice(html.indexOf('function '+a),html.indexOf('function '+b));
  assert.match(slice('poiEconomyDrop','poiEconomyCollect'),/poiEconomyDrops\.set[\s\S]*poiSound\('enemy-loot','coin'\)/);
  assert.match(slice('poiEconomyCollect','poiEconomySnapshot'),/if\(!poiEconomyWrite[\s\S]*poiEconomyDrops\.delete[\s\S]*poiSound\('item-pickup','coin'\)/);
- assert.match(slice('poiInventoryDrop','poiInventoryPickup'),/if\(!poiEconomyWrite[\s\S]*poiSound\('inventory-drop',type\)/);
+ assert.match(slice('poiInventoryDrop','poiInventoryPickup'),/if\(!poiEconomyWrite[\s\S]*poiSound\('inventory-drop',cell\.type\)/);
  assert.match(slice('poiInventoryPickup','poiInventoryReleaseMesh'),/if\(!poiEconomyWrite[\s\S]*poiSound\('item-pickup',item\.type\)/);
  assert.match(slice('poiSound','poiEconomyAllowed'),/!poiWalkActive\|\|!poiAudioEnabled\|\|!poiAudioAllowed\(\)[\s\S]*poiItemSound/);
 });

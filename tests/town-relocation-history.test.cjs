@@ -1,3 +1,4 @@
+const {kitchenChestAddedV162}=require('./kitchen-chest-history.cjs');
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),{test}=require('node:test');
 const {createHash}=require('node:crypto');
 const canalHistory=require('./canal-history-fixture.cjs');
@@ -8,6 +9,7 @@ const src=html.match(/const FACILITY_SITES[\s\S]*?(?=function facilityNavigate\(
 assert(src,'authored Game World source');
 const build=vm.runInNewContext(src+';buildFacilitySiteLegacyFrame');
 const site=build('base');
+const historicalWorld=site.map.world.filter(o=>!kitchenChestAddedV162(o));
 // Canonical hashes pinned from the exact shipped v136 map. The exterior
 // additions/removals below enumerate individual authored changes by type,
 // level, rotation and z-row, not a wildcard for a larger "changed area."
@@ -93,7 +95,7 @@ function geometry(b,relative,translation=[0,0]){
  const owned=new Set(Array.from(b.footprint,p=>key(p.x,p.z)));
  const floors=Object.entries(b.floorFootprints).map(([y,p])=>[y,Array.from(p,anchor)]);
  // Sort by cell while retaining same-cell drawing/selection order.
- const items=Array.from(site.map.world.filter(o=>owned.has(key(o.x,o.z))),o=>[o.x-dx,o.z-dz,o.y,o.type,o.rot])
+ const items=Array.from(historicalWorld.filter(o=>owned.has(key(o.x,o.z))),o=>[o.x-dx,o.z-dz,o.y,o.type,o.rot])
   .sort((a,b)=>a[0]-b[0]||a[1]-b[1]||a[2]-b[2]);
  return digest([b.id,b.name,b.turn,b.x1-dx,b.x2-dx,b.z1-dz,b.z2-dz,anchor(b.entrance),footprint,floors,items]);
 }
@@ -158,7 +160,7 @@ test('every v136 exterior record remains except the enumerated civic paving and 
 
 test('open grassland alters only enumerated non-structural exterior planting and styles',()=>{
  const {pinned,added,removed}=outsideHistory;
- const records=gateHistory.prior(site.map.world),present=new Set(records);
+ const records=gateHistory.prior(historicalWorld),present=new Set(records);
  assert.equal(present.size,records.length,'unique authored records');
  const outside=(x,z)=>z>47||x<1||x>66||(z>20&&x>62)||(z<4&&x>46);
  const cells=new Set(site.creek.deep.map(o=>key(o.x,o.z)));

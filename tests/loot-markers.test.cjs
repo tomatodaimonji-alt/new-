@@ -10,7 +10,7 @@ function fixture(){
   world:[{x:11,z:10,y:0,type:'woodfloor'},{x:10,z:11,y:0,type:'poiPottedPlant'}],
   poiEconomyMesh:{},poiEconomyCaches:new Map(),poiEconomyDrops:new Map(),
   poiInventoryMeshDrops:[{x:11,z:10,y:0,type:'healingHerb'},{x:11,z:11,y:1,type:'equipWoodSword'}],
-  POI_INVENTORY_HERB:'healingHerb',POI_INVENTORY_SWORD:'equipWoodSword',
+  poiInventoryStack:type=>['healingHerb','equipWoodSword','kitchenKnife','cannedFood'].includes(type)?1:0,POI_INVENTORY_HERB:'healingHerb',POI_INVENTORY_SWORD:'equipWoodSword',
   mesh:()=>({p:[]}),upload:m=>{built.push(m);return {buf:m}},gl:{deleteBuffer:b=>deleted.push(b)},draw:m=>drawn.push(m),
   quad(m,...args){m.p.push(...args.slice(0,4).flat())},diamond(m,x,y,z,r,color){marks.push([x,y,z,r,color]);m.p.push(x,y,z)}
  });

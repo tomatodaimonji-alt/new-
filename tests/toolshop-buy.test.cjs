@@ -5,7 +5,7 @@ function shop(){
  assert(a>=0&&b>a,'checkout UI missing');
  const ids=Object.fromEntries(['poiWalkAction','poiShopDialog','poiGoldHud','poiGoldValue','poiShopGold','poiShopBuyPotion','poiShopFeedback'].map(id=>[id,{setAttribute(k,v){this[k]=v},showModal(){this.open=true},close(){this.open=false}}]));
  let purchases=0,refresh=0;
- const ctx=vm.createContext({$:id=>ids[id],facilitySite:{id:'base'},poiWalkActive:true,pineAIActive:false,poiWalkLevel:0,
+ const ctx=vm.createContext({$:id=>ids[id],poiChestIsOpen:()=>false,poiKitchenChestReachable:()=>false,facilitySite:{id:'base'},poiWalkActive:true,pineAIActive:false,poiWalkLevel:0,
   poiWalkX:47,poiWalkZ:13,poiWalkFacing:1,world:[{x:48,z:13,y:0,type:'counterLuxury',rot:1},{x:48,z:13,y:0,type:'poiLedgerPapers',rot:3}],
   poiEconomyGold:()=>9,poiEconomyBuyPotion:()=>{purchases++;return {ok:true,gold:3,potions:4,cost:6}},
   poiInventoryCanReceive:()=>true,poiHotbarRead:()=>({potions:3}),poiHotbarRender:()=>{refresh++},document:{querySelector:()=>null}});

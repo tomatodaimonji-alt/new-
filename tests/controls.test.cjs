@@ -12,7 +12,7 @@ test('facility uses the same default directional pad, center button, and game-re
 test('facility center attack can hit current-floor monsters without writing any save',()=>{
  let now=810,saveCalls=0,avatarCalls=0,damages=[];
  const other={hp:55,x:3,z:1},active={hp:55,x:3,z:1};
- const ctx=vm.createContext({poiShopIsOpen:()=>false,poiShopOpen:()=>false,poiWalkActive:true,facilitySite:{},poiWalkLevel:1,
+ const ctx=vm.createContext({poiChestIsOpen:()=>false,poiKitchenChestReachable:()=>false,poiShopIsOpen:()=>false,poiShopOpen:()=>false,poiWalkActive:true,facilitySite:{},poiWalkLevel:1,
   poiWalkActionWeapon:null,poiEquippedWeapon:()=>null,poiPlayerAttackDamage:()=>20,
   poiWalkFacing:0,poiWalkX:3,poiWalkZ:2,poiAttackReady:0,poiWalkActionStarted:0,
   performance:{now:()=>now},poiWalkAvatar:()=>avatarCalls++,poiSound(){},toast(){},terrainY:()=>0,
@@ -35,7 +35,7 @@ test('facility center attack can hit current-floor monsters without writing any 
 test('wood contact uses the captured equipment and no synthetic swing before contact',()=>{
  const calls=[],actor={hp:50,x:4,z:2};
  let chosen='equipWoodSword';
- const ctx=vm.createContext({poiShopIsOpen:()=>false,poiShopOpen:()=>false,poiWalkActive:true,facilitySite:{id:'base'},poiWalkLevel:0,
+ const ctx=vm.createContext({poiChestIsOpen:()=>false,poiKitchenChestReachable:()=>false,poiShopIsOpen:()=>false,poiShopOpen:()=>false,poiWalkActive:true,facilitySite:{id:'base'},poiWalkLevel:0,
   poiWalkActionWeapon:null,poiEquippedWeapon:()=>chosen,poiPlayerAttackDamage:weapon=>weapon==='equipWoodSword'?28:20,
   poiWalkFacing:1,poiWalkX:3,poiWalkZ:2,poiAttackReady:0,poiWalkActionStarted:0,
   performance:{now:()=>500},poiWalkAvatar:()=>{chosen=null},poiSound:(...args)=>calls.push(args),
@@ -49,7 +49,7 @@ test('wood contact uses the captured equipment and no synthetic swing before con
 test('only a lethal contact requests the breakup cue; an empty swing and a rejected repeat do not',()=>{
  const calls=[],actor={hp:35,x:4,z:2},obj={type:'monsterSlime'};
  let now=500,broken=0;
- const ctx=vm.createContext({poiShopIsOpen:()=>false,poiShopOpen:()=>false,poiWalkActive:true,facilitySite:{id:'base'},poiWalkLevel:0,
+ const ctx=vm.createContext({poiChestIsOpen:()=>false,poiKitchenChestReachable:()=>false,poiShopIsOpen:()=>false,poiShopOpen:()=>false,poiWalkActive:true,facilitySite:{id:'base'},poiWalkLevel:0,
   poiWalkActionWeapon:null,poiEquippedWeapon:()=>null,poiPlayerAttackDamage:()=>20,
   poiWalkFacing:1,poiWalkX:3,poiWalkZ:2,poiAttackReady:0,poiWalkActionStarted:0,
   performance:{now:()=>now},poiWalkAvatar(){},poiSound:(...args)=>calls.push(args),
@@ -64,7 +64,7 @@ test('only a lethal contact requests the breakup cue; an empty swing and a rejec
 test('wood empty swing keeps air only; a finishing contact requests wood then recorded defeat only',()=>{
  const calls=[],actor={hp:15,x:4,z:2},obj={type:'monsterSlime'};
  let now=500,target=null,breaks=0;
- const ctx=vm.createContext({poiShopIsOpen:()=>false,poiShopOpen:()=>false,poiWalkActive:true,facilitySite:{id:'base'},poiWalkLevel:0,
+ const ctx=vm.createContext({poiChestIsOpen:()=>false,poiKitchenChestReachable:()=>false,poiShopIsOpen:()=>false,poiShopOpen:()=>false,poiWalkActive:true,facilitySite:{id:'base'},poiWalkLevel:0,
   poiWalkActionWeapon:null,poiEquippedWeapon:()=>'equipWoodSword',poiPlayerAttackDamage:()=>28,
   poiWalkFacing:1,poiWalkX:3,poiWalkZ:2,poiAttackReady:0,poiWalkActionStarted:0,
   performance:{now:()=>now},poiWalkAvatar(){},poiSound:(...args)=>calls.push(args),

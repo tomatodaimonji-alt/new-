@@ -10,7 +10,7 @@ function fixture(kit={weapon:null,potions:3}, options={}){
   poiEconomyDrops:new Map(),poiEconomyCaches:new Map(),poiEconomyMeshDirty:false,POI_ECONOMY_COIN:3,
   POI_INVENTORY_HERB:'healingHerb',POI_INVENTORY_SWORD:'equipWoodSword',POI_INVENTORY_LIMIT:36,POI_ECONOMY_GOLD_MAX:999999,
   poiEconomyRefresh(){},toast(){},poiInventoryAllowed:()=>true,poiWalkLevel:0,
-  poiInventoryAccept:()=>({slots:{},accepted:1}),poiInventoryEdited:kit=>kit});
+  poiInventoryItemName:()=>'薬草',poiInventoryAccept:()=>({slots:{},accepted:1}),poiInventoryEdited:kit=>kit});
  vm.runInContext(snippet('const POI_LOOKOUT_CELLS=','function poiEconomyDrop(')+
   snippet('function poiEconomyCollect(','function poiEconomySnapshot(')+
   snippet('function poiInventoryPickup(','function poiInventoryReleaseMesh('),scope);

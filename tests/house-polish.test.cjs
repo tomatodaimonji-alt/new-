@@ -1,3 +1,4 @@
+const {kitchenChestAddedV162}=require('./kitchen-chest-history.cjs');
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),{test}=require('node:test');
 const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const source=html.match(/const FACILITY_SITES[\s\S]*?(?=function facilityNavigate\()/)?.[0];
@@ -101,6 +102,7 @@ function unchangedLayoutDigest(scope){
   const items=[];
   for(let x=0;x<w;x++)for(let z=0;z<d;z++)for(let y=-1;y<=4;y++)for(const o of at(x,z,y)){
    if(!owned.has(o.x+','+o.z))continue;
+   if(scope==='base'&&kitchenChestAddedV162(o))continue;
    if(!y&&allowed[id(b)]?.has(x+','+z+':'+o.type))continue;
    items.push(JSON.stringify(canonical(o)));
   }

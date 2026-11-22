@@ -1,3 +1,4 @@
+const {kitchenChestAddedV162}=require('./kitchen-chest-history.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
 const {createHash}=require('node:crypto');
 const html=fs.readFileSync(process.env.HTML||path.join(__dirname,'../world-editor.html'),'utf8');
@@ -26,6 +27,7 @@ test('the previous 108×68 frame preserves its complete +12, +12 translation fro
  // Independently pinned v144 original-record guard confirms no old cells
  // change as the public builder gains the new eastern/southern margin.
  const framed=require('./town-frame-v144-projection.cjs').originalFrame(live);
+ framed.map.world=framed.map.world.filter(o=>!kitchenChestAddedV162(o,12));
  assert.equal(framed.townOffset,12);
  const {townOffset,map:{world,...map},...meta}=inverse(framed);
  map.size=96;map.width=96;map.height=56;
