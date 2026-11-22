@@ -159,6 +159,7 @@ async function fixedShop(browser){
   assert(frame&&frame.x>=-1&&frame.y>=-1&&frame.x+frame.width<=321&&frame.y+frame.height<=741,'fits 320px portrait');
   assert.deepEqual((await state(page)).position,counter);
   assert.equal((await state(page)).combat.actionAt,attack,'opening commerce does not attack');
+  await choice(page,'request');
   await choice(page,'shop');
   await button(page,/薬草.*6 ?G|6 ?G.*薬草/);
   const before=await readStock(page);
@@ -225,7 +226,7 @@ async function lodging(browser){
   const layout=await getMap(page);
   await worker(page,'innkeeper');
   const before=await readStock(page);
-  await enter(page);await choice(page,'stay');
+  await enter(page);await choice(page,'request');await choice(page,'stay');
   await page.waitForFunction(()=>!!window.__editorTest.townResidents().playerBedId);
   const r=await residents(page),book=r.innBeds.find(b=>b.id===r.playerBedId);
   assert.equal(book?.occupant,'player');assert.equal(book?.y,1);

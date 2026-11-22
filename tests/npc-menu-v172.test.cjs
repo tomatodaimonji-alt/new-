@@ -17,9 +17,9 @@ function fixture(){
 test('a real desk opens glass menus, direction wraps, confirmation trades and Back restores announcements',()=>{
  const {c,actor,state,ended,trades}=fixture();
  assert.equal(c.poiTownDialogueAction(200),true);assert.equal(actor.facing,2);
- assert.deepEqual(state().actions.map(x=>x.id),['talk','request','shop','back']);
+ assert.deepEqual(state().actions.map(x=>x.id),['talk','status','request','back']);
  c.poiNpcMenuStep(-1);assert.equal(state().index,3);
- c.poiNpcMenuChoose('request',210);assert.deepEqual(state().actions.map(x=>x.id),['sell','buy','recruit','back']);
+ c.poiNpcMenuChoose('request',210);assert.deepEqual(state().actions.map(x=>x.id),['shop','sell','buy','recruit','back']);
  c.poiNpcMenuChoose('recruit',220);assert.equal(state().text,'今は忙しい');
  c.poiNpcMenuChoose('buy',230);c.poiNpcMenuChoose('trade:h',240);
  assert.equal(trades.length,0);assert(c.poiNpcTradeSessionMatches(actor,'buy'));

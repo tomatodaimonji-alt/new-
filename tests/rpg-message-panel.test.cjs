@@ -123,3 +123,15 @@ test('last choice scrolls into the independent menu instead of moving the speech
  vm.runInNewContext(snippet('function poiNpcMenuMark(','function poiNpcMenuRender('),c);
  c.poiNpcMenuMark();assert.equal(menu.scrollTop,63);
 });
+test('status uses available vertical space beside minimap on short screens and stays aligned when it fits',()=>{
+ const a=html.indexOf('function poiNpcStatusLayout('),b=html.indexOf('function poiNpcMenuMark(',a);
+ assert(a>=0&&b>a,'status uses independent placement');
+ const c=vm.createContext({});vm.runInContext(html.slice(a,b),c);
+ const q=(bottom,map)=>Array.from(c.poiNpcStatusLayout({left:8,right:382,bottom:224},{top:50},bottom,map));
+ const map={left:10,right:112,bottom:187};
+ assert.deepEqual(q(226,map),[109,208,170,0]);
+ assert.deepEqual(q(410,map),[0,208,215,0]);
+ assert.deepEqual(q(226,null),[0,208,170,0]);
+ assert.deepEqual(q(138,map),[109,208,128,46]);
+ assert.deepEqual(q(138,null),[0,208,128,46]);
+});

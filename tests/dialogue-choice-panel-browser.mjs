@@ -161,7 +161,7 @@ async function exercise(browser,{width,id,x,z,facing,service}){
   priorPanel(before,root);aboveLeft(root);
   assert.equal(await page.locator(speech).isVisible(),false);
   const actions=await page.locator(choices).evaluateAll(nodes=>nodes.map(e=>e.dataset.npcAction));
-  assert.deepEqual(actions,['talk','request',...(service?[service]:[]),'back']);
+  assert.deepEqual(actions,['talk','status','request','back']);
   assert.equal(await page.locator(choices+'[aria-current="true"]').getAttribute('data-npc-action'),'talk');
   const position=(await state(page)).position,attack=(await state(page)).combat.actionAt;
   await dpad(page,'n').tap();
@@ -170,7 +170,8 @@ async function exercise(browser,{width,id,x,z,facing,service}){
   assert.equal(await page.locator(choices+'[aria-current="true"]').getAttribute('data-npc-action'),'talk');
   assert.deepEqual((await state(page)).position,position);
   assert.equal((await state(page)).combat.actionAt,attack);
-  await choice(page,service||'request').tap();
+  await choice(page,'request').tap();
+  if(service)await choice(page,service).tap();
   const sub=await geometry(page);
   priorPanel(before,sub);aboveLeft(sub);
   if(service&&width===390){
@@ -180,6 +181,7 @@ async function exercise(browser,{width,id,x,z,facing,service}){
   assert.equal(await choice(page,service?'trade:shop-herb':'buy').count(),1);
   if(out)await page.screenshot({path:out+'/v176-choices-'+id+'-'+width+'.png'});
   await page.keyboard.press('Escape');
+  if(service)await page.keyboard.press('Escape');
   assert.equal(await choice(page,'talk').count(),1,'back reopens root rather than closing');
   await choice(page,'back').tap();
   await page.locator(market).waitFor({state:'hidden'});

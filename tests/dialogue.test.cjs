@@ -102,3 +102,35 @@ test('ambient indoor text respects the speaker building, actual door thresholds 
  f.c.poiWalkLevel=1;
  f.run('poiTownDialogueDraw(1400,[])');assert.equal(f.e.hidden,true);assert.equal(f.run('poiTownAmbientSnapshot()'),null);
 });
+test('root has four exact choices and NPC status is derived only from live stats and actual modeled equipment',()=>{
+ const f=fixture();
+ Object.assign(f.actor,{hp:74,coins:6,potions:2});
+ Object.assign(f.c,{POI_TOWN_RESIDENT_HP:100,POI_TOWN_RESIDENT_MELEE:13});
+ Object.assign(f.actor.role,{role:'adventurer',type:'humanKnight'});
+ assert.equal(f.run('poiTownDialogueAction(100)'),true);
+ assert.deepEqual(JSON.parse(f.run('JSON.stringify(poiTownDialogueSnapshot().actions)')),[
+  {id:'talk',label:'話す'},{id:'status',label:'状態'},{id:'request',label:'依頼'},{id:'back',label:'戻る'}]);
+ assert.equal(f.run("poiNpcMenuChoose('status',101)"),true);
+ const s=JSON.parse(f.run('JSON.stringify(poiTownDialogueSnapshot())'));
+ assert.equal(s.menu,'status');assert.deepEqual(s.actions,[{id:'back',label:'戻る'}]);
+ assert.deepEqual(s.status,{role:'冒険者',hp:74,maxHP:100,attack:13,equipment:['剣','盾','鎧'],coins:6,herbs:2});
+ assert.equal(f.run("poiNpcMenuChoose('back',103)"),true);assert.equal(f.run('poiTownDialogueSnapshot().menu'),'root');
+ f.actor.role={...f.actor.role,role:'keeper',type:'humanMerchant'};
+ assert.equal(f.run("poiNpcMenuChoose('status',104)"),true);
+ const ordinary=JSON.parse(f.run('JSON.stringify(poiTownDialogueSnapshot().status)'));
+ assert.deepEqual(ordinary.equipment,[]);assert.equal(ordinary.attack,null);
+ assert.deepEqual([f.actor.hp,f.actor.coins,f.actor.potions],[74,6,2],'only reads actor');
+});
+test('bookable inn stays nested inside requests and viewing status does not book',()=>{
+ const f=fixture();f.actor.role={...f.actor.role,id:'innkeeper'};
+ Object.assign(f.c,{POI_TOWN_RESIDENT_HP:100,POI_TOWN_RESIDENT_MELEE:13});
+ f.c.poiTownPlayerService=()=> 'book';let reservations=0;
+ f.c.poiTownRequestPlayerLodging=()=>{reservations++;return {ok:true,bed:{id:'inn-south'}}};
+ f.run('poiTownDialogueAction(100)');
+ assert.equal(f.run("poiNpcMenuChoose('stay',101)"),false);
+ f.run("poiNpcMenuChoose('status',102)");assert.equal(reservations,0);
+ f.run("poiNpcMenuChoose('back',103)");f.run("poiNpcMenuChoose('request',104)");
+ assert.equal(f.run('poiTownDialogueSnapshot().actions[0].id'),'stay');
+ f.run("poiNpcMenuChoose('stay',105)");assert.equal(reservations,1);
+ assert.match(f.run('poiTownDialogueSnapshot().text'),/南の客室/);
+});

@@ -695,6 +695,16 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
  max-height:var(--poi-npc-menu-room, min(210px,40dvh));overflow-y:auto;overscroll-behavior:contain;
  pointer-events:auto;touch-action:pan-y}
 #poiNpcMenu[hidden]{display:none}
+#poiNpcStatus{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:3px 7px;
+ grid-column:1/-1;margin:0;padding:4px;line-height:1.22;text-align:left}
+#poiNpcStatus dt{color:#decba5}
+#poiNpcStatus dd{min-width:0;margin:0;overflow-wrap:anywhere}
+#poiNpcStatus + button{grid-column:1/-1}
+#poiNpcMenu[data-status]{left:var(--poi-npc-status-offset,0px);width:var(--poi-npc-status-width,min(100%,208px));
+ transform:translateY(var(--poi-npc-status-drop,0px));
+ -webkit-backdrop-filter:var(--workshop-panel-blur);backdrop-filter:var(--workshop-panel-blur)}
+/* Inspecting an NPC is read-only; temporarily clear edit/camera buttons above this card. */
+#viewWrap:has(#poiNpcMenu[data-status]:not([hidden])) :is(#quickTools,#poiGameTools){visibility:hidden}
 #poiNpcMenu[data-compact]{grid-template-columns:repeat(2,minmax(0,1fr));padding:1px}
 #poiNpcMenu[data-compact] button{min-height:28px;padding:3px 5px}
 #poiNpcMenu button{text-align:left;min-height:32px;line-height:1.2;font-size:inherit;padding:4px 8px;
@@ -978,7 +988,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v177）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v178）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -8732,6 +8742,7 @@ function poiTownNpcVisiting(role,minute){return minute>=role.arrives&&minute<rol
 function poiTownNpcVisitorGoal(role,minute){
  return minute>=12*60&&minute<14*60?role.public:role.work;
 }
+const POI_TOWN_RESIDENT_HP=100,POI_TOWN_RESIDENT_MELEE=13;
 function poiTownNpcInit(clock){
  if(poiTownNpcActors.length)return;
  poiTownNpcActors=POI_TOWN_RESIDENT_ROLES.map((role,index)=>{
@@ -8747,7 +8758,7 @@ function poiTownNpcInit(clock){
    bed?.stand||(night&&!assigned?role.home:role.role==='keeper'?role.work:role.public||role.home);
   const p=poiTownNpcStance(start)?start:role.home;
   const morning=clock.absoluteMinute-clock.minute+POI_TOWN_WAKE+(clock.minute>=POI_TOWN_WAKE?1440:0);
-  return {role,...p,index,hp:100,activity:recessed?'offsite':'idle',recessed,attacks:0,coins:0,potions:0,bedId:bed?.id??null,
+  return {role,...p,index,hp:POI_TOWN_RESIDENT_HP,activity:recessed?'offsite':'idle',recessed,attacks:0,coins:0,potions:0,bedId:bed?.id??null,
    bedUntil:bed?morning:null,restUntil:null,path:null,nextPlan:0,attackAt:0,encounterAt:0};
  });
  poiTownNpcVersion++;
@@ -8879,9 +8890,9 @@ function poiTownNpcResolve(a,now){
   const recent=now-a.hitAt<340;
   a.hitAt=null;
   if(recent&&poiTownNpcMelee(a,state)&&a.facing===poiTownNpcFaces(a.x,a.z,state.x,state.z)){
-   a.attacks++;a.lastHitAt=now;state.townHurtAt=now;state.hp=Math.max(0,state.hp-13);poiMonsterMeshDirty=true;
+   a.attacks++;a.lastHitAt=now;state.townHurtAt=now;state.hp=Math.max(0,state.hp-POI_TOWN_RESIDENT_MELEE);poiMonsterMeshDirty=true;
    if(poiTownNpcCombatNear(state.x,state.z,0)){
-    if(typeof poiDamageNumber==='function')poiDamageNumber(state.x+.5,state.z+.5,terrainY(state.x,state.z)+1.20,13);
+    if(typeof poiDamageNumber==='function')poiDamageNumber(state.x+.5,state.z+.5,terrainY(state.x,state.z)+1.20,POI_TOWN_RESIDENT_MELEE);
     if(typeof poiSound==='function')poiSound('hit','equipWoodSword',state.hp===0);
     if(!state.hp&&typeof poiMonsterBreak==='function')poiMonsterBreak(obj,state,now);
    }
@@ -9058,7 +9069,7 @@ const POI_NPC_EXTRA_SPEECH=Object.freeze({
  workshopkeeper:['手に馴染んだ道具ほど、大切に使いたいものだ。'],
  stablekeeper:['今日は馬の調子もいい。外は歩きやすそうだね。']
 });
-const POI_NPC_MENU_LABELS={talk:'話す',request:'依頼',shop:'買い物する',stay:'泊まる',sell:'アイテムを売る',
+const POI_NPC_MENU_LABELS={talk:'話す',status:'状態',request:'依頼',shop:'買い物する',stay:'泊まる',sell:'アイテムを売る',
  buy:'アイテムを買う',recruit:'仲間になってほしい',back:'戻る',confirm:'はい'};
 function poiNpcMenuActive(){return !!poiTownDialogue&&!poiTownDialogue.sleeping}
 function poiTownNpcSleeping(a){return /^(?:sleep-|rest-inn$)/.test(a.activity||'')}
@@ -9080,11 +9091,12 @@ function poiNpcAtWork(actor){
 function poiNpcMenuRows(d){
  if(d.sleeping)return [];
  const row=id=>({id,label:POI_NPC_MENU_LABELS[id]});
- if(d.page==='root'){
+ if(d.page==='root')return ['talk','status','request','back'].map(row);
+ if(d.page==='status')return ['back'].map(row);
+ if(d.page==='request'){
   const service=poiNpcMenuService(d.actor);
-  return ['talk','request',...(service?[service]:[]),'back'].map(row);
+  return [...(service?[service]:[]),'sell','buy','recruit','back'].map(row);
  }
- if(d.page==='request')return ['sell','buy','recruit','back'].map(row);
  if(d.page==='confirm')return ['confirm','back'].map(row);
  const offers=d.page==='shop'?[{code:'shop-herb',name:'薬草',price:6,canTrade:true}]:
   typeof poiNpcTradeCatalog==='function'?poiNpcTradeCatalog(d.actor,d.page):[];
@@ -9092,16 +9104,60 @@ function poiNpcMenuRows(d){
   label:offer.name+' '+offer.price+'G'+(Number.isFinite(offer.quantity)?'（'+offer.quantity+'）':''),
   offer})),row('back')];
 }
-function poiNpcMenuMark(){
+function poiTownNpcStatus(actor){
+ const role=actor.role,knight=role.type==='humanKnight';
+ return {role:({keeper:'店や施設の担当者',adventurer:'冒険者',visitor:'来訪者'})[role.role]||'住人',
+  hp:actor.hp,maxHP:POI_TOWN_RESIDENT_HP,attack:role.role==='adventurer'?POI_TOWN_RESIDENT_MELEE:null,
+  equipment:knight?['剣','盾','鎧']:[],coins:actor.coins||0,herbs:actor.potions||0};
+}
+function poiNpcStatusView(actor){
+ const info=poiTownNpcStatus(actor),view=document.createElement('dl');view.id='poiNpcStatus';
+ view.setAttribute('aria-label',actor.role.name+'の状態');
+ const fields=[['role','役割',info.role],['hp','HP',info.hp+' / '+info.maxHP]];
+ if(info.attack!==null)fields.push(['attack','攻撃力',info.attack]);
+ fields.push(['equipment','装備',info.equipment.join('・')||'なし'],
+  ['coins','金貨',info.coins+'G'],['herbs','薬草',info.herbs+'個']);
+ for(const [key,label,value] of fields){
+  const term=document.createElement('dt'),text=document.createElement('dd');
+  term.textContent=label;text.dataset.npcStat=key;text.textContent=String(value);view.append(term,text);
+ }
+ return view;
+}
+function poiNpcStatusLayout(stack,stage,bottom,map){
+ const edge=stage.top+6,width=Math.min(208,stack.right-stack.left);
+ const overlaps=map&&map.right>stack.left&&map.left<stack.left+width;
+ const below=overlaps?Math.max(edge,map.bottom+5):edge;
+ const side=overlaps?Math.max(stack.left,map.right+5):stack.left;
+ const useSide=overlaps&&bottom-below<154&&stack.right-side>=145;
+ const left=useSide?side:stack.left;
+ const top=useSide||bottom-below<100?edge:below;
+ // Only exceptionally short views borrow from the speech area. Stop
+ // above the stack's bottom so the shortcut/action controls remain free.
+ const drop=Math.max(0,Math.floor(Math.min(128-(bottom-top),stack.bottom-bottom-6)));
+ return [Math.round(left-stack.left),Math.floor(Math.min(width,stack.right-left)),
+  Math.max(0,Math.min(215,Math.floor(bottom+drop-top))),drop];
+}
+function poiNpcMenuMark(keepTop=false){
  const menu=$('poiNpcMenu'),d=poiTownDialogue;
  if(!menu||!d)return;
- for(const [i,b] of [...menu.children].entries()){
+ const choices=[...menu.children].filter(el=>el.id!=='poiNpcStatus');
+ for(const [i,b] of choices.entries()){
   if(i===d.index)b.setAttribute('aria-current','true');else b.removeAttribute('aria-current');
  }
- const target=menu.children[d.index];
+ const target=choices[d.index];
  if(target&&!menu.hidden){
   const stage=$('viewWrap'),mini=$('poiMiniHud');
-  if(stage&&menu.style){
+  if(stage&&menu.style&&d.page==='status'&&menu.parentElement){
+   const map=mini&&!mini.hidden?mini.getBoundingClientRect():null;
+   const stack=menu.parentElement.getBoundingClientRect();
+   const [offset,width,height,drop]=poiNpcStatusLayout(stack,stage.getBoundingClientRect(),
+    stack.top+menu.offsetTop+menu.offsetHeight,map);
+   menu.removeAttribute('data-compact');
+   menu.style.setProperty('--poi-npc-status-offset',offset+'px');
+   menu.style.setProperty('--poi-npc-status-width',width+'px');
+   menu.style.setProperty('--poi-npc-status-drop',drop+'px');
+   menu.style.setProperty('--poi-npc-menu-room',height+'px');
+  }else if(stage&&menu.style){
    const bounds=menu.getBoundingClientRect(),edge=stage.getBoundingClientRect().top+6;
    const map=mini&&!mini.hidden?mini.getBoundingClientRect():null;
    const stop=map&&map.right>bounds.left&&map.left<bounds.right?Math.max(edge,map.bottom+3):edge;
@@ -9111,6 +9167,7 @@ function poiNpcMenuMark(){
    const top=room>=(compact?32:42)?stop:edge;
    menu.style.setProperty('--poi-npc-menu-room',Math.max(0,Math.min(215,Math.floor(bounds.bottom-top)))+'px');
   }
+  if(keepTop){menu.scrollTop=0;return}
   const a=target.getBoundingClientRect(),b=menu.getBoundingClientRect();
   if(a.bottom>b.bottom-3)menu.scrollTop+=a.bottom-b.bottom+3;
   if(a.top<b.top+3)menu.scrollTop+=a.top-b.top-3;
@@ -9124,13 +9181,13 @@ function poiNpcMenuRender(now){
  }
  const menu=$('poiNpcMenu');
  if(!menu)return;
- menu.hidden=d.sleeping;
- menu.replaceChildren(...d.rows.map(r=>{
+ menu.hidden=d.sleeping;menu.toggleAttribute('data-status',d.page==='status');
+ menu.replaceChildren(...(d.page==='status'?[poiNpcStatusView(d.actor)]:[]),...d.rows.map(r=>{
   const b=document.createElement('button');b.type='button';b.dataset.npcAction=r.id;
   if(r.offer?.canTrade===false)b.dataset.npcUnavailable='';
   b.textContent=r.label;return b;
  }));
- poiNpcMenuMark();
+ poiNpcMenuMark(d.page==='status');
 }
 function poiNpcMenuStep(delta){
  if(!poiNpcMenuActive())return false;
@@ -9142,7 +9199,7 @@ function poiNpcMenuBack(now=performance.now()){
  const d=poiTownDialogue;
  if(!d)return false;
  if(d.sleeping||d.page==='root'){poiTownDialogueClose();poiShopSync();return true}
- d.page=d.page==='confirm'?d.pending.page:d.page==='buy'||d.page==='sell'?'request':'root';
+ d.page=d.page==='confirm'?d.pending.page:['buy','sell','shop'].includes(d.page)?'request':'root';
  d.pending=null;d.index=0;d.text=d.topic;
  poiNpcMenuRender(now);return true;
 }
@@ -9159,6 +9216,8 @@ function poiNpcMenuChoose(id,now=performance.now()){
  if(id==='talk'){
   const topics=POI_NPC_EXTRA_SPEECH[d.actor.role.id]||['夕方になると門の外は暗くなる。帰り道は覚えておくといいよ。','町へ戻ると、ようやく一息つけるね。'];
   d.topic=d.text=topics[(d.topicIndex++)%topics.length];
+ }else if(id==='status'){
+  d.page='status';d.index=0;d.text=d.topic;
  }else if(id==='request'||id==='shop'||id==='buy'||id==='sell'){
   d.page=id;d.index=0;
   d.text=id==='request'?'どんな用かな？':id==='sell'?'どれを売りたい？':'どれにする？';
@@ -9226,13 +9285,13 @@ function poiTownDialogueTarget(now){
 function poiTownDialogueSnapshot(){
  const d=poiTownDialogue;
  return d?{id:d.actor.role.id,name:d.actor.role.name,text:d.text,until:d.until,sleeping:d.sleeping,
-  menu:d.sleeping?null:d.page,index:d.index,actions:d.rows.map(({id,label})=>({id,label}))}:null;
+  menu:d.sleeping?null:d.page,index:d.index,...(d.page==='status'?{status:poiTownNpcStatus(d.actor)}:{}),actions:d.rows.map(({id,label})=>({id,label}))}:null;
 }
 function poiTownDialogueClose(){
  if(!poiTownDialogue)return false;
  poiTownDialogue=null;
  const menu=$('poiNpcMenu');
- if(menu){menu.hidden=true;menu.replaceChildren?.()}
+ if(menu){menu.hidden=true;menu.removeAttribute?.('data-status');menu.replaceChildren?.()}
  if(typeof poiMessageEndSpeech==='function')poiMessageEndSpeech();
  return true;
 }
@@ -9554,7 +9613,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v177',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v178',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -9669,7 +9728,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v177';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v178';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -9884,7 +9943,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v177',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v178',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -18123,7 +18182,7 @@ for(const [kind,id] of [['master','poiVolumeMaster'],['bgm','poiVolumeBgm'],['se
 poiAudioSyncUI();
 
 $('poiWalkAction').addEventListener('click',poiWalkAction);
-function poiNpcMenuResize(){if(poiNpcMenuActive())poiNpcMenuMark()}
+function poiNpcMenuResize(){if(poiNpcMenuActive())poiNpcMenuMark(poiTownDialogue.page==='status')}
 window.addEventListener('resize',poiNpcMenuResize,{passive:true});
 window.visualViewport?.addEventListener('resize',poiNpcMenuResize,{passive:true});
 $('poiNpcMenu').addEventListener('click',e=>{const b=e.target.closest('button[data-npc-action]');if(b)poiNpcMenuChoose(b.dataset.npcAction)});
