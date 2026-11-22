@@ -7,9 +7,24 @@ import {mkdir} from 'node:fs/promises';
 const require=createRequire(import.meta.url);
 const {chromium}=require(process.env.PLAYWRIGHT_PACKAGE??'playwright');
 const html=readFileSync(process.argv[2]??'world-editor.html','utf8');
+const initAnchor='function poiTownNpcInit(clock){';
+assert.equal(html.split(initAnchor).length,2,'native resident initializer exists exactly once');
+// Controlled fixture only, at runtime on this local origin; the panel must
+// show these actual actor fields, not the player's independent saved kit.
+const observed=html.replace(initAnchor,`function poiTownNpcInit(clock){
+ __qaNpcInit(clock);
+ for(const actor of poiTownNpcActors){
+  const seed=actor.role.id==='toolkeeper'?[73,7,2]:actor.role.id==='stablekeeper'?[86,4,1]:null;
+  if(seed&&!actor.__qaStatusSeed){
+   actor.__qaStatusSeed=true;
+   [actor.hp,actor.coins,actor.potions]=seed;
+  }
+ }
+}
+function __qaNpcInit(clock){`);
 const server=createServer((req,res)=>{
  res.setHeader('Content-Type','text/html; charset=utf-8');
- res.end(req.url.startsWith('/seed')?'<!doctype html><title>Isolated fixtures</title>':html);
+ res.end(req.url.startsWith('/seed')?'<!doctype html><title>Isolated fixtures</title>':observed);
 });
 await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',resolve).once('error',reject));
 const origin='http://127.0.0.1:'+server.address().port;
@@ -109,12 +124,12 @@ async function worker(page,id){
  return byId(await residents(page),id);
 }
 const morning=9*60;
-const menu='#poiNpcMenu',sheet='#poiNpcStatus';
+const menu='#poiNpcMenu',sheet='#poiNpcStatus',bag='#poiNpcInventory',portrait='#poiNpcPortrait';
 const stat=(page,id)=>page.locator(sheet+' [data-npc-stat="'+id+'"]');
-const rows=page=>page.locator(menu+' button[data-npc-action]').evaluateAll(nodes=>
+const rows=page=>page.locator(menu+' > button[data-npc-action]').evaluateAll(nodes=>
  nodes.map(e=>[e.dataset.npcAction,e.textContent.trim()]));
 const expected=[['talk','話す'],['status','状態'],['request','依頼'],['back','戻る']];
-const choose=(page,id)=>page.locator(menu+' [data-npc-action="'+id+'"]').tap();
+const choose=(page,id)=>page.locator(menu+' > button[data-npc-action="'+id+'"]').tap();
 async function present(page){
  await page.waitForFunction(()=>/話す|会話|取引|買い物/.test([document.querySelector('#poiWalkAction').getAttribute('aria-label'),document.querySelector('#poiWalkAction').textContent].join(' ')));
  await page.locator(action).tap();
@@ -130,33 +145,62 @@ async function exercise(browser,{width,height=740,id,x,z,service}){
   await page.locator('[data-poi-dir="s"]').tap();
   assert.equal(await page.locator(menu+' [aria-current=true]').getAttribute('data-npc-action'),'status');
   await page.locator(action).tap(); // Center action on real mobile D-pad.
-  await page.locator(sheet).waitFor({state:'visible'});
+  await page.locator(bag).waitFor({state:'visible'});
+  assert.equal(await page.locator('#poiBagPanel').isVisible(),false,'NPC status is not the writable player bag');
   assert.deepEqual(await rows(page),[['back','戻る']]);
   const actor=byId(await residents(page),id);
-  assert.ok(actor);
+  assert.deepEqual([actor.hp,actor.coins,actor.potions],id==='toolkeeper'?[73,7,2]:[86,4,1]);
   assert.match(await stat(page,'hp').innerText(),new RegExp(actor.hp+'\\s*[/／]\\s*100'));
-  assert.match(await stat(page,'coins').innerText(),new RegExp('(?:^|[^0-9])'+actor.coins+'\\s*G'));
-  assert.match(await stat(page,'herbs').innerText(),new RegExp('(?:^|[^0-9])'+actor.potions+'(?:[^0-9]|$)'));
   assert.equal(await stat(page,'attack').count(),0,'ordinary non-hunter has no fictional attack stat');
-  assert.equal((await stat(page,'equipment').innerText()).trim(),'なし','non-knight has no battle gear');
+  assert.deepEqual(await page.locator(sheet+' [data-npc-stat]').evaluateAll(n=>n.map(e=>e.dataset.npcStat)),['role','hp'],
+    'under portrait only the applicable core stats');
   assert.deepEqual(await readStock(page),raw,'NPC status must not change player equipment, currency or stock');
   const opened=await state(page);
   assert.deepEqual(opened.position,initial.position,'D-pad did not move avatar in menu');
   assert.equal(opened.combat.actionAt,initial.combat.actionAt,'viewing status never attacks');
-  const rect=await page.locator(menu).boundingBox();
-  assert(rect&&rect.x>=-1&&rect.x+rect.width<=width+1&&rect.y>=-1&&rect.y+rect.height<=height+1,'status fits actual viewport');
-  assert.ok(rect.height>=90,'status pane is tall enough for meaningful content: '+JSON.stringify(rect));
-  for(const id of ['hp','equipment']){
-   const field=await stat(page,id).boundingBox();
-   assert(field&&field.y>=rect.y&&field.y+field.height<=rect.y+rect.height+1,id+' fully readable before scrolling');
+  const metrics=await page.evaluate(({bag,portrait,sheet})=>{
+   const q=s=>document.querySelector(s),r=e=>{const b=e.getBoundingClientRect();return {x:b.x,y:b.y,width:b.width,height:b.height,right:b.right,bottom:b.bottom}};
+   const holder=q(bag),art=q(portrait),status=q(sheet),g=art.getContext('2d');
+   const paint=g&&g.getImageData(0,0,art.width,art.height).data;
+   const entries=[...holder.querySelectorAll('[data-npc-bag-slot]')];
+   const gear=[...holder.querySelectorAll('[data-npc-gear-slot]')];
+   return {rect:r(holder),art:r(art),status:r(status),model:art.dataset.model,
+    viewport:r(q('#poiNpcMenu')),hp:r(status.querySelector('[data-npc-stat=hp]')),
+    hasFigure:!!paint&&paint.some((v,i)=>i%4===3&&v>0)&&paint.some((v,i)=>i%4===3&&v===0),
+    items:entries.filter(e=>e.dataset.npcItem).map(e=>[e.dataset.npcItem,Number(e.dataset.count)]),
+    cells:entries.length,gear:gear.map(e=>[e.dataset.npcGearSlot,e.dataset.npcEquipment??null]),
+    liveSlots:[...entries,...gear].filter(e=>e.matches('button,input,[draggable=true]')).length};
+  },{bag,portrait,sheet});
+  assert.equal(metrics.cells,25,'5×5 independent NPC bag');
+  assert.deepEqual(metrics.gear,['weapon','shield','armor','other'].map(part=>[part,null]),'ordinary residents have no fictitious gear');
+  assert.equal(metrics.liveSlots,0,'NPC items are not action targets or draggable');
+  assert.deepEqual(metrics.items.sort(),[['gold',actor.coins],['healingHerb',actor.potions]]);
+  assert.equal(metrics.model,actor.type,'portrait matches the selected resident, not the player');
+  assert.ok(metrics.hasFigure,'actual transparent NPC character art was painted');
+  assert(metrics.status.y>=metrics.art.bottom-1,'stats beneath NPC character, not layered over its picture');
+  assert(metrics.hp.y>=metrics.viewport.y&&metrics.hp.bottom<=metrics.viewport.bottom-1,
+   'NPC HP is fully visible under the artwork when first opened: '+JSON.stringify(metrics));
+  const rect=metrics.rect;
+  assert(rect.width>=140&&rect.height>=90&&rect.x>=-1&&rect.right<=width+1&&rect.y>=-1&&rect.bottom<=height+1,
+   'NPC catalogue fits short viewport: '+JSON.stringify(metrics));
+  assert.equal(await page.locator('dialog[open]').count(),0,'status stays in original non-modal choices layer');
+  await page.locator(bag+' [data-npc-item=healingHerb]').tap();
+  assert.equal(await page.locator('#poiItemDetail[open]').count(),0,'NPC items cannot be acted on');
+  const toggle=page.locator('#poiBagToggle');
+  if(await toggle.isVisible()&&await toggle.isEnabled()){
+   const hittable=await toggle.evaluate(e=>{const r=e.getBoundingClientRect();return e.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2))});
+   if(hittable)await toggle.tap();
   }
-  assert.equal(await page.locator('dialog[open]').count(),0,'status stays in original non-modal choices panel');
+  assert.equal(await page.locator('#poiBagPanel').isVisible(),false,'player bag controls cannot take over while NPC inventory is open');
+  assert.ok(await page.locator(bag).isVisible());
   const tools=page.locator('#poiGameTools');
-  assert.equal(await tools.evaluate(el=>getComputedStyle(el).visibility),'hidden','unrelated game tools cannot mask the status card');
-  if(out)await page.screenshot({path:out+'/v178-npc-status-'+id+'.png'});
-  await choose(page,'back');
-  await page.locator(sheet).waitFor({state:'hidden'});
-  assert.equal(await tools.evaluate(el=>getComputedStyle(el).visibility),'visible','game tools return after closing status');
+  assert.equal(await tools.evaluate(e=>getComputedStyle(e).visibility),'hidden','upper-right tools cannot occlude NPC inventory');
+  if(out)await page.screenshot({path:out+'/v179-npc-inventory-'+id+'.png'});
+  assert.equal(await page.locator('#poiNpcInventoryClose').count(),1,'separate unique close button');
+  if(service)await page.locator('#poiNpcInventoryClose').tap();
+  else await page.keyboard.press('Escape');
+  await page.locator(bag).waitFor({state:'hidden'});
+  assert.equal(await tools.evaluate(e=>getComputedStyle(e).visibility),'visible');
   assert.deepEqual(await rows(page),expected);
   await choose(page,'request');
   const nested=(await rows(page)).map(([key])=>key);
@@ -181,5 +225,5 @@ try{
   args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
  await exercise(browser,{width:320,id:'toolkeeper',x:69,z:35,service:'shop'});
  await exercise(browser,{width:390,height:568,id:'stablekeeper',x:34,z:61});
- console.log('PASS mobile real NPC status, exact root actions, D-pad, nested true shop, and save protection');
+ console.log('PASS mobile read-only NPC inventory, live gear/stats and painted portrait, D-pad, nested true shop, and save protection');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}

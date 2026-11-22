@@ -132,13 +132,31 @@ async function layout(page){
    headerGold:document.querySelector('#poiBagHeading').parentElement.contains(document.querySelector('#poiBagWallet'))};
  });
 }
+const playerCard='.poiPartyCard[data-party-slot="0"]';
+const underPortrait='#poiBagPlayerStats';
+async function playerStatus(page){
+ const panel=page.locator(underPortrait),hp=page.locator('#poiBagPlayerHpValue'),attack=page.locator('#poiBagPlayerAttackValue');
+ await panel.waitFor({state:'visible'});
+ assert.equal(await page.locator(playerCard).isVisible(),false,'no duplicate player HUD while bag is up');
+ assert.match(await hp.innerText(),/100\s*[/／]\s*100/);
+ assert.match(await attack.innerText(),/\b28\b/,'status uses the actual wooden sword damage');
+ const [status,art,bag]=await Promise.all([panel.boundingBox(),page.locator('#poiAvatarPreview').boundingBox(),
+  page.locator('#poiBagPanel').boundingBox()]);
+ assert(status&&art&&bag&&status.y>=art.y+art.height-1,'status sits beneath, not over character art');
+ assert(status.x>=bag.x-1&&status.x+status.width<=bag.x+bag.width+1&&status.y+status.height<=bag.y+bag.height+1);
+ await page.evaluate(()=>window.__editorTest.testWound(36));
+ await page.waitForFunction(()=>/64\s*[/／]\s*100/.test(document.querySelector('#poiBagPlayerHpValue')?.textContent||''));
+ assert.equal((await state(page)).combat.playerHP,64);
+}
 async function exercise(browser,width){
  const {ctx,page,errors}=await launch(browser,'base',{x:56,z:39},{width,kit:legacy});
  try{
   assert.deepEqual(await save(page),legacy,'old kit is not rewritten on load');
   assert.deepEqual((await inv(page)).worn,expected,'legacy hero is wearing all four original garment types');
   const original=await mapState(page);
+  assert.ok(await page.locator(playerCard).isVisible(),'closed bag retains existing gameplay HUD');
   await openBag(page);
+  await playerStatus(page);
   assert.equal(await page.locator('#poiGoldHud').count(),0,'no left HUD gold panel');
   assert.equal(await page.locator('#poiBagWallet #poiGoldValue').textContent(),String(legacy.gold),'legacy currency is visible in the bag');
   assert.ok(await page.locator('#poiClockHud').isVisible(),'clock remains in gameplay HUD');
@@ -174,6 +192,8 @@ async function exercise(browser,width){
   await drag(ctx,page,slot(8),slot(9));
   assert.deepEqual(await save(page),before,'locked destination likewise refuses without a ground drop');
   await closeBag(page);
+  assert.ok(await page.locator(playerCard).isVisible(),'closing the bag restores the single gameplay HUD');
+  assert.equal(await page.locator(underPortrait).isVisible(),false);
   await page.reload();
   await page.waitForFunction(()=>window.__editorTest?.facility?.().active);
   assert.equal((await inv(page)).worn.feet,null);
@@ -194,7 +214,7 @@ async function exercise(browser,width){
    assert.equal((await appearance(page)).preview,restored.preview,'portrait pixels remain stable across reopening');
   }
   assert.equal(await page.evaluate(()=>window.__portraitDepthPaints),portraitPaints,'same outfit does not redraw portrait on each open or animation frame');
-  if(out)await page.screenshot({path:out+'/v173-equipped-'+width+'.png'});
+  if(out)await page.screenshot({path:out+'/v179-equipped-'+width+'.png'});
   await closeBag(page);
   assert.deepEqual(await mapState(page),original);
   await unchanged(page);assert.deepEqual(errors,[]);
