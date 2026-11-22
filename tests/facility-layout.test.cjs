@@ -1,4 +1,4 @@
-const {beforeAbandonedMine}=require('./mine-history-v165.cjs');
+const {beforeAbandonedMine,beforeOtherworld}=require('./mine-history-v165.cjs');
 const {kitchenChestAddedV162}=require('./kitchen-chest-history.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -132,7 +132,7 @@ test('base stamps are exact rotations and it has a well, signed inn and outdoor 
 test('interior route lighting is wall-mounted and street lamps stay outside',()=>{
  for(const id of ids){
   const site=buildFacilitySite(id),previous=beforeAbandonedMine(site),{map,buildings}=previous;
-  for(const s of site.map.world.slice(map.world.length).filter(o=>o.type==='poiWallSconce')){
+  for(const s of beforeOtherworld(site).map.world.slice(map.world.length).filter(o=>o.type==='poiWallSconce')){
    const [dx,dz]=dirs[s.rot],at=(x,z,t)=>site.map.world.some(o=>o.x===x&&o.z===z&&o.y===-1&&t.test(o.type));
    assert.equal(s.y,-1);assert(at(s.x,s.z,/^(?:stone|moss)wall$/));assert(at(s.x+dx,s.z+dz,/^(?:stone|moss)$/));
   }

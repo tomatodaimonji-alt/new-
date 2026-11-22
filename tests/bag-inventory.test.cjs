@@ -404,3 +404,41 @@ test('side rooms roll independently on legitimate B1 exploration and preserve bo
  assert.deepEqual(Array.from(next.ctx.poiMineFindList(next.ctx.poiHotbarRead()),v=>v.id),['mine-storeroom']);
  assert.deepEqual(f.raw().mineFindClaims,['mine-breakroom']);
 });
+test('otherworld exact elite unlocks only its own gate and a capped wallet cannot block its independent reward box',()=>{
+ const f=fixture({version:1,weapon:null,potions:3,gold:999999}),c=f.ctx;
+ const elite={x:101,z:79,y:-1,type:'monsterDragon'},chest={x:100,z:74,y:-1,type:'rewardChest'};
+ c.facilitySite.otherworld={elite,chest,chestStand:{x:100,z:75,y:-1,facing:0},bounds:{x1:95,x2:109,z1:73,z2:93,y:-1}};
+ Object.assign(c,{poiWalkLevel:-1,poiWalkX:100,poiWalkZ:75,poiWalkFacing:0,world:[chest],poiMonsterAt:()=>null});
+ assert.equal(c.poiOtherworldGateOpen(),false);assert.equal(c.poiOtherworldRecordDefeat({...elite,x:99},{hp:0}),false);
+ assert.equal(c.poiOtherworldRecordDefeat(elite,{hp:0}),true);
+ assert.equal(c.poiMineVaultGateOpen(),false);assert.equal(c.poiOtherworldGateOpen(),true);
+ assert.equal(c.poiMineUnlockStart(0,'otherworldChest'),true);
+ c.poiMineUnlockCancel();c.poiMineUnlockFrame(3300);assert.equal(f.raw().otherworldChest,undefined);
+ assert.equal(c.poiMineUnlockStart(4000,'otherworldChest'),true);c.poiMineUnlockFrame(7000);
+ assert.equal(f.raw().otherworldChest.slots[0].count,3);assert.equal(f.raw().otherworldChest.slots[1].count,4);
+ assert.equal(f.raw().gold,999999);assert.equal(f.raw().mineTreasureChest,undefined);assert.equal(f.writes(),2);
+ assert.equal(fixture(f.raw()).ctx.poiOtherworldChestOpened(),true);
+});
+test('reciprocal portal steps land off both arches without quest or kit writes',()=>{
+ const start={version:1,weapon:null,potions:3,gold:12},f=fixture(start),c=f.ctx;
+ const entrance={x:118,z:88,y:0,type:'otherworldPortal'},exit={x:100,z:91,y:-1,type:'otherworldPortal'};
+ const surfaceStand={x:118,z:87,y:0,facing:2},dungeonStand={x:100,z:90,y:-1,facing:2};
+ c.facilitySite.otherworld={entrance,exit,surfaceStand,dungeonStand,gate:{x:100,z:76,y:-1},name:'星蝕の回廊',bounds:{x1:95,x2:109,z1:73,z2:93,y:-1}};
+ c.world=[entrance,exit];const noop=()=>{};
+ let pauses=0,resumes=0,valid=true,style={classList:{toggle:noop}};
+ Object.assign(c,{poiWalkX:118,poiWalkZ:87,poiWalkLevel:0,poiWalkFacing:2,poiWalkCanStep:()=>valid,
+  poiWalkFromX:118,poiWalkFromZ:87,poiWalkViewX:118,poiWalkViewZ:87,POI_WALK_MS:155,
+  poiStopRepeat(){pauses++},poiEnemyCancelPlayer:noop,$:()=>style,poiCreekAudioSync:noop,
+  poiWalkRoof:noop,poiWalkCamera:noop,poiWalkStatus:noop,workshopResumeWrite(){resumes++}});
+ assert.equal(c.poiOtherworldUseStep(100,91,50),false,'wrong-side exit never transfers');
+ valid=false;assert.equal(c.poiOtherworldUseStep(118,88,100),true);assert.equal(c.poiWalkLevel,0);assert.equal(pauses,0);
+ valid=true;assert.equal(c.poiOtherworldUseStep(118,88,200),true);
+ assert.deepEqual([c.poiWalkX,c.poiWalkZ,c.poiWalkLevel,c.poiWalkFacing],[100,90,-1,0]);
+ assert.equal(c.poiOtherworldEnemyMayFight({x:101,z:79,y:-1},100,90),false);
+ assert.equal(c.poiOtherworldEnemyMayFight({x:101,z:79,y:-1},100,83),true);
+ assert.equal(c.poiOtherworldEnemyMayFight({x:101,z:79,y:-1},100,77),true);
+ assert.equal(c.poiOtherworldEnemyMayFight({x:101,z:79,y:-1},100,76),false,'realm enemies stop at the treasury gate even after it has opened');
+ assert.equal(c.poiOtherworldUseStep(100,91,400),true);
+ assert.deepEqual([c.poiWalkX,c.poiWalkZ,c.poiWalkLevel,c.poiWalkFacing],[118,87,0,0]);
+ assert.equal(pauses,2);assert.equal(resumes,2);assert.deepEqual(f.raw(),start);assert.equal(f.writes(),0);
+});

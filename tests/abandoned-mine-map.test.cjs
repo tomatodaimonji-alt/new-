@@ -1,9 +1,9 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),{createHash}=require('node:crypto');
-const {beforeMineDepths}=require('./mine-history-v165.cjs');
+const {beforeMineDepths,beforeOtherworld}=require('./mine-history-v165.cjs');
 const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const slice=(a,b)=>html.slice(html.indexOf(a),html.indexOf(b,html.indexOf(a)+1));
 const build=vm.runInNewContext(slice('const FACILITY_SITES=Object.freeze(','function workshopResumeDecode(')+';buildFacilitySite');
-const site=JSON.parse(JSON.stringify(build('base'))),world=site.map.world;
+const site=beforeOtherworld(JSON.parse(JSON.stringify(build('base')))),world=site.map.world;
 const digest=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const at=(x,z,y)=>world.filter(o=>o.x===x&&o.z===z&&o.y===y);
 test('new mine extends the released Game World without replacing a single old record or metadata field',()=>{
