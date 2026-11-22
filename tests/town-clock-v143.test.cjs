@@ -3,11 +3,11 @@ const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 function fixture(saved){
  const a=h.indexOf('const POI_TOWN_CLOCK_KEY='),b=h.indexOf('function poiShopIsOpen(',a);
  assert(a>=0&&b>a,'town clock source');
- const panel={hidden:true},value={textContent:''},writes=new Map();if(saved)writes.set('world-workshop-town-clock-v1',saved);
+ const panel={hidden:true},value={textContent:''},day={textContent:''},writes=new Map();if(saved)writes.set('world-workshop-town-clock-v1',saved);
  const c={facilitySite:{id:'base'},poiWalkActive:true,pineAIActive:false,document:{hidden:false},
-  $:id=>id==='poiClockHud'?panel:value,localStorage:{getItem:k=>writes.get(k)||null,setItem:(k,v)=>writes.set(k,v)}};
+  $:id=>({poiClockHud:panel,poiClockValue:value,poiClockDay:day}[id]),localStorage:{getItem:k=>writes.get(k)||null,setItem:(k,v)=>writes.set(k,v)}};
  vm.createContext(c);vm.runInContext(h.slice(a,b),c);
- return {c,panel,value,writes};
+ return {c,panel,value,day,writes};
 }
 test('base clock ticks from 08:00 at two minutes per real second, pauses outside foreground play',()=>{
  const {c,panel,value}=fixture();c.poiTownClockFrame(0);assert.equal(value.textContent,'08:00');assert(!panel.hidden);
@@ -20,8 +20,8 @@ test('base clock ticks from 08:00 at two minutes per real second, pauses outside
  assert.equal(c.poiTownClockSnapshot().absoluteMinute,484);
 });
 test('24h wraps and a separate saved clock resumes without altering other storage',()=>{
- const {c,value,writes}=fixture('{"version":1,"gameMs":719500}');c.poiTownClockFrame(0);assert.equal(value.textContent,'23:59');
- c.poiTownClockFrame(500);assert.equal(value.textContent,'00:00');
+ const {c,value,day,writes}=fixture('{"version":1,"gameMs":719500}');c.poiTownClockFrame(0);assert.equal(value.textContent,'23:59');assert.equal(day.textContent,'1日目');
+ c.poiTownClockFrame(500);assert.equal(value.textContent,'00:00');assert.equal(day.textContent,'2日目');
  assert.deepEqual({...c.poiTownClockSnapshot()},{minute:0,hour:0,day:2,absoluteMinute:1440});
  c.poiTownClockSuspend();
  assert.equal(JSON.parse(writes.get('world-workshop-town-clock-v1')).gameMs,720000);
@@ -30,4 +30,23 @@ test('24h wraps and a separate saved clock resumes without altering other storag
 test('clock HUD follows wallet and the pale shared gameplay panel',()=>{
  assert.match(h,/<div id="poiClockHud" hidden>[\s\S]*?id="poiClockValue"/);
  assert.match(h,/#app #viewWrap :is\(#poiMiniMap,#poiLocationPanel,#poiClockHud\)\{[^}]+background-color:var\(--workshop-panel-surface\)/);
+});
+test('light cycles smoothly across sunrise, noon and midnight, only in Game World above-ground play',()=>{
+ const {c}=fixture();c.poiWalkLevel=0;
+ const at=m=>{assert.equal(c.poiTownClockSetTest(m),true);return [...c.poiTownSceneLight()]};
+ const midnight=at(0),dawn=at(390),noon=at(720),late=at(1439);
+ assert.deepEqual(noon,[1,1,1]);assert(midnight[0]<.6&&midnight[2]>midnight[0]);
+ assert(dawn[0]>midnight[0]+.15&&dawn[0]>dawn[2]+.1&&dawn[0]<noon[0]-.1);
+ assert(late.every((v,i)=>Math.abs(v-midnight[i])<.003));
+ c.poiWalkLevel=2;assert.deepEqual([...c.poiTownSceneLight()],late);c.poiWalkLevel=0;
+ for(const [key,value] of [['poiWalkLevel',-1],['poiWalkActive',false],['pineAIActive',true],['facilitySite',{id:'lodging'}]]){
+  const old=c[key];c[key]=value;assert.deepEqual([...c.poiTownSceneLight()],[1,1,1]);c[key]=old;
+ }
+});
+test('day label is beside the existing time and light is confined to 3D programs',()=>{
+ assert.match(h,/<div id="poiClockHud" hidden><span id="poiClockDay">1日目<\/span><strong id="poiClockValue">08:00/);
+ assert.match(h,/gl_FragColor=vec4\(pow\(max\(vCol,[^\n]*\*uTownDaylight,1\.0\)/);
+ assert.match(h,/gl_FragColor=vec4\(c.rgb\*uTownDaylight,c.a\)/);
+ assert.match(h,/gl.uniform3f\(loc.daylight,\.\.\.daylight\)/);
+ assert.doesNotMatch(h,/#view(?:Wrap)?\{[^}]*filter:brightness/);
 });

@@ -248,7 +248,7 @@ async function residentTrade(browser){
   await page.keyboard.press('Escape');
   await choice(page,'buy');
   await show();
-  assert.match(await page.locator(trade).innerText(),/販売品/);
+  assert.match(await page.locator(trade).innerText(),/ノア（厩舎番）.*販売品/);
   assert.equal(await tradeItem('trade:healingHerb').getAttribute('data-count'),'3','visible NPC stock reflects prior sale');
   assert.equal(await tradeItem('trade:healingHerb').getAttribute('data-price'),'9');
   await quote('trade:healingHerb',9,'買う');
@@ -263,7 +263,7 @@ async function residentTrade(browser){
   assert.equal(bought.combat.playerHP,before.combat.playerHP);
   assert.deepEqual(afterPurchase.npcTrade.actors.stablekeeper,{healingHerb:2,cannedFood:1});
   assert.equal(await tradeItem('trade:healingHerb').getAttribute('data-count'),'2','visible NPC stock decreases after Buy');
-  if(out)await page.screenshot({path:out+'/v183-private-sale-stock.png'});
+  if(out)await page.screenshot({path:out+'/v184-private-sale-stock.png'});
   await page.keyboard.press('Escape'); // purchase projection → request
   await page.keyboard.press('Escape'); // request → root
   await choice(page,'talk');

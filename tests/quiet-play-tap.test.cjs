@@ -14,7 +14,7 @@ test('the cursor mesh paints only in editor and play with an explicit editing to
   assert.equal(draws.length,Number(expected),JSON.stringify({play,game,mode}));
   if(expected)assert.deepEqual(draws[0],[mesh,vp]);
  }
- assert.match(html,/drawSignOverlays\(p.vp\);pineDrawEditCursor\(p.vp\);/,'frame must use the scoped gate');
+ assert.match(html,/drawSignOverlays\(p.vp,daylight\);pineDrawEditCursor\(p.vp\);/,'frame must use the scoped gate');
 });
 test('intentional check overlays and normal tap actions remain separate',()=>{
  assert.match(html,/pineDrawChecks\(p.vp\)/);

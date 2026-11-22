@@ -16,7 +16,7 @@ test('player-led conversation pauses the resident, uses announcements only and s
  assert.equal(f.run('poiTownDialogueAction(100)'),true);assert.equal(f.actor.facing,2);
  f.run('poiTownDialogueDraw(200,[])');
  assert.equal(f.e.hidden,true);assert.equal(announcements.length,1);
- assert.equal(announcements[0][0],'受付係');assert.equal(announcements[0][1],f.run('poiTownDialogueSnapshot().text'));
+ assert.equal(announcements[0][0],'受付係（ギルド受付）');assert.equal(announcements[0][1],f.run('poiTownDialogueSnapshot().text'));
  assert.equal(f.run('poiTownDialogueUpdate(4600)'),f.actor,'awake menu persists until Back or actor loss');
  f.run("poiNpcMenuChoose('back',4601)");assert.equal(f.run('poiTownDialogueUpdate(4602)'),null);
  const update=html.slice(html.indexOf('function poiMessagePush('),html.indexOf('function poiAnnounceDefeat('));
@@ -113,7 +113,7 @@ test('root has four exact choices and NPC status is derived only from live stats
  assert.equal(f.run("poiNpcMenuChoose('status',101)"),true);
  const s=JSON.parse(f.run('JSON.stringify(poiTownDialogueSnapshot())'));
  assert.equal(s.menu,'status');assert.deepEqual(s.actions,[{id:'back',label:'戻る'}]);
- assert.deepEqual(s.status,{name:f.actor.role.name,hp:74,maxHP:100,attack:13,equipment:['剣','盾','鎧'],coins:6,herbs:2});
+ assert.deepEqual(s.status,{name:f.actor.role.name+'（ギルド受付）',hp:74,maxHP:100,attack:13,equipment:['剣','盾','鎧'],coins:6,herbs:2});
  assert.equal(f.run("poiNpcMenuChoose('back',103)"),true);assert.equal(f.run('poiTownDialogueSnapshot().menu'),'root');
  f.actor.role={...f.actor.role,role:'keeper',type:'humanMerchant'};
  assert.equal(f.run("poiNpcMenuChoose('status',104)"),true);
@@ -163,7 +163,21 @@ test('actual residents have unique given names and those names label dialogue an
  assert.equal(new Set(names.map(([,name])=>name)).size,names.length);
  assert.deepEqual(Array.from(names[0]),['guildkeeper','リーネ']);
  assert(names.every(([,name])=>!/(役割|店主|受付係|主人|冒険者|配達人|旅人|行商人|厩舎番)/.test(name)));
- assert.match(html,/poiMessageSpeak\(d\.actor\.role\.name,d\.text,now\)/);
+ assert.match(html,/poiMessageSpeak\(poiTownNpcDisplayName\(d\.actor\.role\),d\.text,now\)/);
  assert.match(html,/\['name','名前',info\.name\]/);
  assert.doesNotMatch(html,/\['role','役割',info\.role\]/);
+});
+test('job titles follow given names and all dialogue surfaces use the same display name',()=>{
+ const f=fixture(),announcements=[];f.c.poiMessageSpeak=(...args)=>announcements.push(args);
+ f.actor.role.name='リーネ';
+ f.c.guest={x:5,z:4,y:0,role:{id:'guestadventurer',name:'カイ'}};
+ f.c.host={x:5,z:2,y:0,role:{id:'innkeeper',name:'ガルド'}};
+ assert.equal(f.run("poiTownAmbientSpeak('inn',guest,host,100)"),true);
+ f.run('poiTownDialogueDraw(1200,[])');assert.match(f.e.textContent,/^ガルド（宿屋の主人）\n/);
+ assert.equal(f.run('poiTownNpcDisplayName(guest.role)'),'カイ（冒険者）');
+ assert.equal(f.run("poiTownNpcDisplayName({id:'northtraveler',name:'セオ'})"),'セオ');
+ assert.equal(f.run('poiTownDialogueAction(1500)'),true);
+ assert.equal(announcements[0][0],'リーネ（ギルド受付）');
+ assert.equal(f.run('poiTownDialogueSnapshot().name'),'リーネ（ギルド受付）');
+ assert.equal(f.actor.role.name,'リーネ');
 });

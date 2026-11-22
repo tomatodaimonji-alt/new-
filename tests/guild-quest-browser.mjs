@@ -151,7 +151,7 @@ async function guildQuest(browser){
   await acceptedMarker(page,false);
   const topology=(await state(page)).miniMap.topologyBuilds;
   await talk(page,'guildkeeper');
-  assert.equal((await page.locator('#poiMessageHeading').innerText()).trim(),'リーネ');
+  assert.equal((await page.locator('#poiMessageHeading').innerText()).trim(),'リーネ（ギルド受付）');
   const keys=await actionKeys(page);
   assert(keys.includes('quest'),'guild receptionist offers quests at the actual public desk');
   assert.deepEqual(keys.filter(k=>k!=='quest'),['talk','status','request','back']);
@@ -174,7 +174,7 @@ async function guildQuest(browser){
   await acceptedMarker(page,true);
   assert.equal((await state(page)).miniMap.topologyBuilds,topology,'quest repaint does not rebuild topological map');
   assert.deepEqual((await state(page)).position,before);
-  if(out)await page.screenshot({path:out+'/v182-guild-accepted.png'});
+  if(out)await page.screenshot({path:out+'/v184-guild-accepted.png'});
   await page.keyboard.press('Escape');
   await page.keyboard.press('Escape');
   await menu(page).waitFor({state:'hidden'});
