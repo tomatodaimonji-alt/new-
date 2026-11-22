@@ -882,8 +882,75 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 #poiShopFeedback{min-height:1.4em}
 #poiResetGameConfirm:not(:disabled){border-color:#ce9b85;background:#774a3cf0;color:#fff4da}
 #poiResetGameFeedback:empty{display:none}
+/* Pre-JavaScript cover: shares the Android WebView's native dark background. */
+#pineStartupCover{position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;
+ padding:20px;background:#08141a;color:#f0e8d1;text-align:center}
+#pineStartupCover[hidden],#pineStartupActions[hidden]{display:none!important}
+#pineStartupContent{max-width:360px}
+#pineStartupMessage{margin:0 0 12px;font-weight:750}
+#pineStartupActions{display:flex;justify-content:center;flex-wrap:wrap;gap:8px}
+#pineStartupActions button{min-height:44px}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v170）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="pineStartupCover" data-state="loading">
+ <div id="pineStartupContent">
+  <p id="pineStartupMessage" role="status" aria-live="polite">読み込み中…</p>
+  <div id="pineStartupActions" hidden>
+   <button id="pineStartupRetry" type="button">再試行</button>
+   <button id="pineStartupEditor" type="button">エディターに戻る</button>
+  </div>
+ </div>
+</div>
+<script>
+// BEGIN PINE STARTUP COVER
+(()=>{
+ const cover=document.getElementById('pineStartupCover'),actions=document.getElementById('pineStartupActions');
+ const message=document.getElementById('pineStartupMessage');
+ let status='loading',initialized=false,firstFrame=false,watchdog=null;
+ const stop=()=>{if(watchdog!==null){clearTimeout(watchdog);watchdog=null}};
+ const finish=()=>{
+  if(status!=='loading'||!initialized||!firstFrame)return;
+  status='ready';stop();cover.dataset.state=status;
+  const app=document.getElementById('app');if(app)app.inert=false;
+  cover.hidden=true;
+ };
+ const fail=error=>{
+  if(status!=='loading')return;
+  status='failed';stop();cover.dataset.state=status;
+  message.textContent='画面を読み込めませんでした。';actions.hidden=false;
+  if(error)console.error('3D workshop startup failed',error);
+ };
+ const arm=()=>{
+  stop();
+  if(status==='loading'&&!document.hidden)watchdog=setTimeout(()=>fail(),25000);
+ };
+ document.addEventListener('visibilitychange',arm);
+ window.addEventListener('error',event=>fail(event.error||event.message));
+ document.getElementById('pineStartupRetry').addEventListener('click',()=>location.reload());
+ document.getElementById('pineStartupEditor').addEventListener('click',()=>{
+  const url=new URL(location.href),test=url.searchParams.get('test')==='1';
+  url.search='';url.hash='';url.searchParams.set('startup-editor','1');
+  if(test)url.searchParams.set('test','1');
+  location.replace(url.href);
+ });
+ window.pineStartup={
+  start(init){
+   // One rendering opportunity with the parsed cover before WebGL and scene
+   // generation can occupy the main thread.
+   requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    if(status!=='loading')return;
+    try{init();initialized=true;finish()}catch(error){fail(error)}
+   }));
+  },
+  rendered(){if(status==='loading'){firstFrame=true;finish()}},
+  fail,
+  get loading(){return status==='loading'},
+  get failed(){return status==='failed'}
+ };
+ arm();
+})();
+// END PINE STARTUP COVER
+</script>
+<div id="app" inert><header><h1>3Dワールド工房（v171）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -1077,7 +1144,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 </div>
 <div class="modal" id="jsonModal"><div class="modalBody"><h2>ワールドをデータで共有</h2><p>建物やタイルなどの配置データをJSONで保存・共有できます。</p><textarea id="jsonText" spellcheck="false" placeholder="ここにJSONを貼り付けて読み込み"></textarea><div class="row"><button id="exportJson">最新のJSONを表示</button><button id="copyJson">JSONをコピー</button><button id="downloadJson">.json を保存</button><button id="pickJsonFile">.jsonファイルを選ぶ</button><input id="jsonFile" type="file" accept=".json,application/json" style="display:none"><button id="importJson">JSONを読み込む</button><button id="closeJson">閉じる</button></div><p class="muted">安全のため、読み込み時はデータ形式・数・位置・サイズを検査する。ブラウザにローカル保存される。</p></div></div>
 <script>
-(()=>{'use strict';
+window.pineStartup.start(()=>{'use strict';
 // Android WebView can report a taller CSS viewport than the visible screen.
  // Keep the game height synchronized with the actual visible viewport.
  function syncVisibleViewport(){
@@ -1092,7 +1159,8 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 let MAP_W=16,MAP_H=16,terrainHeights=new Map();const TERRAIN_MAX=8,TERRAIN_STEP=1;const MIN_MAP=12,MAX_MAP=128,MAX_LEVEL=9,SAVE_KEY='forest-world-editor-v1',TAU=Math.PI*2;
 const $=id=>document.getElementById(id);
 const facilityParams=new URLSearchParams(location.search);
-const facilityReturn=facilityParams.get('facility-return')==='1';
+const startupEditor=facilityParams.get('startup-editor')==='1';
+const facilityReturn=startupEditor||facilityParams.get('facility-return')==='1';
 const WORKSHOP_RESUME_KEY='world-workshop-resume-v1';
 let workshopResumeReady=false,workshopResumeLeaving=false,workshopResumeRaw='',workshopResumeTag='empty',workshopAdventureResumeQuiet=false;
 let facilitySite=null,facilityRoofMeshes=[],facilityExportFallback=null;
@@ -1133,7 +1201,8 @@ function toast(message){
  toastEl.textContent=message;toastEl.classList.add('show');clearTimeout(toast.timer);
  toast.timer=setTimeout(()=>toastEl.classList.remove('show'),2200);
 }
-if(!gl){$('canvasTip').textContent='この端末はWebGLに対応していません。3D編集を開始できません。';return}
+if(!gl){window.pineStartup.fail(Error('WebGL is not available'));return}
+canvas.addEventListener('webglcontextlost',()=>window.pineStartup.fail(Error('WebGL context lost before first frame')));
 const palette=[
 {id:'pineLandingCraft',name:'兵員輸送艇・20人乗り（18×8）',icon:'▰',cat:'decor'},
 {id:'pineHarborPier',name:'港・木造歩行桟橋',icon:'▥',cat:'build'},
@@ -9006,7 +9075,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v170',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v171',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -9121,7 +9190,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v170';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v171';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -9336,7 +9405,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v170',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v171',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -11414,7 +11483,11 @@ function poiAngledWallRecord(records,m,o,sides,start,trim=false){
  for(let v=start*3;v<end*3;v+=3)for(let i=0;i<3;i++){
   min[i]=Math.min(min[i],m.p[v+i]);max[i]=Math.max(max[i],m.p[v+i]);
  }
- for(const {owner,side} of sides)records.push({owner,side,x:o.x,z:o.z,y:o.y,type:o.type,min,max,start,end,trim});
+ // The few irregular watchtower modules retain their major rendered faces
+ // for rear-ray tests: a window aperture need not fade with its solid jamb.
+ const rearGeometry=!trim&&sides.some(s=>s.owner==='watchtower')?poiAngledRoofPart(m,start,[],64):null;
+ for(const {owner,side} of sides)records.push({owner,side,x:o.x,z:o.z,y:o.y,type:o.type,min,max,start,end,trim,
+  ...(owner==='watchtower'&&rearGeometry?{rearGeometry}:{})});
 }
 
 // BEGIN FACILITY SHARED GRADE
@@ -11676,7 +11749,7 @@ void main(){
  gl_FragColor=vec4(pow(max(vCol,vec3(0.0)),vec3(.92)),1.0);
 }`;
 function sh(t,src){const s=gl.createShader(t);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s}
-let program;try{program=gl.createProgram();gl.attachShader(program,sh(gl.VERTEX_SHADER,VERT));gl.attachShader(program,sh(gl.FRAGMENT_SHADER,FRAG));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program))}catch(e){$('canvasTip').textContent='WebGLシェーダーエラー: '+e.message;return}
+let program;try{program=gl.createProgram();gl.attachShader(program,sh(gl.VERTEX_SHADER,VERT));gl.attachShader(program,sh(gl.FRAGMENT_SHADER,FRAG));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program))}catch(e){window.pineStartup.fail(e);return}
 gl.useProgram(program);gl.enable(gl.DEPTH_TEST);gl.depthMask(true);gl.depthFunc(gl.LESS);gl.clearColor(0,0,0,0);const loc={p:gl.getAttribLocation(program,'aPos'),n:gl.getAttribLocation(program,'aNorm'),c:gl.getAttribLocation(program,'aCol'),mvp:gl.getUniformLocation(program,'uMVP'),
  occlusionShape:gl.getUniformLocation(program,'uOcclusionShape'),occlusionInfo:gl.getUniformLocation(program,'uOcclusionInfo')};
 try{initSignProgram()}catch(e){console.warn('2D sign textures unavailable',e)}
@@ -11911,6 +11984,18 @@ function poiAngledStoreySelect(records,origins,bearing,floor){
 // BEGIN ANGLED WALL OCCLUSION
 const POI_ANGLED_NO_FADE={active:false};
 let poiAngledWallDisabled=false,poiAngledStoreyDisabled=false,poiAngledWallPrevious=null;
+function poiAngledOutsideWallOwner(owner,x,z,y){
+ const site=typeof facilitySite==='undefined'?null:facilitySite;
+ if(!site||owner==='abandoned-mine')return false;
+ if(owner==='watchtower'&&site.id==='base'){
+  const offset=site.townOffset||0;
+  return x<84+offset||x>=89+offset||z<34+offset||z>=39+offset;
+ }
+ const index=site.buildings?.findIndex((b,i)=>(b.id??i)===owner)??-1;
+ if(index<0)return false;
+ const b=site.buildings[index],floor=typeof facilityFloorMasks==='undefined'?null:facilityFloorMasks[index]?.floors.get(y);
+ return floor?!floor.has(Math.floor(x)+','+Math.floor(z)):x<b.x1||x>=b.x2+1||z<b.z1||z>=b.z2+1;
+}
 function poiAngledWallOcclusion(p,now){
  if(!poiWalkActive||poiThirdPerson||cameraTopDown||pineAIActive||poiAngledWallDisabled)return POI_ANGLED_NO_FADE;
  const roofs=typeof facilityRoofMeshes==='undefined'?null:facilityRoofMeshes;
@@ -11934,9 +12019,21 @@ function poiAngledWallOcclusion(p,now){
   return start;
  };
  let best=null,nearest=Infinity;
- const front=new Map(),mineHits=new Map();
+ const front=new Map(),mineHits=new Map(),rearHits=[],outsideOwners=new Map();
+ const rearRays=()=>avatars.map(h=>[x,h,z]);
  for(const w of walls){
-  if(w.trim||faces[w.side]<.10||w.y<poiWalkLevel||Math.abs(w.x+.5-x)>4||Math.abs(w.z+.5-z)>4)continue;
+  if(w.trim||w.y<poiWalkLevel||Math.abs(w.x+.5-x)>4||Math.abs(w.z+.5-z)>4)continue;
+  if(faces[w.side]<.10){
+   // Full material walls are solid. The tower's irregular openings can
+   // qualify only when a ray intersects their recorded stone surfaces.
+   if(w.owner==='abandoned-mine'||(!w.rearGeometry&&!/^(?:wall|woodwall|stonewall|brickwall|plasterwall|mosswall|ironwall)(?:Plain|All|Double)?$/.test(w.type)))continue;
+   const t=Math.min(...avatars.map(h=>ray(w,h)));
+   if(!Number.isFinite(t))continue;
+   if(!outsideOwners.has(w.owner))outsideOwners.set(w.owner,poiAngledOutsideWallOwner(w.owner,x,z,poiWalkLevel));
+   if(!outsideOwners.get(w.owner))continue;
+   rearHits.push({w,t});
+   continue;
+  }
   const t=Math.min(...avatars.map(h=>ray(w,h)));
   if(t<nearest||best&&t===nearest&&faces[w.side]>faces[best.side]){nearest=t;best=w}
   if(Number.isFinite(t)){
@@ -11946,6 +12043,16 @@ function poiAngledWallOcclusion(p,now){
   }
  }
  let mask=POI_ANGLED_NO_FADE;
+ if(!best&&rearHits.length){
+  const origins=rearRays(),hit=rearHits.sort((a,b)=>a.t-b.t).filter(({w})=>!w.rearGeometry||poiAngledRoofHits(w.rearGeometry,origins,bearing));
+  const seed=hit[0],spans=new Map();
+  if(seed){
+   for(const {w,t} of hit)if(w.owner===seed.w.owner&&t<=seed.t+.34&&!spans.has(w.start))spans.set(w.start,w);
+   const hits=[...spans.values()],cells=hits.map(({x,z,y,type})=>({x,z,y,type}));
+   mask={active:true,kind:'overhead-wall',opacity:POI_OCCLUSION_OPACITY,
+    wall:{owner:seed.w.owner,side:seed.w.side,rear:true,cells},spans:poiAngledRangeMerge(hits.map(w=>[w.start,w.end]))};
+  }
+ }
  if(best?.owner==='abandoned-mine'){
   const hits=[...mineHits.values()],cells=hits.map(({x,z,y,type})=>({x,z,y,type}));
   mask={active:true,kind:'overhead-wall',opacity:POI_OCCLUSION_OPACITY,
@@ -12143,6 +12250,7 @@ function poiDrawEnemyThreatTiles(now,vp){
  finally{gl.depthMask(true);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.disable(gl.BLEND)}
 }
 function render(){
+ if(window.pineStartup.failed)return;
  requestAnimationFrame(render);
  const now=performance.now();
  poiTownClockFrame(now);poiWalkFrame(now);poiMessageUpdate(now);
@@ -12194,6 +12302,7 @@ function render(){
     {mesh:makeScene(),signs:signProgram?buildSignOverlay():[]});
   }finally{hideUpper=original}
  }
+ if(window.pineStartup.loading&&sceneMesh?.count>0&&canvas.width>0&&canvas.height>0&&!gl.isContextLost())window.pineStartup.rendered();
 }
 let savedMapRestoreFailed=false;
 function saveLocal(){
@@ -16189,7 +16298,7 @@ function workshopResumePermitted(params){
  return [...params.keys()].every(k=>k==='revision')&&/^\d{1,20}$/.test(params.get('revision')||'');
 }
 function workshopResumeRead(){
- if(!workshopResumePermitted(facilityParams))return null;
+ if(startupEditor||!workshopResumePermitted(facilityParams))return null;
  try{return workshopResumeDecode(localStorage.getItem(WORKSHOP_RESUME_KEY))}catch(e){return null}
 }
 function workshopResumeMapTag(text){
@@ -16224,7 +16333,7 @@ function workshopResumeWrite(override,seed=false){
 }
 function workshopResumeStart(){
  workshopResumeReady=true;
- workshopResumeWrite(undefined,facilityParams.get('guild-return')==='1');
+ workshopResumeWrite(undefined,startupEditor||facilityParams.get('guild-return')==='1');
  // Native activity termination and updates need not dispatch beforeunload.
  // Position/mode writes are immediate; camera-only gestures are sampled.
  setInterval(workshopResumeWrite,500);
@@ -16233,7 +16342,7 @@ function workshopResumeStart(){
  window.addEventListener('pageshow',e=>{
   if(e.persisted){
    workshopResumeLeaving=false;facilityLeaving=false;workshopResumeRaw='';
-   workshopResumeWrite(undefined,new URL(location.href).searchParams.get('guild-return')==='1');
+   workshopResumeWrite(undefined,startupEditor||new URL(location.href).searchParams.get('guild-return')==='1');
   }
  });
 }
@@ -16347,7 +16456,7 @@ function facilityNavigate(id,playOnOpen=false){
   console.warn('Facility back marker unavailable',e);
  }
  // A preview is loaded in a separate page; opening it never calls commit().
- url.searchParams.delete('facility-return');url.searchParams.delete('guild-return');
+ url.searchParams.delete('facility-return');url.searchParams.delete('guild-return');url.searchParams.delete('startup-editor');
  url.searchParams.delete('facility-play');url.searchParams.set('facility',id);
  if(playOnOpen&&id==='base')url.searchParams.set('facility-play','1');
  location.assign(url.href);
@@ -17621,9 +17730,9 @@ $('pickJsonFile').addEventListener('click',()=>$('jsonFile').click());
 $('jsonFile').addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{if(file.size>6*1024*1024)throw Error('ファイルが大きすぎます（上限6MB）');const contents=await file.text();JSON.parse(contents);$('jsonText').value=contents;toast('JSONファイルを読み込みました。「JSONを読み込む」で配置に反映します')}catch(err){toast('ファイルの読み込み失敗: '+err.message)}finally{e.target.value=''}});
 $('importJson').addEventListener('click',()=>{if(facilitySite){toast('JSONの読み込みは元の編集画面で行ってください。この施設の一時編集はJSON保存できます。');return}try{const o=JSON.parse($('jsonText').value);const before=JSON.stringify(data());loadData(o);undoStack.push(before);if(undoStack.length>45)undoStack.shift();redoStack.length=0;commit();$('jsonModal').classList.remove('open');toast('ワールドを読み込んだ')}catch(e){toast('読み込み失敗：'+e.message)}});
 $('showPalette').addEventListener('click',()=>{pineSetCheckMode(false);$('palette').classList.toggle('mobileOpen');$('inspector').classList.remove('mobileOpen')});
-try{if(poiGameResetPending(localStorage))poiGameResetBlocked=!poiGameResetRecover(localStorage)}catch(_e){}
+try{if(!startupEditor&&poiGameResetPending(localStorage))poiGameResetBlocked=!poiGameResetRecover(localStorage)}catch(_e){}
 const workshopResume=workshopResumeRead();
-const facilityRequested=facilityParams.get('facility')??(workshopResume?.route==='facility'?workshopResume.id:null);
+const facilityRequested=startupEditor?null:facilityParams.get('facility')??(workshopResume?.route==='facility'?workshopResume.id:null);
 const guildRenewalRequested=facilityRequested==='guildrenewal';
 const guildOriginalRequested=facilityRequested==='guildsaved';
 const facilityRecord=guildOriginalRequested?{id:'guildsaved',name:PINE_ADVENTURERS_GUILD_NAME}:guildRenewalRequested
@@ -17667,5 +17776,5 @@ $('poiRoofToggle').textContent=hideUpper?'屋根を表示':'屋根を隠す';
 refreshPalette();updateStats();updateSelected();showEntireMap();
 workshopResumeRestore(workshopResume);workshopResumeStart();render();
 if(location.search.includes('test=1'))window.__editorTest={state:()=>({world:world.map(p=>({...p})),models:models.map(m=>({...m})),prefabs:prefabs.map(p=>({...p})),selected,mode,rotation,level,walking:poiWalkActive,adventure:pineGameActive,position:{x:poiWalkX,z:poiWalkZ,level:poiWalkLevel},glLink:gl.getProgramParameter(program,gl.LINK_STATUS)}),place:(x,z)=>changeCell(x,z),data};
-})();
+});
 </script></body></html>
