@@ -32,22 +32,18 @@ test('Facility-only roof treatment uses coherent muted colors without changing g
  assert.match(between('function facilityBuildRoofs(','function facilityVisibleRoofs('),/residentialRoofGeometry\(m,group,residential,!guildRoof\)/);
  assert.match(between('function makeScene(','function upload('),/if\(!pineGuildFantasyRoof\(m,group\)\)residentialRoofGeometry\(m,group,allRoofLookup,!!facilitySite&&!facilityUsesGuildRendering\(\)\)/);
 });
-test('The offline wooden cue uses filtered transients, not pitched sine sweeps; other effects unchanged in routing',()=>{
- const events=[];
- const ctx=vm.createContext({facilitySite:null,poiWalkActive:true,poiAudioEnabled:true,poiAudioLevels:{master:85,se:70},
-   poiAudioStart(){},poiAudioAllowed:()=>true,poiAudioContext:{state:'running',currentTime:1},
-   poiAudioNoiseBurst(...args){events.push(['noise',...args]);},
-   poiAudioThud(...args){events.push(['sine',...args]);},console});
- vm.runInContext(between('function poiSound(','function poiAudioSyncLifecycle(')+"poiSound('door');",ctx);
- assert(events.length>=3&&events.length<=6);
- assert(events.every(([kind,at,duration,freq,q,peak])=>kind==='noise'&&at>=1&&at+duration<1.35&&freq>70&&freq<4500&&peak<=.4));
- assert(events.some(([,at,duration,freq])=>at>=1.08&&freq<450&&duration>.055),'wood panel seating thud');
- events.length=0;
- ctx.poiAudioLevels.se=0;
- vm.runInContext("poiSound('door')",ctx);
- assert.equal(events.length,0,'respect muted sound effect bus');
- vm.runInContext("poiSound('step')",ctx);
- assert(events.some(e=>e[0]==='sine'),'ordinary footsteps retained');
+test('The two offline door cues have distinct textured chimes/slides, without clipping or an abrupt stop',()=>{
+ const c={};vm.runInNewContext(between('function poiSurfaceFoleyPcm(','const poiSurfaceFoleyCache='),c);
+ const peak=a=>Math.max(...a.map(Math.abs)),energy=a=>a.reduce((s,v)=>s+v*v,0)/a.length;
+ const wood=c.poiSurfaceFoleyPcm('wood',24000),stone=c.poiSurfaceFoleyPcm('stone',24000);
+ assert.equal(wood.length,4848);assert.equal(stone.length,5472);
+ for(const buf of [wood,stone]){
+  assert(peak(buf)>.13&&peak(buf)<.7);
+  assert(energy(buf.slice(72,480))>energy(buf.slice(-240))*9,'latch transient and gentle ending');
+  assert(Math.abs(buf.at(-1))<.001);
+ }
+ assert.notDeepEqual(wood.slice(1440,2304),stone.slice(1440,2304));
+ assert.notDeepEqual(wood,c.poiSurfaceFoleyPcm('wood',24000,1));
 });
 test('One door cue per actual threshold, matched to current floor including basements',()=>{
  const run=(type,doorY,playerY)=>{
@@ -58,7 +54,7 @@ test('One door cue per actual threshold, matched to current floor including base
    facilitySite:{},pineGameActive:false,performance:{now:(()=>{let t=1000;return()=>t+=200})()},
    world:[{x:1,z:0,y:doorY,type}],poiWalkCanStep:()=>true,
    poiWalkPassableDoor:t=>t.endsWith('Door')||t.endsWith('DoorOpen')||t.endsWith('Entrance'),
-   poiSound:k=>result.push(k),poiWalkRoof(){},poiWalkAvatar(){},poiWalkStatus(){},workshopResumeWrite(){}
+   facilityHasDiningStoneLeaf:()=>false,poiSound:k=>result.push(k),poiWalkRoof(){},poiWalkAvatar(){},poiWalkStatus(){},workshopResumeWrite(){}
   });
   vm.runInContext(between('function poiWalkStep(','function poiWalkAction(')+"poiWalkStep(1,0);poiWalkStep(1,0);",ctx);
   return result;

@@ -127,3 +127,18 @@ test('wood sound uses one cached dry impulse with a short tail',()=>{
  assert.equal(wave[0],0);
  assert.ok(Math.abs(wave[wave.length-1])<.001);
 });
+test('indoor steps and material-aware door openings use short distinct cached effect buffers',()=>{
+ const b=harness('base'),k=harness('kitchen');
+ assert.deepEqual(b.fx('step','indoor'),[['buffer',104,.58,0]]);
+ assert.deepEqual(b.fx('step','outdoor'),[['filter',550,.29,22],['osc',100,.145,16]]);
+ assert.deepEqual(k.fx('step','indoor'),[['filter',810,.4,8],['osc',117,.21,8]]);
+ assert.deepEqual(b.fx('door','wood'),[['buffer',202,.63,0]]);
+ assert.deepEqual(b.fx('door','stone'),[['buffer',228,.63,0]]);
+ b.run('poiAudioLevels.se=0');assert.deepEqual(b.fx('door','stone'),[]);assert.deepEqual(b.fx('step','indoor'),[]);
+});
+test('only a successful step onto a closed door tile plays the opening cue, using the rendered leaf',()=>{
+ const a=html.indexOf('function poiWalkStep('),b=html.indexOf('function poiWalkAction(',a),step=html.slice(a,b);
+ assert.match(step,/stairCell\.find\(\(\{type\}\)=>poiWalkPassableDoor\(type\)/);
+ assert.match(step,/if\(door\)poiSound\('door',facilityHasDiningStoneLeaf\(door\)\?'stone':'wood'\)/);
+ assert.match(step,/else poiSound\('step',facilitySite\?\.id==='base'&&\(poiWalkLevel<0\|\|poiWalkIndoor\(\)\)\?'indoor':'outdoor'\)/);
+});

@@ -1032,7 +1032,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v186）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v187）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -6712,6 +6712,50 @@ function poiItemSound(kind,material,now){
  }
 }
 // END ITEM FOLEY
+// Small procedural surface foley: one cached mono source per event.
+function poiSurfaceFoleyPcm(kind,rate,variation=0){
+ const foot=kind==='indoor',stone=kind==='stone',duration=foot ? .104 : stone ? .228 : .202;
+ const out=new Float32Array(Math.round(duration*rate)),tau=Math.PI*2;
+ let seed=0x4c32687+173*variation,low=0,mid=0,previous=0;
+ const pulse=(t,at,attack,decay)=>t<=at?0:Math.min(1,(t-at)/attack)*Math.exp(-decay*(t-at));
+ for(let i=0;i<out.length;i++){
+  seed=(Math.imul(seed,1664525)+1013904223)>>>0;
+  const t=i/rate,n=seed/2147483648-1,edge=n-previous;previous=n;
+  low+=.07*(n-low);mid+=.27*(n-mid);
+  const grain=mid-low,j=.97+.05*variation,end=Math.min(1,(duration-t)/.016);
+  let v;
+  if(foot){
+   // Defined heel knock and a light sole release, with only a tiny hard room reflection.
+   const thump=pulse(t,0,.003,71)*(.24*Math.sin(tau*(152*j*t-345*t*t))+.18*mid);
+   const knock=pulse(t,.003,.0018,126)*(.21*grain+.071*Math.sin(tau*570*j*t));
+   const toe=pulse(t,.031,.004,100)*(.17*grain+.11*low);
+   const room=pulse(t,.013,.004,91)*(.035*Math.sin(tau*322*t)+.023*Math.sin(tau*493*t));
+   v=thump+knock+toe+room;
+  }else{
+   const latch=pulse(t,.003,.0018,155)*(.30*grain+.105*edge+.115*Math.sin(tau*1718*j*t));
+   const lever=pulse(t,.022,.002,125)*(.24*mid+.13*Math.sin(tau*312*t));
+   const u=t-.031,sweep=Math.min(1,Math.max(0,u/.027))*Math.exp(-20*Math.max(0,u-.041));
+   const friction=stone ? (.40*mid+.27*low+.14*Math.sin(tau*(82*u-93*u*u))) :
+    (.13*grain+.17*low+.13*Math.sin(tau*(213*j*u+580*u*u))+.057*Math.sin(tau*(451*u-980*u*u)));
+   const chatter=.66+.34*Math.sin(tau*(22*u+30*u*u));
+   const rest=pulse(t,stone ? .157 : .142,.006,77)*(.10*mid+.095*Math.sin(tau*151*j*t));
+   v=latch+lever+friction*sweep*chatter+rest;
+  }
+  out[i]=v*end;
+ }
+ return out;
+}
+const poiSurfaceFoleyCache=new WeakMap();
+function poiSurfaceFoley(kind){
+ const ctx=poiAudioContext,variant=Math.random()<.5?0:1,key=kind+variant;
+ let cache=poiSurfaceFoleyCache.get(ctx);
+ if(!cache){cache=new Map();poiSurfaceFoleyCache.set(ctx,cache)}
+ if(!cache.has(key)){
+  const rate=24000,pcm=poiSurfaceFoleyPcm(kind,rate,variant),buffer=ctx.createBuffer(1,pcm.length,rate);
+  buffer.getChannelData(0).set(pcm);cache.set(key,buffer);
+ }
+ return cache.get(key);
+}
 function poiSound(kind,weapon=null,defeated=false){
  if(!poiWalkActive||!poiAudioEnabled||!poiAudioAllowed())return;
  poiAudioStart();const ctx=poiAudioContext;if(!ctx||ctx.state!=='running')return;
@@ -6737,15 +6781,12 @@ function poiSound(kind,weapon=null,defeated=false){
    poiAudioThud(now+.106,167,69,.095,.15,.016);
   }else if(kind==='door'){
    if(poiAudioLevels.master<=0||poiAudioLevels.se<=0)return;
-   // Dry latch, a brief hinge scrape, then the loose plank seating.
-   // These are broadband filtered, not oscillator pitches; the effects bus
-   // still carries the existing volume controls and compressor.
-   const grain=.92+Math.random()*.16;
-   poiAudioNoiseBurst(now,.025,2320*grain,1.05,.29);
-   poiAudioNoiseBurst(now+.025,.112,845*grain,1.9,.15);
-   poiAudioNoiseBurst(now+.116,.132,195*grain,.72,.38);
-   poiAudioNoiseBurst(now+.123,.061,555*grain,1.15,.18);
+   poiPlayImpactBuffer(poiSurfaceFoley(weapon==='stone'?'stone':'wood'),now,.63);
   }else if(facilitySite?.id==='base'&&kind==='step'){
+   if(weapon==='indoor'){
+    if(poiAudioLevels.master>0&&poiAudioLevels.se>0)poiPlayImpactBuffer(poiSurfaceFoley('indoor'),now,.58);
+    return;
+   }
    // Muted sole against earth: a short low brush and a rounded heel.
    poiAudioNoiseBurst(now,.135,460+Math.random()*180,.84,.29,.022);
    poiAudioThud(now,90+Math.random()*20,52,.135,.145,.016);
@@ -9549,7 +9590,33 @@ function poiNpcMenuChoose(id,now=performance.now()){
  }
  poiNpcMenuRender(now);poiShopSync();return true;
 }
-function poiTownDialogueTarget(now){
+// A flexible greeting is small and still requires an open same-floor approach.
+function poiTownDialogueMovingTarget(a,now,dx,dz,held){
+ const sx=poiWalkX,sz=poiWalkZ,y=poiWalkLevel,x=a.x,z=a.z;
+ const rx=x-sx,rz=z-sz,steps=Math.abs(rx)+Math.abs(rz);
+ if(!steps||steps>2||rx*dx+rz*dz<0||Math.abs(rx*dz-rz*dx)>1)return Infinity;
+ let distance=steps;
+ if(!held){
+  if(typeof poiTownNpcVisualPosition!=='function')return Infinity;
+  const visual=poiTownNpcVisualPosition(a,now);
+  const vx=visual.x-sx,vz=visual.z-sz;distance=vx*vx+vz*vz;
+  if(visual.t>=1||distance>1.65*1.65||vx*dx+vz*dz<0)return Infinity;
+ }
+ const g=poiTownNpcGraph(),origin={x:sx,z:sz,y};
+ const open=(from,tx,tz)=>{
+  for(const [obj,s] of poiMonsterStates)if(s.hp>0&&obj.y===y&&s.x===tx&&s.z===tz)return false;
+  return poiTownNpcNextTile(from,tx,tz,g)?.y===y;
+ };
+ const horizontal={x:sx+Math.sign(rx),z:sz,y},vertical={x:sx,z:sz+Math.sign(rz),y};
+ let pass;
+ if(steps===1)pass=open(origin,x,z);
+ else if(rx&&rz)pass=open(origin,horizontal.x,horizontal.z)&&open(origin,vertical.x,vertical.z)&&open(horizontal,x,z)&&open(vertical,x,z);
+ else{
+  const middle=rx?horizontal:vertical;pass=open(origin,middle.x,middle.z)&&open(middle,x,z);
+ }
+ return pass?distance:Infinity;
+}
+function poiTownDialogueTarget(now,selection=null){
  if(!poiTownNpcActive()||!poiTownNpcActors.length)return null;
  const [dx,dz]=[[0,-1],[1,0],[0,1],[-1,0]][poiWalkFacing]||[0,0];
  if(!dx&&!dz)return null;
@@ -9559,6 +9626,8 @@ function poiTownDialogueTarget(now){
   !(Number.isFinite(a.hurtAt)&&now-a.hurtAt<400)&&!(a!==current&&Number.isFinite(a.gestureAt)&&now-a.gestureAt<1120)&&
   !/^(sleep|rest|fight|buy|seek-inn)/.test(a.activity);
  for(const [obj,s] of poiMonsterStates)if(s.hp>0&&obj.y===y&&s.x===x&&s.z===z)return null;
+ if(current&&poiTownDialogue.movingGreeting&&engaged(current)&&
+    Number.isFinite(poiTownDialogueMovingTarget(current,now,dx,dz,true)))return current;
  const near=a=>a.x===x&&a.z===z&&engaged(a);
  const adjacent=current&&near(current)?current:poiTownNpcActors.find(near);
  if(adjacent&&poiTownNpcNextTile({x:poiWalkX,z:poiWalkZ,y},x,z,poiTownNpcGraph())?.y===y)return adjacent;
@@ -9582,11 +9651,19 @@ function poiTownDialogueTarget(now){
  const clerk=poiTownNpcActors.find(a=>a.role.id==='guildkeeper'&&atWork(a)&&
   a.role.public?.x===poiWalkX&&a.role.public?.z===poiWalkZ&&a.role.public?.y===y&&
   a.role.public?.facing===poiWalkFacing&&a.x===x+dx&&a.z===z+dz);
- if(!clerk)return null;
- const g=poiTownNpcGraph();
- if(!poiTownNpcStance(clerk,g))return null;
- const cell=g.cells.get(poiTownNpcKey(x,z,y))||[];
- return cell.includes('counterWood')&&cell.every(t=>t==='counterWood'||t==='poiLedgerPapers'||t==='poiPenHolder'||isFloor(t))?clerk:null;
+ if(clerk){
+  const g=poiTownNpcGraph(),cell=g.cells.get(poiTownNpcKey(x,z,y))||[];
+  if(poiTownNpcStance(clerk,g)&&cell.includes('counterWood')&&
+     cell.every(t=>t==='counterWood'||t==='poiLedgerPapers'||t==='poiPenHolder'||isFloor(t)))return clerk;
+ }
+ let candidate=null,distance=Infinity;
+ for(const a of poiTownNpcActors){
+  if(!engaged(a))continue;
+  const grade=poiTownDialogueMovingTarget(a,now,dx,dz,false);
+  if(grade<distance){candidate=a;distance=grade}
+ }
+ if(candidate&&selection)selection.movingGreeting=true;
+ return candidate;
 }
 function poiTownDialogueSnapshot(){
  const d=poiTownDialogue;
@@ -9617,7 +9694,7 @@ function poiTownDialogueUpdate(now){
  return d.sleeping?null:d.actor;
 }
 function poiTownDialogueAction(now){
- const actor=poiTownDialogueTarget(now);
+ const selection={},actor=poiTownDialogueTarget(now,selection);
  if(poiNpcMenuActive()){
   const id=poiTownDialogue.rows[poiTownDialogue.index]?.id;
   if(id)poiNpcMenuChoose(id,now);
@@ -9629,10 +9706,16 @@ function poiTownDialogueAction(now){
   role==='visitor'?'いい町ですね。門をくぐると、ほっとします。':'こんにちは。今日は過ごしやすいですね。');
  poiTownAmbientClose();
  if(!sleeping&&typeof poiBagSetOpen==='function')poiBagSetOpen(false);
- poiTownDialogue={actor,text,topic:text,topicIndex:0,sleeping,until:sleeping?now+2200:null,page:'root',index:0,rows:[]};
+ poiTownDialogue={actor,text,topic:text,topicIndex:0,sleeping,movingGreeting:!!selection.movingGreeting,until:sleeping?now+2200:null,page:'root',index:0,rows:[]};
  if(!sleeping){
   if(typeof poiStopRepeat==='function')poiStopRepeat();
-  poiTownNpcFace(actor,(poiWalkFacing+2)%4);
+  let facing=(poiWalkFacing+2)%4;
+  if(selection.movingGreeting){
+   const fx=poiWalkX-actor.x,fz=poiWalkZ-actor.z;
+   if(Math.abs(fx)>Math.abs(fz))facing=fx>0?1:3;
+   else if(Math.abs(fz)>Math.abs(fx))facing=fz>0?2:0;
+  }
+  poiTownNpcFace(actor,facing);
  }
  poiNpcMenuRender(now);poiShopSync();return true;
 }
@@ -9920,7 +10003,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v186',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v187',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -10035,7 +10118,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v186';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v187';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -10250,7 +10333,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v186',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v187',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -11583,12 +11666,14 @@ function poiWalkStep(dx,dz){
   }
  // Fire on entering the mechanical doorway cell, not on both steps.
  // Use the destination data at the current floor, not ground coordinates.
- const isDoor=stairCell.some(({type})=>poiWalkPassableDoor(type)&&
+ const door=stairCell.find(({type})=>poiWalkPassableDoor(type)&&
   (type==='door'||/Door$/.test(type)));
  poiWalkStarted=now;poiWalkNextReady=now+POI_WALK_MS;
  if(facilitySite?.id==='base'&&poiWalkLevel===0&&typeof poiLookoutEnter==='function')poiLookoutEnter(poiWalkFromX,poiWalkFromZ,poiWalkX,poiWalkZ);
  if(facilitySite?.id==='base'){if(facilitySite.creek)poiCreekAudioSync();poiEconomyCollect(poiWalkX,poiWalkZ);poiInventoryPickup(poiWalkX,poiWalkZ)}
- poiSound(isDoor?'door':'step');poiWalkRoof();poiWalkAvatar(poiWalkStarted);poiWalkStatus();if(pineGameActive){workshopAdventureResumeQuiet=false;pineGameSave()}workshopResumeWrite();
+ if(door)poiSound('door',facilityHasDiningStoneLeaf(door)?'stone':'wood');
+ else poiSound('step',facilitySite?.id==='base'&&(poiWalkLevel<0||poiWalkIndoor())?'indoor':'outdoor');
+ poiWalkRoof();poiWalkAvatar(poiWalkStarted);poiWalkStatus();if(pineGameActive){workshopAdventureResumeQuiet=false;pineGameSave()}workshopResumeWrite();
 }
 function poiWalkAction(){
  if(!poiWalkActive||(typeof poiPlayerDying==='function'&&poiPlayerDying()))return;
