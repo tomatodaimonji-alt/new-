@@ -159,6 +159,10 @@ async function fixedShop(browser){
   assert(frame&&frame.x>=-1&&frame.y>=-1&&frame.x+frame.width<=321&&frame.y+frame.height<=741,'fits 320px portrait');
   assert.deepEqual((await state(page)).position,counter);
   assert.equal((await state(page)).combat.actionAt,attack,'opening commerce does not attack');
+  await choice(page,'status');
+  await page.locator('#poiNpcInventory').waitFor({state:'visible'});
+  await page.locator('#poiNpcInventoryClose').tap();
+  await menu(page).waitFor({state:'visible'});
   await choice(page,'request');
   await choice(page,'shop');
   await button(page,/薬草.*6 ?G|6 ?G.*薬草/);
@@ -174,9 +178,17 @@ async function fixedShop(browser){
  }finally{await ctx.close();}
 }
 async function residentTrade(browser){
- const {ctx,page,errors}=await launch(browser,'base',{x:34,z:61},{clockStart:morning,kit:stock,facing:1,width:390});
+ const seed=Array(27).fill(null),herb=count=>({type:'healingHerb',count});
+ seed[0]={type:'equipWoodSword',count:1};seed[1]=herb(2);seed[9]=herb(3);
+ const listed={...stock,potions:5,slots:seed};
+ const {ctx,page,errors}=await launch(browser,'base',{x:34,z:61},{clockStart:morning,kit:listed,facing:1,width:390});
  try{
   const layout=await getMap(page),where=at(34,61);
+  await page.evaluate(()=>window.__editorTest.testWound(45));
+  await page.locator('#poiBagToggle').tap();
+  await page.locator('#poiBagPanel').waitFor({state:'visible'});
+  const playerBox=await page.locator('#poiBagPanel').boundingBox();
+  await page.locator('#poiBagClose').tap();
   await worker(page,'stablekeeper');await enter(page);
   const before=await state(page);
   await verifyNoBackdrop(page);
@@ -194,24 +206,65 @@ async function residentTrade(browser){
   assert.equal((await selected()).at,0,'D-pad down wraps to start');
   assert.deepEqual((await state(page)).position,where,'D-pad navigates choices, not player');
   assert.equal((await state(page)).combat.actionAt,before.combat.actionAt);
+  const trade='#poiNpcTradePanel',detail='#poiNpcTradeDetail';
+  const price=(sel,n)=>page.locator(sel).filter({hasText:new RegExp('(?:^|[^0-9])'+n+'\\s*G')});
+  const tradeItem=id=>page.locator(trade+' [data-npc-action="'+id+'"]');
+  const select=(id)=>tradeItem(id).tap();
+  const show=async()=>{
+   await page.locator(trade).waitFor({state:'visible'});
+   const r=await page.locator(trade).boundingBox();
+   assert(r&&playerBox&&Math.abs(r.width-playerBox.width)<=1.5&&Math.abs(r.height-playerBox.height)<=1.5,
+    'private trade uses actual bag-size presentation');
+   assert.equal(await page.locator('#poiBagPanel').isVisible(),false,'trade is a protected inventory projection');
+  };
+  const quote=async(id,amount,action)=>{
+   await select(id);
+   await price(detail,amount).waitFor({state:'visible'});
+   const confirmation=page.locator(detail+' [data-npc-action=confirm]');
+   assert.equal((await confirmation.innerText()).trim(),action);
+   return confirmation;
+  };
   await choice(page,'request');
-  await choice(page,'buy');
-  await button(page,/薬草.*9 ?G|9 ?G.*薬草/);
-  assert.equal(cash(await state(page)),12);
-  await page.keyboard.press('Escape');
-  assert.deepEqual(await readStock(page),stock,'cancelled quote never changes carried items or coins');
-  await button(page,/薬草.*9 ?G|9 ?G.*薬草/);
-  await button(page,/はい|確定/);
-  await page.waitForFunction(()=>window.__editorTest.facility().economy.gold===3);
-  assert.equal(herbCount(await state(page)),herbCount(before)+1);
-  await page.keyboard.press('Escape'); // buy list → request menu
   await choice(page,'sell');
-  await button(page,/薬草.*3 ?G|3 ?G.*薬草/);
-  assert.equal(cash(await state(page)),3);
-  await button(page,/はい|確定/);
+  await show();
+  assert.equal(await tradeItem('trade-sell:1').getAttribute('data-npc-trade-slot'),'1','actual hotbar slot offered');
+  assert.equal(await tradeItem('trade-sell:9').getAttribute('data-npc-trade-slot'),'9','actual bag slot offered independently');
+  assert.deepEqual(await Promise.all([tradeItem('trade-sell:1').getAttribute('data-count'),
+   tradeItem('trade-sell:9').getAttribute('data-count')]),['2','3'],'each visible sell tile shows its own stack');
+  await quote('trade-sell:1',3,'売る');
+  assert.deepEqual(await readStock(page),listed,'selecting an actual shortcut stack does not sell or use');
+  await page.keyboard.press('Escape');
+  await page.locator(detail).waitFor({state:'hidden'});
+  await show();
+  assert.deepEqual(await readStock(page),listed,'back leaves player and NPC stock unchanged');
+  await (await quote('trade-sell:1',3,'売る')).tap();
+  await page.waitForFunction(()=>window.__editorTest.facility().economy.gold===15);
+  await page.locator(detail).waitFor({state:'hidden'});
+  const sold=await state(page),afterSale=await readStock(page);
+  assert.deepEqual(sold.inventory.hotbar[1],herb(1),'only one item removed from selected hotbar stack');
+  assert.deepEqual(sold.inventory.bag[0],herb(3),'same-type bag stack untouched');
+  assert.equal(sold.combat.playerHP,before.combat.playerHP,'sale never uses the herb');
+  assert.deepEqual(afterSale.npcTrade.actors.stablekeeper,{healingHerb:3,cannedFood:1});
+  await page.keyboard.press('Escape');
+  await choice(page,'buy');
+  await show();
+  assert.match(await page.locator(trade).innerText(),/販売品/);
+  assert.equal(await tradeItem('trade:healingHerb').getAttribute('data-count'),'3','visible NPC stock reflects prior sale');
+  assert.equal(await tradeItem('trade:healingHerb').getAttribute('data-price'),'9');
+  await quote('trade:healingHerb',9,'買う');
+  assert.deepEqual(await readStock(page),afterSale,'NPC sale stock and wallet unchanged until actual Buy');
+  await page.keyboard.press('Escape');
+  await page.locator(detail).waitFor({state:'hidden'});
+  await (await quote('trade:healingHerb',9,'買う')).tap();
   await page.waitForFunction(()=>window.__editorTest.facility().economy.gold===6);
-  assert.equal(herbCount(await state(page)),herbCount(before),'non-shop buy/sell reflected exactly in live slots');
-  await page.keyboard.press('Escape'); // sell list → request
+  await page.locator(detail).waitFor({state:'hidden'});
+  const bought=await state(page),afterPurchase=await readStock(page);
+  assert.equal(herbCount(bought),herbCount(before),'sale followed by purchase restores one item only');
+  assert.equal(bought.combat.playerHP,before.combat.playerHP);
+  assert.deepEqual(afterPurchase.npcTrade.actors.stablekeeper,{healingHerb:2,cannedFood:1});
+  assert.equal(await tradeItem('trade:healingHerb').getAttribute('data-count'),'2','visible NPC stock decreases after Buy');
+  if(out)await page.screenshot({path:out+'/v183-private-sale-stock.png'});
+  await page.keyboard.press('Escape'); // purchase projection → request
   await page.keyboard.press('Escape'); // request → root
   await choice(page,'talk');
   assert.equal(cash(await state(page)),6);

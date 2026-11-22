@@ -57,3 +57,14 @@ test('capacity, distant trades, and malformed stored actor data cannot write or 
  assert.equal(f.c.poiInventorySnapshot().bag[0].count,8);
  assert.deepEqual(Object.keys(f.raw().npcTrade.actors),['stablekeeper']);
 });
+test('selling removes exactly one from the chosen hotbar or legacy bag stack and no other',()=>{
+ const slots=Array(27).fill(null);slots[0]={type:'equipWoodSword',count:1};
+ for(const [i,count] of [[1,2],[9,3],[26,4]])slots[i]={type:'healingHerb',count};
+ const f=fixture({version:1,weapon:'equipWoodSword',potions:9,gold:20,slots});
+ const rows=f.c.poiNpcTradeSellRows(f.actor),counts=()=>[1,9,26].map(i=>f.c.poiHotbarRead().slots[i].count);
+ assert.deepEqual(Array.from(rows,r=>[r.sourceIndex,r.quantity]),[[1,2],[9,3],[26,4]]);
+ assert.equal(f.c.poiNpcTradeTransaction(f.actor,'sell','healingHerb',0).reason,'item');assert.equal(f.writes(),0);
+ f.fail(true);assert.equal(f.c.poiNpcTradeTransaction(f.actor,'sell','healingHerb',26).reason,'storage');assert.deepEqual(counts(),[2,3,4]);
+ f.fail(false);assert.equal(f.c.poiNpcTradeTransaction(f.actor,'sell','healingHerb',1).gold,23);assert.deepEqual(counts(),[1,3,4]);
+ assert.equal(f.c.poiNpcTradeTransaction(f.actor,'sell','healingHerb',26).gold,26);assert.deepEqual(counts(),[1,3,3]);
+});
