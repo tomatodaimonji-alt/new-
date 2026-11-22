@@ -3,7 +3,7 @@ const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 test('the detail dialog places the shared item-art slot beside the current name',()=>{
  assert.match(html,/<div id="poiItemDetailHeader">\s*<div id="poiItemDetailIcon" aria-hidden="true">[\s\S]*?class="hotbar-icon"[\s\S]*?class="hotbar-count"[\s\S]*?<h2 id="poiItemDetailName">/);
  assert.match(html,/#poiItemDetailHeader\{[^}]*grid-template-columns:clamp\(42px,12vw,48px\) minmax\(0,1fr\)/);
- assert.match(html,/poiInventoryPresentItem\(\$\('poiItemDetailIcon'\),cell\)/);
+ assert.match(html,/poiInventoryPresentItem\(\$\('poiItemDetailIcon'\),cell,true\)/);
 });
 test('item art copies the exact inventory canvases and shows counts without stealing or rebuilding icons',()=>{
  const a=html.indexOf('function poiInventoryPresentItem('),b=html.indexOf('function poiItemDetailRender()',a);

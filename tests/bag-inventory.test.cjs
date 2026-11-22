@@ -307,3 +307,39 @@ test('bag equipment does not overwrite gold when all ordinary shortcuts are full
  assert.equal(c.poiEquipBagItem(0).ok,true);
  assert.equal(c.poiInventorySnapshot().hotbar[8].type,'equipWoodSword');
 });
+test('legacy equipment displays full durability without rewriting; sword break is paid once and survives reload',()=>{
+ const full=fixture({version:1,weapon:'equipWoodSword',potions:0});
+ assert.equal(full.ctx.poiEquipmentDurabilityPercent(full.ctx.poiInventorySnapshot().hotbar[0]),100);
+ assert.equal(full.ctx.poiEquipmentDurabilityPercent(full.ctx.poiArmorSnapshot().torso),100);
+ assert.equal(full.writes(),0);
+ assert.equal(full.ctx.poiEquipmentSpendWeapon('equipWoodSword'),true);
+ assert.equal(fixture(full.raw()).ctx.poiInventorySnapshot().hotbar[0].durability,79);
+ const slots=Array(27).fill(null);slots[0]={type:'equipWoodSword',count:1,durability:1};
+ const f=fixture({version:1,weapon:'equipWoodSword',potions:0,slots}),c=f.ctx,sounds=[];
+ c.poiSound=(...args)=>sounds.push(args);
+ f.fail(true);assert.equal(c.poiEquipmentSpendWeapon('equipWoodSword'),false);assert.equal(c.poiEquippedWeapon(),'equipWoodSword');assert.equal(sounds.length,0);
+ f.fail(false);assert.equal(c.poiEquipmentSpendWeapon('equipWoodSword'),true);assert.equal(c.poiEquippedWeapon(),null);
+ assert.deepEqual(sounds,[['equipment-break','equipWoodSword']]);
+ assert.equal(fixture(f.raw()).ctx.poiInventorySnapshot().hotbar[0],null);
+ assert.equal(c.poiEquipmentSpendWeapon('equipWoodSword'),false);assert.equal(sounds.length,1);
+});
+test('worn gear preserves wear through bag, ground, chest and reload, and final break remains missing',()=>{
+ const f=fixture({version:1,weapon:null,potions:0,worn:{head:null,torso:'starterTunic',legs:null,feet:null},wornDurability:{torso:2},
+  kitchenChest:{version:1,slots:Array(18).fill(null)}}),c=f.ctx;
+ const sounds=[];c.poiSound=(...args)=>sounds.push(args);
+ f.fail(true);assert.equal(c.poiEquipmentWearArmor(),false);assert.equal(c.poiArmorSnapshot().torso.durability,2);
+ f.fail(false);assert.equal(c.poiEquipmentWearArmor(),true);assert.equal(c.poiArmorSnapshot().torso.durability,1);
+ assert.equal(c.poiUnequipArmor('torso').ok,true);
+ c.poiChestIsOpen=c.poiKitchenChestReachable=()=>true;
+ assert.equal(c.poiMoveChestInventorySlot('inventory',9,'chest',0).ok,true);
+ assert.equal(c.poiChestSlotAt(0).durability,1);
+ assert.equal(c.poiMoveChestInventorySlot('chest',0,'inventory',9).ok,true);
+ c.poiChestIsOpen=()=>false;
+ assert.equal(c.poiInventoryDrop(spot('bag',0)).ok,true);assert.equal(f.raw().drops[0].durability,1);
+ const after=fixture(f.raw());after.ctx.poiSound=(...args)=>sounds.push(args);
+ assert.equal(after.ctx.poiInventoryPickup(4,4),true);assert.equal(after.ctx.poiInventorySnapshot().bag[0].durability,1);
+ assert.equal(after.ctx.poiEquipArmorFromBag(0).ok,true);assert.equal(after.ctx.poiArmorSnapshot().torso.durability,1);
+ assert.equal(after.ctx.poiEquipmentWearArmor(),true);assert.equal(after.ctx.poiArmorSnapshot().torso,null);
+ assert.deepEqual(sounds,[['chest-pickup','starterTunic'],['inventory-drop','starterTunic'],['item-pickup','starterTunic'],['equipment-break','starterTunic']]);
+ assert.equal(fixture(after.raw()).ctx.poiArmorSnapshot().torso,null);
+});

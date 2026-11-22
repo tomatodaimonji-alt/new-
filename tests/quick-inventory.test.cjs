@@ -4,14 +4,15 @@ function harness(saved=null){
  const uis={poiPartyHud:{},poiPlayerHp:{},poiPlayerHpValue:{},poiHotbar:{}};
  const slots=Array.from({length:9},(_,i)=>({
   dataset:{hotbarSlot:String(i)},icon:{dataset:{},replaceChildren(child){this.firstChild=child;}},count:{},attrs:{},
-  querySelector(k){return k==='.hotbar-icon'?this.icon:this.count},
+  querySelector(k){return k==='.hotbar-icon'?this.icon:k==='.hotbar-count'?this.count:k==='.poiDurabilityMeter'?this.meter:null},
+  append(child){this.meter=child;child.remove=()=>{this.meter=null}},
   setAttribute(k,v){this.attrs[k]=v},removeAttribute(k){delete this.attrs[k]}
  }));
  const log=[],art=[];
  const x=vm.createContext({
   $:key=>uis[key]||null,poiWalkActive:true,pineAIActive:false,facilitySite:{id:'base'},poiPlayerHP:100,
   POI_PLAYER_MAX_HP:100,POI_PLAYER_ATTACK:20,poiWalkAvatar:()=>{},
-  document:{querySelectorAll:()=>slots,createElement:tag=>({tag,dataset:{},getContext:()=>({drawImage(){}})})},
+  document:{querySelectorAll:()=>slots,createElement:tag=>({tag,dataset:{},style:{setProperty(){}},setAttribute(){},getContext:()=>({drawImage(){}})})},
   drawWallThumbnail:(cv,id,options)=>{art.push({cv,id,options});return true;},toast:s=>log.push(s),localStorage:{
    getItem:k=>{assert.equal(k,'world-workshop-hotbar-v1');return saved;},
    setItem:(k,v)=>{assert.equal(k,'world-workshop-hotbar-v1');saved=v;}
@@ -29,7 +30,7 @@ test('nine slots show sword and three recovery potions, begin unarmed, and updat
  run('poiCombatHud();poiHotbarRender()');
  assert.equal(uis.poiPlayerHpValue.textContent,'100/100');
  assert.equal(slots[2].attrs['aria-pressed'],'true');
- assert.equal(slots[0].attrs['aria-label'],'木の剣');
+ assert.match(slots[0].attrs['aria-label'],/^木の剣(?:・耐久 100%)?$/);
  assert.equal(slots[1].count.textContent,'3');
  assert(slots.slice(2).every(s=>s.disabled===false));
  assert.equal(stored(),null);

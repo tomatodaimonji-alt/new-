@@ -779,6 +779,13 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
 .hotbar-count{position:absolute;right:3px;bottom:2px;font-size:clamp(8px,2.8vw,11px);line-height:1;
  font-weight:750;font-variant-numeric:tabular-nums;color:#fff7de;text-shadow:0 1px 3px #071610,0 0 3px #071610}
 .hotbar-count:empty{display:none}
+.poiDurabilityMeter{position:absolute;left:3px;right:3px;bottom:2px;height:3px;border-radius:3px;
+ background:#101915;overflow:hidden;pointer-events:none;--durability-ink:#85cc8a}
+.poiDurabilityMeter::after{content:"";display:block;width:var(--durability-progress,0%);min-width:1px;
+ height:100%;background:var(--durability-ink);border-radius:inherit}
+.poiDurabilityMeter[data-durability-band="warn"]{--durability-ink:#e9c363}
+.poiDurabilityMeter[data-durability-band="low"]{--durability-ink:#f17a70}
+
 #poiItemDragPreview{position:fixed;top:0;left:0;pointer-events:none;z-index:100005;
  display:grid;place-items:center;width:var(--poi-drag-size,40px);height:var(--poi-drag-size,40px);
  border:1px solid #f0d6a0;border-radius:6px;background:rgba(22,46,39,.89);
@@ -1032,7 +1039,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v187）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v188）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -6713,7 +6720,35 @@ function poiItemSound(kind,material,now){
 }
 // END ITEM FOLEY
 // Small procedural surface foley: one cached mono source per event.
+function poiEquipmentBreakPcm(kind,rate,variation){
+ const wood=kind==='breakWood',metal=kind==='breakMetal',len=metal ? .157 : wood ? .129 : .109;
+ const out=new Float32Array(Math.round(rate*len)),tau=Math.PI*2;
+ let seed=0xf14e361+921*variation,low=0,mid=0,previous=0;
+ for(let i=0;i<out.length;i++){
+  seed=(Math.imul(seed,1664525)+1013904223)>>>0;
+  const t=i/rate,n=seed/2147483648-1,edge=n-previous;previous=n;
+  low+=.08*(n-low);mid+=.31*(n-mid);
+  const grain=mid-low,ramp=Math.min(1,t/.0018)*Math.min(1,(len-t)/.019),j=.98+.03*variation;
+  let v;
+  if(metal){
+   const snap=(.17*edge+.32*grain)*Math.exp(-135*t);
+   const ring=(.12*Math.sin(tau*1621*j*t)+.066*Math.sin(tau*2377*j*t))*Math.exp(-72*t);
+   const d=Math.max(0,t-.056),rattle=Math.min(1,d/.0035)*Math.exp(-80*d)*(.10*grain+.066*Math.sin(tau*925*d));
+   v=snap+ring+rattle;
+  }else if(wood){
+   const snap=(.28*edge+.52*grain+.14*Math.sin(tau*280*j*t))*Math.exp(-145*t);
+   const d=Math.max(0,t-.026),fibers=Math.min(1,d/.006)*Math.exp(-101*d)*(.27*mid+.12*grain);
+   v=snap+fibers;
+  }else{
+   const rip=.38*grain*Math.exp(-((t-.024)**2)/.00021)*(.60+.40*Math.sin(tau*164*j*t));
+   v=.15*mid*Math.exp(-77*t)+rip;
+  }
+  out[i]=v*ramp;
+ }
+ return out;
+}
 function poiSurfaceFoleyPcm(kind,rate,variation=0){
+ if(kind.startsWith('break'))return poiEquipmentBreakPcm(kind,rate,variation);
  const foot=kind==='indoor',stone=kind==='stone',duration=foot ? .104 : stone ? .228 : .202;
  const out=new Float32Array(Math.round(duration*rate)),tau=Math.PI*2;
  let seed=0x4c32687+173*variation,low=0,mid=0,previous=0;
@@ -6779,6 +6814,10 @@ function poiSound(kind,weapon=null,defeated=false){
    poiAudioNoiseBurst(now,.037,2110,1.22,.22,.006);
    poiAudioNoiseBurst(now+.046,.10,710,1.25,.18,.016);
    poiAudioThud(now+.106,167,69,.095,.15,.016);
+  }else if(kind==='equipment-break'){
+   if(poiAudioLevels.master<=0||poiAudioLevels.se<=0)return;
+   const material=weapon==='kitchenKnife'?'breakMetal':weapon==='equipWoodSword'?'breakWood':'breakCloth';
+   poiPlayImpactBuffer(poiSurfaceFoley(material),now+(material==='breakCloth' ? .055 : .145),.66);
   }else if(kind==='door'){
    if(poiAudioLevels.master<=0||poiAudioLevels.se<=0)return;
    poiPlayImpactBuffer(poiSurfaceFoley(weapon==='stone'?'stone':'wood'),now,.63);
@@ -6898,6 +6937,9 @@ function poiHotbarRead(){
  if(!valid)return poiHotbarState={weapon:null,potions:POI_HOTBAR_POTION_START};
  const kit={weapon:saved.weapon,potions:saved.potions};
  const worn=poiArmorDecode(saved.worn);if(worn)kit.worn=worn;
+ const wornDurability=poiWornDurabilityDecode(saved.wornDurability,poiArmorWorn(kit));
+ if(wornDurability)kit.wornDurability=wornDurability;
+ if(saved.sword===false&&saved.woodSwordBroken===true)kit.woodSwordBroken=true;
  const npcTrade=poiNpcTradeDecode(saved.npcTrade);if(npcTrade)kit.npcTrade=npcTrade;
  const goldBagOrder=poiGoldBagDecode(saved.goldBagOrder);if(goldBagOrder)kit.goldBagOrder=goldBagOrder;
  const quests=poiQuestDecode(saved.quests);if(quests)kit.quests=quests;
@@ -6913,10 +6955,10 @@ function poiHotbarRead(){
   (Object.prototype.hasOwnProperty.call(saved,'kitchenChest')?{version:1,slots:Array(POI_CHEST_SIZE).fill(null)}:null);
  if(chest)kit.kitchenChest=chest;
  const chestSword=chest?.slots.some(c=>c?.type===POI_INVENTORY_SWORD);
- if(chestSword&&saved.sword!==false)chest.slots=chest.slots.map(c=>c?.type===POI_INVENTORY_SWORD?null:c);
+ if(chestSword&&(saved.sword!==false||kit.woodSwordBroken))chest.slots=chest.slots.map(c=>c?.type===POI_INVENTORY_SWORD?null:c);
  const drops=poiInventoryReadDrops(saved.drops);
- if(saved.sword===false&&(chestSword||drops.some(d=>d.type===POI_INVENTORY_SWORD))){kit.sword=false;if(kit.weapon===POI_INVENTORY_SWORD)kit.weapon=null}
- const ownedDrops=drops.filter(d=>!(d.type===POI_INVENTORY_SWORD&&(kit.sword!==false||chestSword))&&
+ if(saved.sword===false&&(kit.woodSwordBroken||chestSword||drops.some(d=>d.type===POI_INVENTORY_SWORD))){kit.sword=false;if(kit.weapon===POI_INVENTORY_SWORD)kit.weapon=null}
+ const ownedDrops=drops.filter(d=>!(d.type===POI_INVENTORY_SWORD&&(kit.sword!==false||chestSword||kit.woodSwordBroken))&&
   !(d.type===POI_KNIFE&&chest?.slots.some(c=>c?.type===POI_KNIFE)));
  if(ownedDrops.length)kit.drops=ownedDrops;
  const slots=poiArmorReconcile(kit,poiInventoryReadSlots(saved.slots,kit));
@@ -6930,9 +6972,9 @@ function poiHotbarSave(kit=poiHotbarState){
  try{
   const goldHotbarSlot=poiGoldHotbarSlot(kit);
   if(goldHotbarSlot!==null&&poiInventorySlots(kit)[goldHotbarSlot])return false;
-  const {weapon,potions,gold,claimedCaches,sword,drops,slots,towerFind,kitchenChest,worn,npcTrade,goldBagOrder,quests}=kit;
+  const {weapon,potions,gold,claimedCaches,sword,drops,slots,towerFind,kitchenChest,worn,wornDurability,woodSwordBroken,npcTrade,goldBagOrder,quests}=kit;
   localStorage.setItem(POI_HOTBAR_KEY,JSON.stringify({version:1,weapon,potions:Math.min(potions,POI_HOTBAR_POTION_MAX),
-   ...(gold?{gold}:{}),...(claimedCaches?.length?{claimedCaches}:{}),...(towerFind?{towerFind}:{}),...(kitchenChest?{kitchenChest}:{}),...(worn?{worn}:{}),...(npcTrade?{npcTrade}:{}),...(goldBagOrder?{goldBagOrder}:{}),...(goldHotbarSlot!==null?{goldHotbarSlot}:{}),...(quests?.length?{quests}:{}),
+   ...(gold?{gold}:{}),...(claimedCaches?.length?{claimedCaches}:{}),...(towerFind?{towerFind}:{}),...(kitchenChest?{kitchenChest}:{}),...(worn?{worn}:{}),...(wornDurability?{wornDurability}:{}),...(woodSwordBroken?{woodSwordBroken}:{}),...(npcTrade?{npcTrade}:{}),...(goldBagOrder?{goldBagOrder}:{}),...(goldHotbarSlot!==null?{goldHotbarSlot}:{}),...(quests?.length?{quests}:{}),
    ...(sword===false?{sword}:{}),...(drops?.length?{drops}:{}),...(slots?{slots}:{})}));
   return true;
  }catch(_e){return false}
@@ -7276,12 +7318,31 @@ function poiArmorDecode(raw){
  if(!raw||typeof raw!=='object'||Array.isArray(raw))return null;
  return Object.fromEntries(pieces.map(([part,type])=>[part,raw[part]===null?null:type]));
 }
-function poiArmorCell(type){return type?{type,count:1}:null}
+const POI_EQUIPMENT_DURABILITY=Object.freeze({equipWoodSword:80,kitchenKnife:POI_KNIFE_DURABILITY,
+ starterCap:36,starterTunic:62,starterTrousers:54,starterBoots:46});
+const POI_ARMOR_WEAR_ORDER=Object.freeze(['torso','legs','head','feet']);
+function poiEquipmentDurabilityMax(type){
+ return Object.prototype.hasOwnProperty.call(POI_EQUIPMENT_DURABILITY,type)?POI_EQUIPMENT_DURABILITY[type]:0;
+}
+function poiEquipmentDurabilityPercent(cell){
+ const max=poiEquipmentDurabilityMax(cell?.type);
+ return max?Math.max(1,Math.min(100,Math.ceil((cell.durability??max)*100/max))):null;
+}
+function poiWornDurabilityDecode(raw,worn){
+ if(!raw||typeof raw!=='object'||Array.isArray(raw))return null;
+ const state={};
+ for(const part of POI_ARMOR_WEAR_ORDER){
+  const max=poiEquipmentDurabilityMax(worn[part]),n=raw[part];
+  if(Number.isInteger(n)&&n>=1&&n<max)state[part]=n;
+ }
+ return Object.keys(state).length?state:null;
+}
+function poiArmorCell(type,durability){return type?{type,count:1,...(durability?{durability}:{})}:null}
 function poiArmorWorn(kit){return kit.worn||POI_STARTER_ARMOR}
 function poiArmorSnapshot(){
  const kit=poiHotbarHasKit()?poiHotbarRead():null;
  return Object.fromEntries(Object.keys(POI_STARTER_ARMOR).map(part=>
-  [part,kit?poiArmorCell(poiArmorWorn(kit)[part]):null]));
+  [part,kit?poiArmorCell(poiArmorWorn(kit)[part],kit.wornDurability?.[part]):null]));
 }
 function poiArmorReconcile(kit,slots){
  const seen=new Set(Object.values(poiArmorWorn(kit)));
@@ -7306,14 +7367,18 @@ function poiMoveArmorSlot(from,to){
  const worn={...poiArmorWorn(kit)},cell=slots[i];
  if(equipping&&!cell||removing&&!worn[part])return result('empty');
  if(cell&&poiArmorCategory(cell.type)!==part)return result(equipping?'type':'occupied');
- const returned=poiArmorCell(worn[part]);
+ const returned=poiArmorCell(worn[part],kit.wornDurability?.[part]);
  if(i>=POI_HOTBAR_SIZE+POI_BAG_UNLOCKED&&returned){
   const empty=slots.slice(POI_HOTBAR_SIZE,POI_HOTBAR_SIZE+POI_BAG_UNLOCKED).findIndex(c=>!c);
   if(empty<0)return result('full');
   slots[POI_HOTBAR_SIZE+empty]=returned;slots[i]=null;
  }else slots[i]=returned;
  worn[part]=cell?.type??null;
- if(!poiEconomyWrite(poiInventoryEdited({...kit,worn},slots)))return result('storage');
+ const next={...kit,worn},condition={...(kit.wornDurability||{})};
+ condition[part]=cell?.durability;
+ const wornDurability=poiWornDurabilityDecode(condition,worn);
+ if(wornDurability)next.wornDurability=wornDurability;else delete next.wornDurability;
+ if(!poiEconomyWrite(poiInventoryEdited(next,slots)))return result('storage');
  poiEconomyRefresh();poiWalkAvatar();return result();
 }
 function poiEquipArmorFromBag(index){
@@ -7340,8 +7405,9 @@ function poiInventoryStack(type){return poiHotbarWeaponForType(type)||poiArmorCa
 function poiInventorySanitizeCell(cell){
  const {type,count,durability}=cell||{},max=poiInventoryStack(type);
  if(!max||!Number.isInteger(count)||count<1||count>max)return null;
- if(type!==POI_KNIFE)return {type,count};
- if(!Number.isInteger(durability)||durability<1||durability>POI_KNIFE_DURABILITY)return null;
+ const limit=poiEquipmentDurabilityMax(type);
+ if(!limit||durability===undefined&&type!==POI_KNIFE)return {type,count};
+ if(!Number.isInteger(durability)||durability<1||durability>limit)return null;
  return {type,count,durability};
 }
 function poiChestDecode(raw){
@@ -7543,15 +7609,42 @@ function poiUseBagItem(index){
  return poiUseStorageConsumable(poiHotbarRead(),POI_HOTBAR_SIZE+index);
 }
 
-function poiKitchenKnifeSpend(){
+function poiEquipmentBreakFeedback(type){
+ if(typeof poiSound==='function')poiSound('equipment-break',type);
+ toast(poiInventoryItemName(type)+'が壊れた');
+}
+function poiEquipmentSpendWeapon(type){
+ if(!poiHotbarHasKit()||!poiHotbarWeaponForType(type))return false;
  const kit=poiHotbarRead();
- if(kit.weapon!==POI_KNIFE)return false;
- const slots=poiInventorySlots(kit).slice(),i=slots.findIndex(c=>c?.type===POI_KNIFE);
+ if(kit.weapon!==type)return false;
+ const slots=poiInventorySlots(kit).slice(),i=slots.findIndex(c=>c?.type===type);
  if(i<0||i>=POI_HOTBAR_SIZE)return false;
- const sword=slots[i],broken=sword.durability<=1;
- slots[i]=broken?null:{...sword,durability:sword.durability-1};
- if(!poiEconomyWrite(poiInventoryEdited(kit,slots))){toast('包丁の耐久を保存できませんでした');return false}
- if(broken){poiHotbarEmptySlot=i;toast('包丁が壊れた')}
+ const cell=slots[i],durability=(cell.durability??poiEquipmentDurabilityMax(type))-1,broken=durability<=0;
+ slots[i]=broken?null:{...cell,durability};
+ const next=broken&&type===POI_INVENTORY_SWORD?{...kit,woodSwordBroken:true}:kit;
+ if(!poiEconomyWrite(poiInventoryEdited(next,slots))){
+  toast(poiInventoryItemName(type)+'の耐久を保存できませんでした');return false;
+ }
+ if(broken){poiHotbarEmptySlot=i;poiEquipmentBreakFeedback(type)}
+ poiEconomyRefresh();return true;
+}
+function poiKitchenKnifeSpend(){return poiEquipmentSpendWeapon(POI_KNIFE)}
+function poiEquipmentWearArmor(){
+ if(!poiHotbarHasKit()||!poiWalkActive||pineAIActive)return false;
+ const kit=poiHotbarRead(),worn=poiArmorWorn(kit),condition={...(kit.wornDurability||{})};
+ let choice=null,least=Infinity;
+ for(const part of POI_ARMOR_WEAR_ORDER){
+  const type=worn[part],max=poiEquipmentDurabilityMax(type);if(!max)continue;
+  const left=condition[part]??max,wear=(max-left)/max;
+  if(wear<least){choice={part,type,left};least=wear}
+ }
+ if(!choice)return false;
+ const {part,type,left}=choice,broken=left<=1,next={...kit};
+ if(broken){next.worn={...worn,[part]:null};delete condition[part]}
+ else condition[part]=left-1;
+ if(Object.keys(condition).length)next.wornDurability=condition;else delete next.wornDurability;
+ if(!poiEconomyWrite(next))return false;
+ if(broken){poiEquipmentBreakFeedback(type);poiWalkAvatar()}
  poiEconomyRefresh();return true;
 }
 
@@ -7617,8 +7710,8 @@ function poiInventoryEdited(kit,slots){
  const sword=slots.findIndex(c=>c?.type===POI_INVENTORY_SWORD);
  const potions=slots.reduce((n,c)=>n+(c?.type===POI_INVENTORY_HERB?c.count:0),0);
  const next={...kit,weapon:kit.weapon&&slots.slice(0,POI_HOTBAR_SIZE).some(c=>c?.type===kit.weapon)?kit.weapon:null,potions};
- if(sword<0)next.sword=false;else delete next.sword;
- if((sword===0||sword<0)&&(!potions||slots[1]?.count===potions)&&slots.every((c,i)=>!c||i===0&&c.type===POI_INVENTORY_SWORD||i===1&&c.type===POI_INVENTORY_HERB))delete next.slots;
+ if(sword<0)next.sword=false;else{delete next.sword;delete next.woodSwordBroken}
+ if((sword===0||sword<0)&&(!potions||slots[1]?.count===potions)&&slots.every((c,i)=>!c||i===0&&c.type===POI_INVENTORY_SWORD&&c.durability===undefined||i===1&&c.type===POI_INVENTORY_HERB))delete next.slots;
  else next.slots=slots;
  return next;
 }
@@ -7961,8 +8054,10 @@ function poiPlayerPaperDollRender(){
   const part=button.dataset.gearSlot,cell=gear?.[part],label=POI_GEAR_LABELS[part]||'装備';
   button.classList.toggle('equipped',!!cell);
   const name=cell?poiInventoryItemName(cell.type):'未装備';
-  button.setAttribute('aria-label',label+'：'+name);button.title=label+'：'+name;
-  poiInventoryPresentItem(button,cell);
+  const percent=typeof poiEquipmentDurabilityPercent==='function'?poiEquipmentDurabilityPercent(cell):null;
+  const title=label+'：'+name+(percent===null?'':'・耐久 '+percent+'%');
+  button.setAttribute('aria-label',title);button.title=title;
+  poiInventoryPresentItem(button,cell,true);
  }
  const weapon=typeof poiEquippedWeapon==='function'?poiEquippedWeapon():null;
  const attack=$('poiBagPlayerAttackValue');
@@ -8016,16 +8111,18 @@ function poiBagUiRender(){
   const legacy=zone==='bag'&&state.bagLegacy.includes(index);
   const locked=(zone==='bag'&&index>=state.bagUnlocked&&!legacy)||(stash&&!chest);
   const name=locked?'未解放':type?poiInventoryItemName(type):'空きスロット '+(index+1);
-  const condition=Number.isFinite(cell?.durability)?'・耐久 '+cell.durability:'';
+  const percent=typeof poiEquipmentDurabilityPercent==='function'?poiEquipmentDurabilityPercent(cell):null;
+  const condition=percent===null?'':'・耐久 '+percent+'%';
   button.disabled=!kit||locked;
   button.title=name+condition+(legacy?'・以前の持ち物（取り出し専用）':type?'・長押しせずドラッグで移動':'');
   if(legacy)button.dataset.bagLegacy='';else delete button.dataset.bagLegacy;
   button.setAttribute('aria-label',name+(cell?.count>1?' ×'+cell.count:'')+condition+(legacy?'（取り出し専用）':''));
   if(hot&&kit&&(weapon||!type))button.setAttribute('aria-pressed',String(poiInventorySelected(index)));
   else button.removeAttribute('aria-pressed');
-  poiInventoryPresentItem(button,cell);
+  poiInventoryPresentItem(button,cell,true);
  }
  poiPlayerPaperDollRender();
+ if($('poiItemDetail')?.open)poiItemDetailRender();
 }
 function poiCreateStorageTapGate(schedule,cancelTimer,onSingle,onDouble){
  let pending=null;
@@ -8067,7 +8164,8 @@ function poiItemDetailDescription(cell){
  };
  const info=[descriptions[cell.type]||(typeof poiArmorCategory==='function'&&poiArmorCategory(cell.type)?'見た目を変える装備。防御力は変わらない。':'')];
  if(poiInventoryStack(cell.type)>1)info.push('所持数：'+cell.count);
- if(Number.isInteger(cell.durability))info.push('耐久：'+cell.durability+' / '+POI_KNIFE_DURABILITY);
+ const percent=typeof poiEquipmentDurabilityPercent==='function'?poiEquipmentDurabilityPercent(cell):null;
+ if(percent!==null)info.push('耐久：'+percent+'%');
  return info.join(' ');
 }
 function poiItemDetailClose(restore=true){
@@ -8076,7 +8174,17 @@ function poiItemDetailClose(restore=true){
  if(dialog?.open)dialog.close();
  if(restore&&old?.button?.isConnected&&!$('poiBagPanel')?.hidden)old.button.focus({preventScroll:true});
 }
-function poiInventoryPresentItem(host,cell){
+function poiInventoryDurabilityMeter(host,cell){
+ const percent=typeof poiEquipmentDurabilityPercent==='function'?poiEquipmentDurabilityPercent(cell):null;
+ let meter=host.querySelector('.poiDurabilityMeter');
+ if(!Number.isInteger(percent)||percent<1||percent>100){meter?.remove?.();return}
+ if(!meter){meter=document.createElement('span');meter.className='poiDurabilityMeter';meter.setAttribute('aria-hidden','true');host.append(meter)}
+ if(meter.dataset.durabilityPercent===String(percent))return;
+ meter.dataset.durabilityPercent=String(percent);
+ meter.dataset.durabilityBand=percent>50?'good':percent>25?'warn':'low';
+ meter.style.setProperty('--durability-progress',percent+'%');
+}
+function poiInventoryPresentItem(host,cell,durability=false){
  if(!host)return;
  const icon=host.querySelector('.hotbar-icon'),amount=host.querySelector('.hotbar-count'),type=cell?.type||'';
  if(icon&&icon.dataset.art!==type){
@@ -8091,6 +8199,7 @@ function poiInventoryPresentItem(host,cell){
   }else icon.textContent={equipWoodSword:'⚔︎',healingHerb:'🌿',kitchenKnife:'🔪',cannedFood:'🥫'}[type]||'';
  }
  if(amount)amount.textContent=(type==='healingHerb'||type==='cannedFood')&&cell.count>0?String(cell.count):'';
+ if(durability)poiInventoryDurabilityMeter(host,cell);
 }
 function poiItemDetailAvailableActions(ref,cell){
  const space=ref.zone!=='hotbar'||poiInventoryEmptyHotbar(poiHotbarRead())>=0;
@@ -8101,7 +8210,7 @@ function poiItemDetailRender(){
  if(!cell||cell.type!==poiItemDetailSelection.type){poiItemDetailClose();return false}
  const dialog=$('poiItemDetail'),actions=poiItemDetailAvailableActions(ref,cell);
  $('poiItemDetailName').textContent=poiInventoryItemName(cell.type);
- poiInventoryPresentItem($('poiItemDetailIcon'),cell);
+ poiInventoryPresentItem($('poiItemDetailIcon'),cell,true);
  $('poiItemDetailDescription').textContent=poiItemDetailDescription(cell);
  for(const button of dialog.querySelectorAll('[data-item-detail-action]')){
   const action=button.dataset.itemDetailAction;
@@ -8767,7 +8876,9 @@ function poiEnemyResolvePlayer(now){
 
 function poiMobHitPlayer(obj,now){
  const amount=POI_MONSTER_STATS[obj.type].attack;
+ const priorHP=poiPlayerHP;
  poiPlayerHP=Math.max(0,poiPlayerHP-amount);poiSound('hurt');
+ if(poiPlayerHP<priorHP&&typeof poiEquipmentWearArmor==='function')poiEquipmentWearArmor();
  poiDamageNumber(poiWalkViewX+.5,poiWalkViewZ+.5,terrainY(poiWalkX,poiWalkZ)+1.8+(facilitySite?poiWalkLevel*1.4:0),amount,true);
  poiCombatHud();if(poiPlayerHP)return false;
  if(!poiPlayerDeathBegin(now)){
@@ -10003,7 +10114,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v187',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v188',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -10118,7 +10229,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v187';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v188';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -10333,7 +10444,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v187',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v188',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -11705,7 +11816,8 @@ function poiWalkAction(){
  // A wooden hit uses only the recorded contact. Keep air for empty
  // swings, and preserve the wind-up layer of bare hands and other weapons.
  if(!monster||poiWalkActionWeapon!=='equipWoodSword')poiSound('attack',poiWalkActionWeapon);
- if(monster){if(poiWalkActionWeapon==='kitchenKnife'&&typeof poiKitchenKnifeSpend==='function'&&!poiKitchenKnifeSpend())return;
+ if(monster){
+  if(poiWalkActionWeapon&&typeof poiEquipmentSpendWeapon==='function'&&!poiEquipmentSpendWeapon(poiWalkActionWeapon))return;
   const [obj,state]=monster,amount=poiPlayerAttackDamage(poiWalkActionWeapon);state.hp=Math.max(0,state.hp-amount);poiSound('hit',poiWalkActionWeapon,state.hp===0);const hx=obj.type==='monsterMineGuard'?x:state.x,hz=obj.type==='monsterMineGuard'?z:state.z;poiDamageNumber(hx+.5,hz+.5,terrainY(hx,hz)+1.8+(facilitySite?poiWalkLevel*1.4:0),amount);if(!state.hp){poiMonsterBreak(obj,state,now);if(obj.type==='monsterSlime'&&state.wildSpawn)poiEconomyDrop(obj,state);
   if(obj.type==='monsterMineGuard'&&typeof poiMineGuardianDefeat==='function')poiMineGuardianDefeat(obj,state);
   if(typeof poiAnnounceDefeat==='function')poiAnnounceDefeat(obj.type,now);else toast('モンスターを倒した')}poiMonsterMeshDirty=true;if(pineGameActive)pineGameSave(true);return}
