@@ -71,13 +71,14 @@ test('One door cue per actual threshold, matched to current floor including base
 
 test('The new routes share authored roof colors and the recovered Guild does not',()=>{
  const script=between('function facilityUsesGuildRendering(','function facilityHiddenRoof(')+
+  between('function poiAngledRoofPart(','function poiAngledRoofHits(')+
   between('function facilityBuildRoofs(','function facilityVisibleRoofs(');
  const run=(id,fullGuild=false)=>{
   const drawn=[],roof={x:1,z:1,y:1,type:'roofSteep'};
   vm.runInNewContext(script+';facilityBuildRoofs();',{
    facilitySite:{id,buildings:[{}]},facilityRoofMeshes:[],
    world:[roof],AUTO_ROOFS:new Set(),RESIDENTIAL_ROOFS:new Set(['roofSteep']),
-   facilityIsRoofPiece:()=>true,facilityRoofOwner:()=>0,residentialRoofComponents:o=>[o],mesh:()=>({}),
+   facilityIsRoofPiece:()=>true,facilityRoofOwner:()=>0,residentialRoofComponents:o=>[o],mesh:()=>({p:[]}),
    pineGuildFantasyRoof(){drawn.push('special-guild');return fullGuild},
    residentialRoofGeometry(m,group,lookup,useMuted){drawn.push(useMuted)},upload:()=>({count:1}),
   });

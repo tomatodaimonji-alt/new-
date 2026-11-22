@@ -7,10 +7,11 @@ function snippet(start,end){
 }
 function fixture(){
  const host={hidden:true,lines:[],append(line){this.lines.push(line)}};
+ const heading={textContent:'アナウンス'};
  const document={createElement:()=>({dataset:{},setAttribute(){},remove(){host.lines=host.lines.filter(l=>l!==this)}})};
- const c=vm.createContext({$:id=>(id==='poiMessagePanel'||id==='poiMessageLog')?host:null,document,poiWalkActive:true,pineAIActive:false});
+ const c=vm.createContext({$:id=>(id==='poiMessagePanel'||id==='poiMessageLog')?host:id==='poiMessageHeading'?heading:null,document,poiWalkActive:true,pineAIActive:false});
  vm.runInContext(snippet('const POI_MESSAGE_LIFETIME=','function poiCombatHud('),c);
- return {c,host};
+ return {c,host,heading};
 }
 test('recent RPG messages keep two cues at most, expire, and never carry over to editor or AI',()=>{
  const {c,host}=fixture();
@@ -45,7 +46,7 @@ test('panel is anchored to party grid without moving adjacent controls or replac
  assert.match(html,/#poiMessagePanel\{[^}]*bottom:calc\(100% \+ var\(--poi-hud-gap\)\)[^}]*pointer-events:none[^}]*background:var\(--workshop-panel-surface\)/);
  assert(snippet('function poiInventoryPickup(','function poiInventoryDraw(').includes('poiMessagePush'));
  const dialogue=snippet('function poiTownDialogueAction(','function poiTownDialogueDraw(');
- assert(dialogue.includes('poiMessagePush'));assert(dialogue.includes('poiTownDialogueElement'));
+ assert(dialogue.includes('poiMessageSpeak'));assert(dialogue.includes('poiTownDialogueElement'));
 });
 test('the overhead resident bubble and tail share the panel tint without fading text',()=>{
  assert.match(html,/#poiTownSpeech\{[^}]*color:#fff8e7;[^}]*background:var\(--workshop-panel-surface\)/);
@@ -71,4 +72,18 @@ test('announcement heading is outside its live log and the 2.3 height ratio is p
 test('newest announcement uses two lines while history yields space',()=>{
  assert.match(html,/\.poiMessageLine\{[^}]*-webkit-line-clamp:1/);
  assert.match(html,/\.poiMessageLine:last-child\{-webkit-line-clamp:2/);
+});
+test('player speech owns the heading and body; pending notices return without resetting their time',()=>{
+ const {c,host,heading}=fixture();
+ c.poiMessagePush('3G拾った！','gold',500);
+ assert.equal(c.poiMessageSpeak('厩舎番','馬は落ち着いてる。',1000),true);
+ assert.equal(heading.textContent,'厩舎番');
+ assert.deepEqual(host.lines.filter(l=>!l.hidden).map(l=>l.textContent),['馬は落ち着いてる。']);
+ c.poiMessagePush('スライムを倒した','defeat',1600);
+ assert.equal(heading.textContent,'厩舎番');
+ assert.deepEqual(host.lines.filter(l=>!l.hidden).map(l=>l.textContent),['馬は落ち着いてる。']);
+ c.poiMessageEndSpeech(5700);
+ assert.equal(heading.textContent,'アナウンス');
+ assert.deepEqual(host.lines.filter(l=>!l.hidden).map(l=>l.textContent),['スライムを倒した']);
+ c.poiMessageUpdate(6600);assert.equal(host.hidden,true);
 });

@@ -12,17 +12,17 @@ function fixture(){
 }
 test('player-led conversation pauses the resident, uses announcements only and stays accessible',()=>{
  const f=fixture(),announcements=[];
- f.c.poiMessagePush=(...v)=>announcements.push(v);
+ f.c.poiMessageSpeak=(...v)=>announcements.push(v);
  assert.equal(f.run('poiTownDialogueAction(100)'),true);assert.equal(f.actor.facing,2);
  f.run('poiTownDialogueDraw(200,[])');
  assert.equal(f.e.hidden,true);assert.equal(announcements.length,1);
- assert.match(announcements[0][0],/^受付係：/);assert.equal(announcements[0][1],'dialogue');
+ assert.equal(announcements[0][0],'受付係');assert.equal(announcements[0][1],f.run('poiTownDialogueSnapshot().text'));
  assert.equal(f.run('poiTownDialogueUpdate(4599)'),f.actor);assert.equal(f.run('poiTownDialogueUpdate(4600)'),null);
  const update=html.slice(html.indexOf('function poiMessagePush('),html.indexOf('function poiAnnounceDefeat('));
  assert.doesNotMatch(update,/aria-hidden/);
 });
 test('nearby successful NPC exchanges get two projected speaker turns, never entering announcements',()=>{
- const f=fixture(),announcements=[];f.c.poiMessagePush=(...v)=>announcements.push(v);
+ const f=fixture(),announcements=[];f.c.poiMessageSpeak=(...v)=>announcements.push(v);
  f.c.guest={x:5,z:4,y:0,role:{id:'guestadventurer',name:'旅人'}};
  f.c.host={x:5,z:2,y:0,role:{id:'innkeeper',name:'宿屋の主人'}};
  assert.equal(f.run("poiTownAmbientSpeak('inn',guest,host,100)"),true);
@@ -68,7 +68,7 @@ test('overlap keeps current speaker, queued attacks take priority',()=>{
  assert.equal(f.run('poiTownDialogueTarget(104)'),other);
 });
 test('player conversation clears other overhead chatter and ambient expires without new messages',()=>{
- const f=fixture(),announcements=[];f.c.poiMessagePush=(...v)=>announcements.push(v);
+ const f=fixture(),announcements=[];f.c.poiMessageSpeak=(...v)=>announcements.push(v);
  f.c.guest={x:5,z:6,y:0,role:{id:'guest',name:'客'}};
  f.c.host={x:5,z:7,y:0,role:{id:'clerk',name:'店員'}};
  assert.equal(f.run("poiTownAmbientSpeak('shop',guest,host,100)"),true);

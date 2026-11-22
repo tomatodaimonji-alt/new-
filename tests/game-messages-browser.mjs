@@ -115,7 +115,7 @@ async function geometry(page){
  assert.equal(opacity,'1');
  assert.equal(pointer,'none','cannot intercept underlying world or controls');
 }
-async function typography(page,kind){
+async function typography(page,kind,caption='アナウンス'){
  const measure=await page.evaluate(kind=>{
   const heading=document.querySelector('#poiMessageHeading');
   const line=document.querySelector('.poiMessageLine[data-kind="'+kind+'"]');
@@ -125,7 +125,7 @@ async function typography(page,kind){
   return {caption:heading.textContent,heading:styles(heading),line:styles(line),ht,hb,lt};
  },kind);
  assert.ok(measure,'live message row for '+kind);
- assert.equal(measure.caption,'アナウンス');
+ assert.equal(measure.caption,caption);
  assert.equal(measure.heading.family,measure.line.family,'same font family: '+kind);
  assert.equal(measure.heading.size,measure.line.size,'same actual responsive font size: '+kind);
  assert.equal(measure.heading.lineHeight,measure.line.lineHeight,'same line-height');
@@ -177,7 +177,8 @@ async function pickup(browser){
 }
 
 async function dialogue(browser){
- const {ctx,page,errors}=await launch(browser,'base',{x:34,z:61},{clockStart:720,facing:1,width:390});
+ const {ctx,page,errors}=await launch(browser,'base',{x:34,z:61},{clockStart:720,facing:1,width:390,
+  kit:{version:1,weapon:null,potions:2,drops:[{type:'healingHerb',x:34,z:62,y:0}]}});
  try{
   const panel=page.locator(boxId);
   await panel.waitFor({state:'hidden'});
@@ -186,13 +187,26 @@ async function dialogue(browser){
   await page.locator(action).tap();
   const actor=await page.evaluate(()=>window.__editorTest.townResidents().dialogue);
   assert.equal(actor.id,'stablekeeper');
-  await page.locator('#poiMessageLog .poiMessageLine[data-kind="dialogue"]').filter({hasText:actor.text}).waitFor({state:'visible'});
+  const body=page.locator('#poiMessageLog .poiMessageLine[data-kind="dialogue"]').filter({hasText:actor.text});
+  await body.waitFor({state:'visible'});
+  assert.equal(await body.textContent(),actor.text,'speech-only body, without duplicated speaker prefix');
+  assert.equal(await page.locator('#poiMessageHeading').textContent(),'厩舎番','actual Japanese resident name becomes heading');
   assert.equal(await page.locator('#poiTownSpeech').isVisible(),false,'player to NPC is announcement-only');
-  await typography(page,'dialogue');
+  await typography(page,'dialogue','厩舎番');
   assert.deepEqual(await panel.evaluate(el=>[getComputedStyle(el).textAlign,getComputedStyle(el).justifyContent]),['left','flex-start']);
   assert.equal((await state(page)).combat.actionAt,attack);
   await geometry(page);
-  if(out)await page.screenshot({path:out+'/v154-player-announcement-only-390.png'});
+  if(out)await page.screenshot({path:out+'/v156-resident-name-heading-390.png'});
+  await page.locator(action).tap();
+  await page.waitForFunction(()=>document.querySelector('#poiMessageHeading')?.textContent==='アナウンス');
+  assert.equal(await body.isVisible(),false,'closing dialogue clears speaker text');
+  await page.locator(action).tap();
+  await body.waitFor({state:'visible'});
+  await move(page,'s',true,true);
+  await page.locator('.poiMessageLine[data-kind="item"]').filter({hasText:/薬草を拾った/}).waitFor({state:'visible'});
+  await typography(page,'item');
+  assert.equal((await state(page)).inventory.potions,3,'actual new pickup restores ordinary notice after leaving conversation');
+  assert.equal(await body.isVisible(),false);
   assert.deepEqual(errors,[]);await unchanged(page);
  }finally{await ctx.close();}
 }

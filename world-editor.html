@@ -675,6 +675,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
 #poiMessageLog{display:flex;flex-direction:column;gap:2px;min-height:0;overflow:hidden}
 .poiMessageLine{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:1;flex:none;overflow:hidden;overflow-wrap:anywhere}
 .poiMessageLine:last-child{-webkit-line-clamp:2}
+#poiMessageLog .poiMessageLine[hidden]{display:none}
 @media(min-width:801px){
  #app:not(.gameWorldMode) #poiMessagePanel{width:calc(100vw - 512px - 2 * var(--poi-message-edge))}
  #app:not(.gameWorldMode) #viewWrap{--poi-hotbar-size:clamp(42px,calc((100vw - 550px) / 6),46px);--poi-inventory-width:calc(100vw - 528px)}
@@ -808,7 +809,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 #poiShopBuyPotion:not(:disabled){border-color:#ebca82;background:#81663ce8!important}
 #poiShopFeedback{min-height:1.4em}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v155）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v156）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -4841,7 +4842,7 @@ function facilityLodgingFacade(m,visible){
  return replaced;
 }
 
-function houseFacadeDetails(m,visible){
+function houseFacadeDetails(m,visible,record=null){
  const lodgingReplaced=facilityLodgingFacade(m,visible);
  const walls=visible.filter(o=>/^(?:plasterwall|woodwall|stonewall|brickwall)(?:Door|Window)$/.test(o.type)&&
   !facilityStableLoadingBayPart(o)&&!lodgingReplaced.has(o));
@@ -4852,7 +4853,7 @@ function houseFacadeDetails(m,visible){
   const light=[.73,.66,.55],x=o.x+.5,z=o.z+.5,y=o.y*1.4+terrainY(o.x,o.z);
   const r=o.rot||0;
   // All trim is local to front (+Z) prior to rotation.
-  const scratch=mesh();
+  const start=m.p.length/3,scratch=mesh();
   const front=.506;
   if(type.endsWith('Plain')||type.endsWith('Window')){
    for(const xx of [-.43,.43])cube(scratch,xx,y,.0+front,.055,1.30,.035,material);
@@ -4874,6 +4875,7 @@ function houseFacadeDetails(m,visible){
    m.p.push(x+dx,scratch.p[i+1],z+dz);
    m.n.push(nx,scratch.n[i+1],nz);m.c.push(...scratch.c.slice(i,i+3));
   }
+  if(record)record(o,start);
  }
 }
 
@@ -6848,11 +6850,35 @@ function poiHotbarUse(slot){
 function poiResetCombat(){poiWildClear();poiPlayerHP=POI_PLAYER_MAX_HP;poiMonsterStates=new Map();for(const o of world){if(poiIsMonster(o.type)){const stats=POI_MONSTER_STATS[o.type];poiMonsterStates.set(o,{x:o.x,z:o.z,fromX:o.x,fromZ:o.z,moveStarted:-10000,facing:0,hp:stats.hp,nextAttack:0})}}poiDamageLabels=[];poiNextMobTick=0;poiAttackReady=0;poiMonsterMeshDirty=true;poiCombatHud();dirty=true}
 const POI_MESSAGE_LIFETIME=5000,POI_MESSAGE_MAX=2;
 const poiMessageLines=[];
+let poiMessageSpeech=null;
+function poiMessageRestore(){
+ const heading=$('poiMessageHeading'),panel=$('poiMessagePanel');
+ if(heading)heading.textContent='アナウンス';
+ if(panel)panel.hidden=!poiMessageLines.length;
+ for(const {line} of poiMessageLines)line.hidden=false;
+}
 function poiMessageUpdate(now){
- if(!poiMessageLines.length)return;
+ if(!poiMessageLines.length&&!poiMessageSpeech)return;
  const show=poiWalkActive&&!pineAIActive;
  while(poiMessageLines.length&&(!show||now>=poiMessageLines[0].until))poiMessageLines.shift().line.remove();
- if(!poiMessageLines.length){const panel=$('poiMessagePanel');if(panel)panel.hidden=true}
+ if(!show&&poiMessageSpeech){poiMessageSpeech.remove();poiMessageSpeech=null;poiMessageRestore()}
+ if(!poiMessageLines.length&&!poiMessageSpeech){const panel=$('poiMessagePanel');if(panel)panel.hidden=true}
+}
+function poiMessageSpeak(name,text,now){
+ if(!poiWalkActive||pineAIActive||!name||!text)return false;
+ const panel=$('poiMessagePanel'),log=$('poiMessageLog'),heading=$('poiMessageHeading');
+ if(!panel||!log||!heading)return false;
+ poiMessageUpdate(now);
+ if(poiMessageSpeech)poiMessageSpeech.remove();
+ for(const {line} of poiMessageLines)line.hidden=true;
+ const line=document.createElement('div');line.className='poiMessageLine';line.dataset.kind='dialogue';line.textContent=text;
+ poiMessageSpeech=line;
+ heading.textContent=name;panel.hidden=false;log.append(line);return true;
+}
+function poiMessageEndSpeech(now=performance.now()){
+ if(!poiMessageSpeech)return;
+ poiMessageSpeech.remove();poiMessageSpeech=null;
+ poiMessageUpdate(now);poiMessageRestore();
 }
 function poiMessagePush(text,kind,now=performance.now()){
  if(!poiWalkActive||pineAIActive||!text)return false;
@@ -6860,7 +6886,7 @@ function poiMessagePush(text,kind,now=performance.now()){
  poiMessageUpdate(now);
  const last=poiMessageLines[poiMessageLines.length-1];
  if(kind==='dialogue'&&last?.kind===kind&&last.text===text&&now-last.start<700)return true;
- const line=document.createElement('div');line.className='poiMessageLine';line.dataset.kind=kind;line.textContent=text;
+ const line=document.createElement('div');line.className='poiMessageLine';line.dataset.kind=kind;line.textContent=text;line.hidden=!!poiMessageSpeech;
  while(poiMessageLines.length>=POI_MESSAGE_MAX)poiMessageLines.shift().line.remove();
  poiMessageLines.push({line,text,kind,start:now,until:now+POI_MESSAGE_LIFETIME});
  panel.hidden=false;log.append(line);return true;
@@ -7521,6 +7547,7 @@ function poiTownDialogueSnapshot(){
 function poiTownDialogueClose(){
  if(!poiTownDialogue)return false;
  poiTownDialogue=null;
+ if(typeof poiMessageEndSpeech==='function')poiMessageEndSpeech();
  return true;
 }
 function poiTownDialogueSyncPrompt(now){
@@ -7549,7 +7576,7 @@ function poiTownDialogueAction(now){
  poiTownAmbientClose();
  poiTownDialogue={actor,text,until:now+4500};
  poiTownNpcFace(actor,(poiWalkFacing+2)%4);
- if(typeof poiMessagePush==='function')poiMessagePush(actor.role.name+'：'+text,'dialogue',now);
+ if(typeof poiMessageSpeak==='function')poiMessageSpeak(actor.role.name,text,now);
  poiShopSync();return true;
 }
 // BEGIN SPEECH PLACEMENT
@@ -7828,7 +7855,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v155',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v156',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -7943,7 +7970,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v155';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v156';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -8158,7 +8185,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v155',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v156',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -10071,7 +10098,8 @@ function pineDrawTownGuildFloor(m,x,z,kind){
 const POI_ANGLED_RUIN_WALLS=new Set(['towerWall','towerWindow','towerBattlement','crackedWall','ruinWallJagged',
  'ruinWallLow','ruinWindowEmpty','ruinWindowShattered','ruinDoorBroken','ruinDoorHanging']);
 function poiAngledWallSides(o){
- if(!isWallId(o.type)&&!POI_ANGLED_RUIN_WALLS.has(o.type))return [];
+ const opening=/^(?:wall|woodwall|stonewall|brickwall|plasterwall|mosswall|ironwall)(?:Door|Window|Counter)$/.test(o.type);
+ if(!isWallId(o.type)&&!opening&&!POI_ANGLED_RUIN_WALLS.has(o.type))return [];
  const {x,z,y}=o,edge=[];
  const add=(owner,west,east,north,south,footprint)=>{
   if(x<west||x>east||z<north||z>south||footprint&&!footprint.has(x+','+z))return;
@@ -10091,13 +10119,13 @@ function poiAngledWallSides(o){
  }
  return edge;
 }
-function poiAngledWallRecord(records,m,o,sides,start){
+function poiAngledWallRecord(records,m,o,sides,start,trim=false){
  const end=m.p.length/3;if(!sides.length||start>=end)return;
  const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];
  for(let v=start*3;v<end*3;v+=3)for(let i=0;i<3;i++){
   min[i]=Math.min(min[i],m.p[v+i]);max[i]=Math.max(max[i],m.p[v+i]);
  }
- for(const {owner,side} of sides)records.push({owner,side,x:o.x,z:o.z,y:o.y,type:o.type,min,max,start,end});
+ for(const {owner,side} of sides)records.push({owner,side,x:o.x,z:o.z,y:o.y,type:o.type,min,max,start,end,trim});
 }
 
 function makeScene(){
@@ -10207,7 +10235,7 @@ function makeScene(){
  const roofs=new Map(visible.filter(o=>roofFamily(o.type)).map(o=>[o.x+','+o.z+','+o.y,o]));
  const wallLookup=wallExteriorLookup(visible);
  const tabletopSupports=pineTabletopSupportIndex(visible),tabletopCeilings=pineTabletopCeilings(world);
- houseFacadeDetails(m,visible);
+ houseFacadeDetails(m,visible,wallFade?(o,start)=>poiAngledWallRecord(wallFade,m,o,poiAngledWallSides(o),start,true):null);
  guildAtriumRailing(m,visible);
  guildMountedLighting(m,visible);
  guildInteriorDetails(m,visible);
@@ -10441,14 +10469,68 @@ function poiClearSceneVariants(){
  poiWalkSceneVariants.clear();
  return {oldMeshes,oldSigns};
 }
+// BEGIN ANGLED ROOF SURFACES
+function poiAngledRoofPart(m,start,tiles){
+ const end=m.p.length/3;if(end<=start)return null;
+ const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity],tri=[];
+ for(let i=start*3;i<end*3;i+=9){
+  const p=m.p;
+  for(let j=i;j<i+9;j++){
+   const axis=(j-i)%3;min[axis]=Math.min(min[axis],p[j]);max[axis]=Math.max(max[axis],p[j]);
+  }
+  const ux=p[i+3]-p[i],uy=p[i+4]-p[i+1],uz=p[i+5]-p[i+2];
+  const vx=p[i+6]-p[i],vy=p[i+7]-p[i+1],vz=p[i+8]-p[i+2];
+  const ax=uy*vz-uz*vy,ay=uz*vx-ux*vz,az=ux*vy-uy*vx,area=ax*ax+ay*ay+az*az;
+  if(area>.0004)tri.push({i,area});
+ }
+ // Major faces dominate the test. Discard small seams and trim first,
+ // bounding temporary work even on unusually detailed authored roofs.
+ if(tri.length>600){tri.sort((a,b)=>b.area-a.area);tri.length=600}
+ const surface=new Float32Array(tri.length*9);
+ for(let i=0;i<tri.length;i++)for(let j=0;j<9;j++)surface[i*9+j]=m.p[tri[i].i+j];
+ return {start,end,min,max,surface,extras:[],tiles:new Set(tiles.map(o=>o.x+','+o.z+','+o.y))};
+}
+function poiAngledRoofHits(part,origins,d){
+ if(!part?.surface.length)return false;
+ const {min,max,surface:p}=part,[dx,dy,dz]=d;
+ for(const [x,y,z] of origins){
+  let lo=.035,hi=7;
+  for(let a=0;a<3;a++){
+   const from=a===0?x:a===1?y:z,step=d[a];
+   if(Math.abs(step)<1e-6){if(from<min[a]-.02||from>max[a]+.02){lo=1;hi=0;break}continue}
+   const n=(min[a]-.02-from)/step,f=(max[a]+.02-from)/step;
+   lo=Math.max(lo,Math.min(n,f));hi=Math.min(hi,Math.max(n,f));if(lo>hi)break;
+  }
+  if(lo>hi)continue;
+  for(let i=0;i<p.length;i+=9){
+   const ux=p[i+3]-p[i],uy=p[i+4]-p[i+1],uz=p[i+5]-p[i+2];
+   const vx=p[i+6]-p[i],vy=p[i+7]-p[i+1],vz=p[i+8]-p[i+2];
+   const qx=dy*vz-dz*vy,qy=dz*vx-dx*vz,qz=dx*vy-dy*vx;
+   const det=ux*qx+uy*qy+uz*qz;if(Math.abs(det)<1e-6)continue;
+   const sx=x-p[i],sy=y-p[i+1],sz=z-p[i+2];
+   const u=(sx*qx+sy*qy+sz*qz)/det;if(u<-.001||u>1.001)continue;
+   const rx=sy*uz-sz*uy,ry=sz*ux-sx*uz,rz=sx*uy-sy*ux;
+   const v=(dx*rx+dy*ry+dz*rz)/det;if(v<-.001||u+v>1.001)continue;
+   const t=(vx*rx+vy*ry+vz*rz)/det;
+   if(t>=lo&&t<=hi)return true;
+  }
+ }
+ return false;
+}
+// END ANGLED ROOF SURFACES
+
 // BEGIN ANGLED WALL OCCLUSION
 const POI_ANGLED_NO_FADE={active:false};
 let poiAngledWallDisabled=false,poiAngledWallPrevious=null;
 function poiAngledWallOcclusion(p,now){
- if(!poiWalkActive||poiThirdPerson||cameraTopDown||pineAIActive||poiAngledWallDisabled||!sceneMesh?.wallFade?.length)return POI_ANGLED_NO_FADE;
+ if(!poiWalkActive||poiThirdPerson||cameraTopDown||pineAIActive||poiAngledWallDisabled)return POI_ANGLED_NO_FADE;
+ const roofs=typeof facilityRoofMeshes==='undefined'?null:facilityRoofMeshes;
+ const roofIds=roofs?.length?facilityVisibleRoofs():[];
+ const walls=sceneMesh?.wallFade||[];
+ if(!walls.length&&!roofIds.length)return POI_ANGLED_NO_FADE;
  const x=poiWalkViewX+.5,z=poiWalkViewZ+.5,y=poiCreekPlayerHeight(now)+poiWalkLevel*1.4;
- const key=[x,z,y,yaw,p.elev,poiWalkLevel].join(':');
- if(poiAngledWallPrevious?.mesh===sceneMesh&&poiAngledWallPrevious.key===key)return poiAngledWallPrevious.mask;
+ const key=[x,z,y,yaw,p.elev,poiWalkLevel,roofIds.join(',')].join(':');
+ if(poiAngledWallPrevious?.mesh===sceneMesh&&poiAngledWallPrevious.roofs===roofs&&poiAngledWallPrevious.key===key)return poiAngledWallPrevious.mask;
  const bearing=[Math.sin(yaw),Math.tan(p.elev),Math.cos(yaw)];
  const avatars=[y+.18,y+.55,y+.95,y+1.19];
  const faces={east:bearing[0],west:-bearing[0],south:bearing[2],north:-bearing[2]};
@@ -10463,37 +10545,63 @@ function poiAngledWallOcclusion(p,now){
   return start;
  };
  let best=null,nearest=Infinity;
- for(const w of sceneMesh.wallFade){
-  if(faces[w.side]<.10||w.y<poiWalkLevel||Math.abs(w.x+.5-x)>4||Math.abs(w.z+.5-z)>4)continue;
+ const front=new Map();
+ for(const w of walls){
+  if(w.trim||faces[w.side]<.10||w.y<poiWalkLevel||Math.abs(w.x+.5-x)>4||Math.abs(w.z+.5-z)>4)continue;
   const t=Math.min(...avatars.map(h=>ray(w,h)));
   if(t<nearest||best&&t===nearest&&faces[w.side]>faces[best.side]){nearest=t;best=w}
+  if(Number.isFinite(t)){
+   const group=w.owner+':'+w.side,old=front.get(group);
+   if(!old||t<old.t)front.set(group,{w,t});
+  }
  }
  let mask=POI_ANGLED_NO_FADE;
  if(best){
   const line=w=>w.side==='east'||w.side==='west'?w.x:w.z;
-  const group=sceneMesh.wallFade.filter(w=>w.owner===best.owner&&w.side===best.side&&line(w)===line(best)&&
-   w.y>=poiWalkLevel&&Math.abs(w.x-best.x)+Math.abs(w.z-best.z)<=4);
-  const run=[best],included=new Set(run);
-  for(const w of run)for(const n of group)if(!included.has(n)&&Math.abs(w.x-n.x)+Math.abs(w.z-n.z)+Math.abs(w.y-n.y)===1){
-   included.add(n);run.push(n);
-  }
-  run.sort((a,b)=>a.start-b.start);
-  const spans=[];
-  for(const {start,end} of run){
-   const tail=spans[spans.length-1];
-   if(tail&&start<=tail[1])tail[1]=Math.max(tail[1],end);else spans.push([start,end]);
+  const seeds=[best,...[...front.values()].map(p=>p.w).filter(w=>w.owner===best.owner&&w.side!==best.side).slice(0,1)];
+  const ranges=[],cells=[];
+  for(const seed of seeds){
+   const group=walls.filter(w=>w.owner===seed.owner&&w.side===seed.side&&line(w)===line(seed)&&
+    w.y>=poiWalkLevel&&Math.abs(w.x-seed.x)+Math.abs(w.z-seed.z)<=7);
+   const run=[seed],included=new Set(run);
+   for(const w of run)for(const n of group)if(!included.has(n)&&Math.abs(w.x-n.x)+Math.abs(w.z-n.z)+Math.abs(w.y-n.y)<=1){
+    included.add(n);run.push(n);
+   }
+   run.sort((a,b)=>a.start-b.start);
+   for(const {x,z,y,type,start,end,trim} of run){ranges.push([start,end]);if(!trim)cells.push({x,z,y,type})}
   }
   mask={active:true,kind:'overhead-wall',opacity:POI_OCCLUSION_OPACITY,
-   wall:{owner:best.owner,side:best.side,cells:run.map(({x,z,y,type})=>({x,z,y,type}))},spans};
+   wall:{owner:best.owner,side:best.side,cells},spans:poiAngledRangeMerge(ranges)};
  }
- poiAngledWallPrevious={mesh:sceneMesh,key,mask};return mask;
+ if(roofIds.length){
+  const wide=.25,rx=Math.cos(yaw)*wide,rz=-Math.sin(yaw)*wide;
+  const rays=[[x,y+.18,z],[x,y+.62,z],[x,y+1.19,z],[x-rx,y+.65,z-rz],[x+rx,y+.65,z+rz]];
+  const roofFades={};
+  for(const id of roofIds){
+   const ranges=[];
+   for(const part of roofs[id].roofFade||[])if(poiAngledRoofHits(part,rays,bearing))ranges.push([part.start,part.end],...part.extras);
+   if(ranges.length)roofFades[id]=poiAngledRangeMerge(ranges);
+  }
+  const ids=Object.keys(roofFades).map(Number);
+  if(ids.length)mask={...(mask.active?mask:{kind:'overhead-roof',active:true,opacity:POI_OCCLUSION_OPACITY}),roofFades,roofOwners:ids};
+ }
+ poiAngledWallPrevious={mesh:sceneMesh,roofs,key,mask};return mask;
+}
+function poiAngledRangeMerge(ranges){
+ const out=[];
+ for(const [start,end] of ranges.sort((a,b)=>a[0]-b[0])){
+  const last=out[out.length-1];
+  if(last&&start<=last[1])last[1]=Math.max(last[1],end);
+  else out.push([start,end]);
+ }
+ return out;
 }
 // END ANGLED WALL OCCLUSION
 
 let poiOcclusionFrame={active:false};
-function poiDrawSceneOcclusion(m,vp){
- const mask=poiOcclusionFrame;
- if(mask.kind!=='overhead-wall'){draw(m,vp);return}
+function poiDrawSceneOcclusion(m,vp,spans=null){
+ if(!spans&&poiOcclusionFrame.kind==='overhead-wall')spans=poiOcclusionFrame.spans;
+ if(!spans?.length){draw(m,vp);return}
  if(!m?.count)return;
  gl.bindBuffer(gl.ARRAY_BUFFER,m.buf);
  for(const [a,offset] of [[loc.p,0],[loc.n,12],[loc.c,24]]){
@@ -10501,7 +10609,7 @@ function poiDrawSceneOcclusion(m,vp){
  }
  gl.uniformMatrix4fv(loc.mvp,false,vp);
  let from=0;
- for(const [start,end] of mask.spans){
+ for(const [start,end] of spans){
   if(start>from)gl.drawArrays(gl.TRIANGLES,from,start-from);
   gl.uniform4f(loc.occlusionInfo,0,0,0,-1);
   gl.drawArrays(gl.TRIANGLES,start,end-start);
@@ -14850,17 +14958,28 @@ function facilityBuildRoofs(){
  const automatic=new Map(pieces.filter(o=>AUTO_ROOFS.has(o.type)).map(o=>[o.x+','+o.z+','+o.y,o]));
  const residential=new Map(pieces.filter(o=>RESIDENTIAL_ROOFS.has(o.type)).map(o=>[o.x+','+o.z+','+o.y,o]));
  facilityRoofMeshes=facilitySite.buildings.map((_,owner)=>{
-  const m=mesh(),roof=pieces.filter(o=>facilityRoofOwner(o)===owner);
-  for(const o of roof.filter(o=>AUTO_ROOFS.has(o.type))){
+  const m=mesh(),roof=pieces.filter(o=>facilityRoofOwner(o)===owner),roofFade=[];
+  const add=(start,tiles)=>{
+   const p=poiAngledRoofPart(m,start,tiles);if(p)roofFade.push(p);
+  };
+  const flat=roof.filter(o=>AUTO_ROOFS.has(o.type));
+  for(const o of flat){
    const part=mesh();connectedRoofGeometry(part,o,automatic);shiftMesh(m,part,terrainY(o.x,o.z));
   }
+  add(0,flat);
   const guildRoof=facilityUsesGuildRendering()||facilitySite.buildings[owner]?.id==='townGuild';
-  for(const group of residentialRoofComponents(roof.filter(o=>RESIDENTIAL_ROOFS.has(o.type))))
-   if(!guildRoof||!pineGuildFantasyRoof(m,group))
-    residentialRoofGeometry(m,group,residential,!guildRoof);
-  for(const o of roof.filter(o=>o.type==='chimney'))
+  for(const group of residentialRoofComponents(roof.filter(o=>RESIDENTIAL_ROOFS.has(o.type)))){
+   const start=m.p.length/3;
+   if(!guildRoof||!pineGuildFantasyRoof(m,group))residentialRoofGeometry(m,group,residential,!guildRoof);
+   add(start,group);
+  }
+  for(const o of roof.filter(o=>o.type==='chimney')){
+   const start=m.p.length/3;
    deco(m,o.type,o.x+.5,o.y*1.4+terrainY(o.x,o.z),o.z+.5,o.rot||0);
-  return upload(m);
+   for(const p of roofFade)if(p.tiles.has(o.x+','+o.z+','+o.y))p.extras.push([start,m.p.length/3]);
+  }
+  for(const p of roofFade)delete p.tiles;
+  return {...upload(m),roofFade};
  });
 }
 function facilityVisibleRoofs(){
@@ -14917,7 +15036,11 @@ function facilityDrawEntranceGuides(p){
 }
 function facilityDrawRoofs(vp){
  if(!facilitySite||!poiWalkActive)return;
- for(const i of facilityVisibleRoofs())draw(facilityRoofMeshes[i],vp);
+ for(const i of facilityVisibleRoofs()){
+  const spans=poiOcclusionFrame.roofFades?.[i];
+  if(spans?.length)poiDrawSceneOcclusion(facilityRoofMeshes[i],vp,spans);
+  else draw(facilityRoofMeshes[i],vp);
+ }
 }
 function facilityInvalidateScenes(){
  facilityWatchtowerCameraWalls=null;
