@@ -91,7 +91,15 @@ test('the guardian room is exactly eight by six clear tiles, with the same south
 test('only the guardian chamber and its surrounding B1 walls changed',()=>{
  const old=[120,55,-1,'monsterMineGuard',0];
  assert(world.some(o=>[o.x,o.z,o.y,o.type,o.rot].join(',')===old.join(',')));
- const untouched=world.slice(5677).filter(o=>!(o.y===-1&&o.x>=116&&o.x<=125&&o.z>=50&&o.z<=57));
+ const untouched=world.slice(5677).filter(o=>!(o.y===-1&&o.x>=116&&o.x<=125&&o.z>=50&&o.z<=57)&&o.type!=='mineSurveyMarker');
  assert.equal(digest(untouched),'500cee7863858973829f4ea766bed79c40ad1a999a3ec151df0986e51c142216',
   'exact v166 arrival trail, portal, stair, early encounter, other lighting and corridor records');
+});
+test('mine survey plaque mounts on the north face of a wall beside the safe approach',()=>{
+ assert.deepEqual(site.mine.survey,{x:119,z:59,y:-1,type:'mineSurveyMarker',stand:{x:119,z:58,y:-1,facing:2}});
+ assert.deepEqual(world.at(-1),{x:119,z:59,y:-1,type:'mineSurveyMarker',rot:2});
+ assert(at(119,59,-1).some(o=>/wall$/.test(o.type)),'a real wall supports the plaque');
+ assert.deepEqual(at(119,58,-1).map(o=>o.type),['stone'],'safe observation tile remains empty');
+ assert.match(html,/case 'mineSurveyMarker':\{/);
+ assert.match(html,/id:'mineSurveyMarker'[^\n]*cat:'decor'/);
 });

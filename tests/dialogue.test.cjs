@@ -181,3 +181,19 @@ test('job titles follow given names and all dialogue surfaces use the same displ
  assert.equal(f.run('poiTownDialogueSnapshot().name'),'リーネ（ギルド受付）');
  assert.equal(f.actor.role.name,'リーネ');
 });
+test('surveyed guild quest exposes report only, and completed quest has no payout action',()=>{
+ const f=fixture();let stage='surveyed',calls=0;
+ f.c.poiQuestsForClerk=()=>[{id:'mine-survey',label:'廃坑★★☆☆☆（調査）'}];
+ f.c.poiQuestProgress=()=>stage;
+ f.c.poiQuestReport=(id,actor)=>{assert.equal(id,'mine-survey');assert.equal(actor,f.actor);calls++;stage='reported';return {ok:true,gold:10}};
+ f.run('poiTownDialogueAction(100)');f.run("poiNpcMenuChoose('quest',101)");
+ assert.match(f.run('poiTownDialogueSnapshot().actions[0].label'),/報告可能/);
+ f.run("poiNpcMenuChoose('quest:mine-survey',102)");
+ assert.equal(f.run('poiTownDialogueSnapshot().actions[0].id'),'quest-report');assert.equal(calls,0);
+ f.run("poiNpcMenuChoose('quest-report',103)");
+ assert.equal(calls,1);assert.match(f.run('poiTownDialogueSnapshot().text'),/10G/);
+ assert.match(f.run('poiTownDialogueSnapshot().actions[0].label'),/報告済み/);
+ f.run("poiNpcMenuChoose('quest:mine-survey',104)");
+ assert.equal(f.run('poiTownDialogueSnapshot().actions.length'),1);
+ assert.equal(f.run("poiNpcMenuChoose('quest-report',105)"),false);assert.equal(calls,1);
+});

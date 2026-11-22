@@ -343,3 +343,28 @@ test('worn gear preserves wear through bag, ground, chest and reload, and final 
  assert.deepEqual(sounds,[['chest-pickup','starterTunic'],['inventory-drop','starterTunic'],['item-pickup','starterTunic'],['equipment-break','starterTunic']]);
  assert.equal(fixture(after.raw()).ctx.poiArmorSnapshot().torso,null);
 });
+test('mine survey verifies real first-floor plaque and returns exactly one 10G reward through the clerk',()=>{
+ const original={version:1,weapon:null,potions:3,gold:12,quests:['mine-survey'],claimedCaches:['mine-guardian']};
+ const f=fixture(original),c=f.ctx,actor={role:{id:'guildkeeper'}};
+ const survey={x:119,z:59,y:-1,type:'mineSurveyMarker',stand:{x:119,z:58,y:-1,facing:2}};
+ Object.assign(c,{POI_TOWN_RESIDENT_ROLES:[{id:'guildkeeper',public:{x:56,z:29,y:0}}],poiMonsterAt:()=>null,
+  poiTownDialogueTarget:()=>actor,poiWalkLevel:-1,poiWalkX:119,poiWalkZ:58,poiWalkFacing:2});
+ c.facilitySite.mine={entrance:{x:116,z:64,y:0},survey};
+ assert.deepEqual(JSON.parse(JSON.stringify(c.poiQuestMiniTargets())),[{id:'mine-survey',x:119,z:58,y:-1}]);
+ assert.equal(c.poiQuestSurvey().reason,'unavailable');assert.equal(f.writes(),0);
+ c.world=[{x:119,z:59,y:-1,type:'mineSurveyMarker'}];
+ c.poiWalkFacing=0;assert.equal(c.poiQuestSurvey().reason,'unavailable');c.poiWalkFacing=2;
+ c.poiMonsterAt=()=>[{}];assert.equal(c.poiQuestSurvey().reason,'unavailable');c.poiMonsterAt=()=>null;
+ f.fail(true);assert.equal(c.poiQuestSurvey().reason,'storage');assert.equal(c.poiQuestProgress('mine-survey'),'accepted');
+ f.fail(false);assert.equal(c.poiQuestSurvey().ok,true);
+ assert.equal(c.poiQuestProgress('mine-survey'),'surveyed');assert.equal(c.poiQuestMiniTargets().length,0);
+ assert.equal(f.raw().gold,12);
+ c.poiWalkLevel=0;assert.deepEqual(JSON.parse(JSON.stringify(c.poiQuestMiniTargets())),[{id:'mine-survey',x:56,z:29,y:0}]);
+ assert.equal(c.poiQuestReport('mine-survey',{role:{id:'guildkeeper'}},100).reason,'unavailable');
+ f.fail(true);assert.equal(c.poiQuestReport('mine-survey',actor,100).reason,'storage');assert.equal(f.raw().gold,12);
+ f.fail(false);assert.equal(c.poiQuestReport('mine-survey',actor,100).gold,10);
+ assert.equal(c.poiQuestReport('mine-survey',actor,100).reason,'already');
+ assert.equal(f.raw().gold,22);assert.equal(f.writes(),2);assert.deepEqual(f.raw().claimedCaches,['mine-guardian']);
+ const next=fixture(f.raw());assert.equal(next.ctx.poiQuestProgress('mine-survey'),'reported');
+ assert.equal(next.ctx.poiEconomyGold(),22);assert.equal(next.writes(),0);assert.equal(c.poiQuestMiniTargets().length,0);
+});
