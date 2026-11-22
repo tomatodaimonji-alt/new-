@@ -253,3 +253,57 @@ test('mine quest acceptance is the only durable write, preserves the kit, and up
  const restored=fixture(f.raw());assert.equal(restored.ctx.poiQuestAccepted('mine-survey'),true);
  assert.equal(restored.writes(),0);
 });
+test('wallet reserves a shortcut, never consumes it as an empty destination, and returns without changing balance',()=>{
+ const f=fixture({version:1,weapon:'equipWoodSword',potions:3,gold:12}),c=f.ctx;
+ const h=i=>spot('hotbar',i),b=i=>spot('bag',i);
+ assert.equal(c.poiMoveGoldToBag(h(0)).reason,'occupied');
+ f.fail(true);assert.equal(c.poiMoveGoldToBag(h(2)).reason,'storage');assert.equal(f.writes(),0);
+ f.fail(false);assert.equal(c.poiMoveGoldToBag(h(2)).ok,true);
+ assert.equal(c.poiInventorySnapshot().goldHotbarSlot,2);assert.equal(f.raw().goldHotbarSlot,2);
+ c.poiHotbarUse(2);assert.equal(c.poiEquippedWeapon(),'equipWoodSword');assert.equal(f.writes(),1);
+ assert.equal(c.poiInventoryMove(1,h(2)).reason,'occupied');
+ assert.equal(c.poiSplitStorageStack('hotbar',1).ok,true);
+ assert.equal(c.poiInventorySnapshot().hotbar[2],null);assert.equal(c.poiInventorySnapshot().hotbar[3].count,2);
+ assert.equal(c.poiEconomyBuyPotion().ok,true);assert.equal(c.poiEconomyGold(),6);
+ assert.equal(fixture(f.raw()).ctx.poiInventorySnapshot().goldHotbarSlot,2);
+ assert.equal(c.poiMoveGoldToBag({zone:'wallet-home'}).ok,true);
+ assert.equal(c.poiInventorySnapshot().goldHotbarSlot,null);
+ assert.equal(f.raw().goldHotbarSlot,undefined);assert.equal(f.raw().gold,6);
+ assert.equal(c.poiInventoryMove(1,h(2)).ok,true);
+});
+test('malformed/reservation conflicts hydrate without changing the wallet or rewriting either value',()=>{
+ for(const i of [0,1,-1,9,'2']){
+  const seed={version:1,weapon:null,potions:3,gold:11,goldHotbarSlot:i};
+  const f=fixture(seed);assert.equal(f.ctx.poiInventorySnapshot().goldHotbarSlot,null);
+  assert.deepEqual(f.raw(),seed);assert.equal(f.writes(),0);
+ }
+});
+test('reserved shortcut is not hidden capacity for chest moves, quick herbs, equipment, shop or pickups',()=>{
+ const slots=Array(27).fill(null);slots[0]={type:'equipWoodSword',count:1};
+ for(let i=1;i<8;i++)slots[i]={type:'healingHerb',count:9};
+ for(let i=9;i<17;i++)slots[i]={type:'healingHerb',count:9};
+ slots[17]={type:'cannedFood',count:9};slots[26]={type:'healingHerb',count:2};
+ const original={version:1,weapon:'equipWoodSword',potions:9,gold:12,slots,goldHotbarSlot:8,
+  drops:[{type:'healingHerb',x:4,z:4,y:0}],kitchenChest:{version:1,slots:[{type:'healingHerb',count:2},...Array(17).fill(null)]}};
+ const f=fixture(original),c=f.ctx;
+ c.poiChestIsOpen=c.poiKitchenChestReachable=()=>true;
+ assert.equal(c.poiMoveChestInventorySlot('chest',0,'inventory',8).reason,'occupied');
+ assert.equal(c.poiDoubleTapStorage('bag',17).reason,'full');
+ assert.equal(c.poiDoubleTapStorage('chest',0).reason,'full');
+ assert.equal(c.poiEconomyBuyPotion().reason,'full');
+ assert.equal(c.poiInventoryPickup(4,4),false);
+ assert.equal(c.poiHotbarSave({...c.poiHotbarRead(),slots:slots.map((cell,i)=>i===8?{type:'healingHerb',count:1}:cell)}),false);
+ assert.deepEqual(f.raw(),original);assert.equal(f.writes(),0);
+ assert.equal(c.poiMoveGoldToBag(spot('bag',0)).reason,'occupied');
+ assert.equal(c.poiMoveGoldToBag(spot('chest',0)).reason,'locked');
+});
+test('bag equipment does not overwrite gold when all ordinary shortcuts are full',()=>{
+ const slots=Array(27).fill(null);
+ for(let i=0;i<8;i++)slots[i]={type:'healingHerb',count:9};
+ slots[9]={type:'equipWoodSword',count:1};
+ const f=fixture({version:1,weapon:null,potions:9,gold:12,slots,goldHotbarSlot:8}),c=f.ctx;
+ assert.equal(c.poiEquipBagItem(0).reason,'full');assert.equal(f.writes(),0);
+ assert.equal(c.poiMoveGoldToBag({zone:'wallet-home'}).ok,true);
+ assert.equal(c.poiEquipBagItem(0).ok,true);
+ assert.equal(c.poiInventorySnapshot().hotbar[8].type,'equipWoodSword');
+});

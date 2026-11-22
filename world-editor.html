@@ -923,7 +923,9 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  border:1px solid #a5baa581;border-radius:4px;background:rgba(65,103,82,.35);
  color:#f5d68c;font-size:clamp(7px,2.1vw,11px);font-weight:750;line-height:1;
  font-variant-numeric:tabular-nums;overflow:hidden;user-select:none}
-#poiBagWallet svg,#poiItemDragPreview .hotbar-icon svg{width:72%;height:72%;transform:translateY(-7%);pointer-events:none}
+#poiBagWallet svg,#poiItemDragPreview .hotbar-icon svg,#poiHotbar [data-gold-shortcut] svg{width:72%;height:72%;transform:translateY(-7%);pointer-events:none}
+#poiBagWallet[data-wallet-away] :is(svg,strong){visibility:hidden}
+#poiHotbar [data-gold-shortcut] .hotbar-count{color:#f5d68c}
 #poiGoldValue{position:absolute;bottom:1px;inset-inline:1px;text-align:right;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 2px #09160c}
 /* Selected items open one compact native modal over the existing storage UI. */
 #poiItemDetail{
@@ -1030,7 +1032,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v185）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v186）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -6802,6 +6804,14 @@ const POI_INVENTORY_LEGACY_COLUMNS=8;
 const POI_HOTBAR_POTION_START=3,POI_HOTBAR_POTION_MAX=9,POI_HOTBAR_HEAL=30,POI_HOTBAR_SWORD_BONUS=8;
 let poiHotbarState=null,poiWoodSwordIcon=null;
 const POI_GOLD_BAG_ID=POI_BAG_UNLOCKED;
+function poiGoldHotbarSlot(kit){
+ const i=kit?.goldHotbarSlot;
+ return Number.isInteger(i)&&i>=0&&i<POI_HOTBAR_SIZE?i:null;
+}
+function poiInventoryEmptyHotbar(kit,slots=poiInventorySlots(kit)){
+ const reserved=poiGoldHotbarSlot(kit);
+ return slots.findIndex((c,i)=>i<POI_HOTBAR_SIZE&&!c&&i!==reserved);
+}
 const POI_GOLD_BAG_DEFAULT=Object.freeze(Array.from({length:POI_GOLD_BAG_ID+1},(_,i)=>i));
 function poiGoldBagDecode(raw){
  if(!Array.isArray(raw)||raw.length!==POI_GOLD_BAG_DEFAULT.length||new Set(raw).size!==raw.length||
@@ -6870,14 +6880,18 @@ function poiHotbarRead(){
  if(ownedDrops.length)kit.drops=ownedDrops;
  const slots=poiArmorReconcile(kit,poiInventoryReadSlots(saved.slots,kit));
  if(!slots&&kit.weapon===POI_KNIFE)kit.weapon=null;
- return poiHotbarState=slots?poiInventoryEdited(kit,slots):kit;
+ const result=slots?poiInventoryEdited(kit,slots):kit,shortcut=poiGoldHotbarSlot(saved);
+ if(shortcut!==null&&!poiInventorySlots(result)[shortcut])result.goldHotbarSlot=shortcut;
+ return poiHotbarState=result;
 }
 function poiHotbarSave(kit=poiHotbarState){
  if(typeof poiGameResetDeparture!=='undefined'&&(poiGameResetDeparture||poiGameResetBlocked))return false;
  try{
+  const goldHotbarSlot=poiGoldHotbarSlot(kit);
+  if(goldHotbarSlot!==null&&poiInventorySlots(kit)[goldHotbarSlot])return false;
   const {weapon,potions,gold,claimedCaches,sword,drops,slots,towerFind,kitchenChest,worn,npcTrade,goldBagOrder,quests}=kit;
   localStorage.setItem(POI_HOTBAR_KEY,JSON.stringify({version:1,weapon,potions:Math.min(potions,POI_HOTBAR_POTION_MAX),
-   ...(gold?{gold}:{}),...(claimedCaches?.length?{claimedCaches}:{}),...(towerFind?{towerFind}:{}),...(kitchenChest?{kitchenChest}:{}),...(worn?{worn}:{}),...(npcTrade?{npcTrade}:{}),...(goldBagOrder?{goldBagOrder}:{}),...(quests?.length?{quests}:{}),
+   ...(gold?{gold}:{}),...(claimedCaches?.length?{claimedCaches}:{}),...(towerFind?{towerFind}:{}),...(kitchenChest?{kitchenChest}:{}),...(worn?{worn}:{}),...(npcTrade?{npcTrade}:{}),...(goldBagOrder?{goldBagOrder}:{}),...(goldHotbarSlot!==null?{goldHotbarSlot}:{}),...(quests?.length?{quests}:{}),
    ...(sword===false?{sword}:{}),...(drops?.length?{drops}:{}),...(slots?{slots}:{})}));
   return true;
  }catch(_e){return false}
@@ -7339,6 +7353,7 @@ function poiMoveChestInventorySlot(fromArea,fromIndex,toArea,toIndex){
  if(!valid(a,fromIndex)||!valid(b,toIndex))return result('locked');
  if(a===b&&fromIndex===toIndex)return result('same');
  if(!a[fromIndex])return result('empty');
+ if(b===slots&&toIndex===poiGoldHotbarSlot(kit))return result('occupied');
  const liveEnd=POI_HOTBAR_SIZE+POI_BAG_UNLOCKED;
  if(b===slots&&toIndex>=liveEnd||
     a===slots&&fromIndex>=liveEnd&&!poiInventoryCanWithdrawTo(a[fromIndex],b[toIndex]))return result('locked');
@@ -7402,7 +7417,7 @@ function poiDoubleTapStorage(zone,index){
   slots[j]={...target,count:target.count+moved};left-=moved;
  }
  if(left){
-  const j=slots.slice(0,POI_HOTBAR_SIZE).findIndex(c=>!c);
+  const j=poiInventoryEmptyHotbar(kit,slots);
   if(j>=0){slots[j]={...cell,count:left};left=0}
  }
  if(left===cell.count)return result('full');
@@ -7413,10 +7428,10 @@ function poiDoubleTapStorage(zone,index){
  if(fromChest&&typeof poiSound==='function')poiSound('chest-pickup',cell.type);
  return result();
 }
-function poiStorageSplitTarget(src,index,cols=POI_BAG_COLUMNS,usable=src.length){
+function poiStorageSplitTarget(src,index,cols=POI_BAG_COLUMNS,usable=src.length,reserved=null){
  const col=index%cols;
  const near=[col<cols-1?index+1:-1,col>0?index-1:-1,index+cols,index-cols];
- return near.find(i=>poiStorageIndexExists(i,usable)&&!src[i])??src.findIndex((c,i)=>i<usable&&!c);
+ return near.find(i=>poiStorageIndexExists(i,usable)&&i!==reserved&&!src[i])??src.findIndex((c,i)=>i<usable&&i!==reserved&&!c);
 }
 function poiSplitStorageStack(zone,index){
  const result=poiStorageActionResult;
@@ -7429,7 +7444,7 @@ function poiSplitStorageStack(zone,index){
  const cell=raw[index];if(!cell)return result('empty');
  if(cell.count<2||poiInventoryStack(cell.type)<2)return result('single');
  const target=inChest?poiStorageSplitTarget(raw,index,POI_CHEST_COLUMNS):
-  hot?poiStorageSplitTarget(raw,index,POI_HOTBAR_SIZE):poiStorageSplitTarget(raw,index,POI_BAG_COLUMNS,POI_BAG_UNLOCKED);
+  hot?poiStorageSplitTarget(raw,index,POI_HOTBAR_SIZE,POI_HOTBAR_SIZE,poiGoldHotbarSlot(kit)):poiStorageSplitTarget(raw,index,POI_BAG_COLUMNS,POI_BAG_UNLOCKED);
  if(target<0)return result('full');
  const src=raw.slice(),count=Math.floor(cell.count/2);
  src[index]={...cell,count};src[target]={...cell,count:cell.count-count};
@@ -7446,7 +7461,7 @@ function poiEquipBagItem(index){
  if(!cell)return result('empty');
  const weapon=poiHotbarWeaponForType(cell.type);
  if(!weapon)return result('type');
- const slot=slots.slice(0,POI_HOTBAR_SIZE).findIndex(c=>!c);
+ const slot=poiInventoryEmptyHotbar(kit,slots);
  if(slot<0)return result('full');
  slots[slot]=cell;slots[i]=null;
  if(!poiEconomyWrite(poiInventoryEdited({...kit,weapon},slots)))return result('storage');
@@ -7571,8 +7586,8 @@ function poiInventorySelected(index){
  if(!poiHotbarHasKit())return false;
  const kit=poiHotbarRead(),slots=poiInventorySlots(kit),cell=slots[index];
  if(kit.weapon)return cell?.type===kit.weapon;
- const empty=slots.slice(0,POI_HOTBAR_SIZE).findIndex(c=>!c);
- return !cell&&index===(slots[poiHotbarEmptySlot]?empty:poiHotbarEmptySlot);
+ const reserved=poiGoldHotbarSlot(kit),empty=poiInventoryEmptyHotbar(kit,slots);
+ return index!==reserved&&!cell&&index===(slots[poiHotbarEmptySlot]||poiHotbarEmptySlot===reserved?empty:poiHotbarEmptySlot);
 }
 function poiInventoryAccept(kit,type,count,source=null){
  const slots=poiInventorySlots(kit).slice();
@@ -7591,7 +7606,7 @@ function poiInventoryAccept(kit,type,count,source=null){
    if(add){slots[i]={type,count:c.count+add};left-=add}
   }
   for(let i=from;i<to&&left;i++){
-   if(slots[i])continue;
+   if(slots[i]||i===poiGoldHotbarSlot(kit))continue;
    const add=Math.min(left,capacity);
    const cell=poiInventorySanitizeCell({...source,type,count:add});if(!cell)return {slots,accepted:0};
    slots[i]=cell;left-=add;
@@ -7610,6 +7625,7 @@ function poiInventoryMove(from,to){
  if(i===j)return result('same');
  const kit=poiHotbarRead(),slots=poiInventorySlots(kit).slice();
  if(!slots[i])return result('empty');
+ if(j===poiGoldHotbarSlot(kit))return result('occupied');
  const liveEnd=POI_HOTBAR_SIZE+POI_BAG_UNLOCKED;
  if(j>=liveEnd||i>=liveEnd&&!poiInventoryCanWithdrawTo(slots[i],slots[j]))return result('locked');
  if(j<POI_HOTBAR_SIZE&&poiArmorCategory(slots[i]?.type)||i<POI_HOTBAR_SIZE&&poiArmorCategory(slots[j]?.type))return result('type');
@@ -7624,15 +7640,25 @@ function poiInventorySlot(kit,i){return poiInventoryCell(kit,i)?.type??null}
 function poiMoveGoldToBag(ref){
  const result=poiStorageActionResult;
  if(!poiInventoryAllowed())return result('unavailable');
- if(ref?.zone!=='bag'||!poiStorageIndexExists(ref.index,POI_BAG_UNLOCKED))return result('locked');
- const kit=poiHotbarRead();
- if(poiInventoryCell(kit,ref))return result('occupied');
- const order=(kit.goldBagOrder||POI_GOLD_BAG_DEFAULT).slice();
- const a=order.indexOf(POI_GOLD_BAG_ID),b=order.indexOf(ref.index);
- [order[a],order[b]]=[order[b],order[a]];
- const next={...kit};
- const changed=poiGoldBagDecode(order);
- if(changed)next.goldBagOrder=changed;else delete next.goldBagOrder;
+ const kit=poiHotbarRead(),next={...kit};
+ const current=poiGoldHotbarSlot(kit),zone=ref?.zone,index=ref?.index;
+ if(zone==='hotbar'){
+  if(!poiStorageIndexExists(index,POI_HOTBAR_SIZE))return result('locked');
+  if(current===index)return result('same');
+  if(poiInventoryCell(kit,ref))return result('occupied');
+  next.goldHotbarSlot=index;
+ }else if(zone==='wallet-home'){
+  if(current===null)return result('same');
+  delete next.goldHotbarSlot;
+ }else if(zone==='bag'&&poiStorageIndexExists(index,POI_BAG_UNLOCKED)){
+  if(poiInventoryCell(kit,ref))return result('occupied');
+  delete next.goldHotbarSlot;
+  const order=(kit.goldBagOrder||POI_GOLD_BAG_DEFAULT).slice();
+  const a=order.indexOf(POI_GOLD_BAG_ID),b=order.indexOf(index);
+  [order[a],order[b]]=[order[b],order[a]];
+  const changed=poiGoldBagDecode(order);
+  if(changed)next.goldBagOrder=changed;else delete next.goldBagOrder;
+ }else return result('locked');
  if(!poiEconomyWrite(next))return result('storage');
  poiEconomyRefresh();return result();
 }
@@ -7640,7 +7666,7 @@ function poiInventorySnapshot(){
  const kit=poiHotbarHasKit()?poiHotbarRead():null;
  const cells=(kit?poiInventorySlots(kit):[]).map(c=>c?{...c}:null);
  const goldBagOrder=(kit?.goldBagOrder||POI_GOLD_BAG_DEFAULT).slice();
- return {goldBagOrder,goldBagSlot:goldBagOrder.indexOf(POI_GOLD_BAG_ID),sword:!!kit&&kit.sword!==false,potions:kit?.potions||0,weapon:kit?.weapon??null,drops:kit?.drops||[],
+ return {goldHotbarSlot:poiGoldHotbarSlot(kit),goldBagOrder,goldBagSlot:goldBagOrder.indexOf(POI_GOLD_BAG_ID),sword:!!kit&&kit.sword!==false,potions:kit?.potions||0,weapon:kit?.weapon??null,drops:kit?.drops||[],
   hotbar:Array.from({length:POI_HOTBAR_SIZE},(_,i)=>cells[i]??null),
   bag:Array.from({length:POI_BAG_SIZE},(_,i)=>cells[POI_HOTBAR_SIZE+i]??null),bagUnlocked:POI_BAG_UNLOCKED,bagLegacy:cells.flatMap((c,i)=>c&&i>=POI_HOTBAR_SIZE+POI_BAG_UNLOCKED?[i-POI_HOTBAR_SIZE]:[]),worn:poiArmorSnapshot(),...(kit?.kitchenChest?{kitchenChest:{version:1,slots:kit.kitchenChest.slots.map(c=>c?{...c}:null)}}:null)};
 }
@@ -7799,13 +7825,14 @@ function poiBagSetOpen(open){
 function poiBagSelectSource(button){
  if(poiBagKeySource){
   delete poiBagKeySource.dataset.bagSource;
-  if(poiBagKeySource.id==='poiBagWallet')poiBagKeySource.setAttribute('aria-pressed','false');
+  if(poiBagSlotRef(poiBagKeySource).zone==='wallet')poiBagKeySource.setAttribute('aria-pressed','false');
  }
  poiBagKeySource=button;
- if(button){button.dataset.bagSource='';if(button.id==='poiBagWallet')button.setAttribute('aria-pressed','true')}
+ if(button){button.dataset.bagSource='';if(poiBagSlotRef(button).zone==='wallet')button.setAttribute('aria-pressed','true')}
 }
 function poiBagSlotRef(button){
- return 'walletSlot' in button.dataset?{zone:'wallet'}:
+ return 'goldShortcut' in button.dataset?{zone:'wallet'}:
+  'walletSlot' in button.dataset?{zone:'walletAway' in button.dataset?'wallet-home':'wallet'}:
   'gearSlot' in button.dataset?{zone:'armor',part:button.dataset.gearSlot}:
   'chestSlot' in button.dataset?{zone:'chest',index:Number(button.dataset.chestSlot)}:
   'bagSlot' in button.dataset?{zone:'bag',index:Number(button.dataset.bagSlot)}:
@@ -7902,10 +7929,13 @@ function poiPlayerPaperDollRender(){
  const key=[weapon,...Object.keys(POI_GEAR_LABELS).map(part=>gear?.[part]?.type)].join(':');
  if(key!==poiPaperDollKey&&poiDrawPaperDoll(view,poiBuildPlayerMesh(weapon,null,gear)))poiPaperDollKey=key;
 }
-function poiBagWalletLayout(order,kit){
+function poiBagWalletLayout(order,kit,away){
  const wallet=$('poiBagWallet'),grid=$('poiBagSlots');
  if(!wallet||!grid)return;
  wallet.disabled=!kit;
+ wallet.toggleAttribute('data-wallet-away',away);
+ if(away){wallet.title='金貨を戻す枠';wallet.removeAttribute('aria-pressed')}
+ else{wallet.title='金貨：選択またはドラッグで移動';wallet.setAttribute('aria-pressed',String(poiBagKeySource===wallet))}
  const id=node=>node===wallet?POI_GOLD_BAG_ID:Number(node?.dataset.bagSlot);
  const cells=[...grid.children].slice(0,POI_GOLD_BAG_DEFAULT.length);
  if(order.every((value,i)=>value===id(cells[i])))return;
@@ -7918,11 +7948,27 @@ function poiBagWalletLayout(order,kit){
  }
  if(cells.includes(active)&&document.activeElement!==active)active.focus({preventScroll:true});
 }
+function poiWalletShortcutRender(button){
+ const icon=button.querySelector('.hotbar-icon'),amount=button.querySelector('.hotbar-count');
+ if(icon&&icon.dataset.art!=='wallet'){
+  icon.dataset.art='wallet';
+  const svg=$('poiBagWallet')?.querySelector('svg');
+  if(svg)icon.replaceChildren(svg.cloneNode(true));else icon.textContent='●';
+ }
+ const label='金貨 '+poiEconomyGold();
+ if(amount)amount.textContent=String(poiEconomyGold());
+ button.title=label;button.setAttribute('aria-label',label);
+ button.setAttribute('aria-pressed',String(poiBagKeySource===button));
+}
 function poiBagUiRender(){
  poiBagUiVisibility();
  const state=poiInventorySnapshot(),kit=poiHotbarHasKit(),chest=poiChestIsOpen();
- poiBagWalletLayout(state.goldBagOrder,kit);
+ poiBagWalletLayout(state.goldBagOrder,kit,state.goldHotbarSlot!==null);
  for(const button of document.querySelectorAll('#poiHotbar [data-hotbar-slot],#poiBagGrid [data-bag-slot],#poiChestGrid [data-chest-slot]')){
+  const shortcut=Object.prototype.hasOwnProperty.call(button.dataset,'hotbarSlot');
+  const isWallet=kit&&shortcut&&Number(button.dataset.hotbarSlot)===state.goldHotbarSlot;
+  if(isWallet)button.dataset.goldShortcut='';else delete button.dataset.goldShortcut;
+  if(isWallet){button.disabled=false;poiWalletShortcutRender(button);continue}
   const {zone,index}=poiBagSlotRef(button),hot=zone==='hotbar',stash=zone==='chest',
    cell=stash?(chest?poiChestSlotAt(index):null):state[zone]?.[index],type=cell?.type;
   const weapon=poiHotbarWeaponForType(type);
@@ -8006,7 +8052,7 @@ function poiInventoryPresentItem(host,cell){
  if(amount)amount.textContent=(type==='healingHerb'||type==='cannedFood')&&cell.count>0?String(cell.count):'';
 }
 function poiItemDetailAvailableActions(ref,cell){
- const space=ref.zone!=='hotbar'||poiInventorySlots(poiHotbarRead()).slice(0,POI_HOTBAR_SIZE).some(c=>!c);
+ const space=ref.zone!=='hotbar'||poiInventoryEmptyHotbar(poiHotbarRead())>=0;
  return poiItemDetailActions(ref.zone,cell,poiChestIsOpen(),space);
 }
 function poiItemDetailRender(){
@@ -8095,13 +8141,14 @@ function poiBagWire(){
  const bar=$('poiHotbar'),bag=$('poiBagPanel'),toggle=$('poiBagToggle'),chest=$('poiChestPanel'),ghost=$('poiItemDragPreview');
  let drag=null,suppress=null;
  const detailZone=zone=>zone==='bag'||zone==='chest'||zone==='hotbar'&&!bag.hidden;
+ const walletTarget=zone=>zone==='wallet'||zone==='wallet-home'||zone==='bag'||zone==='hotbar';
  const find=node=>node?.closest?.('button[data-hotbar-slot],button[data-bag-slot],button[data-chest-slot],button[data-gear-slot],button[data-wallet-slot]');
  const clear=()=>{
   if(drag){delete drag.source.dataset.dragging;if(drag.over)delete drag.over.dataset.dragOver}
   drag=null;ghost.hidden=true;
  };
  poiBagCancelDrag=clear;
- const clearInput=()=>{clear();poiStorageTapGate?.cancel();if(poiBagKeySource?.id==='poiBagWallet')poiBagSelectSource(null)};
+ const clearInput=()=>{clear();poiStorageTapGate?.cancel();if(poiBagKeySource&&poiBagSlotRef(poiBagKeySource).zone==='wallet')poiBagSelectSource(null)};
  window.addEventListener('blur',clearInput);
  document.addEventListener('visibilitychange',()=>{if(document.hidden)clearInput()});
  const occupied=button=>{const ref=poiBagSlotRef(button);return ref.zone==='wallet'||(ref.zone==='chest'
@@ -8115,7 +8162,7 @@ function poiBagWire(){
  const move=(from,to)=>{
   if(from===to)return;
   const a=poiBagSlotRef(from),b=poiBagSlotRef(to);
-  if(a.zone==='wallet'||b.zone==='wallet'){
+  if(a.zone==='wallet'||b.zone==='wallet'||b.zone==='wallet-home'){
    if(a.zone!=='wallet')return;
    const result=poiMoveGoldToBag(b);
    if(result.reason==='occupied')toast('金貨は空き枠に移せます');
@@ -8149,11 +8196,9 @@ function poiBagWire(){
   container.addEventListener('pointerdown',e=>{
    if(e.button!==0||!e.isPrimary||!poiInventoryAllowed())return;
    const source=find(e.target);suppress=null;
-   if(poiBagKeySource?.id==='poiBagWallet'&&source){
-    const {zone}=poiBagSlotRef(source);
-    if(zone!=='wallet'&&zone!=='bag')poiBagSelectSource(null);
-   }
-   if(!source||source.disabled||!occupied(source))return;
+   if(poiBagKeySource&&source&&poiBagSlotRef(poiBagKeySource).zone==='wallet'&&!walletTarget(poiBagSlotRef(source).zone))
+    poiBagSelectSource(null);
+   if(!source||source.disabled||!occupied(source)||bag.hidden&&poiBagSlotRef(source).zone==='wallet')return;
    clear();
    drag={source,id:e.pointerId,x:e.clientX,y:e.clientY,over:null,moved:false};
    try{source.setPointerCapture(e.pointerId)}catch(_e){}
@@ -8206,9 +8251,9 @@ function poiBagWire(){
    const ref=poiBagSlotRef(button);
    if(poiBagKeySource){
     const source=poiBagKeySource;poiBagSelectSource(null);
-    if(source.id!=='poiBagWallet'||ref.zone==='bag'||ref.zone==='wallet'){move(source,button);return}
+    if(poiBagSlotRef(source).zone!=='wallet'||walletTarget(ref.zone)){move(source,button);return}
    }
-   if(ref.zone==='wallet'){poiStorageTapGate.cancel();poiBagSelectSource(button)}
+   if(ref.zone==='wallet'){poiStorageTapGate.cancel();if(!bag.hidden)poiBagSelectSource(button)}
    else if(ref.zone==='hotbar'&&bag.hidden){poiStorageTapGate.cancel();poiHotbarUse(ref.index)}
    else if(occupied(button))poiStorageTapGate.select(button,detailZone(ref.zone)&&e.detail>0);
    else poiStorageTapGate.cancel();
@@ -8252,7 +8297,8 @@ function poiHotbarRender(){
 }
 function poiHotbarUse(slot){
  if(!poiInventoryAllowed()||!Number.isInteger(slot)||slot<0||slot>=POI_HOTBAR_SIZE)return;
- const kit=poiHotbarRead(),item=poiInventorySlot(kit,slot);
+ const kit=poiHotbarRead();if(slot===poiGoldHotbarSlot(kit))return;
+ const item=poiInventorySlot(kit,slot);
  if(item!==POI_INVENTORY_HERB&&item!==POI_CANNED){
   const weapon=poiHotbarWeaponForType(item);
   if(kit.weapon!==weapon&&!poiEconomyWrite({...kit,weapon})){toast('装備を保存できませんでした');return}
@@ -9346,12 +9392,12 @@ function poiNpcTradeGrid(d,mode){
  for(let i=0;i<25;i++){
   const logical=i<order.length?order[i]:i-1;
   const index=POI_HOTBAR_SIZE+logical;
-  if(i<order.length&&logical===POI_GOLD_BAG_ID)items.append(poiNpcTradeCell({type:'gold',count:poiEconomyGold()},null));
+  if(i<order.length&&logical===POI_GOLD_BAG_ID)items.append(poiNpcTradeCell(poiGoldHotbarSlot(kit)===null?{type:'gold',count:poiEconomyGold()}:null,null));
   else items.append(sellCell(index));
  }
  const quick=document.createElement('div');quick.id='poiNpcTradeQuick';quick.textContent='ショートカット';
  const cells=document.createElement('div');
- for(let i=0;i<POI_HOTBAR_SIZE;i++)cells.append(sellCell(i));
+ for(let i=0;i<POI_HOTBAR_SIZE;i++)cells.append(i===poiGoldHotbarSlot(kit)?poiNpcTradeCell({type:'gold',count:poiEconomyGold()},null,i):sellCell(i));
  quick.append(cells);grid.append(items,quick);return grid;
 }
 function poiNpcTradeDetail(d,mode){
@@ -9874,7 +9920,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v185',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v186',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -9989,7 +10035,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v185';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v186';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -10204,7 +10250,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v185',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v186',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -11484,7 +11530,8 @@ function poiShopCheckout(){
 function poiWalletSync(gold){
  const value=$('poiGoldValue'),label=String(gold);
  if(value&&value.textContent!==label)value.textContent=label;
- const wallet=$('poiBagWallet'),name='金貨 '+label;if(wallet&&wallet.getAttribute('aria-label')!==name)wallet.setAttribute('aria-label',name);
+ const wallet=$('poiBagWallet'),name=wallet?.hasAttribute?.('data-wallet-away')?'金貨を戻す枠':'金貨 '+label;
+ if(wallet&&wallet.getAttribute('aria-label')!==name)wallet.setAttribute('aria-label',name);
 }
 function poiShopSync(){
  const action=$('poiWalkAction');

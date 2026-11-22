@@ -58,6 +58,7 @@ async function launch(browser,id='base',start={x:19,z:45},{camera=false,yaw=.24,
 }
 const bag=i=>'#poiBagGrid [data-bag-slot="'+i+'"]';
 const wallet='#poiBagWallet',panel='#poiBagPanel';
+const shortcut=i=>'#poiHotbar [data-hotbar-slot="'+i+'"]';
 const kitKey='world-workshop-hotbar-v1',read=page=>page.evaluate(k=>JSON.parse(localStorage.getItem(k)||'null'),kitKey);
 const getMap=page=>page.evaluate(()=>window.__editorTest.data());
 const seedSlots=Array(27).fill(null);
@@ -80,8 +81,8 @@ async function center(page,target){
  assert.ok(b?.width&&b.height,'real visible touch target '+target);
  return {x:Math.round(b.x+b.width/2),y:Math.round(b.y+b.height/2)};
 }
-async function drag(ctx,page,target){
- const a=await center(page,wallet),b=typeof target==='string'?await center(page,target):target;
+async function drag(ctx,page,target,source=wallet){
+ const a=await center(page,source),b=typeof target==='string'?await center(page,target):target;
  const c=await ctx.newCDPSession(page);
  try{
   await c.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{...a,id:1}]});
@@ -107,6 +108,21 @@ async function verify(page,order){
  assert.equal(save.potions,initial.potions);
  return save;
 }
+async function verifyHotbar(page,index){
+ const inv=(await state(page)).inventory,k=await read(page);
+ assert.equal(inv.goldHotbarSlot,index);
+ assert.equal(inv.hotbar[index],null,'wallet is a reservation, not an ordinary carried item');
+ assert.equal(k.gold,37);
+ assert.equal(k.goldHotbarSlot,index);
+ assert.deepEqual(k.slots,seedSlots);
+ assert.equal(k.weapon,initial.weapon);
+ assert.equal(k.potions,initial.potions);
+ assert.equal(await page.locator(shortcut(index)+'[data-gold-shortcut]').count(),1);
+ assert.equal(await page.locator('#poiHotbar [data-gold-shortcut]').count(),1,'wallet occupies only one shortcut');
+ assert.equal(await page.locator(wallet+'[data-wallet-away]').count(),1,'bag position is a placeholder, not a second wallet');
+ assert.match(await page.locator(shortcut(index)).innerText(),/37/,'coin count is shown in the genuine reserved shortcut');
+ return k;
+}
 async function exercise(browser,width){
  const {ctx,page,errors}=await launch(browser,'base',{x:56,z:39},{width,kit:initial});
  try{
@@ -124,26 +140,52 @@ async function exercise(browser,width){
   await drag(ctx,page,bag(7));
   const two=await verify(page,second);
   assert.deepEqual(two.goldBagOrder,second);
-  await page.locator(wallet).tap();
-  await page.locator('#poiHotbar [data-hotbar-slot="2"]').tap();
-  assert.equal(await page.locator(wallet).getAttribute('aria-pressed'),'false','empty shortcut cancels wallet selection');
-  await page.waitForTimeout(360);
-  assert.equal(await page.locator('#poiItemDetail[open]').count(),0,'empty shortcut does not open details');
-  assert.equal((await state(page)).inventory.weapon,initial.weapon,'open bag empty shortcut does not switch to bare hands');
-  assert.deepEqual(await verify(page,second),two,'cancelling changes neither wallet position nor equipment');
-  for(const target of [bag(1),bag(9),'#poiHotbar [data-hotbar-slot="2"]','[data-gear-slot="legs"]']){
+  for(const target of [bag(1),bag(9),shortcut(0),'[data-gear-slot="legs"]']){
    await drag(ctx,page,target);
-   assert.deepEqual(await verify(page,second),two,'occupied, locked, and non-bag targets cannot receive currency: '+target);
+   assert.deepEqual(await verify(page,second),two,'occupied, locked and gear targets cannot receive currency: '+target);
   }
   const stage=await page.locator('#view').boundingBox();
   assert(stage);const outside={x:Math.round(stage.x+stage.width*.67),y:Math.round(stage.y+stage.height*.31)};
   await drag(ctx,page,outside);
   assert.deepEqual(await verify(page,second),two,'outside drop does not move or spend gold');
   assert.equal((await state(page)).inventory.drops.length,0);
+  const bank=shortcut(2);
+  await page.locator(wallet).tap();
+  await page.locator(bank).tap();
+  await verifyHotbar(page,2);
+  await page.locator('#poiBagClose').tap();
+  await page.locator(panel).waitFor({state:'hidden'});
+  const savedHot=await verifyHotbar(page,2);
+  await page.locator(bank).tap();
+  await page.waitForTimeout(360);
+  assert.equal(await page.locator('#poiItemDetail[open]').count(),0,'gold shortcut never acts as a carried item');
+  assert.deepEqual(await verifyHotbar(page,2),savedHot,'closed-bag wallet tap does not consume, equip, or relocate');
+  await page.reload();await page.waitForFunction(()=>window.__editorTest?.facility?.().active);
+  assert.deepEqual(await verifyHotbar(page,2),savedHot,'gold shortcut position survives a live reload');
+  await openBag(page);
+  await drag(ctx,page,bank,bag(1));
+  assert.deepEqual(await verifyHotbar(page,2),savedHot,'wallet cannot be moved back over an occupied bag slot');
+  await drag(ctx,page,bag(1),bank);
+  assert.deepEqual(await verifyHotbar(page,2),savedHot,'regular items cannot occupy a wallet-reserved shortcut');
+  await page.locator(bank).tap();await page.locator(bag(3)).tap();
+  const afterReturn=await read(page);
+  assert.equal((await state(page)).inventory.goldHotbarSlot,null);
+  assert.equal((await state(page)).inventory.goldBagSlot,3);
+  const returnOrder=await frame(page);
+  assert.equal(returnOrder[3],9);
+  assert.equal(returnOrder[1],1);assert.equal(returnOrder[6],6);
+  assert.deepEqual(await verify(page,returnOrder),afterReturn);
+  await drag(ctx,page,shortcut(4));
+  await verifyHotbar(page,4);
+  await drag(ctx,page,bag(0),shortcut(4));
+  assert.equal((await state(page)).inventory.goldHotbarSlot,null);
+  const finalOrder=await frame(page);
+  const final=await verify(page,finalOrder);
+  assert.equal(finalOrder[0],9);
   await page.reload();await page.waitForFunction(()=>window.__editorTest?.facility?.().active);
   await openBag(page);
-  assert.deepEqual(await verify(page,second),two,'the wallet layout and ordinary item contents persist across reload');
-  if(out)await page.screenshot({path:out+'/v175-gold-slot-'+width+'.png'});
+  assert.deepEqual(await verify(page,finalOrder),final,'return to bag persists without reordering item indexes');
+  if(out)await page.screenshot({path:out+'/v186-gold-slot-'+width+'.png'});
   assert.deepEqual(await getMap(page),mapBefore);
   await unchanged(page);
   assert.deepEqual(errors,[]);
@@ -154,5 +196,5 @@ try{
  browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
   args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
  for(const width of [320,390])await exercise(browser,width);
- console.log('PASS mobile wallet tap/drag, valid bag-only targets, stable save indexes, and reload persistence');
+ console.log('PASS mobile wallet tap/drag both ways, reserved shortcut guard, closed no-op, stable items/gold, and real reload persistence');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
