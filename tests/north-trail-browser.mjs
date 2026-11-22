@@ -125,14 +125,18 @@ const dirSel=d=>'[data-poi-dir="'+d+'"]';
 const amount=s=>[...s.inventory.hotbar,...s.inventory.bag].reduce((n,c)=>n+(c?.type==='healingHerb'?c.count:0),0);
 const coords=async page=>(await state(page)).position;
 async function one(page,dir,x,z){
- const before=await coords(page);
- assert.equal(Math.abs(x-before.x)+Math.abs(z-before.z),1,'test requests a single natural cardinal step');
- await page.locator(dirSel(dir)).tap();
- await page.waitForFunction(({x,z})=>{
-  const p=window.__editorTest.facility().position;
-  return p?.x===x&&p?.z===z&&p.level===0;
- },{x,z},{timeout:4500});
- // Avoid arming v192's optional double-tap sprint while sampling the road.
+ const start=await coords(page),key=arrow[dir];
+ assert.equal(Math.abs(x-start.x)+Math.abs(z-start.z),1);
+ // A single keydown/up avoids a synthetic touch hold turning into auto-repeat
+ // under a slow software renderer. The new route still covers actual D-pad taps.
+ await page.keyboard.press(key);
+ try{
+  await page.waitForFunction(({x,z})=>{
+   const p=window.__editorTest.facility().position;return p.x===x&&p.z===z&&p.level===0;
+  },{x,z},{timeout:4500});
+ }catch(e){
+  throw new Error('North trail '+key+' from '+JSON.stringify(start)+' to '+[x,z]+' stopped at '+JSON.stringify(await coords(page)),{cause:e});
+ }
  await page.waitForTimeout(305);
  assert.deepEqual(await coords(page),pos(x,z));
 }
