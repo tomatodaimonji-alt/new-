@@ -7,9 +7,13 @@ import {mkdir} from 'node:fs/promises';
 const require=createRequire(import.meta.url);
 const {chromium}=require(process.env.PLAYWRIGHT_PACKAGE??'playwright');
 const html=readFileSync(process.argv[2]??'world-editor.html','utf8');
+// UI observation only: expose the real unadjusted world-projected anchor.
+const projectionAnchor='const pt=poiWorldToScreen(vp,a.x+.5,(height??terrainY(a.x,a.z))+a.y*1.4+1.68,a.z+.5);';
+assert.equal(html.split(projectionAnchor).length,2,'unique speech projection anchor');
+const measuredHTML=html.replace(projectionAnchor,projectionAnchor+'window.__naturalSpeechPoint=pt;');
 const server=createServer((req,res)=>{
  res.setHeader('Content-Type','text/html; charset=utf-8');
- res.end(req.url.startsWith('/seed')?'<!doctype html><title>Isolated fixtures</title>':html);
+ res.end(req.url.startsWith('/seed')?'<!doctype html><title>Isolated fixtures</title>':measuredHTML);
 });
 await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',resolve).once('error',reject));
 const origin='http://127.0.0.1:'+server.address().port;
@@ -118,6 +122,19 @@ async function pickup(browser){
   assert.deepEqual(errors,[]);await unchanged(page);
  }finally{await ctx.close();}
 }
+async function measureSpeech(page){
+ return page.evaluate(boxId=>{
+  const b=document.querySelector('#poiTownSpeech'),m=document.querySelector(boxId),point=window.__naturalSpeechPoint;
+  const v=document.querySelector('#viewWrap').getBoundingClientRect();
+  if(!point||b.hidden)return null;
+  const r=b.getBoundingClientRect(),panel=m.getBoundingClientRect(),tail=parseFloat(getComputedStyle(b,'::after').borderTopWidth);
+  // Natural speech is translated up by its own height and its fixed CSS margin.
+  const normalBottom=v.y+Math.round(point.y)+parseFloat(getComputedStyle(b).marginTop);
+  return {naturalBottom:normalBottom,naturalTop:normalBottom-r.height,left:r.left,right:r.right,
+   bottom:r.bottom,top:r.top,tail:Number.isFinite(tail)?tail:0,screenX:v.x+Math.round(point.x),
+   panel:{left:panel.left,right:panel.right,top:panel.top,bottom:panel.bottom,height:panel.height}};
+ },boxId);
+}
 async function dialogue(browser){
  const {ctx,page,errors}=await launch(browser,'base',{x:34,z:61},{clockStart:720,facing:1,width:390});
  try{
@@ -136,7 +153,7 @@ async function dialogue(browser){
    return {bubble:bubble.backgroundColor,panel:getComputedStyle(document.querySelector(boxId)).backgroundColor,
     pad:getComputedStyle(document.querySelector('#poiWalkPad')).backgroundColor,opacity:bubble.opacity,text:bubble.color,
     shadow:bubble.textShadow,corners:parseFloat(bubble.borderTopLeftRadius),tailContent:tail.content,
-    tailBg:tail.backgroundColor,tailEdge:tail.borderTopColor,tailPos:tail.position};
+    tailBg:tail.backgroundColor,tailEdge:tail.borderTopColor,tailBottom:tail.borderBottomColor,tailPos:tail.position};
   },boxId);
   assert.equal(glass.bubble,glass.pad,'NPC bubble exactly matches the resting D-pad tint');
   assert.equal(glass.bubble,glass.panel,'overhead and scrolling messages use the same translucent surface');
@@ -145,12 +162,26 @@ async function dialogue(browser){
   assert.ok(textComponents.length===3&&textComponents.slice(0,3).every(n=>n>=214),'fully opaque readable light text');
   assert.notEqual(glass.shadow,'none','text remains readable over bright scenery');
   assert.ok(glass.corners>=5&&glass.tailPos==='absolute'&&glass.tailContent!=='none','speech bubble retains its rounded shape and tail');
-  assert.ok([glass.tailBg,glass.tailEdge].includes(glass.bubble),'tail uses the same transparent tint without a mismatched opaque tip');
+  assert.ok([glass.tailBg,glass.tailEdge,glass.tailBottom].includes(glass.bubble),'tail uses the same transparent tint without a mismatched opaque tip');
 
   assert.ok((await panel.innerText()).includes(actor.text));
   assert.equal((await state(page)).combat.actionAt,attack);
   await geometry(page);
-  if(out)await page.screenshot({path:out+'/v151-game-message-npc-390.png'});
+  await page.waitForFunction(()=>['above','below'].includes(document.querySelector('#poiTownSpeech').dataset.side));
+  const overlap=await measureSpeech(page);
+  assert.ok(overlap&&overlap.naturalBottom>overlap.panel.top&&overlap.naturalTop<overlap.panel.bottom,
+   'fixture recreates original projected speech overlap: '+JSON.stringify(overlap));
+  assert.ok(overlap.bottom+overlap.tail<=overlap.panel.top-3||
+   overlap.top>=overlap.panel.bottom+3||overlap.right<=overlap.panel.left-3||overlap.left>=overlap.panel.right+3,
+   'overhead speech, including its tail, clears the readable log: '+JSON.stringify(overlap));
+  if(out)await page.screenshot({path:out+'/v152-game-message-no-overlap-390.png'});
+  // A missing/hidden log must not shift the normal head projection.
+  await panel.evaluate(el=>el.hidden=true);
+  await page.waitForFunction(()=>!['above','below'].includes(document.querySelector('#poiTownSpeech').dataset.side));
+  const natural=await measureSpeech(page);
+  assert.ok(natural&&Math.abs(natural.bottom-natural.naturalBottom)<=1.5&&
+    Math.abs((natural.left+natural.right)/2-natural.screenX)<=1.5,
+    'overhead speech stays centered over its real head projection when clear: '+JSON.stringify(natural));
   assert.deepEqual(errors,[]);await unchanged(page);
  }finally{await ctx.close();}
 }
