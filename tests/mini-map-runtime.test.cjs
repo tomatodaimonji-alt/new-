@@ -65,7 +65,7 @@ test('minimap and attached location panel sit nearer the top-left but respect th
 });
 
 test('all four upper-left surfaces blend directly with the scene without a blur backing',()=>{
- const css=html.match(/#app #viewWrap :is\(#poiMiniMap,#poiLocationPanel,#poiGoldHud,#poiClockHud\)\s*\{([^}]+)\}/)?.[1];
+ const css=html.match(/#app #viewWrap :is\(#poiMiniMap,#poiLocationPanel,#poiClockHud\)\s*\{([^}]+)\}/)?.[1];
  assert(css,'scope the flat alpha to the four upper-left surfaces');
  assert.match(css,/background-color:var\(--workshop-panel-surface\)!important/);
  assert.match(css,/backdrop-filter:none/);

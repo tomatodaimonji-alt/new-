@@ -127,21 +127,21 @@ async function openBag(page){
  const layout=await page.evaluate(panel=>{
   const el=document.querySelector(panel),r=el.getBoundingClientRect(),v=document.querySelector('#viewWrap').getBoundingClientRect();
   const title=el.querySelector('#poiBagHeading'),h=title.getBoundingClientRect(),css=getComputedStyle(title);
-  return {panel:[r.left,r.top,r.right,r.bottom],view:[v.left,v.top,v.right,v.bottom],title:{text:title.textContent,x:h.left,y:h.top,bottom:h.bottom,size:parseFloat(css.fontSize),align:css.textAlign},cells:[...el.querySelectorAll('[data-bag-slot]')].map(b=>{
+  return {panel:[r.left,r.top,r.right,r.bottom],view:[v.left,v.top,v.right,v.bottom],title:{text:title.textContent,x:h.left,y:h.top,bottom:h.bottom,size:parseFloat(css.fontSize),align:css.textAlign},cells:[...el.querySelectorAll('[data-bag-slot]:not([hidden])')].map(b=>{
    const q=b.getBoundingClientRect();return {disabled:b.disabled||b.getAttribute('aria-disabled')==='true',x:q.x,y:q.y,width:q.width,height:q.height};
   })};
  },panel);
- assert.equal(layout.cells.length,45);
+ assert.equal(layout.cells.length,29);
  assert.ok(layout.panel.every((coordinate,i)=>i<2?coordinate>=layout.view[i]-1:coordinate<=layout.view[i]+1),
   'all of the bag panel remains inside the game viewport: '+JSON.stringify({panel:layout.panel,view:layout.view}));
  assert.equal(layout.title.text,'インベントリ');
  assert.ok(layout.title.x-layout.panel[0]>=0&&layout.title.x-layout.panel[0]<=14&&layout.title.y-layout.panel[1]>=0&&layout.title.y-layout.panel[1]<=14,'small title at bag top-left');
  assert.ok(layout.title.bottom<=layout.cells[0].y+1&&layout.title.size<=14&&layout.title.align!=='center','heading stays compact and above the slot grid');
- assert.ok(layout.cells.every(slot=>slot.width>=23&&slot.height>=23&&Math.abs(slot.width-slot.height)<=1),'all 45 slots stay square, including locked slots');
+ assert.ok(layout.cells.every(slot=>slot.width>=23&&slot.height>=23&&Math.abs(slot.width-slot.height)<=1),'all 29 visible storage slots stay square, including locked slots');
  assert.equal(new Set(layout.cells.map(c=>c.x.toFixed(1))).size,9);
  assert.equal(new Set(layout.cells.map(c=>c.y.toFixed(1))).size,5);
  for(const c of layout.cells)assert(c.x>=layout.panel[0]&&c.y>=layout.panel[1]&&c.x+c.width<=layout.panel[2]+1&&c.y+c.height<=layout.panel[3]+1,'grid slot is never clipped');
- assert.deepEqual(layout.cells.map(c=>c.disabled),Array.from({length:45},(_,i)=>i>=18),'top two rows only usable');
+ assert.deepEqual(layout.cells.map(c=>c.disabled),Array.from({length:29},(_,i)=>i>=18),'the original 18 storage slots remain usable');
  assert.equal((await bagState(page)).bagUnlocked,18);
 }
 async function closeBag(page){
@@ -222,11 +222,11 @@ async function migrateRows(browser){
   expectedHot[0]=sword;expectedHot[7]=herb(1);
   for(const [i,count] of [[0,2],[7,3],[9,4],[16,5]])expectedBag[i]=herb(count);
   assert.deepEqual(current.hotbar,expectedHot,'old hotbar columns stay at their original positions');
-  assert.deepEqual(current.bag,expectedBag,'old bag cells remain on the same row and in the same column; each new ninth cell is empty');
+  assert.deepEqual(current.bag,expectedBag,'legacy bag contents keep their previously migrated logical indices');
   assert.equal(await read(),JSON.stringify(rawOld),'read-only bag opening leaves the 24-cell storage unchanged');
   await drag(ctx,page,bag(16),bag(17));
   const moved=await bagState(page),persisted=JSON.parse(await read());
-  assert.deepEqual([moved.bag[16],moved.bag[17]],[null,herb(5)],'new ninth cell on unlocked second row accepts touch drag');
+  assert.deepEqual([moved.bag[16],moved.bag[17]],[null,herb(5)],'the last unlocked cell still accepts a touch drag');
   assert.equal(persisted.slots.length,27,'the first real edit writes the 27-cell layout');
   assert.deepEqual(persisted.slots,[...moved.hotbar,...moved.bag.slice(0,18)]);
   await reload(page);

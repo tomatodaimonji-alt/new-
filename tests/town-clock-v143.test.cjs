@@ -28,6 +28,6 @@ test('24h wraps and a separate saved clock resumes without altering other storag
  assert.equal(writes.size,1);
 });
 test('clock HUD follows wallet and the pale shared gameplay panel',()=>{
- assert.match(h,/<div id="poiGoldHud"[\s\S]*?<div id="poiClockHud" hidden>[\s\S]*?id="poiClockValue"/);
- assert.match(h,/#app #viewWrap :is\(#poiMiniMap,#poiLocationPanel,#poiGoldHud,#poiClockHud\)\{[^}]+background-color:var\(--workshop-panel-surface\)/);
+ assert.match(h,/<div id="poiClockHud" hidden>[\s\S]*?id="poiClockValue"/);
+ assert.match(h,/#app #viewWrap :is\(#poiMiniMap,#poiLocationPanel,#poiClockHud\)\{[^}]+background-color:var\(--workshop-panel-surface\)/);
 });

@@ -6,7 +6,7 @@ test('item details provide a separately labelled native dialog and vertically or
  assert.match(dialog[1],/aria-labelledby="poiItemDetailName" aria-describedby="poiItemDetailDescription"/);
  const rows=[...dialog[2].matchAll(/<button type="button" data-item-detail-action="([^"]+)"([^>]*)>([^<]+)<\/button>/g)];
  assert.deepEqual(rows.map(r=>[r[1],r[3]]),[
-  ['transfer','インベントリに入れる'],['split','分割する'],['equip','装備する'],['use','使う'],['drop','捨てる'],['back','戻る']
+  ['transfer','インベントリに入れる'],['split','分割する'],['equip','装備する'],['unequip','取り外す'],['use','使う'],['drop','捨てる'],['back','戻る']
  ]);
  assert(rows.slice(0,-1).every(r=>r[2].includes(' hidden')),'JS explicitly enables only valid actions');
  assert.match(rows.at(-1)[2],/autofocus/);

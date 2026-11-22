@@ -3,7 +3,7 @@ const html=fs.readFileSync(process.env.HTML||path.join(__dirname,'../world-edito
 function shop(){
  const a=html.indexOf('function poiShopIsOpen('),b=html.indexOf('function poiWalkStatus(',a);
  assert(a>=0&&b>a,'checkout UI missing');
- const ids=Object.fromEntries(['poiWalkAction','poiShopDialog','poiGoldHud','poiGoldValue','poiShopGold','poiShopBuyPotion','poiShopFeedback'].map(id=>[id,{setAttribute(k,v){this[k]=v},showModal(){this.open=true},close(){this.open=false}}]));
+ const ids=Object.fromEntries(['poiWalkAction','poiShopDialog','poiGoldValue','poiShopGold','poiShopBuyPotion','poiShopFeedback'].map(id=>[id,{setAttribute(k,v){this[k]=v},showModal(){this.open=true},close(){this.open=false}}]));
  let purchases=0,refresh=0;
  const ctx=vm.createContext({$:id=>ids[id],poiChestIsOpen:()=>false,poiKitchenChestReachable:()=>false,facilitySite:{id:'base'},poiWalkActive:true,pineAIActive:false,poiWalkLevel:0,
   poiWalkX:47,poiWalkZ:13,poiWalkFacing:1,world:[{x:48,z:13,y:0,type:'counterLuxury',rot:1},{x:48,z:13,y:0,type:'poiLedgerPapers',rot:3}],
