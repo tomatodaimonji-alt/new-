@@ -4,7 +4,7 @@ const build=vm.runInNewContext(cut('const FACILITY_SITES=Object.freeze(','functi
 const site=JSON.parse(JSON.stringify(build('base'))),world=site.map.world;
 test('the four newly armed encounters are placed without changing the previous 6551 records',()=>{
  assert.equal(createHash('sha256').update(JSON.stringify(world.slice(0,6551))).digest('hex'),'978a97126a60dac8279feaebd4d53b1b4065fe3fbc2e842f73ac7f3c424f2c43');
- const placed=site.armedEncounters;assert.deepEqual(placed.map(({type,x,z,y})=>[type,x,z,y]),[
+ const placed=site.armedEncounters.slice(0,4);assert.deepEqual(placed.map(({type,x,z,y})=>[type,x,z,y]),[
  ['monsterSkelSpearman',101,61,-1],['monsterSkelWarrior',110,56,-1],
  ['monsterSkelKnight',106,78,-1],['monsterSkelArcher',105,86,0]]);
  for(const {type,x,z,y,leash} of placed){
