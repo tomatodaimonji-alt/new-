@@ -109,7 +109,7 @@ async function worker(page,id){
  return byId(await residents(page),id);
 }
 const morning=9*60;
-const market='#poiMessagePanel[data-npc-menu]';
+const market='#poiNpcMenu';
 const choices='#poiNpcMenu button[data-npc-action]';
 const menu=page=>page.locator(market);
 const textOption=(page,text)=>page.locator(choices).filter({hasText:text});
@@ -133,6 +133,10 @@ async function button(page,label){
  await item.first().tap();
 }
 async function verifyNoBackdrop(page){
+ const card=await page.locator('#poiMessagePanel').boundingBox(),opts=await menu(page).boundingBox();
+ assert.ok(card&&opts&&Math.abs(card.x-opts.x)<2&&opts.y+opts.height<card.y,'separate choices are anchored just above the speech card at its left');
+ assert.ok(opts.y>=0&&card.width>opts.width,'only compact options occupy the separate panel');
+ assert.equal(await page.locator('#poiMessagePanel').evaluate(el=>getComputedStyle(el).pointerEvents),'none');
  const styles=await menu(page).evaluate(el=>{
   const root=el.closest('dialog')||el;
   const p=getComputedStyle(root,'::backdrop');
@@ -177,7 +181,7 @@ async function residentTrade(browser){
   await verifyNoBackdrop(page);
   assert.equal(await page.locator(speech).isVisible(),false,'direct dialogue shows in local panel, not an overhead NPC bubble');
   const selected=()=>menu(page).evaluate(el=>{
-   const rows=[...el.querySelectorAll('#poiNpcMenu button[data-npc-action]')].filter(e=>!e.disabled&&e.getBoundingClientRect().width>0);
+   const rows=[...el.querySelectorAll('button[data-npc-action]')].filter(e=>!e.disabled&&e.getBoundingClientRect().width>0);
    return {at:rows.findIndex(e=>e.getAttribute('aria-selected')==='true'||e.getAttribute('aria-current')==='true'||
     e.dataset.selected==='true'||e.classList.contains('selected')||e===document.activeElement),count:rows.length};
   });

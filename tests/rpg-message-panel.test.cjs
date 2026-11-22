@@ -43,7 +43,7 @@ test('successful coin pickup reports exact G and failed save adds no message',()
 });
 test('panel is anchored to party grid without moving adjacent controls or replacing the dialogue bubble',()=>{
  assert.match(html,/<section id="poiPartyHud"[^>]+>[\s\S]*?<div id="poiMessagePanel" hidden/);
- assert.match(html,/#poiMessagePanel\{[^}]*bottom:calc\(100% \+ var\(--poi-hud-gap\)\)[^}]*pointer-events:none[^}]*background:var\(--workshop-panel-surface\)/);
+ assert.match(html,/#poiMessageStack\{[^}]*bottom:calc\(100% \+ var\(--poi-hud-gap\)\)[^}]*pointer-events:none[^}]*\}\s*#poiMessagePanel\{[^}]*background:var\(--workshop-panel-surface\)/);
  assert(snippet('function poiInventoryPickup(','function poiInventoryDraw(').includes('poiMessagePush'));
  const dialogue=snippet('function poiNpcMenuRender(','function poiNpcMenuStep(');
  assert(dialogue.includes('poiMessageSpeak'));
@@ -67,7 +67,7 @@ test('announcement names the defeated monster and does not duplicate the working
 });
 test('announcement heading is outside its live log and the 2.3 height ratio is preserved',()=>{
  assert.match(html,/<div id="poiMessagePanel" hidden><div id="poiMessageHeading">アナウンス<\/div><div id="poiMessageLog" role="log" aria-labelledby="poiMessageHeading"/);
- assert.match(html,/#poiMessagePanel\{[^}]*height:230%/);
+ assert.match(html,/#poiMessageStack\{[^}]*height:230%/);
 });
 
 test('newest announcement uses two lines while history yields space',()=>{
@@ -98,4 +98,28 @@ test('Play mini messages use the announcement log, but editor and blocking dialo
  c.pineAIActive=true;c.toast('AI編集');assert.equal(out.textContent,'AI編集');
  c.pineAIActive=false;c.poiWalkActive=false;c.toast('編集しました');assert.equal(out.textContent,'編集しました');
  c.poiWalkActive=true;c.document.querySelector=()=>({});c.toast('必須のエラー');assert.equal(out.textContent,'必須のエラー');
+});
+test('dialogue choices occupy a separate glass panel just above the ordinary speech card',()=>{
+ assert.match(html,/<div id="poiMessageStack">\s*<div id="poiMessagePanel" hidden>[^\n]*<\/div><\/div>\s*<div id="poiNpcMenu"/);
+ assert.doesNotMatch(html,/#poiMessagePanel\[data-npc-menu\]/);
+ assert.match(html,/#poiNpcMenu\{[^}]*bottom:calc\(100% \+ var\(--poi-hud-gap\)\)[^}]*left:0[^}]*background:var\(--workshop-panel-surface\)/);
+});
+test('short space below mini HUD uses paired options without overlapping it',()=>{
+ const css=html.match(/#poiNpcMenu\[data-compact\]\{([^}]+)\}/)?.[1];
+ assert.match(css||'',/grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+ const target={setAttribute(){},removeAttribute(){},getBoundingClientRect:()=>({top:215,bottom:243})};
+ const attrs={},menu={children:[target],hidden:false,toggleAttribute:(k,v)=>attrs[k]=v,
+  style:{setProperty:(_k,v)=>attrs.room=v},getBoundingClientRect:()=>({left:8,right:216,width:208,top:215,bottom:247})};
+ const stage={getBoundingClientRect:()=>({top:50})},mini={getBoundingClientRect:()=>({left:5,right:106,bottom:204})};
+ const c={poiTownDialogue:{index:0},$:k=>({poiNpcMenu:menu,viewWrap:stage,poiMiniHud:mini}[k])};
+ vm.runInNewContext(snippet('function poiNpcMenuMark(','function poiNpcMenuRender('),c);
+ c.poiNpcMenuMark();
+ assert.deepEqual(attrs,{'data-compact':true,room:'40px'});
+});
+test('last choice scrolls into the independent menu instead of moving the speech card',()=>{
+ const row={setAttribute(){},removeAttribute(){},getBoundingClientRect:()=>({top:279,bottom:307})};
+ const menu={children:[row,row,row],hidden:false,scrollTop:0,getBoundingClientRect:()=>({top:209,bottom:247})};
+ const c={poiTownDialogue:{index:2},$:k=>k==='poiNpcMenu'?menu:null};
+ vm.runInNewContext(snippet('function poiNpcMenuMark(','function poiNpcMenuRender('),c);
+ c.poiNpcMenuMark();assert.equal(menu.scrollTop,63);
 });

@@ -6,6 +6,6 @@ test('announcement heading and messages have matching type with a restrained acc
  assert.doesNotMatch(css('#poiMessageHeading'),/font-family:/);
  assert.doesNotMatch(css('\\.poiMessageLine'),/font-size:|line-height:|font-family:/);
  assert.match(css('\\.poiMessageLine:last-child'),/-webkit-line-clamp:2/);
- assert.match(css('#poiMessagePanel'),/height:230%/);
+ assert.match(css('#poiMessageStack'),/height:230%/);
  assert.equal(html.includes('.poiMessageLine[data-kind="gold"]{color:'),false,'only the heading has accent text');
 });
