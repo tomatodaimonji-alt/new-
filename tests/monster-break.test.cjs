@@ -17,7 +17,9 @@ function harness(){
    }
   },
   upload:m=>{renders.push(m);return {...m,buf:{}}},draw:m=>draws.push(m)});
- vm.runInContext(html.slice(a,b),ctx);
+  const attack=html.match(/\/\/ BEGIN SLIME ATTACK\n([\s\S]*?)\/\/ END SLIME ATTACK/);
+ assert.ok(attack,'slime attack pose is present');
+ vm.runInContext(attack[1]+html.slice(a,b),ctx);
  return {ctx,renders,draws,calls,run:s=>vm.runInContext(s,ctx)};
 }
 test('a dying slime reuses its colored model triangles, scatters, and vanishes from the render batch',()=>{

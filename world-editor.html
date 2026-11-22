@@ -819,7 +819,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 #poiShopBuyPotion:not(:disabled){border-color:#ebca82;background:#81663ce8!important}
 #poiShopFeedback{min-height:1.4em}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v157）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v158）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -6293,7 +6293,7 @@ window.addEventListener('pageshow',()=>{poiAudioPageHidden=false;poiAudioSyncLif
 // hint never overrides a hidden document or an active pagehide.
 window.__workshopAudioForeground=visible=>{
  if(typeof visible!=='boolean')return;
- poiAudioNativeForeground=visible;if(!visible)poiWildPause();poiAudioSyncLifecycle();
+ poiAudioNativeForeground=visible;if(!visible){poiWildPause();if(typeof poiSlimeCancelPlayer==="function")poiSlimeCancelPlayer()}poiAudioSyncLifecycle();
 };
 // Foreground gameplay always uses the current mixer settings.
 
@@ -7080,7 +7080,74 @@ function poiMonsterCanMove(x,z,except){
  if(facilitySite&&world.some(o=>o.x===x&&o.z===z&&o.y===poiWalkLevel&&
   (o.type==='guildStairUp'||o.type==='guildStairDown')))return false;
  if(!poiWalkCanStep(x,z,wild?except.x:undefined,wild?except.z:undefined)||poiMonsterAt(x,z))return false;if(poiWalkX===x&&poiWalkZ===z)return false;return true}
-function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMobTick=now+380;let changed=false;for(const [obj,state] of poiMonsterStates){if((facilitySite&&obj.y!==poiWalkLevel)||state.hp<=0||state.townOwned||(state.wildSpawn&&!poiWildPlayerOutside()))continue;const dx=poiWalkX-state.x,dz=poiWalkZ-state.z,dist=Math.hypot(dx,dz);if(dist>6.5){if((pineGameActive||state.wildSpawn)&&Math.random()<(state.wildSpawn?.22:.32)){const [rx,rz]=[[0,1],[0,-1],[1,0],[-1,0]][Math.floor(Math.random()*4)],nx=state.x+rx,nz=state.z+rz;if((state.wildSpawn||Math.max(Math.abs(nx-24),Math.abs(nz-24))>=10)&&poiMonsterCanMove(nx,nz,state)){state.fromX=state.x;state.fromZ=state.z;state.x=nx;state.z=nz;state.moveStarted=now;state.facing=rx?rx>0?3:1:rz<0?2:0;changed=true}}continue;}if(Math.abs(dx)+Math.abs(dz)===1){if(now>=state.nextAttack){state.nextAttack=now+1150;const amount=POI_MONSTER_STATS[obj.type].attack;poiPlayerHP=Math.max(0,poiPlayerHP-amount);poiSound('hurt');poiDamageNumber(poiWalkViewX+.5,poiWalkViewZ+.5,terrainY(poiWalkX,poiWalkZ)+1.8+(facilitySite?poiWalkLevel*1.4:0),amount,true);poiCombatHud();if(!poiPlayerHP){if(!poiPlayerDeathBegin(now)){poiPlayerHP=POI_PLAYER_MAX_HP;poiWalkReset(poiSpawnX,poiSpawnZ);poiDamageLabels=[];toast('倒されたため初期位置にリスポーン');poiCombatHud()}break}}continue}
+// BEGIN SLIME ATTACK
+const POI_SLIME_CONTACT_MS=170,POI_SLIME_ATTACK_MS=360;
+const POI_SLIME_ATTACK_KEYS=[
+ [0,0,0,1,1],[70,-.055,0,.65,1.16],[125,.28,.32,1.13,.96],
+ [POI_SLIME_CONTACT_MS,.60,.23,.88,1.10],[217,.36,.15,1.10,.96],[280,.035,0,.75,1.18],[POI_SLIME_ATTACK_MS,0,0,1,1]
+];
+const poiSlimePending=new Set();
+function poiSlimeAttackAge(s,now){
+ const p=s.playerAttack,town=s.townOwned;
+ const start=town?s.counterAt:p?.start,impact=town?s.counterVisualHitAt:p?.visualHitAt;
+ const pending=town?s.counterHitAt!=null:p?.pending;
+ const age=now-start;
+ if(Number.isFinite(impact))return POI_SLIME_CONTACT_MS+now-impact;
+ return pending?Math.min(age,POI_SLIME_CONTACT_MS-.001):age;
+}
+function poiSlimeAttackPose(s,now){
+ const a=s.townOwned?{start:s.counterAt,dx:s.counterTargetX-s.x,dz:s.counterTargetZ-s.z}:s.playerAttack;
+ const elapsed=poiSlimeAttackAge(s,now);
+ if(!Number.isFinite(elapsed)||elapsed<0||elapsed>=POI_SLIME_ATTACK_MS)return null;
+ const i=POI_SLIME_ATTACK_KEYS.findIndex(k=>k[0]>elapsed);
+ const p=POI_SLIME_ATTACK_KEYS[i-1],q=POI_SLIME_ATTACK_KEYS[i],t=(elapsed-p[0])/(q[0]-p[0]),ease=t*t*(3-2*t);
+ const [reach,lift,squash,width]=p.slice(1).map((v,j)=>v+(q[j+1]-v)*ease);
+ const phase=elapsed<70?'squash':elapsed<POI_SLIME_CONTACT_MS?'lunge':elapsed<195?'contact':elapsed<250?'recover':'land';
+ const facing=a.dx>0?3:a.dx<0?1:a.dz<0?2:0;
+ return {phase,elapsed,contact:POI_SLIME_CONTACT_MS,dx:a.dx*reach,dz:a.dz*reach,lift,squash,width,facing};
+}
+function poiSlimeBeginPlayer(obj,s,now){
+ s.nextAttack=now+1150;
+ const dx=poiWalkX-s.x,dz=poiWalkZ-s.z;
+ s.playerAttack={obj,start:now,hit:now+POI_SLIME_CONTACT_MS,x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,dx,dz,pending:true};
+ poiSlimePending.add(s);poiMonsterMeshDirty=true;
+}
+function poiSlimeCancelPlayer(){
+ for(const s of poiSlimePending){s.playerAttack=null;poiMonsterMeshDirty=true}
+ poiSlimePending.clear();
+}
+function poiSlimeResolvePlayer(now){
+ if(!poiSlimePending.size)return false;
+ if(!poiWalkActive||pineAIActive||!poiAudioAllowed()||poiPlayerDying()){poiSlimeCancelPlayer();return false}
+ for(const s of poiSlimePending){
+  const a=s.playerAttack;
+  if(!a||s.hp<=0||poiMonsterStates.get(a.obj)!==s){poiSlimePending.delete(s);continue}
+  if(now<a.hit)continue;
+  poiSlimePending.delete(s);a.pending=false;
+  if(now-a.hit<170){a.visualHitAt=now;poiMonsterMeshDirty=true}
+  if(now-a.hit>=170||poiWalkX!==a.x||poiWalkZ!==a.z||poiWalkLevel!==a.y||
+     Math.abs(s.x-a.x)+Math.abs(s.z-a.z)!==1||(s.wildSpawn&&!poiWildPlayerOutside()))continue;
+  poiMonsterMeshDirty=true;
+  if(poiMobHitPlayer(a.obj,now)){poiSlimeCancelPlayer();return true}
+ }
+ return false;
+}
+// END SLIME ATTACK
+
+function poiMobHitPlayer(obj,now){
+ const amount=POI_MONSTER_STATS[obj.type].attack;
+ poiPlayerHP=Math.max(0,poiPlayerHP-amount);poiSound('hurt');
+ poiDamageNumber(poiWalkViewX+.5,poiWalkViewZ+.5,terrainY(poiWalkX,poiWalkZ)+1.8+(facilitySite?poiWalkLevel*1.4:0),amount,true);
+ poiCombatHud();if(poiPlayerHP)return false;
+ if(!poiPlayerDeathBegin(now)){
+  poiPlayerHP=POI_PLAYER_MAX_HP;poiWalkReset(poiSpawnX,poiSpawnZ);poiDamageLabels=[];
+  toast('倒されたため初期位置にリスポーン');poiCombatHud();
+ }
+ return true;
+}
+function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMobTick=now+380;let changed=false;for(const [obj,state] of poiMonsterStates){if((facilitySite&&obj.y!==poiWalkLevel)||state.hp<=0||state.townOwned||(state.wildSpawn&&!poiWildPlayerOutside()))continue;const dx=poiWalkX-state.x,dz=poiWalkZ-state.z,dist=Math.hypot(dx,dz);if(dist>6.5){if((pineGameActive||state.wildSpawn)&&Math.random()<(state.wildSpawn?.22:.32)){const [rx,rz]=[[0,1],[0,-1],[1,0],[-1,0]][Math.floor(Math.random()*4)],nx=state.x+rx,nz=state.z+rz;if((state.wildSpawn||Math.max(Math.abs(nx-24),Math.abs(nz-24))>=10)&&poiMonsterCanMove(nx,nz,state)){state.fromX=state.x;state.fromZ=state.z;state.x=nx;state.z=nz;state.moveStarted=now;state.facing=rx?rx>0?3:1:rz<0?2:0;changed=true}}continue;}if(Math.abs(dx)+Math.abs(dz)===1){if(now>=state.nextAttack){if(obj.type==='monsterSlime')poiSlimeBeginPlayer(obj,state,now);
+ else{state.nextAttack=now+1150;if(poiMobHitPlayer(obj,now))break}}
+ continue}
  const steps=[[Math.sign(dx),0],[0,Math.sign(dz)]].filter(([sx,sz])=>sx||sz).sort((a,b)=>Math.abs(a[0]*dx+a[1]*dz)>Math.abs(b[0]*dx+b[1]*dz)?-1:1);
  for(const [sx,sz] of steps){const nx=state.x+sx,nz=state.z+sz;if((!pineGameActive||Math.max(Math.abs(nx-24),Math.abs(nz-24))>=10)&&poiMonsterCanMove(nx,nz,state)){state.fromX=state.x;state.fromZ=state.z;state.x=nx;state.z=nz;state.moveStarted=now;state.facing=sx?sx>0?3:1:sz<0?2:0;changed=true;break}}
  }if(changed)poiMonsterMeshDirty=true;if(pineGameActive)pineGameSave()}
@@ -7335,7 +7402,7 @@ function poiTownNpcPickTarget(a,now){
  }
  return null;
 }
-const POI_TOWN_SWING_CONTACT=108,POI_TOWN_COUNTER_CONTACT=170;
+const POI_TOWN_SWING_CONTACT=108,POI_TOWN_COUNTER_CONTACT=typeof POI_SLIME_CONTACT_MS==='number'?POI_SLIME_CONTACT_MS:170;
 function poiTownNpcCombatNear(x,z,y){
  return y===poiWalkLevel&&Math.hypot(x-poiWalkX,z-poiWalkZ)<=9;
 }
@@ -7391,6 +7458,7 @@ function poiTownNpcResolve(a,now){
  if(Number.isFinite(state.counterHitAt)&&now>=state.counterHitAt){
   const recent=now-state.counterHitAt<340;
   state.counterHitAt=null;
+  if(recent){state.counterVisualHitAt=now;poiMonsterMeshDirty=true}
   if(recent&&poiTownNpcMelee(a,state)&&a.x===state.counterTargetX&&a.z===state.counterTargetZ){
    const amount=POI_MONSTER_STATS.monsterSlime.attack||6;
    a.hp=Math.max(0,a.hp-amount);a.hurtAt=now;
@@ -7427,7 +7495,7 @@ function poiTownNpcFight(a,now,budget){
    a.attackAt=now+760;a.swingAt=now;a.hitAt=now+POI_TOWN_SWING_CONTACT;
   }
   if(now>=(state.nextAttack||0)){
-   state.nextAttack=now+1120;state.counterAt=now;state.counterHitAt=now+POI_TOWN_COUNTER_CONTACT;
+   state.nextAttack=now+1120;state.counterAt=now;state.counterVisualHitAt=null;state.counterHitAt=now+POI_TOWN_COUNTER_CONTACT;
    state.counterTargetX=a.x;state.counterTargetZ=a.z;poiMonsterMeshDirty=true;
   }
   return true;
@@ -7891,7 +7959,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v157',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v158',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -8006,7 +8074,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v157';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v158';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -8019,7 +8087,7 @@ function pineAIPlanRender(){
 }
 
 function pineAISetActive(active){
- if(active)poiShopClose();
+ if(active){poiShopClose();poiSlimeCancelPlayer()}
  pineAIActive=!!active;
  if(!pineAIActive){pineAICaptureGeneration++;const old=$('pineAIFullCapture');if(old)old.remove();const plan=document.getElementById('pineAIPlanCapture');if(plan){if(plan._cleanup)plan._cleanup();plan.remove()}}
  $('pineAIMode').hidden=!pineAIActive;
@@ -8221,7 +8289,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v157',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v158',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -8955,11 +9023,13 @@ function poiMonsterPose(obj,s,now){
  let z=(s.fromZ??s.z)+(s.z-(s.fromZ??s.z))*e;
  const moving=t<1&&((s.fromX??s.x)!==s.x||(s.fromZ??s.z)!==s.z);
  let bounce=moving?.10*Math.sin(t*Math.PI):.02*Math.sin(now*.003+obj.x);
- if(s.townOwned&&Number.isFinite(s.counterAt)&&now>=s.counterAt&&now-s.counterAt<340){
+ const attack=obj.type==='monsterSlime'?poiSlimeAttackPose(s,now):null;
+ if(attack){x+=attack.dx;z+=attack.dz;bounce+=attack.lift}
+ else if(obj.type!=='monsterSlime'&&s.townOwned&&Number.isFinite(s.counterAt)&&now>=s.counterAt&&now-s.counterAt<340){
   const hop=Math.sin(Math.PI*(now-s.counterAt)/340);
   x+=(s.counterTargetX-s.x)*.33*hop;z+=(s.counterTargetZ-s.z)*.33*hop;bounce+=.27*hop;
  }
- return {x:x+.5,y:terrainY(s.x,s.z)+bounce+(facilitySite?obj.y*1.4:0),z:z+.5};
+ return {x:x+.5,y:terrainY(s.x,s.z)+bounce+(facilitySite?obj.y*1.4:0),z:z+.5,...(attack?{attack}:null)};
 }
 function poiMonsterFragmentTemplate(type){
  if(poiMonsterFragmentTemplates.has(type))return poiMonsterFragmentTemplates.get(type);
@@ -9082,6 +9152,7 @@ function poiMonsterDrawBreaks(m,now){
   else poiMonsterAppendDebris(m,effect,1,Math.max(0,1-(age-poiMonsterBreakFadeAt(effect))/(poiMonsterBreakTTL(effect)-poiMonsterBreakFadeAt(effect))));
  }
 }
+let poiSlimeMeshAnimating=false;
 function poiMonsterRender(now,vp){
  if(!poiWalkActive)return;
  for(let i=poiMonsterBreaks.length-1;i>=0;i--)if(now-poiMonsterBreaks[i].start>=poiMonsterBreakTTL(poiMonsterBreaks[i])){
@@ -9091,19 +9162,32 @@ function poiMonsterRender(now,vp){
   (!effect.settled||poiMonsterBreakPhase(now-effect.start,effect)==='fade'))||
   [...poiMonsterStates.values()].some(s=>s.hp>0&&(now-s.moveStarted<450||
    (s.townOwned&&(now-s.counterAt<390||now-s.townHurtAt<158))));
- if(!poiMonsterMesh||poiMonsterMeshDirty||(animate&&now-poiMonsterMeshLast>48)){
+ let slimeAttack=false;
+ for(const [o,s] of poiMonsterStates){
+  if(o.type!=='monsterSlime'||s.hp<=0||(facilitySite&&o.y!==poiWalkLevel))continue;
+  const age=poiSlimeAttackAge(s,now);
+  if(age>=0&&age<POI_SLIME_ATTACK_MS){slimeAttack=true;break}
+ }
+ const settle=poiSlimeMeshAnimating&&!slimeAttack;poiSlimeMeshAnimating=slimeAttack;
+ if(!poiMonsterMesh||poiMonsterMeshDirty||settle||((animate||slimeAttack)&&now-poiMonsterMeshLast>(slimeAttack?30:48))){
   const m=mesh();
   for(const [obj,s] of poiMonsterStates){
    if((facilitySite&&obj.y!==poiWalkLevel)||s.hp<=0)continue;
-   const {x:cx,y,z:cz}=poiMonsterPose(obj,s,now),part=mesh();
+   const {x:cx,y,z:cz,attack}=poiMonsterPose(obj,s,now),part=mesh();
    deco(part,obj.type,cx,y,cz,0);
-   const facing=s.facing||0;
+   const facing=attack?.facing??(s.facing||0);
    const flash=s.townOwned&&Number.isFinite(s.townHurtAt)?Math.max(0,1-(now-s.townHurtAt)/115)*.26:0;
    for(let i=0;i<part.p.length;i+=3){
     const [px,pz]=rot2(part.p[i]-cx,part.p[i+2]-cz,facing);
     const [nx,nz]=rot2(part.n[i],part.n[i+2],facing);
-    m.p.push(cx+px,part.p[i+1],cz+pz);
-    m.n.push(nx,part.n[i+1],nz);
+    if(attack){
+     const ny=part.n[i+1]/attack.squash,nnx=nx/attack.width,nnz=nz/attack.width,n=Math.hypot(nnx,ny,nnz)||1;
+     m.p.push(cx+px*attack.width,y+(part.p[i+1]-y)*attack.squash,cz+pz*attack.width);
+     m.n.push(nnx/n,ny/n,nnz/n);
+    }else{
+     m.p.push(cx+px,part.p[i+1],cz+pz);
+     m.n.push(nx,part.n[i+1],nz);
+    }
     m.c.push(Math.min(1,part.c[i]+flash),part.c[i+1]*(1-flash*.44),part.c[i+2]*(1-flash*.37));
    }
   }
@@ -9190,6 +9274,7 @@ function poiWalkFrame(now){
  poiWalkViewZ=poiWalkFromZ+(poiWalkZ-poiWalkFromZ)*smooth;
  panX=poiWalkViewX+.5-MAP_W/2;panZ=poiWalkViewZ+.5-MAP_H/2;
  if(now-poiWalkStarted<=POI_WALK_MS+32||poiWalkAttackPosePending)poiWalkAvatar(now);
+ if(poiSlimeResolvePlayer(now))return;
  poiWildSpawnFrame(now);poiMobFrame(now);
 }
 function poiWalkPassableDoor(type){
@@ -9548,6 +9633,7 @@ function poiWalkAction(){
  // Interactions without an assigned action are intentionally silent.
 }
 function poiWalkReset(x,z){
+ if(typeof poiSlimePending!=='undefined')poiSlimePending.clear();
  if(facilitySite?.id==='base')poiWildClear();
  if(facilitySite){$('app').classList.remove('facilityCellar');poiMonsterMeshDirty=true}
  poiWalkActionStarted=-10000;poiWalkAttackPosePending=false;
@@ -9576,7 +9662,7 @@ function poiWalkSpawnNearCenter(){
 }
 function poiWalkSet(active){
  if(active===poiWalkActive)return;
- if(!active)poiPlayerDeathClear();
+ if(!active){poiPlayerDeathClear();poiSlimePending.clear()}
  if(!active)poiShopClose();
  if(pineAIActive)pineAISetActive(false);
  if(active){
@@ -15269,7 +15355,8 @@ function facilityBoot(resume,playOnOpen=false){
    active:poiWalkActive,guildRenewalSource:facilitySite.guildRenewalSource??null,
    wildSpawn:poiWildSnapshot(),economy:poiEconomySnapshot(),inventory:poiInventorySnapshot(),occlusion:poiOcclusionFrame,
    combat:{playerHP:poiPlayerHP,death:poiPlayerDeathSnapshot(),actionAt:poiWalkActionStarted,effects:poiMonsterBreaks.length,debris:poiMonsterBreakSnapshot(performance.now()),actors:[...poiMonsterStates].map(([o,s])=>
-    ({type:o.type,x:s.x,z:s.z,level:o.y,hp:s.hp,wildSpawn:!!s.wildSpawn}))}})
+    ({type:o.type,x:s.x,z:s.z,level:o.y,hp:s.hp,wildSpawn:!!s.wildSpawn,
+     attack:o.type==='monsterSlime'?poiSlimeAttackPose(s,performance.now()):null}))}})
  };
  refreshPalette();updateStats();updateSelected();showEntireMap();
  if(playOnOpen)facilitySetPlay(true);else workshopResumeRestore(resume);
@@ -15899,8 +15986,8 @@ $('topDownView').addEventListener('click',toggleTopDown);
 $('registerPOI').addEventListener('click',pineRegisterCurrentPOI);
 $('poiWalkToggle').addEventListener('click',()=>facilitySite?facilitySetPlay(!poiWalkActive):poiWalkSet(!poiWalkActive));
 // A hidden tab may deliver no animation frames until the player returns.
-document.addEventListener('visibilitychange',()=>{if(document.hidden)poiWildPause()});
-window.addEventListener('pagehide',poiWildPause);
+document.addEventListener('visibilitychange',()=>{if(document.hidden){poiWildPause();poiSlimeCancelPlayer()}});
+window.addEventListener('pagehide',()=>{poiWildPause();poiSlimeCancelPlayer()});
 $('enterGameWorld').addEventListener('click',()=>{pineSetCheckMode(false);if(facilitySite)facilitySetPlay(true);else if(!pineGameActive)facilityNavigate('base',true)});
 $('facilityExport').addEventListener('click',facilityDownload);
 $('facilityExit').addEventListener('click',facilityExit);
