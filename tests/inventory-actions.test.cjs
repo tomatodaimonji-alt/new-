@@ -66,3 +66,36 @@ test('herb double-tap plays a pickup only after a successful chest withdrawal, n
  assert.equal(c.poiInventoryMove(1,{zone:'bag',index:0}).ok,true);
  assert.equal(c.poiDoubleTapStorage('bag',0).ok,true);assert.deepEqual(notes,[]);
 });
+test('closed-chest bag double tap equips armor and weapons without altering the chest or consuming items',()=>{
+ const {c,fail,mem}=setup();
+ c.poiQuickTransferStorage('chest',0);
+ assert.equal(c.poiUnequipArmor('legs').ok,true);
+ c.poiChestIsOpen=()=>false;
+ assert.equal(at(c,'bag',1).type,'starterTrousers');
+ const bytes=()=>mem.get('world-workshop-hotbar-v1');
+ const before=bytes();
+ fail(true);
+ assert.equal(c.poiDoubleTapStorage('bag',1).reason,'storage');
+ assert.equal(bytes(),before);
+ fail(false);
+ assert.equal(c.poiDoubleTapStorage('bag',1).ok,true);
+ assert.equal(c.poiArmorSnapshot().legs.type,'starterTrousers');
+ assert.equal(at(c,'bag',1),null);
+ assert.equal(c.poiDoubleTapStorage('bag',0).ok,true);
+ assert.equal(c.poiEquippedWeapon(),'kitchenKnife');
+ assert.equal(at(c,'hotbar',2).durability,20);
+ assert.equal(at(c,'bag',0),null);
+ assert.deepEqual(JSON.parse(bytes()).kitchenChest,JSON.parse(before).kitchenChest);
+});
+test('an open chest still receives equipment on bag double tap and closed-chest food defaults to details',()=>{
+ const {c,mem}=setup();
+ c.poiQuickTransferStorage('chest',0);
+ c.poiQuickTransferStorage('chest',1);
+ assert.equal(c.poiDoubleTapStorage('bag',0).ok,true);
+ assert.equal(c.poiChestSlotAt(0).type,'kitchenKnife');
+ assert.notEqual(c.poiEquippedWeapon(),'kitchenKnife');
+ c.poiChestIsOpen=()=>false;
+ const bytes=mem.get('world-workshop-hotbar-v1');
+ assert.equal(c.poiDoubleTapStorage('bag',1).reason,'details');
+ assert.equal(mem.get('world-workshop-hotbar-v1'),bytes);
+});
