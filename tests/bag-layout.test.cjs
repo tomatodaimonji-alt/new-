@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 test('inventory title names the panel and square cells share one responsive track size',()=>{
  assert.match(html,/<section id="poiBagPanel" aria-labelledby="poiBagHeading" hidden>\s*<div id="poiBagHeading">インベントリ<\/div>/);
- assert.match(html,/#poiBagPanel\{[^}]*--poi-bag-cell:min\([^;]*editor-visible-height[^;]*;[^}]*width:calc\(8 \* var\(--poi-bag-cell\) \+ 35px\)/);
+ assert.match(html,/#poiBagPanel\{[^}]*--poi-bag-cell:min\([^;]*editor-visible-height[^;]*;[^}]*width:calc\(9 \* var\(--poi-bag-cell\) \+ 38px\)/);
  assert.match(html,/#poiBagGrid\{[^}]*height:calc\(5 \* var\(--poi-bag-cell\) \+ 12px\)/);
 });
 test('single bag button is outside the upper left of the unchanged movement controls',()=>{

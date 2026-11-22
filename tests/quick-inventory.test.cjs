@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const html=fs.readFileSync(process.env.HTML||path.join(__dirname,'../world-editor.html'),'utf8');
 function harness(saved=null){
  const uis={poiPartyHud:{},poiPlayerHp:{},poiPlayerHpValue:{},poiHotbar:{}};
- const slots=Array.from({length:8},(_,i)=>({
+ const slots=Array.from({length:9},(_,i)=>({
   dataset:{hotbarSlot:String(i)},icon:{dataset:{},replaceChildren(child){this.firstChild=child;}},count:{},attrs:{},
   querySelector(k){return k==='.hotbar-icon'?this.icon:this.count},
   setAttribute(k,v){this.attrs[k]=v},removeAttribute(k){delete this.attrs[k]}
@@ -24,7 +24,7 @@ function harness(saved=null){
  run(html.slice(a,b)+html.slice(c,d));
  return {run,uis,slots,log,art,stored:()=>JSON.parse(saved)};
 }
-test('eight slots show sword and three recovery potions, begin unarmed, and update numeric HP',()=>{
+test('nine slots show sword and three recovery potions, begin unarmed, and update numeric HP',()=>{
  const {run,uis,slots,stored}=harness();
  run('poiCombatHud();poiHotbarRender()');
  assert.equal(uis.poiPlayerHpValue.textContent,'100/100');

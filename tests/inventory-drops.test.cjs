@@ -29,7 +29,7 @@ test('one herb per swipe, invalid/blocked/wet destinations and full pickup never
  x.poiWalkCanStep=()=>true;assert(x.poiInventoryDrop(1).ok);
  assert.equal(h.save().potions,2);
  assert.equal(h.save().drops[0].type,'healingHerb');
- const slots=Array.from({length:24},(_,i)=>i?{type:'healingHerb',count:9}:{type:'equipWoodSword',count:1});
+ const slots=Array.from({length:27},(_,i)=>i?{type:'healingHerb',count:9}:{type:'equipWoodSword',count:1});
  const full=setup({...h.save(),potions:9,slots});
  assert(!full.x.poiInventoryPickup(4,4));assert.equal(full.save().drops.length,1);
  assert(x.poiInventoryPickup(4,4));assert.equal(h.save().potions,3);

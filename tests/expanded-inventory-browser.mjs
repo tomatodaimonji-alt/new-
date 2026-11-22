@@ -109,9 +109,9 @@ async function geometry(page){
   });
   return {wrap:rect('#viewWrap'),panel:rect(panel),hotbar:rect('#poiHotbar'),toggle:rect(toggle),pad:rect('#poiWalkPad'),action:rect('#poiWalkAction'),hot};
  },{panel,toggle});
- assert.equal(dims.hot.length,8);
+ assert.equal(dims.hot.length,9);
  assert.ok(dims.hotbar[2]>=dims.wrap[2]*.90,'hotbar spans nearly the full mobile view width');
- assert.ok(dims.hot.every(([x,y,w,h],i)=>y===dims.hot[0][1]&&w>=27&&h>=27&&(i===0||x>dims.hot[i-1][0])),'one line of eight tap-sized slots');
+ assert.ok(dims.hot.every(([x,y,w,h],i)=>y===dims.hot[0][1]&&w>=25&&h>=25&&Math.abs(w-h)<=1&&(i===0||x>dims.hot[i-1][0])),'one line of nine square tap-sized slots');
  assert.ok(dims.hotbar[0]>=dims.wrap[0]&&dims.hotbar[0]+dims.hotbar[2]<=dims.wrap[0]+dims.wrap[2]+1,'no horizontal overflow');
  const [x,y,w,h]=dims.toggle;
  assert.ok(x<dims.action[0]&&Math.abs(w-dims.action[2])<=2&&Math.abs(h-dims.action[3])<=2,'inventory button sits left of D-pad and matches its touch size: '+JSON.stringify(dims));
@@ -125,21 +125,24 @@ async function geometry(page){
 async function openBag(page){
  await page.locator(toggle).tap();await page.locator(panel).waitFor({state:'visible'});
  const layout=await page.evaluate(panel=>{
-  const el=document.querySelector(panel),r=el.getBoundingClientRect();
+  const el=document.querySelector(panel),r=el.getBoundingClientRect(),v=document.querySelector('#viewWrap').getBoundingClientRect();
   const title=el.querySelector('#poiBagHeading'),h=title.getBoundingClientRect(),css=getComputedStyle(title);
-  return {panel:[r.left,r.top,r.right,r.bottom],title:{text:title.textContent,x:h.left,y:h.top,bottom:h.bottom,size:parseFloat(css.fontSize),align:css.textAlign},cells:[...el.querySelectorAll('[data-bag-slot]')].map(b=>{
+  return {panel:[r.left,r.top,r.right,r.bottom],view:[v.left,v.top,v.right,v.bottom],title:{text:title.textContent,x:h.left,y:h.top,bottom:h.bottom,size:parseFloat(css.fontSize),align:css.textAlign},cells:[...el.querySelectorAll('[data-bag-slot]')].map(b=>{
    const q=b.getBoundingClientRect();return {disabled:b.disabled||b.getAttribute('aria-disabled')==='true',x:q.x,y:q.y,width:q.width,height:q.height};
   })};
  },panel);
- assert.equal(layout.cells.length,40);
+ assert.equal(layout.cells.length,45);
+ assert.ok(layout.panel.every((coordinate,i)=>i<2?coordinate>=layout.view[i]-1:coordinate<=layout.view[i]+1),
+  'all of the bag panel remains inside the game viewport: '+JSON.stringify({panel:layout.panel,view:layout.view}));
  assert.equal(layout.title.text,'インベントリ');
  assert.ok(layout.title.x-layout.panel[0]>=0&&layout.title.x-layout.panel[0]<=14&&layout.title.y-layout.panel[1]>=0&&layout.title.y-layout.panel[1]<=14,'small title at bag top-left');
  assert.ok(layout.title.bottom<=layout.cells[0].y+1&&layout.title.size<=14&&layout.title.align!=='center','heading stays compact and above the slot grid');
- assert.ok(layout.cells.every(slot=>slot.width>=23&&slot.height>=23&&Math.abs(slot.width-slot.height)<=2),'all 40 slots stay near-square, including locked slots');
- assert.equal(new Set(layout.cells.map(c=>c.x.toFixed(1))).size,8);
+ assert.ok(layout.cells.every(slot=>slot.width>=23&&slot.height>=23&&Math.abs(slot.width-slot.height)<=1),'all 45 slots stay square, including locked slots');
+ assert.equal(new Set(layout.cells.map(c=>c.x.toFixed(1))).size,9);
  assert.equal(new Set(layout.cells.map(c=>c.y.toFixed(1))).size,5);
- assert.deepEqual(layout.cells.map(c=>c.disabled),Array.from({length:40},(_,i)=>i>=16),'top two rows only usable');
- assert.equal((await bagState(page)).bagUnlocked,16);
+ for(const c of layout.cells)assert(c.x>=layout.panel[0]&&c.y>=layout.panel[1]&&c.x+c.width<=layout.panel[2]+1&&c.y+c.height<=layout.panel[3]+1,'grid slot is never clipped');
+ assert.deepEqual(layout.cells.map(c=>c.disabled),Array.from({length:45},(_,i)=>i>=18),'top two rows only usable');
+ assert.equal((await bagState(page)).bagUnlocked,18);
 }
 async function closeBag(page){
  await page.locator(toggle).tap();
@@ -149,33 +152,33 @@ async function transfers(browser){
  const {ctx,page,errors}=await launch(browser,'base',{x:41,z:43},{width:320,facing:1,kit:startKit});
  try{
   await geometry(page);
-  assert.deepEqual((await bagState(page)).hotbar,[sword,herb(3),null,null,null,null,null,null],'legacy slots migrate faithfully');
+  assert.deepEqual((await bagState(page)).hotbar,[sword,herb(3),null,null,null,null,null,null,null],'legacy slots migrate faithfully');
   await page.locator(bar(0)).tap();
   assert.equal((await bagState(page)).weapon,'equipWoodSword');
   await openBag(page);
-  if(out)await page.screenshot({path:out+'/v157-inventory-320.png'});
+  if(out)await page.screenshot({path:out+'/v160-inventory-320.png'});
   await drag(ctx,page,bar(0),bag(0));
   let now=await bagState(page);
   assert.deepEqual([now.hotbar[0],now.bag[0],now.weapon],[null,sword,null],'touch drag stows and unequips sword');
   await drag(ctx,page,bar(1),bag(0));
   now=await bagState(page);
   assert.deepEqual([now.hotbar[1],now.bag[0]],[sword,herb(3)],'occupied destination swaps without loss');
-  await drag(ctx,page,bag(0),bag(16));
+  await drag(ctx,page,bag(0),bag(18));
   assert.deepEqual(await bagState(page),now,'locked slot refuses transfer and does not drop the item');
-  await drag(ctx,page,bag(0),bar(7));
+  await drag(ctx,page,bag(0),bar(8));
   now=await bagState(page);
-  assert.deepEqual([now.hotbar[7],now.bag[0]],[herb(3),null],'bag can move items back to the full-width hotbar');
+  assert.deepEqual([now.hotbar[8],now.bag[0]],[herb(3),null],'bag can move items back to the full-width hotbar');
   await closeBag(page);
-  const slot=await center(page,bar(7));
-  await drag(ctx,page,bar(7),{x:slot.x,y:slot.y-145});
+  const slot=await center(page,bar(8));
+  await drag(ctx,page,bar(8),{x:slot.x,y:slot.y-145});
   now=await bagState(page);
-  assert.deepEqual(now.hotbar[7],herb(2),'outside swipe drops one item, not its stack');
+  assert.deepEqual(now.hotbar[8],herb(2),'outside swipe drops one item, not its stack');
   assert.ok(now.drops.some(d=>d.type==='healingHerb'&&d.x===pot[0]&&d.z===pot[1]&&d.y===0),'one actual adjacent dry-ground herb');
   await reload(page);
   assert.deepEqual(await bagState(page),now,'moved slots and ground stock survive browser restart');
   await move(page,'e',true,true);
   now=await bagState(page);
-  assert.deepEqual(now.hotbar[7],herb(3),'step-over merges the dropped item back');
+  assert.deepEqual(now.hotbar[8],herb(3),'step-over merges the dropped item back');
   assert.equal(now.drops.length,0);
   const once=now;
   await move(page,'w');await move(page,'e');
@@ -186,23 +189,48 @@ async function transfers(browser){
  }finally{await ctx.close();}
 }
 async function overflow(browser){
- const full=[sword,...Array.from({length:7},()=>herb(9)),...Array(16).fill(null)];
+ const full=[sword,...Array.from({length:8},()=>herb(9)),...Array(18).fill(null)];
  const {ctx,page,errors}=await launch(browser,'base',{x:41,z:43},{width:390,facing:1,
   kit:{...startKit,potions:9,slots:full,drops:[{type:'healingHerb',x:42,z:43,y:0}]}});
  try{
   await geometry(page);
   const before=await bagState(page);
-  assert.deepEqual(before.hotbar,full.slice(0,8));
-  assert.deepEqual(before.bag,Array(40).fill(null));
+  assert.deepEqual(before.hotbar,full.slice(0,9));
+  assert.deepEqual(before.bag,Array(45).fill(null));
   await move(page,'e',true,true);
   const filled=await bagState(page);
   assert.deepEqual(filled.hotbar,before.hotbar,'full hotbar remains unchanged');
   assert.deepEqual(filled.bag[0],herb(1),'actual pickup falls through into the first unlocked bag slot');
   assert.equal(filled.drops.length,0);
   await openBag(page);
-  if(out)await page.screenshot({path:out+'/v157-overflow-bag-390.png'});
+  if(out)await page.screenshot({path:out+'/v160-overflow-bag-390.png'});
   await reload(page);
   assert.deepEqual(await bagState(page),filled,'overflow bag inventory persists exactly once');
+  await unchanged(page);assert.deepEqual(errors,[]);
+ }finally{await ctx.close();}
+}
+async function migrateRows(browser){
+ const old=Array(24).fill(null);
+ for(const [i,cell] of [[0,sword],[7,herb(1)],[8,herb(2)],[15,herb(3)],[16,herb(4)],[23,herb(5)]])old[i]=cell;
+ const rawOld={...startKit,potions:9,slots:old};
+ const {ctx,page,errors}=await launch(browser,'base',{x:41,z:43},{width:390,facing:1,kit:rawOld});
+ try{
+  await geometry(page);
+  await openBag(page);
+  const current=await bagState(page),read=()=>page.evaluate(k=>localStorage.getItem(k),kitKey);
+  const expectedHot=Array(9).fill(null),expectedBag=Array(45).fill(null);
+  expectedHot[0]=sword;expectedHot[7]=herb(1);
+  for(const [i,count] of [[0,2],[7,3],[9,4],[16,5]])expectedBag[i]=herb(count);
+  assert.deepEqual(current.hotbar,expectedHot,'old hotbar columns stay at their original positions');
+  assert.deepEqual(current.bag,expectedBag,'old bag cells remain on the same row and in the same column; each new ninth cell is empty');
+  assert.equal(await read(),JSON.stringify(rawOld),'read-only bag opening leaves the 24-cell storage unchanged');
+  await drag(ctx,page,bag(16),bag(17));
+  const moved=await bagState(page),persisted=JSON.parse(await read());
+  assert.deepEqual([moved.bag[16],moved.bag[17]],[null,herb(5)],'new ninth cell on unlocked second row accepts touch drag');
+  assert.equal(persisted.slots.length,27,'the first real edit writes the 27-cell layout');
+  assert.deepEqual(persisted.slots,[...moved.hotbar,...moved.bag.slice(0,18)]);
+  await reload(page);
+  assert.deepEqual(await bagState(page),moved,'legacy geometry migrates exactly once');
   await unchanged(page);assert.deepEqual(errors,[]);
  }finally{await ctx.close();}
 }
@@ -210,6 +238,6 @@ let browser;
 try{
  browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
   args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
- await transfers(browser);await overflow(browser);
- console.log('PASS actual mobile 320/390 Chromium inventory: slot grids, touch transfers, blocked rows, drop/pickup, overflow and persisted saves');
+ await transfers(browser);await overflow(browser);await migrateRows(browser);
+ console.log('PASS actual mobile 320/390 Chromium inventory: slot grids, touch transfers, blocked rows, drop/pickup, overflow, old row/column migration and persisted saves');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
