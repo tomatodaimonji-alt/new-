@@ -20,7 +20,11 @@ test('old kit inventory works and purchase updates gold and potion stock atomica
  assert.equal(k.x.poiEconomyBuyPotion().reason,'storage');assert.equal(k.x.poiEconomyGold(),20);
  assert.equal(k.x.poiHotbarRead().potions,8);assert.equal(k.writes(),0);
  k.fail(false);assert.equal(k.x.poiEconomyBuyPotion().potions,9);
- assert.equal(k.x.poiEconomyBuyPotion().reason,'full');assert.equal(k.writes(),1);
+ assert.equal(k.x.poiEconomyBuyPotion().potions,10);assert.equal(k.writes(),2);
+ assert.equal(k.save().potions,9,'legacy mirror remains a single stack');
+ assert.equal(k.save().slots[2].count,1);
+ const full=setup({version:1,weapon:null,potions:9,gold:20,slots:Array.from({length:24},(_,i)=>i?{type:'healingHerb',count:9}:{type:'equipWoodSword',count:1})});
+ assert.equal(full.x.poiEconomyBuyPotion().reason,'full');assert.equal(full.writes(),0);
  k.x.facilitySite=null;assert.equal(k.x.poiEconomyBuyPotion().reason,'unavailable');
  const fresh=setup({version:1,weapon:'equipWoodSword',potions:1});
  assert.equal(fresh.x.poiEquippedWeapon(),'equipWoodSword');assert.equal(fresh.x.poiHotbarRead().potions,1);

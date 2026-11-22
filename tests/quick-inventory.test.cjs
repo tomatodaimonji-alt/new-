@@ -2,8 +2,8 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const html=fs.readFileSync(process.env.HTML||path.join(__dirname,'../world-editor.html'),'utf8');
 function harness(saved=null){
  const uis={poiPartyHud:{},poiPlayerHp:{},poiPlayerHpValue:{},poiHotbar:{}};
- const slots=Array.from({length:6},(_,i)=>({
-  dataset:{hotbarSlot:String(i)},icon:{replaceChildren(child){this.firstChild=child;}},count:{},attrs:{},
+ const slots=Array.from({length:8},(_,i)=>({
+  dataset:{hotbarSlot:String(i)},icon:{dataset:{},replaceChildren(child){this.firstChild=child;}},count:{},attrs:{},
   querySelector(k){return k==='.hotbar-icon'?this.icon:this.count},
   setAttribute(k,v){this.attrs[k]=v},removeAttribute(k){delete this.attrs[k]}
  }));
@@ -11,7 +11,7 @@ function harness(saved=null){
  const x=vm.createContext({
   $:key=>uis[key]||null,poiWalkActive:true,pineAIActive:false,facilitySite:{id:'base'},poiPlayerHP:100,
   POI_PLAYER_MAX_HP:100,POI_PLAYER_ATTACK:20,poiWalkAvatar:()=>{},
-  document:{querySelectorAll:()=>slots,createElement:tag=>({tag,dataset:{}})},
+  document:{querySelectorAll:()=>slots,createElement:tag=>({tag,dataset:{},getContext:()=>({drawImage(){}})})},
   drawWallThumbnail:(cv,id,options)=>{art.push({cv,id,options});return true;},toast:s=>log.push(s),localStorage:{
    getItem:k=>{assert.equal(k,'world-workshop-hotbar-v1');return saved;},
    setItem:(k,v)=>{assert.equal(k,'world-workshop-hotbar-v1');saved=v;}
@@ -24,14 +24,14 @@ function harness(saved=null){
  run(html.slice(a,b)+html.slice(c,d));
  return {run,uis,slots,log,art,stored:()=>JSON.parse(saved)};
 }
-test('six slots show sword and three recovery potions, begin unarmed, and update numeric HP',()=>{
+test('eight slots show sword and three recovery potions, begin unarmed, and update numeric HP',()=>{
  const {run,uis,slots,stored}=harness();
  run('poiCombatHud();poiHotbarRender()');
  assert.equal(uis.poiPlayerHpValue.textContent,'100/100');
  assert.equal(slots[2].attrs['aria-pressed'],'true');
  assert.equal(slots[0].attrs['aria-label'],'木の剣');
  assert.equal(slots[1].count.textContent,'3');
- assert(slots.slice(2).every(s=>s.attrs['aria-disabled']==='false'));
+ assert(slots.slice(2).every(s=>s.disabled===false));
  assert.equal(stored(),null);
  run('poiPlayerHP=42;poiCombatHud()');
  assert.equal(uis.poiPlayerHpValue.textContent,'42/100');
@@ -53,7 +53,7 @@ test('no kit leakage outside Game World or actions while AI/editor, and malforme
  const {run,slots,stored}=harness('{"version":1,"weapon":"illegal","potions":99}');
  run('facilitySite={id:"inn"};poiHotbarRender();poiPlayerHP=50;poiHotbarUse(1)');
  assert.equal(run('poiEquippedWeapon()'),null);
- assert.equal(slots[1].attrs['aria-disabled'],'true');
+ assert.equal(slots[1].disabled,true);
  run('facilitySite={id:"base"};pineAIActive=true;poiHotbarUse(1);pineAIActive=false;poiWalkActive=false;poiHotbarUse(0)');
  assert.equal(run('poiPlayerHP'),50);
  assert.equal(stored().potions,99);
@@ -63,8 +63,8 @@ test('loads valid empty stock, does not heal or spend extra, and supports resele
  const {run,uis,slots,stored}=harness('{"version":1,"weapon":"equipWoodSword","potions":0}');
  run('poiCombatHud();poiHotbarRender();poiPlayerHP=35;poiHotbarUse(1)');
  assert.equal(run('poiPlayerHP'),35);
- assert.equal(slots[1].count.textContent,'0');
- assert.equal(slots[1].attrs['aria-disabled'],'false');
+ assert.equal(slots[1].count.textContent,'');
+ assert.equal(slots[1].disabled,false);
  assert.equal(slots[0].attrs['aria-pressed'],'false');
  assert.equal(slots[1].attrs['aria-pressed'],'true');
  run('poiHotbarUse(2);poiCombatHud()');

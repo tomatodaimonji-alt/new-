@@ -8,7 +8,7 @@ function shop(){
  const ctx=vm.createContext({$:id=>ids[id],facilitySite:{id:'base'},poiWalkActive:true,pineAIActive:false,poiWalkLevel:0,
   poiWalkX:47,poiWalkZ:13,poiWalkFacing:1,world:[{x:48,z:13,y:0,type:'counterLuxury',rot:1},{x:48,z:13,y:0,type:'poiLedgerPapers',rot:3}],
   poiEconomyGold:()=>9,poiEconomyBuyPotion:()=>{purchases++;return {ok:true,gold:3,potions:4,cost:6}},
-  poiHotbarRead:()=>({potions:3}),poiHotbarRender:()=>{refresh++},document:{querySelector:()=>null}});
+  poiInventoryCanReceive:()=>true,poiHotbarRead:()=>({potions:3}),poiHotbarRender:()=>{refresh++},document:{querySelector:()=>null}});
  vm.runInContext(html.slice(a,b),ctx);
  return {ctx,ids,purchases:()=>purchases,refresh:()=>refresh};
 }

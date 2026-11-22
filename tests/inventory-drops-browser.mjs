@@ -87,7 +87,7 @@ async function move(page,d,required=true,touch=false){
 const kitKey='world-workshop-hotbar-v1';
 const retained={version:1,weapon:null,potions:3,gold:12,claimedCaches:['glade']};
 const getMap=page=>page.evaluate(()=>window.__editorTest.data());
-const bag=async page=>(await state(page)).inventory;
+const bag=async page=>{const {sword,potions,weapon,drops}=(await state(page)).inventory;return {sword,potions,weapon,drops};};
 const storage=page=>page.evaluate(k=>JSON.parse(localStorage.getItem(k)),kitKey);
 const box=(page,i)=>page.locator('#poiHotbar [data-hotbar-slot="'+i+'"]');
 const resume=async page=>{
@@ -102,7 +102,7 @@ async function swipe(ctx,page,slot){
  try{
   await c.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y,id:1}]});
   for(let i=1;i<=5;i++)
-   await c.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x+2*i,y:y-i*19,id:1}]});
+   await c.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x+2*i,y:y-i*35,id:1}]});
   await c.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
  }finally{await c.detach();}
 }
@@ -134,7 +134,7 @@ async function playInventory(browser){
   const map=await getMap(page);
   const start=(await state(page)).position;
   assert.deepEqual(start,at(41,43));
-  assert.equal(await page.locator('#poiHotbar [data-hotbar-slot]').count(),6);
+  assert.equal(await page.locator('#poiHotbar [data-hotbar-slot]').count(),8);
   assert.equal(await page.locator('#poiHotbar').getByLabel('素手',{exact:true}).count(),0,'no dedicated fist icon');
   assert.match(await box(page,0).getAttribute('aria-label'),/木の剣/);
   assert.match(await box(page,1).getAttribute('aria-label'),/薬草/);

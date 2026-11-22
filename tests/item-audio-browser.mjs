@@ -115,7 +115,7 @@ async function swipe(ctx,page,slot){
  try{
   await c.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y,id:1}]});
   for(let i=1;i<=5;i++)
-   await c.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x+2*i,y:y-i*19,id:1}]});
+   await c.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x+2*i,y:y-i*35,id:1}]});
   await c.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
  }finally{await c.detach();}
 }
