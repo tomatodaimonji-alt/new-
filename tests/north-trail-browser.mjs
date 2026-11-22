@@ -125,7 +125,7 @@ async function talk(page,id){
 }
 const kit={version:1,weapon:'equipWoodSword',potions:3,gold:12,claimedCaches:['glade']};
 const pos=(x,z)=>({x,z,level:0});
-const inside='北の森の道',camp='たき火のあと';
+const inside='北の森の道',camp='外';
 const dirSel=d=>'[data-poi-dir="'+d+'"]';
 const amount=s=>[...s.inventory.hotbar,...s.inventory.bag].reduce((n,c)=>n+(c?.type==='healingHerb'?c.count:0),0);
 const coords=async page=>(await state(page)).position;

@@ -1050,7 +1050,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v200）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v201）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -2880,11 +2880,11 @@ function poiFantasyEquipmentGeometry(m,id,x,y,z){
   for(const yy of [.31,.38,.45])b(.013,yy,0,.107,.038,.102,lash);
   b(-.045,.96,.044,.054,.065,.038,dark);
  }else if(id==='equipLongStaff'){
-  rod([.035,.024,0],[-.013,.66,0],.067,timber);
-  rod([-.013,.66,0],[.025,1.27,0],.060,grain);
-  rod([.025,1.27,0],[-.016,1.77,.02],.055,timber);
-  for(const yy of [.54,.61,.68,.75])b(0,yy,0,.122,.039,.116,lash);
-  for(const yy of [.13,1.57])b(0,yy,0,.126,.077,.116,dark);
+  rod([.035,.024,0],[-.013,.73,0],.067,timber);
+  rod([-.013,.73,0],[.025,1.44,0],.060,grain);
+  rod([.025,1.44,0],[-.016,2.18,.02],.055,timber);
+  for(const yy of [.29,.35,.57,.63,.69])b(0,yy,0,.122,.032,.116,lash);
+  for(const yy of [.13,1.98])b(0,yy,0,.118,.071,.108,dark);
  }else if(id==='fireWand'){
   b(0,.045,0,.087,.90,.095,dark);b(.01,.31,0,.072,.54,.073,timber);
   for(const yy of [.14,.33,.87,.95])b(0,yy,0,.112,.045,.115,[.66,.45,.26]);
@@ -8485,7 +8485,8 @@ function poiInventoryReleaseMesh(){
 // BEGIN NORTH TRAIL CAMP
 function poiNorthTrailRegion(site,x,z,y){
  if(site?.id!=='base'||y!==0)return null;
- return site.northTrail?.regions?.find(p=>poiDungeonPointIn(p.bounds,x,z,y))||null;
+ const region=site.northTrail?.regions?.find(p=>poiDungeonPointIn(p.bounds,x,z,y));
+ return region&&!region.outdoorLandmark?region:null;
 }
 function poiNorthTrailSupply(kit){
  const supply=facilitySite?.id==='base'?facilitySite.northTrail?.supply:null;
@@ -9782,6 +9783,56 @@ function poiMineGuardPose(s,now){
  return {phase:t<.12?'impact':'recover',dx:a.dx*.22*recoil,dz:a.dz*.22*recoil,lift:0,
   squash:1-.16*recoil,width:1+.09*recoil,facing};
 }
+// BEGIN ENEMY ATTACK MOTION
+// Read-only pose profiles: [name, drawn pitch, contact pitch, drawn yaw,
+// contact yaw, backstep, forward reach, contact lift, recovery milliseconds].
+// They never author a target tile or determine the real contact time.
+const POI_ENEMY_VISUAL_PROFILES=Object.freeze({
+ monsterSkeleton:[['bone-swipe',-.22,.44,-.46,.56,.07,.26,.035,300]],
+ monsterGoblin:[['low-scramble',.39,.26,.31,-.41,.16,.54,.14,330]],
+ monsterSkelWarrior:[['sword-cut',-.34,.42,-.67,.77,.11,.30,.045,345]],
+ monsterSkelKnight:[['shield-cleave',-.29,.38,-.65,.77,.10,.38,.055,450],['shield-bash',.22,.45,.22,-.14,.20,.55,.025,400]],
+ monsterSkelArcher:[['draw-loose',-.08,.06,-.54,-.18,.09,.09,.025,285]],
+ monsterSkelSpearman:[['spear-thrust',-.16,.32,-.12,.15,.19,.65,.038,340]],
+ monsterSkelMage:[['ember-cast',-.39,.16,-.24,.42,.04,.12,.065,425]],
+ monsterSkelLongStaff:[['staff-push',-.26,.28,.44,-.34,.15,.50,.045,355]],
+ monsterChapelWardenVisual:[['mace-drop',-.47,.56,-.38,.37,.11,.37,.07,425]],
+ monsterDragon:[['fang-lunge',-.18,.43,-.18,.18,.18,.62,.13,550],['wing-swipe',.15,.13,.79,-.87,.08,.36,.22,500]],
+ monsterMineGuard:[['hammer-sweep',-.08,.15,-.56,.61,.09,.22,0,640],['hammer-overhead',-.39,.40,.13,-.09,.06,.32,.10,640]]
+});
+function poiEnemyNextVisualVariant(type,s){
+ const count=POI_ENEMY_VISUAL_PROFILES[type]?.length||1;
+ if(count===1)return 0;
+ const id=(s.attackVisualSequence||0)%count;s.attackVisualSequence=id+1;return id;
+}
+function poiEnemyVisualAttack(type,s,now){
+ if(type==='monsterSlime')return poiSlimeAttackPose(s,now);
+ if(type==='monsterPondSkater')return poiPondSkaterPose(s,now);
+ const a=s.playerAttack;
+ if(!a)return null;
+ if(type==='monsterSkeleton'&&a.obj&&typeof poiChapelEliteMatch==='function'&&poiChapelEliteMatch(a.obj))type='monsterChapelWardenVisual';
+ const options=POI_ENEMY_VISUAL_PROFILES[type],p=options?.[a.motion]||options?.[0];
+ if(!p)return null;
+ const [variant,prePitch,hitPitch,preTwist,hitTwist,back,reach,hop,recover]=p;
+ const facing=a.dx>0?3:a.dx<0?1:a.dz<0?2:0;
+ if(a.pending){
+  const span=Math.max(1,a.hit-a.start),t=Math.max(0,Math.min(1,(now-a.start)/span));
+  const prep=Math.min(1,t/.62),draw=prep*prep*(3-2*prep);
+  // The visual strike is held just short of contact until the game
+  // actually resolves; no phantom frame-based hit on a slow phone.
+  const fire=Math.max(0,Math.min(.72,(t-.76)*3));
+  const l=-back*draw+(back+reach)*fire;
+  return {variant,phase:fire>0?'release':'windup',dx:a.dx*l,dz:a.dz*l,lift:hop*(.21*draw+.35*fire),
+   squash:1+(prePitch<0?.065:-.085)*draw,width:1-.03*draw,facing,
+   pitch:prePitch*draw+(hitPitch-prePitch)*fire,twist:preTwist*draw+(hitTwist-preTwist)*fire};
+ }
+ if(!Number.isFinite(a.visualHitAt))return null;
+ const age=Math.max(0,now-a.visualHitAt);if(age>=recover)return null;
+ const f=(1-age/recover)**2,l=reach*f;
+ return {variant,phase:age<65?'impact':'recover',dx:a.dx*l,dz:a.dz*l,lift:hop*f,
+  squash:1-.065*f,width:1+.05*f,facing,pitch:hitPitch*f,twist:hitTwist*f};
+}
+// END ENEMY ATTACK MOTION
 function poiEnemyBeginPlayer(obj,s,now){
  const guardian=obj.type==='monsterMineGuard',armed=typeof POI_ARMED_FOES==='object'?POI_ARMED_FOES[obj.type]:null,
   skater=obj.type==='monsterPondSkater',
@@ -9803,8 +9854,8 @@ function poiEnemyBeginPlayer(obj,s,now){
  if(line)s.facing=line.fx?(line.fx>0?3:1):(line.fz<0?2:0);
  s.nextAttack=now+(guardian?POI_MINE_GUARD_COOLDOWN:skater?POI_POND_SKATER_COOLDOWN:armed?.cool??POI_ENEMY_COOLDOWN);
  s.playerAttack={obj,start:now,hit:now+windup,x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,
-  sx:s.x,sz:s.z,dx:attack?.fx??dx,dz:attack?.fz??dz,pending:true,...(attack?{tiles:attack.tiles}:null)};
- poiEnemyPending.add(s);if(obj.type==='monsterSlime'||guardian||line||skater)poiMonsterMeshDirty=true;
+  sx:s.x,sz:s.z,dx:attack?.fx??dx,dz:attack?.fz??dz,pending:true,motion:typeof poiEnemyNextVisualVariant==='function'?poiEnemyNextVisualVariant(obj.type,s):0,...(attack?{tiles:attack.tiles}:null)};
+ poiEnemyPending.add(s);if(obj.type==='monsterSlime'||guardian||line||skater||typeof poiEnemyVisualAttack==='function')poiMonsterMeshDirty=true;
  return true;
 }
 function poiEnemyCancelPlayer(){
@@ -9841,7 +9892,7 @@ function poiEnemyResolvePlayer(now){
    s.skaterRestUntil=now+POI_POND_SKATER_RECOVER;poiMonsterMeshDirty=true;
    if(timely){a.visualHitAt=now;poiSound('skater-splash')}
   }
-  if(a.obj.type==='monsterSlime'||a.obj.type==='monsterMineGuard'){
+  if(a.obj.type==='monsterSlime'||a.obj.type==='monsterMineGuard'||typeof poiEnemyVisualAttack==='function'){
    if(timely)a.visualHitAt=now;
    poiMonsterMeshDirty=true;
   }
@@ -11187,7 +11238,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v200',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v201',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -11302,7 +11353,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v200';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v201';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -11517,7 +11568,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v200',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v201',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -12347,8 +12398,10 @@ function poiPlayerProfilePose(type,ms){
   return {bowDraw:forward*(1-after*after),bowReleased:ms>=p.hit,twist:-.38*forward*(1-after)};
  }
  if(type==='equipLongStaff'){
-  const thrust=Math.sin(Math.PI*ms/p.pose);
-  return {strike:1.28*thrust,sweep:.22*thrust,twist:.17*thrust,edgeTilt:1.27*thrust,edgeYaw:.22,guard:.52*thrust};
+  const t=ms<=p.hit?ms/p.hit:Math.max(0,(p.pose-ms)/(p.pose-p.hit));
+  const thrust=t*t*(3-2*t),prep=ms<p.hit?Math.sin(Math.PI*t)*.16:0;
+  return {staffThrust:thrust,strike:1.55*thrust-prep,sweep:-.40*thrust,twist:.14*thrust,
+   edgeTilt:.30+(Math.PI/2-.30)*thrust,edgeYaw:0,guard:.70*thrust};
  }
  if(type==='equipPlainStaff')return poiWalkSwordPose(ms*260/p.pose);
  if(type==='equipWoodSpear'){
@@ -12502,6 +12555,10 @@ function poiBuildBowAim(m,pose,r,x,y,z){
   poiWeaponArrowGeometry(m,...tip,Math.sign(facing[0]-x),Math.sign(facing[2]-z),1,Math.hypot(tip[0]-n[0],tip[2]-n[2]));
  }
 }
+function poiLongStaffGripStyle(pose){
+ const t=Number.isFinite(pose?.staffThrust)?pose.staffThrust:0;
+ return {grip:.64-.30*t,scale:.68+.10*t};
+}
 function poiBuildPlayerMesh(weapon,pose,gear,stride=0,r=0,x=0,y=0,z=0){
  const m=mesh(),body=mesh(),twist=pose?.twist||0,twistC=Math.cos(twist),twistS=Math.sin(twist);
  const bowAim=weapon==='equipWoodBow'&&Number.isFinite(pose?.bowDraw);
@@ -12536,11 +12593,13 @@ function poiBuildPlayerMesh(weapon,pose,gear,stride=0,r=0,x=0,y=0,z=0){
   const gx=(.272+hx)*twistC-handZ*twistS,gz=handZ*twistC+(.272+hx)*twistS;
   const gy=(.965+hy)*.90;
   const wrist=characterArmRotation(-(pose?.edgeTilt??.30),pose?.edgeYaw||0);
-  const gripX=weapon==='equipWoodBow' ? .34 : 0,gripY=weapon==='equipWoodBow' ? .57 : weapon==='equipWoodSpear' ? .58 : weapon==='equipLongStaff' ? .64 : weapon==='equipPlainStaff' ? .39 : .25;
+  const long=weapon==='equipLongStaff'?poiLongStaffGripStyle(pose):null;
+  const gripX=weapon==='equipWoodBow' ? .34 : 0,gripY=long?.grip??(weapon==='equipWoodBow' ? .57 : weapon==='equipWoodSpear' ? .58 : weapon==='equipPlainStaff' ? .39 : .25);
+  const scaleY=long?.scale??.68;
   for(let i=0;i<prop.p.length;i+=3){
-   const [wx,wy,wz]=wrist((prop.p[i]-gripX)*.58,(prop.p[i+1]-gripY)*.68,prop.p[i+2]*.53);
+   const [wx,wy,wz]=wrist((prop.p[i]-gripX)*.58,(prop.p[i+1]-gripY)*scaleY,prop.p[i+2]*.53);
    const [px,pz]=rot2(gx+wx,gz+wz,r);
-   const [nx,ny,nz]=wrist(prop.n[i]/.58,prop.n[i+1]/.68,prop.n[i+2]/.53);
+   const [nx,ny,nz]=wrist(prop.n[i]/.58,prop.n[i+1]/scaleY,prop.n[i+2]/.53);
    const [dx,dz]=rot2(nx,nz,r),n=Math.hypot(dx,ny,dz)||1;
    m.p.push(x+px,y+gy+wy,z+pz);
    m.n.push(dx/n,ny/n,dz/n);m.c.push(prop.c[i],prop.c[i+1],prop.c[i+2]);
@@ -12571,8 +12630,8 @@ function poiWalkAvatar(now=performance.now()){
  const gear=kit?poiArmorWorn(kit):null;
  poiWalkMesh=upload(poiBuildPlayerMesh(weapon,pose,gear,stride,[2,3,0,1][poiWalkFacing],x,y,z));
 }
-const POI_MONSTER_BREAK_MS=11310,POI_MONSTER_BREAK_LIMIT=5;
-const POI_MONSTER_FLIGHT_MS=760,POI_MONSTER_FADE_AT=10760;
+const POI_MONSTER_BREAK_MS=5655,POI_MONSTER_BREAK_LIMIT=5;
+const POI_MONSTER_FLIGHT_MS=760,POI_MONSTER_FADE_AT=POI_MONSTER_BREAK_MS-550;
 const poiMonsterBreaks=[],poiMonsterFragmentTemplates=new Map();
 function poiMonsterPose(obj,s,now){
  const t=Math.max(0,Math.min(1,(now-s.moveStarted)/(obj.type==='monsterPondSkater'?POI_POND_SKATER_MOVE:s.guardMoveMs||380))),e=t*t*(3-2*t);
@@ -12580,7 +12639,8 @@ function poiMonsterPose(obj,s,now){
  let z=(s.fromZ??s.z)+(s.z-(s.fromZ??s.z))*e;
  const moving=t<1&&((s.fromX??s.x)!==s.x||(s.fromZ??s.z)!==s.z);
  let bounce=moving?.10*Math.sin(t*Math.PI):.02*Math.sin(now*.003+obj.x);
- const attack=obj.type==='monsterSlime'?poiSlimeAttackPose(s,now):obj.type==='monsterMineGuard'?poiMineGuardPose(s,now):obj.type==='monsterPondSkater'?poiPondSkaterPose(s,now):null;
+ const attack=typeof poiEnemyVisualAttack==='function'?poiEnemyVisualAttack(obj.type,s,now):
+  obj.type==='monsterSlime'?poiSlimeAttackPose(s,now):obj.type==='monsterMineGuard'?poiMineGuardPose(s,now):obj.type==='monsterPondSkater'?poiPondSkaterPose(s,now):null;
  if(attack){x+=attack.dx;z+=attack.dz;bounce+=attack.lift}
  else if(obj.type!=='monsterSlime'&&s.townOwned&&Number.isFinite(s.counterAt)&&now>=s.counterAt&&now-s.counterAt<340){
   const hop=Math.sin(Math.PI*(now-s.counterAt)/340);
@@ -12726,11 +12786,7 @@ function poiMonsterRender(now,vp){
  let slimeAttack=false;
  for(const [o,s] of poiMonsterStates){
   if(s.hp<=0||!onSlice(o))continue;
-  if(o.type==='monsterMineGuard'&&poiMineGuardPose(s,now)){slimeAttack=true;break}
-  if(o.type==='monsterPondSkater'&&poiPondSkaterPose(s,now)){slimeAttack=true;break}
-  if(o.type!=='monsterSlime')continue;
-  const age=poiSlimeAttackAge(s,now);
-  if(age>=0&&age<POI_SLIME_ATTACK_MS){slimeAttack=true;break}
+  if(poiEnemyVisualAttack(o.type,s,now)){slimeAttack=true;break}
  }
  const settle=poiSlimeMeshAnimating&&!slimeAttack;poiSlimeMeshAnimating=slimeAttack;
  if(!poiMonsterMesh||poiMonsterMeshDirty||settle||((animate||slimeAttack)&&now-poiMonsterMeshLast>(slimeAttack?30:48))){
@@ -12741,12 +12797,25 @@ function poiMonsterRender(now,vp){
    deco(part,poiMonsterRenderType(obj),cx,y,cz,0);
    const facing=attack?.facing??(s.facing||0);
    const flash=s.townOwned&&Number.isFinite(s.townHurtAt)?Math.max(0,1-(now-s.townHurtAt)/115)*.26:0;
+   const articulate=attack?.pitch!==undefined,pitch=attack?.pitch||0,twist=attack?.twist||0;
+   const cp=Math.cos(pitch),sp=Math.sin(pitch),ct=Math.cos(twist),st=Math.sin(twist);
    for(let i=0;i<part.p.length;i+=3){
-    const [px,pz]=rot2(part.p[i]-cx,part.p[i+2]-cz,facing);
-    const [nx,nz]=rot2(part.n[i],part.n[i+2],facing);
+    let px=part.p[i]-cx,py=part.p[i+1]-y,pz=part.p[i+2]-cz;
+    let nx=part.n[i],ny=part.n[i+1],nz=part.n[i+2];
+    if(articulate){
+     // Pose the chest, arms and held prop together, leaving the feet
+     // planted. Blend across the waist to keep the low-poly body joined.
+     const w=Math.max(0,Math.min(1,(py-.26)*2.6)),a=px*ct-pz*st,b=pz*ct+px*st;
+     const ay=(py-.59)*cp-b*sp+.59,az=(py-.59)*sp+b*cp;
+     px+=(a-px)*w;py+=(ay-py)*w;pz+=(az-pz)*w;
+     const u=nx*ct-nz*st,v=nz*ct+nx*st;
+     nx+=(u-nx)*w;const vv=ny*sp+v*cp;
+     ny+=(ny*cp-v*sp-ny)*w;nz+=(vv-nz)*w;
+    }
+    [px,pz]=rot2(px,pz,facing);[nx,nz]=rot2(nx,nz,facing);
     if(attack){
-     const ny=part.n[i+1]/attack.squash,nnx=nx/attack.width,nnz=nz/attack.width,n=Math.hypot(nnx,ny,nnz)||1;
-     m.p.push(cx+px*attack.width,y+(part.p[i+1]-y)*attack.squash,cz+pz*attack.width);
+     ny/=attack.squash;const nnx=nx/attack.width,nnz=nz/attack.width,n=Math.hypot(nnx,ny,nnz)||1;
+     m.p.push(cx+px*attack.width,y+py*attack.squash,cz+pz*attack.width);
      m.n.push(nnx/n,ny/n,nnz/n);
     }else{
      m.p.push(cx+px,part.p[i+1],cz+pz);
@@ -18004,7 +18073,7 @@ function extendTownWorldNorthTrail(world){
  ])add(xx,zz,t,r);
  const regions=[
   {name:'北の森の道',difficulty:1,bounds:{x1:39,x2:86,z1:1,z2:4,y:0}},
-  {name:'たき火のあと',difficulty:1,bounds:{x1:59,x2:63,z1:5,z2:8,y:0}}
+  {name:'たき火のあと',difficulty:1,outdoorLandmark:true,bounds:{x1:59,x2:63,z1:5,z2:8,y:0}}
  ];
  return {name:'北の森の道',entry:{...route[0],y:0},end:{...route.at(-1),y:0},route,
   camp:{x:61,z:7,y:0},supply,waymark,regions};
@@ -18059,7 +18128,7 @@ function extendTownWorldForestWatchPost(northTrail,world){
  northTrail.regions.push(
   {name:'北の林道',difficulty:1,bounds:{x1:86,x2:112,z1:2,z2:9,y:0}},
   {name:lowland.name,difficulty:lowland.difficulty,bounds:lowland.bounds},
-  {name:watchPost.name,difficulty:watchPost.difficulty,bounds:watchPost.bounds}
+  {name:watchPost.name,difficulty:watchPost.difficulty,outdoorLandmark:true,bounds:watchPost.bounds}
  );
  return northTrail;
 }
@@ -18138,7 +18207,7 @@ function extendTownWorldWayfarer(northTrail,world){
   {name:'丘の街道',difficulty:1,bounds:{x1:121,x2:121,z1:30,z2:33,y:0}},
   {name:'丘の街道',difficulty:1,bounds:{x1:122,x2:125,z1:30,z2:48,y:0}},
   {name:'丘の街道',difficulty:1,bounds:{x1:121,x2:125,z1:49,z2:51,y:0}},
-  {name:well.name,difficulty:0,bounds:well.bounds}
+  {name:well.name,difficulty:0,outdoorLandmark:true,bounds:well.bounds}
  );
  return northTrail;
 }
@@ -20018,7 +20087,7 @@ function facilityBoot(resume,playOnOpen=false){
     ({type:o.type,x:s.x,z:s.z,level:o.y,hp:s.hp,wildSpawn:!!s.wildSpawn,visible:poiDungeonVisualVisible(o.x,o.z,o.y),
      ...(o.type==='monsterMineGuard'&&performance.now()<s.guardSlideUntil?
       {move:{fromX:s.fromX,fromZ:s.fromZ,start:s.moveStarted,duration:s.guardMoveMs}}:null),
-     attack:o.type==='monsterSlime'?poiSlimeAttackPose(s,performance.now()):o.type==='monsterMineGuard'?poiMineGuardPose(s,performance.now()):o.type==='monsterPondSkater'?poiPondSkaterPose(s,performance.now()):null}))}})
+     attack:poiEnemyVisualAttack(o.type,s,performance.now())}))}})
  };
  refreshPalette();updateStats();updateSelected();showEntireMap();
  if(facilitySite.id==='base'&&poiGameResetBlocked){

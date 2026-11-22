@@ -114,7 +114,7 @@ async function trial(browser){
    await singleStep(page,121,44,true);await calm(page);
    assert.notEqual(await page.locator('#poiWalkAction').getAttribute('aria-label'),'井戸を調べる','well action requires cardinal adjacency');
    await singleStep(page,120,44);await calm(page);
-   await expectHud(page,'旅人の井戸','☆☆☆☆☆');
+   await expectHud(page,'外','★☆☆☆☆');
    assert.equal((await state(page)).combat.threats.length,0,'optional well rest area is not a combat encounter');
    const action=page.locator('#poiWalkAction');
    await action.filter({hasText:'調べる'}).waitFor({state:'visible'});

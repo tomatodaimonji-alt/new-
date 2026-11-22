@@ -180,7 +180,7 @@ async function watchpost(browser){
   await page.locator('#poiMessageLog').filter({hasText:/東へ.*水辺の道.*南へ.*森の見張り場/}).waitFor({state:'visible'});
   assert.deepEqual(await readStock(page),old,'reading the fork waymarker is optional and read-only');
   await line(page,101,5);await line(page,101,10);
-  await waitMap(page,'森の見張り場','★★☆☆☆');
+  await waitMap(page,'外','★☆☆☆☆');
   if(await openAt(page,101,11))await line(page,101,11);
   await defeat(page);
   await page.waitForFunction(()=>JSON.parse(localStorage.getItem('world-workshop-hotbar-v1'))?.northWatchPostGuardLoot===true);

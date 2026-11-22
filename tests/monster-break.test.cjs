@@ -35,11 +35,11 @@ test('a dying slime reuses its colored model triangles, scatters, and vanishes f
  run('poiMonsterRender(900,null)');const settled=renders.at(-1);
  assert.equal(settled.p.length,p.p.length);
  const count=renders.length;
- run('poiMonsterRender(4200,null);poiMonsterRender(9900,null)');
+ run('poiMonsterRender(4200,null);poiMonsterRender(5100,null)');
  assert.equal(renders.length,count,'static debris must reuse the same batch');
- assert.equal(run('poiMonsterBreakSnapshot(9900)[0].phase'),'settled');
- run('poiMonsterRender(11050,null)');assert.equal(run('poiMonsterBreakSnapshot(11050)[0].phase'),'fade');
- run('poiMonsterRender(12000,null)');assert.equal(renders.at(-1).p.length,0);
+ assert.equal(run('poiMonsterBreakSnapshot(5100)[0].phase'),'settled');
+ run('poiMonsterRender(5500,null)');assert.equal(run('poiMonsterBreakSnapshot(5500)[0].phase'),'fade');
+ run('poiMonsterRender(5755,null)');assert.equal(renders.at(-1).p.length,0);
 });
 test('short effects are capped, floor-specific, and cleared without game-world mutation',()=>{
  const {ctx,run,renders,calls}=harness();
@@ -68,4 +68,15 @@ test('all creature shapes persist and use settled locations near the center or w
   }
  }
  assert.notDeepEqual(snapshot[0].parts,snapshot[4].parts,'same monster type lands a little differently each time');
+});
+
+test('only enemy debris expires at exactly half its previous lifetime; human effects and burst timing are unchanged',()=>{
+ const {run}=harness();
+ assert.equal(run('poiMonsterBreakTTL({})'),5655);
+ assert.equal(run('poiMonsterBreakTTL({actor:"player"})'),2400);
+ assert.equal(run('poiMonsterBreakTTL({actor:"resident"})'),2400);
+ assert.equal(run('poiMonsterBreakFadeAt({actor:"player"})'),1850);
+ assert.equal(run('poiMonsterBreakPhase(759,{})'),'flight');
+ assert.equal(run('poiMonsterBreakPhase(760,{})'),'settled');
+ assert.equal(run('poiMonsterBreakFadeAt({})'),5105);
 });
