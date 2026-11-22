@@ -2,7 +2,8 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),vm=requir
 const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const cut=(a,b)=>html.slice(html.indexOf(a),html.indexOf(b,html.indexOf(a)+1));
 const build=vm.runInNewContext(cut('const FACILITY_SITES=Object.freeze(','function workshopResumeDecode(')+';buildFacilitySite');
-const site=JSON.parse(JSON.stringify(build('base'))),world=site.map.world;
+const {beforeArmedEncounters}=require('./mine-history-v165.cjs');
+const site=beforeArmedEncounters(JSON.parse(JSON.stringify(build('base')))),world=site.map.world;
 const at=(x,z,y)=>world.filter(o=>o.x===x&&o.z===z&&o.y===y);
 test('flooded chapel only appends grading and exact stair pairs to the old map',()=>{
  const c=site.chapel;assert.equal(c.name,'水没した礼拝堂');

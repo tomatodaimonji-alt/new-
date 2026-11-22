@@ -1,7 +1,8 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),{createHash}=require('node:crypto');
 const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8'),cut=(a,b)=>html.slice(html.indexOf(a),html.indexOf(b,html.indexOf(a)+1));
 const build=vm.runInNewContext(cut('const FACILITY_SITES=Object.freeze(','function workshopResumeDecode(')+';buildFacilitySite');
-const site=JSON.parse(JSON.stringify(build('base'))),world=site.map.world;
+const {beforeNorthTrail}=require('./mine-history-v165.cjs');
+const site=beforeNorthTrail(JSON.parse(JSON.stringify(build('base')))),world=site.map.world;
 test('two secluded staff skeletons append without changing any old cell',()=>{
  assert.equal(createHash('sha256').update(JSON.stringify(world.slice(0,6555))).digest('hex'),'16e5a8246ac2b1c88a4d949cc290dbc74e90fe06a353a212542172cb7d9c13d6');
  assert.deepEqual(world.slice(6555),[
