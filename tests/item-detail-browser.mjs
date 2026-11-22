@@ -93,7 +93,7 @@ const readMap=page=>page.evaluate(()=>window.__editorTest.data());
 const storage=page=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)||'null'),kitKey);
 const setRoll=(page,r)=>page.evaluate(r=>sessionStorage.setItem('qa-kitchen-rng',String(r)),r);
 const rolls=page=>page.evaluate(()=>window.__qaChestRolls||0);
-const knife={type:'kitchenKnife',count:1,durability:20},can={type:'cannedFood',count:1},herb={type:'healingHerb',count:3};
+const knife={type:'kitchenKnife',count:1,durability:40},can={type:'cannedFood',count:1},herb={type:'healingHerb',count:3};
 const action='#poiWalkAction';
 const spot={x:28,z:32}, facing=3, level=-1;
 async function center(page,target){

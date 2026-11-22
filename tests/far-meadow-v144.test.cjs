@@ -22,7 +22,7 @@ function trace(points){
  return cells;
 }
 test('extension keeps every old Game World tile and all other POIs intact',()=>{
- const oldSource=html.replace(' const margin=10,expanded=shift(site,margin);\n extendTownWorldOutside(expanded,margin);\n const mine=extendTownWorldMine(expanded),otherworld=extendTownWorldOtherworld(expanded);\n return {...expanded,townOffset:townOffset+margin,mine,otherworld};',' return {...site,townOffset};');
+ const oldSource=html.replace(' const margin=10,expanded=shift(site,margin);\n extendTownWorldOutside(expanded,margin);\n const mine=extendTownWorldMine(expanded),otherworld=extendTownWorldOtherworld(expanded);\n extendTownWorldMineEntry(mine,expanded.map.world);\n return {...expanded,townOffset:townOffset+margin,mine,otherworld};',' return {...site,townOffset};');
  assert.notEqual(oldSource,html,'inverse the exact final outlying append order');
  const old=load(oldSource);
  const framed=clean(old('base'));

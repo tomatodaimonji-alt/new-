@@ -12,7 +12,19 @@ function beforeMineDepths(world){
   [5799,121,50,'stonewall'],[5828,115,57,'mosswall']])restored.splice(i,0,{x,z,y:-1,type,rot:0});
  return restored;
 }
+function beforeMineEntry(site){
+ if(!site.mine?.earlyRoom)return site;
+ const {earlyRoom,...mine}=site.mine,world=Array.from(site.map.world.slice(0,6327));
+ world.splice(5774,0,{x:118,z:59,y:-1,type:'stonewall',rot:0});
+ world.splice(5775,0,{x:118,z:60,y:-1,type:'mosswall',rot:0});
+ assert.equal(createHash('sha256').update(JSON.stringify(world)).digest('hex'),
+  '169c2280301a6aaf1e934a86ea9e3e07356af95bd79ad374c36b634aa543cd1c','exact v191 otherworld and entire prior map');
+ assert.equal(createHash('sha256').update(JSON.stringify(mine)).digest('hex'),
+  'e4e8eacbd4188d894ddf3f945e7783aff1b64dd9b51c3920474b15f496b11614','exact previous mine metadata except named early room');
+ return {...site,mine,map:{...site.map,world}};
+}
 function beforeOtherworld(site){
+ site=beforeMineEntry(site);
  if(!site.otherworld)return site;
  const {otherworld,...old}=site,world=old.map.world.slice(0,6091);
  assert.equal(createHash('sha256').update(JSON.stringify(world)).digest('hex'),
@@ -31,4 +43,4 @@ function beforeAbandonedMine(site){
  assert.equal(digest,exactMine,'only the exact v167 mine records are exempt; untouched v166 mine records are pinned separately');
  return {...other,map:{...map,world:world.slice(0,oldLength)}};
 }
-module.exports={beforeAbandonedMine,beforeMineDepths,beforeOtherworld};
+module.exports={beforeAbandonedMine,beforeMineDepths,beforeOtherworld,beforeMineEntry};

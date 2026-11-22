@@ -1,8 +1,9 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),{createHash}=require('node:crypto');
 const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
+const {beforeMineEntry}=require('./mine-history-v165.cjs');
 const cut=(a,b)=>html.slice(html.indexOf(a),html.indexOf(b,html.indexOf(a)+1));
 const build=vm.runInNewContext(cut('const FACILITY_SITES=Object.freeze(','function workshopResumeDecode(')+';buildFacilitySite');
-const site=JSON.parse(JSON.stringify(build('base'))),{world}=site.map;
+const site=beforeMineEntry(JSON.parse(JSON.stringify(build('base')))),{world}=site.map;
 const at=(x,z,y)=>world.filter(o=>o.x===x&&o.z===z&&o.y===y);
 const digest=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 test('otherworld is an exact appended base-only parcel with registry-bound open portals',()=>{

@@ -313,9 +313,9 @@ test('legacy equipment displays full durability without rewriting; sword break i
  assert.equal(full.ctx.poiEquipmentDurabilityPercent(full.ctx.poiArmorSnapshot().torso),100);
  assert.equal(full.writes(),0);
  assert.equal(full.ctx.poiEquipmentSpendWeapon('equipWoodSword'),true);
- assert.equal(fixture(full.raw()).ctx.poiInventorySnapshot().hotbar[0].durability,79);
+ assert.equal(fixture(full.raw()).ctx.poiInventorySnapshot().hotbar[0].durability,159);
  const slots=Array(27).fill(null);slots[0]={type:'equipWoodSword',count:1,durability:1};
- const f=fixture({version:1,weapon:'equipWoodSword',potions:0,slots}),c=f.ctx,sounds=[];
+ const f=fixture({version:1,weaponDurabilityVersion:2,weapon:'equipWoodSword',potions:0,slots}),c=f.ctx,sounds=[];
  c.poiSound=(...args)=>sounds.push(args);
  f.fail(true);assert.equal(c.poiEquipmentSpendWeapon('equipWoodSword'),false);assert.equal(c.poiEquippedWeapon(),'equipWoodSword');assert.equal(sounds.length,0);
  f.fail(false);assert.equal(c.poiEquipmentSpendWeapon('equipWoodSword'),true);assert.equal(c.poiEquippedWeapon(),null);

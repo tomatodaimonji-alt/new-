@@ -159,9 +159,10 @@ async function display(browser){
 }
 async function combat(browser){
  const initial=seed(true);
- const {ctx,page,errors}=await launch(browser,'base',{x:115,z:60},{level:-1,facing:0,kit:initial});
+ const {ctx,page,errors}=await launch(browser,'base',{x:116,z:59},{level:-1,facing:3,kit:initial});
  try{
   const original=await getMap(page);
+  await page.evaluate(()=>window.addEventListener('pointerdown',()=>window.__knifeAudio.warm(),{once:true,capture:true}));
   await page.locator('#view').tap({position:{x:160,y:170}});
   await page.waitForFunction(()=>window.__knifeAudio.ctx?.state==='running');
   // Let the real nearby slime land its fixed marked tile attack first, so
@@ -173,21 +174,21 @@ async function combat(browser){
   let breaks=await page.evaluate(()=>window.__knifeAudio.routed);
   assert.deepEqual(breaks,[{kind:'equipment-break',weapon:'starterTunic',defeated:false}],'exactly one committed tunic break cue');
   await page.locator(action).tap();
-  await page.waitForFunction(()=>window.__editorTest.facility().inventory.hotbar[0]?.durability===63);
+  await page.waitForFunction(()=>window.__editorTest.facility().inventory.hotbar[0]?.durability===127);
   let s=await inv(page);
-  assert.equal(s.hotbar[0].durability,63);
-  assert.equal(s.hotbar[1].durability,8);
+  assert.equal(s.hotbar[0].durability,127);
+  assert.equal(s.hotbar[1].durability,16);
   assert((await actor(page)).hp<35&&(await actor(page)).hp>0);
   await page.waitForTimeout(410);
   await page.locator(hot(1)).tap();
   await page.locator(action).tap();
-  await page.waitForFunction(()=>window.__editorTest.facility().inventory.hotbar[1]?.durability===7);
+  await page.waitForFunction(()=>window.__editorTest.facility().inventory.hotbar[1]?.durability===15);
   assert.equal((await actor(page)).hp,0);
   s=await inv(page);
-  assert.equal(s.hotbar[0].durability,63);assert.equal(s.hotbar[1].durability,7);
+  assert.equal(s.hotbar[0].durability,127);assert.equal(s.hotbar[1].durability,15);
   breaks=await page.evaluate(()=>window.__knifeAudio.routed);
   assert.equal(breaks.length,1,'landed durability decrements without spurious break cues');
-  const durable=await read(page);
+  const durable=await read(page);assert.equal(durable.weaponDurabilityVersion,2);
   await page.reload();await page.waitForFunction(()=>window.__editorTest?.facility?.().active);
   assert.deepEqual(await read(page),durable,'partial and broken condition are durable over reload');
   assert.equal((await inv(page)).worn.torso,null);

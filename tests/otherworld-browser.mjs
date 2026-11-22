@@ -154,6 +154,8 @@ async function verifyRoute(browser){
   await luminous(page,'surface-portal');
   await south(ctx,page,vestibule);
   await assertPlanet(page);
+  assert.equal((await state(page)).dungeonEntranceSerial,1,'first entry plays one transition');
+  await page.waitForFunction(()=>window.__editorTest?.facility?.()?.musicZone==='otherworld');
   assert.deepEqual(await readStock(page),kit,'portal transition never consumes gear or changes inventory');
   assert.equal((await state(page)).combat.playerHP,100);
   assert.equal((await state(page)).combat.threats.length,0,'first arrival is safely outside hostile targeting');
@@ -169,6 +171,10 @@ async function verifyRoute(browser){
   await assertPlanet(page);
   await luminous(page,'return-portal');
   await south(ctx,page,surface);
+  assert.equal((await state(page)).dungeonEntranceSerial,0,'return does not play an entry effect');
+  await page.waitForFunction(()=>window.__editorTest?.facility?.()?.musicZone==='outside');
+  await page.locator('#poiMessageLog').getByText('星蝕の回廊を出た。',{exact:true}).waitFor({state:'visible'});
+  assert(!await page.getByText('ゲーム世界に戻った。',{exact:true}).count());
   await page.waitForTimeout(700);
   assert.deepEqual(await pocket(page),surface,'return does not bounce');
   assert.equal((await state(page)).sceneLayer,'surface');
@@ -236,6 +242,9 @@ async function verifyThreat(browser){
   const chest=page.locator('#poiChestPanel'),gauge=page.locator('#poiMineUnlockProgress');
   await chestReach(page).tap();
   await gauge.waitFor({state:'visible'});
+  assert.equal(await gauge.innerText(),'','no visible unlock caption');
+  assert((await gauge.boundingBox()).width<=62,'the same compact gauge follows the other chamber chest');
+  assert(await gauge.locator('progress').getAttribute('aria-label'));
   await chest.waitFor({state:'visible'});
   await gauge.waitFor({state:'hidden'});
   const reward=await readStock(page);

@@ -97,7 +97,7 @@ const readMap=page=>page.evaluate(()=>window.__editorTest.data());
 const storage=page=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)||'null'),kitKey);
 const setRoll=(page,r)=>page.evaluate(r=>sessionStorage.setItem('qa-kitchen-rng',String(r)),r);
 const rolls=page=>page.evaluate(()=>window.__qaChestRolls||0);
-const knife={type:'kitchenKnife',count:1,durability:20},can={type:'cannedFood',count:1},herb={type:'healingHerb',count:3};
+const knife={type:'kitchenKnife',count:1,durability:40},can={type:'cannedFood',count:1},herb={type:'healingHerb',count:3};
 const action='#poiWalkAction';
 const spot={x:28,z:32}, facing=3, level=-1;
 async function center(page,target){
@@ -228,7 +228,7 @@ async function exercise(browser,success){
    const foley=await page.evaluate(()=>window.__qaKnifeFoley||[]);
    assert.equal(foley.length,1,'knife swing routes to its own shared weapon Foley once');
    assert.deepEqual([foley[0].kind,foley[0].running],['attack',true]);
-   assert.equal((await inv(page)).hotbar[knifeSlot].durability,20,'swinging without actual contact does not spend durability');
+   assert.equal((await inv(page)).hotbar[knifeSlot].durability,40,'swinging without actual contact does not spend durability');
    await page.evaluate(()=>window.__editorTest.testWound(60));
    await page.locator(hot(1)).tap();
    const hp=(await state(page)).combat.playerHP;

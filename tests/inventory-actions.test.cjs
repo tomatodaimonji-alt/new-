@@ -83,7 +83,7 @@ test('closed-chest bag double tap equips armor and weapons without altering the 
  assert.equal(at(c,'bag',1),null);
  assert.equal(c.poiDoubleTapStorage('bag',0).ok,true);
  assert.equal(c.poiEquippedWeapon(),'kitchenKnife');
- assert.equal(at(c,'hotbar',2).durability,20);
+ assert.equal(at(c,'hotbar',2).durability,40);
  assert.equal(at(c,'bag',0),null);
  assert.deepEqual(JSON.parse(bytes()).kitchenChest,JSON.parse(before).kitchenChest);
 });

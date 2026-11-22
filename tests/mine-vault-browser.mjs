@@ -124,6 +124,10 @@ async function startUnlock(page){
   [document.querySelector('#poiWalkAction').getAttribute('aria-label'),document.querySelector('#poiWalkAction').textContent].join(' ')));
  await page.locator(actionButton).tap();
  await page.locator(progress).waitFor({state:'visible'});
+ const meter=page.locator(progress);
+ assert.equal(await meter.innerText(),'','no visible unlock caption');
+ assert((await meter.boundingBox()).width<=62,'compact projected gauge, not the old screen panel');
+ assert(await meter.locator('progress').getAttribute('aria-label'));
 }
 async function throughGate(ctx,page){
  const original=await getMap(page);
