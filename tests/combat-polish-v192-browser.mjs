@@ -88,7 +88,7 @@ const openAt=async(page,x,z,fromX,fromZ)=>page.evaluate(([x,z,fx,fz])=>window.__
 const morning=9*60;
 const kit={version:1,weapon:null,potions:3,gold:12,claimedCaches:['glade']};
 const at=(x,z,level)=>({x,z,level});
-const dash=async page=>(await state(page)).dash;
+const walk=async page=>(await state(page)).walk;
 const target=d=>'[data-poi-dir="'+d+'"]';
 const traces=page=>page.evaluate(()=>window.__qaMovement||[]);
 const clearTraces=page=>page.evaluate(()=>{window.__qaMovement=[]});
@@ -116,48 +116,29 @@ async function pair(ctx,page,first,second=first){
  }finally{await c.detach()}
 }
 const intervals=t=>t.slice(1).map((v,i)=>Math.round(v.t-t[i].t));
-async function dashRun(browser){
+async function ordinaryWalk(browser){
  const {ctx,page,errors}=await launch(browser,'base',{x:53,z:41},{width:390,clockStart:9*60,kit,facing:1});
  try{
   const original=await getMap(page);
-  assert.equal((await dash(page)).active,false);
-  assert.equal((await dash(page)).stamina,100);
+  assert.deepEqual(await walk(page),{stepMs:175,walkMs:175});
+  assert.equal(await page.locator('#poiPlayerStamina').count(),0);
   await clearTraces(page);await hold(ctx,page,'e',560);
   const walking=await traces(page);
   assert(walking.length>=2,'held input genuinely walks');
-  assert.equal((await dash(page)).active,false,'autorepeat from one held press cannot impersonate double tap');
-  assert.equal((await dash(page)).stamina,100);
-  const walkMs=(await dash(page)).stepMs;
   await page.waitForTimeout(300);
   await pair(ctx,page,'w','e');
-  assert.equal((await dash(page)).active,false,'opposite distinct taps must not enable dash');
-  await page.waitForTimeout(300);
-  await pair(ctx,page,'e');
-  await page.waitForFunction(()=>window.__editorTest.facility().dash.active);
-  const run=await dash(page);
-  assert(run.dashMs<walkMs&&run.walkMs===walkMs,JSON.stringify(run));
-  assert.equal(await page.locator('.poiPartyCard[data-party-slot="0"][data-dashing]').count(),1);
-  await page.waitForTimeout(310);
-  await clearTraces(page);await hold(ctx,page,'w',450);
-  const running=await traces(page),spent=await dash(page);
-  assert(running.length>=2,'dash genuinely traverses map cells');
-  assert(spent.active,'ordinary hold does not toggle an existing dash');
-  assert.equal(spent.stepMs,run.dashMs,'a committed tile uses dash cadence');
-  assert.equal(run.stamina-spent.stamina,8*running.length,'stamina is spent only by actual moved tiles');
-  assert.equal(Math.round(Number(await page.locator('#poiPlayerStamina').getAttribute('value'))),Math.round(spent.stamina));
-  console.log('real moved walk/dash intervals',JSON.stringify({walk:intervals(walking),dash:intervals(running)}));
-  // Actual rate-limit cadence is checked structurally rather than making a
-  // hard upper bound on a software-rendered CI browser's scheduling jitter.
-  assert(intervals(walking).every(t=>t>=walkMs-12)&&intervals(running).every(t=>t>=run.dashMs-12));
   await page.waitForTimeout(300);
   await pair(ctx,page,'w');
-  await page.waitForFunction(()=>!window.__editorTest.facility().dash.active);
-  const rest=(await dash(page)).stamina;
-  await page.waitForFunction(s=>window.__editorTest.facility().dash.stamina>s+4,rest);
-  await hold(ctx,page,'e',250);
-  assert.equal((await dash(page)).stepMs,walkMs);
-  assert.equal(await page.locator('.poiPartyCard[data-party-slot="0"][data-dashing]').count(),0);
-  assert.deepEqual(await readStock(page),kit,'run mode never writes inventory/quest fields');
+  await page.waitForTimeout(310);
+  await clearTraces(page);await hold(ctx,page,'w',450);
+  const afterPair=await traces(page);
+  assert(afterPair.length>=2,'held repeat still works after two quick taps');
+  assert.deepEqual(await walk(page),{stepMs:175,walkMs:175},'double taps never alter step cadence');
+  assert(intervals(walking).concat(intervals(afterPair)).every(t=>t>=163));
+  const stopped=await traces(page);
+  await page.waitForTimeout(300);
+  assert.deepEqual(await traces(page),stopped,'released hold does not continue walking');
+  assert.deepEqual(await readStock(page),kit,'walking does not write inventory/quest fields');
   assert.deepEqual(await getMap(page),original);
   await unchanged(page);assert.deepEqual(errors,[]);
  }finally{await ctx.close()}
@@ -202,6 +183,6 @@ let browser;
 try{
  browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
   args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
- await dashRun(browser);await mineArrival(browser);
- console.log('PASS native directional dash, stamina/walk recovery, safe actual Mine arrival, two live slimes and mine/BGM scope');
+ await ordinaryWalk(browser);await mineArrival(browser);
+ console.log('PASS native normal taps and held walk, safe actual Mine arrival, two live slimes and mine/BGM scope');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}

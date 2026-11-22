@@ -442,15 +442,15 @@ test('reciprocal portal steps land off both arches without quest or kit writes',
  assert.deepEqual([c.poiWalkX,c.poiWalkZ,c.poiWalkLevel,c.poiWalkFacing],[118,87,0,0]);
  assert.equal(pauses,2);assert.equal(resumes,2);assert.deepEqual(f.raw(),start);assert.equal(f.writes(),0);
 });
-test('chapel wet cells use a real separate slower route and never charge stamina, other floors unchanged',()=>{
+test('chapel wet cells use a real separate 265ms shallow route with normal 175ms walk elsewhere',()=>{
  const f=fixture(),c=f.ctx;
  c.facilitySite.chapel={shallows:[{x:78,z:83,y:-1}],deep:[{x:79,z:83,y:-1}]};
  Object.assign(c,{poiWalkLevel:-1,world:[{x:78,z:83,y:-1,type:'water'},{x:79,z:83,y:-1,type:'water'}]});
- let spends=0;c.poiDashCommitStep=()=>{spends++;return 105};
+ c.POI_WALK_MS=175;
  assert.equal(c.poiChapelWater(78,83,'shallows'),true);assert.equal(c.poiChapelWater(79,83,'deep'),true);
- assert.equal(c.poiChapelStepMs(78,83),265);assert.equal(spends,0);
- assert.equal(c.poiChapelStepMs(81,83),105);assert.equal(spends,1);
- c.world[0].type='earth';assert.equal(c.poiChapelStepMs(78,83),105);
+ assert.equal(c.poiChapelStepMs(78,83),265);
+ assert.equal(c.poiChapelStepMs(81,83),175);
+ c.world[0].type='earth';assert.equal(c.poiChapelStepMs(78,83),175);
  c.poiWalkLevel=0;assert.equal(c.poiChapelWater(79,83,'deep'),false);
  assert.equal(f.writes(),0);
 });

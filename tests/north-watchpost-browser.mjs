@@ -19,9 +19,14 @@ if(process.env.NORTH_WATCH_LAYOUT_ONLY==='1'){
 }
 const require=createRequire(import.meta.url);
 const {chromium}=require(process.env.PLAYWRIGHT_PACKAGE??'playwright');
+// Scope the browser fixture to the authored encounters. Keep the normal
+// clock and combat scheduler, but suppress unrelated random wild placements.
+const wildPick=' const p=poiWildPick(rng);';
+assert.equal(html.split(wildPick).length,2,'one wild placement anchor in the app');
+const fixtureHtml=html.replace(wildPick,' const p=null;');
 const server=createServer((req,res)=>{
  res.setHeader('Content-Type','text/html; charset=utf-8');
- res.end(req.url.startsWith('/seed')?'<!doctype html><title>Isolated fixtures</title>':html);
+ res.end(req.url.startsWith('/seed')?'<!doctype html><title>Isolated fixtures</title>':fixtureHtml);
 });
 await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',resolve).once('error',reject));
 const origin='http://127.0.0.1:'+server.address().port;
@@ -78,16 +83,17 @@ const roads=[[90,2],[90,3],[98,3],[98,5],[104,5],[104,7],[112,7],[112,9],[117,9]
 const coords=async page=>(await state(page)).position;
 const canCount=s=>[...s.inventory.hotbar,...s.inventory.bag].reduce((n,c)=>n+(c?.type==='cannedFood'?c.count:0),0);
 const foe=s=>s.combat.actors.find(a=>a.type==='monsterSkelWarrior'&&a.level===0&&a.x>=99&&a.x<=103&&a.z>=11&&a.z<=14);
+const arrow={n:'ArrowUp',s:'ArrowDown',w:'ArrowLeft',e:'ArrowRight'};
 const delta=[['e',1,0],['w',-1,0],['s',0,1],['n',0,-1]];
 async function one(page,dir,x,z){
  const p=await coords(page);
- assert.equal(Math.abs(x-p.x)+Math.abs(z-p.z),1,'native trial crosses only one cell per tap');
- await page.locator('[data-poi-dir="'+dir+'"]').tap();
+ assert.equal(Math.abs(x-p.x)+Math.abs(z-p.z),1,'native trial crosses only one cell per key press');
+ await page.keyboard.press(arrow[dir]);
  await page.waitForFunction(({x,z})=>{
   const p=window.__editorTest.facility().position;
   return p.x===x&&p.z===z&&p.level===0;
  },{x,z},{timeout:4500});
- await page.waitForTimeout(305); // Do not accidentally activate sprint with ordinary path taps.
+ await page.waitForTimeout(215); // wait past a single ordinary step
 }
 async function line(page,x,z){
  let p=await coords(page);
@@ -149,7 +155,7 @@ async function defeat(page){
  const a=foe(await state(page)),p=await coords(page);
  const facing=delta.find(d=>d[1]===a.x-p.x&&d[2]===a.z-p.z)[0];
  // Real directional input updates facing against a physically occupied tile, without moving through it.
- await page.locator('[data-poi-dir="'+facing+'"]').tap();
+ await page.keyboard.press(arrow[facing]);
  assert.deepEqual(await coords(page),p);
  let hp=a.hp;
  for(let i=0;i<8&&hp>0;i++){

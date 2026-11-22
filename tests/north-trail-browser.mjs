@@ -7,9 +7,14 @@ import {mkdir} from 'node:fs/promises';
 const require=createRequire(import.meta.url);
 const {chromium}=require(process.env.PLAYWRIGHT_PACKAGE??'playwright');
 const html=readFileSync(process.argv[2]??'world-editor.html','utf8');
+// Scope the browser fixture to the authored encounters. Keep the normal
+// clock and combat scheduler, but suppress unrelated random wild placements.
+const wildPick=' const p=poiWildPick(rng);';
+assert.equal(html.split(wildPick).length,2,'one wild placement anchor in the app');
+const fixtureHtml=html.replace(wildPick,' const p=null;');
 const server=createServer((req,res)=>{
  res.setHeader('Content-Type','text/html; charset=utf-8');
- res.end(req.url.startsWith('/seed')?'<!doctype html><title>Isolated fixtures</title>':html);
+ res.end(req.url.startsWith('/seed')?'<!doctype html><title>Isolated fixtures</title>':fixtureHtml);
 });
 await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',resolve).once('error',reject));
 const origin='http://127.0.0.1:'+server.address().port;

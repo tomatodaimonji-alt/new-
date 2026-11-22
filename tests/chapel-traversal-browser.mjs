@@ -97,7 +97,7 @@ const waitAt=(page,p)=>page.waitForFunction(p=>{
 async function single(page,d,p){
  await page.locator(control(d)).tap();
  await waitAt(page,p);
- await page.waitForTimeout(360); // Keep ordinary taps outside the dash-toggle interval.
+ await page.waitForTimeout(300); // Wait past the slower committed shallow step.
  return lastStep(page);
 }
 async function quickPair(ctx,page,d){
@@ -138,14 +138,14 @@ async function chapel(browser){
   const wetBlocked=await page.evaluate(()=>window.__editorTest.canStep(77,86,78,86));
   assert.equal(wetBlocked,false,'deep water off the wading lane remains impassable');
   await quickPair(ctx,page,'n');
-  await page.waitForFunction(()=>window.__editorTest.facility().dash.active);
+  await page.waitForFunction(()=>window.__editorTest.facility().position.z<86);
   s=await state(page);
-  assert.equal(s.dash.stamina,100,'wading attempts do not drain dash stamina');
+  assert.deepEqual(s.walk,{stepMs:265,walkMs:175});
   const before=s.position.z;
   await page.waitForTimeout(340);
   const slower=await single(page,'n',at(78,before-1,-1));
-  assert(Math.abs(slower.lock-near.lock)<2,'active dash cannot bypass shallow pace');
-  assert.equal((await state(page)).dash.stamina,100);
+  assert(Math.abs(slower.lock-near.lock)<2,'quick repeated taps preserve shallow pace');
+  assert.equal((await state(page)).walk.stepMs,265);
   for(let z=before;z<=88;z++)await single(page,'s',at(78,z,-1));
   await single(page,'s',at(124,82,0));
   assert.notEqual((await state(page)).miniMap.location,'水没した礼拝堂');
@@ -162,5 +162,5 @@ try{
  browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
   args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
  await chapel(browser);
- console.log('PASS no-quest chapel native stairs, dry and shallow steps, no shallow dash savings/loss, return and protected saves');
+ console.log('PASS no-quest chapel native stairs, dry and shallow steps, fixed shallow cadence, return and protected saves');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}

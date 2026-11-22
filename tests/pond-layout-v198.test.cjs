@@ -1,7 +1,8 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),{createHash}=require('node:crypto');
 const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8'),cut=(a,b)=>html.slice(html.indexOf(a),html.indexOf(b,html.indexOf(a)+1));
 const build=vm.runInNewContext(cut('const FACILITY_SITES=Object.freeze(','function workshopResumeDecode(')+';buildFacilitySite');
-const site=JSON.parse(JSON.stringify(build('base'))),world=site.map.world;
+const {beforeWayfarer}=require('./mine-history-v165.cjs');
+const site=beforeWayfarer(JSON.parse(JSON.stringify(build('base')))),world=site.map.world;
 const at=(x,z)=>world.filter(o=>o.x===x&&o.z===z&&o.y===0);
 const floor=/^(?:earth|stone|road\w+|grassTrampled|grassPebbles)$/;
 test('the willow road continues another 29 clear steps without editing any historic cells',()=>{
