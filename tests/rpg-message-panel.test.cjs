@@ -62,7 +62,7 @@ test('announcement names the defeated monster and does not duplicate the working
  assert.deepEqual(toasts,[]);
  c.poiWalkActive=false;c.poiAnnounceDefeat('monsterGoblin',500);
  assert.deepEqual(toasts,['ゴブリンを倒した']);
- const attack=snippet('function poiWalkAction(){','function poiWalkReset(');
+ const attack=snippet('function poiPlayerDamageTarget(','function poiPlayerWeaponResolve(');
  assert.match(attack,/if\(!state\.hp\)\{[\s\S]*?poiAnnounceDefeat\(obj\.type,now\)/);
 });
 test('announcement heading is outside its live log and the 2.3 height ratio is preserved',()=>{

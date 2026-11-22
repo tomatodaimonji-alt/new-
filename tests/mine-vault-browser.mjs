@@ -215,7 +215,10 @@ async function sideLoot(browser){
   await page.reload();await check(page);
   assert.deepEqual((await state(page)).position,coord(109,55));
   await move(page,'e',true,true);await move(page,'w',true,true);
-  assert.deepEqual(await readStock(page),claimed,'same floor cache never respawns after reload');
+  // v194 adds a real warrior to this storeroom. It may wear armor while
+  // the historical fixed can and every unrelated save field stay unchanged.
+  const cacheState=({wornDurability,...remaining})=>remaining;
+  assert.deepEqual(cacheState(await readStock(page)),cacheState(claimed),'same floor cache never respawns after reload');
   assert.equal(canCount(await state(page)),1);
   assert.deepEqual(await getMap(page),original);
   await unchanged(page);assert.deepEqual(errors,[]);
