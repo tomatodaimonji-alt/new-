@@ -8,7 +8,7 @@ function snippet(start,end){
 function fixture(){
  const host={hidden:true,lines:[],append(line){this.lines.push(line)}};
  const document={createElement:()=>({dataset:{},setAttribute(){},remove(){host.lines=host.lines.filter(l=>l!==this)}})};
- const c=vm.createContext({$:id=>id==='poiMessagePanel'?host:null,document,poiWalkActive:true,pineAIActive:false});
+ const c=vm.createContext({$:id=>(id==='poiMessagePanel'||id==='poiMessageLog')?host:null,document,poiWalkActive:true,pineAIActive:false});
  vm.runInContext(snippet('const POI_MESSAGE_LIFETIME=','function poiCombatHud('),c);
  return {c,host};
 }
@@ -41,7 +41,7 @@ test('successful coin pickup reports exact G and failed save adds no message',()
  assert.equal(c.poiEconomyCollect(3,8),true);assert.equal(host.lines[0].textContent,'3G拾った！');
 });
 test('panel is anchored to party grid without moving adjacent controls or replacing the dialogue bubble',()=>{
- assert.match(html,/<section id="poiPartyHud"[^>]+>[\s\S]*?<div id="poiMessagePanel" role="log"[^>]* hidden/);
+ assert.match(html,/<section id="poiPartyHud"[^>]+>[\s\S]*?<div id="poiMessagePanel" hidden/);
  assert.match(html,/#poiMessagePanel\{[^}]*bottom:calc\(100% \+ var\(--poi-hud-gap\)\)[^}]*pointer-events:none[^}]*background:var\(--workshop-panel-surface\)/);
  assert(snippet('function poiInventoryPickup(','function poiInventoryDraw(').includes('poiMessagePush'));
  const dialogue=snippet('function poiTownDialogueAction(','function poiTownDialogueDraw(');
@@ -51,4 +51,24 @@ test('the overhead resident bubble and tail share the panel tint without fading 
  assert.match(html,/#poiTownSpeech\{[^}]*color:#fff8e7;[^}]*background:var\(--workshop-panel-surface\)/);
  assert.match(html,/#poiTownSpeech::after\{[^}]*border-top-color:var\(--workshop-panel-surface\)/);
  assert.doesNotMatch(html,/#poiTownSpeech\{[^}]*\bopacity:/);
+});
+test('announcement names the defeated monster and does not duplicate the working log as a toast',()=>{
+ const {c,host}=fixture(),toasts=[];
+ Object.assign(c,{byId:t=>({name:t==='monsterSlime'?'スライム':'ゴブリン'}),toast:s=>toasts.push(s)});
+ assert.equal(typeof c.poiAnnounceDefeat,'function');
+ c.poiAnnounceDefeat('monsterSlime',400);assert.deepEqual(host.lines.map(l=>l.textContent),['スライムを倒した']);
+ assert.deepEqual(toasts,[]);
+ c.poiWalkActive=false;c.poiAnnounceDefeat('monsterGoblin',500);
+ assert.deepEqual(toasts,['ゴブリンを倒した']);
+ const attack=snippet('function poiWalkAction(){','function poiWalkReset(');
+ assert.match(attack,/if\(!state\.hp\)\{[\s\S]*?poiAnnounceDefeat\(obj\.type,now\)/);
+});
+test('announcement heading is outside its live log and the 2.3 height ratio is preserved',()=>{
+ assert.match(html,/<div id="poiMessagePanel" hidden><div id="poiMessageHeading">アナウンス<\/div><div id="poiMessageLog" role="log" aria-labelledby="poiMessageHeading"/);
+ assert.match(html,/#poiMessagePanel\{[^}]*height:230%/);
+});
+
+test('newest announcement uses two lines while history yields space',()=>{
+ assert.match(html,/\.poiMessageLine\{[^}]*-webkit-line-clamp:1/);
+ assert.match(html,/\.poiMessageLine:last-child\{-webkit-line-clamp:2/);
 });
