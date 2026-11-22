@@ -113,3 +113,16 @@ test('NPC shop needs a real working keeper and counter, buys one with NPC gold a
  a.hp=34;assert(x.poiTownNpcEmergencyHeal(a));assert.equal(a.hp,64);assert.equal(a.potions,0);
  assert.equal(x.poiPlayerHP,46);
 });
+test('actual lethal prey counter breaks the resident once and a short KO retains belongings',()=>{
+ const x=setup(),obj={type:'monsterSlime',y:0},bursts=[];
+ const slime={x:8,z:2,hp:35,townOwned:true,townHunt:'adventurer',counterHitAt:170,counterTargetX:7,counterTargetZ:2};
+ x.poiMonsterStates.set(obj,slime);x.poiMonsterBreak=(...args)=>bursts.push(args);
+ const role={id:'adventurer',type:'humanKnight',public:{x:3,z:4,y:0,facing:1}};
+ const a={role,x:7,z:2,y:0,facing:1,hp:1,potions:1,coins:7,attacks:0,attackAt:0,target:obj,activity:'fight'};
+ x.poiTownNpcResolve(a,170);assert.equal(a.hp,0);assert.equal(a.potions,1);assert.equal(a.coins,7);
+ assert.equal(a.activity,'knocked-out');assert.equal(a.target,null);assert.equal(slime.counterHitAt,null);
+ assert.equal(bursts.length,1);assert.equal(bursts[0][4].actor,'resident');
+ x.poiTownNpcResolve(a,175);assert.equal(bursts.length,1);
+ assert.equal(x.poiTownNpcRecover(a,3169),false);assert.equal(x.poiTownNpcRecover(a,3170),true);
+ assert.deepEqual([a.x,a.z,a.y,a.hp,a.death],[3,4,0,100,null]);assert.equal(a.potions,1);
+});

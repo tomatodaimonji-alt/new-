@@ -40,5 +40,5 @@ test('a newcomer walks in, leaves visibly at dusk, and returns the next day with
  one(1050,100000);assert.equal(state().recessed,false);assert.equal(state().activity,'leaving-visit');
  tick(1050,100401);assert.equal(state().recessed,true);assert.equal(state().x,state().role.home.x);
  one(510,185001);assert.equal(state().recessed,false);assert.notEqual(state().x,state().role.work.x);
- assert.match(html,/if\(a\.recessed\|\|a\.y!==poiWalkLevel\)continue/);
+ assert.match(html,/if\(a\.recessed\|\|a\.death\|\|a\.y!==poiWalkLevel\)continue/);
 });

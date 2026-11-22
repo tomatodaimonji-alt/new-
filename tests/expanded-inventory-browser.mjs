@@ -107,7 +107,7 @@ async function geometry(page){
   const hot=[...document.querySelectorAll('#poiHotbar [data-hotbar-slot]')].map(el=>{
    const r=el.getBoundingClientRect();return [r.x,r.y,r.width,r.height];
   });
-  return {wrap:rect('#viewWrap'),panel:rect(panel),hotbar:rect('#poiHotbar'),toggle:rect(toggle),action:rect('#poiWalkAction'),hot};
+  return {wrap:rect('#viewWrap'),panel:rect(panel),hotbar:rect('#poiHotbar'),toggle:rect(toggle),pad:rect('#poiWalkPad'),action:rect('#poiWalkAction'),hot};
  },{panel,toggle});
  assert.equal(dims.hot.length,8);
  assert.ok(dims.hotbar[2]>=dims.wrap[2]*.90,'hotbar spans nearly the full mobile view width');
@@ -115,17 +115,27 @@ async function geometry(page){
  assert.ok(dims.hotbar[0]>=dims.wrap[0]&&dims.hotbar[0]+dims.hotbar[2]<=dims.wrap[0]+dims.wrap[2]+1,'no horizontal overflow');
  const [x,y,w,h]=dims.toggle;
  assert.ok(x<dims.action[0]&&Math.abs(w-dims.action[2])<=2&&Math.abs(h-dims.action[3])<=2,'inventory button sits left of D-pad and matches its touch size: '+JSON.stringify(dims));
- assert.ok(y>=dims.wrap[1]);
+ const [px,py,pw,ph]=dims.pad;
+ const gap=px-x-w;
+ assert.ok(gap>=-1&&gap<=8&&Math.abs(y-py)<=2,'inventory toggle is outside and aligned to upper-left of D-pad panel: '+JSON.stringify(dims));
+ assert.ok(y+2*h+3<=py+ph,'room for another same-height button below without moving other controls');
+ const reserved=await page.evaluate(({x,y})=>document.elementFromPoint(x,y)?.closest('button')?.id||null,{x:x+w/2,y:y+h*1.5+3});
+ assert.equal(reserved,null,'below-toggle space is not covered by a stray button');
 }
 async function openBag(page){
  await page.locator(toggle).tap();await page.locator(panel).waitFor({state:'visible'});
  const layout=await page.evaluate(panel=>{
   const el=document.querySelector(panel),r=el.getBoundingClientRect();
-  return {panel:[r.left,r.top,r.right,r.bottom],cells:[...el.querySelectorAll('[data-bag-slot]')].map(b=>{
-   const q=b.getBoundingClientRect();return {disabled:b.disabled||b.getAttribute('aria-disabled')==='true',x:q.x,y:q.y};
+  const title=el.querySelector('#poiBagHeading'),h=title.getBoundingClientRect(),css=getComputedStyle(title);
+  return {panel:[r.left,r.top,r.right,r.bottom],title:{text:title.textContent,x:h.left,y:h.top,bottom:h.bottom,size:parseFloat(css.fontSize),align:css.textAlign},cells:[...el.querySelectorAll('[data-bag-slot]')].map(b=>{
+   const q=b.getBoundingClientRect();return {disabled:b.disabled||b.getAttribute('aria-disabled')==='true',x:q.x,y:q.y,width:q.width,height:q.height};
   })};
  },panel);
  assert.equal(layout.cells.length,40);
+ assert.equal(layout.title.text,'インベントリ');
+ assert.ok(layout.title.x-layout.panel[0]>=0&&layout.title.x-layout.panel[0]<=14&&layout.title.y-layout.panel[1]>=0&&layout.title.y-layout.panel[1]<=14,'small title at bag top-left');
+ assert.ok(layout.title.bottom<=layout.cells[0].y+1&&layout.title.size<=14&&layout.title.align!=='center','heading stays compact and above the slot grid');
+ assert.ok(layout.cells.every(slot=>slot.width>=23&&slot.height>=23&&Math.abs(slot.width-slot.height)<=2),'all 40 slots stay near-square, including locked slots');
  assert.equal(new Set(layout.cells.map(c=>c.x.toFixed(1))).size,8);
  assert.equal(new Set(layout.cells.map(c=>c.y.toFixed(1))).size,5);
  assert.deepEqual(layout.cells.map(c=>c.disabled),Array.from({length:40},(_,i)=>i>=16),'top two rows only usable');
@@ -143,7 +153,7 @@ async function transfers(browser){
   await page.locator(bar(0)).tap();
   assert.equal((await bagState(page)).weapon,'equipWoodSword');
   await openBag(page);
-  if(out)await page.screenshot({path:out+'/v155-inventory-320.png'});
+  if(out)await page.screenshot({path:out+'/v157-inventory-320.png'});
   await drag(ctx,page,bar(0),bag(0));
   let now=await bagState(page);
   assert.deepEqual([now.hotbar[0],now.bag[0],now.weapon],[null,sword,null],'touch drag stows and unequips sword');
@@ -190,7 +200,7 @@ async function overflow(browser){
   assert.deepEqual(filled.bag[0],herb(1),'actual pickup falls through into the first unlocked bag slot');
   assert.equal(filled.drops.length,0);
   await openBag(page);
-  if(out)await page.screenshot({path:out+'/v155-overflow-bag-390.png'});
+  if(out)await page.screenshot({path:out+'/v157-overflow-bag-390.png'});
   await reload(page);
   assert.deepEqual(await bagState(page),filled,'overflow bag inventory persists exactly once');
   await unchanged(page);assert.deepEqual(errors,[]);
