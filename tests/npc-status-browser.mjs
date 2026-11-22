@@ -135,11 +135,28 @@ async function present(page){
  await page.locator(action).tap();
  await page.locator(menu).waitFor({state:'visible'});
 }
+async function playerBagDimensions(page){
+ await page.locator('#poiBagToggle').tap();
+ const box=page.locator('#poiBagPanel');
+ await box.waitFor({state:'visible'});
+ const dims=await box.evaluate(el=>{
+  const rect=e=>{const r=e.getBoundingClientRect();return {width:r.width,height:r.height}};
+  return {panel:rect(el),cell:rect(el.querySelector('[data-bag-slot="0"]'))};
+ });
+ await page.locator('#poiBagClose').tap();
+ await box.waitFor({state:'hidden'});
+ return dims;
+}
+function closeSize(actual,expected,message){
+ for(const axis of ['width','height'])assert(Math.abs(actual[axis]-expected[axis])<=1.25,
+  message+' '+axis+': '+actual[axis]+' vs '+expected[axis]);
+}
 async function exercise(browser,{width,height=740,id,x,z,service}){
  const {ctx,page,errors}=await launch(browser,'base',{x,z},{width,height,clockStart:morning,kit:stock,facing:1});
  try{
   await worker(page,id);
   const map=await getMap(page),initial=await state(page),raw=await readStock(page);
+  const playerDims=await playerBagDimensions(page);
   await present(page);
   assert.deepEqual(await rows(page),expected,'ordinary and staffed NPC root has exactly the requested four entries');
   await page.locator('[data-poi-dir="s"]').tap();
@@ -147,7 +164,7 @@ async function exercise(browser,{width,height=740,id,x,z,service}){
   await page.locator(action).tap(); // Center action on real mobile D-pad.
   await page.locator(bag).waitFor({state:'visible'});
   assert.equal(await page.locator('#poiBagPanel').isVisible(),false,'NPC status is not the writable player bag');
-  assert.deepEqual(await rows(page),[['back','戻る']]);
+  assert.equal(await page.locator(menu).isVisible(),false,'read-only inventory replaces ordinary choices until close');
   const actor=byId(await residents(page),id);
   assert.deepEqual([actor.hp,actor.coins,actor.potions],id==='toolkeeper'?[73,7,2]:[86,4,1]);
   assert.match(await stat(page,'hp').innerText(),new RegExp(actor.hp+'\\s*[/／]\\s*100'));
@@ -164,8 +181,8 @@ async function exercise(browser,{width,height=740,id,x,z,service}){
    const paint=g&&g.getImageData(0,0,art.width,art.height).data;
    const entries=[...holder.querySelectorAll('[data-npc-bag-slot]')];
    const gear=[...holder.querySelectorAll('[data-npc-gear-slot]')];
-   return {rect:r(holder),art:r(art),status:r(status),model:art.dataset.model,
-    viewport:r(q('#poiNpcMenu')),hp:r(status.querySelector('[data-npc-stat=hp]')),
+   return {rect:r(holder),cell:r(entries[0]),art:r(art),status:r(status),model:art.dataset.model,
+    viewport:r(holder),hp:r(status.querySelector('[data-npc-stat=hp]')),
     hasFigure:!!paint&&paint.some((v,i)=>i%4===3&&v>0)&&paint.some((v,i)=>i%4===3&&v===0),
     items:entries.filter(e=>e.dataset.npcItem).map(e=>[e.dataset.npcItem,Number(e.dataset.count)]),
     cells:entries.length,gear:gear.map(e=>[e.dataset.npcGearSlot,e.dataset.npcEquipment??null]),
@@ -180,6 +197,8 @@ async function exercise(browser,{width,height=740,id,x,z,service}){
   assert(metrics.status.y>=metrics.art.bottom-1,'stats beneath NPC character, not layered over its picture');
   assert(metrics.hp.y>=metrics.viewport.y&&metrics.hp.bottom<=metrics.viewport.bottom-1,
    'NPC HP is fully visible under the artwork when first opened: '+JSON.stringify(metrics));
+  closeSize(metrics.rect,playerDims.panel,'NPC outer inventory matches the player bag');
+  closeSize(metrics.cell,playerDims.cell,'NPC item square matches player bag cell');
   const rect=metrics.rect;
   assert(rect.width>=140&&rect.height>=90&&rect.x>=-1&&rect.right<=width+1&&rect.y>=-1&&rect.bottom<=height+1,
    'NPC catalogue fits short viewport: '+JSON.stringify(metrics));
@@ -195,7 +214,7 @@ async function exercise(browser,{width,height=740,id,x,z,service}){
   assert.ok(await page.locator(bag).isVisible());
   const tools=page.locator('#poiGameTools');
   assert.equal(await tools.evaluate(e=>getComputedStyle(e).visibility),'hidden','upper-right tools cannot occlude NPC inventory');
-  if(out)await page.screenshot({path:out+'/v179-npc-inventory-'+id+'.png'});
+  if(out)await page.screenshot({path:out+'/v180-npc-inventory-'+id+'-'+width+'x'+height+'.png'});
   assert.equal(await page.locator('#poiNpcInventoryClose').count(),1,'separate unique close button');
   if(service)await page.locator('#poiNpcInventoryClose').tap();
   else await page.keyboard.press('Escape');
@@ -224,6 +243,7 @@ try{
  browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
   args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
  await exercise(browser,{width:320,id:'toolkeeper',x:69,z:35,service:'shop'});
+ await exercise(browser,{width:390,id:'stablekeeper',x:34,z:61});
  await exercise(browser,{width:390,height:568,id:'stablekeeper',x:34,z:61});
  console.log('PASS mobile read-only NPC inventory, live gear/stats and painted portrait, D-pad, nested true shop, and save protection');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
