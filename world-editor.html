@@ -1030,7 +1030,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v184）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v185）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -6593,8 +6593,11 @@ function poiRecordedFoley(id){
  poiRecordedFoleyCache.set(id,buffer);return buffer;
 }
 function poiKitchenKnifePcm(kind,rate){
- const hit=kind==='hit',length=hit ? .208 : .127,out=new Float32Array(Math.round(rate*length));
- const tau=Math.PI*2,modes=[[198,.12,32],[841,.17,28],[1472,.20,49],[2353,.13,65],[3239,.081,104]];
+ const hit=kind==='hit',length=hit ? .174 : .127,out=new Float32Array(Math.round(rate*length));
+ const tau=Math.PI*2;
+ const modes=[[772,.10,91],[1539,.16,104],[2449,.13,143],[3726,.10,194]];
+ // The wet accents are smaller than the cut and irregularly spaced.
+ const droplets=[[.050,.142,690],[.083,.088,810],[.117,.051,615]];
  let seed=0x3465473,slow=0,fast=0,previous=0;
  for(let i=0;i<out.length;i++){
   seed=(Math.imul(seed,1664525)+1013904223)>>>0;
@@ -6604,7 +6607,16 @@ function poiKitchenKnifePcm(kind,rate){
   const tail=Math.min(1,Math.max(0,(length-t)/.023)),ramp=Math.min(1,t/.0018)*tail;
   if(hit){
    let ring=0;for(const [hz,gain,loss] of modes)ring+=Math.sin(tau*hz*t)*gain*Math.exp(-loss*t);
-   out[i]=ramp*(ring+(.255*scrape+.085*dt)*Math.exp(-115*t));
+   const edge=(.28*scrape+.095*dt)*Math.exp(-132*t);
+   const dampIn=Math.min(1,t/.006),dampOut=Math.exp(-96*Math.max(0,t-.009));
+   const cut=(.31*fast+.17*slow+.12*Math.sin(tau*(260*t-900*t*t)))*dampIn*dampOut;
+   let spat=0;
+   for(const [at,gain,hz] of droplets){
+    const d=t-at;if(d<0||d>.025)continue;
+    const env=Math.min(1,d/.0022)*Math.exp(-186*d);
+    spat+=gain*env*(.85*fast+.52*slow+.42*Math.sin(tau*(hz*d-6400*d*d)));
+   }
+   out[i]=ramp*(ring+edge+cut+spat);
   }else{
    const sweep=Math.sin(Math.PI*t/length)**2,contact=Math.exp(-(((t-.038)/.016)**2));
    const friction=.16*Math.sin(tau*(2630*t-3550*t*t))+.073*Math.sin(tau*(3590*t-5760*t*t));
@@ -9862,7 +9874,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v184',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v185',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -9977,7 +9989,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v184';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v185';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -10192,7 +10204,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v184',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v185',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
