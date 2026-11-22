@@ -4,7 +4,7 @@ const block=(a,b)=>{const i=html.indexOf(a),j=html.indexOf(b,i+1);assert(i>=0&&j
 test('base uses one visible name, while gallery preview and bottom entry use different launch modes',()=>{
  const sites=vm.runInNewContext(block('const FACILITY_SITES=','function buildFacilitySite')+';FACILITY_SITES');
  assert.equal(sites.find(p=>p.id==='base').name,'ゲーム世界');
- const bottom=block("$('enterGameWorld').addEventListener","$('").split('\n')[0];
+ const bottom=block("$('enterGameWorld').addEventListener","$('");
  assert.match(bottom,/facilityNavigate\('base',true\)/);
  assert(!bottom.includes('pineGameEnter'));
  assert.match(html,/open\.addEventListener\('click',\(\)=>facilityNavigate\(record\.id\)\)/);
