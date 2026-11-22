@@ -1,3 +1,4 @@
+const {beforeAbandonedMine}=require('./mine-history-v165.cjs');
 const {kitchenChestAddedV162}=require('./kitchen-chest-history.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const {createHash}=require('node:crypto');
@@ -9,7 +10,7 @@ const digest=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const oldCell=({x,z})=>x>=10&&x<118&&z>=10&&z<78;
 const fromOld=require('./town-frame-v144-projection.cjs').originalFrame;
 test('v144 preserves all original Game World cell records, simulation metadata and ordered draw stacks',()=>{
- const site=build('base');
+ const site=beforeAbandonedMine(build('base'));
  assert.deepEqual([site.map.width,site.map.height,site.map.size,site.townOffset],[128,96,128,22]);
  const {map:{world},creek}=site;
  const historical=world.filter(o=>!kitchenChestAddedV162(o,site.townOffset));

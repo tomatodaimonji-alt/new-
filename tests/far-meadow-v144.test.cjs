@@ -1,3 +1,4 @@
+const {beforeAbandonedMine}=require('./mine-history-v165.cjs');
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const html=fs.readFileSync(process.env.HTML||path.join(__dirname,'../world-editor.html'),'utf8');
 function load(s){
@@ -6,7 +7,7 @@ function load(s){
 }
 const view=load(html);
 const clean=s=>JSON.parse(JSON.stringify(s));
-const base=clean(view('base'));
+const base=beforeAbandonedMine(clean(view('base')));
 const k=(x,z)=>x+','+z;
 const byCell=new Map();
 for(const o of base.map.world.filter(o=>o.y===0)){
@@ -21,7 +22,9 @@ function trace(points){
  return cells;
 }
 test('extension keeps every old Game World tile and all other POIs intact',()=>{
- const old=load(html.replace(' const margin=10,expanded=shift(site,margin);\n extendTownWorldOutside(expanded,margin);\n return {...expanded,townOffset:townOffset+margin};',' return {...site,townOffset};'));
+ const oldSource=html.replace(' const margin=10,expanded=shift(site,margin);\n extendTownWorldOutside(expanded,margin);\n const mine=extendTownWorldMine(expanded);\n return {...expanded,townOffset:townOffset+margin,mine};',' return {...site,townOffset};');
+ assert.notEqual(oldSource,html,'inverse the exact final outlying append order');
+ const old=load(oldSource);
  const framed=clean(old('base'));
  const shift=v=>Array.isArray(v)?v.map(shift):v&&typeof v==='object'?Object.fromEntries(Object.entries(v).map(([f,x])=>[f,
   /^(?:x|z|x1|x2|z1|z2)$/.test(f)&&typeof x==='number'?x+10:shift(x)])):v;

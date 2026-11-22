@@ -1,3 +1,4 @@
+const {beforeAbandonedMine}=require('./mine-history-v165.cjs');
 const {kitchenChestAddedV162}=require('./kitchen-chest-history.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
 const {createHash}=require('node:crypto');
@@ -5,7 +6,7 @@ const html=fs.readFileSync(process.env.HTML||path.join(__dirname,'../world-edito
 const source=html.match(/const FACILITY_SITES[\s\S]*?(?=function facilityNavigate\()/)?.[0];
 assert(source,'Game World authored builders');
 const build=vm.runInNewContext(source+';buildFacilitySite');
-const live=JSON.parse(JSON.stringify(build('base')));
+const live=beforeAbandonedMine(JSON.parse(JSON.stringify(build('base'))));
 const prior=Object.freeze({
  count:5206,
  world:'1b31991c89c33864aac594be48acd8ba1874107aab6137dbece9e390f0e37d56',

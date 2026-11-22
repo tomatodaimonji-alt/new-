@@ -1,3 +1,4 @@
+const {beforeAbandonedMine}=require('./mine-history-v165.cjs');
 const {kitchenChestAddedV162}=require('./kitchen-chest-history.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -47,7 +48,7 @@ test('eight deterministic site IDs and exact and varied building footprints',()=
   assert.equal(JSON.stringify(site),JSON.stringify(buildFacilitySite(id)));
   if(id==='base'){
    assert.equal(site.map.width,128);assert.equal(site.map.height,96);
-   assert.ok(site.map.world.filter(({x,z})=>x>=10&&x<118&&z>=10&&z<78).length<5380);
+   assert.ok(beforeAbandonedMine(site).map.world.filter(({x,z})=>x>=10&&x<118&&z>=10&&z<78).length<5380);
    assert.deepEqual(Array.from(site.buildings,b=>b.id),buildingIds);
   }else{
    assert.ok(site.map.width<=48&&site.map.height<=38&&site.map.world.length<2200);
@@ -130,7 +131,11 @@ test('base stamps are exact rotations and it has a well, signed inn and outdoor 
 });
 test('interior route lighting is wall-mounted and street lamps stay outside',()=>{
  for(const id of ids){
-  const {map,buildings}=buildFacilitySite(id);
+  const site=buildFacilitySite(id),previous=beforeAbandonedMine(site),{map,buildings}=previous;
+  for(const s of site.map.world.slice(map.world.length).filter(o=>o.type==='poiWallSconce')){
+   const [dx,dz]=dirs[s.rot],at=(x,z,t)=>site.map.world.some(o=>o.x===x&&o.z===z&&o.y===-1&&t.test(o.type));
+   assert.equal(s.y,-1);assert(at(s.x,s.z,/^(?:stone|moss)wall$/));assert(at(s.x+dx,s.z+dz,/^(?:stone|moss)$/));
+  }
   const guild=buildings.find(b=>b.id==='townGuild');
   assert.ok(map.world.filter(o=>o.type==='lantern').every(o=>
    guild&&o.x>=guild.x1&&o.x<=guild.x2&&o.z>=guild.z1&&o.z<=guild.z2+1));
