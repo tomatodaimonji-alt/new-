@@ -87,3 +87,14 @@ test('player speech owns the heading and body; pending notices return without re
  assert.deepEqual(host.lines.filter(l=>!l.hidden).map(l=>l.textContent),['スライムを倒した']);
  c.poiMessageUpdate(6600);assert.equal(host.hidden,true);
 });
+test('Play mini messages use the announcement log, but editor and blocking dialog messages are left alone',()=>{
+ const {c,host}=fixture(),legacy=[];
+ const out={textContent:'',classList:{add:v=>legacy.push('add:'+v),remove:v=>legacy.push('remove:'+v)}};
+ Object.assign(c,{performance:{now:()=>150},toastEl:out,clearTimeout(){},setTimeout(){},poiRouteMiniMessage:null});
+ c.poiRouteMiniMessage=c.poiMessageRouteMini;
+ vm.runInContext(snippet('function toast(message)','if(!gl)'),c);
+ c.toast('HPは満タンです。');assert.equal(host.lines[0]?.textContent,'HPは満タンです。');assert.equal(out.textContent,'');
+ c.pineAIActive=true;c.toast('AI編集');assert.equal(out.textContent,'AI編集');
+ c.pineAIActive=false;c.poiWalkActive=false;c.toast('編集しました');assert.equal(out.textContent,'編集しました');
+ c.poiWalkActive=true;c.document.querySelector=()=>({});c.toast('必須のエラー');assert.equal(out.textContent,'必須のエラー');
+});

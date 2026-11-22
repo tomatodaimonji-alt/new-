@@ -5,7 +5,7 @@ function fixture(){
  const e={hidden:true,style:{},textContent:''};let synced=0,faced=0;
  const c=vm.createContext({poiTownNpcActive:()=>true,poiTownNpcActors:[actor],poiWalkX:5,poiWalkZ:5,poiWalkLevel:0,poiWalkFacing:0,
   poiTownNpcGraph:()=>({}),poiTownNpcNextTile:(_from,x,z)=>({x,z,y:0}),poiMonsterStates:new Map(),poiTownNpcFace:(a,f)=>{a.facing=f;faced++},poiShopSync:()=>synced++,
-  terrainY:()=>0,poiWorldToScreen:()=>({x:150,y:200}),$:()=>e});
+  facilityDoorTiles:new Set(),facilityCellKey:(x,z,y)=>[x,z,y].join(','),facilityFloorOwner:()=>null,facilityHiddenRoof:()=>null,terrainY:()=>0,poiWorldToScreen:()=>({x:150,y:200}),$:()=>e});
  const m=html.match(/\/\/ BEGIN TOWN DIALOGUE\n([\s\S]*?)\/\/ END TOWN DIALOGUE/);
  assert.ok(m,'conversation runtime is present');
  vm.runInContext(m[1],c);return {actor,e,c,run:(js)=>vm.runInContext(js,c),get faced(){return faced},get synced(){return synced}};
@@ -80,4 +80,23 @@ test('player conversation clears other overhead chatter and ambient expires with
  assert.equal(f.run("poiTownAmbientSpeak('shop',guest,host,500)"),true);
  f.run('poiTownDialogueDraw(3200,[])');assert.equal(f.e.hidden,true);assert.equal(f.run('poiTownAmbientSnapshot()'),null);
  assert.equal(announcements.length,1);
+});
+
+test('ambient indoor text respects the speaker building, actual door thresholds and player floor',()=>{
+ const f=fixture();
+ f.c.guest={x:5,z:4,y:0,role:{id:'guest',name:'旅人'}};
+ f.c.host={x:5,z:3,y:0,role:{id:'keeper',name:'宿屋の主人'}};
+ f.c.facilityFloorOwner=(x,z,y,interiorOnly)=>y===0&&x===5&&(z===3||(!interiorOnly&&z===4))?0:null;
+ f.c.facilityDoorTiles.add('5,4,0');
+ assert.equal(f.run("poiTownAmbientSpeak('inn',guest,host,100)"),true);
+ f.run('poiTownDialogueDraw(200,[])');assert.equal(f.e.hidden,true);assert.equal(f.e.textContent,'');
+ f.c.facilityHiddenRoof=()=>1;
+ f.run('poiTownDialogueDraw(300,[])');assert.equal(f.e.hidden,true);
+ f.c.facilityHiddenRoof=()=>0;
+ f.run('poiTownDialogueDraw(400,[])');assert.equal(f.e.hidden,false);assert.match(f.e.textContent,/^旅人/);
+ f.run('poiTownDialogueDraw(1200,[])');assert.equal(f.e.hidden,false);assert.match(f.e.textContent,/^宿屋の主人/);
+ f.c.facilityHiddenRoof=()=>null;
+ f.run('poiTownDialogueDraw(1300,[])');assert.equal(f.e.hidden,true);
+ f.c.poiWalkLevel=1;
+ f.run('poiTownDialogueDraw(1400,[])');assert.equal(f.e.hidden,true);assert.equal(f.run('poiTownAmbientSnapshot()'),null);
 });

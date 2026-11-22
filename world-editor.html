@@ -715,6 +715,11 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
 .hotbar-count{position:absolute;right:3px;bottom:2px;font-size:clamp(8px,2.8vw,11px);line-height:1;
  font-weight:750;font-variant-numeric:tabular-nums;color:#fff7de;text-shadow:0 1px 3px #071610,0 0 3px #071610}
 .hotbar-count:empty{display:none}
+#poiItemDragPreview{position:fixed;top:0;left:0;pointer-events:none;z-index:100005;
+ display:grid;place-items:center;width:var(--poi-drag-size,40px);height:var(--poi-drag-size,40px);
+ border:1px solid #f0d6a0;border-radius:6px;background:rgba(22,46,39,.89);
+ color:#fff8e7;box-shadow:0 3px 10px #071610a6;user-select:none;will-change:transform}
+#poiItemDragPreview[hidden]{display:none}
 /* Inventory is a sibling overlay: no change to arrow cell sizes or hotbar height. */
 #poiWalkPad{--poi-pad-nudge:0px;--poi-pad-cell-width:82px;--poi-pad-cell-height:80px}
 #poiBagToggle{position:absolute;right:calc(100% + 3px);top:-1px;
@@ -842,7 +847,11 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:var(--workshop-panel-surface);color:#fff8e7;box-shadow:0 8px 28px #07191078;
  text-shadow:0 1px 2px #182c22}
 #poiItemDetail::backdrop{background:rgba(8,17,13,.22)}
-#poiItemDetailName{margin:0 0 5px;font-size:17px;line-height:1.25;font-weight:800;overflow-wrap:anywhere}
+#poiItemDetailHeader{display:grid;grid-template-columns:clamp(42px,12vw,48px) minmax(0,1fr);
+ align-items:center;gap:9px;margin:0 0 8px}
+#poiItemDetailIcon{position:relative;display:grid;place-items:center;aspect-ratio:1;
+ border:1px solid #a5baa581;border-radius:6px;background:rgba(65,103,82,.35);pointer-events:none}
+#poiItemDetailName{margin:0;font-size:17px;line-height:1.25;font-weight:800;overflow-wrap:anywhere}
 #poiItemDetailDescription,#poiItemDetailFeedback{margin:0 0 8px;font-size:12px;line-height:1.4;overflow-wrap:anywhere}
 #poiItemDetailFeedback{color:#ffe2a5}
 #poiItemDetailDescription:empty,#poiItemDetailFeedback:empty{display:none}
@@ -866,7 +875,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 #poiResetGameConfirm:not(:disabled){border-color:#ce9b85;background:#774a3cf0;color:#fff4da}
 #poiResetGameFeedback:empty{display:none}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v163）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v164）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -985,7 +994,10 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 <aside id="inspector"><h2>構造・編集</h2><div class="stats"><div>マップ <strong id="gridLabel">16×16</strong> マス</div><div>配置済み <strong id="countLabel">0</strong> 個</div><div>選択 <strong id="selectedLabel">草原</strong></div><div>角度 <strong id="rotationLabel">0°</strong></div></div><h3>マップの広さ</h3><p class="muted">12〜128マスの範囲で縦横を自由に設定。広げても建物は残ります。</p><div class="row"><label>横 X</label><input id="mapWidth" type="number" min="12" max="128" step="1" value="16"><label>縦 Z</label><input id="mapHeight" type="number" min="12" max="128" step="1" value="16"></div><button id="applyMapSize" class="wide">この広さに変更</button><h3>部材の操作</h3><div class="section"><button id="rotatePart">部材を90°回転</button><button id="eyedrop">スポイト</button></div><h3>地面の高低差</h3><p class="muted">地面をマスごとに0〜8段に編集。建物の階数とは独立しています。</p><div class="row"><button id="terrainUp">地面 ＋1</button><button id="terrainDown">地面 −1</button><button id="terrainFlat">高さを0に</button></div><div class="row"><span class="muted">カーソルの高さ：</span><strong id="terrainHeightLabel">0</strong></div><h3>階層</h3><div class="row"><label for="level">配置する高さ</label><select id="level"><option value="0">地上 0</option><option value="1">2階 1</option><option value="2">3階 2</option><option value="3">4階 3</option><option value="4">5階 4</option><option value="5">6階 5</option><option value="6">7階 6</option><option value="7">8階 7</option><option value="8">9階 8</option><option value="9">10階 9</option></select></div><div class="row"><label><input type="checkbox" id="hideUpper"> 編集階より上を隠す</label></div><div hidden aria-hidden="true" id="legacyPrefabFields"><input id="rangeX1" value="5"><input id="rangeZ1" value="5"><input id="rangeX2" value="11"><input id="rangeZ2" value="11"></div><h3>便利な操作</h3><div class="stack"><button id="demo">スーパーを再生成</button><button id="villageDemo">サンプルの村を建てる</button><button id="organicTownDemo">自然な町を試作</button><button id="showcaseTownDemo">完成見本の街を建てる</button><button id="forestTransitionDemo">完成見本その2・森に還る街</button><button id="elevationDemo">高低差サンプルを建てる</button><button id="terraceFarmDemo">段丘農村の完成見本</button><button id="compactTerrainDemo">24×24・地形の改良見本</button><button id="residentialRoofDemo">24×24・住宅屋根の比較</button><button id="livedInTownDemo">24×24・暮らしの住宅街</button><button id="oldTownRiverDemo">24×24・川沿い旧市街</button><button id="oldTownV2Demo">24×24・暮らす川沿い旧市街</button><button id="cityNature64Demo">64×64・川と丘の旧市街</button><button id="pineHarborDemo">48×40・大型輸送艇と軍港</button><button id="worldAudit">配置チェック</button><button id="house3Demo">3階建てを試作</button><button id="tower7Demo">7階建ての塔を試作</button><button id="clear">すべて消す</button><button id="resetCamera">カメラ初期化</button></div><hr class="divider"><h3>共有できるデータ</h3><p class="muted">建物やタイルの配置データをJSONで保存・共有できます。</p><button class="wide" id="openJson">書き出し・読み込み</button><hr class="divider"><div class="muted">データ形式：forest-world-v1<br>完全オフライン、外部ライブラリなし。<br>編集内容はブラウザ内に自動保存。</div></aside>
 <div id="mobileTabs"><button id="showPalette">エディター</button><button id="pineCheckMode" type="button" aria-pressed="false">チェック</button><button id="enterGameWorld" type="button">ゲーム世界へ</button></div><footer><span>ORIGINAL WORLD EDITOR · WebGL / OFFLINE</span><span>配置 → JSONで書き出し → ChatGPTに共有</span></footer></div>
 <dialog id="poiItemDetail" aria-labelledby="poiItemDetailName" aria-describedby="poiItemDetailDescription">
- <h2 id="poiItemDetailName"></h2>
+ <div id="poiItemDetailHeader">
+  <div id="poiItemDetailIcon" aria-hidden="true"><span class="hotbar-icon"></span><span class="hotbar-count"></span></div>
+  <h2 id="poiItemDetailName"></h2>
+ </div>
  <p id="poiItemDetailDescription"></p>
  <p id="poiItemDetailFeedback" role="status" aria-live="polite"></p>
  <div id="poiItemDetailActions" role="group" aria-label="アイテム操作">
@@ -997,6 +1009,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
   <button type="button" data-item-detail-action="back" autofocus>戻る</button>
  </div>
 </dialog>
+<div id="poiItemDragPreview" aria-hidden="true" hidden><span class="hotbar-icon"></span><span class="hotbar-count"></span></div>
 <dialog id="poiShopDialog" aria-labelledby="poiShopTitle">
  <h2 id="poiShopTitle">道具屋</h2>
  <p>所持金：<strong id="poiShopGold">0</strong> 金貨</p>
@@ -1097,7 +1110,12 @@ async function pineInitBatteryIndicator(){
  }catch(e){/* API unsupported, denied, or unavailable: keep --%. */}
 }
 pineInitBatteryIndicator();
-function toast(message){toastEl.textContent=message;toastEl.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>toastEl.classList.remove('show'),2200)}
+let poiRouteMiniMessage=null;
+function toast(message){
+ if(poiRouteMiniMessage?.(message)){clearTimeout(toast.timer);toastEl.classList.remove('show');return}
+ toastEl.textContent=message;toastEl.classList.add('show');clearTimeout(toast.timer);
+ toast.timer=setTimeout(()=>toastEl.classList.remove('show'),2200);
+}
 if(!gl){$('canvasTip').textContent='この端末はWebGLに対応していません。3D編集を開始できません。';return}
 const palette=[
 {id:'pineLandingCraft',name:'兵員輸送艇・20人乗り（18×8）',icon:'▰',cat:'decor'},
@@ -7165,7 +7183,7 @@ function poiHotbarSwordIcon(){
  if(drawWallThumbnail(cv,'equipWoodSword',{transparent:true,fit:true,rot:0}))poiWoodSwordIcon=cv;
  return poiWoodSwordIcon;
 }
-let poiBagKeySource=null;
+let poiBagKeySource=null,poiBagCancelDrag=null;
 function poiKitchenChestReachable(){
  if(!poiWalkActive||pineAIActive||facilitySite?.id!=='base'||poiWalkLevel!==-1)return false;
  const [dx,dz]=[[0,-1],[1,0],[0,1],[-1,0]][poiWalkFacing];
@@ -7205,7 +7223,7 @@ function poiBagSetOpen(open){
  const toggle=$('poiBagToggle'),panel=$('poiBagPanel');
  if(!toggle||!panel)return;
  open=!!open&&!toggle.hidden&&poiInventoryAllowed();
- if(!open){poiStorageTapGate?.cancel();poiItemDetailClose(false);poiChestSetOpen(false)}
+ if(!open){poiBagCancelDrag?.();poiStorageTapGate?.cancel();poiItemDetailClose(false);poiChestSetOpen(false)}
  panel.hidden=!open;toggle.setAttribute('aria-expanded',String(open));poiBagSelectSource(null);
 }
 function poiBagSelectSource(button){
@@ -7225,7 +7243,7 @@ function poiBagUiRender(){
  for(const button of document.querySelectorAll('#poiHotbar [data-hotbar-slot],#poiBagGrid [data-bag-slot],#poiChestGrid [data-chest-slot]')){
   const {zone,index}=poiBagSlotRef(button),hot=zone==='hotbar',stash=zone==='chest',
    cell=stash?(chest?poiChestSlotAt(index):null):state[zone]?.[index],type=cell?.type;
-  const sword=type===POI_INVENTORY_SWORD,herb=type===POI_INVENTORY_HERB,weapon=poiHotbarWeaponForType(type);
+  const weapon=poiHotbarWeaponForType(type);
   const locked=(zone==='bag'&&index>=state.bagUnlocked)||(stash&&!chest);
   const name=locked?'未解放':type?poiInventoryItemName(type):'空きスロット '+(index+1);
   const condition=Number.isFinite(cell?.durability)?'・耐久 '+cell.durability:'';
@@ -7234,17 +7252,7 @@ function poiBagUiRender(){
   button.setAttribute('aria-label',name+(cell?.count>1?' ×'+cell.count:'')+condition);
   if(hot&&kit&&(weapon||!type))button.setAttribute('aria-pressed',String(poiInventorySelected(index)));
   else button.removeAttribute('aria-pressed');
-  const icon=button.querySelector('.hotbar-icon'),key=type||'';
-  if(icon.dataset.art!==key){
-   icon.dataset.art=key;
-   const preview=sword?poiHotbarSwordIcon():herb?poiHotbarHerbIcon():type?poiLootContentIcon(type):null;
-   if(preview){
-    const copy=document.createElement('canvas');copy.width=preview.width;copy.height=preview.height;
-    if(preview.dataset.itemModel)copy.dataset.itemModel=preview.dataset.itemModel;
-    copy.getContext('2d').drawImage(preview,0,0);icon.replaceChildren(copy);
-   }else icon.textContent=sword?'⚔︎':herb?'🌿':type==='kitchenKnife'?'🔪':type==='cannedFood'?'🥫':'';
-  }
-  button.querySelector('.hotbar-count').textContent=herb||type==='cannedFood'?String(cell.count):'';
+  poiInventoryPresentItem(button,cell);
  }
 }
 function poiCreateStorageTapGate(schedule,cancelTimer,onSingle,onDouble){
@@ -7294,11 +7302,28 @@ function poiItemDetailClose(restore=true){
  if(dialog?.open)dialog.close();
  if(restore&&old?.button?.isConnected&&!$('poiBagPanel')?.hidden)old.button.focus({preventScroll:true});
 }
+function poiInventoryPresentItem(host,cell){
+ if(!host)return;
+ const icon=host.querySelector('.hotbar-icon'),amount=host.querySelector('.hotbar-count'),type=cell?.type||'';
+ if(icon&&icon.dataset.art!==type){
+  icon.dataset.art=type;
+  const preview=type==='equipWoodSword'?poiHotbarSwordIcon():type==='healingHerb'?poiHotbarHerbIcon():type?poiLootContentIcon(type):null;
+  const copy=preview?document.createElement('canvas'):null;
+  if(copy){copy.width=preview.width;copy.height=preview.height}
+  const g=copy?.getContext('2d');
+  if(g){
+   if(preview.dataset.itemModel)copy.dataset.itemModel=preview.dataset.itemModel;
+   g.drawImage(preview,0,0);icon.replaceChildren(copy);
+  }else icon.textContent={equipWoodSword:'⚔︎',healingHerb:'🌿',kitchenKnife:'🔪',cannedFood:'🥫'}[type]||'';
+ }
+ if(amount)amount.textContent=(type==='healingHerb'||type==='cannedFood')&&cell.count>0?String(cell.count):'';
+}
 function poiItemDetailRender(){
  const ref=poiItemDetailSelection?.ref,cell=poiItemDetailCell(ref);
  if(!cell||cell.type!==poiItemDetailSelection.type){poiItemDetailClose();return false}
  const dialog=$('poiItemDetail'),actions=poiItemDetailActions(ref.zone,cell,poiChestIsOpen());
  $('poiItemDetailName').textContent=poiInventoryItemName(cell.type);
+ poiInventoryPresentItem($('poiItemDetailIcon'),cell);
  $('poiItemDetailDescription').textContent=poiItemDetailDescription(cell);
  for(const button of dialog.querySelectorAll('[data-item-detail-action]')){
   const action=button.dataset.itemDetailAction;
@@ -7316,10 +7341,10 @@ function poiItemDetailOpen(button){
  poiBagSelectSource(null);
  poiItemDetailSelection={button,ref,type:cell.type};
  $('poiItemDetailFeedback').textContent='';
- if(poiItemDetailRender()){poiStopRepeat();$('poiItemDetail').showModal()}
+ if(poiItemDetailRender()){poiBagCancelDrag?.();poiStopRepeat();$('poiItemDetail').showModal()}
 }
 function poiItemDetailReason(reason){
- return {full:'空き枠がありません。',blocked:'近くの地面に置けません。',healthy:'体力は満タンです。',
+ return {full:'空き枠がありません。',blocked:'近くの地面に置けません。',healthy:'HPは満タンです。',
   storage:'保存できなかったため、アイテムは移動していません。',single:'これ以上分割できません。'}[reason]||'その操作はできません。';
 }
 function poiItemDetailAction(action){
@@ -7334,7 +7359,11 @@ function poiItemDetailAction(action){
   drop:()=>ref.zone==='chest'?poiDropChestSlot(ref.index):poiInventoryDrop(ref)
  }[action]?.();
  if(!result)return;
- if(!result.ok){$('poiItemDetailFeedback').textContent=poiItemDetailReason(result.reason);return}
+ if(!result.ok){
+  const feedback=poiItemDetailReason(result.reason);
+  if(result.reason==='healthy'){poiItemDetailClose();toast(feedback);return}
+  $('poiItemDetailFeedback').textContent=feedback;return;
+ }
  if(action==='split'){
   if(poiItemDetailRender())$('poiItemDetailFeedback').textContent='分割した。';
   return;
@@ -7349,14 +7378,35 @@ function poiBagGestureTarget(point,moved,slot,blocked,stage,protectedRects){
  if(moved<24||blocked||protectedRects.some(inside))return null;
  return {kind:'drop'};
 }
+function poiItemDragPosition(x,y,size,width,height,pointerType){
+ const clamp=(value,max)=>Math.max(4,Math.min(value,Math.max(4,max-size-4)));
+ const touch=pointerType==='touch',above=y-size-12;
+ return [clamp(touch?x-size/2:x+12,width),clamp(touch&&above>=4?above:y+12,height)];
+}
+function poiItemDragRender(ghost,event,drag){
+ if(ghost.hidden){
+  const ref=poiBagSlotRef(drag.source),cell=ref.zone==='chest'?poiChestSlotAt(ref.index):poiInventoryCell(poiHotbarRead(),ref);
+  if(!cell)return;
+  drag.previewSize=Math.min(48,Math.max(34,Math.round(drag.source.getBoundingClientRect().width)));
+  ghost.style.setProperty('--poi-drag-size',drag.previewSize+'px');
+  poiInventoryPresentItem(ghost,cell);
+  ghost.hidden=false;
+ }
+ const [x,y]=poiItemDragPosition(event.clientX,event.clientY,drag.previewSize,innerWidth,innerHeight,event.pointerType);
+ ghost.style.transform='translate3d('+x+'px,'+y+'px,0)';
+}
 function poiBagWire(){
- const bar=$('poiHotbar'),bag=$('poiBagPanel'),toggle=$('poiBagToggle'),chest=$('poiChestPanel');
+ const bar=$('poiHotbar'),bag=$('poiBagPanel'),toggle=$('poiBagToggle'),chest=$('poiChestPanel'),ghost=$('poiItemDragPreview');
  let drag=null,suppress=null;
  const find=node=>node?.closest?.('button[data-hotbar-slot],button[data-bag-slot],button[data-chest-slot]');
  const clear=()=>{
   if(drag){delete drag.source.dataset.dragging;if(drag.over)delete drag.over.dataset.dragOver}
-  drag=null;
+  drag=null;ghost.hidden=true;
  };
+ poiBagCancelDrag=clear;
+ const clearInput=()=>{clear();poiStorageTapGate?.cancel()};
+ window.addEventListener('blur',clearInput);
+ document.addEventListener('visibilitychange',()=>{if(document.hidden)clearInput()});
  const occupied=button=>{const ref=poiBagSlotRef(button);return ref.zone==='chest'
   ?poiChestIsOpen()&&!!poiChestSlotAt(ref.index):!!poiInventoryCell(poiHotbarRead(),ref)};
  const resultToast=result=>{
@@ -7398,6 +7448,7 @@ function poiBagWire(){
   container.addEventListener('pointermove',e=>{
    if(drag?.id!==e.pointerId||(!drag.moved&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<10))return;
    drag.moved=true;poiStorageTapGate.cancel();poiBagSelectSource(null);drag.source.dataset.dragging='';
+   poiItemDragRender(ghost,e,drag);
    const target=find(document.elementFromPoint(e.clientX,e.clientY));
    if(drag.over)delete drag.over.dataset.dragOver;
    drag.over=target&&!target.disabled&&target!==drag.source?target:null;
@@ -7443,7 +7494,9 @@ function poiBagWire(){
   });
  }
  document.addEventListener('keydown',e=>{
-  if(e.key!=='Escape'||bag.hidden||poiItemDetailIsOpen())return;
+  if(e.key!=='Escape')return;
+  if(drag){clear();return}
+  if(bag.hidden||poiItemDetailIsOpen())return;
   e.preventDefault();
   if(poiBagKeySource)poiBagSelectSource(null);else if(poiChestIsOpen())poiChestCloseFromUi();else{poiBagSetOpen(false);toggle.focus()}
  });
@@ -7478,7 +7531,7 @@ function poiHotbarUse(slot){
   poiHotbarRender();if(kit.weapon!==weapon)poiWalkAvatar();return;
  }
  const result=poiUseStorageConsumable(kit,slot);
- if(result.reason==='healthy')toast('HPは満タンです');
+ if(result.reason==='healthy')toast('HPは満タンです。');
  else if(result.reason==='storage')toast(poiInventoryItemName(item)+'を保存できませんでした');
 }
 function poiResetCombat(){poiWildClear();poiPlayerHP=POI_PLAYER_MAX_HP;poiMonsterStates=new Map();for(const o of world){if(poiIsMonster(o.type)){const stats=POI_MONSTER_STATS[o.type];poiMonsterStates.set(o,{x:o.x,z:o.z,fromX:o.x,fromZ:o.z,moveStarted:-10000,facing:0,hp:stats.hp,nextAttack:0})}}poiDamageLabels=[];poiNextMobTick=0;poiAttackReady=0;poiMonsterMeshDirty=true;poiCombatHud();dirty=true}
@@ -7525,6 +7578,12 @@ function poiMessagePush(text,kind,now=performance.now()){
  poiMessageLines.push({line,text,kind,start:now,until:now+POI_MESSAGE_LIFETIME});
  panel.hidden=false;log.append(line);return true;
 }
+function poiMessageRouteMini(message){
+ if(!poiWalkActive||pineAIActive||!message||
+  (typeof document!=='undefined'&&document.querySelector?.('dialog[open]:not(#poiItemDetail),.modal.open')))return false;
+ return poiMessagePush(message,'notice');
+}
+if(typeof poiRouteMiniMessage!=='undefined')poiRouteMiniMessage=poiMessageRouteMini;
 function poiAnnounceDefeat(type,now){
  const name=byId(type)?.name||'モンスター',message=name+'を倒した';
  if(!poiMessagePush(message,'defeat',now))toast(message);
@@ -8398,6 +8457,13 @@ function poiTownAmbientSnapshot(){
  return {venue:d.venue,speaker:(d.phase?d.host:d.guest).role.id,guest:d.guest.role.id,host:d.host.role.id,
   phase:d.phase,text:d.lines[d.phase],until:d.until};
 }
+function poiTownAmbientVisible(a){
+ const door=facilityDoorTiles.has(facilityCellKey(a.x,a.z,a.y));
+ const owner=facilityFloorOwner(a.x,a.z,a.y,!door);
+ // Match the player's real covered doorway/interior threshold. Same-floor
+ // proximity is already checked by the caller; outside speakers remain audible.
+ return owner===null||owner===facilityHiddenRoof();
+}
 function poiTownDialogueDraw(now,vp){
  poiTownDialogueUpdate(now);
  const d=poiTownAmbient;if(!d)return;
@@ -8405,6 +8471,7 @@ function poiTownDialogueDraw(now,vp){
  const a=d.phase?d.host:d.guest,el=poiTownDialogueElement();
  if(!poiTownNpcActive()||now>=d.until||!poiTownAmbientNear(a)){poiTownAmbientClose();return}
  if(!el)return;
+ if(!poiTownAmbientVisible(a)){el.hidden=true;return}
  const text=a.role.name+'\n'+d.lines[d.phase];
  if(el.textContent!==text)el.textContent=text;
  const height=a.y===0?(typeof facilityCreekIndex!=='undefined'?facilityCreekIndex?.bridgeHeight?.get(a.x+','+a.z):null):null;
@@ -8616,7 +8683,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v163',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v164',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -8731,7 +8798,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v163';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v164';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -8946,7 +9013,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v163',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v164',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);

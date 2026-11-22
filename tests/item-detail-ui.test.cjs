@@ -17,3 +17,9 @@ test('item details use shared glass, viewport-safe scroll and touch-size vertica
  assert.match(html,/#poiItemDetailActions button\{[^}]*min-height:44px/);
  assert.match(html,/#poiItemDetailActions button\[hidden\]\{display:none\}/);
 });
+test('full HP closes item detail and emits a single announcement route; other errors stay inline',()=>{
+ const a=html.indexOf('function poiItemDetailAction(action)'),b=html.indexOf('function poiBagGestureTarget',a);
+ const handler=html.slice(a,b);
+ assert.match(handler,/if\(result.reason==='healthy'\)\{poiItemDetailClose\(\);toast\(feedback\);return\}/);
+ assert.match(handler,/\$\('poiItemDetailFeedback'\)\.textContent=feedback;return;/);
+});
