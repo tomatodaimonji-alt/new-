@@ -40,17 +40,6 @@ if(out)await mkdir(out,{recursive:true});
 const open='#enterGameWorld';
 async function launch(browser,id='base',start={x:19,z:45},{camera=false,yaw=.24,orbitYaw=0,pitch=.24,townLayout=5,facing=2,kit=null,clockStart=null,fixture='',dist=5.5,level=0}={}){
  const ctx=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
- await ctx.addInitScript(()=>{
-  const gl=WebGLRenderingContext.prototype,probes=new WeakSet();
-  const oldGet=gl.getUniformLocation,oldSet=gl.uniformMatrix4fv;
-  gl.getUniformLocation=function(program,name){
-   const loc=oldGet.call(this,program,name);if(loc&&name==='uMVP')probes.add(loc);return loc;
-  };
-  gl.uniformMatrix4fv=function(loc,transpose,matrix){
-   if(loc&&probes.has(loc))window.__dialogueVP=Array.from(matrix);
-   return oldSet.call(this,loc,transpose,matrix);
-  };
- });
  const page=await ctx.newPage(),errors=[];
  page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(12000);
  await page.goto(origin+'/seed');
@@ -88,7 +77,7 @@ const settle=page=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>re
 async function picture(page,label){
  if(!out)return;
  await settle(page);
- await page.screenshot({path:out+'/v147-'+label+'.png'});
+ await page.screenshot({path:out+'/v154-'+label+'.png'});
 }
 async function noMapMutation(page,map){
  assert.deepEqual(await getMap(page),map,'NPCs, rooms and clock do not write authenticated game layout or tiles');
@@ -113,7 +102,7 @@ async function waitDialogue(page,opened){
   return Boolean(t)===opened;
  },opened);
  const bubble=page.locator(speech);
- await bubble.waitFor({state:opened?'visible':'hidden'});
+ await bubble.waitFor({state:'hidden'});
 }
 async function worker(page,id){
  await page.waitForFunction(id=>window.__editorTest.townResidents()?.actors.some(x=>x.id===id&&x.activity==='work'),id);
@@ -128,20 +117,10 @@ async function startTalking(page,id){
  const d=await talkInfo(page);
  assert.equal(d.id,id,'the nearby aimed NPC responds');
  assert.ok(typeof d.text==='string'&&d.text.length>0&&d.text.length<=100,'short actual dialogue line appears');
- const bubble=page.locator(speech);
- assert.ok((await bubble.innerText()).includes(d.text));
- assert.ok((await bubble.evaluate(el=>getComputedStyle(el).position))==='absolute','speech is anchored to canvas, not a full-screen modal');
- const [r,canvas]=await Promise.all([bubble.boundingBox(),page.locator('#view').boundingBox()]);
- assert.ok(r&&canvas&&r.x>=canvas.x-1&&r.x+r.width<=canvas.x+canvas.width+1&&r.y>=canvas.y-1&&r.y+r.height<=canvas.y+canvas.height+1,'projected speech remains visible on mobile screen');
- const placement=await bubble.evaluate((el,id)=>{
-  const vp=window.__dialogueVP,a=window.__editorTest.townResidents().actors.find(n=>n.id===id),c=document.querySelector('#view');
-  if(!vp||!a)return null;
-  const x=a.x+.5,y=a.y*1.4+1.68,z=a.z+.5;
-  const w=vp[3]*x+vp[7]*y+vp[11]*z+vp[15];
-  const px=(vp[0]*x+vp[4]*y+vp[8]*z+vp[12])/w,py=(vp[1]*x+vp[5]*y+vp[9]*z+vp[13])/w;
-  return {anchor:[parseFloat(el.style.left),parseFloat(el.style.top)],head:[(1+px)*c.clientWidth/2,(1-py)*c.clientHeight/2]};
- },id);
- assert.ok(placement&&placement.anchor.every((v,i)=>Math.abs(v-placement.head[i])<2),'bubble is projected from the actual resident’s head in the live WebGL view');
+ const line=page.locator('#poiMessageLog .poiMessageLine[data-kind="dialogue"]').filter({hasText:d.text});
+ await line.waitFor({state:'visible'});
+ assert.equal(await line.count(),1,'one direct conversation line in the announcement log');
+ assert.equal(await page.locator(speech).isVisible(),false,'player conversation never uses overhead balloon');
  assert.equal((await state(page)).combat.actionAt,swing,'talk action has no attack side effect');
  return d;
 }
@@ -222,5 +201,5 @@ try{
  browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
   args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
  await holdAndRetap(browser);await moveDismiss(browser);await onOtherFloor(browser);await shopPriority(browser);
- console.log('PASS mobile Chromium: actual nearby projected conversation, facing/hold/resume, touch dismissal, floor and counter priority, protected saves');
+ console.log('PASS mobile Chromium: actual nearby announcement-only conversation, facing/hold/resume, touch dismissal, floor and counter priority, protected saves');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}

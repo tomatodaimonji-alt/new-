@@ -7,13 +7,14 @@ import {mkdir} from 'node:fs/promises';
 const require=createRequire(import.meta.url);
 const {chromium}=require(process.env.PLAYWRIGHT_PACKAGE??'playwright');
 const html=readFileSync(process.argv[2]??'world-editor.html','utf8');
-// UI observation only: expose the real unadjusted world-projected anchor.
-const projectionAnchor='const pt=poiWorldToScreen(vp,a.x+.5,(height??terrainY(a.x,a.z))+a.y*1.4+1.68,a.z+.5);';
-assert.equal(html.split(projectionAnchor).length,2,'unique speech projection anchor');
-const measuredHTML=html.replace(projectionAnchor,projectionAnchor+'window.__naturalSpeechPoint=pt;');
+// Only the item-typography enemy encounter uses a fixed wild spawn; its
+// HP, real attack sequence and defeat announcement are left untouched.
+const spawnAnchor='const p=poiWildPick(rng);';
+assert.equal(html.split(spawnAnchor).length,2,'unique ordinary wild-spawn anchor');
+const defeatFixture=html.replace(spawnAnchor,'const p=(poiWalkX===41&&poiWalkZ===73)?{x:42,z:73}:poiWildPick(rng);');
 const server=createServer((req,res)=>{
  res.setHeader('Content-Type','text/html; charset=utf-8');
- res.end(req.url.startsWith('/seed')?'<!doctype html><title>Isolated fixtures</title>':measuredHTML);
+ res.end(req.url.startsWith('/seed')?'<!doctype html><title>Isolated fixtures</title>':req.url.startsWith('/defeat')?defeatFixture:html);
 });
 await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',resolve).once('error',reject));
 const origin='http://127.0.0.1:'+server.address().port;
@@ -44,6 +45,17 @@ if(out)await mkdir(out,{recursive:true});
 const open='#enterGameWorld';
 async function launch(browser,id='base',start={x:19,z:45},{camera=false,yaw=.24,orbitYaw=0,pitch=.24,townLayout=5,facing=2,kit=null,clockStart=null,fixture='',dist=5.5,level=0,width=390}={}){
  const ctx=await browser.newContext({viewport:{width,height:740},deviceScaleFactor:1,isMobile:true,hasTouch:true});
+ await ctx.addInitScript(()=>{
+  const gl=WebGLRenderingContext.prototype,probes=new WeakSet();
+  const oldGet=gl.getUniformLocation,oldSet=gl.uniformMatrix4fv;
+  gl.getUniformLocation=function(program,name){
+   const loc=oldGet.call(this,program,name);if(loc&&name==='uMVP')probes.add(loc);return loc;
+  };
+  gl.uniformMatrix4fv=function(loc,transpose,matrix){
+   if(loc&&probes.has(loc))window.__dialogueVP=Array.from(matrix);
+   return oldSet.call(this,loc,transpose,matrix);
+  };
+ });
  const page=await ctx.newPage(),errors=[];
  page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(12000);
  await page.goto(origin+'/seed');
@@ -103,6 +115,44 @@ async function geometry(page){
  assert.equal(opacity,'1');
  assert.equal(pointer,'none','cannot intercept underlying world or controls');
 }
+async function typography(page,kind){
+ const measure=await page.evaluate(kind=>{
+  const heading=document.querySelector('#poiMessageHeading');
+  const line=document.querySelector('.poiMessageLine[data-kind="'+kind+'"]');
+  if(!heading||!line)return null;
+  const styles=n=>{const s=getComputedStyle(n);return {family:s.fontFamily,size:s.fontSize,weight:Number(s.fontWeight),color:s.color,lineHeight:s.lineHeight}};
+  const {top:ht,bottom:hb}=heading.getBoundingClientRect(),{top:lt}=line.getBoundingClientRect();
+  return {caption:heading.textContent,heading:styles(heading),line:styles(line),ht,hb,lt};
+ },kind);
+ assert.ok(measure,'live message row for '+kind);
+ assert.equal(measure.caption,'アナウンス');
+ assert.equal(measure.heading.family,measure.line.family,'same font family: '+kind);
+ assert.equal(measure.heading.size,measure.line.size,'same actual responsive font size: '+kind);
+ assert.equal(measure.heading.lineHeight,measure.line.lineHeight,'same line-height');
+ assert.equal(measure.line.weight,650,'all message body kinds have one weight');
+ assert.equal(measure.line.color,'rgb(255, 248, 231)','all body kinds use the same cream, including gold');
+ assert.equal(measure.heading.color,'rgb(222, 203, 165)','heading alone retains muted separation');
+ assert.equal(measure.heading.weight-measure.line.weight,100,'heading alone has subtly stronger weight');
+ assert.ok(measure.ht<measure.lt&&measure.hb<=measure.lt+1,'heading remains a separate line above message text');
+}
+async function defeatTypography(browser){
+ const {ctx,page,errors}=await launch(browser,'base',{x:41,z:73},{fixture:'defeat',width:390,facing:1});
+ try{
+  const wild=await page.waitForFunction(()=>window.__editorTest.facility().combat.actors.some(a=>a.wildSpawn&&a.x===42&&a.z===73&&a.hp===35),null,{timeout:16000});
+  assert.ok(wild);
+  await page.locator('#poiHotbar [data-hotbar-slot="0"]').tap();
+  await page.locator('#poiWalkAction').tap();
+  await page.waitForTimeout(410);
+  await page.locator('#poiWalkAction').tap();
+  await page.locator('.poiMessageLine[data-kind="defeat"]').filter({hasText:/^スライムを倒した$/}).waitFor({state:'visible'});
+  await typography(page,'defeat');
+  await move(page,'e',true,true);
+  await page.locator('.poiMessageLine[data-kind="gold"]').filter({hasText:/^3G拾った！$/}).waitFor({state:'visible'});
+  await typography(page,'gold');
+  if(out)await page.screenshot({path:out+'/v154-announcement-typography-390.png'});
+  await unchanged(page);assert.deepEqual(errors,[]);
+ }finally{await ctx.close();}
+}
 async function pickup(browser){
  const {ctx,page,errors}=await launch(browser,'base',{x:88,z:55},{clockStart:720,kit:{version:1,weapon:null,potions:2,drops:[{type:'healingHerb',x:88,z:55,y:0}]},facing:1,width:320});
  try{
@@ -112,76 +162,77 @@ async function pickup(browser){
   await move(page,'e',true,true);
   await page.waitForFunction(sel=>/3\s*G\s*拾った[！!]/.test(document.querySelector(sel)?.textContent||''),boxId);
   assert.equal((await state(page)).economy.gold,3,'visible notice comes from actual pickup');
+  await typography(page,'gold');
   await geometry(page);
-  if(out)await page.screenshot({path:out+'/v151-game-message-pickup-320.png'});
+  if(out)await page.screenshot({path:out+'/v154-game-message-pickup-320.png'});
   await move(page,'w');
   await page.waitForFunction(sel=>/薬草/.test(document.querySelector(sel)?.textContent||''),boxId);
   assert.equal((await state(page)).inventory.potions,3,'stepping back picks up the actual loose herb');
+  await typography(page,'item');
+  await typography(page,'gold');
   await move(page,'e');
   assert.equal((await state(page)).economy.gold,3,'repeated walking grants no extra gold');
   assert.deepEqual(errors,[]);await unchanged(page);
  }finally{await ctx.close();}
 }
-async function measureSpeech(page){
- return page.evaluate(boxId=>{
-  const b=document.querySelector('#poiTownSpeech'),m=document.querySelector(boxId),point=window.__naturalSpeechPoint;
-  const v=document.querySelector('#viewWrap').getBoundingClientRect();
-  if(!point||b.hidden)return null;
-  const r=b.getBoundingClientRect(),panel=m.getBoundingClientRect(),tail=parseFloat(getComputedStyle(b,'::after').borderTopWidth);
-  // Natural speech is translated up by its own height and its fixed CSS margin.
-  const normalBottom=v.y+Math.round(point.y)+parseFloat(getComputedStyle(b).marginTop);
-  return {naturalBottom:normalBottom,naturalTop:normalBottom-r.height,left:r.left,right:r.right,
-   bottom:r.bottom,top:r.top,tail:Number.isFinite(tail)?tail:0,screenX:v.x+Math.round(point.x),
-   panel:{left:panel.left,right:panel.right,top:panel.top,bottom:panel.bottom,height:panel.height}};
- },boxId);
-}
+
 async function dialogue(browser){
  const {ctx,page,errors}=await launch(browser,'base',{x:34,z:61},{clockStart:720,facing:1,width:390});
  try{
-  await page.locator(boxId).waitFor({state:'hidden'});
+  const panel=page.locator(boxId);
+  await panel.waitFor({state:'hidden'});
   await page.waitForFunction(()=>document.querySelector('#poiWalkAction')?.getAttribute('aria-label')?.includes('話す'));
   const attack=(await state(page)).combat.actionAt;
   await page.locator(action).tap();
-  await page.locator('#poiTownSpeech').waitFor({state:'visible'});
   const actor=await page.evaluate(()=>window.__editorTest.townResidents().dialogue);
   assert.equal(actor.id,'stablekeeper');
-  const panel=page.locator(boxId);
-  await page.waitForFunction(({boxId,text})=>document.querySelector(boxId)?.textContent.includes(text),{boxId,text:actor.text});
-  assert.ok((await page.locator('#poiTownSpeech').innerText()).includes(actor.text),'same live line stays in the overhead balloon');
-  const glass=await page.evaluate(boxId=>{
-   const balloon=document.querySelector('#poiTownSpeech'),bubble=getComputedStyle(balloon),tail=getComputedStyle(balloon,'::after');
-   return {bubble:bubble.backgroundColor,panel:getComputedStyle(document.querySelector(boxId)).backgroundColor,
-    pad:getComputedStyle(document.querySelector('#poiWalkPad')).backgroundColor,opacity:bubble.opacity,text:bubble.color,
-    shadow:bubble.textShadow,corners:parseFloat(bubble.borderTopLeftRadius),tailContent:tail.content,
-    tailBg:tail.backgroundColor,tailEdge:tail.borderTopColor,tailBottom:tail.borderBottomColor,tailPos:tail.position};
-  },boxId);
-  assert.equal(glass.bubble,glass.pad,'NPC bubble exactly matches the resting D-pad tint');
-  assert.equal(glass.bubble,glass.panel,'overhead and scrolling messages use the same translucent surface');
-  assert.equal(glass.opacity,'1','fade the glass, not the lettering');
-  const textComponents=glass.text.match(/\d+(?:\.\d+)?/g)?.map(Number)??[];
-  assert.ok(textComponents.length===3&&textComponents.slice(0,3).every(n=>n>=214),'fully opaque readable light text');
-  assert.notEqual(glass.shadow,'none','text remains readable over bright scenery');
-  assert.ok(glass.corners>=5&&glass.tailPos==='absolute'&&glass.tailContent!=='none','speech bubble retains its rounded shape and tail');
-  assert.ok([glass.tailBg,glass.tailEdge,glass.tailBottom].includes(glass.bubble),'tail uses the same transparent tint without a mismatched opaque tip');
-
-  assert.ok((await panel.innerText()).includes(actor.text));
+  await page.locator('#poiMessageLog .poiMessageLine[data-kind="dialogue"]').filter({hasText:actor.text}).waitFor({state:'visible'});
+  assert.equal(await page.locator('#poiTownSpeech').isVisible(),false,'player to NPC is announcement-only');
+  await typography(page,'dialogue');
+  assert.deepEqual(await panel.evaluate(el=>[getComputedStyle(el).textAlign,getComputedStyle(el).justifyContent]),['left','flex-start']);
   assert.equal((await state(page)).combat.actionAt,attack);
   await geometry(page);
-  await page.waitForFunction(()=>['above','below'].includes(document.querySelector('#poiTownSpeech').dataset.side));
-  const overlap=await measureSpeech(page);
-  assert.ok(overlap&&overlap.naturalBottom>overlap.panel.top&&overlap.naturalTop<overlap.panel.bottom,
-   'fixture recreates original projected speech overlap: '+JSON.stringify(overlap));
-  assert.ok(overlap.bottom+overlap.tail<=overlap.panel.top-3||
-   overlap.top>=overlap.panel.bottom+3||overlap.right<=overlap.panel.left-3||overlap.left>=overlap.panel.right+3,
-   'overhead speech, including its tail, clears the readable log: '+JSON.stringify(overlap));
-  if(out)await page.screenshot({path:out+'/v152-game-message-no-overlap-390.png'});
-  // A missing/hidden log must not shift the normal head projection.
-  await panel.evaluate(el=>el.hidden=true);
-  await page.waitForFunction(()=>!['above','below'].includes(document.querySelector('#poiTownSpeech').dataset.side));
-  const natural=await measureSpeech(page);
-  assert.ok(natural&&Math.abs(natural.bottom-natural.naturalBottom)<=1.5&&
-    Math.abs((natural.left+natural.right)/2-natural.screenX)<=1.5,
-    'overhead speech stays centered over its real head projection when clear: '+JSON.stringify(natural));
+  if(out)await page.screenshot({path:out+'/v154-player-announcement-only-390.png'});
+  assert.deepEqual(errors,[]);await unchanged(page);
+ }finally{await ctx.close();}
+}
+async function ambientInn(browser){
+ const {ctx,page,errors}=await launch(browser,'base',{x:42,z:32},{clockStart:16*60+23,facing:0,width:390});
+ try{
+  const started=await page.waitForFunction(()=>{
+   const state=window.__editorTest.townResidents(),a=state.ambientDialogue,el=document.querySelector('#poiTownSpeech');
+   return a&&a.guest==='guestadventurer'&&!el.hidden&&el.textContent.includes(a.text)&&a;
+  },null,{timeout:24000,polling:'raf'});
+  const guest=await started.jsonValue();
+  assert.equal(guest.speaker,'guestadventurer','booked guest actually initiates the exchange');
+  assert.equal(guest.host,'innkeeper');
+  assert.equal(guest.venue,'inn');
+  const occupied=await page.evaluate(()=>window.__editorTest.townResidents().actors.find(a=>a.id==='guestadventurer').bedId);
+  assert.equal(occupied,'inn-west','bubble came from successful actual NPC lodging service');
+  const follow=await page.waitForFunction(()=>{
+   const state=window.__editorTest.townResidents(),a=state.ambientDialogue,el=document.querySelector('#poiTownSpeech');
+   return a&&a.speaker==='innkeeper'&&!el.hidden&&el.textContent.includes(a.text)&&a;
+  },null,{timeout:4000,polling:'raf'});
+  const host=await follow.jsonValue();
+  assert.notEqual(guest.text,host.text,'genuine different host and guest lines');
+  assert.equal(await page.locator('#poiMessageLog .poiMessageLine').count(),0,'NPC-to-NPC stays only overhead, not announcement');
+  const measured=await page.locator('#poiTownSpeech').evaluate(el=>{
+   const css=getComputedStyle(el),tail=getComputedStyle(el,'::after'),pad=getComputedStyle(document.querySelector('#poiWalkPad'));
+   const a=window.__editorTest.townResidents().actors.find(a=>a.id==='innkeeper');
+   const vp=window.__dialogueVP,d=document.querySelector('#view');
+   if(!vp||!a)return null;
+   const x=a.x+.5,y=a.y*1.4+1.68,z=a.z+.5;
+   const w=vp[3]*x+vp[7]*y+vp[11]*z+vp[15];
+   const px=(vp[0]*x+vp[4]*y+vp[8]*z+vp[12])/w,py=(vp[1]*x+vp[5]*y+vp[9]*z+vp[13])/w;
+   return {left:parseFloat(el.style.left),top:parseFloat(el.style.top),x:(1+px)*d.clientWidth/2,y:(1-py)*d.clientHeight/2,
+    align:css.textAlign,opacity:css.opacity,surface:css.backgroundColor,pad:pad.backgroundColor,tail:tail.borderTopColor};
+  });
+  assert.ok(measured&&Math.abs(measured.left-measured.x)<2&&Math.abs(measured.top-measured.y)<2,'other NPC speech still follows the speaker’s live WebGL head');
+  assert.equal(measured.align,'left');assert.equal(measured.opacity,'1');
+  assert.equal(measured.surface,measured.pad);assert.equal(measured.tail,measured.surface);
+  if(out)await page.screenshot({path:out+'/v154-npc-inn-ambient-only-390.png'});
+  await page.locator('#poiTownSpeech').waitFor({state:'hidden',timeout:6000});
+  assert.equal(await page.locator('#poiMessageLog .poiMessageLine').count(),0);
   assert.deepEqual(errors,[]);await unchanged(page);
  }finally{await ctx.close();}
 }
@@ -191,5 +242,7 @@ try{
   args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
  await pickup(browser);
  await dialogue(browser);
- console.log('PASS actual 320/390 Chromium: translucent game message geometry, live touch coin pickup, resident line and original balloon, protected saves');
+ await ambientInn(browser);
+ await defeatTypography(browser);
+ console.log('PASS actual 320/390 Chromium: translucent game message geometry, live touch coin pickup, player dialogue only in log, NPC check-in only overhead, protected saves');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
