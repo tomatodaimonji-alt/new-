@@ -42,3 +42,19 @@ test('edited blocked spawn chooses the next valid protected city tile',()=>{
  const backup=c.poiPlayerDeathSpawn();
  assert.deepEqual([backup.x,backup.z],[20,20]);
 });
+test('player burst reuses the existing monster defeat SE exactly once and obeys the SE mixer and foreground',()=>{
+ const {c,calls}=fixture(),replays=[];
+ c.poiSound=(...v)=>calls.push(['sound',...v]);
+ c.poiPlayerDeathBegin(100);c.poiPlayerDeathBegin(110);
+ c.poiPlayerDeathFrame(1850);c.poiPlayerDeathFrame(2500);
+ assert.deepEqual(calls.filter(a=>a[0]==='sound'),[['sound','player-defeat']]);
+ assert.equal(calls[0][0],'burst');
+ const a=html.indexOf('function poiSound('),b=html.indexOf('function poiAudioSyncLifecycle()',a);
+ Object.assign(c,{poiAudioEnabled:true,poiAudioContext:{state:'running',currentTime:4},poiAudioLevels:{master:85,se:90},
+  poiAudioStart(){},poiDefeatSound:when=>replays.push(when),console});
+ vm.runInContext(html.slice(a,b),c);
+ c.poiSound('player-defeat');assert.deepEqual(replays,[4]);
+ c.poiAudioLevels.se=0;c.poiSound('player-defeat');c.poiAudioLevels.se=90;
+ c.poiAudioLevels.master=0;c.poiSound('player-defeat');c.poiAudioLevels.master=85;
+ c.poiAudioAllowed=()=>false;c.poiSound('player-defeat');assert.deepEqual(replays,[4]);
+});

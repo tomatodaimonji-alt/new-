@@ -822,7 +822,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 #poiShopBuyPotion:not(:disabled){border-color:#ebca82;background:#81663ce8!important}
 #poiShopFeedback{min-height:1.4em}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v159）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v160）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -4770,7 +4770,7 @@ function connectedRoofGeometry(m,o,lookup){
 // Walls themselves are unchanged so legacy houses and saved files stay intact.
 // Lodging depth is a static overlay on visible authored walls. The existing
 // shell, opening meshes, roof objects and movement grid stay authoritative.
-function facilityLodgingFacade(m,visible){
+function facilityLodgingFacade(m,visible,record=null){
  const replaced=new Set();
  if(facilitySite?.id!=='base'&&facilitySite?.id!=='lodging')return replaced;
  const inn=facilitySite.buildings.find(b=>b.id==='lodging');
@@ -4791,7 +4791,7 @@ function facilityLodgingFacade(m,visible){
    const front=(main||window)&&r===(o.rot||0);
    if(o.type==='plasterwallDoor'&&!front)continue;
    const x=o.x+.5,z=o.z+.5,y=o.y*1.4+terrainY(o.x,o.z);
-   const scratch=mesh();
+   const start=m.p.length/3,scratch=mesh();
    const B=(u,h,d,w,hh,dd,c)=>cube(scratch,u,y+h,d,w,hh,dd,c);
    const p=(u,h,d)=>[u,y+h,d];
    // Wide continuous cladding needs only its exposed faces.
@@ -4858,13 +4858,14 @@ function facilityLodgingFacade(m,visible){
     m.p.push(x+a,scratch.p[i+1],z+b);m.n.push(na,scratch.n[i+1],nb);
     m.c.push(scratch.c[i],scratch.c[i+1],scratch.c[i+2]);
    }
+   if(record)record(o,start);
   }
  }
  return replaced;
 }
 
 function houseFacadeDetails(m,visible,record=null){
- const lodgingReplaced=facilityLodgingFacade(m,visible);
+ const lodgingReplaced=facilityLodgingFacade(m,visible,record);
  const walls=visible.filter(o=>/^(?:plasterwall|woodwall|stonewall|brickwall)(?:Door|Window)$/.test(o.type)&&
   !facilityStableLoadingBayPart(o)&&!lodgingReplaced.has(o));
  const all=new Map(visible.filter(o=>o.y>=0&&!isFloor(o.type)).map(o=>[o.x+','+o.z+','+o.y,o]));
@@ -6248,6 +6249,8 @@ function poiSound(kind,weapon=null,defeated=false){
     poiWeaponSound(kind,weaponSound,now);
     if(kind==='hit'&&defeated)poiDefeatSound(now+POI_WEAPON_CONTACT_DELAY+.018);
    }
+  }else if(kind==='player-defeat'){
+   if(poiAudioLevels.master>0&&poiAudioLevels.se>0)poiDefeatSound(now);
   }else if(kind==='enemy-loot'||kind==='inventory-drop'||kind==='item-pickup'){
    poiItemSound(kind,weapon,now);
   }else if(kind==='heal'){
@@ -8013,7 +8016,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v159',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v160',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -8128,7 +8131,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v159';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v160';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -8343,7 +8346,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v159',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v160',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -9278,6 +9281,7 @@ function poiPlayerDeathBegin(now){
  const x=poiWalkX,z=poiWalkZ,y=poiWalkLevel;
  const pose={x:poiWalkViewX+.5,y:poiCreekPlayerHeight(now)+y*1.4+.03,z:poiWalkViewZ+.5};
  poiMonsterBreak({type:'humanBare',x,z,y},{x,z,facing:[2,3,0,1][poiWalkFacing]},now,Math.random,{actor:'player',pose});
+ if(typeof poiSound==='function')poiSound('player-defeat');
  const notice='死んでしまった。';
  if(typeof poiMessagePush!=='function'||!poiMessagePush(notice,'defeat',now))toast(notice);
  poiPlayerDeathView('pause',0);return true;
@@ -10031,11 +10035,13 @@ function pineFinishInteriorWindow(m,o,lookup){
  }
 }
 // Smooth, uniform top surfaces across adjoining timber wall/door/wall tiles.
-function pineFinishPartitionTops(m,visible){
+function pineFinishPartitionTops(m,visible,record=null){
  for(const o of visible){
   if(!['woodwall','woodwallDoor','woodwallWindow'].includes(o.type))continue;
   const y=o.y*1.4+terrainY(o.x,o.z);
+  const start=m.p.length/3;
   cube(m,o.x+.5,y+1.382,o.z+.5,1.005,.008,1.005,[.54,.367,.227]);
+  if(record)record(o,start);
  }
 }
 // v102: Baked floor contact shading and warm lantern bounce, using EXISTING
@@ -10379,7 +10385,7 @@ function poiAngledWallRecord(records,m,o,sides,start,trim=false){
 }
 
 function makeScene(){
- const wallFade=poiWalkActive&&facilitySite?[]:null;
+ const wallFade=poiWalkActive&&facilitySite?[]:null,storeyFade=wallFade?[]:null;
  const cut=facilitySite?facilityVisibilityOwner():null;
  const m=mesh(),visible=world.filter(o=>{
   if(facilitySite&&!facilityObjectVisible(o,cut))return false;
@@ -10474,18 +10480,23 @@ function makeScene(){
   floorLayers.get(o.y).set(o.x+','+o.z,o.type);
  }
  for(const o of raised){
-  const layer=floorLayers.get(o.y),tmp=mesh(),kind=o.type;
+  const layer=floorLayers.get(o.y),tmp=mesh(),kind=o.type,start=m.p.length/3;
   if(townGuildWood(o.x,o.z,kind))pineDrawTownGuildFloor(tmp,o.x,o.z,kind);
   else addFloorTile(tmp,o.x,o.z,kind,MAP_W*MAP_H,ROAD_IDS.has(kind)&&!kind.endsWith('Full')?roadConnections(layer,o.x,o.z,kind):0);
   pineBakeFloorLighting(tmp,o.x,o.z,o.y,pineShadows,pineWarmLamps);
   shiftMesh(m,tmp,o.y*1.4+terrainY(o.x,o.z));
+  poiAngledStoreyRecord(storeyFade,m,o,start);
  }
  const bridgeLookup=new Map(visible.filter(o=>BRIDGE_IDS.has(o.type)).map(o=>[o.x+','+o.z,o]));
  const fenceLookup=new Map(visible.filter(o=>/^fence(Wood|Stone|Iron)/.test(o.type)).map(o=>[o.x+','+o.z+','+o.y,o]));
  const roofs=new Map(visible.filter(o=>roofFamily(o.type)).map(o=>[o.x+','+o.z+','+o.y,o]));
  const wallLookup=wallExteriorLookup(visible);
  const tabletopSupports=pineTabletopSupportIndex(visible),tabletopCeilings=pineTabletopCeilings(world);
- houseFacadeDetails(m,visible,wallFade?(o,start)=>poiAngledWallRecord(wallFade,m,o,poiAngledWallSides(o),start,true):null);
+ const storeyTrim=storeyFade?(o,start)=>poiAngledStoreyRecord(storeyFade,m,o,start,true):null;
+ houseFacadeDetails(m,visible,wallFade?(o,start)=>{
+  poiAngledWallRecord(wallFade,m,o,poiAngledWallSides(o),start,true);
+  storeyTrim(o,start);
+ }:null);
  guildAtriumRailing(m,visible);
  guildMountedLighting(m,visible);
  guildInteriorDetails(m,visible);
@@ -10535,10 +10546,14 @@ function makeScene(){
   }
   else if(!pineDrawBaseTree(m,o)&&!pineDrawEastNature(m,o))deco(m,o.type,o.x+.5,o.y*1.4+terrainY(o.x,o.z),o.z+.5,o.rot||0);
   if(sides.length)poiAngledWallRecord(wallFade,m,o,sides,start);
+  poiAngledStoreyRecord(storeyFade,m,o,start);
  }
- for(const o of visible)pineFinishInteriorWindow(m,o,wallLookup);
- pineFinishPartitionTops(m,visible);
- const uploaded=upload(m);if(wallFade)uploaded.wallFade=wallFade;
+ for(const o of visible){
+  const start=m.p.length/3;pineFinishInteriorWindow(m,o,wallLookup);
+  if(storeyTrim)storeyTrim(o,start);
+ }
+ pineFinishPartitionTops(m,visible,storeyTrim);
+ const uploaded=upload(m);if(wallFade){uploaded.wallFade=wallFade;uploaded.storeyFade=storeyFade}
  return uploaded;
 }
 function upload(m,reuse=null,usage=gl.STATIC_DRAW){const n=m.p.length/3,data=new Float32Array(n*9);for(let i=0;i<n;i++){const a=i*9,b=i*3;for(let j=0;j<3;j++){data[a+j]=m.p[b+j];data[a+3+j]=m.n[b+j];data[a+6+j]=m.c[b+j]}}const vbo=reuse||gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vbo);gl.bufferData(gl.ARRAY_BUFFER,data,usage);return{buf:vbo,count:n}}
@@ -10720,7 +10735,7 @@ function poiClearSceneVariants(){
  return {oldMeshes,oldSigns};
 }
 // BEGIN ANGLED ROOF SURFACES
-function poiAngledRoofPart(m,start,tiles){
+function poiAngledRoofPart(m,start,tiles,limit=600){
  const end=m.p.length/3;if(end<=start)return null;
  const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity],tri=[];
  for(let i=start*3;i<end*3;i+=9){
@@ -10735,7 +10750,7 @@ function poiAngledRoofPart(m,start,tiles){
  }
  // Major faces dominate the test. Discard small seams and trim first,
  // bounding temporary work even on unusually detailed authored roofs.
- if(tri.length>600){tri.sort((a,b)=>b.area-a.area);tri.length=600}
+ if(tri.length>limit){tri.sort((a,b)=>b.area-a.area);tri.length=limit}
  const surface=new Float32Array(tri.length*9);
  for(let i=0;i<tri.length;i++)for(let j=0;j<9;j++)surface[i*9+j]=m.p[tri[i].i+j];
  return {start,end,min,max,surface,extras:[],tiles:new Set(tiles.map(o=>o.x+','+o.z+','+o.y))};
@@ -10769,15 +10784,54 @@ function poiAngledRoofHits(part,origins,d){
 }
 // END ANGLED ROOF SURFACES
 
+// BEGIN ANGLED STOREY SURFACES
+function poiAngledStoreyRecord(records,m,o,start,trim=false){
+ if(!records||o.y<=0||start>=m.p.length/3)return;
+ const owner=facilityFloorOwner(o.x,o.z,o.y);
+ if(owner===null||(!trim&&facilityIsRoofPiece(o)))return;
+ const kind=trim?'trim':isFloor(o.type)?'slab':
+  isWallId(o.type)||/wall|window|door|partition/i.test(o.type)?'wall':
+  /^(?:bed|table|roundTable|counter|wardrobe|bookshelf|displayShelf|chest|kitchen|bench)/.test(o.type)?'bulk':'prop';
+ const part=kind==='trim'||kind==='prop'?{start,end:m.p.length/3}:poiAngledRoofPart(m,start,[],kind==='slab'?32:64);
+ if(!part)return;
+ delete part.tiles;delete part.extras;
+ records.push({...part,owner:facilitySite.buildings[owner]?.id??owner,x:o.x,z:o.z,y:o.y,kind,type:o.type});
+}
+function poiAngledStoreyBoxHit(record,origins,bearing){
+ for(const origin of origins){
+  let lo=.035,hi=6.5;
+  for(let i=0;i<3;i++){
+   const d=bearing[i],low=record.min[i]-.016,high=record.max[i]+.016,p=origin[i];
+   if(Math.abs(d)<1e-6){if(p<low||p>high){lo=1;hi=0;break}continue}
+   const a=(low-p)/d,b=(high-p)/d;
+   lo=Math.max(lo,Math.min(a,b));hi=Math.min(hi,Math.max(a,b));if(lo>hi)break;
+  }
+  if(lo<=hi)return true;
+ }
+ return false;
+}
+function poiAngledStoreySelect(records,origins,bearing,floor){
+ const [x,,z]=origins[0];
+ const near=records.filter(r=>r.y>floor&&Math.abs(r.x+.5-x)<=7&&Math.abs(r.z+.5-z)<=7);
+ const direct=near.filter(r=>r.min&&poiAngledStoreyBoxHit(r,origins,bearing)&&
+  (r.surface?poiAngledRoofHits(r,origins,bearing):true));
+ if(!direct.length)return [];
+ const selected=near.filter(r=>
+  direct.includes(r)||((r.x+.5-x)*bearing[0]+(r.z+.5-z)*bearing[2]>=-.04&&
+   direct.some(s=>r.owner===s.owner&&r.y===s.y&&Math.abs(r.x-s.x)+Math.abs(r.z-s.z)<=1)));
+ return selected.sort((a,b)=>a.start-b.start);
+}
+// END ANGLED STOREY SURFACES
+
 // BEGIN ANGLED WALL OCCLUSION
 const POI_ANGLED_NO_FADE={active:false};
-let poiAngledWallDisabled=false,poiAngledWallPrevious=null;
+let poiAngledWallDisabled=false,poiAngledStoreyDisabled=false,poiAngledWallPrevious=null;
 function poiAngledWallOcclusion(p,now){
  if(!poiWalkActive||poiThirdPerson||cameraTopDown||pineAIActive||poiAngledWallDisabled)return POI_ANGLED_NO_FADE;
  const roofs=typeof facilityRoofMeshes==='undefined'?null:facilityRoofMeshes;
  const roofIds=roofs?.length?facilityVisibleRoofs():[];
- const walls=sceneMesh?.wallFade||[];
- if(!walls.length&&!roofIds.length)return POI_ANGLED_NO_FADE;
+ const walls=sceneMesh?.wallFade||[],storeys=poiAngledStoreyDisabled?[]:sceneMesh?.storeyFade||[];
+ if(!walls.length&&!roofIds.length&&!storeys.length)return POI_ANGLED_NO_FADE;
  const x=poiWalkViewX+.5,z=poiWalkViewZ+.5,y=poiCreekPlayerHeight(now)+poiWalkLevel*1.4;
  const key=[x,z,y,yaw,p.elev,poiWalkLevel,roofIds.join(',')].join(':');
  if(poiAngledWallPrevious?.mesh===sceneMesh&&poiAngledWallPrevious.roofs===roofs&&poiAngledWallPrevious.key===key)return poiAngledWallPrevious.mask;
@@ -10823,9 +10877,18 @@ function poiAngledWallOcclusion(p,now){
   mask={active:true,kind:'overhead-wall',opacity:POI_OCCLUSION_OPACITY,
    wall:{owner:best.owner,side:best.side,cells},spans:poiAngledRangeMerge(ranges)};
  }
+ const wide=.25,rx=Math.cos(yaw)*wide,rz=-Math.sin(yaw)*wide;
+ const rays=[[x,y+.18,z],[x,y+.62,z],[x,y+1.19,z],[x-rx,y+.65,z-rz],[x+rx,y+.65,z+rz]];
+ if(storeys.length){
+  const hit=poiAngledStoreySelect(storeys,rays,bearing,poiWalkLevel);
+  if(hit.length){
+   const cells=new Map();
+   for(const {owner,x,z,y,type} of hit)cells.set(owner+':'+x+','+z+','+y+':'+type,{owner,x,z,y,type});
+   mask={...(mask.active?mask:{kind:'overhead-storey',active:true,opacity:POI_OCCLUSION_OPACITY}),
+    spans:poiAngledRangeMerge([...(mask.spans||[]),...hit.map(r=>[r.start,r.end])]),storey:{cells:[...cells.values()]}};
+  }
+ }
  if(roofIds.length){
-  const wide=.25,rx=Math.cos(yaw)*wide,rz=-Math.sin(yaw)*wide;
-  const rays=[[x,y+.18,z],[x,y+.62,z],[x,y+1.19,z],[x-rx,y+.65,z-rz],[x+rx,y+.65,z+rz]];
   const roofFades={};
   for(const id of roofIds){
    const ranges=[];
@@ -10850,7 +10913,7 @@ function poiAngledRangeMerge(ranges){
 
 let poiOcclusionFrame={active:false};
 function poiDrawSceneOcclusion(m,vp,spans=null){
- if(!spans&&poiOcclusionFrame.kind==='overhead-wall')spans=poiOcclusionFrame.spans;
+ if(!spans)spans=poiOcclusionFrame.spans;
  if(!spans?.length){draw(m,vp);return}
  if(!m?.count)return;
  gl.bindBuffer(gl.ARRAY_BUFFER,m.buf);
@@ -15447,6 +15510,7 @@ function facilityBoot(resume,playOnOpen=false){
    poiPlayerHP=Math.max(1,poiPlayerHP-n);poiCombatHud();return true;
   },
   setOverheadWallFade:enabled=>{poiAngledWallDisabled=!enabled},
+  setUpperStoreyFade:enabled=>{poiAngledStoreyDisabled=!enabled;poiAngledWallPrevious=null},
   townResidents:()=>typeof poiTownResidentsSnapshot==='function'?poiTownResidentsSnapshot():null,
   facility:()=>({id:facilitySite.id,mode:poiWalkActive?'play':'editor',editorLevel:level,
    spawn:{...facilitySite.spawn},buildings:facilitySite.buildings.map(r=>({...r})),

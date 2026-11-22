@@ -14,7 +14,17 @@ const spawnAnchor='const p=poiWildPick(rng);';
 const counterAnchor='const amount=POI_MONSTER_STATS.monsterSlime.attack||6;';
 assert.equal(html.split(spawnAnchor).length,2,'unique ordinary spawn anchor');
 assert.equal(html.split(counterAnchor).length,2,'unique actual NPC counter-hit anchor');
-const playerFixture=html.replace(spawnAnchor,'const p=(poiWalkX===41&&poiWalkZ===73)?{x:42,z:73}:poiWildPick(rng);');
+const soundAnchor='function poiDefeatSound(when){';
+assert.equal(html.split(soundAnchor).length,2,'exact same shared recorded defeat helper');
+const audioHTML=html.replace(soundAnchor,`function poiDefeatSound(when){
+ const probe=window.__deathAudio;
+ probe.calls.push({stage:poiPlayerDeath?.phase??null,hp:poiPlayerHP,when,state:poiAudioContext?.state??null,
+  actorFragments:poiMonsterBreaks.filter(e=>e.actor==='player').length});
+ probe.inside=true;
+ try{return __qaDefeatSound(when)}finally{probe.inside=false}
+}
+function __qaDefeatSound(when){`);
+const playerFixture=audioHTML.replace(spawnAnchor,'const p=(poiWalkX===41&&poiWalkZ===73)?{x:42,z:73}:poiWildPick(rng);');
 const npcFixture=html.replace(counterAnchor,
  "if(a.role.id==='resadventurer'&&poiTownNpcCombatNear(a.x,a.z,a.y)&&!window.__npcLethalPrepared){a.hp=1;window.__npcLethalPrepared=true}"+counterAnchor);
 const server=createServer((req,res)=>{
@@ -50,6 +60,20 @@ if(out)await mkdir(out,{recursive:true});
 const open='#enterGameWorld';
 async function launch(browser,id='base',start={x:19,z:45},{camera=false,yaw=.24,orbitYaw=0,pitch=.24,townLayout=5,facing=2,kit=null,clockStart=null,fixture='',dist=5.5,level=0,width=390}={}){
  const ctx=await browser.newContext({viewport:{width,height:740},deviceScaleFactor:1,isMobile:true,hasTouch:true});
+ await ctx.addInitScript(()=>{
+  const probe=window.__deathAudio={calls:[],starts:[],inside:false,ctx:null};
+  const ac=AudioContext.prototype,create=ac.createBufferSource;
+  ac.createBufferSource=function(...args){
+   probe.ctx=this;
+   const source=create.apply(this,args),start=source.start;
+   source.start=function(...args){
+    const result=start.apply(this,args);
+    if(probe.inside)probe.starts.push({duration:source.buffer?.duration,channels:source.buffer?.numberOfChannels,when:args[0],loop:source.loop});
+    return result;
+   };
+   return source;
+  };
+ });
  const page=await ctx.newPage(),errors=[];
  page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(12000);
  await page.goto(origin+'/seed');
@@ -93,6 +117,9 @@ async function player(browser){
  try{
   const map=await getMap(page),initial=(await state(page)).position;
   assert.deepEqual(initial,{x:41,z:73,level:0});
+  await page.locator('#poiWalkAction').tap();
+  await page.waitForFunction(()=>window.__deathAudio.ctx?.state==='running');
+  assert.deepEqual(await page.evaluate(()=>window.__deathAudio.calls),[],'ordinary user gesture does not emit death audio');
   await page.evaluate(()=>window.__editorTest.testWound(99));
   assert.equal((await getCombat(page)).playerHP,1);
   const frames=page.evaluate(()=>new Promise(resolve=>{
@@ -125,7 +152,7 @@ async function player(browser){
   assert.deepEqual((await state(page)).position,initial,'movement blocked during KO');
   assert.equal((await getCombat(page)).actionAt,contact,'attack blocked during KO');
   assert.deepEqual(await readStock(page),stock,'hotbar input blocked during KO');
-  if(out)await page.screenshot({path:out+'/v157-player-defeat-390.png'});
+  if(out)await page.screenshot({path:out+'/v160-player-defeat-390.png'});
   const log=await frames;
   assert.ok(log.done,'defeat animation, darkness and recovery finish');
   assert.deepEqual(log.frames.map(r=>r.phase),['pause','out','black','in']);
@@ -134,6 +161,13 @@ async function player(browser){
   const pause=log.frames.find(r=>r.phase==='pause');
   assert.equal(pause.hp,0);
   assert.ok(pause.debris.some(d=>d.actor==='player'&&d.parts?.length>=4),'actual multiple scattered player fragments');
+  const sound=await page.evaluate(()=>({calls:window.__deathAudio.calls,starts:window.__deathAudio.starts}));
+  assert.equal(sound.calls.length,1,'the exact monster defeat helper fires once per player death');
+  assert.deepEqual({hp:sound.calls[0].hp,stage:sound.calls[0].stage,state:sound.calls[0].state,actorFragments:sound.calls[0].actorFragments},
+   {hp:0,stage:'pause',state:'running',actorFragments:1},'shared foley is invoked with player fragments, not on relocation');
+  assert.equal(sound.starts.length,1,'one actual non-looping Web Audio sample starts');
+  assert.ok(sound.starts[0].duration>.3&&sound.starts[0].channels===1&&!sound.starts[0].loop);
+  assert.ok(Math.abs(sound.starts[0].when-sound.calls[0].when)<1e-4);
   const respawn=log.end.spawn;
   assert.deepEqual(log.end.position,{x:respawn.x,z:respawn.z,level:0},'respawns in actual authored safe town spawn');
   assert.equal(log.end.combat.playerHP,100);
@@ -143,7 +177,8 @@ async function player(browser){
   assert.deepEqual(await readStock(page),stock);
   await unchanged(page);assert.deepEqual(errors,[]);
   await move(page,'e',true,true); // regular controls become available again
-  console.log('real lethal contact → fragments/pause/out/black/in → safe town',log.frames.map(r=>r.phase));
+  assert.equal(await page.evaluate(()=>window.__deathAudio.calls.length),1,'movement following respawn does not replay death audio');
+  console.log('real lethal contact → fragments, shared SE, pause/out/black/in → safe town',log.frames.map(r=>r.phase));
  }finally{await ctx.close();}
 }
 async function resident(browser){
@@ -158,7 +193,7 @@ async function resident(browser){
   const whileDead=await getCombat(page);
   assert.equal(whileDead.death,null,'NPC defeat never fades the player screen or respawns the player');
   assert.ok(whileDead.debris.some(d=>d.actor==='resident'&&d.actorId===residentId&&d.parts?.length>=4),'actual NPC fragment effect');
-  if(out)await page.screenshot({path:out+'/v157-resident-fragments-390.png'});
+  if(out)await page.screenshot({path:out+'/v160-resident-fragments-390.png'});
   await page.waitForFunction(id=>window.__editorTest.townResidents().actors.some(a=>a.id===id&&!a.death&&a.hp>0),residentId,{timeout:18000,polling:'raf'});
   const revived=await npc();
   assert.ok(revived.hp>0&&revived.id===residentId,'same resident returns to regular routine');
