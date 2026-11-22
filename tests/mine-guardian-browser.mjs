@@ -180,12 +180,7 @@ async function combat(browser){
   assert.ok(!third.some(t=>t.x===122&&t.z===56));
   await endMark(page,third[0].start);
   assert.equal((await readHits(page)).length,1,'east escape also avoids damage');
-  for(let x=123;x<=124;x++)await move(page,'e');
-  assert.deepEqual((await state(page)).position,{x:124,z:56,level:-1},'expanded room is walkable beyond the old east wall');
-  loc(await state(page),'廃坑','★★★☆☆');
-  await move(page,'e',false);
-  assert.deepEqual((await state(page)).position,{x:124,z:56,level:-1},'new east wall stops walking');
-  for(let x=123;x>=120;x--)await move(page,'w');
+  for(let x=121;x>=120;x--)await move(page,'w');
   // Capturing screenshots can block software WebGL. Do it outside the two
   // timed damage assertions above, while the next windup is still visible.
   if(out){await waitMark(page,third[0].start);await page.screenshot({path:out+'/v165-guardian-warning.png'})}
@@ -209,10 +204,45 @@ async function combat(browser){
   await unchanged(page);assert.deepEqual(errors,[]);
  }finally{await ctx.close();}
 }
+async function movingGuardian(browser){
+ const {ctx,page,errors}=await launch(browser,'base',{x:117,z:55},{width:390,height:700,level:-1,facing:1,kit:bladeKit});
+ try{
+  const authored=await readMap(page);
+  const step=(await page.waitForFunction(()=>{
+   const g=window.__editorTest.facility().combat.actors.find(a=>a.type==='monsterMineGuard');
+   return g?.move&&g;
+  },null,{timeout:10000,polling:'raf'})).jsonValue();
+  const moved=await step;
+  assert.deepEqual([moved.move.fromX,moved.move.fromZ,moved.x,moved.z],[120,55,119,55],'approaches by one tile from the authored spawn');
+  assert.equal(moved.move.duration,850);
+  const warned=await waitMark(page);
+  assert.equal(warned[0].hit-warned[0].start,1050,'existing warning wait is unchanged');
+  assert.ok(warned[0].start>=moved.move.start+moved.move.duration,'cannot warn until footfall');
+  assert.ok(warned.some(t=>t.x===117&&t.z===55&&t.y===-1));
+  assert.ok(warned.every(t=>t.x>=117&&t.x<=118),'attack comes from the moved position toward the player');
+  await move(page,'n',true,true);await move(page,'n');
+  await endMark(page,warned[0].start);
+  assert.equal((await readHits(page)).length,0,'dodge works after the guardian walks');
+  const resting=actor(await state(page));
+  assert.deepEqual([resting.x,resting.z],[119,55],'telegraph and impact do not move the guardian');
+  assert.ok(!resting.move);
+  await move(page,'s');await move(page,'s');await move(page,'e',true,true);
+  await page.keyboard.press('ArrowRight');
+  for(const hp of [92,64,36,8,0]){
+   await page.locator(action).tap();
+   await page.waitForFunction(hp=>window.__editorTest.facility().combat.actors.some(a=>a.type==='monsterMineGuard'&&a.hp===hp),hp,{timeout:6500});
+   if(hp)await page.waitForTimeout(315);
+  }
+  assert.equal((await state(page)).economy.gold,21,'authored one-time reward still earned after guardian walks');
+  assert.ok((await readKit(page)).claimedCaches.includes('mine-guardian'));
+  assert.deepEqual(await readMap(page),authored,'walking does not rewrite the authored map');
+  await unchanged(page);assert.deepEqual(errors,[]);
+ }finally{await ctx.close();}
+}
 let browser;
 try{
  browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
   args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
- await exploration(browser);await combat(browser);
- console.log('PASS real mobile Chromium mine entrance, cellar, guardian marks/left and right dodge/new boundary/hit, repeat kill without duplicate reward, save protection');
+ await exploration(browser);await combat(browser);await movingGuardian(browser);
+ console.log('PASS real mobile Chromium mine entrance, cellar, guardian marks/left and right dodge, approach/stop/hit, repeat kill without duplicate reward, save protection');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}

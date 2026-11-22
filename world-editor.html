@@ -875,7 +875,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 #poiResetGameConfirm:not(:disabled){border-color:#ce9b85;background:#774a3cf0;color:#fff4da}
 #poiResetGameFeedback:empty{display:none}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v167）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v168）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -7696,7 +7696,25 @@ function poiRenderEnemyHealth(now,vp){
  }
  for(const [obj,bar] of poiEnemyBars)if(bar.seen!==frame){bar.el.remove();poiEnemyBars.delete(obj)}
 }
-function poiMonsterAt(x,z){for(const [obj,state] of poiMonsterStates){if((!facilitySite||obj.y===poiWalkLevel)&&state.hp>0&&state.x===x&&state.z===z)return [obj,state]}return null}
+function poiMonsterAt(x,z,reserveSlide=false){
+ for(const [obj,state] of poiMonsterStates){
+  if((facilitySite&&obj.y!==poiWalkLevel)||state.hp<=0)continue;
+  const destination=state.x===x&&state.z===z;
+  if(obj.type==='monsterMineGuard'&&state.guardSlideUntil){
+   const source=state.fromX===x&&state.fromZ===z;
+   if(!destination&&!source)continue;
+   const now=performance.now();
+   if(now<state.guardSlideUntil){
+    // Keep both occupied for pathing. Melee follows the same mid-point as
+    // the smooth render interpolation, so a nearby blow never hits air.
+    if(reserveSlide||(now-state.moveStarted<state.guardMoveMs/2?source:destination))return [obj,state];
+    continue;
+   }
+  }
+  if(destination)return [obj,state];
+ }
+ return null;
+}
 const POI_WILD_MAX=3;
 const POI_WILD_LANDMARKS=[[84,34,88,38],[77,45,79,47]];
 const POI_WILD_GATES=[
@@ -7867,8 +7885,37 @@ const POI_MINE_GUARD_WINDUP=1050,POI_MINE_GUARD_COOLDOWN=2450;
 function poiEnemyContactTolerance(a){return a.obj.type==='monsterMineGuard'?450:POI_ENEMY_CONTACT_LATE_MS}
 function poiMineGuardHere(obj,s){
  const marker=facilitySite?.id==='base'?facilitySite.mine?.guardian:null;
- return !!facilitySite?.mine?.bounds&&marker?.type===obj.type&&obj.y===marker.y&&s.x===marker.x&&s.z===marker.z;
+ return !!facilitySite?.mine?.bounds&&marker?.type===obj.type&&obj.y===marker.y&&obj.x===marker.x&&obj.z===marker.z&&poiMineGuardInChamber(s);
 }
+const POI_MINE_GUARD_STEP_MS=850,POI_MINE_GUARD_REST_MS=750;
+function poiMineGuardInChamber(p){
+ const b=facilitySite?.mine?.chamber;
+ return !!b&&p.x>=b.x1&&p.x<=b.x2&&p.z>=b.z1&&p.z<=b.z2;
+}
+function poiMineGuardFrame(obj,s,now){
+ if(!poiEnemyThreatEnabled()||!poiMineGuardHere(obj,s)||poiWalkLevel!==obj.y||
+  s.hp<=0||s.playerAttack?.pending||now<Math.max(s.guardSlideUntil||0,s.guardRestUntil||0))return false;
+ const dx=poiWalkX-s.x,dz=poiWalkZ-s.z;
+ if(poiMineGuardAim(s,dx,dz)){
+  if(now>=s.nextAttack)poiEnemyBeginPlayer(obj,s,now);
+  return false;
+ }
+ if(!poiMineGuardInChamber({x:poiWalkX,z:poiWalkZ}))return false;
+ const mine=facilitySite.mine;
+ const steps=[[Math.sign(dx),0],[0,Math.sign(dz)]].filter(([x,z])=>x||z)
+  .sort((a,b)=>Math.abs(b[0]*dx+b[1]*dz)-Math.abs(a[0]*dx+a[1]*dz));
+ for(const [sx,sz] of steps){
+  const x=s.x+sx,z=s.z+sz;
+  // Keep the inside landing directly in front of the passage clear.
+  if(!poiMineGuardInChamber({x,z})||(x===mine.guardian.x&&z===mine.chamber.z2)||
+   (x===poiWalkX&&z===poiWalkZ)||!poiMonsterCanMove(x,z,s))continue;
+  s.fromX=s.x;s.fromZ=s.z;s.moveStarted=now;s.guardSlideUntil=now+POI_MINE_GUARD_STEP_MS;s.guardMoveMs=POI_MINE_GUARD_STEP_MS;
+  s.x=x;s.z=z;s.facing=sx?sx>0?3:1:sz<0?2:0;
+  return true;
+ }
+ return false;
+}
+
 function poiMineGuardAttackMask(s,fx,fz){
  const b=facilitySite.mine.bounds,tiles=[];
  for(let side=-1;side<=1;side++){
@@ -7912,7 +7959,7 @@ function poiEnemyBeginPlayer(obj,s,now){
     poiMonsterStates.get(obj)!==s||s.hp<=0||(facilitySite&&obj.y!==poiWalkLevel)||
     (s.wildSpawn&&!poiWildPlayerOutside()))return false;
  const dx=poiWalkX-s.x,dz=poiWalkZ-s.z;
- const sweep=guardian&&poiMineGuardHere(obj,s)?poiMineGuardAim(s,dx,dz):null;
+ const sweep=guardian&&now>=Math.max(s.guardSlideUntil||0,s.guardRestUntil||0)&&poiMineGuardHere(obj,s)?poiMineGuardAim(s,dx,dz):null;
  if(guardian?!sweep:Math.abs(dx)+Math.abs(dz)!==1)return false;
  s.nextAttack=now+(guardian?POI_MINE_GUARD_COOLDOWN:POI_ENEMY_COOLDOWN);
  s.playerAttack={obj,start:now,hit:now+windup,x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,
@@ -7946,6 +7993,7 @@ function poiEnemyResolvePlayer(now){
   if(now<a.hit)continue;
   poiEnemyPending.delete(s);a.pending=false;
   const timely=now-a.hit<poiEnemyContactTolerance(a);
+  if(a.obj.type==='monsterMineGuard')s.guardRestUntil=now+POI_MINE_GUARD_REST_MS;
   if(a.obj.type==='monsterSlime'||a.obj.type==='monsterMineGuard'){
    if(timely)a.visualHitAt=now;
    poiMonsterMeshDirty=true;
@@ -7979,7 +8027,7 @@ function poiMineEarlyMayMove(obj,x,z){
  return x>=e.x-1&&x<=e.x+2&&z>=e.z&&z<=mine.stairs.z;
 }
 function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMobTick=now+380;let changed=false;for(const [obj,state] of poiMonsterStates){if((facilitySite&&obj.y!==poiWalkLevel)||state.hp<=0||state.townOwned||(state.wildSpawn&&!poiWildPlayerOutside())||state.playerAttack?.pending)continue;const dx=poiWalkX-state.x,dz=poiWalkZ-state.z,dist=Math.hypot(dx,dz);
- if(obj.type==='monsterMineGuard'){if(dist<=3&&now>=state.nextAttack)poiEnemyBeginPlayer(obj,state,now);continue}
+ if(obj.type==='monsterMineGuard'){if(poiMineGuardFrame(obj,state,now))changed=true;continue}
  if(dist>6.5){if((pineGameActive||state.wildSpawn)&&Math.random()<(state.wildSpawn?.22:.32)){const [rx,rz]=[[0,1],[0,-1],[1,0],[-1,0]][Math.floor(Math.random()*4)],nx=state.x+rx,nz=state.z+rz;if((state.wildSpawn||Math.max(Math.abs(nx-24),Math.abs(nz-24))>=10)&&poiMonsterCanMove(nx,nz,state)){state.fromX=state.x;state.fromZ=state.z;state.x=nx;state.z=nz;state.moveStarted=now;state.facing=rx?rx>0?3:1:rz<0?2:0;changed=true}}continue;}if(Math.abs(dx)+Math.abs(dz)===1){if(now>=state.nextAttack)poiEnemyBeginPlayer(obj,state,now);continue}
  const steps=[[Math.sign(dx),0],[0,Math.sign(dz)]].filter(([sx,sz])=>sx||sz).sort((a,b)=>Math.abs(a[0]*dx+a[1]*dz)>Math.abs(b[0]*dx+b[1]*dz)?-1:1);
  for(const [sx,sz] of steps){const nx=state.x+sx,nz=state.z+sz;if((!pineGameActive||Math.max(Math.abs(nx-24),Math.abs(nz-24))>=10)&&poiMineEarlyMayMove(obj,nx,nz)&&poiMonsterCanMove(nx,nz,state)){state.fromX=state.x;state.fromZ=state.z;state.x=nx;state.z=nz;state.moveStarted=now;state.facing=sx?sx>0?3:1:sz<0?2:0;changed=true;break}}
@@ -8800,7 +8848,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v167',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v168',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -8915,7 +8963,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v167';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v168';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -9130,7 +9178,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v167',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v168',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -9859,7 +9907,7 @@ const POI_MONSTER_BREAK_MS=11310,POI_MONSTER_BREAK_LIMIT=5;
 const POI_MONSTER_FLIGHT_MS=760,POI_MONSTER_FADE_AT=10760;
 const poiMonsterBreaks=[],poiMonsterFragmentTemplates=new Map();
 function poiMonsterPose(obj,s,now){
- const t=Math.max(0,Math.min(1,(now-s.moveStarted)/380)),e=t*t*(3-2*t);
+ const t=Math.max(0,Math.min(1,(now-s.moveStarted)/(s.guardMoveMs||380))),e=t*t*(3-2*t);
  let x=(s.fromX??s.x)+(s.x-(s.fromX??s.x))*e;
  let z=(s.fromZ??s.z)+(s.z-(s.fromZ??s.z))*e;
  const moving=t<1&&((s.fromX??s.x)!==s.x||(s.fromZ??s.z)!==s.z);
@@ -10001,7 +10049,7 @@ function poiMonsterRender(now,vp){
  }
  const animate=poiMonsterBreaks.some(effect=>(!facilitySite||effect.floor===poiWalkLevel)&&
   (!effect.settled||poiMonsterBreakPhase(now-effect.start,effect)==='fade'))||
-  [...poiMonsterStates.values()].some(s=>s.hp>0&&(now-s.moveStarted<450||
+  [...poiMonsterStates.values()].some(s=>s.hp>0&&(now-s.moveStarted<(s.guardMoveMs||380)+70||
    (s.townOwned&&(now-s.counterAt<390||now-s.townHurtAt<158))));
  let slimeAttack=false;
  for(const [o,s] of poiMonsterStates){
@@ -10185,7 +10233,7 @@ function poiWalkCanStep(x,z,fromX,fromZ){
  const cell=world.filter(o=>o.y===poiWalkLevel&&o.x===x&&o.z===z&&(!poiWalkActive||!poiIsMonster(o.type)));
  if(facilitySite&&poiWalkLevel!==0&&!facilityValidLanding(x,z,poiWalkLevel))return false;
  if(!facilitySite&&poiWalkLevel>0&&!cell.some(o=>isFloor(o.type)||o.type==='guildStairDown'||o.type==='guildStairUp'))return false;
- if(poiWalkActive&&poiMonsterAt(x,z))return false;
+ if(poiWalkActive&&poiMonsterAt(x,z,true))return false;
  const creek=poiWalkLevel===0&&facilitySite?.id==='base'&&facilitySite.creek?facilityCreekIndex:null;
  const key=x+','+z,deck=creek?.parts.get(key);
  if(creek?.water.has(key)&&!deck)return false;
@@ -10492,7 +10540,7 @@ function poiWalkAction(){
  // swings, and preserve the wind-up layer of bare hands and other weapons.
  if(!monster||poiWalkActionWeapon!=='equipWoodSword')poiSound('attack',poiWalkActionWeapon);
  if(monster){if(poiWalkActionWeapon==='kitchenKnife'&&typeof poiKitchenKnifeSpend==='function'&&!poiKitchenKnifeSpend())return;
-  const [obj,state]=monster,amount=poiPlayerAttackDamage(poiWalkActionWeapon);state.hp=Math.max(0,state.hp-amount);poiSound('hit',poiWalkActionWeapon,state.hp===0);poiDamageNumber(state.x+.5,state.z+.5,terrainY(state.x,state.z)+1.8+(facilitySite?poiWalkLevel*1.4:0),amount);if(!state.hp){poiMonsterBreak(obj,state,now);if(obj.type==='monsterSlime'&&state.wildSpawn)poiEconomyDrop(obj,state);
+  const [obj,state]=monster,amount=poiPlayerAttackDamage(poiWalkActionWeapon);state.hp=Math.max(0,state.hp-amount);poiSound('hit',poiWalkActionWeapon,state.hp===0);const hx=obj.type==='monsterMineGuard'?x:state.x,hz=obj.type==='monsterMineGuard'?z:state.z;poiDamageNumber(hx+.5,hz+.5,terrainY(hx,hz)+1.8+(facilitySite?poiWalkLevel*1.4:0),amount);if(!state.hp){poiMonsterBreak(obj,state,now);if(obj.type==='monsterSlime'&&state.wildSpawn)poiEconomyDrop(obj,state);
   if(obj.type==='monsterMineGuard'&&typeof poiMineGuardianDefeat==='function')poiMineGuardianDefeat(obj,state);
   if(typeof poiAnnounceDefeat==='function')poiAnnounceDefeat(obj.type,now);else toast('モンスターを倒した')}poiMonsterMeshDirty=true;if(pineGameActive)pineGameSave(true);return}
  // Interactions without an assigned action are intentionally silent.
@@ -11182,6 +11230,12 @@ function poiAngledWallSides(o){
   const offset=facilitySite.townOffset||0;
   add('watchtower',84+offset,88+offset,34+offset,38+offset);
  }
+ const mine=facilitySite.id==='base'?facilitySite.mine?.bounds:null;
+ if(mine&&y===mine.y&&x>=mine.x1&&x<=mine.x2&&z>=mine.z1&&z<=mine.z2){
+  // An irregular underground enclosure has no facade orientation. Each
+  // wall is an eligible near blocker; the camera rays decide what fades.
+  for(const side of ['west','east','north','south'])edge.push({owner:'abandoned-mine',side});
+ }
  return edge;
 }
 function poiAngledWallRecord(records,m,o,sides,start,trim=false){
@@ -11385,7 +11439,15 @@ uniform OCCP vec4 uOcclusionShape;
 uniform OCCP vec4 uOcclusionInfo;
 float workshopDither2(vec2 p){return 2.0*p.x+3.0*p.y-4.0*p.x*p.y;}
 void main(){
- if(uOcclusionInfo.w<0.0){
+ if(uOcclusionInfo.w< -1.5){
+  // Only the avatar's reverse-depth pass uses this stipple. It does not
+  // wash out a normally visible avatar or blend multiply over rear faces.
+  vec2 cell=mod(floor(gl_FragCoord.xy),4.0);
+  float bit=(4.0*workshopDither2(mod(cell,2.0))+workshopDither2(floor(cell*.5))+.5)/16.0;
+  if(bit>.44)discard;
+  gl_FragColor=vec4(vec3(.90,.82,.63),1.0);
+  return;
+ }else if(uOcclusionInfo.w<0.0){
   vec2 cell=mod(floor(gl_FragCoord.xy),4.0);
   float bit=(4.0*workshopDither2(mod(cell,2.0))+workshopDither2(floor(cell*.5))+.5)/16.0;
   if(bit>${POI_OCCLUSION_OPACITY})discard;
@@ -11663,18 +11725,23 @@ function poiAngledWallOcclusion(p,now){
   return start;
  };
  let best=null,nearest=Infinity;
- const front=new Map();
+ const front=new Map(),mineHits=new Map();
  for(const w of walls){
   if(w.trim||faces[w.side]<.10||w.y<poiWalkLevel||Math.abs(w.x+.5-x)>4||Math.abs(w.z+.5-z)>4)continue;
   const t=Math.min(...avatars.map(h=>ray(w,h)));
   if(t<nearest||best&&t===nearest&&faces[w.side]>faces[best.side]){nearest=t;best=w}
   if(Number.isFinite(t)){
+   if(w.owner==='abandoned-mine'&&!mineHits.has(w.start))mineHits.set(w.start,w);
    const group=w.owner+':'+w.side,old=front.get(group);
    if(!old||t<old.t)front.set(group,{w,t});
   }
  }
  let mask=POI_ANGLED_NO_FADE;
- if(best){
+ if(best?.owner==='abandoned-mine'){
+  const hits=[...mineHits.values()],cells=hits.map(({x,z,y,type})=>({x,z,y,type}));
+  mask={active:true,kind:'overhead-wall',opacity:POI_OCCLUSION_OPACITY,
+   wall:{owner:best.owner,side:best.side,cells},spans:poiAngledRangeMerge(hits.map(w=>[w.start,w.end]))};
+ }else if(best){
   const line=w=>w.side==='east'||w.side==='west'?w.x:w.z;
   const seeds=[best,...[...front.values()].map(p=>p.w).filter(w=>w.owner===best.owner&&w.side!==best.side).slice(0,1)];
   const ranges=[],cells=[];
@@ -11744,6 +11811,18 @@ function poiDrawSceneOcclusion(m,vp,spans=null){
   from=end;
  }
  if(from<m.count)gl.drawArrays(gl.TRIANGLES,from,m.count-from);
+}
+function poiDrawWalkAvatar(vp){
+ if(!poiWalkMesh)return;
+ if(!pineAIActive){
+  // Write no depth: only scene/actor occluders matter, not the player's
+  // own triangles. The opaque avatar pass wins normally in visible areas.
+  gl.depthMask(false);gl.depthFunc(gl.GREATER);
+  gl.uniform4f(loc.occlusionInfo,0,0,0,-2);
+  try{draw(poiWalkMesh,vp)}
+  finally{gl.uniform4f(loc.occlusionInfo,0,0,0,0);gl.depthFunc(gl.LESS);gl.depthMask(true)}
+ }
+ draw(poiWalkMesh,vp);
 }
 function poiAvatarOcclusion(p,now){
  if(!poiWalkActive||!poiThirdPerson||cameraTopDown||pineAIActive)return {active:false};
@@ -11860,8 +11939,8 @@ function render(){
  if(poiWalkActive){
   poiEconomyDraw(p.vp);poiInventoryDraw(p.vp);
   if(typeof poiTownResidentsDraw==='function')poiTownResidentsDraw(now,p.vp);
-  if(!poiPlayerDeath||poiPlayerDeath.relocated)draw(poiWalkMesh,p.vp);
   poiMonsterRender(now,p.vp);
+  if(!poiPlayerDeath||poiPlayerDeath.relocated)poiDrawWalkAvatar(p.vp);
  }
  poiLootMarksDraw(p.vp);
  poiRenderEnemyHealth(now,p.vp);poiRenderDamageLabels(now,p.vp);poiTownDialogueDraw(now,p.vp);pineDrawChecks(p.vp);
@@ -16530,6 +16609,8 @@ function facilityBoot(resume,playOnOpen=false){
    wildSpawn:poiWildSnapshot(),economy:poiEconomySnapshot(),inventory:poiInventorySnapshot(),occlusion:poiOcclusionFrame,
    combat:{playerHP:poiPlayerHP,death:poiPlayerDeathSnapshot(),threats:poiEnemyThreatTiles(performance.now()),actionAt:poiWalkActionStarted,effects:poiMonsterBreaks.length,debris:poiMonsterBreakSnapshot(performance.now()),actors:[...poiMonsterStates].map(([o,s])=>
     ({type:o.type,x:s.x,z:s.z,level:o.y,hp:s.hp,wildSpawn:!!s.wildSpawn,
+     ...(o.type==='monsterMineGuard'&&performance.now()<s.guardSlideUntil?
+      {move:{fromX:s.fromX,fromZ:s.fromZ,start:s.moveStarted,duration:s.guardMoveMs}}:null),
      attack:o.type==='monsterSlime'?poiSlimeAttackPose(s,performance.now()):o.type==='monsterMineGuard'?poiMineGuardPose(s,performance.now()):null}))}})
  };
  refreshPalette();updateStats();updateSelected();showEntireMap();
