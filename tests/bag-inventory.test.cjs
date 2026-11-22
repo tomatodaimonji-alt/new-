@@ -368,3 +368,39 @@ test('mine survey verifies real first-floor plaque and returns exactly one 10G r
  const next=fixture(f.raw());assert.equal(next.ctx.poiQuestProgress('mine-survey'),'reported');
  assert.equal(next.ctx.poiEconomyGold(),22);assert.equal(next.writes(),0);assert.equal(c.poiQuestMiniTargets().length,0);
 });
+test('vault gate records actual canonical defeat independently; cancelled timers cannot seed or reroll chest',()=>{
+ const f=fixture({version:1,weapon:null,potions:3,gold:999999}),c=f.ctx;
+ const chest={x:121,z:43,y:-1,type:'rewardChest'},stand={x:121,z:44,y:-1,facing:0};
+ const guard={x:120,z:55,y:-1,type:'monsterMineGuard'};
+ c.facilitySite.mine={guardian:guard,vault:{chest,stand}};
+ Object.assign(c,{poiWalkLevel:-1,poiWalkX:121,poiWalkZ:44,poiWalkFacing:0,world:[chest],poiMonsterAt:()=>null});
+ assert.equal(c.poiMineVaultGateOpen(),false);assert.equal(c.poiMineVaultRecordDefeat({...guard,x:119},{hp:0}),false);
+ assert.equal(c.poiMineVaultRecordDefeat(guard,{hp:0}),true);
+ assert.deepEqual(f.raw(),{version:1,weapon:null,potions:3,gold:999999,mineGateCleared:true});
+ assert.equal(c.poiMineUnlockStart(0),true);c.poiMineUnlockFrame(2999);assert.equal(f.writes(),1);
+ c.poiMineUnlockCancel();c.poiMineUnlockFrame(10000);assert.equal(f.writes(),1);
+ assert.equal(c.poiMineUnlockStart(20000),true);
+ f.fail(true);c.poiMineUnlockFrame(23000);assert.equal(f.raw().mineTreasureChest,undefined);
+ f.fail(false);assert.equal(c.poiMineUnlockStart(30000),true);c.poiMineUnlockFrame(33000);
+ assert.equal(c.poiMineVaultChestOpened(),true);assert.equal(f.raw().mineTreasureChest.slots[0].type,'cannedFood');
+ assert.equal(c.poiMineUnlockStart(34000),false);assert.equal(f.writes(),2);
+ const fresh=fixture(f.raw());assert.equal(fresh.ctx.poiMineVaultGateOpen(),true);assert.equal(fresh.ctx.poiMineVaultChestOpened(),true);
+});
+test('side rooms roll independently on legitimate B1 exploration and preserve both empty and found outcomes',()=>{
+ const f=fixture({version:1,weapon:null,potions:3}),c=f.ctx;
+ const finds=[{id:'mine-storeroom',x:109,z:55,y:-1,type:'cannedFood',count:1},
+  {id:'mine-breakroom',x:108,z:65,y:-1,type:'healingHerb',count:2},{id:'mine-cut',x:99,z:60,y:-1,type:'healingHerb',count:1}];
+ c.facilitySite.mine={sideFinds:finds};c.poiWalkLevel=-1;
+ let calls=0;const rng=()=>{calls++;return .5};
+ assert.equal(c.poiMineFindExplore(110,60,rng),false);assert.equal(calls,0);
+ f.fail(true);assert.equal(c.poiMineFindExplore(108,64,rng),false);assert.equal(calls,1);assert.equal(f.raw().mineFindRolls,undefined);
+ f.fail(false);assert.equal(c.poiMineFindExplore(108,64,rng),true);assert.equal(calls,1);
+ assert.equal(c.poiMineFindExplore(99,61,rng),true);assert.equal(calls,2);
+ assert.deepEqual(f.raw().mineFindRolls,{'mine-breakroom':true,'mine-cut':false});
+ assert.deepEqual(Array.from(c.poiMineFindList(c.poiHotbarRead()),v=>v.id),['mine-storeroom','mine-breakroom']);
+ assert.equal(c.poiMineFindPickup(108,65),true);assert.equal(c.poiMineFindPickup(108,65),false);
+ const next=fixture(f.raw());next.ctx.facilitySite.mine={sideFinds:finds};next.ctx.poiWalkLevel=-1;
+ assert.equal(next.ctx.poiMineFindExplore(99,61,rng),false);assert.equal(calls,2);
+ assert.deepEqual(Array.from(next.ctx.poiMineFindList(next.ctx.poiHotbarRead()),v=>v.id),['mine-storeroom']);
+ assert.deepEqual(f.raw().mineFindClaims,['mine-breakroom']);
+});
