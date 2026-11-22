@@ -113,7 +113,7 @@ test('root has four exact choices and NPC status is derived only from live stats
  assert.equal(f.run("poiNpcMenuChoose('status',101)"),true);
  const s=JSON.parse(f.run('JSON.stringify(poiTownDialogueSnapshot())'));
  assert.equal(s.menu,'status');assert.deepEqual(s.actions,[{id:'back',label:'戻る'}]);
- assert.deepEqual(s.status,{role:'冒険者',hp:74,maxHP:100,attack:13,equipment:['剣','盾','鎧'],coins:6,herbs:2});
+ assert.deepEqual(s.status,{name:f.actor.role.name,hp:74,maxHP:100,attack:13,equipment:['剣','盾','鎧'],coins:6,herbs:2});
  assert.equal(f.run("poiNpcMenuChoose('back',103)"),true);assert.equal(f.run('poiTownDialogueSnapshot().menu'),'root');
  f.actor.role={...f.actor.role,role:'keeper',type:'humanMerchant'};
  assert.equal(f.run("poiNpcMenuChoose('status',104)"),true);
@@ -155,4 +155,15 @@ test('only the guild clerk offers a quest; list, back, and confirmed accept rema
  assert.equal(f.run("poiTownDialogueSnapshot().actions.some(a=>a.id==='quest-accept')"),false);
  f.run("poiNpcMenuChoose('back',108)");f.run("poiNpcMenuChoose('back',109)");
  assert.equal(f.run('poiTownDialogueSnapshot().menu'),'root');assert.equal(calls.length,1);
+});
+test('actual residents have unique given names and those names label dialogue and status',()=>{
+ const a=html.indexOf('const POI_TOWN_RESIDENT_ROLES='),b=html.indexOf('const POI_TOWN_INN=',a);
+ const names=vm.runInNewContext(html.slice(a,b)+';POI_TOWN_RESIDENT_ROLES.map(({id,name})=>[id,name])');
+ assert.equal(names.length,11);
+ assert.equal(new Set(names.map(([,name])=>name)).size,names.length);
+ assert.deepEqual(Array.from(names[0]),['guildkeeper','リーネ']);
+ assert(names.every(([,name])=>!/(役割|店主|受付係|主人|冒険者|配達人|旅人|行商人|厩舎番)/.test(name)));
+ assert.match(html,/poiMessageSpeak\(d\.actor\.role\.name,d\.text,now\)/);
+ assert.match(html,/\['name','名前',info\.name\]/);
+ assert.doesNotMatch(html,/\['role','役割',info\.role\]/);
 });

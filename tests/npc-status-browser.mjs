@@ -129,6 +129,9 @@ const stat=(page,id)=>page.locator(sheet+' [data-npc-stat="'+id+'"]');
 const rows=page=>page.locator(menu+' > button[data-npc-action]').evaluateAll(nodes=>
  nodes.map(e=>[e.dataset.npcAction,e.textContent.trim()]));
 const expected=[['talk','話す'],['status','状態'],['request','依頼'],['back','戻る']];
+const names={guildkeeper:'リーネ',innkeeper:'ガルド',diningkeeper:'マルタ',workshopkeeper:'ブラム',
+ toolkeeper:'トビン',stablekeeper:'ノア',resadventurer:'ユリス',guestadventurer:'カイ',
+ westpeddler:'ミナ',northtraveler:'セオ',canalcourier:'リタ'};
 const choose=(page,id)=>page.locator(menu+' > button[data-npc-action="'+id+'"]').tap();
 async function present(page){
  await page.waitForFunction(()=>/話す|会話|取引|買い物/.test([document.querySelector('#poiWalkAction').getAttribute('aria-label'),document.querySelector('#poiWalkAction').textContent].join(' ')));
@@ -158,6 +161,8 @@ async function exercise(browser,{width,height=740,id,x,z,service}){
   const map=await getMap(page),initial=await state(page),raw=await readStock(page);
   const playerDims=await playerBagDimensions(page);
   await present(page);
+  assert.equal((await page.locator('#poiMessageHeading').innerText()).trim(),names[id],'direct dialogue title is only the personal name');
+  assert.deepEqual(Object.fromEntries((await residents(page)).actors.map(a=>[a.id,a.name])),names,'every genuine town actor has its assigned personal name');
   assert.deepEqual(await rows(page),expected,'ordinary and staffed NPC root has exactly the requested four entries');
   await page.locator('[data-poi-dir="s"]').tap();
   assert.equal(await page.locator(menu+' [aria-current=true]').getAttribute('data-npc-action'),'status');
@@ -169,7 +174,9 @@ async function exercise(browser,{width,height=740,id,x,z,service}){
   assert.deepEqual([actor.hp,actor.coins,actor.potions],id==='toolkeeper'?[73,7,2]:[86,4,1]);
   assert.match(await stat(page,'hp').innerText(),new RegExp(actor.hp+'\\s*[/／]\\s*100'));
   assert.equal(await stat(page,'attack').count(),0,'ordinary non-hunter has no fictional attack stat');
-  assert.deepEqual(await page.locator(sheet+' [data-npc-stat]').evaluateAll(n=>n.map(e=>e.dataset.npcStat)),['role','hp'],
+  assert.equal((await page.locator('#poiNpcInventoryHeader strong').innerText()).trim(),names[id]+'のインベントリ');
+  assert.equal((await stat(page,'name').innerText()).trim(),names[id]);
+  assert.deepEqual(await page.locator(sheet+' [data-npc-stat]').evaluateAll(n=>n.map(e=>e.dataset.npcStat)),['name','hp'],
     'under portrait only the applicable core stats');
   assert.deepEqual(await readStock(page),raw,'NPC status must not change player equipment, currency or stock');
   const opened=await state(page);
@@ -214,7 +221,7 @@ async function exercise(browser,{width,height=740,id,x,z,service}){
   assert.ok(await page.locator(bag).isVisible());
   const tools=page.locator('#poiGameTools');
   assert.equal(await tools.evaluate(e=>getComputedStyle(e).visibility),'hidden','upper-right tools cannot occlude NPC inventory');
-  if(out)await page.screenshot({path:out+'/v180-npc-inventory-'+id+'-'+width+'x'+height+'.png'});
+  if(out)await page.screenshot({path:out+'/v182-npc-inventory-'+id+'-'+width+'x'+height+'.png'});
   assert.equal(await page.locator('#poiNpcInventoryClose').count(),1,'separate unique close button');
   if(service)await page.locator('#poiNpcInventoryClose').tap();
   else await page.keyboard.press('Escape');

@@ -237,7 +237,8 @@ test('mine quest acceptance is the only durable write, preserves the kit, and up
  const f=fixture(original),c=f.ctx,actor={role:{id:'guildkeeper'}};
  c.facilitySite.mine={entrance:{x:116,z:64,y:0}};
  c.poiTownDialogueTarget=()=>actor;let paints=0;c.poiMiniUpdate=()=>paints++;
- assert.equal(c.poiQuestsForClerk()[0].label,'廃坑の調査');
+ assert.equal(c.poiQuestsForClerk()[0].label,'廃坑★★☆☆☆（調査）');
+ assert.equal(c.poiQuestTitle({dungeon:'古塔',difficulty:4,kind:'hunt'}),'古塔★★★★☆（討伐）');
  assert.equal(c.poiQuestMiniTargets().length,0);assert.equal(f.writes(),0);
  assert.equal(c.poiQuestAccept('mine-survey',{role:{id:'stablekeeper'}},100).reason,'unavailable');
  assert.equal(c.poiQuestAccept('unknown',actor,100).reason,'unavailable');
