@@ -1,15 +1,13 @@
 const assert=require('node:assert/strict'),{createHash}=require('node:crypto');
-const oldLength=5677,addedLength=113,cornerLength=8;
-const exactCorners='a7f60db626cd8697558ac16ca9447c4b08d65e363fe574226dbd7e6538af5710';
-const exactAdded='fd410418b69db181d08ec897beeaae39d7e95dc7f1cc478944b464ba624c96a5';
+const oldLength=5677,addedLength=158;
+const exactMine='64584a1eb89a0d25dc48b080cc0f8332cb9040a31d835e870973030efe49eb47';
 function beforeAbandonedMine(site){
  if(!site.mine)return site;
  const {mine,map:{world,...map},...other}=site;
- const end=oldLength+addedLength;
- const digest=rows=>createHash('sha256').update(JSON.stringify(rows)).digest('hex');
- assert.equal(world.length,end+cornerLength,'only the bounded mine and its eight corner blocks were added');
- assert.equal(digest(world.slice(oldLength,end)),exactAdded,'the exact v165 mine parcel stays in its original order');
- assert.equal(digest(world.slice(end)),exactCorners,'only the exact v166 wall corner additions are exempt');
+ const suffix=Array.from(world.slice(oldLength));
+ assert.equal(suffix.length,addedLength,'the only extra authored records are the mine and its widened B1 chamber');
+ const digest=createHash('sha256').update(JSON.stringify(suffix)).digest('hex');
+ assert.equal(digest,exactMine,'only the exact v167 mine records are exempt; untouched v166 mine records are pinned separately');
  return {...other,map:{...map,world:world.slice(0,oldLength)}};
 }
 module.exports={beforeAbandonedMine};

@@ -11,13 +11,13 @@ function fixture(type='monsterSlime'){
 }
 test('one fixed player tile: visible through windup even after a sidestep, miss never retargets',()=>{
  const {c,obj,state,hits,tiles}=fixture();assert(c.poiEnemyBeginPlayer(obj,state,100));
- assert.deepEqual(tiles(100),[[5,5,0,100,520,'monsterSlime']]);
+ assert.deepEqual(tiles(100),[[5,5,0,100,580,'monsterSlime']]);
  c.poiWalkX=4;c.poiWalkZ=6;
- c.poiEnemyResolvePlayer(510);assert.deepEqual(tiles(510),[[5,5,0,100,520,'monsterSlime']]);assert.deepEqual(hits,[]);
- c.poiEnemyResolvePlayer(520);assert.deepEqual(hits,[]);assert.deepEqual(tiles(520),[]);assert.equal(state.nextAttack,1250);
+ c.poiEnemyResolvePlayer(570);assert.deepEqual(tiles(570),[[5,5,0,100,580,'monsterSlime']]);assert.deepEqual(hits,[]);
+ c.poiEnemyResolvePlayer(580);assert.deepEqual(hits,[]);assert.deepEqual(tiles(580),[]);assert.equal(state.nextAttack,1250);
 });
 test('all player-targeted monsters use readable timing; old cooldown and a single hit survive',()=>{
- for(const [type,windup] of [['monsterSlime',420],['monsterSkeleton',520],['monsterGoblin',550],['monsterDragon',640]]){
+ for(const [type,windup] of [['monsterSlime',480],['monsterSkeleton',520],['monsterGoblin',550],['monsterDragon',640]]){
   const {c,obj,state,hits,tiles}=fixture(type);
   assert(c.poiEnemyBeginPlayer(obj,state,100));assert(!c.poiEnemyBeginPlayer(obj,state,110));
   assert.deepEqual(tiles(100),[[5,5,0,100,100+windup,type]]);
@@ -32,8 +32,8 @@ test('broken eligibility, removed or relocated source and lifecycle never become
   (c,o,s)=>{s.x=5;s.z=4},(c)=>{c.poiWalkLevel=1},(c)=>{c.poiAudioAllowed=()=>false},
   (c)=>c.poiEnemyCancelPlayer(),(c)=>{c.poiWildPlayerOutside=()=>false}]){
   const {c,obj,state,hits,tiles}=fixture();c.poiEnemyBeginPlayer(obj,state,100);
-  cancel(c,obj,state);c.poiEnemyResolvePlayer(520);
-  assert.deepEqual(tiles(520),[]);assert.deepEqual(hits,[]);
+  cancel(c,obj,state);c.poiEnemyResolvePlayer(580);
+  assert.deepEqual(tiles(580),[]);assert.deepEqual(hits,[]);
  }
  const {c,obj,state,tiles}=fixture();state.townOwned=true;assert(!c.poiEnemyBeginPlayer(obj,state,100));assert.deepEqual(tiles(300),[]);
 });

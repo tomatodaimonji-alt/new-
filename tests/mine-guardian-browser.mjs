@@ -173,9 +173,22 @@ async function combat(browser){
   await endMark(page,second[0].start);
   assert.equal((await readHits(page)).length,1,'sidestep avoids second hit');
   await move(page,'e',true,true);await move(page,'e');
+  const third=await waitMark(page,second[0].start);
+  assertSweep(third);
+  await move(page,'e',true,true);await move(page,'e');
+  assert.deepEqual((await state(page)).position,{x:122,z:56,level:-1},'real D-pad exits the attack on the east as well');
+  assert.ok(!third.some(t=>t.x===122&&t.z===56));
+  await endMark(page,third[0].start);
+  assert.equal((await readHits(page)).length,1,'east escape also avoids damage');
+  for(let x=123;x<=124;x++)await move(page,'e');
+  assert.deepEqual((await state(page)).position,{x:124,z:56,level:-1},'expanded room is walkable beyond the old east wall');
+  loc(await state(page),'廃坑','★★★☆☆');
+  await move(page,'e',false);
+  assert.deepEqual((await state(page)).position,{x:124,z:56,level:-1},'new east wall stops walking');
+  for(let x=123;x>=120;x--)await move(page,'w');
   // Capturing screenshots can block software WebGL. Do it outside the two
   // timed damage assertions above, while the next windup is still visible.
-  if(out){await waitMark(page,second[0].start);await page.screenshot({path:out+'/v165-guardian-warning.png'})}
+  if(out){await waitMark(page,third[0].start);await page.screenshot({path:out+'/v165-guardian-warning.png'})}
   await finishGuard(page);
   const after=await state(page);
   assert.equal(after.economy.gold,21,'first actual lethal wood sword hit adds exactly 9G');
@@ -201,5 +214,5 @@ try{
  browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
   args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
  await exploration(browser);await combat(browser);
- console.log('PASS real mobile Chromium mine entrance, cellar, guardian marks/dodge/hit, repeat kill without duplicate reward, save protection');
+ console.log('PASS real mobile Chromium mine entrance, cellar, guardian marks/left and right dodge/new boundary/hit, repeat kill without duplicate reward, save protection');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}

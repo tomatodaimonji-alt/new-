@@ -10,7 +10,7 @@ test('new mine extends the released Game World without replacing a single old re
  assert.deepEqual([map.width,map.height,site.buildings.length],[128,96,10]);
  assert.equal(digest(other),'1fe3ca0f69ad209420343d6902ebe2567ceaf5018a0e3d3164dd30902a3e3408');
  assert.equal(digest(world.slice(0,5677)),'1c61c5eaf7e8dd919a8091ebca761b0f72b81e7157cb607f1d4de23a56ea4f82');
- assert(world.length>5677&&world.length<5840,'keep additions tightly bounded');
+ assert(world.length>5677&&world.length<5850,'keep additions tightly bounded');
  assert.equal(new Set(world.map(o=>JSON.stringify(o))).size,world.length);
  for(const scope of ['kitchen','lodging','homes'])assert(!build(scope).mine);
 });
@@ -46,9 +46,9 @@ test('the east gate and the original bridge connect to a real stair pair, early 
  ctx.poiWalkLevel=-1;
  assert(at(115,59,-1).some(o=>o.type==='monsterSlime'));
  assert(at(120,55,-1).some(o=>o.type==='monsterMineGuard'));
- for(const target of [[115,60],[120,56],[118,54],[122,54],[120,53],[116,62]])
-  assert(reachable([116,62],target,[112,52,123,63]),'walkable mine route '+target);
- assert(!walk(124,55,123,55));
+ for(const target of [[115,60],[120,56],[117,51],[117,56],[124,51],[124,56],[120,53],[116,62]])
+  assert(reachable([116,62],target,[112,50,125,63]),'walkable mine route '+target);
+ assert(!walk(125,55,124,55));
 });
 test('the mine B1 wall ring has no diagonal-only joins, without replacing its traversable floor',()=>{
  const parcel=world.slice(5677).filter(o=>o.y===-1);
@@ -66,10 +66,32 @@ test('the mine B1 wall ring has no diagonal-only joins, without replacing its tr
  for(const {x,z} of walls)for(const dz of [-1,1])
   if(byCell.has(key(x+1,z+dz)))assert(byCell.has(key(x+1,z))||byCell.has(key(x,z+dz)),
    'cardinal bridge at '+[x,z,x+1,z+dz]);
- const corners=world.slice(5790);
- assert.equal(corners.length,8);
- for(const {x,z,y,type} of corners){
-  assert.equal(y,-1);assert.match(type,/^(?:stone|moss)wall$/);
-  assert(!world.slice(0,5790).some(o=>o.x===x&&o.z===z&&o.y===-1),'no old cell or route changed');
+ assert(walls.every(w=>!parcel.some(o=>o.x===w.x&&o.z===w.z&&/^(?:stone|moss)$/.test(o.type))),
+  'all cardinal connectors and side walls stay outside the playable floor');
+});
+
+test('the guardian room is exactly eight by six clear tiles, with the same south entrance',()=>{
+ const {chamber,guardian}=site.mine;
+ assert.deepEqual(chamber,{x1:117,x2:124,z1:51,z2:56});
+ for(let x=chamber.x1;x<=chamber.x2;x++)for(let z=chamber.z1;z<=chamber.z2;z++){
+  const cell=at(x,z,-1),floor=cell.filter(o=>/^(?:stone|moss)$/.test(o.type));
+  assert.equal(floor.length,1,'authored arena floor at '+[x,z]);
+  const contents=cell.filter(o=>!floor.includes(o));
+  if(x===guardian.x&&z===guardian.z)assert.equal(contents[0]?.type,'monsterMineGuard');
+  else assert.equal(contents.length,0,'clear walking and dodging space at '+[x,z]);
  }
+ assert.deepEqual([guardian.x,guardian.z,guardian.y],[120,55,-1]);
+ for(let x=chamber.x1;x<=chamber.x2;x++){
+  const border=at(x,57,-1);
+  if(x===120)assert(border.some(o=>/^(?:stone|moss)$/.test(o.type))&&!border.some(o=>/wall$/.test(o.type)));
+  else assert(border.some(o=>/wall$/.test(o.type)),'only the original entry stays open');
+ }
+});
+
+test('only the guardian chamber and its surrounding B1 walls changed',()=>{
+ const old=[120,55,-1,'monsterMineGuard',0];
+ assert(world.some(o=>[o.x,o.z,o.y,o.type,o.rot].join(',')===old.join(',')));
+ const untouched=world.slice(5677).filter(o=>!(o.y===-1&&o.x>=116&&o.x<=125&&o.z>=50&&o.z<=57));
+ assert.equal(digest(untouched),'500cee7863858973829f4ea766bed79c40ad1a999a3ec151df0986e51c142216',
+  'exact v166 arrival trail, portal, stair, early encounter, other lighting and corridor records');
 });

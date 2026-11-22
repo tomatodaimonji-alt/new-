@@ -128,7 +128,7 @@ async function exercise(browser,dodge){
   const first=await seen(page);
   const hot=await first.jsonValue();
   assert.deepEqual(stamp(hot),originTile,'warning singles out original player tile and active floor');
-  assert.equal(hot.hit-hot.start,420,'visible, fixed-tile warning is scheduled 420ms before slime contact');
+  assert.equal(hot.hit-hot.start,480,'visible, fixed-tile warning is scheduled 480ms before slime contact');
   if(dodge){
    await inputSouth(page);
    await page.waitForFunction(()=>window.__editorTest.facility().position.z===74);
