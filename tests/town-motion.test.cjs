@@ -1,9 +1,9 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 function setup(){
- const a=h.indexOf('function poiTownNpcMotion('),b=h.indexOf('const poiTownNpcModelCache=',a);
+ const a=h.indexOf('// BEGIN TOWN WALK VISUAL'),b=h.indexOf('const poiTownNpcModelCache=',a);
  assert(a>=0&&b>a,'missing pure resident motion sampler');
- const x={poiTownNpcVersion:0,poiWalkX:0,poiWalkZ:0,poiWalkLevel:0};vm.createContext(x);
+ const x={POI_TOWN_RESIDENT_TICK:380,poiTownNpcVersion:0,poiWalkX:0,poiWalkZ:0,poiWalkLevel:0};vm.createContext(x);
  vm.runInContext(h.slice(a,b),x);return x;
 }
 test('idle, work, walk, sleep and rest have distinct near-field pose sampling and distant actors are static',()=>{
@@ -16,7 +16,7 @@ test('idle, work, walk, sleep and rest have distinct near-field pose sampling an
  for(const [id,kind] of [['stablekeeper','tend'],['workshopkeeper','craft'],['diningkeeper','serve']]){
   a.role.id=id;a.activity='work';assert.equal(x.poiTownNpcMotion(a,200,true).kind,kind);
  }
- a.activity='errand';a.moveAt=100;a.fromY=0;assert.equal(x.poiTownNpcMotion(a,200,true).kind,'walk');
+ a.activity='errand';a.moveAt=100;a.fromX=0;a.fromZ=0;a.fromY=0;assert.equal(x.poiTownNpcMotion(a,200,true).kind,'walk');
 });
 test('transactions are temporary and do not mask existing sword contact or hurt',()=>{
  const x=setup(),a={role:{id:'innkeeper'},x:0,z:0,y:0,activity:'work'};
