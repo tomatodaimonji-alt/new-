@@ -1050,7 +1050,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v199）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v200）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -7687,17 +7687,22 @@ function poiEconomyDraw(vp){
  }
  if(poiEconomyMesh)draw(poiEconomyMesh,vp);
 }
-const POI_LOOT_MARK_RADIUS=6,POI_LOOT_MARK_CAP=12;
+const POI_LOOT_MARK_RADIUS=12,POI_LOOT_MARK_CAP=12;
 let poiLootMarksState=null,poiLootMarksMesh=null;
-function poiLootMark(m,x,y,z){
- const ink=[.66,.60,.36],glint=[.91,.82,.57],floor=y+.018;
- // Four low brass accents, not a solid outline or a floating icon.
+function poiLootMark(m,x,y,z,item){
+ const ink=item?[.30,.80,.86]:[.84,.62,.22];
+ const stem=item?[.49,.94,.99]:[1,.78,.35];
+ const glint=item?[.77,1,1]:[1,.93,.60];
+ const floor=y+.018,height=item?1.22:.94,width=item?.072:.061;
  const point=(a,r)=>[x+Math.sin(a)*r,floor,z+Math.cos(a)*r];
  for(let i=0;i<4;i++){
-  const a=i*Math.PI/2+.14,b=a+.38;
-  quad(m,point(a,.365),point(b,.365),point(b,.340),point(a,.340),ink);
+  const a=i*Math.PI/2+.10,b=a+.49;
+  quad(m,point(a,.34),point(b,.34),point(b,.29),point(a,.29),ink);
  }
- diamond(m,x,y+.173,z,.028,glint);
+ // A slim, depth-tested beacon. The brighter gem reads above grass,
+ // without a particle emitter, HUD icon, or a marker through walls.
+ cube(m,x,y+.075,z,width,height-.105,width,stem);
+ diamond(m,x,y+height,z,item?.116:.095,glint);
 }
 function poiLootMarksDraw(vp){
  const active=poiWalkActive&&!pineAIActive&&poiHotbarHasKit();
@@ -7707,10 +7712,10 @@ function poiLootMarksDraw(vp){
   poiLootMarksMesh=null;poiLootMarksState=null;return;
  }
  // Existing item batches are rebuilt first; their identities are loot revisions.
- const x=poiWalkX,z=poiWalkZ,level=poiWalkLevel,coins=poiEconomyMesh,drops=poiInventoryMeshDrops;
- if(!old||old.x!==x||old.z!==z||old.level!==level||old.coins!==coins||old.drops!==drops){
+ const x=poiWalkX,z=poiWalkZ,level=poiWalkLevel,coins=poiEconomyMesh,inventory=poiInventoryMesh;
+ if(!old||old.x!==x||old.z!==z||old.level!==level||old.coins!==coins||old.inventory!==inventory){
   if(poiLootMarksMesh)gl.deleteBuffer(poiLootMarksMesh.buf);
-  poiLootMarksMesh=null;poiLootMarksState={x,z,level,coins,drops};
+  poiLootMarksMesh=null;poiLootMarksState={x,z,level,coins,inventory};
   const near=new Map();
   const add=(d,item)=>{
    const q=(d.x-x)**2+(d.z-z)**2;
@@ -7722,14 +7727,14 @@ function poiLootMarksDraw(vp){
    for(const d of poiEconomyCaches.values())add(d,false);
    for(const d of poiEconomyDrops.values())add(d,false);
   }
-  for(const d of drops||[])if(d.y===level&&poiInventoryStack(d.type))add(d,true);
+  for(const d of poiInventoryVisibleLoot)if(d.y===level&&poiInventoryStack(d.type))add(d,true);
   if(near.size){
    const m=mesh();
    for(const d of [...near.values()].sort((a,b)=>a.q-b.q).slice(0,POI_LOOT_MARK_CAP)){
     const tile=d.item&&world.find(o=>o.x===d.x&&o.z===d.z&&o.y===level&&isFloor(o.type));
     const top=/^(?:woodfloor(?:Light|Dark)?|brickfloor|basicfloor|plasterfloor|mossfloor|ironfloor)$/.test(tile?.type||'')?.13:0;
     const lookout=typeof poiLookoutLootTop==='function'?poiLookoutLootTop(d.x,d.z,level):0;
-    poiLootMark(m,d.x+.5,level*1.4+terrainY(d.x,d.z)+Math.max(top,lookout),d.z+.5);
+    poiLootMark(m,d.x+.5,level*1.4+terrainY(d.x,d.z)+Math.max(top,lookout),d.z+.5,d.item);
    }
    poiLootMarksMesh=upload(m);
   }
@@ -8089,19 +8094,20 @@ function poiEquipmentBreakFeedback(type){
  if(typeof poiSound==='function')poiSound('equipment-break',type);
  toast(poiInventoryItemName(type)+'が壊れた');
 }
-function poiEquipmentSpendWeapon(type){
+function poiEquipmentSpendWeapon(type,released=false){
  if(!poiHotbarHasKit()||!poiHotbarWeaponForType(type))return false;
  const kit=poiHotbarRead();
- if(kit.weapon!==type)return false;
+ const releasedBow=released&&type==='equipWoodBow';
+ if(kit.weapon!==type&&!releasedBow)return false;
  const slots=poiInventorySlots(kit).slice(),i=slots.findIndex(c=>c?.type===type);
- if(i<0||i>=POI_HOTBAR_SIZE)return false;
+ if(i<0||i>=POI_HOTBAR_SIZE&&!releasedBow)return false;
  const cell=slots[i],durability=(cell.durability??poiEquipmentDurabilityMax(type))-1,broken=durability<=0;
  slots[i]=broken?null:{...cell,durability};
  const next=broken&&type===POI_INVENTORY_SWORD?{...kit,woodSwordBroken:true}:kit;
  if(!poiEconomyWrite(poiInventoryEdited(next,slots))){
   toast(poiInventoryItemName(type)+'の耐久を保存できませんでした');return false;
  }
- if(broken){poiHotbarEmptySlot=i;poiEquipmentBreakFeedback(type)}
+ if(broken){if(i<POI_HOTBAR_SIZE&&kit.weapon===type)poiHotbarEmptySlot=i;poiEquipmentBreakFeedback(type)}
  poiEconomyRefresh();return true;
 }
 function poiKitchenKnifeSpend(){return poiEquipmentSpendWeapon(POI_KNIFE)}
@@ -8472,6 +8478,7 @@ function poiInventoryPickup(x,z){
  return true;
 }
 function poiInventoryReleaseMesh(){
+ poiInventoryVisibleLoot=[];
  if(poiInventoryMesh)gl.deleteBuffer(poiInventoryMesh.buf);
  poiInventoryMesh=null;poiInventoryMeshDrops=null;poiInventoryMeshFloor=null;poiInventoryMeshFinds=null;
 }
@@ -8515,18 +8522,21 @@ function poiNorthTrailPickup(x,z){
  toast(watch?'森の見張り場で缶詰を拾った。':marsh?'池のほとりで薬草を拾った。':'たき火のそばで薬草を2つ拾った。');return true;
 }
 // END NORTH TRAIL CAMP
-let poiInventoryMeshArmed=null,poiInventoryMeshCamp=null,poiInventoryMeshWatch=null,poiInventoryMeshMarsh=null;
+let poiInventoryVisibleLoot=[];
+let poiInventoryMeshArmed=null,poiInventoryMeshCamp=null,poiInventoryMeshWatch=null,poiInventoryMeshMarsh=null,poiInventoryMeshRealm=null;
 function poiInventoryDraw(vp){
  if(!poiHotbarHasKit()||!poiWalkActive||pineAIActive)return;
  const kit=poiHotbarRead(),list=kit.drops||null,finds=poiMineFindList(kit),armed=poiArmedDrawList(kit),camp=poiNorthTrailSupply(kit),watch=poiNorthTrailWatchSupply(kit),marsh=poiNorthTrailMarshSupply(kit);
- if(list!==poiInventoryMeshDrops||finds!==poiInventoryMeshFinds||armed!==poiInventoryMeshArmed||camp!==poiInventoryMeshCamp||watch!==poiInventoryMeshWatch||marsh!==poiInventoryMeshMarsh||poiWalkLevel!==poiInventoryMeshFloor){
+ const realm=poiDungeonTravelKey(facilitySite,poiWalkX,poiWalkZ,poiWalkLevel);
+ if(list!==poiInventoryMeshDrops||finds!==poiInventoryMeshFinds||armed!==poiInventoryMeshArmed||camp!==poiInventoryMeshCamp||watch!==poiInventoryMeshWatch||marsh!==poiInventoryMeshMarsh||realm!==poiInventoryMeshRealm||poiWalkLevel!==poiInventoryMeshFloor){
   poiInventoryReleaseMesh();
-  poiInventoryMeshDrops=list;poiInventoryMeshFinds=finds;poiInventoryMeshFloor=poiWalkLevel;poiInventoryMeshArmed=armed;poiInventoryMeshCamp=camp;poiInventoryMeshWatch=watch;poiInventoryMeshMarsh=marsh;
+  poiInventoryMeshDrops=list;poiInventoryMeshFinds=finds;poiInventoryMeshFloor=poiWalkLevel;poiInventoryMeshArmed=armed;poiInventoryMeshCamp=camp;poiInventoryMeshWatch=watch;poiInventoryMeshMarsh=marsh;poiInventoryMeshRealm=realm;
   const nearby=[camp,watch,marsh].filter(p=>p&&poiNorthTrailSupplyGround(p));
   if(list?.length||finds?.length||armed?.length||nearby.length){
    const m=mesh();
    for(const d of [...(list||[]),...(finds||[]),...(armed||[]),...nearby]){
-    if(d.y!==poiWalkLevel||!validPos(d.x,d.z))continue;
+    if(d.y!==poiWalkLevel||!validPos(d.x,d.z)||!poiDungeonVisualVisible(d.x,d.z,d.y))continue;
+    poiInventoryVisibleLoot.push(d);
     const surface=world.find(o=>o.x===d.x&&o.z===d.z&&o.y===d.y&&isFloor(o.type));
     const floorTop=/^(?:woodfloor(?:Light|Dark)?|brickfloor|basicfloor|plasterfloor|mossfloor|ironfloor)$/.test(surface?.type||'')?.13:0;
     const lookout=typeof poiLookoutLootTop==='function'?poiLookoutLootTop(d.x,d.z,d.y):0;
@@ -8699,6 +8709,14 @@ function poiDungeonTravelKey(site,x,z,y){
  if(site?.id!=='base')return null;
  if(poiDungeonPointIn(site.chapel?.bounds,x,z,y))return 'chapel';
  return poiOtherworldIn(site,x,z,y)?'otherworld':null;
+}
+// Keep the B1 game scene's dynamic rendering on the same slice as
+// facilityObjectVisible. Its null slice is the entire connected mine,
+// including the side galleries and treasury beyond the original bounds.
+function poiDungeonVisualVisible(x,z,y){
+ if(facilitySite&&y!==poiWalkLevel)return false;
+ if(facilitySite?.id!=='base'||poiWalkLevel>=0)return true;
+ return poiDungeonTravelKey(facilitySite,x,z,y)===poiDungeonTravelKey(facilitySite,poiWalkX,poiWalkZ,poiWalkLevel);
 }
 function poiChapelWater(x,z,kind){
  const y=poiWalkLevel,chapel=facilitySite?.id==='base'?facilitySite.chapel:null;
@@ -9061,8 +9079,8 @@ function poiItemDetailDescription(cell){
   kitchenKnife:'刃のある調理道具。敵に当てると耐久が減り、なくなると壊れる。',
   healingHerb:'体力を最大30回復する薬草。',
   cannedFood:'体力を最大55回復する保存食。薬草より回復量が多い。',
-  fireWand:'向いている方向に火球を放つ。発射ごとに残り回数が1減る。',
-  equipWoodBow:'木で作った弓。離れた敵を狙える。',
+  fireWand:'向いている方向に最大8マス先まで炎を飛ばす。発射ごとに残り回数が1減る。',
+  equipWoodBow:'構えてから、向いている方向へ最大5マス先まで矢を放つ。敵に当たると耐久が減る。',
   equipWoodSpear:'木製の長槍。通常の近接武器より遠くから突ける。',
   equipStoneMace:'石の頭を付けた打撃武器。近距離用。',
   equipBoneSword:'骨を削り出した近距離用の剣。',
@@ -9452,6 +9470,7 @@ function poiRenderEnemyHealth(now,vp){
  const frame=++poiEnemyBarFrame;
  if(poiWalkActive&&!pineAIActive)for(const [obj,state] of poiMonsterStates){
   if(state.hp<=0||(facilitySite&&obj.y!==poiWalkLevel)||
+    (typeof poiDungeonVisualVisible==='function'&&!poiDungeonVisualVisible(obj.x,obj.z,obj.y))||
     Math.max(Math.abs(state.x-poiWalkX),Math.abs(state.z-poiWalkZ))>10)continue;
   const pose=poiMonsterPose(obj,state,now);
   const point=poiWorldToScreen(vp,pose.x,pose.y+(POI_ENEMY_HEAD_HEIGHT[obj.type]||1.2)+POI_ENEMY_HEAD_CLEARANCE,pose.z);
@@ -11168,7 +11187,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v199',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v200',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -11283,7 +11302,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v199';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v200';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -11498,7 +11517,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v199',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v200',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -12171,20 +12190,20 @@ function poiWalkSwordPose(ms){
 }
 // BEGIN PLAYER WEAPON PROFILES
 const POI_PLAYER_WEAPON_PROFILES=Object.freeze({
- equipWoodBow:{range:5,damage:22,hit:650,ready:1030,pose:850},
+ equipWoodBow:{range:5,damage:22,hit:650,ready:1030,pose:850,cellMs:65,minFlight:70},
  equipWoodSpear:{range:2,damage:24,near:12,hit:240,ready:540,pose:410},
  equipStoneMace:{range:1,damage:32,hit:380,ready:760,pose:620},
  equipBoneSword:{range:1,damage:24,hit:0,ready:300,pose:260},
  equipIronSword:{range:1,damage:30,hit:0,ready:300,pose:260},
  equipPlainStaff:{range:1,damage:23,hit:140,ready:350,pose:300},
  equipLongStaff:{range:2,damage:20,hit:210,ready:510,pose:400},
- fireWand:{range:5,damage:34,hit:170,ready:610,pose:310}
+ fireWand:{range:8,damage:34,hit:0,ready:610,pose:310,cellMs:55,minFlight:55}
 });
 let poiPlayerWeaponPending=null,poiPlayerWeaponVisual=null;
 const poiEnemyMageBolts=[];
 function poiPlayerWeaponProfile(type){return Object.hasOwn(POI_PLAYER_WEAPON_PROFILES,type)?POI_PLAYER_WEAPON_PROFILES[type]:null}
-function poiPlayerWeaponCancel(){
- poiEnemyMageBolts.length=0;
+function poiPlayerWeaponCancel(keepEnemy=false){
+ if(!keepEnemy)poiEnemyMageBolts.length=0;
  if(!poiPlayerWeaponPending&&!poiPlayerWeaponVisual)return;
  poiPlayerWeaponPending=poiPlayerWeaponVisual=null;poiWalkActionStarted=-10000;
 }
@@ -12239,9 +12258,8 @@ function poiPlayerDamageTarget(monster,x,z,amount,weapon,now){
  if(pineGameActive)pineGameSave(true);
 }
 function poiPlayerWeaponResolve(shot,now,line=poiPlayerWeaponTrace(shot)){
- if(shot.type==='equipWoodBow')poiSound('attack',shot.type);
  if(!line.monster)return;
- if(shot.type!=='fireWand'&&typeof poiEquipmentSpendWeapon==='function'&&!poiEquipmentSpendWeapon(shot.type))return;
+ if(shot.type!=='fireWand'&&typeof poiEquipmentSpendWeapon==='function'&&!poiEquipmentSpendWeapon(shot.type,shot.phase==='flight'))return;
  poiPlayerDamageTarget(line.monster,line.x,line.z,line.distance===1&&shot.profile.near?shot.profile.near:shot.profile.damage,shot.type,now);
 }
 function poiPlayerStartProfile(type,now){
@@ -12262,40 +12280,71 @@ function poiPlayerCastFireWand(index){
  if(now<poiAttackReady||poiPlayerWeaponPending)return {ok:false,reason:'cooldown'};
  if(typeof poiInventorySpendFireWand!=='function'||!poiInventorySpendFireWand(index))return {ok:false,reason:'storage'};
  const shot={type,profile,started:now,x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,facing:poiWalkFacing};
- const line=poiPlayerWeaponTrace(shot);
- poiPlayerWeaponPending=shot;poiPlayerWeaponVisual={...shot,toX:line.x,toZ:line.z};
+ poiPlayerWeaponFlightBegin(shot,now);
  poiWalkActionWeapon=type;poiWalkActionStarted=now;poiAttackReady=now+profile.ready;
  poiSound('attack',type);poiWalkAvatar(now);
  return {ok:true};
+}
+function poiPlayerFlightMs(profile,n){
+ return Math.max(profile.minFlight,profile.cellMs*n);
+}
+function poiPlayerWeaponFlightBegin(shot,now){
+ const [dx,dz]=[[0,-1],[1,0],[0,1],[-1,0]][shot.facing];
+ // Determine the visible solid endpoint, never preselect an enemy. A
+ // moving actor is tested only when the projectile reaches its tile.
+ let limit=0,x=shot.x,z=shot.z;
+ while(limit<shot.profile.range&&poiPlayerRayClear(x+dx,z+dz,shot.y,x,z)){
+  x+=dx;z+=dz;limit++;
+ }
+ const flight={...shot,phase:'flight',started:now,dx,dz,limit,nextCell:1,cellMs:shot.profile.cellMs};
+ poiPlayerWeaponPending=flight;
+ poiPlayerWeaponVisual={...flight,toX:x,toZ:z,travel:poiPlayerFlightMs(shot.profile,limit)};
+ if(shot.type==='equipWoodBow')poiSound('attack',shot.type);
+}
+function poiPlayerWeaponFlightImpact(a,now,x,z,distance,monster=null){
+ poiPlayerWeaponPending=null;
+ const v=poiPlayerWeaponVisual;
+ if(v){
+  v.toX=x;v.toZ=z;v.impact=now;v.travel=poiPlayerFlightMs(a.profile,distance);
+ }
+ if(monster)poiPlayerWeaponResolve(a,now,{x,z,distance,monster});
+}
+function poiPlayerWeaponFlightFrame(a,now){
+ const age=now-a.started;
+ if(!a.limit){
+  if(age>=a.profile.minFlight)poiPlayerWeaponFlightImpact(a,now,a.x,a.z,0);
+  return;
+ }
+ for(let n=a.nextCell;n<=a.limit&&age>=poiPlayerFlightMs(a.profile,n);n++){
+  const x=a.x+a.dx*n,z=a.z+a.dz*n;
+  if(!poiPlayerRayClear(x,z,a.y,x-a.dx,z-a.dz)){
+   poiPlayerWeaponFlightImpact(a,now,x-a.dx,z-a.dz,n-1);return;
+  }
+  const monster=poiMonsterAt(x,z);
+  if(monster||n===a.limit){poiPlayerWeaponFlightImpact(a,now,x,z,n,monster);return}
+  a.nextCell=n+1;
+ }
 }
 function poiPlayerWeaponFrame(now){
  const a=poiPlayerWeaponPending;
  if(!a)return;
  if(document.hidden||!poiWalkActive||poiWalkLevel!==a.y||(typeof pineAIActive!=='undefined'&&pineAIActive)){poiPlayerWeaponCancel();return}
- // A physical draw/windup is committed in place. Moving or replacing its
- // weapon cancels the hit without wearing it; a cast is already in flight.
- if(a.type!=='fireWand'&&(poiWalkX!==a.x||poiWalkZ!==a.z||poiWalkFacing!==a.facing||poiEquippedWeapon()!==a.type)){poiPlayerWeaponCancel();return}
+ if(a.phase==='flight'){poiPlayerWeaponFlightFrame(a,now);return}
+ // Only windup is committed in place. Once launched, an arrow keeps
+ // its original cardinal direction even after movement or equip changes.
+ if(poiWalkX!==a.x||poiWalkZ!==a.z||poiWalkFacing!==a.facing||poiEquippedWeapon()!==a.type){poiPlayerWeaponCancel(true);return}
  if(now<a.started+a.profile.hit)return;
+ if(a.type==='equipWoodBow'){poiPlayerWeaponFlightBegin(a,now);return}
  poiPlayerWeaponPending=null;
- const v=poiPlayerWeaponVisual;
- const cap=a.type==='fireWand'&&v?Math.abs(v.toX-a.x)+Math.abs(v.toZ-a.z):a.profile.range;
- const line=poiPlayerWeaponTrace(a,cap);
- if(a.type==='fireWand'){
-  // The projectile never hits beyond its displayed initial endpoint;
-  // walls or entrants that arrive before impact may shorten the ray.
-  if(!v)return;
-  v.toX=line.x;v.toZ=line.z;v.impact=now;
- }else if(a.type==='equipWoodBow'&&line.distance){
-  poiPlayerWeaponVisual={...a,started:now,travel:124,toX:line.x,toZ:line.z};
- }
- poiPlayerWeaponResolve(a,now,line);
+ poiPlayerWeaponResolve(a,now);
 }
 function poiPlayerProfilePose(type,ms){
  const p=poiPlayerWeaponProfile(type);
  if(!p||ms<0||ms>=p.pose)return null;
  if(type==='equipWoodBow'){
-  const draw=Math.min(1,ms/p.hit),recoil=Math.max(0,Math.min(1,(p.pose-ms)/(p.pose-p.hit)));
-  return {strike:1.42*draw*recoil,sweep:.41*draw*recoil,twist:-.34*draw*recoil,edgeTilt:0,edgeYaw:0,guard:1.35*draw*recoil};
+  const raw=Math.min(1,ms/p.hit),forward=raw*raw*(3-2*raw);
+  const after=Math.max(0,Math.min(1,(ms-p.hit)/Math.max(1,p.pose-p.hit)));
+  return {bowDraw:forward*(1-after*after),bowReleased:ms>=p.hit,twist:-.38*forward*(1-after)};
  }
  if(type==='equipLongStaff'){
   const thrust=Math.sin(Math.PI*ms/p.pose);
@@ -12330,30 +12379,91 @@ function poiEnemyMageBoltRelease(a,now){
  }
  return n;
 }
+function poiPlayerProjectileSample(v,now){
+ const age=Math.max(0,now-v.started),travel=v.travel||v.profile?.hit||325;
+ const distance=Math.abs(v.toX-v.x)+Math.abs(v.toZ-v.z),cell=v.profile?.cellMs||travel/(distance||1);
+ const first=Math.max(cell,v.profile?.minFlight||0),second=Math.max(first,2*cell);
+ const progress=v.impact!==undefined?1:Math.min(1,age/travel);
+ let dx=Math.sign(v.toX-v.x),dz=Math.sign(v.toZ-v.z);
+ if(!distance)[dx,dz]=[[0,-1],[1,0],[0,1],[-1,0]][v.facing]||[0,1];
+ const arrow=v.type==='equipWoodBow';
+ let along=distance,side=0;
+ if(v.impact===undefined&&distance){
+  // Start at the hand, then meet each tile center at its collision time.
+  // Do not add muzzle offset for the length of the whole flight.
+  if(age<first){
+   const t=age/first,muzzle=arrow?.75:.34;
+   along=muzzle+(1-muzzle)*t;
+   side=arrow?-.118*(1-t):0;
+  }else if(age<second&&second>first)along=1+(age-first)/(second-first);
+  else along=age/cell;
+  along=Math.min(distance,along);
+ }
+ const x=v.x+.5+dx*along+dz*side,z=v.z+.5+dz*along-dx*side;
+ const y=terrainY(Math.floor(x),Math.floor(z))+(facilitySite?v.y*1.4:0)+(arrow?.90:.77)+Math.sin(Math.PI*progress)*(arrow?.095:.043);
+ return {x,y,z,dx,dz,progress};
+}
+function poiWeaponArrowGeometry(m,x,y,z,dx,dz,fade=1,length=.61){
+ const V=(d,u,h)=>[x+dx*d+dz*u,y+h,z+dz*d-dx*u];
+ const axisX=!!dx,tail=-length,nock=tail+.09;
+ const draw=(d,h,w,height,depth,col)=>cube(m,x+dx*d,y+h,z+dz*d,axisX?depth:w,height,axisX?w:depth,col);
+ draw((tail-.10)*.5,-.011,.021,.024,length-.10,[.65,.43,.235]);
+ const steel=[.74,.79,.80],edge=[.43,.50,.52],tip=V(0,0,0);
+ tri(m,tip,V(-.126,-.051,0),V(-.126,0,.044),steel);tri(m,tip,V(-.126,0,.044),V(-.126,.051,0),edge);
+ tri(m,tip,V(-.126,.051,0),V(-.126,0,-.044),steel);tri(m,tip,V(-.126,0,-.044),V(-.126,-.051,0),edge);
+ const f=[.85*fade,.82*fade,.64*fade];
+ tri(m,V(tail,0,0),V(nock,0,.075),V(nock+.066,0,0),f);
+ tri(m,V(tail,0,.008),V(nock,-.066,-.017),V(nock+.066,0,0),f);
+ tri(m,V(tail,0,.008),V(nock,.066,-.017),V(nock+.066,0,0),f);
+}
+function poiPlayerFireGeometry(m,p,now,impact){
+ const {x,y,z,dx,dz}=p,W=(d,u,h)=>[x+dx*d+dz*u,y+h,z+dz*d-dx*u];
+ const phase=now*.029,death=impact===undefined?0:Math.max(0,Math.min(1,(now-impact)/160));
+ const strength=1-death;if(strength<=0)return;
+ const flash=impact===undefined?1:1.16+death*.35;
+ const hues=[[1,.22,.037],[1,.39,.05],[1,.61,.10],[1,.86,.25],[1,.95,.67]];
+ const tint=col=>col.map(c=>c*(.76+.24*strength));
+ const body=W(.018,0,-.014),nose=W(.20*flash,0,.005),tail=W(-(.48+.044*Math.sin(phase))*strength,0,.083);
+ const ring=[[0,.14],[.14,0],[0,-.13],[-.14,0]],hot=[[0,.075],[.071,0],[0,-.056],[-.071,0]];
+ for(let i=0;i<4;i++){
+  const j=(i+1)%4,roll=.93+.18*Math.sin(phase+i*1.75);
+  const a=ring[i],b=ring[j],A=W(-.063,a[0]*roll*flash,a[1]*roll*flash),B=W(-.063,b[0]*flash,b[1]*flash);
+  tri(m,nose,A,B,tint(hues[1+i%2]));
+  tri(m,A,tail,B,tint(hues[i%2]));
+  const H=hot[i],J=hot[j];
+  tri(m,W(.209,0,.021),W(.026,H[0],H[1]),W(.026,J[0],J[1]),tint(hues[3+i%2]));
+ }
+ // Asymmetric points trail from the hot body, not from a cube.
+ for(let i=0;i<3;i++){
+  const side=i%2?-.1:.12,flick=Math.sin(phase*1.7+i*2.13);
+  const tongue=W(-(.31+i*.11+.057*flick)*strength,side*(1+flick*.40),.19+i*.041);
+  tri(m,body,W(-.15,side*.77,.055),tongue,tint(hues[i%2]));
+  tri(m,body,tongue,W(-.20,side*.39,.118),tint(hues[2]));
+ }
+}
 function poiAppendWeaponProjectile(m,v,now){
- const progress=Math.max(0,Math.min(1,(now-v.started)/(v.travel||v.profile.hit)));
- const x=v.x+(v.toX-v.x)*progress+.5,z=v.z+(v.toZ-v.z)*progress+.5;
- const y=terrainY(Math.floor(x),Math.floor(z))+(facilitySite?v.y*1.4:0)+.74;
- if(v.type==='equipWoodBow'){
-  const alongX=v.x!==v.toX,dx=Math.sign(v.toX-v.x),dz=Math.sign(v.toZ-v.z);
-  cube(m,x,y,z,alongX?.55:.032,.034,alongX?.032:.55,[.67,.45,.245]);
-  cube(m,x+.22*dx,y-.012,z+.22*dz,alongX?.12:.072,.065,alongX?.072:.12,[.56,.64,.69]);
- }else if(v.type==='monsterSkelMage'){
+ if(v.type==='monsterSkelMage'){
+  // Old enemy recipe remains deliberately independent of the player weapon.
+  const progress=Math.max(0,Math.min(1,(now-v.started)/(v.travel||v.profile.hit)));
+  const x=v.x+(v.toX-v.x)*progress+.5,z=v.z+(v.toZ-v.z)*progress+.5;
+  const y=terrainY(Math.floor(x),Math.floor(z))+(facilitySite?v.y*1.4:0)+.74;
   const dx=Math.sign(v.toX-v.x),dz=Math.sign(v.toZ-v.z);
   cube(m,x-dx*.19,y-.012,z-dz*.19,.16,.17,.16,[.72,.22,.08]);
   cube(m,x,y,z,.23,.25,.23,[1,.50,.16]);
   cube(m,x+dx*.10,y+.06,z+dz*.10,.13,.13,.13,[.83,.88,1]);
- }else{
-  const radius=v.impact===undefined?.18:.24+Math.min(.27,(now-v.impact)/600);
-  cube(m,x,y,z,radius,radius,radius,[1,.36,.055]);
-  cube(m,x+.03,y+.06,z-.03,radius*.58,radius*.76,radius*.62,[1,.86,.30]);
+  return;
  }
+ const p=poiPlayerProjectileSample(v,now);
+ if(v.type==='equipWoodBow'){
+  const fade=v.impact===undefined?1:Math.max(0,1-(now-v.impact)/110);
+  if(fade>0)poiWeaponArrowGeometry(m,p.x,p.y,p.z,p.dx,p.dz,.55+.45*fade);
+ }else if(v.type==='fireWand')poiPlayerFireGeometry(m,p,now,v.impact);
 }
 function poiPlayerWeaponDraw(now,vp){
  if(!poiWalkActive||pineAIActive){poiPlayerWeaponVisual=null;poiEnemyMageBolts.length=0;return}
  const v=poiPlayerWeaponVisual;
- if(v&&(poiWalkLevel!==v.y||(v.impact!==undefined&&now-v.impact>=210)||
-     (v.travel&&now-v.started>=v.travel)))poiPlayerWeaponVisual=null;
+ if(v&&(poiWalkLevel!==v.y||
+     (v.impact!==undefined&&now-v.impact>=(v.type==='equipWoodBow'?100:185))))poiPlayerWeaponVisual=null;
  for(let i=poiEnemyMageBolts.length-1;i>=0;i--){
   const bolt=poiEnemyMageBolts[i];
   if(bolt.y!==poiWalkLevel||now-bolt.started>=bolt.travel)poiEnemyMageBolts.splice(i,1);
@@ -12366,10 +12476,42 @@ function poiPlayerWeaponDraw(now,vp){
 }
 // END PLAYER WEAPON PROFILES
 let poiWalkActionWeapon,poiWalkAttackPosePending=false;
+function poiBowAimPoints(pose){
+ const d=pose.bowDraw,a=-.118,y=.73+.17*d;
+ const torso=Math.cos(pose.twist||0),ts=Math.sin(pose.twist||0);
+ return {front:[a,y,.19+.36*d],draw:[a,y,.14-.075*d-(pose.bowReleased ? .085 : 0)],
+  left:[-.272*torso,.838,-.272*ts],right:[.272*torso,.838,.272*ts],
+  leftElbow:[-.280,.725+.12*d,.135+.157*d],rightElbow:[.334,.707+.15*d,.079-.211*d]};
+}
+function poiBuildBowAim(m,pose,r,x,y,z){
+ const p=poiBowAimPoints(pose),R=(a,h,d)=>{const [px,pz]=rot2(a,d,r);return [x+px,y+h,z+pz]};
+ const P=a=>R(...a);
+ const B=(a,b,w,col)=>{const A=P(a),B=P(b);naturalBranch(m,...A,...B,w,w*.86,col)};
+ const f=p.front,draw=p.draw,skin=[.77,.59,.43],highlight=[.84,.65,.48],wood=[.47,.29,.15],limb=[.69,.46,.22];
+ for(const [shoulder,elbow,hand] of [[p.left,p.leftElbow,f],[p.right,p.rightElbow,draw]]){
+  B(shoulder,elbow,.076,skin);B(elbow,hand,.060,highlight);
+  const [hx,hy,hz]=P(hand);cube(m,hx,hy-.035,hz,.090,.073,.081,skin);
+ }
+ const bow=[[-.35,-.213],[-.26,-.075],[-.13,-.006],[0,0],[.13,-.010],[.27,-.080],[.35,-.213]]
+  .map(([h,d])=>[f[0],f[1]+h,f[2]+d]);
+ for(let i=1;i<bow.length;i++)B(bow[i-1],bow[i],i===3||i===4 ? .032 : .026,i%2?wood:limb);
+ const nock=pose.bowReleased?[f[0],f[1],f[2]-.204]:draw;
+ B(bow[0],nock,.009,[.92,.83,.65]);B(nock,bow.at(-1),.009,[.92,.83,.65]);
+ if(!pose.bowReleased){
+  const tip=P([f[0],f[1],f[2]+.20]),n=P(nock),facing=R(0,0,1);
+  poiWeaponArrowGeometry(m,...tip,Math.sign(facing[0]-x),Math.sign(facing[2]-z),1,Math.hypot(tip[0]-n[0],tip[2]-n[2]));
+ }
+}
 function poiBuildPlayerMesh(weapon,pose,gear,stride=0,r=0,x=0,y=0,z=0){
  const m=mesh(),body=mesh(),twist=pose?.twist||0,twistC=Math.cos(twist),twistS=Math.sin(twist);
- characterHuman(body,0,0,0,false,pose,gear);
+ const bowAim=weapon==='equipWoodBow'&&Number.isFinite(pose?.bowDraw);
+ if(bowAim)body.townParts={};
+ characterHuman(body,0,0,0,false,bowAim?null:pose,gear);
  for(let i=0;i<body.p.length;i+=3){
+  if(bowAim){
+   const {left,right}=body.townParts;
+   if(i>=left[0]&&i<left[1]||i>=right[0]&&i<right[1])continue;
+  }
   const lx=body.p[i],ly=body.p[i+1],lz=body.p[i+2];
   const swing=ly<.54&&Math.abs(lx)<.22?(lx<0?-stride:stride):
     ly>.45&&ly<.85&&Math.abs(lx)>.23?(lx<0?stride:-stride)*.36:0;
@@ -12383,7 +12525,8 @@ function poiBuildPlayerMesh(weapon,pose,gear,stride=0,r=0,x=0,y=0,z=0){
   m.n.push(nx,body.n[i+1],nz);
   m.c.push(body.c[i],body.c[i+1],body.c[i+2]);
  }
- if(weapon){
+ if(bowAim)poiBuildBowAim(m,pose,r,x,y,z);
+ else if(weapon){
   const prop=mesh();deco(prop,weapon,0,0,0,0);
   // Grip uses the same shoulder transform and torso turn as the fist
   // geometry. The only independent motion is wrist orientation.
@@ -12555,7 +12698,8 @@ function poiMonsterAppendDebris(m,e,t,fade=1){
 }
 function poiMonsterDrawBreaks(m,now){
  for(const effect of poiMonsterBreaks){
-  if(facilitySite&&effect.floor!==poiWalkLevel)continue;
+  if((facilitySite&&effect.floor!==poiWalkLevel)||
+   (typeof poiDungeonVisualVisible==='function'&&!poiDungeonVisualVisible(Math.floor(effect.x),Math.floor(effect.z),effect.floor)))continue;
   const age=now-effect.start,phase=poiMonsterBreakPhase(age,effect);
   if(age>=POI_MONSTER_FLIGHT_MS&&!effect.settled){
    effect.settled=mesh();poiMonsterAppendDebris(effect.settled,effect,1);
@@ -12572,13 +12716,16 @@ function poiMonsterRender(now,vp){
  for(let i=poiMonsterBreaks.length-1;i>=0;i--)if(now-poiMonsterBreaks[i].start>=poiMonsterBreakTTL(poiMonsterBreaks[i])){
   poiMonsterBreaks.splice(i,1);poiMonsterMeshDirty=true;
  }
+ const onSlice=(o)=>!(facilitySite&&o.y!==poiWalkLevel)&&
+  (typeof poiDungeonVisualVisible!=='function'||poiDungeonVisualVisible(o.x,o.z,o.y));
  const animate=poiMonsterBreaks.some(effect=>(!facilitySite||effect.floor===poiWalkLevel)&&
+  (typeof poiDungeonVisualVisible!=='function'||poiDungeonVisualVisible(Math.floor(effect.x),Math.floor(effect.z),effect.floor))&&
   (!effect.settled||poiMonsterBreakPhase(now-effect.start,effect)==='fade'))||
-  [...poiMonsterStates.values()].some(s=>s.hp>0&&(now-s.moveStarted<(s.guardMoveMs||380)+70||
+  [...poiMonsterStates].some(([o,s])=>onSlice(o)&&s.hp>0&&(now-s.moveStarted<(s.guardMoveMs||380)+70||
    (s.townOwned&&(now-s.counterAt<390||now-s.townHurtAt<158))));
  let slimeAttack=false;
  for(const [o,s] of poiMonsterStates){
-  if(s.hp<=0||(facilitySite&&o.y!==poiWalkLevel))continue;
+  if(s.hp<=0||!onSlice(o))continue;
   if(o.type==='monsterMineGuard'&&poiMineGuardPose(s,now)){slimeAttack=true;break}
   if(o.type==='monsterPondSkater'&&poiPondSkaterPose(s,now)){slimeAttack=true;break}
   if(o.type!=='monsterSlime')continue;
@@ -12589,7 +12736,7 @@ function poiMonsterRender(now,vp){
  if(!poiMonsterMesh||poiMonsterMeshDirty||settle||((animate||slimeAttack)&&now-poiMonsterMeshLast>(slimeAttack?30:48))){
   const m=mesh();
   for(const [obj,s] of poiMonsterStates){
-   if((facilitySite&&obj.y!==poiWalkLevel)||s.hp<=0)continue;
+   if(!onSlice(obj)||s.hp<=0)continue;
    const {x:cx,y,z:cz,attack}=poiMonsterPose(obj,s,now),part=mesh();
    deco(part,poiMonsterRenderType(obj),cx,y,cz,0);
    const facing=attack?.facing??(s.facing||0);
@@ -14691,7 +14838,8 @@ function poiDrawEnemyThreatTiles(now,vp){
  if(poiEnemyThreatWorld!==world||poiEnemyThreatHeights.size>32){poiEnemyThreatWorld=world;poiEnemyThreatHeights.clear()}
  const hits=new Map();
  for(const tile of threats){
-  if(tile.y!==poiWalkLevel||!validPos(tile.x,tile.z))continue;
+  if(tile.y!==poiWalkLevel||!validPos(tile.x,tile.z)||
+   (typeof poiDungeonVisualVisible==='function'&&!poiDungeonVisualVisible(tile.x,tile.z,tile.y)))continue;
   const alpha=poiEnemyThreatAlpha(tile,now),key=tile.x+','+tile.z;
   if(alpha>(hits.get(key)?.alpha??0))hits.set(key,{tile,alpha});
  }
@@ -17948,14 +18096,13 @@ function extendTownWorldPondMarsh(northTrail,world){
   [117,26,'tallGrass',2],[117,30,'watersideRock',1],[116,31,'tallGrass',3],
   [114,32,'treeWillow'],[115,31,'bushFern',1],[117,33,'rockCluster',2],[119,31,'tallGrass',2]
  ])add(xx,zz,type,rot);
- const pond={name:'アメンボの池',difficulty:2,bounds:{x1:111,x2:120,z1:24,z2:32,y:0},
+ const pond={name:'アメンボの池',bounds:{x1:111,x2:120,z1:24,z2:32,y:0},
   water,bank,guard,leash:{x1:112,x2:120,z1:24,z2:32},
   reward:{id:'north-marsh-herb',type:'healingHerb',count:1,x:115,z:32,y:0}};
  northTrail.marsh={name:'柳の道',path,pond};
  northTrail.regions.push(
   {name:'柳の道',difficulty:1,bounds:{x1:116,x2:121,z1:17,z2:23,y:0}},
-  {name:'柳の道',difficulty:1,bounds:{x1:121,x2:122,z1:24,z2:29,y:0}},
-  {name:pond.name,difficulty:pond.difficulty,bounds:pond.bounds}
+  {name:'柳の道',difficulty:1,bounds:{x1:121,x2:122,z1:24,z2:29,y:0}}
  );
  return northTrail;
 }
@@ -19868,7 +20015,7 @@ function facilityBoot(resume,playOnOpen=false){
    wildSpawn:poiWildSnapshot(),economy:poiEconomySnapshot(),walk:{stepMs:poiWalkStepMs,walkMs:POI_WALK_MS},inventory:poiInventorySnapshot(),armedDrops:poiHotbarHasKit()?poiHotbarRead().armedDrops||[]:[],chapel:{gateOpen:poiChapelGateOpen(),chestOpened:poiChapelChestOpened(),unlock:poiMineUnlockSnapshot()},mineVault:{gateOpen:poiMineVaultGateOpen(),chestOpened:poiMineVaultChestOpened(),
     unlock:poiMineUnlockSnapshot(),sideFinds:poiHotbarHasKit()?poiMineFindList(poiHotbarRead())||[]:[]},occlusion:poiOcclusionFrame,
    combat:{playerHP:poiPlayerHP,death:poiPlayerDeathSnapshot(),threats:poiEnemyThreatTiles(performance.now()),actionAt:poiWalkActionStarted,effects:poiMonsterBreaks.length,debris:poiMonsterBreakSnapshot(performance.now()),actors:[...poiMonsterStates].map(([o,s])=>
-    ({type:o.type,x:s.x,z:s.z,level:o.y,hp:s.hp,wildSpawn:!!s.wildSpawn,
+    ({type:o.type,x:s.x,z:s.z,level:o.y,hp:s.hp,wildSpawn:!!s.wildSpawn,visible:poiDungeonVisualVisible(o.x,o.z,o.y),
      ...(o.type==='monsterMineGuard'&&performance.now()<s.guardSlideUntil?
       {move:{fromX:s.fromX,fromZ:s.fromZ,start:s.moveStarted,duration:s.guardMoveMs}}:null),
      attack:o.type==='monsterSlime'?poiSlimeAttackPose(s,performance.now()):o.type==='monsterMineGuard'?poiMineGuardPose(s,performance.now()):o.type==='monsterPondSkater'?poiPondSkaterPose(s,performance.now()):null}))}})

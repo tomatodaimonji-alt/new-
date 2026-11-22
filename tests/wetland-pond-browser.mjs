@@ -145,7 +145,7 @@ async function bank(browser){
   assert.equal(after.combat.playerHP,cue.hp,'actual dodge leaves committed tile without taking damage from the observed warning');
   assert(monsterAt(after)?.hp<monsterAt(before).hp,'native facing and action make one weapon hit across the wet edge');
   assert.equal(after.walk.stepMs,175);
-  await expectHud(page,'アメンボの池','★★☆☆☆');
+  await expectHud(page,'外','★☆☆☆☆');
   if(out)await page.screenshot({path:out+'/v198-dry-dodge-bank.png'});
   // Exit via the physically traversable north branch.
   for(const [x,z] of [[119,27],[119,26],[120,26],[121,26]]){

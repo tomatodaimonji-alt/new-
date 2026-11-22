@@ -17,7 +17,7 @@ function beforeWayfarer(site){
  const {wayfarer,regions,...trail}=site.northTrail,world=site.map.world.slice(0,6874);
  assert.equal(createHash('sha256').update(JSON.stringify(world)).digest('hex'),
   'ec7a5a436973075aa9d6a83b0a76e51f4e483fd9fa820cd4c630f2d798a2d511','exact v198 world before the appended travelers well');
- return {...site,northTrail:{...trail,regions:regions.slice(0,8)},map:{...site.map,world}};
+ return {...site,northTrail:{...trail,regions:regions.slice(0,7)},map:{...site.map,world}};
 }
 function beforePondMarsh(site){
  site=beforeWayfarer(site);

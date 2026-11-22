@@ -21,7 +21,8 @@ test('the willow road continues another 29 clear steps without editing any histo
 });
 test('pond has connected water, guard on wet cell, and two dry exits for the player',()=>{
  const {marsh:m}=site.northTrail,p=m.pond,k=(x,z)=>x+','+z;
- assert.equal(p.name,'アメンボの池');assert.equal(p.difficulty,2);
+ assert.equal(p.name,'アメンボの池');
+ assert(!site.northTrail.regions.some(r=>r.name===p.name),'city HUD should treat the pond as ordinary outdoor ground');
  assert.deepEqual(p.guard,{x:117,z:28,y:0,type:'monsterPondSkater'});
  assert(at(117,28).some(o=>o.type==='water')&&at(117,28).some(o=>o.type===p.guard.type));
  assert.deepEqual(p.reward,{id:'north-marsh-herb',type:'healingHerb',count:1,x:115,z:32,y:0});
