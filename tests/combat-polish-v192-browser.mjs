@@ -184,7 +184,7 @@ async function mineArrival(browser){
   let s=await state(page);
   assert.equal(s.combat.playerHP,100,'arriving player cannot be harmed by nearby encounters over multiple simulation ticks');
   assert.equal(s.combat.threats.length,0);
-  assert.equal(s.combat.actors.filter(a=>a.type==='monsterSlime'&&a.level===-1&&a.hp>0).length,2);
+  assert.equal(s.combat.actors.filter(a=>a.type==='monsterSlime'&&a.level===-1&&a.hp>0&&a.x>=114&&a.x<=122&&a.z>=59&&a.z<=64).length,2);
   await move(page,'n',true,true);await move(page,'n',true,true);await move(page,'n',true,true);
   assert.deepEqual((await state(page)).position,at(116,59,-1));
   await page.waitForFunction(()=>window.__editorTest.facility().combat.threats.some(t=>t.type==='monsterSlime'&&t.y===-1));

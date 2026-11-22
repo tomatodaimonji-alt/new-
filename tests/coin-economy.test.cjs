@@ -14,7 +14,7 @@ test('old kit inventory works and purchase updates gold and potion stock atomica
  const o=setup({version:1,weapon:'equipWoodSword',potions:2,gold:9});const x=o.x;
  assert.equal(x.poiEconomyGold(),9);assert.equal(o.writes(),0);
  const result=x.poiEconomyBuyPotion();assert.equal(result.ok,true);assert.equal(o.writes(),1);
- assert.deepEqual(o.save(),{version:1,weapon:'equipWoodSword',potions:3,gold:3});
+ assert.deepEqual(o.save(),{version:1,weapon:'equipWoodSword',potions:3,gold:3,toolshopSupply:{version:1,stock:2,delivered:0,cargo:0}});
  assert.equal(x.poiEconomyBuyPotion().reason,'funds');assert.equal(o.writes(),1);
  const k=setup({version:1,weapon:null,potions:8,gold:20});k.fail(true);
  assert.equal(k.x.poiEconomyBuyPotion().reason,'storage');assert.equal(k.x.poiEconomyGold(),20);

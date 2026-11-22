@@ -442,3 +442,53 @@ test('reciprocal portal steps land off both arches without quest or kit writes',
  assert.deepEqual([c.poiWalkX,c.poiWalkZ,c.poiWalkLevel,c.poiWalkFacing],[118,87,0,0]);
  assert.equal(pauses,2);assert.equal(resumes,2);assert.deepEqual(f.raw(),start);assert.equal(f.writes(),0);
 });
+test('chapel wet cells use a real separate slower route and never charge stamina, other floors unchanged',()=>{
+ const f=fixture(),c=f.ctx;
+ c.facilitySite.chapel={shallows:[{x:78,z:83,y:-1}],deep:[{x:79,z:83,y:-1}]};
+ Object.assign(c,{poiWalkLevel:-1,world:[{x:78,z:83,y:-1,type:'water'},{x:79,z:83,y:-1,type:'water'}]});
+ let spends=0;c.poiDashCommitStep=()=>{spends++;return 105};
+ assert.equal(c.poiChapelWater(78,83,'shallows'),true);assert.equal(c.poiChapelWater(79,83,'deep'),true);
+ assert.equal(c.poiChapelStepMs(78,83),265);assert.equal(spends,0);
+ assert.equal(c.poiChapelStepMs(81,83),105);assert.equal(spends,1);
+ c.world[0].type='earth';assert.equal(c.poiChapelStepMs(78,83),105);
+ c.poiWalkLevel=0;assert.equal(c.poiChapelWater(79,83,'deep'),false);
+ assert.equal(f.writes(),0);
+});
+test('only the exact chapel elite opens chapel treasury, loot survives reload independently of prior vaults',()=>{
+ const f=fixture({version:1,weapon:null,potions:3,gold:20}),c=f.ctx;
+ const elite={x:79,z:78,y:-1,type:'monsterSkeleton'},chest={x:78,z:75,y:-1,type:'rewardChest'};
+ c.facilitySite.chapel={elite,chest,chestStand:{x:78,z:76,y:-1,facing:0}};
+ Object.assign(c,{poiWalkLevel:-1,poiWalkX:78,poiWalkZ:76,poiWalkFacing:0,world:[chest],poiMonsterAt:()=>null});
+ assert.equal(c.poiChapelGateOpen(),false);assert.equal(c.poiChapelRecordDefeat({...elite,x:81},{hp:0}),false);
+ assert.equal(c.poiChapelRecordDefeat(elite,{hp:0}),true);
+ assert.equal(c.poiOtherworldGateOpen(),false);assert.equal(c.poiMineVaultGateOpen(),false);assert.equal(c.poiChapelGateOpen(),true);
+ assert.equal(c.poiMineUnlockStart(0,'chapelChest'),true);c.poiMineUnlockFrame(3000);
+ assert.equal(f.raw().chapelChest.slots[0].count,2);assert.equal(f.raw().chapelChest.slots[1].count,2);
+ assert.equal(f.raw().gold,32);assert.equal(f.raw().otherworldChest,undefined);assert.equal(f.writes(),2);
+ assert.equal(fixture(f.raw()).ctx.poiChapelChestOpened(),true);
+});
+test('real chapel stair pair lands away from each end, saves only resume, and never requires a quest',()=>{
+ const start={version:1,weapon:null,potions:3,gold:12},f=fixture(start),c=f.ctx;
+ const entrance={x:124,z:81,y:0,type:'guildStairDown'},exit={x:78,z:89,y:-1,type:'guildStairUp'};
+ const surfaceStand={x:124,z:82,y:0,facing:0},dungeonStand={x:78,z:88,y:-1,facing:2};
+ c.facilitySite.chapel={entrance,exit,surfaceStand,dungeonStand,name:'水没した礼拝堂',bounds:{x1:73,x2:83,z1:73,z2:90,y:-1}};
+ c.world=[entrance,exit];const noop=()=>{};
+ Object.assign(c,{poiWalkX:124,poiWalkZ:82,poiWalkLevel:0,poiWalkFacing:0,poiWalkCanStep:()=>true,
+  POI_WALK_MS:175,poiStopRepeat:noop,poiEnemyCancelPlayer:noop,$:()=>({classList:{toggle:noop}}),
+  poiCreekAudioSync:noop,poiWalkRoof:noop,poiWalkCamera:noop,poiWalkStatus:noop,workshopResumeWrite:noop});
+ assert.equal(c.poiOtherworldUseStep(124,81,200),true);
+ assert.deepEqual([c.poiWalkX,c.poiWalkZ,c.poiWalkLevel,c.poiWalkFacing],[78,88,-1,0]);
+ assert.equal(c.poiDungeonTravelKey(c.facilitySite,78,88,-1),'chapel');
+ assert.equal(c.poiOtherworldUseStep(78,89,400),true);
+ assert.deepEqual([c.poiWalkX,c.poiWalkZ,c.poiWalkLevel,c.poiWalkFacing],[124,82,0,2]);
+ assert.deepEqual(f.raw(),start);assert.equal(f.writes(),0);
+});
+test('toolshop state and chapel rewards survive the same authoritative kit transaction',()=>{
+ const start={version:1,weapon:null,potions:3,gold:20,toolshopSupply:{version:1,stock:6,delivered:1,cargo:0},
+   chapelCleared:true,chapelChest:{version:1,slots:[{type:'healingHerb',count:2},...Array(17).fill(null)]}};
+ const f=fixture(start);assert.equal(f.ctx.poiChapelChestOpened(),true);assert.equal(f.ctx.poiToolshopStock(),6);
+ assert.equal(f.writes(),0);assert.deepEqual(f.raw(),start);
+ assert.equal(f.ctx.poiEconomyBuyPotion().ok,true);
+ assert.equal(f.raw().toolshopSupply.stock,5);assert.deepEqual(f.raw().chapelChest,start.chapelChest);
+ assert.equal(f.raw().chapelCleared,true);assert.equal(f.raw().gold,14);
+});

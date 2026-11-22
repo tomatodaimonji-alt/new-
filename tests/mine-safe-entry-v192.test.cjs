@@ -2,8 +2,8 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),vm=requir
 const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const cut=(a,b)=>html.slice(html.indexOf(a),html.indexOf(b,html.indexOf(a)+1));
 const build=vm.runInNewContext(cut('const FACILITY_SITES=Object.freeze(','function workshopResumeDecode(')+';buildFacilitySite');
-const site=JSON.parse(JSON.stringify(build('base'))),{world}=site.map;
-const {beforeMineEntry}=require('./mine-history-v165.cjs');
+const {beforeMineEntry,beforeChapel}=require('./mine-history-v165.cjs');
+const site=beforeChapel(JSON.parse(JSON.stringify(build('base')))),{world}=site.map;
 const at=(x,z)=>world.filter(o=>o.x===x&&o.z===z&&o.y===-1);
 test('mine has two encounter slimes beyond, not inside, the safe original landing',()=>{
  const {mine}=site,room=mine.earlyRoom;
