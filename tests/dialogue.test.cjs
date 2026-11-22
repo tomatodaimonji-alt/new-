@@ -5,7 +5,7 @@ function fixture(){
  const e={hidden:true,style:{},textContent:''};let synced=0,faced=0;
  const c=vm.createContext({poiTownNpcActive:()=>true,poiTownNpcActors:[actor],poiWalkX:5,poiWalkZ:5,poiWalkLevel:0,poiWalkFacing:0,
   poiTownNpcGraph:()=>({}),poiTownNpcNextTile:(_from,x,z)=>({x,z,y:0}),poiMonsterStates:new Map(),poiTownNpcFace:(a,f)=>{a.facing=f;faced++},poiShopSync:()=>synced++,
-  facilityDoorTiles:new Set(),facilityCellKey:(x,z,y)=>[x,z,y].join(','),facilityFloorOwner:()=>null,facilityHiddenRoof:()=>null,terrainY:()=>0,poiWorldToScreen:()=>({x:150,y:200}),$:()=>e});
+  facilityDoorTiles:new Set(),facilityCellKey:(x,z,y)=>[x,z,y].join(','),facilityFloorOwner:()=>null,facilityHiddenRoof:()=>null,terrainY:()=>0,poiWorldToScreen:()=>({x:150,y:200}),$:id=>id==='poiTownSpeech'?e:null});
  const m=html.match(/\/\/ BEGIN TOWN DIALOGUE\n([\s\S]*?)\/\/ END TOWN DIALOGUE/);
  assert.ok(m,'conversation runtime is present');
  vm.runInContext(m[1],c);return {actor,e,c,run:(js)=>vm.runInContext(js,c),get faced(){return faced},get synced(){return synced}};
@@ -17,7 +17,8 @@ test('player-led conversation pauses the resident, uses announcements only and s
  f.run('poiTownDialogueDraw(200,[])');
  assert.equal(f.e.hidden,true);assert.equal(announcements.length,1);
  assert.equal(announcements[0][0],'受付係');assert.equal(announcements[0][1],f.run('poiTownDialogueSnapshot().text'));
- assert.equal(f.run('poiTownDialogueUpdate(4599)'),f.actor);assert.equal(f.run('poiTownDialogueUpdate(4600)'),null);
+ assert.equal(f.run('poiTownDialogueUpdate(4600)'),f.actor,'awake menu persists until Back or actor loss');
+ f.run("poiNpcMenuChoose('back',4601)");assert.equal(f.run('poiTownDialogueUpdate(4602)'),null);
  const update=html.slice(html.indexOf('function poiMessagePush('),html.indexOf('function poiAnnounceDefeat('));
  assert.doesNotMatch(update,/aria-hidden/);
 });
@@ -38,14 +39,15 @@ test('walls, floors, active enemy, and busy residents never yield a conversation
  const f=fixture();f.actor.y=1;assert.equal(f.run('poiTownDialogueTarget(100)'),null);f.actor.y=0;
  f.c.poiTownNpcNextTile=()=>null;assert.equal(f.run('poiTownDialogueTarget(100)'),null);f.c.poiTownNpcNextTile=()=>({y:0});
  f.actor.target={};assert.equal(f.run('poiTownDialogueTarget(100)'),null);delete f.actor.target;
- f.actor.activity='sleep-home';assert.equal(f.run('poiTownDialogueTarget(100)'),null);
+ f.actor.activity='sleep-home';assert.equal(f.run('poiTownDialogueTarget(100)'),f.actor);
  f.actor.activity='work';f.c.poiMonsterStates.set({y:0},{x:5,z:4,hp:30});assert.equal(f.run('poiTownDialogueTarget(100)'),null);
 });
-test('retap or leaving cancels; unrelated attack fallback remains available',()=>{
+test('center selects a new topic; leaving cancels and unrelated attack remains available',()=>{
  const f=fixture();assert.equal(f.run('poiTownDialogueAction(100)'),true);
+ const first=f.run('poiTownDialogueSnapshot().text');
  assert.equal(f.run('poiTownDialogueAction(200)'),true);
- assert.equal(f.run('poiTownDialogueSnapshot()'),null);
- f.run('poiTownDialogueAction(300)');f.c.poiWalkFacing=1;assert.equal(f.run('poiTownDialogueUpdate(400)'),null);
+ assert.notEqual(f.run('poiTownDialogueSnapshot().text'),first);
+ f.c.poiWalkFacing=1;assert.equal(f.run('poiTownDialogueUpdate(400)'),null);
  assert.equal(f.run('poiTownDialogueAction(500)'),false);
 });
 test('guild clerk at the mapped counter speaks across only the verified public desk',()=>{

@@ -13,7 +13,7 @@ const server=createServer((_,res)=>{
 });
 await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',resolve).once('error',reject));
 const url='http://127.0.0.1:'+server.address().port+'/?facility=base&facility-play=1&test=1';
-const panels=['#poiMiniMap','#poiLocationPanel','#poiGoldHud','#poiClockHud'];
+const panels=['#poiMiniMap','#poiLocationPanel','#poiClockHud'];
 const others=['#poiWalkPad','#poiGameTools','.poiPartyCard'];
 const out=process.env.FACILITY_SCREENSHOTS;
 if(out)await mkdir(out,{recursive:true});
@@ -26,6 +26,7 @@ try{
    const page=await context.newPage();
    await page.goto(url);
    await page.locator('#poiClockHud').waitFor({state:'visible'});
+   assert.equal(await page.locator('#poiGoldHud').count(),0,'wallet moved to inventory');
    await frame(page);
    const boxes=await page.evaluate(({panels,others})=>{
     return Object.fromEntries(['#viewWrap','#poiMiniHud',...panels,...others].map(sel=>{

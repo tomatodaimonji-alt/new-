@@ -45,8 +45,9 @@ test('panel is anchored to party grid without moving adjacent controls or replac
  assert.match(html,/<section id="poiPartyHud"[^>]+>[\s\S]*?<div id="poiMessagePanel" hidden/);
  assert.match(html,/#poiMessagePanel\{[^}]*bottom:calc\(100% \+ var\(--poi-hud-gap\)\)[^}]*pointer-events:none[^}]*background:var\(--workshop-panel-surface\)/);
  assert(snippet('function poiInventoryPickup(','function poiInventoryDraw(').includes('poiMessagePush'));
- const dialogue=snippet('function poiTownDialogueAction(','function poiTownDialogueDraw(');
- assert(dialogue.includes('poiMessageSpeak'));assert(dialogue.includes('poiTownDialogueElement'));
+ const dialogue=snippet('function poiNpcMenuRender(','function poiNpcMenuStep(');
+ assert(dialogue.includes('poiMessageSpeak'));
+ assert(snippet('function poiTownDialogueDraw(','// END TOWN DIALOGUE').includes('poiTownDialogueElement'));
 });
 test('the overhead resident bubble and tail share the panel tint without fading text',()=>{
  assert.match(html,/#poiTownSpeech\{[^}]*color:#fff8e7;[^}]*background:var\(--workshop-panel-surface\)/);
