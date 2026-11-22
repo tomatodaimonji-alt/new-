@@ -833,6 +833,26 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 #poiGoldHud[hidden],#poiClockHud[hidden]{display:none}
 #poiClockHud{color:#e6efdb}#poiClockValue{font-variant-numeric:tabular-nums;letter-spacing:.06em}
 #poiGoldValue{overflow:hidden;text-overflow:ellipsis}
+/* Selected items open one compact native modal over the existing storage UI. */
+#poiItemDetail{
+ width:min(286px,calc(100vw - 2 * max(12px,env(safe-area-inset-left,0px),env(safe-area-inset-right,0px))));
+ max-height:calc(100dvh - 2 * max(12px,env(safe-area-inset-top,0px),env(safe-area-inset-bottom,0px)));
+ padding:13px;border:1px solid rgba(195,220,199,.52);border-radius:10px;
+ overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;
+ background:var(--workshop-panel-surface);color:#fff8e7;box-shadow:0 8px 28px #07191078;
+ text-shadow:0 1px 2px #182c22}
+#poiItemDetail::backdrop{background:rgba(8,17,13,.22)}
+#poiItemDetailName{margin:0 0 5px;font-size:17px;line-height:1.25;font-weight:800;overflow-wrap:anywhere}
+#poiItemDetailDescription,#poiItemDetailFeedback{margin:0 0 8px;font-size:12px;line-height:1.4;overflow-wrap:anywhere}
+#poiItemDetailFeedback{color:#ffe2a5}
+#poiItemDetailDescription:empty,#poiItemDetailFeedback:empty{display:none}
+#poiItemDetailActions{display:grid;grid-template-columns:minmax(0,1fr);gap:4px}
+#poiItemDetailActions button{min-height:44px;width:100%;padding:6px 9px;text-align:left;
+ font-size:13px;font-weight:700;line-height:1.2;white-space:normal;touch-action:manipulation}
+#poiItemDetailActions button[hidden]{display:none}
+#poiItemDetailActions button:focus-visible{outline:2px solid #f0d6a0;outline-offset:-2px}
+#poiItemDetailActions [data-item-detail-action="drop"]{color:#ffe2c9}
+#poiItemDetailActions [data-item-detail-action="back"]{border-color:#cad6bc8c}
 #poiShopDialog,#poiResetGameDialog{width:min(350px,calc(100vw - 28px));padding:14px;border:1px solid #a5baa581;
  border-radius:10px;color:#fff4da;background:var(--workshop-panel-surface);
  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);box-shadow:0 8px 30px #07190f7a}
@@ -846,7 +866,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 #poiResetGameConfirm:not(:disabled){border-color:#ce9b85;background:#774a3cf0;color:#fff4da}
 #poiResetGameFeedback:empty{display:none}
 </style></head><body>
-<div id="app"><header><h1>3Dワールド工房（v162）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app"><header><h1>3Dワールド工房（v163）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -964,6 +984,19 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  <div class="poiWalkDpad"><span></span><button data-poi-dir="n">▲</button><span></span><button data-poi-dir="w">◀</button><button id="poiWalkAction" class="poiWalkAction" type="button" aria-label="攻撃または決定">攻撃<br>決定</button><button data-poi-dir="e">▶</button><span></span><button data-poi-dir="s">▼</button><span></span></div></div><div id="viewBar"><button id="rotatePlacement" title="これから置く部材の向きを90°変更">↻ 向き</button><button id="fitMap" title="マップ全体を見る">▣ 全体</button><button id="turn" title="カメラ回転">⟳ 視点</button><button id="zoomOut">−</button><button id="zoomIn">＋</button></div></main>
 <aside id="inspector"><h2>構造・編集</h2><div class="stats"><div>マップ <strong id="gridLabel">16×16</strong> マス</div><div>配置済み <strong id="countLabel">0</strong> 個</div><div>選択 <strong id="selectedLabel">草原</strong></div><div>角度 <strong id="rotationLabel">0°</strong></div></div><h3>マップの広さ</h3><p class="muted">12〜128マスの範囲で縦横を自由に設定。広げても建物は残ります。</p><div class="row"><label>横 X</label><input id="mapWidth" type="number" min="12" max="128" step="1" value="16"><label>縦 Z</label><input id="mapHeight" type="number" min="12" max="128" step="1" value="16"></div><button id="applyMapSize" class="wide">この広さに変更</button><h3>部材の操作</h3><div class="section"><button id="rotatePart">部材を90°回転</button><button id="eyedrop">スポイト</button></div><h3>地面の高低差</h3><p class="muted">地面をマスごとに0〜8段に編集。建物の階数とは独立しています。</p><div class="row"><button id="terrainUp">地面 ＋1</button><button id="terrainDown">地面 −1</button><button id="terrainFlat">高さを0に</button></div><div class="row"><span class="muted">カーソルの高さ：</span><strong id="terrainHeightLabel">0</strong></div><h3>階層</h3><div class="row"><label for="level">配置する高さ</label><select id="level"><option value="0">地上 0</option><option value="1">2階 1</option><option value="2">3階 2</option><option value="3">4階 3</option><option value="4">5階 4</option><option value="5">6階 5</option><option value="6">7階 6</option><option value="7">8階 7</option><option value="8">9階 8</option><option value="9">10階 9</option></select></div><div class="row"><label><input type="checkbox" id="hideUpper"> 編集階より上を隠す</label></div><div hidden aria-hidden="true" id="legacyPrefabFields"><input id="rangeX1" value="5"><input id="rangeZ1" value="5"><input id="rangeX2" value="11"><input id="rangeZ2" value="11"></div><h3>便利な操作</h3><div class="stack"><button id="demo">スーパーを再生成</button><button id="villageDemo">サンプルの村を建てる</button><button id="organicTownDemo">自然な町を試作</button><button id="showcaseTownDemo">完成見本の街を建てる</button><button id="forestTransitionDemo">完成見本その2・森に還る街</button><button id="elevationDemo">高低差サンプルを建てる</button><button id="terraceFarmDemo">段丘農村の完成見本</button><button id="compactTerrainDemo">24×24・地形の改良見本</button><button id="residentialRoofDemo">24×24・住宅屋根の比較</button><button id="livedInTownDemo">24×24・暮らしの住宅街</button><button id="oldTownRiverDemo">24×24・川沿い旧市街</button><button id="oldTownV2Demo">24×24・暮らす川沿い旧市街</button><button id="cityNature64Demo">64×64・川と丘の旧市街</button><button id="pineHarborDemo">48×40・大型輸送艇と軍港</button><button id="worldAudit">配置チェック</button><button id="house3Demo">3階建てを試作</button><button id="tower7Demo">7階建ての塔を試作</button><button id="clear">すべて消す</button><button id="resetCamera">カメラ初期化</button></div><hr class="divider"><h3>共有できるデータ</h3><p class="muted">建物やタイルの配置データをJSONで保存・共有できます。</p><button class="wide" id="openJson">書き出し・読み込み</button><hr class="divider"><div class="muted">データ形式：forest-world-v1<br>完全オフライン、外部ライブラリなし。<br>編集内容はブラウザ内に自動保存。</div></aside>
 <div id="mobileTabs"><button id="showPalette">エディター</button><button id="pineCheckMode" type="button" aria-pressed="false">チェック</button><button id="enterGameWorld" type="button">ゲーム世界へ</button></div><footer><span>ORIGINAL WORLD EDITOR · WebGL / OFFLINE</span><span>配置 → JSONで書き出し → ChatGPTに共有</span></footer></div>
+<dialog id="poiItemDetail" aria-labelledby="poiItemDetailName" aria-describedby="poiItemDetailDescription">
+ <h2 id="poiItemDetailName"></h2>
+ <p id="poiItemDetailDescription"></p>
+ <p id="poiItemDetailFeedback" role="status" aria-live="polite"></p>
+ <div id="poiItemDetailActions" role="group" aria-label="アイテム操作">
+  <button type="button" data-item-detail-action="transfer" hidden>インベントリに入れる</button>
+  <button type="button" data-item-detail-action="split" hidden>分割する</button>
+  <button type="button" data-item-detail-action="equip" hidden>装備する</button>
+  <button type="button" data-item-detail-action="use" hidden>使う</button>
+  <button type="button" data-item-detail-action="drop" hidden>捨てる</button>
+  <button type="button" data-item-detail-action="back" autofocus>戻る</button>
+ </div>
+</dialog>
 <dialog id="poiShopDialog" aria-labelledby="poiShopTitle">
  <h2 id="poiShopTitle">道具屋</h2>
  <p>所持金：<strong id="poiShopGold">0</strong> 金貨</p>
@@ -6819,6 +6852,77 @@ function poiMoveChestInventorySlot(fromArea,fromIndex,toArea,toIndex){
  poiEconomyRefresh();if(kit.weapon!==next.weapon)poiWalkAvatar();
  return result(null);
 }
+function poiStorageActionResult(reason=null){return {ok:reason===null,reason}}
+function poiStorageIndexExists(i,count){return Number.isInteger(i)&&i>=0&&i<count}
+function poiQuickTransferStorage(zone,index){
+ const result=poiStorageActionResult;
+ if(!poiChestTxnAllowed())return result('unavailable');
+ const kit=poiHotbarRead(),chest=kit.kitchenChest?.slots;
+ if(!chest)return result('unavailable');
+ const slots=poiInventorySlots(kit),bag=slots.slice(POI_HOTBAR_SIZE);
+ const fromChest=zone==='chest',src=fromChest?chest:zone==='bag'?bag:null,dst=fromChest?bag:chest;
+ if(!src||!poiStorageIndexExists(index,src.length))return result('locked');
+ if(!src[index])return result('empty');
+ const target=dst.findIndex(c=>!c);
+ if(target<0)return result('full');
+ return fromChest?poiMoveChestInventorySlot('chest',index,'inventory',POI_HOTBAR_SIZE+target):
+  poiMoveChestInventorySlot('inventory',POI_HOTBAR_SIZE+index,'chest',target);
+}
+function poiStorageSplitTarget(src,index){
+ const cols=POI_BAG_COLUMNS,col=index%cols;
+ const near=[col<cols-1?index+1:-1,col>0?index-1:-1,index+cols,index-cols];
+ return near.find(i=>poiStorageIndexExists(i,src.length)&&!src[i])??src.findIndex(c=>!c);
+}
+function poiSplitStorageStack(zone,index){
+ const result=poiStorageActionResult;
+ if(!poiInventoryAllowed()||(zone==='chest'&&!poiChestTxnAllowed()))return result('unavailable');
+ const kit=poiHotbarRead(),inChest=zone==='chest',bag=zone==='bag';
+ const raw=inChest?kit.kitchenChest?.slots:bag?poiInventorySlots(kit).slice(POI_HOTBAR_SIZE):null;
+ if(!raw)return result(inChest?'unavailable':'locked');
+ if(!poiStorageIndexExists(index,raw.length))return result('locked');
+ const cell=raw[index];if(!cell)return result('empty');
+ if(cell.count<2||poiInventoryStack(cell.type)<2)return result('single');
+ const target=poiStorageSplitTarget(raw,index);
+ if(target<0)return result('full');
+ const src=raw.slice(),count=Math.floor(cell.count/2);
+ src[index]={...cell,count};src[target]={...cell,count:cell.count-count};
+ const next=inChest?{...kit,kitchenChest:{...kit.kitchenChest,slots:src}}:
+  poiInventoryEdited(kit,[...poiInventorySlots(kit).slice(0,POI_HOTBAR_SIZE),...src]);
+ if(!poiEconomyWrite(next))return result('storage');
+ poiEconomyRefresh();return result();
+}
+function poiEquipBagItem(index){
+ const result=poiStorageActionResult;
+ if(!poiInventoryAllowed())return result('unavailable');
+ if(!poiStorageIndexExists(index,POI_BAG_UNLOCKED))return result('locked');
+ const kit=poiHotbarRead(),slots=poiInventorySlots(kit).slice(),i=index+POI_HOTBAR_SIZE,cell=slots[i];
+ if(!cell)return result('empty');
+ const weapon=poiHotbarWeaponForType(cell.type);
+ if(!weapon)return result('type');
+ const slot=slots.slice(0,POI_HOTBAR_SIZE).findIndex(c=>!c);
+ if(slot<0)return result('full');
+ slots[slot]=cell;slots[i]=null;
+ if(!poiEconomyWrite(poiInventoryEdited({...kit,weapon},slots)))return result('storage');
+ poiEconomyRefresh();poiWalkAvatar();return result();
+}
+function poiUseStorageConsumable(kit,index){
+ const result=poiStorageActionResult,slots=poiInventorySlots(kit).slice(),cell=slots[index];
+ if(!cell)return result('empty');
+ if(cell.type!==POI_INVENTORY_HERB&&cell.type!==POI_CANNED)return result('type');
+ if(poiPlayerHP>=POI_PLAYER_MAX_HP)return result('healthy');
+ const healed=Math.min(cell.type===POI_CANNED?POI_CANNED_HEAL:POI_HOTBAR_HEAL,POI_PLAYER_MAX_HP-poiPlayerHP);
+ slots[index]=cell.count>1?{...cell,count:cell.count-1}:null;
+ if(!poiEconomyWrite(poiInventoryEdited(kit,slots)))return result('storage');
+ poiPlayerHP+=healed;poiCombatHud();poiEconomyRefresh();
+ if(typeof poiHealPlayerFeedback==='function')poiHealPlayerFeedback(healed);
+ toast('HPが'+healed+'回復しました');return result();
+}
+function poiUseBagItem(index){
+ if(!poiInventoryAllowed())return poiStorageActionResult('unavailable');
+ if(!poiStorageIndexExists(index,POI_BAG_UNLOCKED))return poiStorageActionResult('locked');
+ return poiUseStorageConsumable(poiHotbarRead(),POI_HOTBAR_SIZE+index);
+}
+
 function poiKitchenKnifeSpend(){
  const kit=poiHotbarRead();
  if(kit.weapon!==POI_KNIFE)return false;
@@ -7101,7 +7205,7 @@ function poiBagSetOpen(open){
  const toggle=$('poiBagToggle'),panel=$('poiBagPanel');
  if(!toggle||!panel)return;
  open=!!open&&!toggle.hidden&&poiInventoryAllowed();
- if(!open)poiChestSetOpen(false);
+ if(!open){poiStorageTapGate?.cancel();poiItemDetailClose(false);poiChestSetOpen(false)}
  panel.hidden=!open;toggle.setAttribute('aria-expanded',String(open));poiBagSelectSource(null);
 }
 function poiBagSelectSource(button){
@@ -7143,6 +7247,101 @@ function poiBagUiRender(){
   button.querySelector('.hotbar-count').textContent=herb||type==='cannedFood'?String(cell.count):'';
  }
 }
+function poiCreateStorageTapGate(schedule,cancelTimer,onSingle,onDouble){
+ let pending=null;
+ const cancel=()=>{if(pending){cancelTimer(pending.timer);pending=null}};
+ const select=(button,allowDouble)=>{
+  if(!allowDouble){cancel();onSingle(button);return}
+  if(pending?.button===button){cancel();onDouble(button);return}
+  cancel();
+  const entry={button,timer:null};pending=entry;
+  entry.timer=schedule(()=>{if(pending===entry){pending=null;onSingle(button)}});
+ };
+ return {select,cancel};
+}
+let poiItemDetailSelection=null,poiStorageTapGate=null;
+function poiItemDetailIsOpen(){return !!$('poiItemDetail')?.open}
+function poiItemDetailCell(ref){
+ if(!ref||$('poiBagPanel')?.hidden!==false||!poiInventoryAllowed())return null;
+ return ref.zone==='chest'?(poiChestIsOpen()?poiChestSlotAt(ref.index):null):
+  ref.zone==='bag'?poiInventoryCell(poiHotbarRead(),ref):null;
+}
+function poiItemDetailActions(zone,cell,chestOpen){
+ const actions=[];
+ if(chestOpen)actions.push('transfer');
+ if(poiInventoryStack(cell.type)>1&&cell.count>1)actions.push('split');
+ if(zone==='bag'){
+  if(poiHotbarWeaponForType(cell.type))actions.push('equip');
+  else if(cell.type==='healingHerb'||cell.type==='cannedFood')actions.push('use');
+ }
+ return [...actions,'drop','back'];
+}
+function poiItemDetailDescription(cell){
+ const descriptions={
+  equipWoodSword:'木でできた軽い剣。ショートカットに装備して使う。',
+  kitchenKnife:'刃のある調理道具。敵に当てると耐久が減り、なくなると壊れる。',
+  healingHerb:'体力を最大30回復する薬草。',
+  cannedFood:'体力を最大55回復する保存食。薬草より回復量が多い。'
+ };
+ const info=[descriptions[cell.type]||''];
+ if(poiInventoryStack(cell.type)>1)info.push('所持数：'+cell.count);
+ if(Number.isInteger(cell.durability))info.push('耐久：'+cell.durability+' / '+POI_KNIFE_DURABILITY);
+ return info.join(' ');
+}
+function poiItemDetailClose(restore=true){
+ const dialog=$('poiItemDetail'),old=poiItemDetailSelection;
+ poiItemDetailSelection=null;
+ if(dialog?.open)dialog.close();
+ if(restore&&old?.button?.isConnected&&!$('poiBagPanel')?.hidden)old.button.focus({preventScroll:true});
+}
+function poiItemDetailRender(){
+ const ref=poiItemDetailSelection?.ref,cell=poiItemDetailCell(ref);
+ if(!cell||cell.type!==poiItemDetailSelection.type){poiItemDetailClose();return false}
+ const dialog=$('poiItemDetail'),actions=poiItemDetailActions(ref.zone,cell,poiChestIsOpen());
+ $('poiItemDetailName').textContent=poiInventoryItemName(cell.type);
+ $('poiItemDetailDescription').textContent=poiItemDetailDescription(cell);
+ for(const button of dialog.querySelectorAll('[data-item-detail-action]')){
+  const action=button.dataset.itemDetailAction;
+  if(action==='transfer')button.textContent=ref.zone==='chest'?'インベントリに入れる':'チェストに入れる';
+  button.hidden=!actions.includes(action);
+ }
+ if(document.activeElement?.hidden&&dialog.contains(document.activeElement))
+  dialog.querySelector('[data-item-detail-action="back"]').focus({preventScroll:true});
+ return true;
+}
+function poiItemDetailOpen(button){
+ if(poiItemDetailIsOpen()||poiGameResetDialogOpen()||document.querySelector('.modal.open'))return;
+ const ref=poiBagSlotRef(button),cell=poiItemDetailCell(ref);
+ if(!cell||!button.isConnected)return;
+ poiBagSelectSource(null);
+ poiItemDetailSelection={button,ref,type:cell.type};
+ $('poiItemDetailFeedback').textContent='';
+ if(poiItemDetailRender()){poiStopRepeat();$('poiItemDetail').showModal()}
+}
+function poiItemDetailReason(reason){
+ return {full:'空き枠がありません。',blocked:'近くの地面に置けません。',healthy:'体力は満タンです。',
+  storage:'保存できなかったため、アイテムは移動していません。',single:'これ以上分割できません。'}[reason]||'その操作はできません。';
+}
+function poiItemDetailAction(action){
+ if(action==='back'){poiItemDetailClose();return}
+ const ref=poiItemDetailSelection?.ref,cell=poiItemDetailCell(ref);
+ if(!cell||cell.type!==poiItemDetailSelection.type||!poiItemDetailActions(ref.zone,cell,poiChestIsOpen()).includes(action))return;
+ const result={
+  transfer:()=>poiQuickTransferStorage(ref.zone,ref.index),
+  split:()=>poiSplitStorageStack(ref.zone,ref.index),
+  equip:()=>poiEquipBagItem(ref.index),
+  use:()=>poiUseBagItem(ref.index),
+  drop:()=>ref.zone==='chest'?poiDropChestSlot(ref.index):poiInventoryDrop(ref)
+ }[action]?.();
+ if(!result)return;
+ if(!result.ok){$('poiItemDetailFeedback').textContent=poiItemDetailReason(result.reason);return}
+ if(action==='split'){
+  if(poiItemDetailRender())$('poiItemDetailFeedback').textContent='分割した。';
+  return;
+ }
+ poiItemDetailClose();
+ if(action==='drop')toast('地面に置いた');
+}
 function poiBagGestureTarget(point,moved,slot,blocked,stage,protectedRects){
  const inside=(rect)=>point.x>=rect.left&&point.x<rect.right&&point.y>=rect.top&&point.y<rect.bottom;
  if(moved<10||!inside(stage))return null;
@@ -7174,6 +7373,18 @@ function poiBagWire(){
   }else resultToast(poiInventoryMove(a,b));
  };
  $('poiChestClose').addEventListener('click',poiChestCloseFromUi);
+ const detail=$('poiItemDetail');
+ detail.addEventListener('click',e=>{const action=e.target.closest('button[data-item-detail-action]');
+  if(action&&!action.hidden)poiItemDetailAction(action.dataset.itemDetailAction)
+ });
+ detail.addEventListener('cancel',e=>{e.preventDefault();poiItemDetailClose()});
+ detail.addEventListener('close',()=>{if(!detail.open)poiItemDetailSelection=null});
+ poiStorageTapGate=poiCreateStorageTapGate(fn=>setTimeout(fn,285),clearTimeout,poiItemDetailOpen,button=>{
+  const ref=poiBagSlotRef(button);
+  if(!poiItemDetailCell(ref)||!poiChestIsOpen())return;
+  const result=poiQuickTransferStorage(ref.zone,ref.index);
+  if(!result.ok)toast(poiItemDetailReason(result.reason));
+ });
  toggle.addEventListener('click',()=>poiBagSetOpen(bag.hidden));
  for(const container of [bar,bag]){
   container.addEventListener('pointerdown',e=>{
@@ -7186,7 +7397,7 @@ function poiBagWire(){
   });
   container.addEventListener('pointermove',e=>{
    if(drag?.id!==e.pointerId||(!drag.moved&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<10))return;
-   drag.moved=true;poiBagSelectSource(null);drag.source.dataset.dragging='';
+   drag.moved=true;poiStorageTapGate.cancel();poiBagSelectSource(null);drag.source.dataset.dragging='';
    const target=find(document.elementFromPoint(e.clientX,e.clientY));
    if(drag.over)delete drag.over.dataset.dragOver;
    drag.over=target&&!target.disabled&&target!==drag.source?target:null;
@@ -7197,7 +7408,7 @@ function poiBagWire(){
    const source=drag.source,moved=Math.hypot(e.clientX-drag.x,e.clientY-drag.y),wasMoved=drag.moved;
    clear();
    if(moved<10&&!wasMoved)return;
-   e.preventDefault();suppress={button:source,until:performance.now()+550};
+   e.preventDefault();poiStorageTapGate.cancel();suppress={button:source,until:performance.now()+550};
    if(!poiInventoryAllowed())return;
    const hit=document.elementFromPoint(e.clientX,e.clientY),stage=$('viewWrap');
    const protectedRects=[bar,bag,chest,$('poiWalkPad'),$('poiMiniHud'),$('poiMessagePanel'),
@@ -7218,8 +7429,9 @@ function poiBagWire(){
     const source=poiBagKeySource;poiBagSelectSource(null);move(source,button);return;
    }
    const ref=poiBagSlotRef(button);
-   if(ref.zone==='hotbar')poiHotbarUse(ref.index);
-   else if(occupied(button))poiBagSelectSource(button);
+   if(ref.zone==='hotbar'){poiStorageTapGate.cancel();poiHotbarUse(ref.index)}
+   else if(occupied(button))poiStorageTapGate.select(button,poiChestIsOpen()&&e.detail>0);
+   else poiStorageTapGate.cancel();
   });
   container.addEventListener('keydown',e=>{
    if(!e.shiftKey||!(e.key==='Enter'||e.key===' ')||!poiInventoryAllowed())return;
@@ -7227,11 +7439,11 @@ function poiBagWire(){
    if(!source||source.disabled||!occupied(source))return;
    e.preventDefault();e.stopPropagation();
    if(bag.hidden)poiBagSetOpen(true);
-   poiBagSelectSource(source);
+   poiStorageTapGate.cancel();poiBagSelectSource(source);
   });
  }
  document.addEventListener('keydown',e=>{
-  if(e.key!=='Escape'||bag.hidden)return;
+  if(e.key!=='Escape'||bag.hidden||poiItemDetailIsOpen())return;
   e.preventDefault();
   if(poiBagKeySource)poiBagSelectSource(null);else if(poiChestIsOpen())poiChestCloseFromUi();else{poiBagSetOpen(false);toggle.focus()}
  });
@@ -7265,14 +7477,9 @@ function poiHotbarUse(slot){
   if(!weapon)poiHotbarEmptySlot=slot;
   poiHotbarRender();if(kit.weapon!==weapon)poiWalkAvatar();return;
  }
- if(poiPlayerHP>=POI_PLAYER_MAX_HP){toast('HPは満タンです');return}
- const healed=Math.min(item===POI_CANNED?POI_CANNED_HEAL:POI_HOTBAR_HEAL,POI_PLAYER_MAX_HP-poiPlayerHP);
- const slots=poiInventorySlots(kit).slice(),cell=slots[slot];
- slots[slot]=cell.count>1?{...cell,count:cell.count-1}:null;
- if(!poiEconomyWrite(poiInventoryEdited(kit,slots))){toast(poiInventoryItemName(item)+'を保存できませんでした');return}
- poiPlayerHP+=healed;poiCombatHud();poiEconomyRefresh();
- if(typeof poiHealPlayerFeedback==='function')poiHealPlayerFeedback(healed);
- toast('HPが'+healed+'回復しました');
+ const result=poiUseStorageConsumable(kit,slot);
+ if(result.reason==='healthy')toast('HPは満タンです');
+ else if(result.reason==='storage')toast(poiInventoryItemName(item)+'を保存できませんでした');
 }
 function poiResetCombat(){poiWildClear();poiPlayerHP=POI_PLAYER_MAX_HP;poiMonsterStates=new Map();for(const o of world){if(poiIsMonster(o.type)){const stats=POI_MONSTER_STATS[o.type];poiMonsterStates.set(o,{x:o.x,z:o.z,fromX:o.x,fromZ:o.z,moveStarted:-10000,facing:0,hp:stats.hp,nextAttack:0})}}poiDamageLabels=[];poiNextMobTick=0;poiAttackReady=0;poiMonsterMeshDirty=true;poiCombatHud();dirty=true}
 const POI_MESSAGE_LIFETIME=5000,POI_MESSAGE_MAX=2;
@@ -8409,7 +8616,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v162',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v163',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -8524,7 +8731,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v162';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v163';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -8739,7 +8946,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v162',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v163',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -10025,6 +10232,7 @@ function poiWalkStatus(){
 }
 function poiWalkStep(dx,dz){
  if(!poiWalkActive||poiShopIsOpen()||(typeof poiPlayerDying==='function'&&poiPlayerDying()))return;
+ if(typeof poiItemDetailIsOpen==='function'&&poiItemDetailIsOpen())return;
  if(poiChestIsOpen())poiBagSetOpen(false);
  const now=performance.now();
  if(now<poiWalkNextReady)return;
@@ -16759,7 +16967,7 @@ for(const button of document.querySelectorAll('[data-poi-dir]')){
 }
 document.addEventListener('keydown',e=>{
  if(!poiWalkActive||poiShopIsOpen()||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
- if(poiGameResetDialogOpen())return;
+ if(poiGameResetDialogOpen()||poiItemDetailIsOpen())return;
  if(poiPlayerDying()){e.preventDefault();return}
  const k=e.key.toLowerCase();
  if(/^[1-9]$/.test(k)&&poiHotbarHasKit()&&!pineAIActive&&!e.altKey&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!document.querySelector('.modal.open')){
