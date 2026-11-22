@@ -126,11 +126,11 @@ async function exercise(browser,width){
   assert.deepEqual(two.goldBagOrder,second);
   await page.locator(wallet).tap();
   await page.locator('#poiHotbar [data-hotbar-slot="2"]').tap();
-  await page.waitForFunction(()=>window.__editorTest.facility().inventory.weapon===null);
-  assert.equal(await page.locator(wallet).getAttribute('aria-pressed'),'false','hotbar works normally after wallet selection');
-  await page.locator('#poiHotbar [data-hotbar-slot="0"]').tap();
-  await page.waitForFunction(()=>window.__editorTest.facility().inventory.weapon==='equipWoodSword');
-  assert.deepEqual(await verify(page,second),two);
+  assert.equal(await page.locator(wallet).getAttribute('aria-pressed'),'false','empty shortcut cancels wallet selection');
+  await page.waitForTimeout(360);
+  assert.equal(await page.locator('#poiItemDetail[open]').count(),0,'empty shortcut does not open details');
+  assert.equal((await state(page)).inventory.weapon,initial.weapon,'open bag empty shortcut does not switch to bare hands');
+  assert.deepEqual(await verify(page,second),two,'cancelling changes neither wallet position nor equipment');
   for(const target of [bag(1),bag(9),'#poiHotbar [data-hotbar-slot="2"]','[data-gear-slot="legs"]']){
    await drag(ctx,page,target);
    assert.deepEqual(await verify(page,second),two,'occupied, locked, and non-bag targets cannot receive currency: '+target);

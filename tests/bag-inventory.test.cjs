@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 function fixture(saved=null){
  let failure=false,raw=saved&&JSON.stringify(saved),writes=0;
- const ctx={facilitySite:{id:'base'},poiWalkActive:true,pineAIActive:false,poiWalkX:4,poiWalkZ:5,poiWalkLevel:0,poiWalkFacing:0,world:[],
+ const ctx={poiPlayerHP:100,POI_PLAYER_MAX_HP:100,facilitySite:{id:'base'},poiWalkActive:true,pineAIActive:false,poiWalkX:4,poiWalkZ:5,poiWalkLevel:0,poiWalkFacing:0,world:[],
  localStorage:{getItem(){return raw},setItem(_key,v){if(failure)throw Error('quota');raw=v;writes++}},
  poiWalkCanStep:()=>true,isFloor:()=>true,poiWalkAvatar(){},document:{querySelectorAll:()=>[]},$(){return null},toast(){}};
  vm.createContext(ctx);
@@ -201,4 +201,34 @@ test('wallet placement is recoverable without canonicalization writes and carrie
  assert.equal(f.ctx.poiMoveGoldToBag(spot('bag',0)).ok,true);
  assert.equal(f.raw().goldBagOrder,undefined,'identity layout is omitted');
  assert.deepEqual(Array.from(f.ctx.poiInventorySnapshot().goldBagOrder),identity);
+});
+test('shortcut details explicitly split, equip, use and move without double-tap auto-use',()=>{
+ const f=fixture({version:1,weapon:null,potions:5}),c=f.ctx;
+ assert.equal(c.poiSplitStorageStack('hotbar',1).ok,true);
+ assert.equal(c.poiInventorySnapshot().hotbar[1].count,2);
+ assert.equal(c.poiInventorySnapshot().hotbar[2].count,3);
+ assert.equal(c.poiEquipHotbarItem(0).ok,true);
+ assert.equal(c.poiEquippedWeapon(),'equipWoodSword');
+ vm.runInContext('poiPlayerHP=70;poiCombatHud=()=>{}',c);
+ assert.equal(c.poiUseHotbarItem(1).ok,true);
+ assert.equal(c.poiPlayerHP,100);
+ assert.equal(c.poiDoubleTapStorage('hotbar',2).ok,true);
+ assert.equal(c.poiInventorySnapshot().bag[0].count,3);
+ assert.equal(c.poiInventorySnapshot().hotbar[2],null);
+ assert.equal(c.poiEquippedWeapon(),'equipWoodSword');
+ assert.equal(c.poiPlayerHP,100);
+});
+test('hotbar-to-bag is atomic and does not treat old overflow as capacity; transfer can use chest',()=>{
+ const slots=Array(27).fill(null);slots[0]={type:'equipWoodSword',count:1};
+ slots[1]={type:'healingHerb',count:2};
+ for(let i=9;i<18;i++)slots[i]={type:'cannedFood',count:9};
+ const f=fixture({version:1,weapon:'equipWoodSword',potions:2,slots,kitchenChest:{version:1,slots:Array(18).fill(null)}}),c=f.ctx;
+ assert.equal(c.poiDoubleTapStorage('hotbar',0).reason,'full');
+ c.poiChestIsOpen=()=>false;c.poiKitchenChestReachable=()=>true;
+ assert.equal(c.poiQuickTransferStorage('hotbar',0).reason,'unavailable');
+ c.poiChestIsOpen=()=>true;f.fail(true);
+ assert.equal(c.poiQuickTransferStorage('hotbar',0).reason,'storage');assert.equal(f.writes(),0);
+ assert.equal(c.poiEquippedWeapon(),'equipWoodSword');
+ f.fail(false);assert.equal(c.poiQuickTransferStorage('hotbar',0).ok,true);
+ assert.equal(c.poiEquippedWeapon(),null);assert.equal(c.poiChestSlotAt(0).type,'equipWoodSword');
 });

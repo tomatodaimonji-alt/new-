@@ -978,7 +978,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v176）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v177）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -7248,16 +7248,27 @@ function poiQuickTransferStorage(zone,index){
  const kit=poiHotbarRead(),chest=kit.kitchenChest?.slots;
  if(!chest)return result('unavailable');
  const slots=poiInventorySlots(kit),bag=slots.slice(POI_HOTBAR_SIZE);
- const fromChest=zone==='chest',src=fromChest?chest:zone==='bag'?bag:null,dst=fromChest?bag.slice(0,POI_BAG_UNLOCKED):chest;
+ const fromChest=zone==='chest',hot=zone==='hotbar';
+ const src=fromChest?chest:hot?slots.slice(0,POI_HOTBAR_SIZE):zone==='bag'?bag:null;
+ const dst=fromChest?bag.slice(0,POI_BAG_UNLOCKED):chest;
  if(!src||!poiStorageIndexExists(index,src.length))return result('locked');
  if(!src[index])return result('empty');
  const target=dst.findIndex(c=>!c);
  if(target<0)return result('full');
  return fromChest?poiMoveChestInventorySlot('chest',index,'inventory',POI_HOTBAR_SIZE+target):
-  poiMoveChestInventorySlot('inventory',POI_HOTBAR_SIZE+index,'chest',target);
+  poiMoveChestInventorySlot('inventory',hot?index:POI_HOTBAR_SIZE+index,'chest',target);
 }
 function poiDoubleTapStorage(zone,index){
  const result=poiStorageActionResult,fromChest=zone==='chest';
+ if(zone==='hotbar'){
+  if(!poiInventoryAllowed())return result('unavailable');
+  if(!poiStorageIndexExists(index,POI_HOTBAR_SIZE))return result('locked');
+  const cells=poiInventorySlots(poiHotbarRead());
+  if(!cells[index])return result('empty');
+  const to=cells.slice(POI_HOTBAR_SIZE,POI_HOTBAR_SIZE+POI_BAG_UNLOCKED).findIndex(c=>!c);
+  if(to<0)return result('full');
+  return poiInventoryMove(index,{zone:'bag',index:to});
+ }
  if(zone!=='bag'&&!fromChest)return result('locked');
  if(!poiInventoryAllowed()||fromChest&&!poiChestTxnAllowed())return result('unavailable');
  const kit=poiHotbarRead(),slots=poiInventorySlots(kit).slice(),chest=kit.kitchenChest?.slots.slice();
@@ -7298,19 +7309,20 @@ function poiStorageSplitTarget(src,index,cols=POI_BAG_COLUMNS,usable=src.length)
 function poiSplitStorageStack(zone,index){
  const result=poiStorageActionResult;
  if(!poiInventoryAllowed()||(zone==='chest'&&!poiChestTxnAllowed()))return result('unavailable');
- const kit=poiHotbarRead(),inChest=zone==='chest',bag=zone==='bag';
- const raw=inChest?kit.kitchenChest?.slots:bag?poiInventorySlots(kit).slice(POI_HOTBAR_SIZE):null;
+ const kit=poiHotbarRead(),inChest=zone==='chest',bag=zone==='bag',hot=zone==='hotbar';
+ const cells=poiInventorySlots(kit);
+ const raw=inChest?kit.kitchenChest?.slots:bag?cells.slice(POI_HOTBAR_SIZE):hot?cells.slice(0,POI_HOTBAR_SIZE):null;
  if(!raw)return result(inChest?'unavailable':'locked');
  if(!poiStorageIndexExists(index,raw.length))return result('locked');
  const cell=raw[index];if(!cell)return result('empty');
  if(cell.count<2||poiInventoryStack(cell.type)<2)return result('single');
  const target=inChest?poiStorageSplitTarget(raw,index,POI_CHEST_COLUMNS):
-  poiStorageSplitTarget(raw,index,POI_BAG_COLUMNS,POI_BAG_UNLOCKED);
+  hot?poiStorageSplitTarget(raw,index,POI_HOTBAR_SIZE):poiStorageSplitTarget(raw,index,POI_BAG_COLUMNS,POI_BAG_UNLOCKED);
  if(target<0)return result('full');
  const src=raw.slice(),count=Math.floor(cell.count/2);
  src[index]={...cell,count};src[target]={...cell,count:cell.count-count};
  const next=inChest?{...kit,kitchenChest:{...kit.kitchenChest,slots:src}}:
-  poiInventoryEdited(kit,[...poiInventorySlots(kit).slice(0,POI_HOTBAR_SIZE),...src]);
+  poiInventoryEdited(kit,hot?[...src,...cells.slice(POI_HOTBAR_SIZE)]:[...cells.slice(0,POI_HOTBAR_SIZE),...src]);
  if(!poiEconomyWrite(next))return result('storage');
  poiEconomyRefresh();return result();
 }
@@ -7327,6 +7339,23 @@ function poiEquipBagItem(index){
  slots[slot]=cell;slots[i]=null;
  if(!poiEconomyWrite(poiInventoryEdited({...kit,weapon},slots)))return result('storage');
  poiEconomyRefresh();poiWalkAvatar();return result();
+}
+function poiEquipHotbarItem(index){
+ const result=poiStorageActionResult;
+ if(!poiInventoryAllowed())return result('unavailable');
+ if(!poiStorageIndexExists(index,POI_HOTBAR_SIZE))return result('locked');
+ const kit=poiHotbarRead(),cell=poiInventorySlots(kit)[index];
+ if(!cell)return result('empty');
+ const weapon=poiHotbarWeaponForType(cell.type);
+ if(!weapon)return result('type');
+ if(kit.weapon===weapon)return result();
+ if(!poiEconomyWrite({...kit,weapon}))return result('storage');
+ poiEconomyRefresh();poiWalkAvatar();return result();
+}
+function poiUseHotbarItem(index){
+ if(!poiInventoryAllowed())return poiStorageActionResult('unavailable');
+ if(!poiStorageIndexExists(index,POI_HOTBAR_SIZE))return poiStorageActionResult('locked');
+ return poiUseStorageConsumable(poiHotbarRead(),index);
 }
 function poiUseStorageConsumable(kit,index){
  const result=poiStorageActionResult,slots=poiInventorySlots(kit).slice(),cell=slots[index];
@@ -7815,14 +7844,14 @@ function poiItemDetailCell(ref){
  if(!ref||$('poiBagPanel')?.hidden!==false||!poiInventoryAllowed())return null;
  return ref.zone==='armor'?poiArmorSnapshot()[ref.part]??null:
   ref.zone==='chest'?(poiChestIsOpen()?poiChestSlotAt(ref.index):null):
-  ref.zone==='bag'?poiInventoryCell(poiHotbarRead(),ref):null;
+  ref.zone==='bag'||ref.zone==='hotbar'?poiInventoryCell(poiHotbarRead(),ref):null;
 }
-function poiItemDetailActions(zone,cell,chestOpen){
+function poiItemDetailActions(zone,cell,chestOpen,hasSplitSpace=true){
  if(zone==='armor')return ['unequip','back'];
  const actions=[];
  if(chestOpen)actions.push('transfer');
- if(poiInventoryStack(cell.type)>1&&cell.count>1)actions.push('split');
- if(zone==='bag'){
+ if(poiInventoryStack(cell.type)>1&&cell.count>1&&hasSplitSpace)actions.push('split');
+ if(zone==='bag'||zone==='hotbar'){
   if(poiHotbarWeaponForType(cell.type)||(typeof poiArmorCategory==='function'&&poiArmorCategory(cell.type)))actions.push('equip');
   else if(cell.type==='healingHerb'||cell.type==='cannedFood')actions.push('use');
  }
@@ -7862,10 +7891,14 @@ function poiInventoryPresentItem(host,cell){
  }
  if(amount)amount.textContent=(type==='healingHerb'||type==='cannedFood')&&cell.count>0?String(cell.count):'';
 }
+function poiItemDetailAvailableActions(ref,cell){
+ const space=ref.zone!=='hotbar'||poiInventorySlots(poiHotbarRead()).slice(0,POI_HOTBAR_SIZE).some(c=>!c);
+ return poiItemDetailActions(ref.zone,cell,poiChestIsOpen(),space);
+}
 function poiItemDetailRender(){
  const ref=poiItemDetailSelection?.ref,cell=poiItemDetailCell(ref);
  if(!cell||cell.type!==poiItemDetailSelection.type){poiItemDetailClose();return false}
- const dialog=$('poiItemDetail'),actions=poiItemDetailActions(ref.zone,cell,poiChestIsOpen());
+ const dialog=$('poiItemDetail'),actions=poiItemDetailAvailableActions(ref,cell);
  $('poiItemDetailName').textContent=poiInventoryItemName(cell.type);
  poiInventoryPresentItem($('poiItemDetailIcon'),cell);
  $('poiItemDetailDescription').textContent=poiItemDetailDescription(cell);
@@ -7894,13 +7927,13 @@ function poiItemDetailReason(reason){
 function poiItemDetailAction(action){
  if(action==='back'){poiItemDetailClose();return}
  const ref=poiItemDetailSelection?.ref,cell=poiItemDetailCell(ref);
- if(!cell||cell.type!==poiItemDetailSelection.type||!poiItemDetailActions(ref.zone,cell,poiChestIsOpen()).includes(action))return;
+ if(!cell||cell.type!==poiItemDetailSelection.type||!poiItemDetailAvailableActions(ref,cell).includes(action))return;
  const result={
   transfer:()=>poiQuickTransferStorage(ref.zone,ref.index),
   split:()=>poiSplitStorageStack(ref.zone,ref.index),
-  equip:()=>poiArmorCategory(cell.type)?poiEquipArmorFromBag(ref.index):poiEquipBagItem(ref.index),
+  equip:()=>ref.zone==='hotbar'?poiEquipHotbarItem(ref.index):poiArmorCategory(cell.type)?poiEquipArmorFromBag(ref.index):poiEquipBagItem(ref.index),
   unequip:()=>poiUnequipArmor(ref.part),
-  use:()=>poiUseBagItem(ref.index),
+  use:()=>ref.zone==='hotbar'?poiUseHotbarItem(ref.index):poiUseBagItem(ref.index),
   drop:()=>ref.zone==='chest'?poiDropChestSlot(ref.index):poiInventoryDrop(ref)
  }[action]?.();
  if(!result)return;
@@ -7947,6 +7980,7 @@ function poiItemDragRender(ghost,event,drag){
 function poiBagWire(){
  const bar=$('poiHotbar'),bag=$('poiBagPanel'),toggle=$('poiBagToggle'),chest=$('poiChestPanel'),ghost=$('poiItemDragPreview');
  let drag=null,suppress=null;
+ const detailZone=zone=>zone==='bag'||zone==='chest'||zone==='hotbar'&&!bag.hidden;
  const find=node=>node?.closest?.('button[data-hotbar-slot],button[data-bag-slot],button[data-chest-slot],button[data-gear-slot],button[data-wallet-slot]');
  const clear=()=>{
   if(drag){delete drag.source.dataset.dragging;if(drag.over)delete drag.over.dataset.dragOver}
@@ -8027,7 +8061,7 @@ function poiBagWire(){
     // Classify a physical storage tap at pointer release. Touch compatibility
     // clicks can be delayed or report detail=0, unlike normal pointer events.
     const ref=poiBagSlotRef(source);
-    if((ref.zone==='bag'||ref.zone==='chest')&&!poiBagKeySource&&
+    if(detailZone(ref.zone)&&!poiBagKeySource&&
        !source.disabled&&poiInventoryAllowed()&&occupied(source)&&
        find(document.elementFromPoint(e.clientX,e.clientY))===source){
      suppress={button:source,until:performance.now()+550};
@@ -8061,8 +8095,8 @@ function poiBagWire(){
     if(source.id!=='poiBagWallet'||ref.zone==='bag'||ref.zone==='wallet'){move(source,button);return}
    }
    if(ref.zone==='wallet'){poiStorageTapGate.cancel();poiBagSelectSource(button)}
-   else if(ref.zone==='hotbar'){poiStorageTapGate.cancel();poiHotbarUse(ref.index)}
-   else if(occupied(button))poiStorageTapGate.select(button,(ref.zone==='bag'||ref.zone==='chest')&&e.detail>0);
+   else if(ref.zone==='hotbar'&&bag.hidden){poiStorageTapGate.cancel();poiHotbarUse(ref.index)}
+   else if(occupied(button))poiStorageTapGate.select(button,detailZone(ref.zone)&&e.detail>0);
    else poiStorageTapGate.cancel();
   });
   container.addEventListener('keydown',e=>{
@@ -9520,7 +9554,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v176',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v177',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -9635,7 +9669,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v176';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v177';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -9850,7 +9884,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v176',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v177',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -18138,7 +18172,17 @@ document.addEventListener('keydown',e=>{
   return;
  }
  if(/^[1-9]$/.test(k)&&poiHotbarHasKit()&&!pineAIActive&&!e.altKey&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!document.querySelector('.modal.open')){
-  e.preventDefault();if(!e.repeat)poiHotbarUse(Number(k)-1);return;
+  e.preventDefault();
+  if(!e.repeat){
+   const slot=Number(k)-1;
+   if($('poiBagPanel')?.hidden!==false)poiHotbarUse(slot);
+   else{
+    poiStorageTapGate?.cancel();
+    const button=$('poiHotbar')?.querySelector('[data-hotbar-slot="'+slot+'"]');
+    if(button)poiItemDetailOpen(button);
+   }
+  }
+  return;
  }
  if(k===' '||k==='enter'){
   if(e.target?.closest?.('#poiHotbar'))return;
