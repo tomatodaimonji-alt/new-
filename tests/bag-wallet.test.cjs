@@ -1,8 +1,8 @@
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
 const h=fs.readFileSync(process.env.HTML||path.join(__dirname,'..','world-editor.html'),'utf8');
-test('money has one compact inventory header readout next to close, not a HUD or saved slot',()=>{
+test('money has one inventory cell, not a header, HUD or saved stack',()=>{
  assert.doesNotMatch(h,/id="poiGoldHud"/);
- assert.match(h,/<div id="poiBagHeading">インベントリ<\/div>\s*<div id="poiBagWallet"><span>金貨<\/span><strong id="poiGoldValue">0<\/strong><\/div>\s*<button id="poiBagClose"/);
+ assert.match(h,/<div id="poiBagSlots">[\s\S]*?data-bag-slot="8"[\s\S]*?id="poiBagWallet"[\s\S]*?id="poiGoldValue">0<\/strong>[\s\S]*?data-bag-slot="9"/);
  assert.match(h,/<div id="poiClockHud" hidden>[^\n]+id="poiClockValue"/);
  assert.equal((h.match(/id="poiGoldValue"/g)||[]).length,1);
  assert.match(h,/if\(open\).*poiWalletSync\(poiEconomyGold\(\)\)/);

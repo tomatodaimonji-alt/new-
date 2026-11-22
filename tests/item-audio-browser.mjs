@@ -120,7 +120,7 @@ async function swipe(ctx,page,slot){
  }finally{await c.detach();}
 }
 
-const signatures={woodDrop:[730,1030],herbDrop:[1680,650],woodPickup:[1830,810],herbPickup:[1830,1260],coinDrop:[2730,1690],coinPickup:[1310,1990,2510]};
+const signatures={woodDrop:[730,1030],herbDrop:[1680,650],woodPickup:[1110,784],herbPickup:[1510,659.25],coinDrop:[2730,1690],coinPickup:[1370,1480,1976]};
 const clear=page=>page.evaluate(()=>window.__itemAudio.events.length=0);
 const events=page=>page.evaluate(()=>window.__itemAudio.events);
 function has(hz,list){return list.some(e=>Math.abs(e.hz-hz)<.001);}
@@ -180,7 +180,7 @@ async function coins(browser){
   assert.equal((await wallet()).gold,12,'defeat never auto-collects a coin');
   assert.ok((await wallet()).drops.some(d=>d.x===42&&d.z===73&&d.amount===3));
   const loot=await cue(page,'coinDrop');
-  assert.ok(!has(1990,loot),'landing cue is not the pickup cue');
+  assert.ok(!has(1480,loot),'landing cue is not the pickup cue');
   await clear(page);await move(page,'e',true,true);
   assert.equal((await wallet()).gold,15);
   const pickup=await cue(page,'coinPickup');

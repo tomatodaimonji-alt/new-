@@ -44,3 +44,18 @@ test('durability save fails closed, final hit breaks the knife without re-rollin
  const reload=fixture(f.raw());assert.equal(reload.c.poiOpenKitchenChest(()=>0),true);assert.equal(reload.c.poiChestSlotAt(0),null);
  assert.equal(reload.c.poiChestSlotAt(1),null);
 });
+test('only committed acquisition from chest plays one item cue (including quick take and a direct transfer)',()=>{
+ const f=fixture(),{c}=f,notes=[];
+ c.poiSound=(...v)=>notes.push(v);
+ assert.equal(c.poiOpenKitchenChest(()=>.2),true);assert.deepEqual(notes,[]);
+ f.fail(true);assert.equal(c.poiMoveChestInventorySlot('chest',0,'inventory',2).reason,'storage');
+ f.fail(false);assert.equal(c.poiMoveChestInventorySlot('chest',0,'inventory',27).reason,'locked');assert.deepEqual(notes,[]);
+ assert.equal(c.poiQuickTransferStorage('chest',0).ok,true);assert.deepEqual(notes,[['chest-pickup','kitchenKnife']]);notes.length=0;
+ assert.equal(c.poiMoveChestInventorySlot('inventory',9,'chest',2).ok,true);
+ assert.equal(c.poiMoveChestInventorySlot('chest',2,'chest',0).ok,true);
+ assert.equal(c.poiQuickTransferStorage('chest',2).reason,'empty');assert.deepEqual(notes,[]);
+ assert.equal(c.poiQuickTransferStorage('chest',1).ok,true);notes.length=0;
+ assert.equal(c.poiMoveChestInventorySlot('inventory',9,'chest',1).ok,true);
+ assert.equal(c.poiMoveChestInventorySlot('chest',1,'inventory',2).ok,true);
+ assert.deepEqual(notes,[['chest-pickup','cannedFood']]);
+});

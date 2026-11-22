@@ -1,11 +1,12 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
-test('real shortcut and inventory grids expose nine hotbar cells and two of five available rows',()=>{
+test('real shortcut and inventory grids expose nine hotbar cells and two opening rows, including the currency cell',()=>{
  assert.equal((html.match(/<button type="button" data-hotbar-slot="/g)||[]).length,9);
  const bag=[...html.matchAll(/<button type="button" data-bag-slot="(\d+)"([^>]*)>/g)];
- assert.deepEqual(bag.map(m=>[+m[1],/ disabled\b/.test(m[2])]),Array.from({length:45},(_,i)=>[i,i>=18]));
+ assert.deepEqual(bag.filter(m=>!/ hidden\b/.test(m[2])).map(m=>[+m[1],/ disabled\b/.test(m[2])]),Array.from({length:24},(_,i)=>[i,i>=9]));
+ assert(bag.filter(m=>/ hidden\b/.test(m[2])).every(m=>/ disabled\b/.test(m[2])));
  assert.match(html,/<button id="poiBagToggle"[^>]*aria-label="インベントリ"[^>]*aria-expanded="false" aria-controls="poiBagPanel"/);
- assert.match(html,/#poiBagGrid\{[^}]*grid-template-columns:repeat\(9,minmax\(0,1fr\)\)[^}]*grid-template-rows:repeat\(5,minmax\(0,1fr\)\)/);
+ assert.match(html,/#poiBagSlots\{[^}]*grid-template-columns:repeat\(5,var\(--poi-bag-cell\)\)[^}]*grid-template-rows:repeat\(5,var\(--poi-bag-cell\)\)/);
 });
 test('a locked slot or protected UI cannot become a world drop',()=>{
  const a=html.indexOf('function poiBagGestureTarget('),b=html.indexOf('function poiBagWire()',a);

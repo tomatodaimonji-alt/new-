@@ -14,7 +14,7 @@ const spot=(zone,index)=>({zone,index});
 test('legacy state opens with no writes and migrates atomically when rearranged',()=>{
  const f=fixture({version:1,weapon:'equipWoodSword',potions:0,gold:30,claimedCaches:['glade']});
  let s=f.ctx.poiInventorySnapshot();
- assert.equal(s.hotbar.length,9);assert.equal(s.bag.length,45);assert.equal(s.bagUnlocked,18);
+ assert.equal(s.hotbar.length,9);assert.equal(s.bag.length,25);assert.equal(s.bagUnlocked,9);
  assert.equal(s.hotbar[0].type,'equipWoodSword');assert.equal(s.hotbar[1],null);assert.equal(f.writes(),0);
  assert.equal(f.ctx.poiInventoryMove(0,spot('bag',18)).ok,false);assert.equal(f.writes(),0);
  f.fail(true);assert.equal(f.ctx.poiInventoryMove(0,spot('bag',1)).ok,false);assert.equal(f.ctx.poiInventorySnapshot().weapon,'equipWoodSword');
@@ -71,7 +71,7 @@ test('v155 24-cell saves open as 27 destinations without shifting any old bag ro
  slots[23]={type:'healingHerb',count:6};
  const old={version:1,weapon:null,potions:9,gold:24,claimedCaches:['glade'],slots};
  const f=fixture(old),s=f.ctx.poiInventorySnapshot();
- assert.equal(s.hotbar.length,9);assert.equal(s.bag.length,45);assert.equal(s.bagUnlocked,18);
+ assert.equal(s.hotbar.length,9);assert.equal(s.bag.length,25);assert.equal(s.bagUnlocked,9);
  assert.equal(s.hotbar[7].count,3);assert.equal(s.hotbar[8],null);
  assert.equal(s.bag[0].count,4);assert.equal(s.bag[7].count,5);assert.equal(s.bag[8],null);
  assert.equal(s.bag[9].type,'equipWoodSword');assert.equal(s.bag[16].count,6);assert.equal(s.bag[17],null);
@@ -80,4 +80,87 @@ test('v155 24-cell saves open as 27 destinations without shifting any old bag ro
  const saved=f.raw();assert.equal(saved.slots.length,27);assert.equal(saved.gold,24);assert.deepEqual(saved.claimedCaches,['glade']);
  const fresh=fixture(saved).ctx.poiInventorySnapshot();
  assert.equal(fresh.hotbar[8].type,'equipWoodSword');assert.equal(fresh.bag[9],null);
+});
+test('legacy occupied slots survive reload and can only be withdrawn, not merged into or swapped',()=>{
+ const slots=Array(27).fill(null);
+ const sword={type:'equipWoodSword',count:1},herb={type:'healingHerb',count:2};
+ slots[0]=sword;slots[1]=herb;slots[19]=herb;slots[26]={type:'cannedFood',count:3};
+ const original={version:1,weapon:null,potions:4,gold:12,slots,kitchenChest:{version:1,slots:[herb,...Array(17).fill(null)]}};
+ const f=fixture(original), api=f.ctx;
+ api.poiChestIsOpen=api.poiKitchenChestReachable=()=>true;
+ assert.equal(f.writes(),0);
+ assert.deepEqual(Array.from(api.poiInventorySnapshot().bagLegacy),[10,17]);
+ assert.equal(api.poiInventoryMove(1,spot('bag',10)).reason,'locked');
+ assert.equal(api.poiInventoryMove(spot('bag',17),1).reason,'locked');
+ assert.equal(api.poiMoveChestInventorySlot('chest',0,'inventory',20).reason,'locked');
+ assert.equal(api.poiMoveChestInventorySlot('inventory',26,'chest',0).reason,'locked');
+ assert.equal(f.writes(),0);assert.deepEqual(f.raw(),original);
+ f.fail(true);assert.equal(api.poiQuickTransferStorage('bag',17).reason,'storage');
+ assert.equal(api.poiInventorySnapshot().bag[17].count,3);
+ f.fail(false);assert.equal(api.poiQuickTransferStorage('bag',17).ok,true);
+ assert.equal(api.poiChestSlotAt(1).count,3);
+ assert.equal(api.poiInventoryMove(spot('bag',10),1).ok,true);
+ const r=fixture(f.raw());assert.equal(r.ctx.poiInventorySnapshot().hotbar[1].count,4);
+ assert.deepEqual(Array.from(r.ctx.poiInventorySnapshot().bagLegacy),[]);
+ assert.equal(r.ctx.poiInventoryMove(1,spot('bag',10)).reason,'locked');
+});
+test('pickup, purchase, quick transfer and split cannot treat locked empty slots or legacy stacks as capacity',()=>{
+ const slots=Array.from({length:27},(_,i)=>i===0?{type:'equipWoodSword',count:1}:i<18?{type:'healingHerb',count:9}:i===19?{type:'healingHerb',count:3}:null);
+ const original={version:1,weapon:null,potions:9,gold:12,slots,
+  kitchenChest:{version:1,slots:[{type:'healingHerb',count:1},...Array(17).fill(null)]},
+  drops:[{type:'healingHerb',x:4,z:3,y:0,count:2}]};
+ const f=fixture(original),api=f.ctx;
+ api.poiChestIsOpen=api.poiKitchenChestReachable=()=>true;
+ assert.equal(api.poiEconomyBuyPotion().reason,'full');
+ assert.equal(api.poiInventoryPickup(4,3),false);
+ assert.equal(api.poiQuickTransferStorage('chest',0).reason,'full');
+ assert.equal(api.poiSplitStorageStack('bag',10).reason,'full');
+ assert.equal(f.writes(),0);
+ assert.equal(api.poiMoveChestInventorySlot('inventory',17,'chest',1).ok,true);
+ assert.equal(api.poiSplitStorageStack('bag',10).ok,true);
+ assert.equal(api.poiInventorySnapshot().bag[10].count,1);
+ assert.equal(api.poiInventorySnapshot().bag[8].count,2);
+});
+test('legacy-only gear and consumables remain usable without reopening locked destinations',()=>{
+ const slots=Array(27).fill(null);
+ slots[18]={type:'starterCap',count:1};
+ slots[19]={type:'healingHerb',count:1};
+ slots[26]={type:'equipWoodSword',count:1};
+ const f=fixture({version:1,weapon:null,potions:1,slots,worn:{head:null,torso:'starterTunic',legs:'starterTrousers',feet:'starterBoots'}}),api=f.ctx;
+ assert.deepEqual(Array.from(api.poiInventorySnapshot().bagLegacy),[9,10,17]);
+ assert.equal(api.poiEquipArmorFromBag(9).ok,true);
+ assert.equal(api.poiArmorSnapshot().head.type,'starterCap');
+ assert.equal(api.poiMoveArmorSlot({zone:'armor',part:'head'},spot('bag',9)).reason,'locked');
+ assert.equal(api.poiEquipBagItem(17).ok,true);
+ assert.equal(api.poiEquippedWeapon(),'equipWoodSword');
+ assert.equal(api.poiInventoryDrop(spot('bag',10)).ok,true);
+ assert.deepEqual(Array.from(api.poiInventorySnapshot().bagLegacy),[]);
+ assert.equal(api.poiInventoryPickup(4,4),true);
+ assert.equal(f.raw().slots?.length??27,27);
+});
+test('double tapping a legacy herb fills hotbar stacks then empty hotbar slots without use or equipment changes',()=>{
+ const slots=Array(27).fill(null);
+ slots[0]={type:'equipWoodSword',count:1};slots[7]={type:'healingHerb',count:8};
+ slots[26]={type:'healingHerb',count:3};
+ const f=fixture({version:1,weapon:'equipWoodSword',potions:9,slots});
+ f.fail(true);assert.equal(f.ctx.poiDoubleTapStorage('bag',17).reason,'storage');
+ assert.equal(f.ctx.poiInventorySnapshot().bag[17].count,3);
+ f.fail(false);assert.equal(f.ctx.poiDoubleTapStorage('bag',17).ok,true);
+ const s=f.ctx.poiInventorySnapshot();
+ assert.equal(s.weapon,'equipWoodSword');assert.equal(s.hotbar[7].count,9);assert.equal(s.hotbar[1].count,2);
+ assert.equal(s.bag[17],null);assert.equal(s.potions,11);assert.equal(f.writes(),1);
+});
+test('chest herb reaches shortcut only if chest is usable, and full shortcut does not use empty bag',()=>{
+ const slots=Array(27).fill(null);
+ slots[0]={type:'equipWoodSword',count:1};
+ for(let i=1;i<9;i++)slots[i]={type:'healingHerb',count:9};
+ const f=fixture({version:1,weapon:null,potions:9,slots,kitchenChest:{version:1,slots:[{type:'healingHerb',count:2},...Array(17).fill(null)]}});
+ const c=f.ctx;
+ c.poiChestIsOpen=()=>false;c.poiKitchenChestReachable=()=>true;
+ assert.equal(c.poiDoubleTapStorage('chest',0).reason,'unavailable');c.poiChestIsOpen=()=>true;
+ assert.equal(c.poiDoubleTapStorage('chest',0).reason,'full');
+ assert.equal(c.poiChestSlotAt(0).count,2);assert.equal(f.writes(),0);
+ assert.equal(c.poiInventoryMove(8,spot('bag',0)).ok,true);
+ assert.equal(c.poiDoubleTapStorage('chest',0).ok,true);
+ assert.equal(c.poiInventorySnapshot().hotbar[8].count,2);assert.equal(c.poiChestSlotAt(0),null);
 });

@@ -95,11 +95,13 @@ async function loading(browser){
   assert.ok(await page.locator(cover+'[data-state="loading"]').isVisible());
   assert.match(await page.locator(status).innerText(),/読み込み中/);
   assert.equal(await page.evaluate(()=>window.__startupDrawWitness||0),0);
+  assert.equal(await page.locator('#enterGameWorld').isVisible(),false,'unpainted app never exposes default editor button');
   assert.equal(await mapBytes(page),saved);
-  if(out)await page.screenshot({path:out+'/v171-loader.png',timeout:2500}).catch(()=>{});
+  if(out)await page.screenshot({path:out+'/v173-loader.png',timeout:2500}).catch(()=>{});
   await page.evaluate(()=>window.__releaseFrame());
   await ready(page);
   assert.equal(await page.evaluate(()=>window.__editorTest?.facility?.().active),true,'normal saved world still resumes');
+  assert.equal((await page.locator('#enterGameWorld').textContent()).trim(),'初期化','first visible resumed Game World footer has reset label');
   await unchanged(page);assert.deepEqual(errors,[]);
  }finally{await ctx.close();}
 }
@@ -122,6 +124,7 @@ async function recovery(browser,action){
    await page.waitForURL(u=>u.searchParams.get('startup-editor')==='1');
    await ready(page);
    assert.equal(await page.evaluate(()=>window.__editorTest?.state?.().walking),false,'recovery starts the ordinary editor');
+   assert.equal((await page.locator('#enterGameWorld').textContent()).trim(),'ゲーム世界へ');
    assert.equal(await mapBytes(page),saved,'recovery does not overwrite the blocked game resume record');
   }
   await unchanged(page);assert.deepEqual(errors,[]);

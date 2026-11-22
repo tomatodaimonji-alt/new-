@@ -58,6 +58,13 @@ if(out)await mkdir(out,{recursive:true});
 const open='#enterGameWorld';
 async function launch(browser,id='base',start={x:19,z:45},{camera=false,yaw=.24,orbitYaw=0,pitch=.24,townLayout=5,facing=2,kit=null,clockStart=null,fixture='',dist=5.5,level=0,width=390}={}){
  const ctx=await browser.newContext({viewport:{width,height:740},deviceScaleFactor:1,isMobile:true,hasTouch:true});
+ await ctx.addInitScript(()=>{
+  const put=CanvasRenderingContext2D.prototype.putImageData;
+  CanvasRenderingContext2D.prototype.putImageData=function(...args){
+   if(this.canvas?.id==='poiAvatarPreview')window.__portraitDepthPaints=(window.__portraitDepthPaints||0)+1;
+   return put.apply(this,args);
+  };
+ });
  const page=await ctx.newPage(),errors=[];
  page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(12000);
  await page.goto(origin+'/seed');
@@ -120,7 +127,9 @@ async function layout(page){
    .map(e=>({i:Number(e.dataset.bagSlot),lock:e.disabled||e.getAttribute('aria-disabled')==='true',...r(e)}));
   const gear=[...document.querySelectorAll('#poiGearColumn [data-gear-slot]')].map(e=>({p:e.dataset.gearSlot,...r(e)}));
   return {cells,gear,preview:r(document.querySelector('#poiAvatarPreview')),close:r(document.querySelector('#poiBagClose')),
-   bag:r(document.querySelector('#poiBagPanel')),view:r(document.querySelector('#viewWrap'))};
+   bag:r(document.querySelector('#poiBagPanel')),view:r(document.querySelector('#viewWrap')),
+   wallet:r(document.querySelector('#poiBagWallet')),
+   headerGold:document.querySelector('#poiBagHeading').parentElement.contains(document.querySelector('#poiBagWallet'))};
  });
 }
 async function exercise(browser,width){
@@ -134,8 +143,14 @@ async function exercise(browser,width){
   assert.equal(await page.locator('#poiBagWallet #poiGoldValue').textContent(),String(legacy.gold),'legacy currency is visible in the bag');
   assert.ok(await page.locator('#poiClockHud').isVisible(),'clock remains in gameplay HUD');
   const dims=await layout(page),first=dims.cells[0];
-  assert.deepEqual(dims.cells.map(c=>c.i),Array.from({length:29},(_,i)=>i),'45 minus upper-right 4×4 (29 visible)');
-  assert.deepEqual(dims.cells.filter(c=>!c.lock).map(c=>c.i),Array.from({length:18},(_,i)=>i),'18 usable logical bag indexes unchanged');
+  assert.deepEqual(dims.cells.map(c=>c.i),Array.from({length:24},(_,i)=>i),'24 bag cells and one wallet');
+  assert.deepEqual(dims.cells.filter(c=>!c.lock).map(c=>c.i),Array.from({length:9},(_,i)=>i),'only first nine ordinary destinations are usable');
+  const all=[...dims.cells,dims.wallet];
+  assert.equal(new Set(all.map(c=>Math.round(c.x))).size,5,'exactly five bag columns; no lower ghost cells');
+  assert.equal(new Set(all.map(c=>Math.round(c.y))).size,5);
+  assert(Math.abs(dims.wallet.y-dims.cells[5].y)<=1&&Math.abs(dims.wallet.x-dims.cells[4].x)<=1,'wallet at second row rightmost cell');
+  assert.equal(dims.headerGold,false,'coin indicator is not in bag header');
+  assert(dims.gear[0].x-dims.wallet.right>=4,'visible gutter separates bag and gear');
   assert.deepEqual(dims.gear.map(c=>c.p),parts);
   assert(dims.gear.every(c=>Math.abs(c.w-first.w)<=2&&Math.abs(c.h-first.h)<=2&&c.x===dims.gear[0].x));
   assert(dims.gear.every((c,i)=>i===0||c.y>dims.gear[i-1].y),'gear slots are one vertical column');
@@ -145,34 +160,41 @@ async function exercise(browser,width){
    'whole bag is within playable mobile frame');
   const dressed=await appearance(page);
   assert.notEqual(dressed.preview,'data:,','preview canvas has rendered dimensions');
-  await drag(ctx,page,gear('feet'),slot(17));
+  await drag(ctx,page,gear('feet'),slot(8));
   await page.waitForFunction(()=>window.__editorTest.facility().inventory.worn.feet===null);
   const removed=await appearance(page);
   assert.notEqual(removed.preview,dressed.preview,'preview pixels change after removing boots');
   assert.notDeepEqual(removed.avatar,dressed.avatar,'actual uploaded 3D player geometry changes too');
   const boot={type:'starterBoots',count:1},before=await save(page);
-  assert.deepEqual((await inv(page)).bag[17],boot);
+  assert.deepEqual((await inv(page)).bag[8],boot);
   assert.equal(before.worn.feet,null);
   assert.equal(before.gold,legacy.gold);
-  await drag(ctx,page,slot(17),gear('legs'));
+  await drag(ctx,page,slot(8),gear('legs'));
   assert.deepEqual(await save(page),before,'wrong armor part refuses, neither item is lost');
-  await drag(ctx,page,slot(17),slot(18));
+  await drag(ctx,page,slot(8),slot(9));
   assert.deepEqual(await save(page),before,'locked destination likewise refuses without a ground drop');
   await closeBag(page);
   await page.reload();
   await page.waitForFunction(()=>window.__editorTest?.facility?.().active);
   assert.equal((await inv(page)).worn.feet,null);
-  assert.deepEqual((await inv(page)).bag[17],boot,'one nonstacking boot item survives reload');
+  assert.deepEqual((await inv(page)).bag[8],boot,'one nonstacking boot item survives reload');
   await openBag(page);
   assert.equal((await appearance(page)).preview,removed.preview,'reopened preview matches saved loadout');
-  await drag(ctx,page,slot(17),gear('feet'));
+  await drag(ctx,page,slot(8),gear('feet'));
   await page.waitForFunction(()=>window.__editorTest.facility().inventory.worn.feet?.type==='starterBoots');
-  assert.equal((await inv(page)).bag[17],null);
+  assert.equal((await inv(page)).bag[8],null);
   assert.deepEqual((await inv(page)).worn,expected);
   const restored=await appearance(page);
   assert.equal(restored.preview,dressed.preview,'equipping again restores exact preview pixels');
   assert.deepEqual(restored.avatar,dressed.avatar,'equipping again restores exact actual 3D appearance');
-  if(out)await page.screenshot({path:out+'/v170-equipped-'+width+'.png'});
+  const portraitPaints=await page.evaluate(()=>window.__portraitDepthPaints);
+  assert.ok(portraitPaints>0,'portrait uses the depth-resolved canvas painter');
+  for(let i=0;i<3;i++){
+   await closeBag(page);await openBag(page);
+   assert.equal((await appearance(page)).preview,restored.preview,'portrait pixels remain stable across reopening');
+  }
+  assert.equal(await page.evaluate(()=>window.__portraitDepthPaints),portraitPaints,'same outfit does not redraw portrait on each open or animation frame');
+  if(out)await page.screenshot({path:out+'/v173-equipped-'+width+'.png'});
   await closeBag(page);
   assert.deepEqual(await mapState(page),original);
   await unchanged(page);assert.deepEqual(errors,[]);
@@ -193,11 +215,42 @@ async function chestPanel(browser){
   await unchanged(page);assert.deepEqual(errors,[]);
  }finally{await ctx.close();}
 }
+async function legacyWithdrawal(browser){
+ const slots=Array(27).fill(null);
+ slots[0]={type:'equipWoodSword',count:1};slots[1]={type:'healingHerb',count:3};
+ const food={type:'cannedFood',count:1};
+ slots[9+9]=food;slots[9+17]=food;
+ const old={...legacy,slots};
+ const {ctx,page,errors}=await launch(browser,'base',{x:56,z:39},{width:390,kit:old});
+ try{
+  await openBag(page);
+  assert.deepEqual(await save(page),old,'read does not migrate or collapse old indexes');
+  assert.deepEqual((await inv(page)).bagLegacy,[9,17]);
+  const hold=await save(page);
+  // An occupied legacy cell can be a source, never a new destination. A
+  // swap that would place another item in its old cell is also rejected.
+  await drag(ctx,page,'#poiHotbar [data-hotbar-slot="1"]',slot(9));
+  assert.deepEqual(await save(page),hold);
+  await drag(ctx,page,slot(9),'#poiHotbar [data-hotbar-slot="1"]');
+  assert.deepEqual(await save(page),hold);
+  await drag(ctx,page,slot(9),slot(8));
+  const result=await inv(page);
+  assert.deepEqual([result.bag[8],result.bag[9],result.bag[17]],[food,null,food]);
+  assert.deepEqual(result.bagLegacy,[17]);
+  const after=await save(page);
+  assert.equal(after.slots.length,27);
+  assert.deepEqual([after.slots[17],after.slots[18],after.slots[26]],[food,null,food]);
+  await closeBag(page);await page.reload();
+  await page.waitForFunction(()=>window.__editorTest?.facility?.().active);
+  assert.deepEqual((await inv(page)).bagLegacy,[17]);
+  await unchanged(page);assert.deepEqual(errors,[]);
+ }finally{await ctx.close();}
+}
 let browser;
 try{
  browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
   args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
  for(const width of [320,390])await exercise(browser,width);
- await chestPanel(browser);
+ await legacyWithdrawal(browser);await chestPanel(browser);
  console.log('PASS mobile Chromium garment slots, touch transfers, pixels and live 3D mesh, reload, X and chest coupling, protected saves');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}

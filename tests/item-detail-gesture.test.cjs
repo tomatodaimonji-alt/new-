@@ -27,3 +27,14 @@ test('the storage detail stops held movement repeat and blocks movement until cl
  const walk=part('function poiWalkStep(','function poiWalkAction(');
  assert.match(walk,/poiItemDetailIsOpen\(\)\)return;[\s\S]*poiWalkX\+=dx/);
 });
+test('bag and chest pointer taps share a 325ms gate while shortcuts still activate directly',()=>{
+ const wire=part('function poiBagWire(','function poiHotbarRender(');
+ assert.match(wire,/poiCreateStorageTapGate\(fn=>setTimeout\(fn,325\)/);
+ assert.match(wire,/if\(ref.zone==='hotbar'\)\{poiStorageTapGate.cancel\(\);poiHotbarUse\(ref.index\)\}/);
+ assert.match(wire,/poiStorageTapGate.select\(button,\(ref.zone==='bag'\|\|ref.zone==='chest'\)&&e.detail>0\)/);
+});
+test('a real stationary storage touch is handled before its compatibility click, once per contact',()=>{
+ const wire=part('function poiBagWire(','function poiHotbarRender(');
+ assert.match(wire,/if\(moved<10&&!wasMoved\)\{[\s\S]*poiStorageTapGate.select\(source,true\);[\s\S]*?return;/);
+ assert.match(wire,/suppress\?\.button===button&&performance.now\(\)<suppress.until&&\(e.detail>0\|\|e.pointerType\|\|e.sourceCapabilities\?\.firesTouchEvents\)/);
+});

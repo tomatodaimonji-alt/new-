@@ -22,3 +22,15 @@ test('each cue is downstream of its successful spawn, write, and claim only',()=
  assert.match(slice('poiInventoryPickup','poiInventoryReleaseMesh'),/if\(!poiEconomyWrite[\s\S]*poiSound\('item-pickup',item\.type\)/);
  assert.match(slice('poiSound','poiEconomyAllowed'),/!poiWalkActive\|\|!poiAudioEnabled\|\|!poiAudioAllowed\(\)[\s\S]*poiItemSound/);
 });
+test('ground pickup starts after movement; chest has the same softer item cue without the step delay',()=>{
+ const source=html.match(/\/\/ BEGIN ITEM FOLEY\n([\s\S]*?)\/\/ END ITEM FOLEY/)[1];
+ const events=[],c={poiAudioLevels:{master:80,se:80},poiAudioEffects:{},poiAudioNoiseBurst:(at)=>events.push(['brush',at]),poiAudioThud:(at)=>events.push(['body',at]),poiAudioTone:(pitch,at)=>events.push(['tone',at,pitch])};
+ vm.runInNewContext(source,c);
+ function play(kind,material){events.length=0;c.poiItemSound(kind,material,2);return events.slice()}
+ const coin=play('item-pickup','coin'),herb=play('item-pickup','healingHerb'),chest=play('chest-pickup','healingHerb');
+ for(const cue of [coin,herb])assert.ok(cue[0][1]>=2.055&&cue[0][1]<=2.08,'let the footstep start first');
+ assert.equal(chest[0][1],2);assert.deepEqual(chest.map(e=>[e[0],e[2]]),herb.map(e=>[e[0],e[2]]));
+ assert.ok(coin.filter(e=>e[0]==='tone').length>=2);
+ assert.ok(herb.some(e=>e[0]==='tone'&&e[1]>herb[0][1]),'quiet tactile acknowledgement has a pitched tail');
+ c.poiAudioLevels.se=0;assert.deepEqual(play('chest-pickup','healingHerb'),[]);
+});

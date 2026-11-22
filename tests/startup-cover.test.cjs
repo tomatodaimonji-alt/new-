@@ -46,9 +46,18 @@ test('hidden pages never time out before their first frame; failures prevent del
 });
 test('HTML signals only a real rendered scene and safe-editor start suppresses existing automatic writes',()=>{
  assert(h.indexOf('id="pineStartupCover"')<h.indexOf('id="app"'),'pre-application cover markup');
- assert.match(h,/sceneMesh\?\.count>0&&canvas\.width>0&&canvas\.height>0&&!gl\.isContextLost\(\)\)window\.pineStartup\.rendered\(/);
+ assert.match(h,/sceneMesh\?\.count>0&&canvas\.width>0&&canvas\.height>0&&!gl\.isContextLost\(\)\)\{\s*poiGameResetSync\(\);\s*window\.pineStartup\.rendered\(/);
  assert.match(h,/const facilityReturn=startupEditor\|\|/);
  assert.match(h,/if\(startupEditor\|\|!workshopResumePermitted/);
  assert.match(h,/workshopResumeWrite\(undefined,startupEditor\|\|facilityParams/);
  assert.match(h,/if\(!startupEditor&&poiGameResetPending\(localStorage\)\)/);
+});
+test('startup never shows the editor entry label on an unpainted Game World footer',()=>{
+ assert.match(h,/#app\[inert\] #mobileTabs\{visibility:hidden\}/);
+ assert.match(h,/!gl\.isContextLost\(\)\)\{\s*poiGameResetSync\(\);\s*window\.pineStartup\.rendered\(\)/);
+ const sync=h.match(/function poiGameResetSync\(\)\{[^\n]*\n[^\n]*\n[^\n]*\n\}/)?.[0];
+ assert.ok(sync);
+ const button={textContent:'ゲーム世界へ'},c=vm.createContext({facilitySite:{id:'base'},poiWalkActive:true,$:()=>button});
+ vm.runInContext(sync,c);c.poiGameResetSync();assert.equal(button.textContent,'初期化');
+ c.poiWalkActive=false;c.poiGameResetSync();assert.equal(button.textContent,'ゲーム世界へ');
 });

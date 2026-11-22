@@ -1,13 +1,13 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
 const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const grab=(a,b)=>{const i=html.indexOf(a),j=html.indexOf(b,i+1);assert(i>=0&&j>i,'missing '+a);return html.slice(i,j)};
-test('paper doll reserves the top-right 4×4 without losing any writable inventory cell',()=>{
+test('paper doll has its own four-slot column next to the five-column bag',()=>{
  const slots=[...html.matchAll(/<button type="button" data-bag-slot="(\d+)"([^>]*)>/g)];
- assert.deepEqual(slots.filter(r=>!/\bhidden\b/.test(r[2])).map(r=>+r[1]),Array.from({length:29},(_,i)=>i));
- assert.deepEqual(slots.filter(r=>!/\bdisabled\b/.test(r[2])).map(r=>+r[1]),Array.from({length:18},(_,i)=>i));
+ assert.deepEqual(slots.filter(r=>!/\bhidden\b/.test(r[2])).map(r=>+r[1]),Array.from({length:24},(_,i)=>i));
+ assert.deepEqual(slots.filter(r=>!/\bdisabled\b/.test(r[2])).map(r=>+r[1]),Array.from({length:9},(_,i)=>i));
  assert.deepEqual([...html.matchAll(/<button type="button" data-gear-slot="([^"]+)"/g)].map(r=>r[1]),['head','torso','legs','feet']);
- assert.match(html,/#poiGearColumn\{[^}]*grid-column:6;grid-row:1\/5/);
- assert.match(html,/#poiAvatarPreview\{[^}]*grid-column:7\/10;grid-row:1\/5/);
+ assert.match(html,/#poiGearColumn\{[^}]*grid-column:1;grid-row:1\/5/);
+ assert.match(html,/#poiAvatarPreview\{[^}]*grid-column:2;grid-row:1\/5/);
  assert.match(html,/:is\(#poiBagClose,#poiChestClose\)\{/);
  assert.match(html,/<button id="poiBagClose"[^>]+aria-label="インベントリを閉じる"[^>]*>×<\/button>/);
 });
@@ -29,5 +29,5 @@ test('real standing mesh depicts all gear, and idle held blade points slightly f
  const front=m=>Math.max(...m.p.slice(naked.p.length).filter((_,i)=>i%3===2));
  assert(front(ready)>front(old)+.045);
  assert.match(html,/poiWalkMesh=upload\(poiBuildPlayerMesh\(/);
- assert.match(html,/modelMesh:poiBuildPlayerMesh\(/);
+ assert.match(html,/poiDrawPaperDoll\(view,poiBuildPlayerMesh\(/);
 });

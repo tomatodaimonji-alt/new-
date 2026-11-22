@@ -55,3 +55,14 @@ test('full destinations do not swap, split, or write over equipment',()=>{
  assert.equal(c.poiSplitStorageStack('bag',0).reason,'single');
  assert.equal(state(),shifted);assert.equal(at(c,'bag',0).type,'kitchenKnife');
 });
+test('herb double-tap plays a pickup only after a successful chest withdrawal, never bag sorting',()=>{
+ const {c,fail}=setup(),notes=[];
+ c.poiSound=(...args)=>notes.push(args);
+ assert.equal(c.poiMoveChestInventorySlot('inventory',1,'chest',2).ok,true);
+ fail(true);assert.equal(c.poiDoubleTapStorage('chest',2).reason,'storage');
+ assert.deepEqual(notes,[]);assert.equal(c.poiChestSlotAt(2).count,3);
+ fail(false);assert.equal(c.poiDoubleTapStorage('chest',2).ok,true);
+ assert.deepEqual(notes,[['chest-pickup','healingHerb']]);notes.length=0;
+ assert.equal(c.poiInventoryMove(1,{zone:'bag',index:0}).ok,true);
+ assert.equal(c.poiDoubleTapStorage('bag',0).ok,true);assert.deepEqual(notes,[]);
+});
