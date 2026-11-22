@@ -12,7 +12,15 @@ function beforeMineDepths(world){
   [5799,121,50,'stonewall'],[5828,115,57,'mosswall']])restored.splice(i,0,{x,z,y:-1,type,rot:0});
  return restored;
 }
+function beforePondMarsh(site){
+ if(!site.northTrail?.marsh)return site;
+ const {marsh,regions,...trail}=site.northTrail,world=site.map.world.slice(0,6778);
+ assert.equal(createHash('sha256').update(JSON.stringify(world)).digest('hex'),
+  '8367f3ea14d25876d953cb9ac071db34fa42f596607bae4aeb73248a9b5aa40a','exact v197 world before the appended marsh pond');
+ return {...site,northTrail:{...trail,regions:regions.slice(0,5)},map:{...site.map,world}};
+}
 function beforeForestWatchPost(site){
+ site=beforePondMarsh(site);
  if(!site.northTrail?.watchPost)return site;
  const {continuation,watchPost,lowland,regions,...trail}=site.northTrail,world=site.map.world.slice(0,6644);
  assert.equal(createHash('sha256').update(JSON.stringify(world)).digest('hex'),
@@ -73,4 +81,4 @@ function beforeAbandonedMine(site){
  assert.equal(digest,exactMine,'only the exact v167 mine records are exempt; untouched v166 mine records are pinned separately');
  return {...other,map:{...map,world:world.slice(0,oldLength)}};
 }
-module.exports={beforeAbandonedMine,beforeMineDepths,beforeOtherworld,beforeMineEntry,beforeChapel,beforeArmedEncounters,beforeNorthTrail,beforeForestWatchPost};
+module.exports={beforeAbandonedMine,beforeMineDepths,beforeOtherworld,beforeMineEntry,beforeChapel,beforeArmedEncounters,beforeNorthTrail,beforeForestWatchPost,beforePondMarsh};
