@@ -50,3 +50,26 @@ test('the east gate and the original bridge connect to a real stair pair, early 
   assert(reachable([116,62],target,[112,52,123,63]),'walkable mine route '+target);
  assert(!walk(124,55,123,55));
 });
+test('the mine B1 wall ring has no diagonal-only joins, without replacing its traversable floor',()=>{
+ const parcel=world.slice(5677).filter(o=>o.y===-1);
+ const walls=parcel.filter(o=>/^(?:stone|moss)wall$/.test(o.type)),key=(x,z)=>x+','+z;
+ const byCell=new Set(walls.map(({x,z})=>key(x,z)));
+ const seen=new Set([key(walls[0].x,walls[0].z)]),queue=[[walls[0].x,walls[0].z]];
+ for(let i=0;i<queue.length;i++){
+  const [x,z]=queue[i];
+  for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
+   const xx=x+dx,zz=z+dz,k=key(xx,zz);
+   if(byCell.has(k)&&!seen.has(k)){seen.add(k);queue.push([xx,zz])}
+  }
+ }
+ assert.equal(seen.size,walls.length,'all wall cells share one cardinal component');
+ for(const {x,z} of walls)for(const dz of [-1,1])
+  if(byCell.has(key(x+1,z+dz)))assert(byCell.has(key(x+1,z))||byCell.has(key(x,z+dz)),
+   'cardinal bridge at '+[x,z,x+1,z+dz]);
+ const corners=world.slice(5790);
+ assert.equal(corners.length,8);
+ for(const {x,z,y,type} of corners){
+  assert.equal(y,-1);assert.match(type,/^(?:stone|moss)wall$/);
+  assert(!world.slice(0,5790).some(o=>o.x===x&&o.z===z&&o.y===-1),'no old cell or route changed');
+ }
+});
