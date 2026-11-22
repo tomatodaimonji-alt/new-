@@ -1050,7 +1050,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v202）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v203）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -7394,7 +7394,7 @@ function poiHotbarRead(){
  const drops=poiInventoryReadDrops(saved.drops);
  if(saved.sword===false&&(kit.woodSwordBroken||chestSword||drops.some(d=>d.type===POI_INVENTORY_SWORD))){kit.sword=false;if(kit.weapon===POI_INVENTORY_SWORD)kit.weapon=null}
  const ownedDrops=drops.filter(d=>!(d.type===POI_INVENTORY_SWORD&&(kit.sword!==false||chestSword||kit.woodSwordBroken))&&
-  !(d.type!==POI_INVENTORY_SWORD&&poiHotbarWeaponForType(d.type)&&poiAnyChestHas(kit,d.type)));
+  !(d.type!==POI_INVENTORY_SWORD&&poiHotbarWeaponForType(d.type)&&!poiRepeatableMonsterWeapon(d.type)&&poiAnyChestHas(kit,d.type)));
  if(ownedDrops.length)kit.drops=ownedDrops;
  const slots=poiArmorReconcile(kit,poiInventoryReadSlots(saved.slots,kit));
  if(!slots&&kit.weapon!==POI_INVENTORY_SWORD)kit.weapon=null;
@@ -8132,6 +8132,11 @@ function poiEquipmentWearArmor(){
 }
 
 let poiHotbarEmptySlot=2,poiInventoryMesh=null,poiInventoryMeshDrops=null,poiInventoryMeshFloor=null,poiInventoryMeshFinds=null;
+// The source-armed loot can replace a discarded monster weapon. The
+// original pile stays on its tile; only held inventory/chests are unique.
+const POI_REPEATABLE_MONSTER_WEAPONS=new Set(['equipWoodBow','equipWoodSpear','equipStoneMace',
+ 'equipBoneSword','equipIronSword','equipPlainStaff','equipLongStaff']);
+function poiRepeatableMonsterWeapon(type){return POI_REPEATABLE_MONSTER_WEAPONS.has(type)}
 function poiInventoryReadDrops(raw){
  if(!Array.isArray(raw))return [];
  const seen=new Set(),unique=new Set(),out=[];
@@ -8139,7 +8144,7 @@ function poiInventoryReadDrops(raw){
   if(!d||![d.x,d.z,d.y].every(Number.isInteger)||d.x<0||d.x>=128||d.z<0||d.z>=96||d.y< -1||d.y>9)continue;
   const key=d.x+','+d.z+','+d.y;
   const max=poiInventoryStack(d.type),count=Number.isInteger(d.count)?Math.max(1,Math.min(max,d.count)):1;
-  const c=poiInventorySanitizeCell({...d,count}),isWeapon=poiHotbarWeaponForType(d.type);
+  const c=poiInventorySanitizeCell({...d,count}),isWeapon=poiHotbarWeaponForType(d.type)&&!poiRepeatableMonsterWeapon(d.type);
   if(!c||seen.has(key)||isWeapon&&unique.has(d.type))continue;
   if(isWeapon)unique.add(d.type);seen.add(key);
   out.push({type:d.type,x:d.x,z:d.z,y:d.y,...(count>1?{count}:null),...(c.durability?{durability:c.durability}:null),...(c.charges?{charges:c.charges}:null)});
@@ -8175,7 +8180,7 @@ function poiInventoryReadSlots(raw,kit){
   const c=poiInventorySanitizeCell(cell);if(!c)return null;
   if(c.type===POI_INVENTORY_SWORD)swords++;
   if(c.type!==POI_INVENTORY_SWORD&&poiHotbarWeaponForType(c.type)){
-   if(weapons.has(c.type)||kit.drops?.some(d=>d.type===c.type)||poiAnyChestHas(kit,c.type))return null;
+   if(weapons.has(c.type)||!poiRepeatableMonsterWeapon(c.type)&&kit.drops?.some(d=>d.type===c.type)||poiAnyChestHas(kit,c.type))return null;
    weapons.add(c.type);
   }
   if(c.type===POI_INVENTORY_HERB)herbs+=c.count;
@@ -11260,7 +11265,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v202',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v203',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -11375,7 +11380,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v202';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v203';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -11590,7 +11595,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v202',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v203',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
