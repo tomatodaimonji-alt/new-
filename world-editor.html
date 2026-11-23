@@ -1303,6 +1303,10 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
   #viewWrap[data-analog-play] #poiLandscapeVersion{grid-column:1/-1}
  }
 }
+/* Only inventory portraits consume pinch, drag and wheel input. */
+:is(#poiAvatarPreview,#poiNpcPortrait){touch-action:none;cursor:grab;user-select:none}
+:is(#poiAvatarPreview,#poiNpcPortrait):active{cursor:grabbing}
+:is(#poiAvatarPreview,#poiNpcPortrait):focus-visible{outline:2px solid #edcd89;outline-offset:1px}
 /* Larger landscape inventory and shortcut targets */
 @media (orientation: landscape) and (pointer: coarse) and (min-width: 520px){
  #app #viewWrap[data-analog-play]{
@@ -1414,7 +1418,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v221）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v222）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -9588,7 +9592,10 @@ function poiBagSetOpen(open){
  const toggle=$('poiBagToggle'),panel=$('poiBagPanel');
  if(!toggle||!panel)return;
  open=!!open&&!toggle.hidden&&poiInventoryAllowed();
- if(!open){poiBagCancelDrag?.();poiStorageTapGate?.cancel();poiItemDetailClose(false);poiChestSetOpen(false)}
+ if(!open){
+  poiBagCancelDrag?.();poiStorageTapGate?.cancel();poiItemDetailClose(false);poiChestSetOpen(false);
+  if(typeof poiInventoryPortraitCancel==='function')poiInventoryPortraitCancel($('poiAvatarPreview'));
+ }
  panel.hidden=!open;toggle.setAttribute('aria-expanded',String(open));poiBagSelectSource(null);
  if(open)poiWalletSync(poiEconomyGold());
  if(open&&typeof poiPlayerPaperDollRender==='function')poiPlayerPaperDollRender();
@@ -9620,21 +9627,27 @@ function poiArmorContentIcon(type){
  poiArmorContentIcons.set(type,cv);return cv;
 }
 // BEGIN PAPER DOLL DEPTH RASTER
-function poiPaperDollPixels(model,width,height){
+function poiPaperDollFrame(model,width,height){
  if(!model?.p.length||!Number.isInteger(width)||!Number.isInteger(height)||width<1||height<1||width>256||height>256)return null;
- // Same fitted three-quarter projection as the generic thumbnail. Its null
- // direction is [.46,.3066,1], so higher Z is nearer at any given pixel.
- const w=width*2,h=height*2,n=model.p.length/3,points=new Float64Array(n*3);
  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
- for(let i=0;i<n*3;i+=3){
+ for(let i=0;i<model.p.length;i+=3){
   const x=model.p[i],y=model.p[i+1],z=model.p[i+2],u=x-.46*z,v=(x+z)*.21-y;
-  points[i]=u;points[i+1]=v;points[i+2]=z;
   minX=Math.min(minX,u);maxX=Math.max(maxX,u);minY=Math.min(minY,v);maxY=Math.max(maxY,v);
  }
- const scale=.86*Math.min(w/Math.max(.001,maxX-minX),h/Math.max(.001,maxY-minY));
- const cx=(minX+maxX)*.5,cy=(minY+maxY)*.5;
- for(let i=0;i<n*3;i+=3){
-  points[i]=w*.5+(points[i]-cx)*scale;points[i+1]=h*.5+(points[i+1]-cy)*scale;
+ return {cx:(minX+maxX)*.5,cy:(minY+maxY)*.5,scale:.86*Math.min(width*2/Math.max(.001,maxX-minX),height*2/Math.max(.001,maxY-minY))};
+}
+function poiPaperDollPixels(model,width,height,view=null){
+ if(!model?.p.length||!Number.isInteger(width)||!Number.isInteger(height)||width<1||height<1||width>256||height>256)return null;
+ // Fixed neutral framing avoids breathing/size changes while the actual
+ // 3D mesh rotates about its own vertical axis. Higher projected Z is nearer.
+ const {cx:ox,cy:oy,scale:base}=view?.frame||poiPaperDollFrame(model,width,height);
+ const yaw=Number.isFinite(view?.yaw)?view.yaw:0,zoom=Number.isFinite(view?.zoom)?Math.max(.6,Math.min(1.95,view.zoom)):1;
+ const spinC=Math.cos(yaw),spinS=Math.sin(yaw),scale=base*zoom;
+ const w=width*2,h=height*2,points=new Float64Array(model.p.length);
+ for(let i=0;i<model.p.length;i+=3){
+  const lx=model.p[i],y=model.p[i+1],lz=model.p[i+2],x=lx*spinC-lz*spinS,z=lx*spinS+lz*spinC;
+  points[i]=w*.5+(x-.46*z-ox)*scale;
+  points[i+1]=h*.5+((x+z)*.21-y-oy)*scale;points[i+2]=z;
  }
  const depth=new Float64Array(w*h);depth.fill(-Infinity);
  const color=new Uint32Array(w*h),light=Math.hypot(.4,1,.35);
@@ -9645,7 +9658,8 @@ function poiPaperDollPixels(model,width,height){
   if(Math.abs(area)<1e-9)continue;
   const left=Math.max(0,Math.ceil(Math.min(ax,bx,cx)-.5)),right=Math.min(w-1,Math.floor(Math.max(ax,bx,cx)-.5));
   const top=Math.max(0,Math.ceil(Math.min(ay,by,cy)-.5)),bottom=Math.min(h-1,Math.floor(Math.max(ay,by,cy)-.5));
-  const shade=.60+.40*Math.max(0,(-.4*model.n[i]+model.n[i+1]+.35*model.n[i+2])/light);
+  const nx=model.n[i]*spinC-model.n[i+2]*spinS,nz=model.n[i]*spinS+model.n[i+2]*spinC;
+  const shade=.60+.40*Math.max(0,(-.4*nx+model.n[i+1]+.35*nz)/light);
   const rgb=o=>Math.round(255*Math.min(1,Math.max(0,model.c[i+o]*shade)));
   const packed=(rgb(0)<<16)|(rgb(1)<<8)|rgb(2);
   const ua=-(cy-by)/area,ub=(cx-bx)/area,va=-(ay-cy)/area,vb=(ax-cx)/area;
@@ -9675,13 +9689,117 @@ function poiPaperDollPixels(model,width,height){
  }
  return out;
 }
-function poiDrawPaperDoll(canvas,model){
+function poiDrawPaperDoll(canvas,model,view=null){
  const g=canvas.getContext('2d');if(!g)return false;
- const pixels=poiPaperDollPixels(model,canvas.width,canvas.height);if(!pixels)return false;
+ if(!view&&typeof poiInventoryPortraitPrepare==='function')view=poiInventoryPortraitPrepare(canvas,model);
+ const pixels=poiPaperDollPixels(model,canvas.width,canvas.height,view);if(!pixels)return false;
  const image=g.createImageData(canvas.width,canvas.height);image.data.set(pixels);g.putImageData(image,0,0);
+ if(view){view.drawnYaw=view.yaw;view.drawnZoom=view.zoom}
  return true;
 }
 // END PAPER DOLL DEPTH RASTER
+// BEGIN INVENTORY PORTRAIT INTERACTION
+const poiInventoryPortraitViews=new WeakMap();
+function poiInventoryPortraitCancel(canvas){
+ const view=canvas&&poiInventoryPortraitViews.get(canvas);
+ if(!view)return;
+ if(view.pending){cancelAnimationFrame(view.pending);view.pending=0}
+ for(const id of view.pointers.keys())if(canvas.hasPointerCapture(id))canvas.releasePointerCapture(id);
+ view.pointers.clear();view.distance=null;
+}
+function poiInventoryPortraitResume(canvas){
+ const view=canvas&&poiInventoryPortraitViews.get(canvas);
+ if(!view||!view.model||view.pending||view.yaw===view.drawnYaw&&view.zoom===view.drawnZoom)return;
+ const draw=now=>{
+  view.pending=0;
+  if(!canvas.isConnected||canvas.closest('[hidden]'))return;
+  if(now-view.lastPaint<31){view.pending=requestAnimationFrame(draw);return}
+  if(poiDrawPaperDoll(canvas,view.model,view))view.lastPaint=now;
+ };
+ view.pending=requestAnimationFrame(draw);
+}
+function poiInventoryPortraitSet(view,yaw,zoom){
+ const tau=2*Math.PI;
+ const qYaw=Math.round((yaw%tau)*256)/256;
+ const qZoom=Math.round(Math.max(.60,Math.min(1.95,zoom))*400)/400;
+ if(qYaw===view.yaw&&qZoom===view.zoom)return;
+ view.yaw=qYaw;view.zoom=qZoom;
+ poiInventoryPortraitResume(view.canvas);
+}
+function poiInventoryPortraitDistance(points){
+ if(points.size!==2)return null;
+ const [a,b]=points.values();
+ return Math.max(8,Math.hypot(a.x-b.x,a.y-b.y));
+}
+function poiInventoryPortraitPrepare(canvas,model){
+ if(canvas.id!=='poiAvatarPreview'&&canvas.id!=='poiNpcPortrait')return null;
+ let view=poiInventoryPortraitViews.get(canvas);
+ if(!view){
+  view={canvas,model:null,frame:null,pointers:new Map(),distance:null,pending:0,lastPaint:-Infinity,yaw:0,zoom:1,drawnYaw:null,drawnZoom:null};
+  poiInventoryPortraitViews.set(canvas,view);
+  canvas.tabIndex=0;
+  canvas.setAttribute('aria-description','ドラッグで回転、ピンチで拡大・縮小。キーボードは矢印キー。');
+  canvas.setAttribute('aria-keyshortcuts','ArrowLeft ArrowRight ArrowUp ArrowDown Home');
+  canvas.title='ドラッグで回転、ピンチで拡大・縮小';
+  const stop=e=>{
+   if(!view.pointers.delete(e.pointerId))return;
+   e.stopPropagation();
+   view.distance=poiInventoryPortraitDistance(view.pointers);
+  };
+  canvas.addEventListener('pointerdown',e=>{
+   e.stopPropagation();
+   if(e.button!==0||view.pointers.size>=2)return;
+   e.preventDefault();
+   try{canvas.setPointerCapture(e.pointerId)}catch(_){return}
+   canvas.focus({preventScroll:true});
+   view.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+   view.distance=poiInventoryPortraitDistance(view.pointers);
+  });
+  canvas.addEventListener('pointermove',e=>{
+   const prior=view.pointers.get(e.pointerId);
+   if(!prior)return;
+   e.preventDefault();e.stopPropagation();
+   view.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+   const distance=poiInventoryPortraitDistance(view.pointers);
+   if(distance!==null){
+    if(view.distance!==null)poiInventoryPortraitSet(view,view.yaw,view.zoom*distance/view.distance);
+    view.distance=distance;
+   }else{
+    const dx=e.clientX-prior.x;
+    if(dx)poiInventoryPortraitSet(view,view.yaw+dx*(Math.PI*1.35/Math.max(44,canvas.clientWidth)),view.zoom);
+   }
+  });
+  for(const event of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(event,stop);
+  canvas.addEventListener('wheel',e=>{
+   e.preventDefault();e.stopPropagation();
+   const delta=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?120:1);
+   poiInventoryPortraitSet(view,view.yaw,view.zoom*Math.exp(Math.max(-180,Math.min(180,-delta))*.0028));
+  },{passive:false});
+  canvas.addEventListener('keydown',e=>{
+   const turns={ArrowLeft:-.32,ArrowRight:.32},scales={ArrowUp:1.18,ArrowDown:1/1.18,'+':1.18,'=':1.18,'-':1/1.18};
+   if(e.key!=='Home'&&!Object.hasOwn(turns,e.key)&&!Object.hasOwn(scales,e.key))return;
+   e.preventDefault();e.stopPropagation();
+   if(e.key==='Home')poiInventoryPortraitSet(view,0,1);
+   else poiInventoryPortraitSet(view,view.yaw+(turns[e.key]||0),view.zoom*(scales[e.key]||1));
+  });
+  canvas.addEventListener('blur',()=>poiInventoryPortraitCancel(canvas));
+  canvas.addEventListener('click',e=>{e.preventDefault();e.stopPropagation()});
+ }
+ if(view.model!==model){
+  view.model=model;view.frame=poiPaperDollFrame(model,canvas.width,canvas.height);
+ }
+ return view;
+}
+function poiInventoryPortraitCancelAll(){
+ poiInventoryPortraitCancel($('poiAvatarPreview'));
+ poiInventoryPortraitCancel($('poiNpcPortrait'));
+}
+if(typeof window!=='undefined'){
+ window.addEventListener('blur',poiInventoryPortraitCancelAll);
+ window.addEventListener('pagehide',poiInventoryPortraitCancelAll);
+ window.addEventListener('resize',poiInventoryPortraitCancelAll,{passive:true});
+}
+// END INVENTORY PORTRAIT INTERACTION
 let poiPaperDollKey=null;
 function poiPlayerPaperDollRender(){
  const view=$('poiAvatarPreview'),panel=$('poiBagPanel');
@@ -9701,6 +9819,7 @@ function poiPlayerPaperDollRender(){
  if(attack&&typeof poiPlayerAttackDamage==='function')attack.textContent=String(poiPlayerAttackDamage(weapon));
  const key=[weapon,...Object.keys(POI_GEAR_LABELS).map(part=>gear?.[part]?.type)].join(':');
  if(key!==poiPaperDollKey&&poiDrawPaperDoll(view,poiBuildPlayerMesh(weapon,null,gear)))poiPaperDollKey=key;
+ if(typeof poiInventoryPortraitResume==='function')poiInventoryPortraitResume(view);
 }
 function poiBagWalletLayout(order,kit,away){
  const wallet=$('poiBagWallet'),grid=$('poiBagSlots');
@@ -11500,8 +11619,8 @@ function poiTownNpcStatus(actor){
  return {name:poiTownNpcDisplayName(role),hp:actor.hp,maxHP:POI_TOWN_RESIDENT_HP,
   attack:poiTownNpcAttackPower(actor),defense:poiTownNpcDefense(actor),weapon,gear,tools,equipment,coins:actor.coins||0,herbs:actor.potions||0};
 }
-function poiNpcStatusView(actor){
- const info=poiTownNpcStatus(actor),view=document.createElement('dl');view.id='poiNpcStatus';
+function poiNpcStatusView(actor,info=poiTownNpcStatus(actor)){
+ const view=document.createElement('dl');view.id='poiNpcStatus';
  view.setAttribute('aria-label',info.name+'の状態');
  const fields=[['name','名前',info.name],['hp','HP',info.hp+'/'+info.maxHP]];
  if(info.attack!==null)fields.push(['attack','攻撃力',info.attack]);
@@ -11512,19 +11631,15 @@ function poiNpcStatusView(actor){
  }
  return view;
 }
-const poiNpcPortraitCanvases=new Map();
+function poiNpcPortraitModel(portrait,actor){
+ const type=typeof actor==='string'?actor:actor.role.type,wearer=typeof actor==='string'?null:actor;
+ portrait.dataset.model=type;
+ poiDrawPaperDoll(portrait,poiTownNpcModel(type,wearer));
+}
 function poiNpcPortrait(actor){
- const type=typeof actor==='string'?actor:actor.role.type;
- const wearer=typeof actor==='string'?null:actor;
- const key=poiTownNpcGearVisualKey(wearer)||type;
  const portrait=document.createElement('canvas');portrait.id='poiNpcPortrait';portrait.width=96;portrait.height=104;
- portrait.dataset.model=type;portrait.setAttribute('role','img');portrait.setAttribute('aria-label','住人の姿');
- let art=poiNpcPortraitCanvases.get(key);
- if(!art){
-  art=document.createElement('canvas');art.width=portrait.width;art.height=portrait.height;
-  if(poiDrawPaperDoll(art,poiTownNpcModel(type,wearer)))poiNpcPortraitCanvases.set(key,art);
- }
- portrait.getContext('2d')?.drawImage(art,0,0);return portrait;
+ portrait.setAttribute('role','img');portrait.setAttribute('aria-label','住人の姿');
+ poiNpcPortraitModel(portrait,actor);return portrait;
 }
 function poiNpcInventoryItems(info){
  const items=[];
@@ -11541,8 +11656,7 @@ function poiNpcInventoryTile(item){
  }
  return tile;
 }
-function poiNpcInventoryView(actor){
- const info=poiTownNpcStatus(actor);
+function poiNpcInventoryView(actor,info=poiTownNpcStatus(actor),portrait=poiNpcPortrait(actor)){
  const header=document.createElement('div');header.id='poiNpcInventoryHeader';header.className='poiChestHeader';
  const title=document.createElement('strong');title.textContent=poiTownNpcDisplayName(actor.role)+'のインベントリ';
  const close=document.createElement('button');close.type='button';close.id='poiNpcInventoryClose';
@@ -11579,16 +11693,48 @@ function poiNpcInventoryView(actor){
   gear.append(tile);
  }
  const details=document.createElement('div');details.id='poiNpcInventoryActor';
- details.append(gear,poiNpcPortrait(actor),poiNpcStatusView(actor));
+ details.append(gear);
+ if(portrait)details.append(portrait);
+ details.append(poiNpcStatusView(actor,info));
  body.append(bag,details);return [header,body];
 }
 function poiNpcInventorySync(actor=null){
  const panel=$('poiNpcInventory');if(!panel)return;
- if(poiItemDetailSelection?.ref.zone==='npc')poiItemDetailClose(false);
+ const prior=panel._npcInventoryBinding;
  panel.hidden=!actor;
- if(!actor){if(panel.firstChild)panel.replaceChildren();return}
- panel.setAttribute('aria-label',poiTownNpcDisplayName(actor.role)+'のインベントリ');
- panel.replaceChildren(...poiNpcInventoryView(actor));
+ if(!actor){
+  if(poiItemDetailSelection?.ref.zone==='npc')poiItemDetailClose(false);
+  if(prior){poiInventoryPortraitCancel(panel.querySelector('#poiNpcPortrait'));delete panel._npcInventoryBinding}
+  if(panel.firstChild)panel.replaceChildren();return;
+ }
+ const info=poiTownNpcStatus(actor),keys={actor,
+  bag:JSON.stringify(poiNpcInventoryItems(info)),gear:info.equipment.join(':'),
+  status:JSON.stringify([info.name,info.hp,info.maxHP,info.attack,info.defense]),
+  visual:poiTownNpcGearVisualKey(actor)||actor.role.type};
+ if(prior?.actor!==actor||!panel.firstChild){
+  if(poiItemDetailSelection?.ref.zone==='npc')poiItemDetailClose(false);
+  if(prior)poiInventoryPortraitCancel(panel.querySelector('#poiNpcPortrait'));
+  panel.setAttribute('aria-label',info.name+'のインベントリ');
+  panel.replaceChildren(...poiNpcInventoryView(actor,info));panel._npcInventoryBinding=keys;return;
+ }
+ // Keep the portrait attached even when a resident's item count or HP changes.
+ const portrait=panel.querySelector('#poiNpcPortrait');
+ if(prior.visual!==keys.visual)poiNpcPortraitModel(portrait,actor);
+ if(prior.bag!==keys.bag||prior.gear!==keys.gear||prior.status!==keys.status){
+  const [,fresh]=poiNpcInventoryView(actor,info,null);
+  const replace=(id,slot=null)=>{
+   const old=panel.querySelector(id),next=fresh.querySelector(id);
+   if(!old||!next)return;
+   if(poiItemDetailSelection?.ref.zone==='npc'&&old.contains(poiItemDetailSelection.button))poiItemDetailClose(false);
+   const focus=slot&&old.contains(document.activeElement)?document.activeElement.getAttribute(slot):null;
+   old.replaceWith(next);
+   if(focus!==null)next.querySelector('button['+slot+'="'+focus+'"]')?.focus({preventScroll:true});
+  };
+  if(prior.bag!==keys.bag)replace('#poiNpcInventoryItems','data-npc-bag-slot');
+  if(prior.gear!==keys.gear)replace('#poiNpcInventoryGear','data-npc-gear-slot');
+  if(prior.status!==keys.status)replace('#poiNpcStatus');
+ }
+ panel._npcInventoryBinding=keys;
 }
 function poiNpcPrivateTradeMode(d){
  return d.page==='buy'||d.page==='sell'?d.page:d.page==='confirm'&&['buy','sell'].includes(d.pending?.page)?d.pending.page:null;
@@ -12259,7 +12405,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v221',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v222',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -12374,7 +12520,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v221';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v222';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -12589,7 +12735,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v221',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v222',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
