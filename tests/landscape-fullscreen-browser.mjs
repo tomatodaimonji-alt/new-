@@ -47,7 +47,10 @@ async function launch(browser,width,height){
  return {ctx,page,errors};
 }
 const menuSelector='#poiLandscapeMenu',toggleSelector='#poiLandscapeMenuToggle';
-const version=page=>page.getByText(/\bv215\b/i).filter({visible:true});
+const currentVersion=html.match(/<h1>[^<]*（(v[0-9]+)）<\/h1>/)?.[1];
+assert(currentVersion,'canonical HTML has a current release label');
+const currentVersionPattern=new RegExp('\\b'+currentVersion+'\\b','i');
+const version=page=>page.getByText(currentVersionPattern).filter({visible:true});
 const actionItem=(page,name)=>page.locator(menuSelector+' button[data-landscape-action="'+name+'"]');
 async function openMenu(page){
  const toggle=page.locator(toggleSelector),menu=page.locator(menuSelector);
@@ -84,7 +87,7 @@ try{
    const menu=await openMenu(page);await hit(menu,false);
    assert.match(await page.locator(toggleSelector).innerText(),/メニュー/);
    assert.equal(await menu.locator('button:visible').count(),3);
-   assert.match(await menu.innerText(),/\bv215\b/i,'expanded menu displays the current version');
+   assert.match(await menu.innerText(),currentVersionPattern,'expanded menu displays the current version');
    assert.equal(await version(page).count(),1,'menu is the only visible version label');
    const view=actionItem(page,'view'),audio=actionItem(page,'volume'),reset=actionItem(page,'reset');
    for(const command of [view,audio,reset])await hit(command);
@@ -109,6 +112,7 @@ try{
    await openMenu(page);
    await page.setViewportSize({width:390,height:740});
    await page.locator('#poiAnalogPad').waitFor({state:'hidden'});
+   await page.locator(toggleSelector+'[hidden]').waitFor({state:'attached'});
    assert.equal(await page.locator(toggleSelector).isVisible(),false);
    assert.equal(await menu.isVisible(),false);
    await page.locator('#app > header').waitFor({state:'visible'});
