@@ -56,7 +56,8 @@ test('One door cue per actual threshold, matched to current floor including base
    poiWalkPassableDoor:t=>t.endsWith('Door')||t.endsWith('DoorOpen')||t.endsWith('Entrance'),
    facilityHasDiningStoneLeaf:()=>false,poiSound:k=>result.push(k),poiWalkRoof(){},poiWalkAvatar(){},poiWalkStatus(){},workshopResumeWrite(){}
   });
-  vm.runInContext(between('function poiWalkStep(','function poiWalkAction(')+"poiWalkStep(1,0);poiWalkStep(1,0);",ctx);
+  vm.runInContext(between('function poiDungeonThemeAt(','function poiDungeonEnterEffect(')+
+   between('function poiWalkStep(','function poiWalkAction(')+"poiWalkStep(1,0);poiWalkStep(1,0);",ctx);
   return result;
  };
  assert.deepEqual(run('stonewallDoor',0,0),['door','step']);

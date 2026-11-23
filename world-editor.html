@@ -1050,7 +1050,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v205）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v206）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -7072,7 +7072,7 @@ function poiEquipmentBreakPcm(kind,rate,variation){
 }
 function poiSurfaceFoleyPcm(kind,rate,variation=0){
  if(kind.startsWith('break'))return poiEquipmentBreakPcm(kind,rate,variation);
- const foot=kind==='indoor',stone=kind==='stone',duration=foot ? .104 : stone ? .228 : .202;
+ const mine=kind==='mine-step',foot=kind==='indoor'||mine,stone=kind==='stone',duration=mine ? .148 : foot ? .104 : stone ? .228 : .202;
  const out=new Float32Array(Math.round(duration*rate)),tau=Math.PI*2;
  let seed=0x4c32687+173*variation,low=0,mid=0,previous=0;
  const pulse=(t,at,attack,decay)=>t<=at?0:Math.min(1,(t-at)/attack)*Math.exp(-decay*(t-at));
@@ -7089,6 +7089,13 @@ function poiSurfaceFoleyPcm(kind,rate,variation=0){
    const toe=pulse(t,.031,.004,100)*(.17*grain+.11*low);
    const room=pulse(t,.013,.004,91)*(.035*Math.sin(tau*322*t)+.023*Math.sin(tau*493*t));
    v=thump+knock+toe+room;
+   if(mine){
+    // Dry grit at heel and toe, then one soft underground reflection; no extra audio nodes.
+    const u=t-.047;
+    const scrape=pulse(t,.012,.004,67)*(.23*grain+.055*edge)+pulse(t,.039,.005,75)*.22*grain;
+    const reflection=pulse(t,.047,.009,44)*(.050*Math.sin(tau*184*j*u)+.032*Math.sin(tau*294*u)+.090*mid);
+    v=v*.81+scrape+reflection;
+   }
   }else{
    const latch=pulse(t,.003,.0018,155)*(.30*grain+.105*edge+.115*Math.sin(tau*1718*j*t));
    const lever=pulse(t,.022,.002,125)*(.24*mid+.13*Math.sin(tau*312*t));
@@ -7169,8 +7176,8 @@ function poiSound(kind,weapon=null,defeated=false){
    if(poiAudioLevels.master<=0||poiAudioLevels.se<=0)return;
    poiPlayImpactBuffer(poiSurfaceFoley(weapon==='stone'?'stone':'wood'),now,.63);
   }else if(facilitySite?.id==='base'&&kind==='step'){
-   if(weapon==='indoor'){
-    if(poiAudioLevels.master>0&&poiAudioLevels.se>0)poiPlayImpactBuffer(poiSurfaceFoley('indoor'),now,.58);
+   if(weapon==='mine-step'||weapon==='indoor'){
+    if(poiAudioLevels.master>0&&poiAudioLevels.se>0)poiPlayImpactBuffer(poiSurfaceFoley(weapon),now,weapon==='mine-step' ? .54 : .58);
     return;
    }
    // Muted sole against earth: a short low brush and a rounded heel.
@@ -7669,6 +7676,20 @@ function poiEconomySnapshot(){
  return {gold:poiEconomyGold(),potions:poiHotbarHasKit()?poiHotbarRead().potions:0,
   caches:[...poiEconomyCaches.values()],drops:[...poiEconomyDrops.values()]};
 }
+// Match the floor under the center of the existing mesh, not collision
+// height. Grade draws the last authored floor per tile; B1 draws each.
+function poiLootFloorTop(x,z,y,lookout=0){
+ let top=lookout;
+ for(let i=world.length-1;i>=0;i--){
+  const o=world[i];if(o.x!==x||o.z!==z||o.y!==y||!isFloor(o.type))continue;
+  const type=o.type;
+  const rise=ROAD_DIAGONALS.has(type)?.115:
+   ROAD_IDS.has(type)||/^(?:stone|woodfloor(?:Light|Dark)?|brickfloor|basicfloor|plasterfloor|mossfloor|ironfloor)$/.test(type)?.13:0;
+  top=Math.max(top,rise);
+  if(y===0||top>=.13)break;
+ }
+ return top;
+}
 function poiEconomyDraw(vp,now){
  if(!poiEconomyAllowed())return;
  if(poiEconomyMeshDirty){
@@ -7676,7 +7697,8 @@ function poiEconomyDraw(vp,now){
   if(poiEconomyMesh){gl.deleteBuffer(poiEconomyMesh.buf);poiEconomyMesh=null}
   const m=mesh(),face=[1,.78,.27],rim=[.84,.52,.12],core=[1,.94,.52];
   const drawPile=({x,z,id})=>{
-   const y=terrainY(x,z)+.038+(id==='lookout-tower'&&typeof poiLookoutLootTop==='function'?poiLookoutLootTop(x,z,0):0);
+   const lookout=id==='lookout-tower'&&typeof poiLookoutLootTop==='function'?poiLookoutLootTop(x,z,0):0;
+   const y=terrainY(x,z)+poiLootFloorTop(x,z,0,lookout)+.038;
    for(const [dx,dz,lift] of [[-.095,.065,0],[.082,-.062,0],[.122,.087,.026]]){
     const cx=x+.5+dx,cz=z+.5+dz;
     roundStack(m,cx,y+lift,cz,[[0,.116,.116],[.043,.116,.116]],8,rim);
@@ -8516,10 +8538,8 @@ function poiInventoryDraw(vp,now){
    const m=mesh();
    for(const d of [...(list||[]),...(finds||[]),...(armed||[]),...nearby]){
     if(d.y!==poiWalkLevel||!validPos(d.x,d.z)||!poiDungeonVisualVisible(d.x,d.z,d.y))continue;
-    const surface=world.find(o=>o.x===d.x&&o.z===d.z&&o.y===d.y&&isFloor(o.type));
-    const floorTop=/^(?:woodfloor(?:Light|Dark)?|brickfloor|basicfloor|plasterfloor|mossfloor|ironfloor)$/.test(surface?.type||'')?.13:0;
     const lookout=typeof poiLookoutLootTop==='function'?poiLookoutLootTop(d.x,d.z,d.y):0;
-    const x=d.x+.5,z=d.z+.5,y=d.y*1.4+terrainY(d.x,d.z)+Math.max(floorTop,lookout)+(d.type===POI_INVENTORY_HERB?.012:.05);
+    const x=d.x+.5,z=d.z+.5,y=d.y*1.4+terrainY(d.x,d.z)+poiLootFloorTop(d.x,d.z,d.y,lookout)+(d.type===POI_INVENTORY_HERB?.012:.05);
     if(d.type===POI_INVENTORY_HERB){
      if(typeof poiDrawHealingHerb==='function')poiDrawHealingHerb(m,x,y,z);
      else cube(m,x,y,z,.28,.12,.27,[.43,.69,.25]);
@@ -8538,7 +8558,8 @@ function poiInventoryDraw(vp,now){
  if(poiInventoryMesh)poiDrawLootMesh(poiInventoryMesh,vp,now);
 }
 // BEGIN MINE VAULT
-const POI_MINE_UNLOCK_MS=3000,POI_MINE_FIND_IDS=['mine-storeroom','mine-breakroom','mine-cut'];
+const POI_MINE_PREBOSS_MACE='mine-preboss-mace';
+const POI_MINE_UNLOCK_MS=3000,POI_MINE_FIND_IDS=['mine-storeroom','mine-breakroom','mine-cut',POI_MINE_PREBOSS_MACE];
 const POI_MINE_FIND_ODDS=Object.freeze({'mine-breakroom':.65,'mine-cut':.45});
 const poiMineFindPending=new Map();
 let poiMineUnlock=null,poiMineFindCache=null;
@@ -8659,19 +8680,27 @@ function poiMineFindExplore(x,z,rng=Math.random){
  for(const id of Object.keys(rolls))poiMineFindPending.delete(id);
  return true;
 }
+function poiMinePreBossMaceGround(p){
+ return p?.id===POI_MINE_PREBOSS_MACE&&p.x===94&&p.z===62&&p.y===-1&&
+  p.type==='equipStoneMace'&&p.count===1&&p.durability===100&&
+  world.some(o=>o.x===p.x&&o.z===p.z&&o.y===p.y&&o.type==='stone');
+}
 function poiMineFindList(kit){
- const source=facilitySite?.id==='base'?facilitySite.mine?.sideFinds:null;
- if(!source||poiWalkLevel!==-1)return null;
+ const mine=facilitySite?.id==='base'?facilitySite.mine:null,source=mine?.sideFinds,mace=mine?.preBossSupply;
+ if(poiWalkLevel!==-1||(!source&&!mace))return null;
  const claims=kit.mineFindClaims,rolls=kit.mineFindRolls;
- if(poiMineFindCache?.source===source&&poiMineFindCache.claims===claims&&poiMineFindCache.rolls===rolls)return poiMineFindCache.list;
- const list=source.filter(p=>POI_MINE_FIND_IDS.includes(p.id)&&!claims?.includes(p.id)&&
+ const ground=mace?world:null;
+ if(poiMineFindCache?.source===source&&poiMineFindCache.mace===mace&&poiMineFindCache.ground===ground&&
+    poiMineFindCache.claims===claims&&poiMineFindCache.rolls===rolls)return poiMineFindCache.list;
+ const list=(source||[]).filter(p=>p.id!==POI_MINE_PREBOSS_MACE&&POI_MINE_FIND_IDS.includes(p.id)&&!claims?.includes(p.id)&&
   (p.id==='mine-storeroom'||rolls?.[p.id]===true));
- poiMineFindCache={source,claims,rolls,list};return list;
+ if(mace&&!claims?.includes(POI_MINE_PREBOSS_MACE)&&poiMinePreBossMaceGround(mace))list.push(mace);
+ poiMineFindCache={source,mace,ground,claims,rolls,list};return list;
 }
 function poiMineFindPickup(x,z){
  if(!poiInventoryAllowed())return false;
  const kit=poiHotbarRead(),find=poiMineFindList(kit)?.find(p=>p.x===x&&p.z===z&&p.y===poiWalkLevel);
- if(!find)return false;
+ if(!find||(find.id===POI_MINE_PREBOSS_MACE&&!poiMinePreBossMaceGround(find)))return false;
  const {slots,accepted}=poiInventoryAccept(kit,find.type,find.count,find);
  if(accepted!==find.count)return false;
  const next=poiInventoryEdited({...kit,mineFindClaims:[...(kit.mineFindClaims||[]),find.id]},slots);
@@ -11225,7 +11254,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v205',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v206',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -11340,7 +11369,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v205';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v206';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -11555,7 +11584,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v205',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v206',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -13287,7 +13316,8 @@ function poiWalkStep(dx,dz){
  if(facilitySite?.id==='base'){if(facilitySite.creek)poiCreekAudioSync();poiEconomyCollect(poiWalkX,poiWalkZ);poiInventoryPickup(poiWalkX,poiWalkZ);poiMineFindExplore(poiWalkX,poiWalkZ);poiMineFindPickup(poiWalkX,poiWalkZ);poiArmedPickup(poiWalkX,poiWalkZ);if(typeof poiNorthTrailPickup==='function')poiNorthTrailPickup(poiWalkX,poiWalkZ)}
  if(door)poiSound('door',facilityHasDiningStoneLeaf(door)?'stone':'wood');
  else if(wet)poiSound('chapel-water-step');
- else poiSound('step',facilitySite?.id==='base'&&(poiWalkLevel<0||poiWalkIndoor())?'indoor':'outdoor');
+ else poiSound('step',poiDungeonThemeAt(facilitySite,poiWalkX,poiWalkZ,poiWalkLevel)==='mine'?'mine-step':
+  facilitySite?.id==='base'&&(poiWalkLevel<0||poiWalkIndoor())?'indoor':'outdoor');
  poiWalkRoof();poiWalkAvatar(poiWalkStarted);poiWalkStatus();if(pineGameActive){workshopAdventureResumeQuiet=false;pineGameSave()}workshopResumeWrite();
 }
 function poiNorthTrailForkSignReachable(){
@@ -18040,6 +18070,7 @@ function buildFacilitySite(id){
  extendTownWorldWayfarer(northTrail,expanded.map.world);
  extendTownWorldOtherworldDepths(otherworld,expanded.map.world);
  extendTownWorldChapelWest(chapel,expanded.map.world);
+ extendTownWorldMinePrep(mine,expanded.map.world);
  return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail};
 }
 
@@ -18287,6 +18318,59 @@ function extendTownWorldOtherworldDepths(realm,world){
  realm.expansion={originalBounds,rooms:[archive,cloister],doors,cells:[...floors.values()].map(([x,z])=>({x,z})),guard,
   reward:{id:'otherworld-east-supply',type:'cannedFood',count:1,x:121,z:84,y:-1}};
  return realm;
+}
+
+// Off the western working face, a tool room and short parallel haulage cuts.
+function extendTownWorldMinePrep(mine,world){
+ const key=(x,z)=>x+','+z,dirs=[[0,1],[-1,0],[0,-1],[1,0]];
+ const door={x:97,z:61,y:-1},originalBounds={...mine.bounds};
+ const seam=world.findIndex(o=>o.y===door.y&&o.x===door.x&&o.z===door.z&&o.type==='mosswall');
+ if(seam<0)return mine;
+ world[seam]={...door,type:'ruinDoorBroken',rot:1};
+ const oldFloors=new Set(),oldWalls=new Set();
+ for(const o of world){
+  if(o.y!==-1)continue;
+  if(/^(?:stone|moss|water|road\w+)$/.test(o.type))oldFloors.add(key(o.x,o.z));
+  else if(/^(?:stone|moss)wall$/.test(o.type))oldWalls.add(key(o.x,o.z));
+ }
+ const toolRoom={name:'道具の保管室',x1:92,x2:96,z1:60,z2:64,y:-1};
+ const oldCut={name:'古い掘削跡',x1:87,x2:90,z1:62,z2:65,y:-1};
+ const floors=new Map(),edge=new Map(),add=(x,z,type,rot=0)=>world.push({x,z,y:-1,type,rot});
+ const cell=(x,z)=>floors.set(key(x,z),[x,z]);
+ for(const r of [toolRoom,oldCut])for(let z=r.z1;z<=r.z2;z++)for(let x=r.x1;x<=r.x2;x++)cell(x,z);
+ cell(door.x,door.z);cell(91,62);cell(91,64);
+ const hasFloor=k=>floors.has(k)||oldFloors.has(k);
+ for(const [x,z] of floors.values()){
+  if(!oldFloors.has(key(x,z))){
+   const path=z===61&&x>=94||x===91||z===63&&x<=90;
+   add(x,z,path?'roadAncientFull':x===94&&z===62?'stone':(x+z)%7===0?'moss':'stone');
+  }
+  for(const [dx,dz] of dirs){
+   const a=x+dx,b=z+dz,k=key(a,b);
+   if(!hasFloor(k)&&!oldWalls.has(k))edge.set(k,[a,b]);
+  }
+ }
+ const border=new Set([...oldWalls,...edge.keys()]);
+ for(const k of [...border]){
+  const [x,z]=k.split(',').map(Number);if(x<86||x>97||z<59||z>66)continue;
+  for(const dz of [-1,1]){
+   const a=x+1,b=z+dz;
+   if(!border.has(key(a,b))||border.has(key(a,z))||border.has(key(x,b)))continue;
+   const bend=[[a,z],[x,b]].find(([xx,zz])=>!hasFloor(key(xx,zz)));
+   if(bend){edge.set(key(...bend),bend);border.add(key(...bend))}
+  }
+ }
+ for(const [x,z] of edge.values())add(x,z,(x+z)%3===0?'stonewall':'mosswall');
+ for(const [x,z,type,rot=0] of [
+  [92,60,'crate',0],[93,60,'displayShelf',0],[95,60,'sack',0],
+  [95,64,'benchWood',2],[96,64,'barrel',2],
+  [87,62,'rockCluster',1],[90,65,'rubble',1],[87,65,'handcartEmpty',0],
+  [94,59,'poiWallSconce',0],[96,65,'poiWallSconce',2],[86,63,'poiWallSconce',3]
+ ])add(x,z,type,rot);
+ mine.bounds={...mine.bounds,x1:86};
+ mine.prep={originalBounds,rooms:[toolRoom,oldCut],door,cells:[...floors.values()].map(([x,z])=>({x,z}))};
+ mine.preBossSupply={id:'mine-preboss-mace',x:94,z:62,y:-1,type:'equipStoneMace',count:1,durability:100};
+ return mine;
 }
 
 // A dry western circuit around the flooded nave; never opens the altar vault.

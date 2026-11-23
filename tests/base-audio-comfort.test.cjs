@@ -140,5 +140,5 @@ test('only a successful step onto a closed door tile plays the opening cue, usin
  const a=html.indexOf('function poiWalkStep('),b=html.indexOf('function poiWalkAction(',a),step=html.slice(a,b);
  assert.match(step,/stairCell\.find\(\(\{type\}\)=>poiWalkPassableDoor\(type\)/);
  assert.match(step,/if\(door\)poiSound\('door',facilityHasDiningStoneLeaf\(door\)\?'stone':'wood'\)/);
- assert.match(step,/else poiSound\('step',facilitySite\?\.id==='base'&&\(poiWalkLevel<0\|\|poiWalkIndoor\(\)\)\?'indoor':'outdoor'\)/);
+ assert.match(step,/else poiSound\('step',poiDungeonThemeAt\(facilitySite,poiWalkX,poiWalkZ,poiWalkLevel\)==='mine'\?'mine-step':\s*facilitySite\?\.id==='base'&&\(poiWalkLevel<0\|\|poiWalkIndoor\(\)\)\?'indoor':'outdoor'\)/);
 });

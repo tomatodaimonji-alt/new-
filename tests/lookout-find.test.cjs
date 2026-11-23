@@ -57,7 +57,7 @@ test('tower loot is actually rendered above fitted masonry without raising unrel
  assert.equal(scope.poiLookoutLootTop(109,58,0),0);
  assert.equal(scope.poiLookoutLootTop(107,58,1),0);
  assert.match(html,/id==='lookout-tower'&&typeof poiLookoutLootTop/);
- assert.match(html,/Math.max\(floorTop,lookout\)/);
+ assert.match(html,/poiLootFloorTop\(d.x,d.z,d.y,lookout\)/);
  assert.doesNotMatch(html,/function poiLootMarksDraw\(/,'the real item and coin geometry now carries the signal');
 });
 test('temporarily blocked tower does not consume the discovery chance',()=>{

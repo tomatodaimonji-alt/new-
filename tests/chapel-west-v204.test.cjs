@@ -2,7 +2,8 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const cut=(a,b)=>{const i=html.indexOf(a),j=html.indexOf(b,i+a.length);assert(i>=0&&j>i,a);return html.slice(i,j)};
 const build=vm.runInNewContext(cut('const FACILITY_SITES=Object.freeze(','function workshopResumeDecode(')+';buildFacilitySite');
-const site=JSON.parse(JSON.stringify(build('base'))),chapel=site.chapel,world=site.map.world;
+const {beforeMinePrep}=require('./mine-history-v165.cjs');
+const site=beforeMinePrep(JSON.parse(JSON.stringify(build('base')))),chapel=site.chapel,world=site.map.world;
 const floor=/^(?:stone|moss|water|road\w+)$/,key=(x,z)=>x+','+z;
 const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
 const at=(x,z)=>world.filter(o=>o.y===-1&&o.x===x&&o.z===z);
