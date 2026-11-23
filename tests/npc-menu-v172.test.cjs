@@ -4,7 +4,8 @@ function fixture(){
  const actor={role:{id:'toolkeeper',role:'keeper',name:'道具屋',work:{x:5,z:3,y:0}},x:5,z:3,y:0,activity:'work'};
  const spoke=[],ended=[],trades=[],c=vm.createContext({$:()=>null,performance:{now:()=>100},poiTownNpcActive:()=>true,
   poiTownNpcActors:[actor],poiWalkX:5,poiWalkZ:5,poiWalkLevel:0,poiWalkFacing:0,poiMonsterStates:new Map(),
-  poiTownNpcGraph:()=>({}),poiTownNpcNextTile:()=>({y:0}),poiShopSync(){},
+  world:[{x:5,z:4,y:0,type:'counterLuxury',rot:0}],
+  poiTownNpcKey:(x,z,y)=>[x,z,y].join(','),poiTownNpcGraph:()=>({cells:new Map([['5,4,0',['counterLuxury']]])}),poiTownNpcStance:()=>true,poiTownNpcNextTile:()=>({y:0}),poiShopSync(){},
   poiTownNpcFace(a,f){a.facing=f},poiShopCheckout:()=>true,poiTownPlayerService:()=>null,
   poiMessageSpeak:(...a)=>spoke.push(a),poiMessageEndSpeech:()=>ended.push(true),
   poiNpcTradeCatalog:()=>[{code:'h',name:'薬草',price:5,quantity:2,canTrade:true}],

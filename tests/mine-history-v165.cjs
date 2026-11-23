@@ -12,7 +12,16 @@ function beforeMineDepths(world){
   [5799,121,50,'stonewall'],[5828,115,57,'mosswall']])restored.splice(i,0,{x,z,y:-1,type,rot:0});
  return restored;
 }
+// Undo only the v208 town-facing artisan plant relocation before checking old hashes.
+function beforeArtisanPlant(site){
+ const live=site.map.world[3695];
+ if(live?.x!==66||live.z!==52||live.y!==0||live.type!=='poiPottedPlant')return site;
+ const world=Array.from(site.map.world);
+ world[3695]={...live,x:71};
+ return {...site,map:{...site.map,world}};
+}
 function beforeChapelApproach(site){
+ site=beforeArtisanPlant(site);
  if(!site.chapel?.approach)return site;
  const {approach,...chapel}=site.chapel,world=site.map.world.slice(0,7443);
  assert.equal(createHash('sha256').update(JSON.stringify(world)).digest('hex'),
@@ -129,4 +138,4 @@ function beforeAbandonedMine(site){
  assert.equal(digest,exactMine,'only the exact v167 mine records are exempt; untouched v166 mine records are pinned separately');
  return {...other,map:{...map,world:world.slice(0,oldLength)}};
 }
-module.exports={beforeChapelApproach,beforeMinePrep,beforeChapelWest,beforeAbandonedMine,beforeMineDepths,beforeOtherworld,beforeMineEntry,beforeChapel,beforeArmedEncounters,beforeNorthTrail,beforeForestWatchPost,beforePondMarsh,beforeWayfarer,beforeOtherworldDepths};
+module.exports={beforeArtisanPlant,beforeChapelApproach,beforeMinePrep,beforeChapelWest,beforeAbandonedMine,beforeMineDepths,beforeOtherworld,beforeMineEntry,beforeChapel,beforeArmedEncounters,beforeNorthTrail,beforeForestWatchPost,beforePondMarsh,beforeWayfarer,beforeOtherworldDepths};

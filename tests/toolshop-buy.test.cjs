@@ -8,7 +8,9 @@ function shop(){
  const work={x:49,z:13,y:0},clerk={...work,role:{id:'toolkeeper',work,name:'道具屋の店主'},activity:'work'};
  const ctx=vm.createContext({$:id=>ids[id],poiChestIsOpen:()=>false,poiKitchenChestReachable:()=>false,facilitySite:{id:'base'},poiWalkActive:true,pineAIActive:false,poiWalkLevel:0,
   poiWalkX:47,poiWalkZ:13,poiWalkFacing:1,world:[{x:48,z:13,y:0,type:'counterLuxury',rot:1},{x:48,z:13,y:0,type:'poiLedgerPapers',rot:3}],
-  poiTownNpcActors:[clerk],poiTownNpcActive:()=>true,poiTownNpcGraph:()=>({}),poiTownNpcNextTile:()=>null,poiTownNpcFace(){},poiMonsterStates:new Map(),
+  poiTownNpcActors:[clerk],poiTownNpcActive:()=>ctx.facilitySite?.id==='base'&&ctx.poiWalkActive&&!ctx.pineAIActive,
+  poiTownNpcKey:(x,z,y)=>[x,z,y].join(','),poiTownNpcGraph:()=>({cells:new Map([['48,13,0',ctx.world.filter(o=>o.x===48&&o.z===13&&o.y===0).map(o=>o.type)]])}),
+  poiTownNpcStance:()=>true,poiTownNpcNextTile:()=>null,poiTownNpcFace(){},poiMonsterStates:new Map(),
   poiEconomyGold:()=>9,poiEconomyBuyPotion:()=>{purchases++;return {ok:true,gold:3,potions:4,cost:6}},
   performance:{now:()=>100},document:{querySelector:()=>null}});
  const d=html.match(/\/\/ BEGIN TOWN DIALOGUE\n([\s\S]*?)\/\/ END TOWN DIALOGUE/);
@@ -21,7 +23,9 @@ test('canonical staffed shop menu opens only from the guest side in base play',(
  assert(!ctx.poiTownDialogueSnapshot().actions.some(r=>r.id==='shop'));
  ctx.poiNpcMenuChoose('request',100);assert(ctx.poiTownDialogueSnapshot().actions.some(r=>r.id==='shop'));
  assert.equal(ids.poiGoldValue.textContent,'9');
- ctx.poiShopClose();clerk.activity='go-home';assert.equal(ctx.poiTownDialogueAction(101),false);
+ ctx.poiShopClose();clerk.activity='go-home';assert.equal(ctx.poiTownDialogueAction(101),true,'a reachable off-duty resident can still talk');
+ ctx.poiNpcMenuChoose('request',101);assert(!ctx.poiTownDialogueSnapshot().actions.some(r=>r.id==='shop'),'off-duty clerk cannot sell fixed shop stock');
+ ctx.poiShopClose();
  clerk.activity='work';ctx.poiWalkFacing=3;assert.equal(ctx.poiTownDialogueAction(102),false);
  ctx.poiWalkFacing=1;ctx.poiWalkLevel=1;assert.equal(ctx.poiTownDialogueAction(103),false);
  ctx.poiWalkLevel=0;ctx.facilitySite.id='toolshop';assert.equal(ctx.poiTownDialogueAction(104),false);

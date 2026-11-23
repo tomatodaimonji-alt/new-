@@ -9,6 +9,11 @@ const src=html.match(/const FACILITY_SITES[\s\S]*?(?=function facilityNavigate\(
 assert(src,'authored Game World source');
 const build=vm.runInNewContext(src+';buildFacilitySiteLegacyFrame');
 const site=build('base');
+// v208 moves exactly the pot whose old position intersected the artisan
+// stall. This test uses the pre-offset builder, so (66,52) is (44,30).
+const artisanPot=site.map.world.filter(o=>o.x===44&&o.z===30&&o.y===0&&o.type==='poiPottedPlant'&&o.rot===0);
+assert.equal(artisanPot.length,1,'exact v208 artisan pot in the legacy frame');
+artisanPot[0].x=49;
 const historicalWorld=site.map.world.filter(o=>!kitchenChestAddedV162(o));
 // Canonical hashes pinned from the exact shipped v136 map. The exterior
 // additions/removals below enumerate individual authored changes by type,
@@ -177,3 +182,4 @@ test('open grassland alters only enumerated non-structural exterior planting and
  assert.equal(preserved.length,pinned.count);
  assert.equal(digest(preserved),pinned.hash,'all other exact v140 world records preserved');
 });
+

@@ -54,11 +54,14 @@ test('guild clerk at the mapped counter speaks across only the verified public d
  const f=fixture();Object.assign(f.actor,{x:56,z:27,y:0});f.actor.role={...f.actor.role,work:{x:56,z:27,y:0},public:{x:56,z:29,y:0,facing:0}};
  Object.assign(f.c,{poiWalkX:56,poiWalkZ:29,poiWalkFacing:0,poiTownNpcNextTile:()=>null});
  const cells=new Map([['56,28,0',['woodfloor','counterWood','poiLedgerPapers','poiPenHolder']]]);
+ const desk={x:56,z:28,y:0,type:'counterWood',rot:0};f.c.world=[desk];
  f.c.poiTownNpcKey=(x,z,y)=>[x,z,y].join(',');f.c.poiTownNpcGraph=()=>({cells});f.c.poiTownNpcStance=()=>true;f.c.isFloor=t=>t==='woodfloor';
  assert.equal(f.run('poiTownDialogueAction(100)'),true);
  assert.equal(f.actor.facing,2);assert.equal(f.run('poiTownDialogueAction(101)'),true);
  cells.get('56,28,0').push('stonewall');assert.equal(f.run('poiTownDialogueTarget(200)'),null);
- cells.get('56,28,0').pop();cells.get('56,28,0').splice(1,1);assert.equal(f.run('poiTownDialogueTarget(201)'),null);
+ cells.get('56,28,0').pop();desk.rot=1;assert.equal(f.run('poiTownDialogueTarget(201)'),null,'counter must face the players axis');
+ desk.rot=0;f.c.world=[];assert.equal(f.run('poiTownDialogueTarget(202)'),null,'a cached counter must still exist live');
+ f.c.world=[desk];cells.get('56,28,0').splice(1,1);assert.equal(f.run('poiTownDialogueTarget(203)'),null);
 });
 test('overlap keeps current speaker, queued attacks take priority',()=>{
  const f=fixture();const other={...f.actor,role:{id:'other',name:'二人目'}};

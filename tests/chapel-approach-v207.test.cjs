@@ -1,4 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),{createHash}=require('node:crypto');
+const {beforeArtisanPlant}=require('./mine-history-v165.cjs');
 const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const build=vm.runInNewContext(h.slice(h.indexOf('const FACILITY_SITES=Object.freeze('),h.indexOf('function workshopResumeDecode('))+';buildFacilitySite');
 const s=JSON.parse(JSON.stringify(build('base'))),w=s.map.world,at=(x,z)=>w.filter(o=>o.x===x&&o.z===z&&o.y===0);
@@ -16,7 +17,7 @@ test('signed dry path leaves the old southeastern trail and reaches the existing
  assert.equal(a.path.length,12);
 });
 test('old v206 world and all earlier placements stay byte-identical, route only extends the dry bank',()=>{
- const old=w.slice(0,7443),prior=new Set(old.map(o=>o.x+','+o.z+','+o.y));
+ const old=beforeArtisanPlant(s).map.world.slice(0,7443),prior=new Set(old.map(o=>o.x+','+o.z+','+o.y));
  assert.equal(createHash('sha256').update(JSON.stringify(old)).digest('hex'),'250d2f15c06fdd980d391bab89529757446c365e8266c77ec5fe71d8a3c6aa57');
  assert(w.length>7443&&w.length<7462);
  for(const o of w.slice(7443)){

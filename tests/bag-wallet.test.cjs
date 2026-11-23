@@ -7,7 +7,7 @@ test('money has one inventory cell, not a header, HUD or saved stack',()=>{
  assert.equal((h.match(/id="poiGoldValue"/g)||[]).length,1);
  assert.match(h,/if\(open\).*poiWalletSync\(poiEconomyGold\(\)\)/);
 });
-test('wallet updater renders exact changed balance including zero without side effects',()=>{
+test('wallet updater renders exact changed balance and clears its label at zero without writing',()=>{
  const a=h.indexOf('function poiWalletSync('),b=h.indexOf('function poiShopSync(',a);
  assert.ok(a>=0&&b>a);
  let value='0',writes=0;
@@ -15,5 +15,5 @@ test('wallet updater renders exact changed balance including zero without side e
  const c=vm.createContext({$:id=>id==='poiGoldValue'?node:null});
  vm.runInContext(h.slice(a,b),c);c.poiWalletSync(963);c.poiWalletSync(963);
  assert.deepEqual([value,writes],['963',1]);
- c.poiWalletSync(0);assert.equal(value,'0');
+ c.poiWalletSync(0);assert.equal(value,'');
 });
