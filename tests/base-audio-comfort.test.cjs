@@ -73,7 +73,7 @@ test('base footsteps and swings have warmer spectrum and rounded attacks; unrela
  assert.deepEqual(b.fx('attack'),[['filter',790,.41,28],['filter',1120,.18,26],['osc',145,.20,19]]);
  assert.deepEqual(k.fx('step'),[['filter',810,.4,8],['osc',117,.21,8]]);
  assert.deepEqual(k.fx('attack'),[['filter',1250,.58,8],['filter',2100,.32,8],['osc',180,.26,8]]);
- for(const cue of ['door','hit','hurt'])assert.deepEqual(b.fx(cue),k.fx(cue),cue);
+ for(const cue of ['door-open','door-close','hit','hurt'])assert.deepEqual(b.fx(cue),k.fx(cue),cue);
  b.run('document.hidden=true;poiAudioStop(true)');
  assert.equal(b.run('poiAudioTransient.size'),0);
  assert.equal(b.run('poiCreekAudio===null'),true);
@@ -132,13 +132,17 @@ test('indoor steps and material-aware door openings use short distinct cached ef
  assert.deepEqual(b.fx('step','indoor'),[['buffer',104,.58,0]]);
  assert.deepEqual(b.fx('step','outdoor'),[['filter',550,.29,22],['osc',100,.145,16]]);
  assert.deepEqual(k.fx('step','indoor'),[['filter',810,.4,8],['osc',117,.21,8]]);
- assert.deepEqual(b.fx('door','wood'),[['buffer',202,.63,0]]);
- assert.deepEqual(b.fx('door','stone'),[['buffer',228,.63,0]]);
- b.run('poiAudioLevels.se=0');assert.deepEqual(b.fx('door','stone'),[]);assert.deepEqual(b.fx('step','indoor'),[]);
+ assert.deepEqual(b.fx('door-open','wood'),[['buffer',285,.64,0]]);
+ assert.deepEqual(b.fx('door-close','wood',true),[['buffer',164,.68,0,24]]);
+ assert.deepEqual(b.fx('door-open','stone'),[['buffer',310,.64,0]]);
+ assert.deepEqual(b.fx('door-close','stone',true),[['buffer',180,.68,0,24]]);
+ b.run('poiAudioLevels.se=0');assert.deepEqual(b.fx('door-open','stone'),[]);assert.deepEqual(b.fx('door-close','wood'),[]);assert.deepEqual(b.fx('step','indoor'),[]);
 });
 test('only a successful step onto a closed door tile plays the opening cue, using the rendered leaf',()=>{
  const a=html.indexOf('function poiWalkStep('),b=html.indexOf('function poiWalkAction(',a),step=html.slice(a,b);
  assert.match(step,/stairCell\.find\(\(\{type\}\)=>poiWalkPassableDoor\(type\)/);
- assert.match(step,/if\(door\)poiSound\('door',facilityHasDiningStoneLeaf\(door\)\?'stone':'wood'\)/);
+ assert.match(step,/material:door\.type==='ironwallDoor'\?'iron':facilityHasDiningStoneLeaf\(door\)\?'stone':'wood'/);
+ assert.match(step,/if\(after\)poiSound\('door-open',after\.material\)/);
+ assert.match(step,/poiSound\('door-close',before\.material\)/);
  assert.match(step,/else poiSound\('step',poiDungeonThemeAt\(facilitySite,poiWalkX,poiWalkZ,poiWalkLevel\)==='mine'\?'mine-step':\s*facilitySite\?\.id==='base'&&\(poiWalkLevel<0\|\|poiWalkIndoor\(\)\)\?'indoor':'outdoor'\)/);
 });

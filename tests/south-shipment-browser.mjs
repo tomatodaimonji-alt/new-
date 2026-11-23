@@ -13,7 +13,7 @@ assert.equal(town.name,'街道の宿場');assert.deepEqual([town.market.receivin
 assert(road.path.some(p=>p.x===101&&p.z===104)&&road.path.some(p=>p.x===101&&p.z===105));
 if(process.env.SOUTH_SHIPMENT_LAYOUT_ONLY==='1'){console.log('PASS southern shipment fixture landmarks');process.exit(0)}
 const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
-const move=' a.x=p.x;a.z=p.z;a.y=p.y;a.activity=label;poiTownNpcVersion++;';
+const move=' a.x=p.x;a.z=p.z;a.y=p.y;a.activity=label;a.actorRetryCardinal=false;poiTownNpcVersion++;';
 assert.equal(html.split(move).length,2,'instrument actual NPC step after native collision');
 const trace=move+" if(a.role.id==='southmerchant')(window.southActualSteps??=[]).push({x:a.x,z:a.z,y:a.y,fromX:a.fromX,fromZ:a.fromZ,fromY:a.fromY,label});";
 const fixture=html.replace(move,trace); // observers only, no time/placement/loot substitutions
@@ -92,3 +92,4 @@ try{
  assert.deepEqual(errors,[]);
  console.log('PASS Chromium timed Marek physical route, native bridge steps and exactly one live Noah handoff, durable across reload');
 }finally{await browser?.close();await new Promise(r=>server.close(r))}
+

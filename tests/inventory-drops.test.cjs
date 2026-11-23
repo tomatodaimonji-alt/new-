@@ -23,7 +23,13 @@ test('sword drop is atomic, persists and re-picks without equipping or losing go
 test('one herb per swipe, invalid/blocked/wet destinations and full pickup never consume items',()=>{
  const h=setup({version:1,weapon:null,potions:3}),{x}=h;
  assert.equal(x.poiInventoryDrop(2).ok,false);
- x.world=[{x:4,z:4,y:0,type:'river'}];assert(!x.poiInventoryDrop(1).ok);
+ // When every reachable surface in the search radius is wet, the drop
+ // must fail atomically rather than placing on a river tile or taking a herb.
+ x.world=Array.from({length:9},(_,i)=>i-4).flatMap(dx=>
+  Array.from({length:9},(_,i)=>i-4).filter(dz=>Math.abs(dx)+Math.abs(dz)<=4)
+   .map(dz=>({x:3+dx,z:4+dz,y:0,type:'river'})));
+ assert.deepEqual({...x.poiInventoryDrop(1)},{ok:false,reason:'blocked'});
+ assert.equal(h.save().potions,3);assert.equal(h.save().drops,undefined);
  x.world=[];x.poiWalkCanStep=()=>false;assert(!x.poiInventoryDrop(1).ok);
  assert.equal(h.save().potions,3);
  x.poiWalkCanStep=()=>true;assert(x.poiInventoryDrop(1).ok);
@@ -34,8 +40,18 @@ test('one herb per swipe, invalid/blocked/wet destinations and full pickup never
  assert(!full.x.poiInventoryPickup(4,4));assert.equal(full.save().drops.length,1);
  assert(x.poiInventoryPickup(4,4));assert.equal(h.save().potions,3);
 });
+test('a wet front tile does not prevent a drop on the nearest reachable dry tile',()=>{
+ const h=setup({version:1,weapon:null,potions:3}),{x}=h;
+ x.world=[{x:4,z:4,y:0,type:'river'}];
+ assert(x.poiInventoryDrop(1).ok);
+ assert.equal(h.save().potions,2);
+ assert.deepEqual(h.save().drops,[{type:'healingHerb',x:3,z:5,y:0}]);
+ assert(!x.poiInventoryPickup(4,4));
+ assert(x.poiInventoryPickup(3,5));assert.equal(h.save().potions,3);
+});
 test('impossible ground location in a damaged save cannot strand the starting sword',()=>{
  const h=setup({version:1,weapon:null,potions:3,sword:false,drops:[{type:'equipWoodSword',x:50,z:128,y:0}]});
  assert.equal(h.x.poiInventorySnapshot().sword,true);
  assert.equal(h.x.poiInventorySnapshot().drops.length,0);
 });
+
