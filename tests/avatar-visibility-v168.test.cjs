@@ -24,15 +24,16 @@ test('B1 mine stone walls join the real angled fade, limited to the ray-hit tile
  assert.equal(scope.poiAngledWallOcclusion({elev:.86},0).active,false);
 });
 test('depth-only fallback is drawn before the normal avatar and leaves depth writes enabled',()=>{
- const log=[],vp={},avatar={},scope=vm.createContext({loc:{occlusionInfo:123},poiWalkMesh:avatar,pineAIActive:false,
+ const log=[],vp={},avatar={count:42},scope=vm.createContext({loc:{occlusionInfo:123},poiWalkMesh:avatar,pineAIActive:false,
   gl:{GREATER:'greater',LESS:'less',depthFunc:v=>log.push(['depth',v]),depthMask:v=>log.push(['writes',v]),
    uniform4f:(loc,...args)=>log.push(['mode',loc,args[3]])},draw:m=>log.push(['draw',m])});
- vm.runInContext(span('function poiDrawWalkAvatar(','function poiAvatarOcclusion('),scope);
- scope.poiDrawWalkAvatar(vp);
+ vm.runInContext(span('// BEGIN GAME DAMAGE FLASH','// END GAME DAMAGE FLASH')+
+  span('function poiDrawWalkAvatar(','function poiAvatarOcclusion('),scope);
+ scope.poiDrawWalkAvatar(vp,100);
  assert.deepEqual(log,[['writes',false],['depth','greater'],['mode',123,-2],['draw',avatar],
   ['mode',123,0],['depth','less'],['writes',true],['draw',avatar]]);
- log.length=0;scope.pineAIActive=true;scope.poiDrawWalkAvatar(vp);
+ log.length=0;scope.pineAIActive=true;scope.poiDrawWalkAvatar(vp,100);
  assert.deepEqual(log,[['draw',avatar]],'AI render gets no rescue silhouette');
  assert.match(html,/if\(uOcclusionInfo\.w< -1\.5\)[\s\S]*gl_FragColor=vec4\(vec3\(\.90,\.82,\.63\),1\.0\)/);
- assert.match(html,/if\(!poiPlayerDeath\|\|poiPlayerDeath\.relocated\)poiDrawWalkAvatar\(p\.vp\)/);
+ assert.match(html,/if\(!poiPlayerDeath\|\|poiPlayerDeath\.relocated\)poiDrawWalkAvatar\(p\.vp,now\)/);
 });

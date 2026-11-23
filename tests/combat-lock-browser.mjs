@@ -11,6 +11,7 @@ let fixture=replaceOnce(html,hook,hook+`
    isolate:()=>{
     const authored=[...poiMonsterStates].filter(([o,s])=>s.hp>0&&o.y===poiWalkLevel&&Math.hypot(s.x-poiWalkX,s.z-poiWalkZ)<=8)
      .map(([o])=>({type:o.type,x:o.x,z:o.z,y:o.y}));
+    window.__qaCombatIsolated=true;
     poiMonsterStates.clear();poiCombatLockReset();poiMonsterMeshDirty=true;
     return authored;
    },
@@ -65,6 +66,10 @@ fixture=replaceOnce(fixture,'function poiWorldToScreen(vp,x,y,z){',
 fixture=replaceOnce(fixture,'function poiBuildPlayerMesh(weapon,pose,gear,stride=0,r=0,x=0,y=0,z=0,heading=null){',
  'function poiBuildPlayerMesh(weapon,pose,gear,stride=0,r=0,x=0,y=0,z=0,heading=null){window.__qaCombatHeading=heading??r*Math.PI/2;');
 fixture=replaceOnce(fixture,' const p=poiWildPick(rng);',' const p=null;');
+// Wild hoards already use the ambient fixture above. Regional creatures
+// have their own scheduler and can be reborn after the test clears the map.
+fixture=replaceOnce(fixture,'function poiWildRegionalFrame(now,rng){',
+ 'function poiWildRegionalFrame(now,rng){if(window.__qaCombatIsolated)return;');
 const server=createServer((req,res)=>{
  res.setHeader('Content-Type','text/html; charset=utf-8');
  res.end(req.url==='/seed'?'<!doctype html><title>Combat lock QA</title>':fixture);
@@ -94,8 +99,8 @@ try{
   try{await page.waitForFunction(({name,marker})=>{const s=window.__editorTest.combatLockQA.status();return s.name===name&&(marker===undefined||s.marker===marker)},{name,marker})}
   catch(cause){throw Error('lock '+name+'/'+marker+' not observed: '+JSON.stringify(await status()),{cause})}
  };
- // Authored archer (105,86) is 7.62 tiles away and may acquire first. A lock
- // is sticky by design; isolate only the test targets before testing capture.
+ // A naturally spawned archer may acquire first. A lock is sticky by design;
+ // isolate only the test targets before checking synthetic capture rules.
  await op('isolate');
  await op('seed','outside',0,-8.1);
  await op('seed','upper',0,1,1);

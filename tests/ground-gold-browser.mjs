@@ -16,7 +16,7 @@ page.on('pageerror',e=>errors.push(e.message));
 const base='http://127.0.0.1:'+server.address().port;
 const save='world-workshop-hotbar-v1',resume='world-workshop-resume-v1';
 const read=()=>page.evaluate(k=>JSON.parse(localStorage.getItem(k)),save);
-const dialog='#poiGoldDropDialog',detail='#poiItemDetail';
+const detail='#poiItemDetail';
 const shortcut=i=>'#poiHotbar [data-hotbar-slot="'+i+'"]';
 const state=()=>page.evaluate(()=>window.__editorTest.facility());
 const active=()=>page.waitForFunction(()=>window.__editorTest?.facility?.()?.active);
@@ -29,6 +29,47 @@ async function hold(target){
   await page.locator(detail).waitFor({state:'visible'});
   await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
  }finally{await cdp.detach()}
+}
+const wallet='#poiBagWallet';
+async function center(selector){
+ const box=await page.locator(selector).boundingBox();assert(box?.width&&box.height,selector+' must be visible');
+ return {x:Math.round(box.x+box.width/2),y:Math.round(box.y+box.height/2)};
+}
+async function bareCanvas(from){
+ const point=await page.evaluate(from=>{
+  const stage=document.querySelector('#viewWrap').getBoundingClientRect(),canvas=document.querySelector('#view');
+  const zones=['#poiBagPanel','#poiHotbar','#poiChestPanel','#poiMiniHud','#poiLocationPanel','#poiMessagePanel','#poiNpcMenu','#poiPartyHud .poiPartyCard'];
+  const protectedRects=zones.map(s=>document.querySelector(s)).filter(e=>e&&!e.hidden).map(e=>e.getBoundingClientRect());
+  const inside=(r,x,y)=>x>=r.left&&x<r.right&&y>=r.top&&y<r.bottom;
+  for(let y=Math.round(stage.top)+16;y<stage.bottom-16;y+=14)for(let x=Math.round(stage.left)+16;x<stage.right-16;x+=14){
+   if(Math.hypot(x-from.x,y-from.y)<74||x<56||x>innerWidth-56||
+      protectedRects.some(r=>inside(r,x,y))||document.elementFromPoint(x,y)!==canvas)continue;
+   return {x,y};
+  }
+  return null;
+ },from);
+ assert(point,'real uncovered game canvas is available outside the inventory');
+ return point;
+}
+async function swipe(selector,destination=null){
+ const from=await center(selector),to=destination?await center(destination):await bareCanvas(from);
+ const t=(x,y)=>({x:Math.round(x),y:Math.round(y),id:4,force:.7,radiusX:3,radiusY:3});
+ const cdp=await ctx.newCDPSession(page);
+ try{
+  const send=(type,touchPoints)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints});
+  await send('touchStart',[t(from.x,from.y)]);
+  for(const f of [.22,.58,1])await send('touchMove',[t(from.x+(to.x-from.x)*f,from.y+(to.y-from.y)*f)]);
+  await send('touchEnd',[]);
+ }finally{await cdp.detach()}
+}
+const splitButton=detail+' [data-item-detail-action="split"]';
+const detailBack=detail+' [data-item-detail-action="back"]';
+const cellFor=slot=>slot<9?shortcut(slot):'#poiBagSlots [data-bag-slot="'+(slot-9)+'"]';
+async function goldDetails(selector,count){
+ await page.locator(selector).tap();
+ await page.locator(detail).waitFor({state:'visible'});
+ assert.match(await page.locator('#poiItemDetailName').innerText(),/金貨/);
+ assert.match(await page.locator('#poiItemDetailDescription').innerText(),new RegExp(count+'G'));
 }
 try{
  await page.goto(base+'/seed');
@@ -48,22 +89,39 @@ try{
  assert.ok(!held.drops?.length,'touch hold never drops by itself');
  await page.locator(detail+' [data-item-detail-action="back"]').tap();
  await page.locator('#poiBagToggle').tap();
- await page.locator('#poiBagGoldDrop').tap();
- assert.equal(await page.locator('#poiGoldDropAmount').inputValue(),'1');
- await page.locator('#poiGoldDropAmount').fill('22');
- await page.locator(dialog+' [type="submit"]').tap();
- assert.ok(await page.locator('#poiGoldDropFeedback').textContent());
- assert.deepEqual(await read(),held,'out-of-range amount changes no save fields');
- await page.locator('#poiGoldDropCancel').tap();
- assert.deepEqual(await read(),held,'cancel changes no save fields');
- for(const amount of [3,4]){
-  await page.locator('#poiBagGoldDrop').tap();await page.locator('#poiGoldDropAmount').fill(String(amount));
-  await page.locator(dialog+' [type="submit"]').tap();await page.locator(dialog).waitFor({state:'hidden'});
- }
+ assert.equal(await page.locator('#poiBagGoldDrop,#poiGoldDropDialog').count(),0,'old button and amount picker are gone');
+ await swipe(shortcut(8),wallet);
+ await page.waitForFunction(k=>JSON.parse(localStorage.getItem(k)).goldHotbarSlot==null,save);
+ const walletHeld=await read();
+ assert.equal(walletHeld.gold,held.gold,'internal swipe moves the wallet, not its money');
+ assert(!walletHeld.groundGold?.length);
+ await goldDetails(wallet,21);
+ assert.deepEqual(await read(),walletHeld,'tapping only opens Details');
+ await page.locator(splitButton).tap();
+ assert.equal(await page.locator(detail+' [data-item-detail-action="drop"]').isVisible(),false,'coin details provide Split, not a second drop action');
+ const firstSplit=await read();assert.equal(firstSplit.gold,21);
+ assert.equal(firstSplit.goldStacks.length,1);assert.equal(firstSplit.goldStacks[0].amount,10);
+ assert.match(await page.locator('#poiItemDetailDescription').innerText(),/11G/);
+ await page.locator(detailBack).tap();
+ const firstCell=cellFor(firstSplit.goldStacks[0].slot);
+ await swipe(firstCell,shortcut(8));
+ await page.waitForFunction(k=>JSON.parse(localStorage.getItem(k)).goldStacks?.[0]?.slot===8,save);
+ await goldDetails(shortcut(8),10);
+ await page.locator(detailBack).tap();
+ await swipe(shortcut(8));
+ await page.waitForFunction(k=>JSON.parse(localStorage.getItem(k)).groundGold?.[0]?.amount===10,save);
+ assert.equal((await read()).gold,11);
+ assert(!((await read()).goldStacks?.length),'only selected split stack moved to ground');
+ assert.equal(await page.locator(detail).isVisible(),false,'swiping never opens a picker or Details');
+ await goldDetails(wallet,11);
+ await page.locator(splitButton).tap();
+ await page.locator(detailBack).tap();
+ await swipe(wallet);
+ await page.waitForFunction(k=>JSON.parse(localStorage.getItem(k)).groundGold?.[1]?.amount===6,save);
  const coin=await read();
- assert.equal(coin.gold,14);assert.equal(coin.goldHotbarSlot,8);
+ assert.equal(coin.gold,5);assert.equal(coin.goldStacks[0].amount,5);
  assert.deepEqual(coin.slots,held.slots);assert.equal(coin.groundGold.length,2);
- assert.deepEqual(coin.groundGold.map(p=>p.amount),[3,4]);
+ assert.deepEqual(coin.groundGold.map(p=>p.amount),[10,6]);
  const near=(p)=>Math.abs(p.x-41)+Math.abs(p.z-43);
  assert.ok(coin.groundGold.every(p=>near(p)>0&&near(p)<=4&&p.y===0));
  assert.notDeepEqual([coin.groundGold[0].x,coin.groundGold[0].z],[coin.groundGold[1].x,coin.groundGold[1].z]);
@@ -84,6 +142,7 @@ try{
  assert.equal(new Set([...coin.groundGold,ground,...ordinary].map(({x,z,y})=>x+','+z+','+y)).size,5);
  await page.reload();await active();
  assert.deepEqual((await read()).groundGold,coin.groundGold);
+ assert.deepEqual((await read()).goldStacks,coin.goldStacks);
  assert.equal((await read()).drops.find(d=>d.type==='equipWoodSword').durability,ground.durability);
  const first=coin.groundGold[0],start=(await state()).position;
  assert.equal(Math.abs(start.x-first.x)+Math.abs(start.z-first.z),1,'known dry field has nearby free space');
@@ -91,8 +150,9 @@ try{
  await page.keyboard.press(arrow);
  await page.waitForFunction(({x,z})=>{const p=window.__editorTest.facility().position;return p.x===x&&p.z===z},first);
  const recovered=await read();
- assert.equal(recovered.gold,17);assert.equal(recovered.goldHotbarSlot,8);
+ assert.equal(recovered.gold,15);assert.deepEqual(recovered.goldStacks,coin.goldStacks);
  assert.deepEqual(recovered.groundGold,[coin.groundGold[1]]);
  assert.deepEqual(errors,[]);
- console.log('PASS physical touch hold and normal tap, keyboard detail/drop, amount cancellation/validation, separate piles, durable weapon and persisted collectible gold');
+ console.log('PASS real coin Details and split, selected stack swipes including hotbar, durable weapon, persisted independent piles');
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve))}
+

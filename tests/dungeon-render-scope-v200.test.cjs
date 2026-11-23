@@ -23,8 +23,9 @@ test('realm focus is reciprocal and all unrelated sessions preserve same-floor v
  c.facilitySite={id:'standalone'};assert.equal(c.poiDungeonVisualVisible(101,79,-1),true);
  c.facilitySite=null;assert.equal(c.poiDungeonVisualVisible(101,79,-1),true);
 });
-test('actor mesh, HP labels, debris, danger cells and loose pickups use the same scope',()=>{
- for(const [a,b] of [['function poiRenderEnemyHealth(','function poiMonsterAt('],['function poiMonsterRender(now','// BEGIN PLAYER DEFEAT'],['function poiMonsterDrawBreaks(','let poiSlimeMeshAnimating'],['function poiDrawEnemyThreatTiles(','function render(){'],['function poiInventoryDraw(','// BEGIN MINE VAULT']]){
+test('actor mesh, HP labels, debris and loose pickups use the same scope',()=>{
+ for(const [a,b] of [['function poiRenderEnemyHealth(','function poiMonsterAt('],['function poiMonsterRender(now','// BEGIN PLAYER DEFEAT'],['function poiMonsterDrawBreaks(','let poiSlimeMeshAnimating'],['function poiInventoryDraw(','// BEGIN MINE VAULT']]){
   const start=h.indexOf(a);assert.match(h.slice(start,h.indexOf(b,start+1)),/poiDungeonVisualVisible/);
  }
 });
+

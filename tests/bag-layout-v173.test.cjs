@@ -8,7 +8,7 @@ test('Bag holds exactly five visible rows of five, apart from equipment and port
  assert.match(slots,/data-bag-slot="8"[\s\S]*id="poiBagWallet"[\s\S]*id="poiGoldValue"[\s\S]*data-bag-slot="9"/);
  const header=html.split('<section id="poiBagPanel"')[1].split('<div id="poiBagGrid"')[0];
  assert.doesNotMatch(header,/poiBagWallet|poiGoldValue/,'no second wallet display above the grid');
- assert.match(header,/<button id="poiBagGoldDrop" type="button" hidden>金貨を置く<\/button>/,'gold action is separate from wallet and hidden initially');
+ assert.doesNotMatch(header,/poiBagGoldDrop|金貨を置く/,'the wallet uses a swipe instead of a header drop button');
  assert.match(html,/#poiBagSlots\{[^}]*grid-template-columns:repeat\(5,var\(--poi-bag-cell\)\)[^}]*grid-template-rows:repeat\(5,var\(--poi-bag-cell\)\)/);
  assert.match(html,/#poiBagGrid\{[^}]*column-gap:8px/);
  assert.match(html,/#poiBagSlots\{grid-column:1;grid-row:1/);
