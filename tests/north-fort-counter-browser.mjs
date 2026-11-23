@@ -8,6 +8,13 @@ function inject(s,a,b){assert.equal(s.split(a).length,2,a);return s.replace(a,b)
 const anchor='  freeMovementPose:()=>({x:poiWalkViewX,z:poiWalkViewZ,level:poiWalkLevel}),';
 let fixture=inject(html,anchor,anchor+`
   northFortQA:{
+   corner:()=>{
+    const x=64.78,z=13.84,y=poiWalkLevel;
+    if(y!==-1||!poiWalkCanStep(poiFreeCell(x),poiFreeCell(z)))throw Error('fractional southeast fixture must be on the real clear chamber floor');
+    poiWalkX=poiWalkFromX=poiFreeCell(x);poiWalkZ=poiWalkFromZ=poiFreeCell(z);
+    poiWalkViewX=x;poiWalkViewZ=z;
+    poiFreePose={x,z,level:y,distance:0,walking:false,angle:0,changed:true};
+   },
    arm:priorAxe=>{
     if(priorAxe){const state=[...poiMonsterStates].find(([o])=>o.type==='monsterNorthMinotaur')?.[1];
      if(state)state.northLastAttack='axe';}
@@ -117,31 +124,28 @@ async function counter(far){
   cdp=await ctx.newCDPSession(p);
   const touch=(type,touchPoints)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints});
   const ret=(fx,fz)=>touch('touchMove',[{...left,x:left.x+fx,y:left.y+fz}]);
+  // Initial location only: the boss remains gated until the actual CDP
+  // thumb is down. Evasion, contact, and the counter all run normally.
+  if(!far)await p.evaluate(()=>window.__editorTest.northFortQA.corner());
+  const corner=!far?await p.evaluate(()=>window.__editorTest.northFortQA.motion()):null;
+  if(corner)assert(Math.abs(corner.x-64.78)<.001&&Math.abs(corner.z-13.84)<.001);
   await touch('touchStart',[left]);
-  if(!far){
-   // Physically move several tenths of a tile toward the bull before the
-   // tell. Stay on solid floor south of its body; do not teleport the player.
-   await ret(0,-22);
-   await when(()=>window.__editorTest.northFortQA.motion().z<13.84,null,2600);
-   await ret(0,0);
-  }
   await p.evaluate(()=>window.__editorTest.northFortQA.arm(false));
   const started=await when(()=>{const s=window.__editorTest.northFortQA.motion();return s.strike?.pending&&s.strike},null,4000);
+  if(!far)await ret(0,-53); // start as soon as the genuine tell is observed
   const swing=await started.jsonValue();
-  assert.equal(swing.kind,'axe');assert(Math.abs(swing.dx)<.04&&swing.dz>.93,'boss locks the swing toward the real initial player');
+  assert.equal(swing.kind,'axe');
+  if(far)assert(Math.abs(swing.dx)<.04&&swing.dz>.93,'far swing still commits straight south');
+  else assert(swing.dx>.55&&swing.dz>.55,'boss commits its real attack toward the southeast flank');
   checkpoint=tag+' genuine stick evasion';
   if(far){
    await ret(53,0);
    await when(()=>window.__editorTest.northFortQA.motion().x>64.9,null,2200);
   }else{
-   // Use a gentler first turn so asynchronous native frame/dispatch
-   // latency does not carry the avatar a whole step past sword reach.
-   // A small east component on the northward leg clears the body's
-   // reserved edge if the turn arrived before x64.7.
-   await ret(31,0);
-   await when(()=>window.__editorTest.northFortQA.motion().x>=64.56,null,2100);
-   await ret(10,-53);
-   await when(()=>window.__editorTest.northFortQA.motion().z<12.96,null,2100);
+   // Only ONE northward input during the real 850ms tell: no serial
+   // lateral-to-north turn competing with WebGL or consuming the windup.
+   const behind=swing.sz-(corner.x-swing.sx)*swing.dx/swing.dz-.055;
+   await when(goal=>window.__editorTest.northFortQA.motion().z<=goal,behind,1900);
   }
   await touch('touchEnd',[]);
   checkpoint=tag+' actual contact';
