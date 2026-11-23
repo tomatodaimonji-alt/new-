@@ -3,7 +3,7 @@ import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {createServer} from 'node:http';
 const html=readFileSync(process.argv[2]??'world-editor.html','utf8');
-const audio='function poiSound(kind,weapon=null,defeated=false){',random=' const p=poiWildPick(rng);';
+const audio='function poiSound(kind,weapon=null,defeated=false,atContact=false){',random=' const p=poiWildPick(rng);';
 assert.equal(html.split(audio).length,2);assert.equal(html.split(random).length,2);
 const fixture=html.replace(audio,audio+"\n if(window.__doorQACues&&kind.startsWith('door-'))window.__doorQACues.push([kind,weapon]);")
  .replace(random,' const p=null;');

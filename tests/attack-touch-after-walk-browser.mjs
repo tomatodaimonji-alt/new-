@@ -47,7 +47,13 @@ let browser;try {
   try{
    await p.waitForFunction(()=>{const s=window.__attackState();return s.allowed&&!s.pending&&s.now>s.ready});
    const prior=await p.evaluate(()=>{window.__attackProbeClear();window.__events=[];return window.__attackState()});
-   if(mode==='rapid-after-prior'){await touch('touchStart',[attack]);await touch('touchEnd',[]);await p.evaluate(()=>window.__attackProbeClear());}
+   if(mode==='rapid-after-prior'){
+    await touch('touchStart',[attack]);await touch('touchEnd',[]);
+    // Let the first hit resolve on its own target before planting a fresh
+    // probe for the second tap. Keep the original cooldown clock running.
+    await p.waitForFunction(()=>window.__events.some(e=>e.type==='action')&&!window.__attackState().pending);
+    await p.evaluate(()=>window.__attackProbeClear());
+   }
    await touch('touchStart',[start]);await touch('touchMove',[moved]);await p.waitForFunction(()=>window.__attackState().walking);
    if(mode==='released'||mode==='rapid-after-prior'){await touch('touchEnd',[]);await touch('touchStart',[attack]);await touch('touchEnd',[]);}
    else {
@@ -58,7 +64,11 @@ let browser;try {
     // because the left thumb was centered and still touching.
     await touch('touchEnd',[]);
    }
-   await p.waitForTimeout(80);
+   // Fists contact immediately; swords resolve only at the wind-up's real
+   // contact. Observe the action and its settled hit, not a frame-time guess.
+   await p.waitForFunction(expected=>window.__events.filter(e=>e.type==='action').length>=expected&&
+    !window.__attackState().pending,mode==='rapid-after-prior'?2:1);
+   await p.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
    const after=await p.evaluate(()=>({state:window.__attackState(),events:window.__events,probe:window.__attackProbeSnapshot()}));
    console.log(JSON.stringify({weapon,mode,prior,after}));
    assert(after.state.started>prior.started,'a ready physical action tap starts an attack');
@@ -70,7 +80,7 @@ let browser;try {
     assert(after.probe?.hp<80&&after.probe?.hp>0,'normal combat damage reached the target');
    }else{
     assert.equal(actions.length,2,'both physical taps dispatch exactly once');
-    if(actions[1].at<actions[1].ready)assert.equal(after.probe?.hp,80,'legitimate cooldown still rejects the second hit');
+    if(actions[1].at<actions[1].ready||actions[1].pending)assert.equal(after.probe?.hp,80,'legitimate cooldown still rejects the second hit');
     else assert(after.probe?.hp<80,'second hit proceeds when ordinary cooldown expired');
    }
   }catch(e){console.log('case error',weapon,mode,e.message);await touch('touchCancel',[]);process.exitCode=1;}

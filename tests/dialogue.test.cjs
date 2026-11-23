@@ -17,7 +17,7 @@ function fixture(){
  const deps=[
   section('const POI_TOWN_NPC_BASE_GEAR=', 'const POI_TOWN_INN='),
   section('const POI_ARMOR_DEFENSE=', 'function poiPlayerDefense('),
-  section('const POI_PLAYER_WEAPON_PROFILES=', 'function poiPlayerWeaponCancel('),
+  section('const POI_SWORD_PROFILE=', 'function poiPlayerWeaponCancel('),
   ...['const POI_PLAYER_MAX_HP=', 'const POI_HOTBAR_POTION_START=', 'const POI_CHEST_SIZE=',
    'const POI_KNIFE=', 'const POI_TOWN_RESIDENT_HP=','function poiPlayerAttackDamage('].map(declaration).filter(Boolean)
  ];

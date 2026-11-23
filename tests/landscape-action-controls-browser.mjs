@@ -60,7 +60,7 @@ try{
    assert(Math.abs(leftX/w-.125)<.012&&Math.abs(leftY/h-.775)<.015,'left thumb near marked position: '+JSON.stringify({leftX,leftY,w,h}));
    assert(Math.abs(rightX/w-.88)<.012&&Math.abs(rightY/h-.77)<.015,'action near marked position: '+JSON.stringify({rightX,rightY,w,h}));
    assert(a.radius==='50%'&&a.w===a.h&&b.radius==='50%'&&b.w===b.h,'action and backpack are circular');
-   assert(b.right<=a.x-5&&Math.abs(center(b)[1]-rightY)<1,'backpack stays aligned left of action');
+   assert(b.right<=a.x-5&&center(b)[1]-rightY>=2&&center(b)[1]-rightY<=9,'backpack stays left of and slightly lower than action');
    assert(apart(bar,a)&&apart(bar,b)&&apart(bar,p),'neither thumb control obscures shortcuts');
    assert.equal(await bag.getAttribute('aria-label'),'インベントリ');
    assert(await bag.locator('svg').isVisible()&&!(await bag.locator('span').isVisible()),'backpack icon is visible without print');

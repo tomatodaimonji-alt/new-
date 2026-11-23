@@ -8,7 +8,7 @@ function instrument(anchor,replacement){
  assert.equal(html.split(anchor).length,2,anchor);html=html.replace(anchor,replacement);
 }
 instrument(' const p=poiWildPick(rng);',' const p=null;');
-instrument('function poiSound(kind,weapon=null,defeated=false){',`function poiSound(kind,weapon=null,defeated=false){
+instrument('function poiSound(kind,weapon=null,defeated=false,atContact=false){',`function poiSound(kind,weapon=null,defeated=false,atContact=false){
  if(window.__steps&&['step','chapel-water-step','door-open','door-close'].includes(kind))window.__steps.push({kind,weapon,...window.__stride});
 `);
 instrument('function poiAnalogFrame(now){',`function poiAnalogFrame(now){

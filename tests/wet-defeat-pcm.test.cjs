@@ -29,9 +29,10 @@ test('exact recorded combat Foley is embedded in offline HTML, cached per cue an
  assert.ok(Buffer.byteLength(html,'utf8')<12*1024*1024,'authoritative HTML fits Android updater cap');
 });
 test('recorded cues retain exact swing/contact separation and defeat-only guard',()=>{
+ assert.match(html,/const delay=atContact\?0:POI_WEAPON_CONTACT_DELAY/);
  assert.match(html,/poiPlayImpactBuffer\(poiRecordedFoley\('wood'\),contact,\.78\)/);
  assert.match(html,/poiPlayImpactBuffer\(poiRecordedFoley\('defeat'\),when,\.80\)/);
- assert.match(html,/kind==='hit'&&defeated\)poiDefeatSound\(now\+POI_WEAPON_CONTACT_DELAY\+\.018\)/);
+ assert.match(html,/kind==='hit'&&defeated\)poiDefeatSound\(now\+delay\+\.018\)/);
 });
 
 test('common breakup tail settles without clipping over the wood strike',()=>{

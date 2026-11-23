@@ -10,7 +10,7 @@ function setup(save){
   localStorage:{getItem:()=>raw??null,setItem(_k,v){raw=v;writes++}},world:[],poiWalkCanStep:()=>true,
   isFloor:()=>true,poiWalkAvatar(){},toast(){},terrainY:()=>0,poiSound(){},poiCombatHud(){},poiDamageNumber(){},
   poiPlayerHP:100,POI_PLAYER_ATTACK:20,POI_PLAYER_MAX_HP:100,POI_MONSTER_STATS:{monsterSlime:{attack:6}}});
- vm.runInContext(span('const POI_HOTBAR_KEY=','function poiResetCombat(')+span('const POI_PLAYER_WEAPON_PROFILES=','function poiPlayerWeaponCancel(')+span('function poiMobHitPlayer(','function poiMineEarlyMayMove('),c);
+ vm.runInContext(span('const POI_HOTBAR_KEY=','function poiResetCombat(')+span('const POI_SWORD_PROFILE=','function poiPlayerWeaponCancel(')+span('function poiMobHitPlayer(','function poiMineEarlyMayMove('),c);
  return {c,raw:()=>JSON.parse(raw),writes:()=>writes};
 }
 test('only a fresh kit starts with explicit empty armor; old saves keep all four legacy pieces without write',()=>{

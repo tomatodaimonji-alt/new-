@@ -1477,6 +1477,20 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  }
 }
 /* END LARGE LANDSCAPE THUMB CONTROLS */
+/* BEGIN LOWER LANDSCAPE BACKPACK */
+@media (orientation: landscape) and (pointer: coarse) and (min-width: 520px){
+ #app #viewWrap[data-analog-play] #poiBagToggle{
+  --poi-v231-bag-base:calc(var(--poi-v220-action-bottom) + 10.5px);
+  --poi-v231-bar-right:calc((100vw - var(--poi-shortcuts-left) + var(--poi-shortcuts-right) - var(--poi-inventory-width)) / 2);
+  /* Only reserve the vertical shortcut gap when its rightward footprint
+     actually extends beneath the backpack. No horizontal change is needed. */
+  --poi-v231-bag-underlap:calc(var(--poi-v230-bag-right) + 58px - var(--poi-v231-bar-right));
+  --poi-v231-bag-have:clamp(0px,calc(var(--poi-v231-bag-base) - var(--poi-land-bottom) - var(--poi-land-hotbar-height) - 3px),8px);
+  --poi-v231-bag-hold:clamp(0px,calc(var(--poi-v231-bag-underlap) * 100),calc(8px - var(--poi-v231-bag-have)));
+  bottom:max(var(--poi-land-bottom),calc(var(--poi-v231-bag-base) - 8px + var(--poi-v231-bag-hold)));
+ }
+}
+/* END LOWER LANDSCAPE BACKPACK */
 </style></head><body>
 <div id="pineStartupCover" data-state="loading">
  <div id="pineStartupContent">
@@ -1555,7 +1569,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v230）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v231）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -7670,10 +7684,11 @@ const POI_WEAPON_SE={
  equipClub:       {swing:[610,980,104],impact:[350,620,133],weight:1.20,cut:.78},
  equipWoodSword:  {swing:[940,1630,126],material:'woodSword',weight:1,cut:1},
  equipStoneSword: {swing:[815,1270,112],impact:[660,1260,162],weight:1.10,cut:.86},
+ equipBoneSword:  {swing:[855,1520,124],impact:[710,1510,185],weight:.86,cut:.90},
  equipIronSword:  {swing:[1100,1940,142],impact:[1060,1820,215],weight:.94,cut:1.08}
 };
 const POI_WEAPON_CONTACT_DELAY=.108;
-function poiWeaponSound(kind,sound,now){
+function poiWeaponSound(kind,sound,now,contactDelay=POI_WEAPON_CONTACT_DELAY){
  if(kind==='attack'){
   if(sound.material==='kitchenKnife'){poiPlayImpactBuffer(poiKitchenKnifeBuffer('attack'),now+.05,.63);return}
   const [air,edge,body]=sound.swing;
@@ -7681,9 +7696,8 @@ function poiWeaponSound(kind,sound,now){
   poiAudioNoiseBurst(now+.078,.084,edge,1.22,.17*sound.cut,.027);
   poiAudioThud(now+.059,body,62,.13,.15*sound.weight,.035);
  }else{
-  // Strike contact aligns with the blade crossing at 108 ms. The action
-  // still checks the same target at button press, with no deferred game state.
-  const contact=now+POI_WEAPON_CONTACT_DELAY;
+  // Legacy actions schedule audio ahead; a timed sweep is already at contact.
+  const contact=now+contactDelay;
   if(sound.material==='kitchenKnife'){poiPlayImpactBuffer(poiKitchenKnifeBuffer('hit'),contact,.72);return}
   if(sound.material==='woodSword'){poiPlayImpactBuffer(poiRecordedFoley('wood'),contact,.78);return}
   const [knock,edge,body]=sound.impact;
@@ -7867,7 +7881,7 @@ function poiSurfaceFoley(kind){
  }
  return cache.get(key);
 }
-function poiSound(kind,weapon=null,defeated=false){
+function poiSound(kind,weapon=null,defeated=false,atContact=false){
  if(!poiWalkActive||!poiAudioEnabled||!poiAudioAllowed())return;
  poiAudioStart();const ctx=poiAudioContext;if(!ctx||ctx.state!=='running')return;
  const now=ctx.currentTime;
@@ -7876,8 +7890,9 @@ function poiSound(kind,weapon=null,defeated=false){
    ?POI_WEAPON_SE[weapon]:null;
   if(weaponSound){
    if(poiAudioLevels.master>0&&poiAudioLevels.se>0){
-    poiWeaponSound(kind,weaponSound,now);
-    if(kind==='hit'&&defeated)poiDefeatSound(now+POI_WEAPON_CONTACT_DELAY+.018);
+    const delay=atContact?0:POI_WEAPON_CONTACT_DELAY;
+    poiWeaponSound(kind,weaponSound,kind==='attack'&&atContact?now-.050:now,delay);
+    if(kind==='hit'&&defeated)poiDefeatSound(now+delay+.018);
    }
   }else if(kind==='player-defeat'){
    if(poiAudioLevels.master>0&&poiAudioLevels.se>0)poiDefeatSound(now);
@@ -10234,7 +10249,7 @@ function poiItemDetailDescription(cell){
  const info=[descriptions[cell.type]||(armor?'装備すると受けるダメージを軽減する。':'')];
  if(armor&&typeof poiArmorDefense==='function')info.push('防御力：'+poiArmorDefense(cell.type));
  const profile=typeof poiPlayerWeaponProfile==='function'?poiPlayerWeaponProfile(cell.type):null;
- if(profile)info.push('攻撃力：'+profile.damage,'射程：'+profile.range+'マス');
+ if(profile)info.push('攻撃力：'+profile.damage,profile.sweep?'攻撃範囲：前方約1.3マス・横幅約3マス':'射程：'+profile.range+'マス');
  else if(typeof poiHotbarWeaponForType==='function'&&poiHotbarWeaponForType(cell.type)&&typeof poiPlayerAttackDamage==='function')
   info.push('攻撃力：'+poiPlayerAttackDamage(cell.type),'射程：1マス');
  const price=typeof poiEquipmentPrice==='function'?poiEquipmentPrice(cell.type):null;
@@ -12950,7 +12965,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v230',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v231',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -13065,7 +13080,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v230';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v231';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -13280,7 +13295,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v230',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v231',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -13953,6 +13968,11 @@ function poiWalkSwordPose(ms){
 }
 // BEGIN ANGULAR COMBAT MATH
 const POI_AIM_EPS=1e-7,POI_AIM_RADIUS=.34;
+const POI_SWORD_FORWARD=1.3,POI_SWORD_HALF_WIDTH=1.5;
+function poiSwordSweepContains(o,d,c){
+ const x=c.x-o.x,z=c.z-o.z,forward=x*d.x+z*d.z,side=x*d.z-z*d.x;
+ return forward>POI_AIM_EPS&&forward<=POI_SWORD_FORWARD+POI_AIM_EPS&&Math.abs(side)<=POI_SWORD_HALF_WIDTH+POI_AIM_EPS;
+}
 function poiAimUnit(x,z){
  const n=Math.hypot(x,z);
  return n>POI_AIM_EPS?{x:Math.abs(x/n)<POI_AIM_EPS?0:x/n,z:Math.abs(z/n)<POI_AIM_EPS?0:z/n}:null;
@@ -14048,7 +14068,10 @@ function poiAimSelect(o,type,range,now,force=false){
  const same=type===poiAimLockType&&o.y===poiAimLockY;
  if(!force&&same&&now<poiAimLockAt&&(!poiAimLocked||poiAimLocked.state.hp>0&&poiMonsterStates.get(poiAimLocked.id)===poiAimLocked.state&&Math.hypot(poiAimLocked.x-o.x,poiAimLocked.z-o.z)<=range))return poiAimLocked;
  const pass=poiAimWall(o);
- poiAimLocked=poiAimChooseLock(o,poiAimTargetList(o,range,now),range,(d,r)=>poiAimWallLimit(o,d,r,pass),same?poiAimLocked?.id:null);
+ let targets=poiAimTargetList(o,range,now);
+ if(poiPlayerWeaponProfile(type)?.sweep)
+  targets=targets.filter(c=>poiSwordSweepContains(o,o.dir,c));
+ poiAimLocked=poiAimChooseLock(o,targets,range,(d,r)=>poiAimWallLimit(o,d,r,pass),same?poiAimLocked?.id:null);
  poiAimLockAt=now+100;poiAimLockType=type;poiAimLockY=o.y;
  return poiAimLocked;
 }
@@ -14149,12 +14172,14 @@ function poiAimRenderMarker(now,vp,layer){
 }
 
 // BEGIN PLAYER WEAPON PROFILES
+const POI_SWORD_PROFILE=Object.freeze({range:1.3,hit:108,ready:350,pose:296,sweep:true});
 const POI_PLAYER_WEAPON_PROFILES=Object.freeze({
  equipWoodBow:{range:5,damage:22,hit:650,ready:1030,pose:850,cellMs:65,minFlight:70},
  equipWoodSpear:{range:2,damage:24,near:12,hit:240,ready:540,pose:410},
  equipStoneMace:{range:1,damage:32,hit:380,ready:760,pose:620},
- equipBoneSword:{range:1,damage:24,hit:0,ready:300,pose:260},
- equipIronSword:{range:1,damage:30,hit:0,ready:300,pose:260},
+ equipWoodSword:{...POI_SWORD_PROFILE,get damage(){return POI_PLAYER_ATTACK+POI_HOTBAR_SWORD_BONUS}},
+ equipBoneSword:{...POI_SWORD_PROFILE,damage:24},
+ equipIronSword:{...POI_SWORD_PROFILE,damage:30},
  equipPlainStaff:{range:1,damage:23,hit:140,ready:350,pose:300},
  equipLongStaff:{range:2,damage:20,hit:210,ready:510,pose:400},
  equipFryingPan:{range:1,damage:26,hit:150,ready:425,pose:320},
@@ -14162,13 +14187,13 @@ const POI_PLAYER_WEAPON_PROFILES=Object.freeze({
  equipBallpointPen:{range:1,damage:12,hit:70,ready:195,pose:180},
  fireWand:{range:8,damage:34,hit:0,ready:610,pose:310,cellMs:55,minFlight:55}
 });
-let poiPlayerWeaponPending=null,poiPlayerWeaponVisual=null;
+let poiPlayerWeaponPending=null,poiPlayerWeaponVisual=null,poiSwordVisual=null;
 const poiEnemyMageBolts=[];
 function poiPlayerWeaponProfile(type){return Object.hasOwn(POI_PLAYER_WEAPON_PROFILES,type)?POI_PLAYER_WEAPON_PROFILES[type]:null}
 function poiPlayerWeaponCancel(keepEnemy=false){
  if(!keepEnemy)poiEnemyMageBolts.length=0;
- if(!poiPlayerWeaponPending&&!poiPlayerWeaponVisual)return;
- poiPlayerWeaponPending=poiPlayerWeaponVisual=null;poiWalkActionStarted=-10000;
+ if(!poiPlayerWeaponPending&&!poiPlayerWeaponVisual&&!poiSwordVisual)return;
+ poiPlayerWeaponPending=poiPlayerWeaponVisual=poiSwordVisual=null;poiWalkActionStarted=-10000;
 }
 function poiPlayerRayClear(x,z,y,fromX,fromZ){
  const walls=world.filter(o=>o.y===y&&o.x===x&&o.z===z);
@@ -14200,14 +14225,14 @@ function poiPlayerWeaponTrace(shot,maxRange=shot.profile.range){
  }
  return {x,z,distance:Math.abs(x-shot.x)+Math.abs(z-shot.z),monster:null};
 }
-function poiPlayerDamageTarget(monster,x,z,amount,weapon,now){
+function poiPlayerDamageTarget(monster,x,z,amount,weapon,now,silent=false){
  const [obj,state]=monster;
  if(state.actorFree&&typeof poiMonsterActorPoint==='function'){
   const p=poiMonsterActorPoint(state.actorFree,now);
   state.x=Math.floor(p.x+.5);state.z=Math.floor(p.z+.5);
  }
  state.hp=Math.max(0,state.hp-amount);
- poiSound('hit',weapon,state.hp===0);
+ if(!silent)poiSound('hit',weapon,state.hp===0);
  const contact=obj.type==='monsterMineGuard'||state.actorFree;
  const hx=contact?x:state.x,hz=contact?z:state.z;
  poiDamageNumber(hx+.5,hz+.5,terrainY(hx,hz)+1.8+(facilitySite?poiWalkLevel*1.4:0),amount);
@@ -14232,6 +14257,20 @@ function poiPlayerWeaponResolve(shot,now,line=poiPlayerWeaponTrace(shot)){
  if(shot.type!=='fireWand'&&typeof poiEquipmentSpendWeapon==='function'&&!poiEquipmentSpendWeapon(shot.type,shot.phase==='flight'))return;
  poiPlayerDamageTarget(line.monster,line.x,line.z,(shot.aim?line.distance<=1+POI_AIM_EPS:line.distance===1)&&shot.profile.near?shot.profile.near:shot.profile.damage,shot.type,now);
 }
+function poiSwordResolve(shot,now){
+ const o=shot.aim,d={x:shot.dx,z:shot.dz},pass=poiAimWall(o);
+ const range=Math.hypot(POI_SWORD_FORWARD,POI_SWORD_HALF_WIDTH),hits=[];
+ for(const c of poiAimTargetList(o,range,now)){
+  if(!poiSwordSweepContains(o,d,c))continue;
+  const x=c.x-o.x,z=c.z-o.z,len=Math.hypot(x,z),ray=poiAimUnit(x,z);
+  if(ray&&poiAimWallLimit(o,ray,len,pass)+POI_AIM_EPS>=len)hits.push(c);
+ }
+ if(!hits.length){if(shot.type==='equipWoodSword')poiSound('attack',shot.type,false,true);return}
+ if(!poiEquipmentSpendWeapon(shot.type))return;
+ // One contact sound for the whole swing keeps a group hit from stacking loud samples.
+ poiSound('hit',shot.type,hits.some(c=>c.state.hp<=shot.profile.damage),true);
+ for(const c of hits)poiPlayerDamageTarget([c.id,c.state],Math.floor(c.x+.5),Math.floor(c.z+.5),shot.profile.damage,shot.type,now,true);
+}
 function poiPlayerStartProfile(type,now){
  const profile=poiPlayerWeaponProfile(type);
  if(!profile||type==='fireWand')return false;
@@ -14239,7 +14278,8 @@ function poiPlayerStartProfile(type,now){
  const base={type,profile,started:now,x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,facing:poiWalkFacing};
  const shot=typeof poiAimNewShot==='function'?poiAimNewShot(base,now):base;
  if(profile.hit)poiPlayerWeaponPending=shot;
- if(type!=='equipWoodBow')poiSound('attack',type);
+ if(profile.sweep&&shot.aim)poiSwordVisual=poiSwordStartTrail(shot,now);
+ if(type!=='equipWoodBow'&&type!=='equipWoodSword')poiSound('attack',type);
  poiWalkAvatar(now);
  if(!profile.hit)poiPlayerWeaponResolve(shot,now);
  return true;
@@ -14305,6 +14345,16 @@ function poiPlayerWeaponFrame(now){
  if(!a)return;
  if(document.hidden||!poiWalkActive||poiWalkLevel!==a.y||(typeof pineAIActive!=='undefined'&&pineAIActive)){poiPlayerWeaponCancel();return}
  if(a.phase==='flight'){poiPlayerWeaponFlightFrame(a,now);return}
+ if(a.profile.sweep){
+  // A committed sword swing works with the thumb still moving; use the
+  // attack origin and bearing captured on press, not the new camera yaw.
+  if(poiEquippedWeapon()!==a.type){poiPlayerWeaponCancel(true);return}
+  if(now<a.started+a.profile.hit)return;
+  poiPlayerWeaponPending=null;
+  if(a.aim)poiSwordResolve(a,now);
+  else poiPlayerWeaponResolve(a,now);
+  return;
+ }
  // Only windup is committed in place. Once launched, an arrow keeps
  // its original cardinal direction even after movement or equip changes.
  const moved=a.aim?poiAimWindupMoved(a,now):poiWalkX!==a.x||poiWalkZ!==a.z||poiWalkFacing!==a.facing;
@@ -14315,9 +14365,29 @@ function poiPlayerWeaponFrame(now){
  poiPlayerWeaponPending=null;
  poiPlayerWeaponResolve(a,now);
 }
+// A shoulder-led flat cut: wind the hand wide, cross the body at contact,
+ // and finish well on the opposite side. Generic weapon/NPC poses stay unchanged.
+const POI_PLAYER_SWORD_SWEEP_KEYS=[
+ [0,0,0,0,.30,0,.08],
+ [52,1.46,1.46,-.54,1.42,1.93,.31],
+ [76,1.51,1.39,-.48,1.51,1.74,.34],
+ [108,1.51,-.22,.05,1.57,-.04,.58],
+ [151,1.47,-1.71,.48,1.50,-1.96,.53],
+ [192,1.34,-1.74,.41,1.24,-2.07,.40],
+ [296,0,0,0,.30,0,.08]
+];
+function poiPlayerSwordSweepPose(ms){
+ if(ms<=0||ms>=POI_SWORD_PROFILE.pose)return null;
+ const i=POI_PLAYER_SWORD_SWEEP_KEYS.findIndex(p=>p[0]>=ms);
+ const a=POI_PLAYER_SWORD_SWEEP_KEYS[i-1],b=POI_PLAYER_SWORD_SWEEP_KEYS[i];
+ const t=(ms-a[0])/(b[0]-a[0]),k=t*t*(3-2*t);
+ const [strike,sweep,twist,edgeTilt,edgeYaw,guard]=a.slice(1).map((v,j)=>v+(b[j+1]-v)*k);
+ return {strike,sweep,twist,edgeTilt,edgeYaw,guard};
+}
 function poiPlayerProfilePose(type,ms){
  const p=poiPlayerWeaponProfile(type);
  if(!p||ms<0||ms>=p.pose)return null;
+ if(p.sweep)return poiPlayerSwordSweepPose(ms);
  if(type==='equipWoodBow'){
   const raw=Math.min(1,ms/p.hit),forward=raw*raw*(3-2*raw);
   const after=Math.max(0,Math.min(1,(ms-p.hit)/Math.max(1,p.pose-p.hit)));
@@ -14441,19 +14511,49 @@ function poiAppendWeaponProjectile(m,v,now){
   if(fade>0)poiWeaponArrowGeometry(m,p.x,p.y,p.z,p.dx,p.dz,.55+.45*fade);
  }else if(v.type==='fireWand')poiPlayerFireGeometry(m,p,now,v.impact);
 }
+function poiSwordStartTrail(shot,now){
+ const o=shot.aim,pass=poiAimWall(o),edge=Math.atan2(POI_SWORD_HALF_WIDTH,POI_SWORD_FORWARD);
+ const angles=[...Array.from({length:19},(_,i)=>(9-i)*Math.PI/18),edge,-edge].sort((a,b)=>b-a);
+ const samples=angles.map(a=>{
+  const f=Math.cos(a),side=Math.sin(a),d={x:shot.dx*f+shot.dz*side,z:shot.dz*f-shot.dx*side};
+  const reach=Math.min(POI_SWORD_FORWARD/Math.max(POI_AIM_EPS,f),POI_SWORD_HALF_WIDTH/Math.max(POI_AIM_EPS,Math.abs(side)));
+  const wall=poiAimWallLimit(o,d,reach+POI_AIM_EPS,pass),r=Math.min(reach,Math.max(0,wall-.025));
+  return {a,x:d.x*r,z:d.z*r};
+ });
+ return {o,samples,at:now,height:poiCreekPlayerHeight(now)+o.y*1.4+.98};
+}
+function poiSwordTrailDraw(m,v,now){
+ const age=now-v.at;
+ if(age<67||age>=208)return;
+ const front=Math.PI/2*(1-2*Math.min(1,(age-67)/84));
+ for(let i=0;i<v.samples.length-1;i++){
+  const a=v.samples[i],b=v.samples[i+1],delta=(a.a+b.a)*.5-front;
+  if(delta<-.14||delta>1.80)continue;
+  if(Math.hypot(a.x-b.x,a.z-b.z)>.55)continue; // do not bridge a wall edge
+  const light=Math.max(0,1-Math.abs(delta)/1.80)*Math.min(1,(208-age)/45);
+  if(light<.10)continue;
+  const point=(p,rise,scale)=>[v.o.x+.5+p.x*scale,v.height+rise,v.o.z+.5+p.z*scale];
+  quad(m,point(a,0,1),point(b,0,1),point(b,-.08*light,.89),point(a,-.08*light,.89),
+   [.49+.45*light,.63+.34*light,.72+.26*light]);
+ }
+}
 function poiPlayerWeaponDraw(now,vp){
- if(!poiWalkActive||pineAIActive){poiPlayerWeaponVisual=null;poiEnemyMageBolts.length=0;return}
+ if(!poiWalkActive||pineAIActive||document.hidden){poiPlayerWeaponVisual=poiSwordVisual=null;poiEnemyMageBolts.length=0;return}
  const v=poiPlayerWeaponVisual;
+ if(poiSwordVisual&&(poiSwordVisual.o.y!==poiWalkLevel||now-poiSwordVisual.at>=208||poiWalkActionStarted!==poiSwordVisual.at))poiSwordVisual=null;
+ const trail=poiSwordVisual&&now-poiSwordVisual.at>=67?poiSwordVisual:null;
  if(v&&(poiWalkLevel!==v.y||
      (v.impact!==undefined&&now-v.impact>=(v.type==='equipWoodBow'?100:185))))poiPlayerWeaponVisual=null;
  for(let i=poiEnemyMageBolts.length-1;i>=0;i--){
   const bolt=poiEnemyMageBolts[i];
   if(bolt.y!==poiWalkLevel||now-bolt.started>=bolt.travel)poiEnemyMageBolts.splice(i,1);
  }
- if(!poiPlayerWeaponVisual&&!poiEnemyMageBolts.length)return;
+ if(!poiPlayerWeaponVisual&&!poiEnemyMageBolts.length&&!trail)return;
  const m=mesh();
+ if(trail)poiSwordTrailDraw(m,trail,now);
  if(poiPlayerWeaponVisual)poiAppendWeaponProjectile(m,poiPlayerWeaponVisual,now);
  for(const bolt of poiEnemyMageBolts)poiAppendWeaponProjectile(m,bolt,now);
+ if(!m.p.length)return;
  const data=upload(m);try{draw(data,vp)}finally{gl.deleteBuffer(data.buf)}
 }
 // END PLAYER WEAPON PROFILES
@@ -15455,7 +15555,7 @@ function poiWalkAction(){
  }
  const now=performance.now();if((typeof poiTownDialogueAction==="function"&&poiTownDialogueAction(now))||(typeof poiNorthTrailReadForkSign==="function"&&poiNorthTrailReadForkSign())||(typeof poiChapelReadWaymark==='function'&&poiChapelReadWaymark())||(typeof poiWayfarerWellRead==="function"&&poiWayfarerWellRead())||now<poiAttackReady||(typeof poiPlayerWeaponPending!=='undefined'&&poiPlayerWeaponPending))return;
  // The attack plays even without a target; equipment is snapshotted for this swing.
- // The hit check below is independent of the visible animation.
+ // Sword damage is resolved by its profile at the blade contact keyframe.
  if(pineGameActive)workshopAdventureResumeQuiet=false;
  if(typeof poiArmedWandIndex==='function'){
   const wand=poiArmedWandIndex();

@@ -149,7 +149,7 @@ function observe(){
     }:null;};
     const clock=ctx.currentTime,graph=shape(node,6);
     const pcm=kind==='source'&&!node.loop&&graph.next?.kind==='gain'?inspectPcm(node.buffer):null;
-    starts.push({kind,loop:node.loop??false,when:args[0]??null,shape:graph,pcm,clock});
+    starts.push({kind,loop:node.loop??false,when:args[0]??null,shape:graph,pcm,clock,wallClock:performance.now()});
     return start(...args);
    };
   }
@@ -177,7 +177,7 @@ function sfx(records){
   if(r.pcm){
    const g=shape.next;exact(lastTarget(g.next),.90*.88,'PCM uses existing SE bus');
    const pcmKind=r.pcm.frames===approved.wood.frames?'wood-pcm':'defeat-pcm';
-   return [{hz:pcmKind,peak:g.volume,pcm:r.pcm,when:r.when,clock:r.clock}];
+   return [{hz:pcmKind,peak:g.volume,pcm:r.pcm,when:r.when,clock:r.clock,wallClock:r.wallClock}];
   }
   if(r.kind==='source'&&!r.loop&&shape.next?.kind==='filter'){
    const g=shape.next.next;exact(lastTarget(g.next),.90*.88,'SE bus');return [{hz:shape.next.frequency?.[0]?.[1]??shape.next.hz,low:shape.next.frequency?.[1]?.[1],peak:peak(g),onset:onset(g),decay:decay(g),when:r.when}];
@@ -262,14 +262,22 @@ async function soundCapture(page,weapon,expectHit,prev=false,expectDeath=false){
  const impactOnly=!prev&&weapon&&expectHit;
  const swing=impactOnly?[]:(weapon?woodSwing:handSwing);
  const hit=weapon?woodHit:handHit;
+ if(weapon){
+  // The real contact decides whether wood uses approved impact PCM or,
+  // for an empty swing, its existing air layers. Observe the relevant sound.
+  await page.waitForFunction(({start,frames,expectHit})=>window.__comfort.starts.slice(start).some(r=>
+   expectHit?r.pcm?.frames===frames:r.shape?.frequency?.[0]?.[1]===940||r.shape?.next?.frequency?.[0]?.[1]===940),
+   {start,frames:approved.wood.frames,expectHit});
+ }
  const want=expectHit?[...swing,...hit,...(expectDeath?defeatLayers:[])]:swing;
  const segment=withoutHurt(sfx((await events(page)).slice(start)));
  assert.deepEqual(segment.map(o=>o.hz),want,'real WebAudio sources for '+(weapon?'wood':'hand')+' '+(expectHit?'hit':'miss'));
  if(impactOnly){
-  const contact=segment[0],delay=contact.when-contact.clock;
-  // Exact 108ms is pinned by unit tests. The native audio clock may advance
-  // while decoding a new buffer; guard against early/no-delay scheduling.
-  assert.ok(delay>=.060&&delay<=.120,'wood contact remains scheduled near 108 ms, got '+delay);
+  const contact=segment[0],delay=contact.when-contact.clock,actionAt=(await state(page)).combat.actionAt;
+  // Exact 108ms is pinned by action tests. Native must not schedule its
+  // sample before contact or delay it a second time on the audio clock.
+  assert.ok(contact.wallClock-actionAt>=104,'wood sample starts only when the timed contact resolves');
+  assert.ok(delay>=-.06&&delay<=.04,'wood sample is not deferred for a second wind-up, got '+delay);
   approvedPcm(contact.pcm,'wood');
   exact(contact.peak,.78,'wood impact gain');
  }

@@ -79,8 +79,9 @@ try{
    assert(mini.x<32&&mini.y<24,'minimap sits immediately at upper-left');
    assert(pad.x<32&&pad.y>mini.y+mini.h,'pad remains below the complete minimap, location and clock: '+JSON.stringify({width,height,mini,pad}));
    assert(action.w>62&&action.h>56&&action.x>width*.72&&width-action.right>=12&&height-action.bottom>=7,'large action button has a deliberate inward margin');
-   assert(bag.right+6<=action.x&&action.x-bag.right<=20&&Math.abs((bag.y+bag.h/2)-(action.y+action.h/2))<=2,
-    'bag is adjacent to the centerline of the intentionally larger action button: '+JSON.stringify({width,height,bag,action}));
+   const bagDrop=(bag.y+bag.h/2)-(action.y+action.h/2);
+   assert(bag.right+6<=action.x&&action.x-bag.right<=20&&bagDrop>=2&&bagDrop<=9,
+    'bag is adjacent and a little below the attack center, without changing horizontal spacing: '+JSON.stringify({width,height,bag,action,bagDrop}));
    const clear=(a,b)=>a.right<=b.x+1||b.right<=a.x+1||a.bottom<=b.y+1||b.bottom<=a.y+1;
    assert(clear(bar,bag)&&clear(bar,action)&&clear(bar,pad),'bar does not overlap any thumb target');
    assert(toggle.x>width*.72&&toggle.y<40&&toggle.w>=40&&toggle.h>=40,'upper-right menu has a thumb-sized touch target');
