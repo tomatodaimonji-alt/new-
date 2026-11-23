@@ -8,11 +8,11 @@ function rt(){
   poiEquipmentSpendWeapon:(id)=>{wear.push(id);return true},poiSound(){},
   poiPlayerDamageTarget:(pair,x,z,damage,type,now,silent=false,atContact=false)=>hits.push({id:pair[0],damage,type,atContact})};
  const api=vm.runInNewContext(cut('// BEGIN ANGULAR COMBAT MATH','// END ANGULAR COMBAT MATH')+
-  cut('function poiAimTrace(','function poiAimFlightBegin(')+cut('// BEGIN PLAYER WEAPON PROFILES','function poiPlayerWeaponCancel(')+
+  cut('const POI_COMBAT_TORSO_HEIGHT=','function poiAimRenderMarker(')+cut('function poiAimTrace(','function poiAimFlightBegin(')+cut('// BEGIN PLAYER WEAPON PROFILES','function poiPlayerWeaponCancel(')+
   cut('function poiPlayerWeaponResolve(','function poiPlayerStartProfile(')+
   ';({trace:poiAimTrace,profile:poiPlayerWeaponProfile,grades:poiPlayerWeaponGrades,sword:poiSwordResolve,contact:poiPlayerWeaponResolve})',c);
  const shot=(type,dx=1,dz=0)=>({type,profile:api.profile(type),aim:{x:0,z:0,y:0},dx,dz});
- const put=(x,z)=>targets.push({x,z,id:targets.length+1,state:{hp:100}});
+ const put=(x,z)=>targets.push({x,z,y:0,id:targets.length+1,state:{hp:100}});
  return {api,shot,put,hits,wear,c};
 }
 const grades=p=>[p.speed,p.reach];

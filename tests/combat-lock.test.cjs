@@ -55,7 +55,7 @@ test('combat-facing tracks the lock independent of sideways/backwards movement h
  const a=h.enemy(0,3),point=h.draw();assert.equal(point?.z,13.5);
  c.poiFreePose.angle=Math.PI/2;c.poiFreePose.walking=true;c.poiFreePose.distance=.4;
  c.poiWalkAvatar(1200);
- const avatar=h.avatars.at(-1);assert(Math.abs(avatar.at(-1))<1e-6,'target is south while walking west');
+ const avatar=h.avatars.at(-1);assert(Math.abs(avatar[8])<1e-6,'target is south while walking west');
  assert.equal(c.poiFreePose.angle,Math.PI/2);assert.equal(c.poiWalkFacing,1);
  assert.equal(a.hp,40);
 });

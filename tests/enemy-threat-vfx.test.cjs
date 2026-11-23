@@ -21,6 +21,7 @@ test('a normal gameplay render with a pending threat submits the scene and monst
   'poiRenderEnemyHealth','poiRenderDamageLabels','poiMineUnlockDraw','poiTownDialogueDraw','pineDrawChecks',
   'facilityDrawEntranceGuides','poiScreenNoteCaptureFrame'])s[name]=()=>{};
  vm.runInContext(extract('function poiDungeonPointIn(','function poiOtherworldIn(')+
+  extract('// BEGIN OUTDOOR SKY','// END OUTDOOR SKY')+
   extract('// BEGIN NORTH AXE FOOTPRINT','// END NORTH AXE FOOTPRINT')+
   extract('function render(){','let savedMapRestoreFailed=')+'\nrender();',s);
  assert.deepEqual(calls,['ground','monster']);
