@@ -12,7 +12,17 @@ function beforeMineDepths(world){
   [5799,121,50,'stonewall'],[5828,115,57,'mosswall']])restored.splice(i,0,{x,z,y:-1,type,rot:0});
  return restored;
 }
+function beforeChapelWest(site){
+ if(!site.chapel?.expansion)return site;
+ const {expansion,...realm}=site.chapel,world=Array.from(site.map.world.slice(0,7160));
+ for(const [i,x,z,type,rot] of [[6474,75,87,'mosswall',0],[6506,74,80,'mosswall',0],
+   [6523,74,87,'mosswall',0],[6529,75,87,'poiWallSconce',3]])world[i]={x,z,y:-1,type,rot};
+ assert.equal(createHash('sha256').update(JSON.stringify(world)).digest('hex'),
+  'dddcb6c5946c92b6de0e766b8df416dae20f34babaaf1f9608422a163e7cada4','exact v203 map before the western chapel loop');
+ return {...site,chapel:{...realm,bounds:{...expansion.originalBounds}},map:{...site.map,world}};
+}
 function beforeOtherworldDepths(site){
+ site=beforeChapelWest(site);
  if(!site.otherworld?.expansion)return site;
  const {expansion,...realm}=site.otherworld,world=Array.from(site.map.world.slice(0,6925));
  for(const [i,x,z] of [[6249,102,86],[6270,108,81]]){
@@ -101,4 +111,4 @@ function beforeAbandonedMine(site){
  assert.equal(digest,exactMine,'only the exact v167 mine records are exempt; untouched v166 mine records are pinned separately');
  return {...other,map:{...map,world:world.slice(0,oldLength)}};
 }
-module.exports={beforeAbandonedMine,beforeMineDepths,beforeOtherworld,beforeMineEntry,beforeChapel,beforeArmedEncounters,beforeNorthTrail,beforeForestWatchPost,beforePondMarsh,beforeWayfarer,beforeOtherworldDepths};
+module.exports={beforeChapelWest,beforeAbandonedMine,beforeMineDepths,beforeOtherworld,beforeMineEntry,beforeChapel,beforeArmedEncounters,beforeNorthTrail,beforeForestWatchPost,beforePondMarsh,beforeWayfarer,beforeOtherworldDepths};
