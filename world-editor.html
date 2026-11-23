@@ -1414,7 +1414,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v220）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v221）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -12259,7 +12259,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v220',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v221',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -12374,7 +12374,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v220';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v221';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -12589,7 +12589,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v220',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v221',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -15623,7 +15623,16 @@ function facilityWatchtowerCameraEye(target,desired){
    (isWallId(o.type)?1.4:0);
   if(!height)return [];
   const base=o.y*1.4+terrainY(o.x,o.z),pad=.062;
-  return [[[o.x-pad,base-pad,o.z-pad],[o.x+1+pad,base+height+pad,o.z+1+pad]]];
+  const min=[o.x-pad,base-pad,o.z-pad],max=[o.x+1+pad,base+height+pad,o.z+1+pad];
+  if(o.type==='towerWindow'){
+   // The curved window occupies only the outside strip of this cell.
+   // Treating its empty inner half as stone traps the eye in the doorway.
+   const side=((o.rot||0)%4+4)%4,axis=side%2?0:2,positive=side===0||side===3;
+   const edge=axis===0?o.x:o.z;
+   if(positive)min[axis]=edge+.77-pad;
+   else max[axis]=edge+.23+pad;
+  }
+  return [[min,max]];
  });
  const ray=desired.map((v,i)=>v-target[i]),distance=Math.hypot(...ray);
  const clip=vector=>{
@@ -15641,19 +15650,43 @@ function facilityWatchtowerCameraEye(target,desired){
    }
    if(near>1e-6&&near<=far&&near<closest)closest=near;
   }
-  return closest===1?1:Math.max(closest*.5,closest-.235/distance);
+  return closest===1?1:Math.max(closest*.5,closest-.235/Math.hypot(...vector));
  };
- let chosen=ray,fraction=clip(ray);
+ const fraction=clip(ray),arm=fraction*distance;
  if(fraction===1)return desired;
- // A compressed eye can enter the avatar at the threshold. Keep the
- // pitch/distance preference and try nearby clear angles in fixed order.
- if(fraction*distance<1.8)for(const bend of [.65,-.65,1.3,-1.3,2.1,-2.1,Math.PI]){
-  const c=Math.cos(bend),s=Math.sin(bend),candidate=[ray[0]*c-ray[2]*s,ray[1],ray[0]*s+ray[2]*c];
-  const next=clip(candidate);
-  if(next>fraction){chosen=candidate;fraction=next}
-  if(fraction*distance>=1.8)break;
+ if(arm>=1.8)return target.map((v,i)=>v+fraction*ray[i]);
+ // Never turn the camera away from the held movement bearing. At a tight
+ // sill, test only the pitch of a short arm, keeping the azimuth identical.
+ const horizontal=Math.hypot(ray[0],ray[2]),radius=Math.min(1.805,distance);
+ let best=ray,bestFraction=fraction,bestDistance=arm;
+ if(horizontal>1e-7){
+  const pitch=Math.atan2(ray[1],horizontal),maxPitch=Math.asin(Math.min(.9999995,ray[1]/radius));
+  const candidate=a=>{
+   const h=radius*Math.cos(a);
+   return [ray[0]*h/horizontal,radius*Math.sin(a),ray[2]*h/horizontal];
+  };
+  // Prefer a slightly higher same-side arm, never raising the camera above
+  // the player's requested eye height. A level ray can fit below the arch.
+  const check=trial=>{
+   const fraction=clip(trial),length=radius*fraction;
+   if(length>bestDistance){best=trial;bestFraction=fraction;bestDistance=length}
+   return fraction===1;
+  };
+  for(let i=1;i<=9;i++){
+   const upper=candidate(pitch+(maxPitch-pitch)*i/9);
+   if(check(upper))return target.map((v,j)=>v+upper[j]);
+  }
+  for(let i=1;i<=5;i++){
+   const lower=candidate(Math.max(.018,pitch*(1-i/5)));
+   if(check(lower))return target.map((v,j)=>v+lower[j]);
+  }
  }
- return target.map((v,i)=>v+fraction*chosen[i]);
+ return target.map((v,i)=>v+bestFraction*best[i]);
+}
+function facilityWatchtowerCloseFov(distance){
+ // A short safe arm would otherwise fill the screen with the character.
+ // A wider lens, only when clipped, keeps the doorway and avatar readable.
+ return Math.min(Math.PI*.76,2*Math.atan(Math.tan(Math.PI/6)*Math.max(1,2.25/distance)));
 }
 function parameters(){
  const q=layout(),halfH=9/zoom,halfW=halfH*q.aspect;
@@ -15669,8 +15702,10 @@ function parameters(){
   const desired=[x-horizontal*Math.sin(poiCameraYaw),ground+1.1+poiCameraDistance*Math.sin(poiCameraPitch),z-horizontal*Math.cos(poiCameraYaw)];
   const target=[x,ground+1.1,z];
   const eye=facilityWatchtowerCameraEye(target,desired);
-  const near=eye!==desired&&Math.hypot(...eye.map((v,i)=>v-target[i]))<1.8 ? .08 : .45;
-  return{...q,halfH,halfW,centerX,centerZ,elev,targetY,vp:mult(perspective(Math.PI/3,Math.max(.1,q.aspect),near,Math.max(90,sceneReach*1.6+18)),look(eye,target))};
+  const arm=eye===desired?poiCameraDistance:Math.hypot(...eye.map((v,i)=>v-target[i]));
+  const near=eye!==desired&&arm<1.81?.08:.45;
+  const fov=eye===desired?Math.PI/3:facilityWatchtowerCloseFov(arm);
+  return{...q,halfH,halfW,centerX,centerZ,elev,targetY,vp:mult(perspective(fov,Math.max(.1,q.aspect),near,Math.max(90,sceneReach*1.6+18)),look(eye,target))};
  }
  const cameraDistance=Math.max(80,sceneReach*1.6+24);
  const eye=[centerX+cameraDistance*Math.sin(yaw)*Math.cos(elev),targetY+cameraDistance*Math.sin(elev),centerZ+cameraDistance*Math.cos(yaw)*Math.cos(elev)];
