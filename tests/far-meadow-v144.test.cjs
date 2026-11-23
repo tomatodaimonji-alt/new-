@@ -1,4 +1,4 @@
-const {beforeAbandonedMine}=require('./mine-history-v165.cjs');
+const {beforeAbandonedMine,beforeNorthFort}=require('./mine-history-v165.cjs');
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const html=fs.readFileSync(process.env.HTML||path.join(__dirname,'../world-editor.html'),'utf8');
 function load(s){
@@ -7,7 +7,7 @@ function load(s){
 }
 const view=load(html);
 const clean=s=>JSON.parse(JSON.stringify(s));
-const base=beforeAbandonedMine(clean(view('base')));
+const base=beforeAbandonedMine(beforeNorthFort(clean(view('base'))));
 const k=(x,z)=>x+','+z;
 const byCell=new Map();
 for(const o of base.map.world.filter(o=>o.y===0)){
@@ -22,8 +22,11 @@ function trace(points){
  return cells;
 }
 test('extension keeps every old Game World tile and all other POIs intact',()=>{
- const oldSource=html.replace(' const margin=10,expanded=shift(site,margin);\n extendTownWorldOutside(expanded,margin);\n const mine=extendTownWorldMine(expanded),otherworld=extendTownWorldOtherworld(expanded);\n extendTownWorldMineEntry(mine,expanded.map.world);\n const chapel=extendTownWorldChapel(expanded),armedEncounters=extendTownWorldArmedEncounters(expanded.map.world);\n const northTrail=extendTownWorldNorthTrail(expanded.map.world);\n extendTownWorldForestWatchPost(northTrail,expanded.map.world);\n extendTownWorldPondMarsh(northTrail,expanded.map.world);\n extendTownWorldWayfarer(northTrail,expanded.map.world);\n extendTownWorldOtherworldDepths(otherworld,expanded.map.world);\n extendTownWorldChapelWest(chapel,expanded.map.world);\n extendTownWorldMinePrep(mine,expanded.map.world);\n extendTownWorldChapelApproach(chapel,expanded.map.world);\n const southRoad=extendTownWorldSouthRoad(expanded);\n extendTownWorldMineApproach(mine,expanded.map.world);\n southRoad.creek=extendTownWorldSouthCreek(expanded);\n southRoad.town=extendTownWorldSouthTown(expanded,southRoad);\n return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad};',' return {...site,townOffset};');
- assert.notEqual(oldSource,html,'inverse the exact final outlying append order');
+ const northBuild=' const northFort=extendTownWorldNorthFort(expanded.map.world,northTrail);\n return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad,northFort};';
+ const oldBuild=' return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad};';
+ const preFort=html.includes(northBuild)?html.replace(northBuild,oldBuild):html;
+ const oldSource=preFort.replace(' const margin=10,expanded=shift(site,margin);\n extendTownWorldOutside(expanded,margin);\n const mine=extendTownWorldMine(expanded),otherworld=extendTownWorldOtherworld(expanded);\n extendTownWorldMineEntry(mine,expanded.map.world);\n const chapel=extendTownWorldChapel(expanded),armedEncounters=extendTownWorldArmedEncounters(expanded.map.world);\n const northTrail=extendTownWorldNorthTrail(expanded.map.world);\n extendTownWorldForestWatchPost(northTrail,expanded.map.world);\n extendTownWorldPondMarsh(northTrail,expanded.map.world);\n extendTownWorldWayfarer(northTrail,expanded.map.world);\n extendTownWorldOtherworldDepths(otherworld,expanded.map.world);\n extendTownWorldChapelWest(chapel,expanded.map.world);\n extendTownWorldMinePrep(mine,expanded.map.world);\n extendTownWorldChapelApproach(chapel,expanded.map.world);\n const southRoad=extendTownWorldSouthRoad(expanded);\n extendTownWorldMineApproach(mine,expanded.map.world);\n southRoad.creek=extendTownWorldSouthCreek(expanded);\n southRoad.town=extendTownWorldSouthTown(expanded,southRoad);\n return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad};',' return {...site,townOffset};');
+ assert.notEqual(oldSource,preFort,'inverse the exact final outlying append order');
  const old=load(oldSource.replace("[id==='base'?1:6,8,'poiPottedPlant']","[6,8,'poiPottedPlant']"));
  const framed=clean(old('base'));
  const shift=v=>Array.isArray(v)?v.map(shift):v&&typeof v==='object'?Object.fromEntries(Object.entries(v).map(([f,x])=>[f,

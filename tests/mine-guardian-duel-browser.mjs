@@ -24,12 +24,12 @@ let fixture=inject(html,anchor,anchor+`
 // Chromium; from arm onward the exact authored action engine runs normally.
 fixture=inject(fixture,'function poiEnemyBeginPlayer(obj,s,now){',
  'function poiEnemyBeginPlayer(obj,s,now){if(obj.type==="monsterMineGuard"&&!window.__qaDuelArmed)return false;');
-fixture=inject(fixture,'function poiMobHitPlayer(obj,now){',`function poiMobHitPlayer(obj,now){
+fixture=inject(fixture,'function poiMobHitPlayer(obj,now,attackDamage){',`function poiMobHitPlayer(obj,now,attackDamage){
  const before=poiPlayerHP;
- try{return __qaGuardianHit(obj,now)}
+ try{return __qaGuardianHit(obj,now,attackDamage)}
  finally{if(obj.type==='monsterMineGuard')(window.__qaDuelHits??=[]).push({before,after:poiPlayerHP,now})}
 }
-function __qaGuardianHit(obj,now){`);
+function __qaGuardianHit(obj,now,attackDamage){`);
 // Read the actual pose used in the monster WebGL mesh build, not merely a
 // threat flag computed as part of the AI. Frame probes do not drive the game.
 fixture=inject(fixture,'   const {x:cx,y,z:cz,attack,heading}=poiMonsterPose(obj,s,now),part=mesh();',`

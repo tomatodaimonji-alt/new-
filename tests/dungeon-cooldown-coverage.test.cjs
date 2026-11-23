@@ -7,7 +7,7 @@ test('all actual dungeon monsters, including the later armed guards, have distin
  vm.runInContext(pick('// BEGIN DUNGEON POPULATION','// END DUNGEON POPULATION'),c);
  const found=new Set();
  for(const o of site.map.world.filter(o=>o.y===-1&&o.type.startsWith('monster'))){
-  const realm=['mine','chapel','otherworld'].find(k=>{const b=site[k].bounds;return o.x>=b.x1&&o.x<=b.x2&&o.z>=b.z1&&o.z<=b.z2});
+  const realm=['mine','chapel','otherworld','northFort'].find(k=>{const b=site[k].bounds;return o.x>=b.x1&&o.x<=b.x2&&o.z>=b.z1&&o.z<=b.z2});
   a(realm,'authored hostile B1 encounter is registered in a dungeon');
   const id=c.poiDungeonSpawnId(o);a(id?.startsWith(realm+'.'),o.type+' '+o.x+','+o.z);a(!found.has(id));found.add(id);
   const p=c.poiDungeonPopulationDecode({version:1,dead:{[id]:1000}},8000);

@@ -11,6 +11,18 @@ test('new market music has a soft plucked melody and a distinct bounded eight-ba
 });
 test('only inside the named town chooses market audio, but stops clear the loop',()=>{
  a.match(slice('function poiAudioMusicZone(','function poiAudioTownRegionMusic('),/poiSouthTownContains\(facilitySite,poiWalkX,poiWalkZ,floor\)\?'market'/);
- a.match(slice('function poiAudioTownRegionMusic(','let poiMusicBars='),/\['mine','otherworld','chapel','market'\]/);
+ a.match(slice('function poiAudioTownRegionMusic(','let poiMusicBars='),/\['mine','otherworld','chapel','market','northFort'\]/);
  a.match(h,/delete poiDungeonMusicClocks\.market/);
+});
+test('north fort uses the existing dungeon score without replacing the market score',()=>{
+ const play=zone=>{
+  const heard=[],c=vm.createContext({poiPianoKey:(hz,at,gain)=>heard.push({hz,at,gain}),poiAudioTone(){}});
+  vm.runInContext(slice('const POI_DUNGEON_SCORES=','// BEGIN DUNGEON ARRIVAL'),c);
+  for(let t=0;t<12;t+=.2)c.poiAudioDungeonPhrase(zone,t,'destination',true);
+  return heard;
+ };
+ const fort=play('northFort');
+ a(fort.length>0);
+ a.deepEqual(fort,play('otherworld'));
+ a.notDeepEqual(fort,play('market'));
 });

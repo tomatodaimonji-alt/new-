@@ -1,4 +1,4 @@
-const {beforeSouthCreek}=require('./mine-history-v165.cjs');
+const {beforeSouthCreek,beforeNorthFort}=require('./mine-history-v165.cjs');
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const html=fs.readFileSync(process.env.HTML||path.join(__dirname,'../world-editor.html'),'utf8');
 const a=html.indexOf('const FACILITY_SITES=Object.freeze('),b=html.indexOf('function workshopResumeDecode(',a);
@@ -8,7 +8,7 @@ const site=clean(api.build('base'));
 const at=(x,z)=>site.map.world.filter(o=>o.x===x&&o.z===z&&o.y===0);
 test('four wide gates connect to genuine meadows and preserve both old routes',()=>{
  assert.deepEqual([site.map.width,site.map.height,site.townOffset],[128,128,22]);
- const gates=site.map.world.filter(o=>o.type==='poiFortGate');
+ const gates=beforeNorthFort(site).map.world.filter(o=>o.type==='poiFortGate');
  assert.deepEqual(gates.map(({x,z,rot})=>[x,z,rot]).sort(),[[23,49,1],[34,22,2],[41,69,0],[84,67,3]]);
  for(const [x,z,dx,dz] of [[34,22,0,-1],[23,49,-1,0],[41,69,0,1],[84,67,1,0]]){
   for(let side=-1;side<=1;side++)for(let forward=-1;forward<=1;forward++){

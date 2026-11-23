@@ -1,8 +1,8 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),{createHash}=require('node:crypto');
-const {beforeSouthCreek,beforeSouthTown}=require('./mine-history-v165.cjs');
+const {beforeSouthCreek,beforeSouthTown,beforeNorthFort}=require('./mine-history-v165.cjs');
 const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const build=vm.runInNewContext(html.slice(html.indexOf('const FACILITY_SITES=Object.freeze('),html.indexOf('function workshopResumeDecode('))+';buildFacilitySite');
-const s=JSON.parse(JSON.stringify(build('base'))),w=s.map.world,k=(x,z)=>x+','+z,at=new Map();
+const current=JSON.parse(JSON.stringify(build('base'))),s=beforeNorthFort(current),w=s.map.world,k=(x,z)=>x+','+z,at=new Map();
 for(const o of w.filter(o=>o.y===0)){const key=k(o.x,o.z);if(!at.has(key))at.set(key,[]);at.get(key).push(o);}
 const floor=/^(?:earth|grass\w*|road\w+|woodfloor\w*|stone|brickfloor)$/;
 const walk=o=>floor.test(o.type)||/wallDoor$/.test(o.type);
@@ -42,7 +42,7 @@ test('town is append-only, uses only the reservation and leaves independent buil
  assert(tail.length>=350&&tail.length<=560);
  assert(tail.every(o=>o.x>=94&&o.x<=116&&o.z>=108&&o.z<=122&&o.y>=0&&o.y<=1));
  const floorSlots=new Set();
- for(const o of w.filter(o=>o.y===0&&floor.test(o.type))){
+ for(const o of current.map.world.filter(o=>o.y===0&&floor.test(o.type))){
   const p=k(o.x,o.z);assert(!floorSlots.has(p),'unique ground surface '+p);floorSlots.add(p);
  }
  assert.equal(build('artisan').buildings.length,1);
