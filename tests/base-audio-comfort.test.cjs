@@ -50,11 +50,11 @@ function harness(id) {
    return row;
   });
  };
- return {nodes,now,notes,timers,writes,fx,run,wind:()=>nodes.find(n=>n.kind==='filter'&&n.type==='lowpass')?.next.gain.value,
+ return {nodes,now,notes,timers,writes,fx,run,wind:()=>nodes.find(n=>n.kind==='filter'&&n.type==='lowpass'&&n.next?.next?.kind==='ambience')?.next.gain.value,
   rustle:()=>nodes.find(n=>n.kind==='filter'&&n.frequency.value===1450)?.next.gain.value,
   creek:()=>nodes.find(n=>n.kind==='filter'&&n.frequency.value===1050)?.next.gain.value};
 }
-test('continuous wind/rustle are gone while the local creek, piano and mixer stay intact',()=>{
+test('continuous wind/rustle are gone while the local creek, orchestra and mixer stay intact',()=>{
  const b=harness('base'),k=harness('kitchen'),e=harness(null);
  assert.deepEqual([b.wind(),b.rustle(),b.creek()],[undefined,undefined,.145]);
  for(const a of [k,e])assert.deepEqual([a.wind(),a.rustle(),a.creek()],[undefined,undefined,undefined]);
@@ -64,8 +64,10 @@ test('continuous wind/rustle are gone while the local creek, piano and mixer sta
   assert.equal(a.nodes.find(n=>n.kind==='ambience').gain.value,.39*68/100);
   assert.equal(a.nodes.find(n=>n.kind==='effects').gain.value,.90*90/100);
  }
- assert.deepEqual(b.notes.map(v=>Array.from(v).slice(0,3)),[[130.8127826502993,10.09,.41]]);
- assert.deepEqual(b.timers,[200]);assert.deepEqual(k.timers,[8000]);
+ assert.equal(b.notes.length,0,'the superseded piano transport does not schedule simultaneously');
+ assert.equal(b.run('poiOrchestraSnapshot().active'),'town');
+ assert(b.run('poiOrchestraSnapshot().voices')>=2,'new music bus has a real chord');
+ assert.deepEqual(b.timers,[200]);assert.deepEqual(k.timers,[200]);
 });
 test('base footsteps and swings have warmer spectrum and rounded attacks; unrelated cues use the exact previous graph',()=>{
  const b=harness('base'),k=harness('kitchen');
@@ -164,4 +166,3 @@ test('chapel footsteps retain the wet cues but take the edge off the splash',()=
  assert.deepEqual(a.fx('chapel-water-step',null,true),[['filter',1120,.073,11,0],['filter',560,.055,14,32]]);
  assert.deepEqual(a.fx('skater-splash',null,true),[['filter',1760,.112,8,0],['filter',860,.07,14,26]]);
 });
-

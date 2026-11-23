@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
+import {Script} from 'node:vm';
 
 const html=readFileSync(process.argv[2]||'world-editor.html','utf8');
 const a=html.indexOf('const PINE_AUDIO_SETTINGS_KEY'),b=html.indexOf('const POI_PLAYER_MAX_HP',a);
@@ -9,6 +10,11 @@ const audio=html.slice(a,b);
 const mixTrim='.58*poiAudioLevels.bgm/100';
 assert.equal(audio.split(mixTrim).length,2);
 const baseline=audio.replace(mixTrim,'.38*poiAudioLevels.bgm/100');
+if(process.env.ORCHESTRA_MIX_LAYOUT_ONLY==='1'){
+ new Script(audio);new Script(baseline);
+ console.log('PASS isolated production orchestral audio and native mixer fixture parse');
+ process.exit(0);
+}
 const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
 let browser;
 try{
@@ -33,8 +39,10 @@ try{
   async function render(bundle,zone,levels,cues){
    const context=new OfflineAudioContext(2,length,rate),state={time:0,writes:0};
    Object.defineProperty(context,'currentTime',{configurable:true,get:()=>state.time});
-   // The timestamp is seeded manually to schedule the unchanged game phrases
-   // and sound routines into a native two-channel OfflineAudioContext.
+   Object.defineProperty(context,'state',{configurable:true,get:()=> 'running'});
+   // Suspend at actual native audio checkpoints, fill the production
+   // lookahead, then resume. Pre-scheduling all 12 seconds would exhaust
+   // the true live-voice cap before OfflineAudioContext can emit onended.
    const launch=new Function('context','state','zone','levels','cues',`
     const window={AudioContext:function(){return context},addEventListener(){}};
     const document={hidden:false,addEventListener(){}};
@@ -48,7 +56,7 @@ try{
     poiAudioInitialize();
     poiAudioMusicZone=()=>zone;
     poiAudioStart=()=>{};
-    for(let t=0;t<11.9;t+=.2)poiAudioTownRegionMusic(t);
+    poiOrchestraTick(0);
     if(cues){
      let index=0;
      for(let t=1;t<11;t+=.175){
@@ -63,12 +71,19 @@ try{
      state.time=4.1;poiSound('hit','equipWoodSword');
     }
     state.time=0;
-    return {levels:{...poiAudioLevels},render:context.startRendering()};
+    return {levels:{...poiAudioLevels},tick:()=>poiOrchestraTick(state.time)};
    `);
    const r=launch(context,state,zone,levels,cues);
-   return {...stats(await r.render),writes:state.writes,levels:r.levels};
+   const checkpoints=Array.from({length:59},(_,i)=>{
+    const t=(i+1)*.2;return [t,context.suspend(t)];
+   });
+   const rendering=context.startRendering();
+   for(const [t,gate] of checkpoints){
+    await gate;state.time=t;r.tick();await context.resume();
+   }
+   return {...stats(await rendering),writes:state.writes,levels:r.levels};
   }
-  const zones=['town','outside','mine','otherworld','chapel','market'],full={master:100,bgm:100,se:100};
+  const zones=['town','indoor','outside','mine','otherworld','chapel','market','northFort','battle'],full={master:100,bgm:100,se:100};
   const converted=[];
   for(const zone of zones)converted.push({zone,...await render(audio,zone,full,true)});
   const normal={master:85,bgm:68,se:90};
@@ -88,5 +103,5 @@ try{
   assert(muted.settledPeak<1e-5,'master and mute buses are silent after the preexisting gain ramp');
   assert.equal(muted.writes,0);
  }
- console.log('PASS native stereo WebAudio: '+JSON.stringify(results));
+ console.log('PASS native stereo WebAudio orchestral score + unchanged SE: '+JSON.stringify(results));
 }finally{await browser?.close()}

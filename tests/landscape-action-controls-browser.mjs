@@ -123,7 +123,7 @@ try{
  try{
   assert.equal(await page.locator('#poiLandscapeBattery #batteryPercent').textContent(),'--%','no invented charge if Battery API is unavailable');
   const action=page.locator('#poiWalkAction');
-  await page.waitForFunction(()=>document.querySelector('#poiWalkAction')?.getAttribute('aria-label')==='住人と話す');
+  await page.waitForFunction(()=>document.querySelector('#poiWalkAction')?.getAttribute('aria-label')==='イネス（食堂の料理人）と話す');
   assert.equal(await action.textContent(),'話す');
   await action.tap();
   assert.equal(await action.getAttribute('aria-label'),'会話の選択肢を決定する');
@@ -136,3 +136,4 @@ try{
  }finally{await context.close()}
  console.log('PASS marked round touch controls, actual equipped icon, unarmed fist/attack, speech and unchanged portrait');
 }finally{await browser?.close();await new Promise(r=>server.close(r))}
+
