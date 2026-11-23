@@ -61,6 +61,24 @@ async function waitPosition(page,x,z,level=-1){
 const deathAt=2*1440+605;
 const slime=s=>s.combat.actors.find(a=>a.type==='monsterSlime'&&a.level===-1&&a.visible&&a.hp>0);
 const gate=async page=>assert.equal(await page.evaluate(()=>window.__editorTest.canStep(121,47,121,48)),false);
+async function unifiedEntrance(browser){
+ const stair=site.mine.stairs;
+ const {ctx,page,errors}=await launch(browser,pos(stair.x,stair.z+1,0));
+ async function label(){
+  assert.equal((await api(page)).miniMap.location,'廃坑');
+  assert.equal(await page.locator('#poiLocationName').textContent(),'廃坑');
+  assert.equal(await page.locator('#poiLocationStars').textContent(),'★★★☆☆☆☆☆☆☆');
+ }
+ try{
+  await label();
+  await page.keyboard.press('ArrowUp');
+  await waitPosition(page,stair.x,stair.z,-1);
+  await label();
+  assert.equal(await page.locator('#poiLocationPanel').evaluate(el=>el.getAnimations().length),0,
+   'normal staircase descent stays in the same area without a separate announcement');
+  assert.deepEqual(errors,[]);
+ }finally{await ctx.close()}
+}
 async function oldThreshold(browser){
  const {ctx,page,errors}=await launch(browser,pos(120,57),pos(120,58));
  try{
@@ -110,6 +128,6 @@ try{
  browser=await chromium.launch({headless:true,
   ...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
   args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
- await oldThreshold(browser);await cooldown(browser);
+ await unifiedEntrance(browser);await oldThreshold(browser);await cooldown(browser);
  console.log('PASS native old threshold fallback, safe patrol, durable cooldown reconstruction');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
