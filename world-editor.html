@@ -726,6 +726,8 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
 #poiNpcInventoryGear{display:grid;grid-template-rows:repeat(5,var(--poi-bag-cell));gap:3px}
 #poiNpcInventory :is([data-npc-bag-slot],[data-npc-gear-slot]){position:relative;display:grid;place-items:center;
  width:var(--poi-bag-cell);height:var(--poi-bag-cell);border:1px solid #b7cbb577;border-radius:4px;background:#45645256}
+#poiNpcInventory :is(button[data-npc-bag-slot],button[data-npc-gear-slot]){padding:0;box-shadow:none;cursor:pointer}
+#poiNpcInventory :is(button[data-npc-bag-slot],button[data-npc-gear-slot]):focus-visible{outline:2px solid #f0d6a0;outline-offset:-2px}
 #poiNpcInventory [data-npc-bag-slot]:nth-child(n+11){background:#15261b8e;border-color:#80977a55}
 #poiNpcInventory [data-npc-gear-slot]{font-size:10px;color:#f6e6c8;overflow:hidden}
 #poiNpcInventory .hotbar-icon{width:100%;height:100%;display:grid;place-items:center}
@@ -1057,7 +1059,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v212）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v213）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -9404,12 +9406,17 @@ function poiCreateStorageTapGate(schedule,cancelTimer,onSingle,onDouble){
 let poiItemDetailSelection=null,poiStorageTapGate=null;
 function poiItemDetailIsOpen(){return !!$('poiItemDetail')?.open}
 function poiItemDetailCell(ref){
+ if(ref?.zone==='npc'){
+  const panel=$('poiNpcInventory');
+  return panel?.hidden===false&&panel.contains(ref.button)?ref.cell:null;
+ }
  if(!ref||$('poiBagPanel')?.hidden!==false||!poiInventoryAllowed())return null;
  return ref.zone==='armor'?poiArmorSnapshot()[ref.part]??null:
   ref.zone==='chest'?(poiChestIsOpen()?poiChestSlotAt(ref.index):null):
   ref.zone==='bag'||ref.zone==='hotbar'?poiInventoryCell(poiHotbarRead(),ref):null;
 }
 function poiItemDetailActions(zone,cell,chestOpen,hasSplitSpace=true){
+ if(zone==='npc')return ['back'];
  if(zone==='armor')return ['unequip','back'];
  const actions=[];
  if(chestOpen)actions.push('transfer');
@@ -9421,6 +9428,7 @@ function poiItemDetailActions(zone,cell,chestOpen,hasSplitSpace=true){
  return [...actions,'drop','back'];
 }
 function poiItemDetailDescription(cell){
+ if(cell.type==='gold')return '所持金：'+cell.count+'G';
  const descriptions={
   equipWoodSword:'木でできた軽い剣。ショートカットに装備して使う。',
   kitchenKnife:'刃のある調理道具。敵に当てると耐久が減り、なくなると壊れる。',
@@ -9457,7 +9465,7 @@ function poiItemDetailClose(restore=true){
  const dialog=$('poiItemDetail'),old=poiItemDetailSelection;
  poiItemDetailSelection=null;
  if(dialog?.open)dialog.close();
- if(restore&&old?.button?.isConnected&&!$('poiBagPanel')?.hidden)old.button.focus({preventScroll:true});
+ if(restore&&old?.button?.isConnected&&(old.ref.zone==='npc'?!$('poiNpcInventory')?.hidden:!$('poiBagPanel')?.hidden))old.button.focus({preventScroll:true});
 }
 function poiInventoryDurabilityMeter(host,cell){
  const percent=typeof poiEquipmentDurabilityPercent==='function'?poiEquipmentDurabilityPercent(cell):null;
@@ -9495,8 +9503,13 @@ function poiItemDetailRender(){
  const ref=poiItemDetailSelection?.ref,cell=poiItemDetailCell(ref);
  if(!cell||cell.type!==poiItemDetailSelection.type){poiItemDetailClose();return false}
  const dialog=$('poiItemDetail'),actions=poiItemDetailAvailableActions(ref,cell);
- $('poiItemDetailName').textContent=poiInventoryCellName(cell);
+ $('poiItemDetailName').textContent=(cell.type==='gold'?'金貨':poiInventoryCellName(cell));
  poiInventoryPresentItem($('poiItemDetailIcon'),cell,true);
+ if(cell.type==='gold'){
+  const art=$('poiBagWallet')?.querySelector('svg'),icon=$('poiItemDetailIcon').querySelector('.hotbar-icon');
+  if(art){const copy=art.cloneNode(true);copy.removeAttribute('id');icon.replaceChildren(copy)}
+  else icon.textContent='●';
+ }
  $('poiItemDetailDescription').textContent=poiItemDetailDescription(cell);
  for(const button of dialog.querySelectorAll('[data-item-detail-action]')){
   const action=button.dataset.itemDetailAction;
@@ -9507,11 +9520,11 @@ function poiItemDetailRender(){
   dialog.querySelector('[data-item-detail-action="back"]').focus({preventScroll:true});
  return true;
 }
-function poiItemDetailOpen(button){
+function poiItemDetailOpen(button,npcCell=null){
  if(poiItemDetailIsOpen()||poiGameResetDialogOpen()||document.querySelector('.modal.open'))return;
- const ref=poiBagSlotRef(button),cell=poiItemDetailCell(ref);
+ const ref=npcCell?{zone:'npc',button,cell:npcCell}:poiBagSlotRef(button),cell=poiItemDetailCell(ref);
  if(!cell||!button.isConnected)return;
- poiBagSelectSource(null);
+ if(!npcCell)poiBagSelectSource(null);
  poiItemDetailSelection={button,ref,type:cell.type};
  $('poiItemDetailFeedback').textContent='';
  if(poiItemDetailRender()){poiBagCancelDrag?.();poiStopRepeat();$('poiItemDetail').showModal()}
@@ -11147,6 +11160,14 @@ function poiNpcInventoryItems(info){
  for(const type of info.tools||[])items.push({type,count:1});
  return items;
 }
+function poiNpcInventoryTile(item){
+ const tile=document.createElement(item?'button':'span');
+ if(item){
+  tile.type='button';
+  tile.addEventListener('click',()=>poiItemDetailOpen(tile,item));
+ }
+ return tile;
+}
 function poiNpcInventoryView(actor){
  const info=poiTownNpcStatus(actor);
  const header=document.createElement('div');header.id='poiNpcInventoryHeader';header.className='poiChestHeader';
@@ -11158,11 +11179,11 @@ function poiNpcInventoryView(actor){
  const bag=document.createElement('div');bag.id='poiNpcInventoryItems';bag.setAttribute('role','group');bag.setAttribute('aria-label','持ち物');
  const items=poiNpcInventoryItems(info);
  for(let i=0;i<25;i++){
-  const tile=document.createElement('span'),item=items[i];tile.dataset.npcBagSlot=i;
+  const item=items[i],tile=poiNpcInventoryTile(item);tile.dataset.npcBagSlot=i;
   if(item){
    tile.dataset.npcItem=item.type;tile.dataset.count=item.count;
    const isGold=item.type==='gold',label=isGold?'金貨 '+item.count+'G':poiInventoryItemName(item.type)+' '+item.count+'個';
-   tile.setAttribute('role','img');tile.setAttribute('aria-label',label);tile.title=label;
+   tile.setAttribute('aria-label',label);tile.title=label;
    const icon=document.createElement('span'),amount=document.createElement('span');
    icon.className='hotbar-icon';amount.className='hotbar-count';tile.append(icon,amount);
    if(isGold){
@@ -11174,8 +11195,7 @@ function poiNpcInventoryView(actor){
  }
  const gear=document.createElement('div');gear.id='poiNpcInventoryGear';gear.setAttribute('role','group');gear.setAttribute('aria-label','装備');
  for(const [index,part] of ['weapon','head','torso','legs','feet'].entries()){
-  const tile=document.createElement('span');tile.dataset.npcGearSlot=part;
-  const item=info.equipment[index];
+  const item=info.equipment[index],tile=poiNpcInventoryTile(item?{type:item,count:1}:null);tile.dataset.npcGearSlot=part;
   if(item){
    tile.dataset.npcEquipment=item;const label=poiInventoryItemName(item)||item;
    tile.title=label;tile.setAttribute('aria-label',label);
@@ -11191,6 +11211,7 @@ function poiNpcInventoryView(actor){
 }
 function poiNpcInventorySync(actor=null){
  const panel=$('poiNpcInventory');if(!panel)return;
+ if(poiItemDetailSelection?.ref.zone==='npc')poiItemDetailClose(false);
  panel.hidden=!actor;
  if(!actor){if(panel.firstChild)panel.replaceChildren();return}
  panel.setAttribute('aria-label',poiTownNpcDisplayName(actor.role)+'のインベントリ');
@@ -11865,7 +11886,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v212',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v213',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -11980,7 +12001,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v212';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v213';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -12195,7 +12216,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v212',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v213',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -21910,7 +21931,7 @@ document.addEventListener('keydown',e=>{
   if(dir){e.preventDefault();if(!e.repeat)poiNpcMenuStep(dir);return}
   if(k==='escape'){e.preventDefault();if(!e.repeat)poiNpcMenuBack();return}
   if(k==='enter'||k===' '){
-   if(e.target?.closest?.('#poiNpcMenu button,#poiNpcInventoryClose,#poiNpcTradePanel button'))return;
+   if(e.target?.closest?.('#poiNpcMenu button,#poiNpcInventory button,#poiNpcTradePanel button'))return;
    e.preventDefault();if(!e.repeat)poiWalkAction();
   }
   return;
