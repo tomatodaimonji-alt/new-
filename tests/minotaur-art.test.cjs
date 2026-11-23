@@ -34,11 +34,17 @@ test('charge lowers and thrusts pale horns while axe launches through a differen
  const model=(a,t)=>{const m=mesh();art(m,0,0,0,pose(a,t));return m};
  const neutral=model(null,0);
  const hornWind={northAttack:'horn',start:0,hit:700,pending:true},axeWind={northAttack:'axe',start:0,hit:700,pending:true};
- const crouch=model(hornWind,690),upswing=model(axeWind,530),across=model({...axeWind,pending:false,visualHitAt:700},730);
- const nh=bounds(neutral,horn),ch=bounds(crouch,horn),nb=bounds(neutral,steel),ub=bounds(upswing,steel),ab=bounds(across,steel);
+ const crouch=model(hornWind,690),backswing=model(axeWind,530),
+  across=model({...axeWind,pending:false,visualHitAt:700},700),
+  finish=model({...axeWind,pending:false,visualHitAt:700},816);
+ const nh=bounds(neutral,horn),ch=bounds(crouch,horn),bb=bounds(backswing,steel),
+  ab=bounds(across,steel),fb=bounds(finish,steel);
  assert(ch[1][1]<nh[1][1]-.29&&ch[2][1]>nh[2][1]+.30);
- assert(ub[2][0]<nb[2][0]-.23&&ub[1][1]>nb[1][1]+.28,'axe visibly drawn back and up');
- assert(ab[2][1]>ub[2][1]+.58&&ab[0][0]<ub[0][0]-.4,'axe head crosses the front of the body');
+ assert(bb[0][0]>.9&&bb[2][0]<-.35,'axe drawn on right back flank');
+ assert(ab[2][0]>1.20&&ab[0][0]<.6,'steel head passes through forward center at contact');
+ assert(fb[0][1]<-.8,'steel head crosses to the opposite flank');
+ const heights=[bb[1],ab[1],fb[1]].map(([low,high])=>(low+high)/2);
+ assert(Math.max(...heights)-Math.min(...heights)<.18,'the complete blade stays roughly horizontal');
 });
 test('palette name, neutral model height and lock anchor have matching AI registry without duplicate IDs',()=>{
  assert.match(h,/{id:'monsterNorthMinotaur',name:'ミノタウロス',icon:'♉',cat:'character'}/);

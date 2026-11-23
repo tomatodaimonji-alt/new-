@@ -39,11 +39,12 @@ let fixture=replaceOnce(html,hook,hook+`
     return {armed:poiArmedWandIndex(),equipped:poiEquippedWeapon(),charges:slot?.charges,lockVisible:poiCombatLockProbe,
      hps:window.__qaMeleeTargets?.map(({state})=>state.hp),
      marker:{visible:!!m&&!m.hidden&&getComputedStyle(m).display!=='none',aim:m?.getAttribute('data-aim'),color:m?getComputedStyle(m).color:null,point:m?.style.transform},
-     now:performance.now(),at:poiWalkActionStarted,ready:poiAttackReady,release:window.__qaBowReleased??null};
+     now:performance.now(),at:poiWalkActionStarted,ready:poiAttackReady,release:window.__qaBowReleased??null,frames:window.__qaBowFrames??[]};
    }
   },`);
 fixture=replaceOnce(fixture,' const p=poiWildPick(rng);',' const p=null;');
 fixture=replaceOnce(fixture,'function poiWildRegionalFrame(now,rng){','function poiWildRegionalFrame(now,rng){return;');
+fixture=replaceOnce(fixture,'function poiPlayerWeaponFrame(now){','function poiPlayerWeaponFrame(now){if(poiPlayerWeaponPending?.type==="equipWoodBow"&&poiPlayerWeaponPending.phase!=="flight")(window.__qaBowFrames??=[]).push(now);');
 fixture=replaceOnce(fixture,'function poiPlayerWeaponFlightBegin(shot,now){',
  'function poiPlayerWeaponFlightBegin(shot,now){if(shot.type==="equipWoodBow")window.__qaBowReleased=now;');
 const server=createServer((req,res)=>{
@@ -127,10 +128,11 @@ try{
  assert(Math.abs(wind.ready-wind.at-1030)<.001,'shorter wind-up does not reduce the existing cooldown');
  await page.waitForFunction(()=>window.__editorTest.wandAimQA.status().release!==null,null,{polling:25,timeout:3500});
  const fired=await read(),elapsed=fired.release-wind.at;
- // The real RAF can paint a little late when the runner is loaded. The
- // lower bound proves no early release, the upper bound separates the old
- // 650ms wind-up with headroom; the VM covers the exact 324/325 boundary.
- assert(elapsed>=325&&elapsed<600,'real release expected after the 325ms wind-up but before old 650ms, got '+elapsed.toFixed(1)+'ms');
+ // The browser runner can delay RAF; compare against the first actual
+ // eligible simulation frame, not wall-clock rendering latency.
+ const eligible=fired.frames.find(t=>t-wind.at>=325);
+ assert(elapsed>=325&&eligible!==undefined&&fired.release===eligible, 'bow releases on the first simulation frame at/after 325ms: '+JSON.stringify({elapsed,eligible,frames:fired.frames}));
  assert.deepEqual(errors,[]);
  console.log('PASS real touch fire-wand shortcut changes live cursor with and without enemy, clears safely, and real bow release halves while cooldown stays unchanged');
 }finally{await browser?.close();await new Promise(r=>server.close(r));clearTimeout(watchdog)}
+

@@ -15,7 +15,7 @@ test('close axe windup keeps committed angle, sweeps side and grants open window
  const c=setup();assert.equal(c.poiNorthMinotaurBegin(c.obj,c.state,0),true);
  const a=c.state.playerAttack;assert.equal(a.northAttack,'axe');assert.equal(a.hit,850);
  c.p={x:65.5,z:14.5,y:-1};assert.equal(c.poiNorthMinotaurCovered(a,850),true);
- c.p={x:64,z:16,y:-1};assert.equal(c.poiNorthMinotaurCovered(a,850),false);
+ c.p={x:64,z:17.01,y:-1};assert.equal(c.poiNorthMinotaurCovered(a,850),false);
  a.pending=false;c.poiNorthMinotaurSettle(c.state,a,850,false);
  assert.equal(c.state.northOpenUntil,1970);
  assert.equal(c.poiNorthMinotaurPose(c.state,950).phase,'open');
@@ -57,9 +57,10 @@ test('real enemy resolver contacts once with move-specific raw damage and never 
  c.poiEnemyResolvePlayer(2700);
  assert.deepEqual(damage,[[850,33],[2700,26]]);
  assert.ok(c.poiNorthMinotaurBegin(c.obj,c.state,4000));
- c.wall=true;c.poiEnemyResolvePlayer(4700);
+ assert.equal(c.state.playerAttack.northAttack,'axe');
+ c.wall=true;c.poiEnemyResolvePlayer(4850);
  assert.deepEqual(damage,[[850,33],[2700,26]]);
- assert.equal(c.state.northOpenUntil,5820);
+ assert.equal(c.state.northOpenUntil,5970);
 });
 test('boss chase uses legal steps inside chamber and never moves in punish window or outside room',()=>{
  const c=setup();c.p.z=19;
@@ -73,4 +74,33 @@ test('boss chase uses legal steps inside chamber and never moves in punish windo
  c.p.z=20;
  assert.equal(c.poiNorthMinotaurFrame(c.obj,c.state,1300),false);
  assert.equal(c.state.z,14);
+});
+test('axe is a four-tile semicircle facing the original bearing, with exact side and front boundaries',()=>{
+ const c=setup();assert.equal(c.poiNorthMinotaurBegin(c.obj,c.state,0),true);
+ const a=c.state.playerAttack;assert.equal(a.northAttack,'axe');
+ for(const [x,z,hit] of [[68,13,true],[60,13,true],[64,17,true],[67.98,13.2,true],
+  [64,17.001,false],[68.01,13,false],[67.9,12.99,false],[64,12.8,false],[64,13,false]]){
+  c.p={x,z,y:-1};assert.equal(c.poiNorthMinotaurCovered(a,850),hit,[x,z].join());
+ }
+ c.wall=true;c.p={x:68,z:13,y:-1};assert.equal(c.poiNorthMinotaurCovered(a,850),false,'closed wall blocks exact side');
+ assert.ok(a.tiles.some(({x,z})=>x===68&&z===13),'exact side is also in debug tiles');
+ assert.ok(!a.tiles.some(({z})=>z<13),'no rear debug tiles');
+});
+test('four-tile outer band selects only axe; at 3.2 and 3.7 horn gets first preference then axe',()=>{
+ for(const [dist,kind] of [[3.2,'horn'],[3.7,'horn'],[3.8,'axe'],[4,'axe'],[4.001,null]]){
+  const c=setup();c.p.z=13+dist;
+  assert.equal(c.poiNorthMinotaurBegin(c.obj,c.state,0),!!kind,dist);
+  if(!kind)continue;
+  const a=c.state.playerAttack;assert.equal(a.northAttack,kind,dist);
+  assert.equal(c.poiNorthMinotaurCovered(a,a.hit),true,dist);
+  a.pending=false;c.poiNorthMinotaurSettle(c.state,a,a.hit,true);
+  assert.equal(c.poiNorthMinotaurBegin(c.obj,c.state,3000),true,dist);
+  assert.equal(c.state.playerAttack.northAttack,'axe',dist);
+ }
+});
+test('oblique axe rotates side boundary with frozen bearing',()=>{
+ const c=setup();c.p={x:65,z:14,y:-1};assert.ok(c.poiNorthMinotaurBegin(c.obj,c.state,0));
+ const a=c.state.playerAttack,side=Math.SQRT2*2;
+ c.p={x:64+side,z:13-side,y:-1};assert.equal(c.poiNorthMinotaurCovered(a,850),true);
+ c.p={x:64+side-.01,z:13-side,y:-1};assert.equal(c.poiNorthMinotaurCovered(a,850),false);
 });

@@ -1578,7 +1578,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v242）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v243）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -5187,12 +5187,15 @@ function poiNorthMinotaurArtPose(a,now){
   const lean=a.pending?smooth(t/.83):1-smooth(age/420);
   return {head:lean,grip:lerp(idle.grip,[.67,.86,-.55],lean),end:lerp(idle.end,[.92,1.66,-.93],lean)};
  }
- const back={grip:[.55,1.58,-.24],end:[.94,2.63,-.72]};
- const cross={grip:[.24,1.36,.54],end:[-.77,1.49,1.12]};
- const draw=a.pending?smooth(t/.65):1; // Hold the load before readable release.
- const swing=a.pending?.16*smooth((t-.83)/.17):1-smooth(age/510);
- const arm=(part)=>lerp(lerp(idle[part],back[part],a.pending?draw:swing),cross[part],swing);
- return {head:0,grip:arm('grip'),end:arm('end')};
+ // Swing on a horizontal circle instead of lifting the axe vertically.
+ // At the exact contact, the axe passes the center of its forward fan.
+ const side=Math.PI*112/180,arc=a.pending?side*(1-smooth((t-.70)/.30)):
+  -side*smooth(age/116);
+ const rest=a.pending?1-smooth(t/.30):smooth((age-135)/330);
+ const sx=Math.sin(arc),sz=Math.cos(arc);
+ const grip=[.22+sx*.46,1.39,.105+sz*.47];
+ const end=[.15+sx*1.61,1.46,.105+sz*1.64];
+ return {head:0,grip:lerp(grip,idle.grip,rest),end:lerp(end,idle.end,rest)};
 }
 function poiNorthMinotaurGeometry(m,x,y,z,pose=null){
  const {head,grip,end}=pose||poiNorthMinotaurArtPose(null,0);
@@ -5924,7 +5927,8 @@ function buildSignOverlay(){
  // adding a saved world object. Uses the same textured sign draw call.
  const guild=guildBounds();
  if(guild&&world.some(o=>o.y===0&&o.type==='counterWood'&&Math.abs(o.x-guild.cx)<4&&Math.abs(o.z-guild.cz)<2)&&
-    world.some(o=>o.x===Math.round(guild.cx)&&o.z===guild.north&&o.y===0&&o.type==='stonewall')){
+    world.some(o=>o.x===Math.round(guild.cx)&&o.z===guild.north&&o.y===0&&o.type==='stonewall'&&
+     (!hideUpper||o.y<=level)&&(!facilitySite||facilityObjectVisible(o)))){
   const atlas=pineGuildAtlasLayout(guild),x=atlas.x,z=atlas.faceZ,y=atlas.y;
   const corners=[[x+atlas.left,y+atlas.bottom,z],[x+atlas.right,y+atlas.bottom,z],
    [x+atlas.right,y+atlas.top,z],[x+atlas.left,y+atlas.top,z]];
@@ -11464,7 +11468,7 @@ function poiEnemyAttackSourceValid(s,a){
 // BEGIN NORTH MINOTAUR COMBAT
 const POI_NORTH_MINOTAUR_ATTACKS=Object.freeze({
  horn:Object.freeze({range:3.7,width:.48,windup:700,damage:26,recover:700}),
- axe:Object.freeze({range:2.65,dot:Math.cos(70*Math.PI/180),windup:850,damage:33,recover:750})
+ axe:Object.freeze({range:4,windup:850,damage:33,recover:750})
 });
 const POI_NORTH_MINOTAUR_OPEN_MS=1120;
 function poiNorthMinotaurMatch(obj){
@@ -11483,19 +11487,21 @@ function poiNorthMinotaurArea(a,p){
  const k=POI_NORTH_MINOTAUR_ATTACKS[a.northAttack];
  const dx=p.x-a.sx,dz=p.z-a.sz,d=Math.hypot(dx,dz);
  const forward=dx*a.dx+dz*a.dz,side=Math.abs(dx*a.dz-dz*a.dx);
- if(!k||forward<=1e-6)return false;
- return a.northAttack==='horn'?forward<=k.range+1e-6&&side<=k.width+1e-6:
-  d<=k.range+1e-6&&forward>=d*k.dot-1e-6;
+ if(!k)return false;
+ return a.northAttack==='horn'?forward>1e-6&&forward<=k.range+1e-6&&side<=k.width+1e-6:
+  d>1e-6&&d<=k.range+1e-6&&forward>=-1e-6;
 }
 function poiNorthMinotaurBegin(obj,s,now){
  const b=poiNorthMinotaurMatch(obj);
  if(!b||s.hp<=0||s.townOwned||s.playerAttack?.pending||now<s.nextAttack||now-s.moveStarted<380||
     poiMonsterStates.get(obj)!==s||!poiEnemyThreatEnabled()||poiWalkLevel!==b.y)return false;
  const p=poiAimOrigin(now),dx=p.x-s.x,dz=p.z-s.z,d=Math.hypot(dx,dz);
- if(!poiNorthMinotaurRoom(b,p)||d<=1e-6||d>POI_NORTH_MINOTAUR_ATTACKS.horn.range)return false;
+ if(!poiNorthMinotaurRoom(b,p)||d<=1e-6||d>POI_NORTH_MINOTAUR_ATTACKS.axe.range+1e-6)return false;
  const pass=poiAimWall(p);
  if(!poiNorthMinotaurClear(s.x,s.z,p,pass))return false;
- const northAttack=d>POI_NORTH_MINOTAUR_ATTACKS.axe.range?'horn':
+ // Only the axe reaches the outer band; in the shared band alternate,
+ // keeping an initial straight horn thrust at medium distance.
+ const northAttack=d>POI_NORTH_MINOTAUR_ATTACKS.horn.range+1e-6?'axe':
   s.northLastAttack?s.northLastAttack==='axe'?'horn':'axe':d>2.05?'horn':'axe';
  const k=POI_NORTH_MINOTAUR_ATTACKS[northAttack];
  const a={obj,start:now,hit:now+k.windup,x:Math.round(p.x),z:Math.round(p.z),y:b.y,
@@ -13851,7 +13857,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v242',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v243',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -13966,7 +13972,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v242';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v243';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -14181,7 +14187,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v242',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v243',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -18260,6 +18266,101 @@ function poiOcclusionBegin(p,now){
 function poiOcclusionEnd(){
  if(poiOcclusionFrame.active)gl.uniform4f(loc.occlusionInfo,0,0,0,0);
 }
+// BEGIN NORTH AXE FOOTPRINT
+const POI_NORTH_AXE_FLASH_MS=365;
+function poiNorthAxeFootprint(a){
+ if(a?.northAttack!=='axe')return [];
+ const room=poiNorthMinotaurMatch(a.obj)?.room;
+ const radius=POI_NORTH_MINOTAUR_ATTACKS.axe.range;
+ if(!room||!Number.isFinite(radius))return [];
+ const {sx,sz,dx,dz,y}=a,half=Math.PI/2,segments=40,angles=new Set();
+ for(let i=0;i<=segments;i++)angles.add(-half+i*Math.PI/segments);
+ // Raycast beside each tile corner to stop a smooth arc at real walls,
+ // without joining opposite sides of a wall with a long diagonal chord.
+ for(let z=Math.ceil(sz-radius-.5)+.5;z<=sz+radius;z++)for(let x=Math.ceil(sx-radius-.5)+.5;x<=sx+radius;x++){
+  const rx=x-sx,rz=z-sz;
+  if(rx*rx+rz*rz>radius*radius||rx*dx+rz*dz<0)continue;
+  const t=Math.atan2(rz*dx-rx*dz,rx*dx+rz*dz);
+  for(const e of [-1e-5,0,1e-5])if(Math.abs(t+e)<half)angles.add(t+e);
+ }
+ const pass=poiAimWall({y});
+ return [...angles].sort((s,t)=>s-t).map(angle=>{
+  const c=Math.cos(angle),s=Math.sin(angle),ux=dx*c-dz*s,uz=dz*c+dx*s;
+  const roomX=Math.abs(ux)<1e-9?Infinity:((ux>0?room.maxX+.5:room.minX-.5)-sx)/ux;
+  const roomZ=Math.abs(uz)<1e-9?Infinity:((uz>0?room.maxZ+.5:room.minZ-.5)-sz)/uz;
+  const reach=Math.max(0,Math.min(radius,roomX,roomZ));
+  const d=Math.max(0,poiAimWallLimit({x:sx,z:sz},{x:ux,z:uz},reach,pass));
+  return {sx:sx+ux*d,sz:sz+uz*d,dx:ux,dz:uz,d};
+ });
+}
+function poiNorthAxeCueGeometry(a){
+ const points=poiNorthAxeFootprint(a),m=mesh();
+ if(points.length<2)return m;
+ const point=(x,z)=>[x+.5,terrainY(Math.floor(x+.5),Math.floor(z+.5))+a.y*1.4+.052,z+.5];
+ const centre=point(a.sx,a.sz);
+ const fill=[.48,.324,.113],rim=[1,.719,.275],border=[.81,.551,.185];
+ const edge=(p,depth=0)=>point(a.sx+p.dx*Math.max(0,p.d-depth),a.sz+p.dz*Math.max(0,p.d-depth));
+ for(let i=1;i<points.length;i++){
+  const u=points[i-1],v=points[i],a0=edge(u),b0=edge(v),a1=edge(u,.125),b1=edge(v,.125);
+  // Regions share vertices and never overlap; a band cannot brighten
+  // by accumulating alpha from an underlying fill triangle.
+  tri(m,centre,b1,a1,fill);
+  quad(m,a1,b1,b0,a0,rim);
+ }
+ // The two straight side edges define the half circle even at oblique yaw.
+ for(const i of [0,points.length-1]){
+  const p=points[i],q=points[i===0?1:i-1],turn=i===0?1:-1;
+  const d=Math.max(0,Math.min(p.d,q.d)-.13),epsilon=Math.min(.022,Math.PI/80);
+  if(d<.16)continue;
+  const c=Math.cos(epsilon),s=Math.sin(epsilon)*turn;
+  const left=point(a.sx+p.dx*d,a.sz+p.dz*d);
+  const right=point(a.sx+(p.dx*c-p.dz*s)*d,a.sz+(p.dz*c+p.dx*s)*d);
+  // This thin ribbon is a separate accent, not a tile outline.
+  if(turn>0)tri(m,centre,right,left,border);else tri(m,centre,left,right,border);
+ }
+ return m;
+}
+function poiNorthAxeOpacity(a,now){
+ if(a?.northAttack!=='axe'||now<a.start)return 0;
+ if(a.pending){
+  const t=Math.max(0,Math.min(1,(now-a.start)/Math.max(1,a.hit-a.start)));
+  return .09+.19*t;
+ }
+ if(!Number.isFinite(a.visualHitAt))return 0;
+ const t=(now-a.visualHitAt)/POI_NORTH_AXE_FLASH_MS;
+ return t<0||t>=1?0:.66*(1-t)**1.28;
+}
+let poiNorthAxeCueCache=null;
+function poiDrawNorthAxeCue(now,vp){
+ let attack=null,alpha=0;
+ const b=facilitySite?.northFort?.bounds;
+ if(poiWalkActive&&!pineAIActive&&!document.hidden&&
+    poiDungeonPointIn(b,poiWalkX,poiWalkZ,poiWalkLevel)){
+  for(const [obj,s] of poiMonsterStates){
+   if(obj.type!=='monsterNorthMinotaur'||s.hp<=0||!poiNorthMinotaurMatch(obj))continue;
+   const a=s.playerAttack,visible=poiNorthAxeOpacity(a,now);
+   if(visible>0){attack=a;alpha=visible;break}
+  }
+ }
+ if(poiNorthAxeCueCache&&(poiNorthAxeCueCache.attack!==attack||poiNorthAxeCueCache.world!==world)){
+  if(poiNorthAxeCueCache.gpu)gl.deleteBuffer(poiNorthAxeCueCache.gpu.buf);
+  poiNorthAxeCueCache=null;
+ }
+ if(!attack)return;
+ if(!poiNorthAxeCueCache){
+  const m=poiNorthAxeCueGeometry(attack);
+  poiNorthAxeCueCache={attack,world,gpu:m.p.length?upload(m):null};
+ }
+ const gpu=poiNorthAxeCueCache.gpu;if(!gpu)return;
+ // Keep depth testing active; rocks and walls in front of the cue win.
+ gl.enable(gl.BLEND);gl.blendColor(0,0,0,alpha);gl.blendFunc(gl.CONSTANT_ALPHA,gl.ONE_MINUS_CONSTANT_ALPHA);gl.depthMask(false);
+ try{draw(gpu,vp)}
+ finally{
+  gl.depthMask(true);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.blendColor(0,0,0,0);gl.disable(gl.BLEND);
+ }
+}
+// END NORTH AXE FOOTPRINT
+
 function render(){
  if(window.pineStartup.failed)return;
  requestAnimationFrame(render);
@@ -18302,6 +18403,7 @@ function render(){
  poiOcclusionEnd();
  poiDrawEditorGhostRoof(p.vp);
  drawSignOverlays(p.vp,daylight);pineDrawEditCursor(p.vp);
+ poiDrawNorthAxeCue(now,p.vp);
  if(poiWalkActive){
   poiEconomyDraw(p.vp,now);poiInventoryDraw(p.vp,now);
   if(typeof poiTownResidentsDraw==='function')poiTownResidentsDraw(now,p.vp);
