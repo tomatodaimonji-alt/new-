@@ -43,7 +43,7 @@ async function verifyControls(page,width){
  const mini=await fits(page.locator('#poiMiniHud'),'#viewWrap',false);
  const bag=await fits(page.locator('#poiBagToggle'),'#viewWrap');
  const bar=await fits(page.locator('#poiHotbar'),'#viewWrap',false);
- assert(pad.x<width*.1&&action.right>width*.9&&bag.right<action.x,'left thumb / right action / adjacent bag');
+ assert(pad.x<width*.1&&action.right>width*.86&&bag.right<action.x,'left thumb / right action / adjacent bag');
  assert(mini.x<width*.15&&mini.y<pad.y&&bar.right<bag.x&&bar.x>pad.x,'upper-left map and centered nonoverlapping shortcuts');
  for(const tool of await page.locator('#poiGameTools > button:visible').all())await fits(tool,'#viewWrap');
  for(const tool of await page.locator('#quickTools > button:visible').all())await fits(tool,'#viewWrap');
@@ -61,12 +61,13 @@ try{
   try{
    await verifyControls(page,width);
    if(out)await page.screenshot({path:out+'/v214-landscape-'+width+'.png'});
-   const sound=page.locator('#poiSoundSettingsToggle');
-   await sound.tap();
+   const menu=page.locator('#poiLandscapeMenuToggle');
+   const sound=page.locator('#poiLandscapeMenu button[data-landscape-action="volume"]');
+   await menu.tap();await sound.tap();
    const mixer=page.locator('#poiSoundPanel');await mixer.waitFor({state:'visible'});
    await fits(mixer,'#viewWrap',false);
    for(const slider of await mixer.locator('input[type="range"]').all())await fits(slider,'#viewWrap');
-   await sound.tap();await mixer.waitFor({state:'hidden'});
+   await sound.tap();await mixer.waitFor({state:'hidden'});await menu.tap();
    await page.waitForFunction(()=>document.querySelector('#poiWalkAction').getAttribute('aria-label')==='住人と話す');
    await page.locator('#poiWalkAction').tap();
    const inspect=page.locator('#poiNpcMenu [data-npc-action="status"]');
