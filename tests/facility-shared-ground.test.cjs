@@ -45,7 +45,7 @@ test('Guild 1F/2F/3F share one buffer but expose their own exact visible floor a
  }
  assert.equal(builds,1);
  assert.deepEqual(seen,[[[10,30],[40,50],[70,80],[80,90]],[[40,50],[70,80],[80,90]],[[80,90]],[[40,50],[70,80],[80,90]],[[10,30],[40,50],[70,80],[80,90]]]);
- assert.equal(c.facilitySharedSurfaceAllowed(1),false,'neighboring inn light uses exact bake fallback');
+ assert.equal(c.facilitySharedSurfaceAllowed(1),true,'neighboring inn light uses the same surface plus local tint patches');
  c.poiWalkLevel=-1;assert.equal(c.facilitySharedSurfaceAllowed(0),false);
  c.poiWalkLevel=0;c.facilitySurfaceEdited=true;assert.equal(c.facilitySharedSurfaceAllowed(0),false);
  c.facilitySurfaceEdited=false;c.facilitySurface=null;c.world=[{y:2,type:'lantern'}];
@@ -87,4 +87,21 @@ test('the sparse middle-floor view uses one capped compact index buffer only on 
  ctx.facilitySurfaceUintIndices=undefined;ctx.gl.getExtension=()=>null;
  assert.equal(ctx.facilitySurfaceIndexBuffer(12,hidden),null);
  assert.equal(uploaded.length,2);
+});
+
+test('lodging tint updates only exact stock ranges once on entering or leaving, never other buffers',()=>{
+ const writes=[],scene={buf:'town',lodgingTintActive:false};
+ const c=vm.createContext({facilitySurface:scene,facilitySite:{buildings:[{id:'lodging'},{id:'townGuild'}]},
+  gl:{ARRAY_BUFFER:34962,bindBuffer:(...a)=>writes.push(a),bufferSubData:(target,offset,source)=>writes.push([target,offset,Array.from(source)])}});
+ vm.runInContext(span('function facilityLodgingTintPatch(','function facilitySharedSurfaceAllowed('),c);
+ const patches=[];
+ c.facilityLodgingTintPatch(patches,{p:[0,0,0,4,5,6],n:[0,0,0,1,2,3],c:[0,0,0,.5,.25,.75]},1,[.25,.125,.5]);
+ assert.equal(patches[0].offset,36);assert.equal(patches[0].outside.byteLength,36);
+ scene.lodgingTintPatches=patches;
+ const v={mesh:{buf:'town'}};
+ c.facilityApplyLodgingTint(v,0);c.facilityApplyLodgingTint(v,0);
+ c.facilityApplyLodgingTint({mesh:{buf:'cellar'}},null);
+ c.facilityApplyLodgingTint(v,null);c.facilityApplyLodgingTint(v,1);
+ assert.deepEqual(writes,[[34962,'town'],[34962,36,[4,5,6,1,2,3,.25,.125,.5]],
+  [34962,'town'],[34962,36,[4,5,6,1,2,3,.5,.25,.75]]]);
 });

@@ -1336,7 +1336,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v218）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v219）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -12169,7 +12169,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v218',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v219',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -12284,7 +12284,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v218';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v219';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -12499,7 +12499,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v218',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v219',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -15180,6 +15180,22 @@ function makeScene(){
   return !hideUpper||o.y<=level;
  });
  const {blockers:pineShadows,lamps:pineWarmLamps}=pineFloorLightingSources(visible);
+ // Store both exact bakes of the few surviving upper floors just outside
+ // lodging. Entering its roof cut no longer constructs a second town VBO.
+ const lodgingIndex=facilityBuildFullSurface&&facilitySite?.id==='base'?
+  facilitySite.buildings.findIndex(b=>b.id==='lodging'):-1;
+ const lodging=lodgingIndex<0?null:facilitySite.buildings[lodgingIndex];
+ const lodgingTintPatches=lodging?[]:null;
+ const lodgingLighting=lodging?{
+  blockers:new Map(pineShadows),
+  lamps:pineWarmLamps.filter(o=>o.y<=0||facilityFloorOwner(o.x,o.z,o.y)!==lodgingIndex)
+ }:null;
+ // A hidden upper tile's contact blockers are keyed by its exact storey;
+ // no second full-world lighting-source scan is needed.
+ if(lodgingLighting)for(const [y,cells] of facilityFloorMasks[lodgingIndex].floors){
+  if(y<=0)continue;
+  for(const cell of cells)lodgingLighting.blockers.delete(cell+','+y);
+ }
  const gradeKey=facilityGradeKey(pineWarmLamps),cachedGrade=facilityGradeGet(gradeKey);
  const buildSharedGrade=facilityGradeMayRemember(gradeKey);
  const grade=buildSharedGrade?mesh():m;
@@ -15278,8 +15294,17 @@ function makeScene(){
   if(wet!==undefined)poiChapelWetFloor(tmp,o.x,o.z,wet);
   else if(townGuildWood(o.x,o.z,kind))pineDrawTownGuildFloor(tmp,o.x,o.z,kind);
   else addFloorTile(tmp,o.x,o.z,kind,MAP_W*MAP_H,ROAD_IDS.has(kind)&&!kind.endsWith('Full')?roadConnections(layer,o.x,o.z,kind):0);
+  let lodgingColor=null;
+  if(lodging&&o.y>0&&o.x>=lodging.x1-4&&o.x<=lodging.x2+4&&o.z>=lodging.z1-4&&o.z<=lodging.z2+4&&
+     facilityFloorOwner(o.x,o.z,o.y)!==lodgingIndex){
+   const alternate={p:tmp.p,c:tmp.c.slice()};
+   pineBakeFloorLighting(alternate,o.x,o.z,o.y,lodgingLighting.blockers,lodgingLighting.lamps);
+   lodgingColor=alternate.c;
+  }
   pineBakeFloorLighting(tmp,o.x,o.z,o.y,pineShadows,pineWarmLamps);
   shiftMesh(m,tmp,o.y*1.4+terrainY(o.x,o.z));
+  if(lodgingColor?.some((c,i)=>c!==tmp.c[i]))
+   facilityLodgingTintPatch(lodgingTintPatches,m,start,lodgingColor);
   poiAngledStoreyRecord(storeyFade,m,o,start);
  }
  const bridgeLookup=new Map(visible.filter(o=>BRIDGE_IDS.has(o.type)).map(o=>[o.x+','+o.z,o]));
@@ -15397,6 +15422,7 @@ function makeScene(){
  const uploaded=upload(m);if(sharedGrade)uploaded.ground=sharedGrade;
  if(wallFade){uploaded.wallFade=wallFade;uploaded.storeyFade=storeyFade}
  if(sharedParts)uploaded.facilitySharedParts=sharedParts;
+ if(lodgingTintPatches?.length){uploaded.lodgingTintPatches=lodgingTintPatches;uploaded.lodgingTintActive=false}
  return uploaded;
 }
 function upload(m,reuse=null,usage=gl.STATIC_DRAW){const n=m.p.length/3,data=new Float32Array(n*9);for(let i=0;i<n;i++){const a=i*9,b=i*3;for(let j=0;j<3;j++){data[a+j]=m.p[b+j];data[a+3+j]=m.n[b+j];data[a+6+j]=m.c[b+j]}}const vbo=reuse||gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vbo);gl.bufferData(gl.ARRAY_BUFFER,data,usage);return{buf:vbo,count:n}}
@@ -21262,10 +21288,33 @@ function poiChestInvalidateModel(){
  facilityScenes.delete(key);
 }
 // BEGIN FACILITY SHARED SURFACE
+function facilityLodgingTintPatch(patches,m,start,colors){
+ // The VBO interleaves 3 positions, 3 normals and 3 colors per vertex.
+ const length=colors.length/3,a=new Float32Array(length*9),b=new Float32Array(a.length);
+ for(let i=0;i<length;i++){
+  const src=(start+i)*3,dst=i*9;
+  for(let j=0;j<3;j++){
+   a[dst+j]=b[dst+j]=m.p[src+j];a[dst+3+j]=b[dst+3+j]=m.n[src+j];
+   a[dst+6+j]=m.c[src+j];b[dst+6+j]=colors[i*3+j];
+  }
+ }
+ patches.push({offset:start*36,outside:a,inside:b});
+}
+function facilityApplyLodgingTint(variant,cut){
+ const s=facilitySurface;
+ if(!s?.lodgingTintPatches||variant.mesh.buf!==s.buf)return variant;
+ const inside=facilitySite.buildings[cut]?.id==='lodging';
+ if(inside===s.lodgingTintActive)return variant;
+ gl.bindBuffer(gl.ARRAY_BUFFER,s.buf);
+ for(const patch of s.lodgingTintPatches)
+  gl.bufferSubData(gl.ARRAY_BUFFER,patch.offset,inside?patch.inside:patch.outside);
+ s.lodgingTintActive=inside;
+ return variant;
+}
 function facilitySharedSurfaceAllowed(cut){
- // The inn's upper lighting reaches the adjacent Guild's elevated floor.
- // Keep that one view's exact local bake rather than sharing a stale tint.
- return facilitySite?.id==='base'&&facilitySite.buildings[cut]?.id!=='lodging'&&!facilitySurfaceEdited&&!hideUpper&&
+ // Only the stock map and fixtures without generic cross-floor lanterns can
+ // use these local raised-floor corrections. Edited worlds keep exact bakes.
+ return facilitySite?.id==='base'&&!facilitySurfaceEdited&&!hideUpper&&
   poiWalkLevel>=0&&(!!facilitySurface||!world.some(o=>o.y>0&&o.type==='lantern'));
 }
 function facilitySurfaceIndexBuffer(count,hidden){
@@ -21317,7 +21366,7 @@ function facilityRenderScene(){
    const shared=facilitySurfaceView(cut);
    if(shared){
     variant={mesh:shared,signs:signProgram?buildSignOverlay():[]};
-    facilityScenes.set(key,variant);return variant;
+    facilityScenes.set(key,variant);return typeof facilityApplyLodgingTint==='function'?facilityApplyLodgingTint(variant,cut):variant;
    }
   }
   // Keep only one full-scene cutaway for this three-floor building on mobile.
@@ -21330,7 +21379,7 @@ function facilityRenderScene(){
   variant={mesh:makeScene(),signs:signProgram?buildSignOverlay():[]};
   facilityScenes.set(key,variant);
  }
- return variant;
+ return typeof facilityApplyLodgingTint==='function'?facilityApplyLodgingTint(variant,cut):variant;
 }
 function facilityBuildRoofs(){
  const pieces=world.filter(facilityIsRoofPiece);

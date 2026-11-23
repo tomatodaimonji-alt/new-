@@ -98,6 +98,7 @@ try{
    if(m.width===568){
     await page.setViewportSize({width:390,height:740});
     await page.locator('#poiAnalogPad').waitFor({state:'hidden'});
+    await page.locator('#viewWrap:not([data-analog-play])').waitFor({state:'attached'});
     assert.equal(await page.locator('.poiWalkDpad [data-poi-dir]:visible').count(),4);
     const port=await Promise.all((await slots.all()).map(x=>box(x)));
     assert.equal(new Set(port.map(c=>Math.round(c.y))).size,1,'portrait slot row unchanged');
