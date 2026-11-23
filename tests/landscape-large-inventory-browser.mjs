@@ -25,6 +25,8 @@ async function open(browser,width,height,spawn=point){
     hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.24,orbitDistance:5.5}}));
  },{point:spawn,kitKey,kit});
  await page.goto(origin+'/?resume=1&test=1');await page.waitForFunction(()=>window.__editorTest?.facility?.()?.active);
+ // The world may already be active while the original startup cover still captures touch.
+ await page.locator('#pineStartupCover').waitFor({state:'hidden'});
  return {context,page,errors};
 }
 async function box(locator,requireTouch=true){

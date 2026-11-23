@@ -7,9 +7,24 @@ import {mkdir} from 'node:fs/promises';
 const require=createRequire(import.meta.url);
 const {chromium}=require(process.env.PLAYWRIGHT_PACKAGE??'playwright');
 const html=readFileSync(process.argv[2]??'world-editor.html','utf8');
+const damageAnchor=" poiPlayerHP=Math.max(0,poiPlayerHP-amount);poiSound('hurt');";
+assert.equal(html.split(damageAnchor).length,2,'actual damage reducer anchor');
+const swordStateAnchor='  playerWeapon:()=>';
+const actionAnchor='function poiWalkAction(){';
+assert.equal(html.split(swordStateAnchor).length,2,'real weapon test API');
+assert.equal(html.split(actionAnchor).length,2,'real right action handler');
+const observedHtml=html.replace(swordStateAnchor,`  otherworldSwordQA:()=>({now:performance.now(),started:poiWalkActionStarted,ready:poiAttackReady,
+   pending:poiPlayerWeaponPending?.type??null,dispatches:window.__otherworldDispatches??0}),
+`+swordStateAnchor).replace(actionAnchor,actionAnchor+`
+ if(window.__otherworldContacts)window.__otherworldDispatches=(window.__otherworldDispatches??0)+1;
+`).replace(damageAnchor,damageAnchor+`
+ if(window.__otherworldContacts)window.__otherworldContacts.push({
+  type:obj.type,x:obj.x,z:obj.z,y:obj.y,prior:priorHP,after:poiPlayerHP,at:now
+ });
+`);
 const server=createServer((req,res)=>{
  res.setHeader('Content-Type','text/html; charset=utf-8');
- res.end(req.url.startsWith('/seed')?'<!doctype html><title>Isolated fixtures</title>':html);
+ res.end(req.url.startsWith('/seed')?'<!doctype html><title>Isolated fixtures</title>':req.url.startsWith('/elite-proof?')?observedHtml:html);
 });
 await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',resolve).once('error',reject));
 const origin='http://127.0.0.1:'+server.address().port;
@@ -40,6 +55,7 @@ if(out)await mkdir(out,{recursive:true});
 const open='#enterGameWorld';
 async function launch(browser,id='base',start={x:19,z:45},{camera=false,yaw=.24,orbitYaw=0,pitch=.24,townLayout=5,facing=2,kit=null,clockStart=null,fixture='',dist=5.5,level=0,width=390}={}){
  const ctx=await browser.newContext({viewport:{width,height:740},deviceScaleFactor:1,isMobile:true,hasTouch:true});
+ if(fixture==='elite-proof')await ctx.addInitScript(()=>{window.__otherworldContacts=[]});
  const page=await ctx.newPage(),errors=[];
  page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(12000);
  await page.goto(origin+'/seed');
@@ -188,18 +204,24 @@ async function verifyRoute(browser){
 async function verifyThreat(browser){
  const practiceKit={...kit,slots:[{type:'equipWoodSword',count:1,durability:80},
   {type:'healingHerb',count:3},{type:'cannedFood',count:5},...Array(9+18-3).fill(null)]};
- const {ctx,page,errors}=await launch(browser,'base',{x:101,z:80},{level:-1,width:390,clockStart:morning,kit:practiceKit,facing:0});
+ const {ctx,page,errors}=await launch(browser,'base',{x:101,z:80},{level:-1,width:390,clockStart:morning,kit:practiceKit,facing:0,fixture:'elite-proof'});
  try{
   await assertPlanet(page);
   const initial=await state(page);
   assert.equal(initial.inventory.hotbar[2]?.count,5,'real 27-slot inventory decodes battle provisions');
-  const before=initial.combat.playerHP;
 
   const dragon=(await state(page)).combat.actors.find(a=>a.type==='monsterDragon'&&a.level===-1&&a.x===101&&a.z===79);
   assert.equal(dragon?.hp,150,'the authored elite is a real 150HP enemy, not a scenery actor');
   await page.waitForFunction(()=>window.__editorTest.facility().combat.threats.some(t=>t.type==='monsterDragon'&&t.x===101&&t.z===80&&t.y===-1));
-  await page.waitForFunction(h=>window.__editorTest.facility().combat.playerHP<h,before);
-  assert.equal((await state(page)).combat.playerHP,before-(22-2),'the standing player takes the real elite strike less 2 defense from starting cloth shorts');
+  const elite=row=>row.type==='monsterDragon'&&row.x===101&&row.z===79&&row.y===-1;
+  // Nearby ordinary mobs can land their own diagonal contacts first. Wait
+  // for the exact authored source, not an arbitrary decrease in shared HP.
+  await page.waitForFunction(()=>window.__otherworldContacts?.some(row=>row.type==='monsterDragon'&&row.x===101&&row.z===79&&row.y===-1))
+   .catch(async cause=>{throw new Error('No elite contact: '+JSON.stringify({errors,contacts:await page.evaluate(()=>window.__otherworldContacts)}),{cause})});
+  const contacts=await page.evaluate(()=>window.__otherworldContacts);
+  const strike=contacts.find(elite);
+  console.log('Otherworld native contacts before elite: '+JSON.stringify(contacts.slice(0,contacts.indexOf(strike)+1)));
+  assert.equal(strike.prior-strike.after,22-2,'the standing player takes the real elite strike less 2 defense from starting cloth shorts');
   assert.equal(await openAt(page,100,76),false,'deep reward gate is solid until elite defeat');
   assert.equal((await readStock(page)).otherworldCleared,undefined);
   // Complete the real fight with the starting wooden sword. The boost is only
@@ -211,17 +233,34 @@ async function verifyThreat(browser){
   let hp=150;
   for(let hit=0;hit<6;hit++){
    const target=Math.max(0,hp-28);
-   for(let attempt=0;attempt<2 && await dragonHp()===hp;attempt++){
-    // This is ★4: use normal carried food through the real shortcut instead
-    // of deliberately face-tanking the elite and both approaching guards.
-    const live=await state(page);
-    if(live.combat.playerHP<=80){
-     assert(live.inventory.hotbar[2]?.type==='cannedFood','a legal canned food is available');
-     await page.keyboard.press('3');
-    }
-    await page.keyboard.press('Space');
-    await page.waitForTimeout(340);
+   // This is ★4: use normal carried food through the real shortcut instead
+   // of deliberately face-tanking the elite and both approaching guards.
+   const live=await state(page);
+   if(live.combat.playerHP<=80){
+    assert(live.inventory.hotbar[2]?.type==='cannedFood','a legal canned food is available');
+    await page.keyboard.press('3');
    }
+   const sword=()=>page.evaluate(()=>window.__editorTest.otherworldSwordQA());
+   await page.waitForFunction(()=>{
+    const q=window.__editorTest.otherworldSwordQA();
+    return !q.pending&&q.now>=q.ready;
+   });
+   const armed=await sword();
+   await page.keyboard.press('Space');
+   await page.waitForFunction(prior=>window.__editorTest.otherworldSwordQA().started>prior,armed.started,{timeout:5000})
+    .catch(async cause=>{
+     const now=await sword();
+     throw new Error('Wooden strike '+(hit+1)+(now.dispatches===armed.dispatches?' was not dispatched':' was dispatched but rejected')+
+      ': '+JSON.stringify({armed,now,errors}),{cause});
+    });
+   const accepted=await sword();
+   assert.equal(accepted.dispatches,armed.dispatches+1,'one Space press dispatches one action');
+   await page.waitForFunction(start=>{
+    const q=window.__editorTest.otherworldSwordQA();
+    return q.started===start&&!q.pending;
+   },accepted.started,{timeout:5000}).catch(async cause=>{
+    throw new Error('Wooden strike '+(hit+1)+' accepted, but real pending contact did not settle: '+JSON.stringify({accepted,now:await sword(),errors}),{cause});
+   });
    const found=await dragonHp();
    if(found!==target){
     const s=await state(page);

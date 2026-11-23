@@ -14,9 +14,9 @@ test('one fixed player tile: visible through windup even after a sidestep, miss 
  assert.deepEqual(tiles(100),[[5,5,0,100,580,'monsterSlime']]);
  c.poiWalkX=4;c.poiWalkZ=6;
  c.poiEnemyResolvePlayer(570);assert.deepEqual(tiles(570),[[5,5,0,100,580,'monsterSlime']]);assert.deepEqual(hits,[]);
- c.poiEnemyResolvePlayer(580);assert.deepEqual(hits,[]);assert.deepEqual(tiles(580),[]);assert.equal(state.nextAttack,1250);
+ c.poiEnemyResolvePlayer(580);assert.deepEqual(hits,[]);assert.deepEqual(tiles(580),[]);assert.equal(state.nextAttack,2080);
 });
-test('all player-targeted monsters use readable timing; old cooldown and a single hit survive',()=>{
+test('all player-targeted monsters keep windup and a single hit; only slime recovery is lengthened',()=>{
  for(const [type,windup] of [['monsterSlime',480],['monsterSkeleton',520],['monsterGoblin',550],['monsterDragon',640]]){
   const {c,obj,state,hits,tiles}=fixture(type);
   assert(c.poiEnemyBeginPlayer(obj,state,100));assert(!c.poiEnemyBeginPlayer(obj,state,110));
@@ -24,7 +24,7 @@ test('all player-targeted monsters use readable timing; old cooldown and a singl
   c.poiEnemyResolvePlayer(99+windup);assert.deepEqual(hits,[]);
   c.poiEnemyResolvePlayer(100+windup);c.poiEnemyResolvePlayer(130+windup);
   assert.deepEqual(hits,[[type,100+windup]]);
-  assert.equal(state.nextAttack,1250);
+  assert.equal(state.nextAttack,type==='monsterSlime'?2080:1250);
  }
 });
 test('broken eligibility, removed or relocated source and lifecycle never become attacks',()=>{

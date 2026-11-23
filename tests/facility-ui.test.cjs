@@ -30,5 +30,9 @@ test('facility sessions reject whole-map import and cap even in-play editing and
  assert(near("$('level').addEventListener('change'",410).includes('if(facilitySite){facilitySetEditLevel'));
  assert(near('function stampPrefab(',670).includes('p.y>(facilitySite?facilityMaxEditLevel():MAX_LEVEL)'));
  assert(near('function facilitySetEditLevel(',300).includes('facilityMaxEditLevel()'));
- assert(near('function facilityObjectVisible(',380).includes('facilityRoofOwner(o)!==null'));
+ // Inspect the whole function rather than truncating the roof guard when
+ // unrelated object-visibility routing is added ahead of it.
+ const start=html.indexOf('function facilityObjectVisible('),end=html.indexOf('\n}',start);
+ assert(start>=0&&end>start);
+ assert.match(html.slice(start,end),/if\(floor>=0&&poiWalkActive&&facilityIsRoofPiece\(o\)&&facilityRoofOwner\(o\)!==null\)return false/);
 });

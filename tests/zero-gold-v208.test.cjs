@@ -28,3 +28,11 @@ test('already zero old saves open without rewrites and the wallet numeral and ic
  f.c.poiWalletSync(1);assert.equal(f.value.textContent,'1');assert(!f.attrs.has('data-wallet-empty'));
  assert.match(h,/#poiBagWallet\[data-wallet-empty\]\s+svg/);
 });
+
+test('wallet display subtracts reservations from the supplied authoritative balance without saving',()=>{
+ const f=setup({...saved,gold:21,goldStacks:[{slot:10,amount:10}]});
+ f.c.poiWalletSync(21);assert.equal(f.value.textContent,'11');
+ f.c.poiWalletSync(14);assert.equal(f.value.textContent,'4');
+ f.c.poiWalletSync(10);assert.equal(f.value.textContent,'');assert(f.attrs.has('data-wallet-empty'));
+ assert.equal(f.writes(),0);
+});

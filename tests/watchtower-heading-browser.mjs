@@ -4,12 +4,17 @@ import {createRequire} from 'node:module';
 import {createServer} from 'node:http';
 
 const html=readFileSync(process.argv[2]||'world-editor.html','utf8');
-const cameraLine='const eye=facilityWatchtowerCameraEye(target,desired);';
-assert.equal(html.split(cameraLine).length,2,'unique production orbit path');
+// Probe the eye selected by production just before its distance/FOV use.
+const towerBranch=':facilityWatchtowerCameraEye(target,desired);';
+const cameraLine='const arm=eye===desired?poiCameraDistance:Math.hypot(...eye.map((v,i)=>v-target[i]));';
+assert.equal(html.split(towerBranch).length,2,'unique actual surface watchtower fallback');
+assert.equal(html.split(cameraLine).length,2,'unique final orbit eye consumption');
+const at=html.indexOf(cameraLine);
+assert(html.slice(at-220,at).includes(towerBranch),'the unchanged watchtower branch feeds the sampled eye');
 const random=' const p=poiWildPick(rng);';
 assert.equal(html.split(random).length,2);
 const fixture=html.replace(random,' const p=null;').replace(cameraLine,cameraLine+`
- if(window.__towerOrbitSamples&&window.__towerOrbitSamples.length<1200){
+ if(!mineCamera&&window.__towerOrbitSamples&&window.__towerOrbitSamples.length<1200){
   const v=eye.map((a,i)=>a-target[i]),seen=Math.atan2(-v[0],-v[2]);
   const delta=Math.atan2(Math.sin(seen-poiCameraYaw),Math.cos(seen-poiCameraYaw));
   window.__towerOrbitSamples.push({x:target[0],z:target[2],delta,distance:Math.hypot(...v),rise:v[1],yaw:poiCameraYaw});
@@ -38,6 +43,7 @@ async function verify(browser,orbitYaw,dy,rear=false){
   },{route,orbitYaw,kitKey,resumeKey,kit});
   await page.goto(root+'/?resume=1&test=1');
   await page.waitForFunction(()=>window.__editorTest?.facility?.()?.active);
+  await page.locator('#pineStartupCover').waitFor({state:'hidden'});
   const pos=()=>page.evaluate(()=>window.__editorTest.facility().position);
   assert.deepEqual(await pos(),{x:108,z:route.z,level:0});
   const objects=await page.evaluate(()=>window.__editorTest.data().world.filter(o=>

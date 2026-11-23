@@ -29,7 +29,7 @@ test('checks wallet amount, stores two separate piles in one write each, and rec
   const poiDropGroundLocation=()=>({location:{x:(kit.groundGold?.length||0)+1,z:2,y:0}});
   const poiEconomyWrite=next=>{if(denied)return false;kit=next;writes++;return true};
   const poiEconomyRefresh=()=>{},poiSound=()=>{},poiMessagePush=()=>true,toast=()=>{};
-  `+get('poiGroundGoldDrop')+';'+get('poiGroundGoldPickup')+`
+  `+get('poiWalletGold')+';'+get('poiGroundGoldDrop')+';'+get('poiGroundGoldPickup')+`
   return {drop:poiGroundGoldDrop,pick:poiGroundGoldPickup,kit:()=>kit,
    deny:v=>denied=v,floor:v=>poiWalkLevel=v,writes:()=>writes,cap:()=>kit={...kit,gold:999998}};
  `);

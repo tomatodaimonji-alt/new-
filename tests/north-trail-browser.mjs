@@ -11,7 +11,9 @@ const html=readFileSync(process.argv[2]??'world-editor.html','utf8');
 // clock and combat scheduler, but suppress unrelated random wild placements.
 const wildPick=' const p=poiWildPick(rng);';
 assert.equal(html.split(wildPick).length,2,'one wild placement anchor in the app');
-const fixtureHtml=html.replace(wildPick,' const p=null;');
+const regional="if(typeof poiWildRegionalFrame==='function')poiWildRegionalFrame(now,rng);";
+assert.equal(html.split(regional).length,2,'one regional replacement anchor in the app');
+const fixtureHtml=html.replace(wildPick,' const p=null;').replace(regional,'');
 const server=createServer((req,res)=>{
  res.setHeader('Content-Type','text/html; charset=utf-8');
  res.end(req.url.startsWith('/seed')?'<!doctype html><title>Isolated fixtures</title>':fixtureHtml);

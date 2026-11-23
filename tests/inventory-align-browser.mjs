@@ -76,8 +76,9 @@ try{
    await page.locator('#poiBagToggle').tap();await page.locator(panel).waitFor({state:'visible'});
    const [bag,cell,doll,close,gold]=await Promise.all([
     box(page.locator(panel),false),box(page.locator(slot)),box(page.locator(avatar)),
-    box(page.locator('#poiBagClose')),box(page.locator('#poiBagGoldDrop'))
+    box(page.locator('#poiBagClose')),box(page.locator('#poiBagWallet'))
    ]);
+   assert.equal(await page.locator('#poiBagGoldDrop').count(),0,'coin placement comes from the wallet, not a header button');
    match(bag,bar,'bag left/right follow actual hotbar at '+width);
    assert(bag.bottom+3<=bar.y,'stable gap above the top shortcut row');
    assert(Math.abs(cell.w-cell.h)<.6,'bag cells remain square');
