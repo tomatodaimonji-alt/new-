@@ -67,7 +67,7 @@ async function oldThreshold(browser){
   const world=await map(page),raw=await stock(page);
   assert.equal(await page.evaluate(()=>window.__editorTest.canStep(120,57,120,58)),false);
   let s=await api(page);
-  assert.equal(s.combat.actors.find(a=>a.type==='monsterMineGuard'&&a.visible)?.hp,140);
+  assert.equal(s.combat.actors.find(a=>a.type==='monsterMineGuard'&&a.visible)?.hp,112);
   assert.equal(s.miniMap.location,'廃坑');
   await page.keyboard.press('ArrowUp');await waitPosition(page,120,58);
   assert.equal(await stock(page),raw);
@@ -99,7 +99,7 @@ async function cooldown(browser){
   assert.deepEqual(end.position,pos(116,61),'player remains on safe landing while real slime roams');
   assert.equal(end.combat.playerHP,100);assert.equal(end.combat.threats.length,0);
   assert(Math.abs(m.x-120)+Math.abs(m.z-62)<=4,'actual ordinary patrol stays within its authored tether');
-  assert.equal(end.combat.actors.find(a=>a.type==='monsterMineGuard'&&a.visible)?.hp,140);
+  assert.equal(end.combat.actors.find(a=>a.type==='monsterMineGuard'&&a.visible)?.hp,112);
   assert.equal(await stock(page),raw,'clock expiry and roaming do not spend or grant items');
   assert.deepEqual(await map(page),world);
   assert.deepEqual(errors,[]);

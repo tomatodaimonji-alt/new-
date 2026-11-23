@@ -88,7 +88,7 @@ async function gateStillLocked(page){
  const s=await api(page),k=JSON.parse(await stock(page));
  assert.equal(s.mineVault.gateOpen,false);
  assert.equal(k.mineGateCleared,undefined);assert.equal(k.mineTreasureChest,undefined);assert.equal(k.quests,undefined);
- assert(s.combat.actors.some(a=>a.type==='monsterMineGuard'&&a.hp===140&&a.visible),'old elite remains alive and unchanged');
+ assert(s.combat.actors.some(a=>a.type==='monsterMineGuard'&&a.hp===112&&a.visible),'authored guardian is alive at full encounter HP');
 }
 async function trial(browser){
  const {ctx,page,errors}=await launch(browser,start);
