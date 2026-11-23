@@ -140,11 +140,21 @@ async function counter(far){
   if(!far)await p.evaluate(()=>window.__editorTest.northFortQA.corner());
   const corner=!far?await p.evaluate(()=>window.__editorTest.northFortQA.motion()):null;
   if(corner)assert(Math.abs(corner.x-64.78)<.001&&Math.abs(corner.z-13.84)<.001);
-  await touch('touchStart',[left]);
-  assert.equal((await p.evaluate(()=>window.__editorTest.northFortQA.motion())).strike,null,
-   "the boss did not precommit before the real thumb contact");
-  await p.evaluate(()=>window.__editorTest.northFortQA.arm(false));
   const motion=()=>p.evaluate(()=>window.__editorTest.northFortQA.motion());
+  // Installing/pausing a virtual clock can put performance.now behind a
+  // scheduler deadline created during normal startup. Synchronize to that
+  // real deadline with combat still DISARMED, before any physical touch.
+  // Fast-forward skips rendering stale intermediate frames; once armed we
+  // use only normal frame increments for all movement, impact and recovery.
+  const initial=await motion();
+  const clockDebt=Math.ceil(initial.nextMob-initial.now);
+  if(clockDebt>380)await p.clock.fastForward(clockDebt+32);
+  const aligned=await motion();
+  assert(aligned.nextMob-aligned.now<=400&&!aligned.strike,
+   'disarmed gameplay clock is synchronized: '+JSON.stringify({initial,aligned}));
+  await touch('touchStart',[left]);
+  assert.equal((await motion()).strike,null,'the boss did not precommit before the real thumb contact');
+  await p.evaluate(()=>window.__editorTest.northFortQA.arm(false));
   let swing;
   const armedAt=await motion();
   let observed=armedAt;

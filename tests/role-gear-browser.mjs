@@ -77,7 +77,10 @@ async function resident(browser,r){
    const a=window.__editorTest.townResidents().actors.find(a=>a.id===r.id);
    return a&&!a.recessed&&a.activity==='work'&&a.x===r.at[0]&&a.z===r.at[1]&&a.y===0;
   },r);
-  await page.waitForFunction(()=>document.querySelector('#poiWalkAction').getAttribute('aria-label')==='住人と話す');
+  await page.waitForFunction(name=>{
+   const label=document.querySelector('#poiWalkAction').getAttribute('aria-label')||'';
+   return label.startsWith(name+'（')&&label.endsWith('）と話す');
+  },r.name);
   await page.locator('#poiWalkAction').tap();
   await page.waitForFunction(id=>window.__editorTest.townResidents().dialogue?.id===id,r.id);
   await page.locator('#poiNpcMenu [data-npc-action="status"]').tap();

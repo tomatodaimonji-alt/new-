@@ -44,7 +44,8 @@ try{
  const {ctx,page,errors}=await launch(browser,cook,legacy);
  const npc=page.locator('#poiNpcInventory'),dialog=page.locator('#poiItemDetail');
  await page.waitForFunction(r=>window.__editorTest.townResidents().actors.some(a=>a.id===r.id&&a.activity==='work'&&a.x===r.at[0]&&a.z===r.at[1]),cook);
- await page.waitForFunction(()=>document.querySelector('#poiWalkAction').getAttribute('aria-label')==='住人と話す');
+ await page.waitForFunction(label=>document.querySelector('#poiWalkAction').getAttribute('aria-label')===label,
+  'イネス（食堂の料理人）と話す');
  await page.locator('#poiWalkAction').tap();
  await page.locator('#poiNpcMenu [data-npc-action="status"]').tap();
  const before=await talk(page);

@@ -63,7 +63,7 @@ async function worker(page,r){
 }
 async function openTalk(page,r){
  await worker(page,r);
- await page.waitForFunction(()=>document.querySelector('#poiWalkAction').getAttribute('aria-label')==='住人と話す');
+ await page.waitForFunction(name=>{const text=document.querySelector('#poiWalkAction').getAttribute('aria-label');return text?.startsWith(name)&&text.endsWith('と話す')},r.name);
  await page.locator(action).tap();
  await page.waitForFunction(id=>window.__editorTest.townResidents()?.dialogue?.id===id,r.id);
  assert((await talk(page)).name.startsWith(r.name));
@@ -153,3 +153,4 @@ try{
  if(process.env.GOLD_COUNTER_CASE!=='gold')await counters(browser);
  console.log('PASS native portrait zero wallet, actual 6G purchase to 0, five staffed counters, and blocked unrelated wall');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
+

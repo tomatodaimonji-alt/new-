@@ -1585,7 +1585,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v255）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v256）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -14244,30 +14244,132 @@ function poiTownDutyRoutine(a,clock,now,budget){
  return true;
 }
 // END TOWN WATCH DUTY
+// BEGIN TOWN DAILY LIFE
+// Shops keep their shared player-facing hours. Outside that window the
+// residents follow different shifts, using the same physical path graph.
+const POI_TOWN_KEEPER_DAY=Object.freeze({
+ guildkeeper:{depart:385,bed:1200,evening:[55,42,2]},
+ innkeeper:{depart:421,bed:1170,evening:[40,35,2]},
+ diningkeeper:{depart:371,bed:1190,evening:[54,41,1]},
+ workshopkeeper:{depart:397,bed:1250,evening:[65,39,2],alternate:[63,42,0]},
+ toolkeeper:{depart:411,bed:1208,evening:[65,40,3]},
+ stablekeeper:{depart:365,bed:1220,evening:[42,47,1]}
+});
+const POI_TOWN_VISITOR_DAY=Object.freeze({
+ westpeddler:{from:825,to:900,stop:[52,44,0],label:'market-browse'},
+ northtraveler:{from:830,to:875,stop:[39,39,3],label:'meal-break'},
+ towncook:{from:855,to:905,stop:[48,42,1],label:'market-browse'},
+ canalcourier:{from:1055,to:1200,stop:[58,44,0],label:'evening-delivery',alternate:true}
+});
+function poiTownDailyPoint(values){
+ return {x:values[0],z:values[1],y:0,facing:values[2]};
+}
+function poiTownDailyRoad(point){
+ if(!point||typeof poiTownNpcGraph!=='function')return false;
+ const g=poiTownNpcGraph(),types=g.cells.get(poiTownNpcKey(point.x,point.z,point.y));
+ return !!types?.some(t=>t.startsWith('road'))&&poiTownNpcStance(point,g);
+}
+function poiTownDailyRoles(){
+ if(!(facilitySite?.id==='base'&&facilitySite.buildings?.some(b=>b.id==='lodging')))return [];
+ const home=poiTownDailyPoint([38,38,1]),first=poiTownDailyPoint([39,39,3]),
+  second=poiTownDailyPoint([40,39,0]),third=poiTownDailyPoint([41,40,3]);
+ if(![home,first,second,third].every(poiTownDailyRoad))return [];
+ return [{id:'nightporter',name:'ロウ',role:'night-porter',type:'humanVillager',
+  home,work:first,rounds:[first,second,third]}];
+}
+function poiTownDailyPlan(role,clock){
+ if(typeof poiTownNpcGraph!=='function')return null;
+ const m=clock.minute,odd=Math.floor((clock.absoluteMinute??m)/1440)%2===0;
+ if(role.role==='night-porter'){
+  const on=m>=1160||m<350;
+  // Pin the loop to the shift that crosses midnight so 23:59 -> 00:00
+  // changes target only when the round itself changes.
+  const elapsed=(m+1440-1160)%1440;
+  const n=Math.floor(elapsed/49)%role.rounds.length;
+  const goal=on&&poiTownDailyRoad(role.rounds[n])?role.rounds[n]:role.home;
+  return {goal,recessed:!on,label:!on?'off-duty':n===1?'lamp-check':'porter-round'};
+ }
+ const keeper=role.role==='keeper'&&Object.hasOwn(POI_TOWN_KEEPER_DAY,role.id)?POI_TOWN_KEEPER_DAY[role.id]:null;
+ if(keeper){
+  if(m>=POI_TOWN_OPEN&&m<POI_TOWN_CLOSE)return {goal:role.work,label:'work'};
+  if(m>=keeper.depart&&m<POI_TOWN_OPEN)return {goal:role.work,label:'going-work'};
+  const stop=poiTownDailyPoint(!odd&&keeper.alternate?keeper.alternate:keeper.evening);
+  if(m>=POI_TOWN_CLOSE&&m<keeper.bed&&poiTownDailyRoad(stop))
+   return {goal:stop,label:'evening-walk'};
+  return {goal:role.sleepStand||role.home,label:'going-home'};
+ }
+ const visit=role.role==='visitor'&&Object.hasOwn(POI_TOWN_VISITOR_DAY,role.id)?POI_TOWN_VISITOR_DAY[role.id]:null;
+ if(!visit)return null;
+ if(m>=visit.from&&m<visit.to&&(!visit.alternate||odd)){
+  const stop=poiTownDailyPoint(visit.stop);
+  if(poiTownDailyRoad(stop))return {goal:stop,label:visit.label,recessed:false};
+ }
+ if(!poiTownNpcVisiting(role,m))return {goal:role.home,label:'offsite',recessed:true};
+ const goal=poiTownNpcVisitorGoal(role,m);
+ return {goal,label:role.id==='towncook'&&goal===role.work?'work':'visit',recessed:false};
+}
+// Only cold-start placement may choose a nearby safe tile. Once live,
+// every phase transition takes the normal swept/cardinal route.
+function poiTownDailySpawn(p,role,reserved){
+ const g=poiTownNpcGraph();
+ const open=q=>q&&poiTownNpcStance(q,g)&&!reserved.has(poiTownNpcKey(q.x,q.z,q.y))&&
+  !(typeof poiWalkX!=='undefined'&&poiWalkX===q.x&&poiWalkZ===q.z&&poiWalkLevel===q.y);
+ if(open(p))return p;
+ for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
+  const q=poiTownNpcNextTile(p,p.x+dx,p.z+dz,g);
+  if(q?.y===p.y&&open(q))return {...q,facing:p.facing};
+ }
+ for(const q of [role.public,role.sleepStand,role.home])if(open(q))return q;
+ return p;
+}
+function poiTownDailyRoutine(a,clock,now,budget,plan=poiTownDailyPlan(a.role,clock)){
+ if(!plan)return false;
+ const {role}=a,{goal,label,recessed}=plan;
+ if(recessed&&a.recessed)return true;
+ if(a.recessed){a.recessed=false;poiTownNpcVersion++}
+ const going=label==='work'&&role.role==='keeper'?'going-work':
+  role.role==='visitor'?recessed?'leaving-visit':'going-visit':
+  role.role==='night-porter'?recessed?'porter-off-duty':'porter-walk':
+  label==='evening-walk'?'going-evening':label;
+ const arrived=poiTownNpcMove(a,goal,going,now,budget);
+ if(recessed&&arrived){a.recessed=true;poiTownNpcVersion++}
+ if(arrived&&label==='going-home'){
+  const bed=poiTownNpcExistsBed(role.bed);
+  if(bed)a.hp=100;
+  poiTownNpcAct(a,bed?'sleep-home':'home');
+ }else poiTownNpcAct(a,arrived?label:going);
+ return true;
+}
+// END TOWN DAILY LIFE
 const POI_TOWN_RESIDENT_HP=100,POI_TOWN_RESIDENT_MELEE=13;
 function poiTownNpcInit(clock){
  if(poiTownNpcActors.length)return;
  const merchant=typeof poiSouthMarketRole==='function'?poiSouthMarketRole():null;
  const duty=typeof poiTownDutyRoles==='function'?poiTownDutyRoles():[];
- const roster=[...POI_TOWN_RESIDENT_ROLES,...(merchant?[merchant]:[]),...duty];
+ const daily=typeof poiTownDailyRoles==='function'?poiTownDailyRoles():[];
+ const roster=[...POI_TOWN_RESIDENT_ROLES,...(merchant?[merchant]:[]),...duty,...daily];
+ const reserved=new Set();
  poiTownNpcActors=roster.map((role,index)=>{
   const visitor=role.role==='visitor';
   const duty=typeof poiTownDutyPlan==='function'?poiTownDutyPlan(role,clock.minute):null;
-  const recessed=duty?.recessed??(visitor&&!poiTownNpcVisiting(role,clock.minute));
+  const daily=typeof poiTownDailyPlan==='function'?poiTownDailyPlan(role,clock):null;
+  const recessed=duty?.recessed??daily?.recessed??(visitor&&!poiTownNpcVisiting(role,clock.minute));
   const night=clock.minute<POI_TOWN_WAKE||clock.minute>=20*60;
   const assigned=role.role==='adventurer'&&POI_TOWN_INN_BEDS.find(b=>b.residentId===role.id);
   // Like the residents' private beds, an assigned guest room can be
   // reconstructed after a cold evening launch; no clerk or spare room is used.
   const bed=assigned&&(clock.minute<POI_TOWN_WAKE||clock.minute>=POI_TOWN_CLOSE)&&
    poiTownNpcExistsBed(assigned)&&poiTownNpcStance(assigned.stand)?assigned:null;
-  const start=duty?.start??(visitor?(recessed?role.home:poiTownNpcVisitorGoal(role,clock.minute)):
+  const start=duty?.start??daily?.goal??(visitor?(recessed?role.home:poiTownNpcVisitorGoal(role,clock.minute)):
    bed?.stand||(night&&!assigned?role.sleepStand||role.home:role.role==='keeper'?role.work:role.public||role.home));
   const shipment=role.id==='toolkeeper'&&typeof poiToolshopSupplyResume==='function'?poiToolshopSupplyResume(clock):null;
   const returning=shipment&&poiTownNpcStance(shipment);
-  const p=returning?shipment:poiTownNpcStance(start)?start:role.home;
+  const chosen=returning?shipment:poiTownNpcStance(start)?start:role.home;
+  const p=!recessed&&!returning&&daily&&typeof poiTownDailySpawn==='function'?poiTownDailySpawn(chosen,role,reserved):chosen;
+  if(!recessed)reserved.add(p.x+','+p.z+','+p.y);
   const morning=clock.absoluteMinute-clock.minute+POI_TOWN_WAKE+(clock.minute>=POI_TOWN_WAKE?1440:0);
   const {weapon,gear}=poiTownNpcLoadout({role});
-  return {role,weapon,gear,...p,index,...(returning?{supplyCarrying:true}:{}),hp:POI_TOWN_RESIDENT_HP,activity:returning?'supply-return':recessed?'offsite':duty?.label||'idle',recessed,attacks:0,coins:0,potions:0,bedId:bed?.id??null,
+  return {role,weapon,gear,...p,index,...(returning?{supplyCarrying:true}:{}),hp:POI_TOWN_RESIDENT_HP,activity:returning?'supply-return':recessed?'offsite':duty?.label||daily?.label||'idle',recessed,attacks:0,coins:0,potions:0,bedId:bed?.id??null,
    bedUntil:bed?morning:null,restUntil:null,path:null,nextPlan:0,attackAt:0,encounterAt:0};
  });
  poiTownNpcVersion++;
@@ -14735,8 +14837,21 @@ function poiToolshopSupplyRoutine(a,clock,now,budget){
 // END TOOLSHOP SUPPLY ROUTINE
 function poiTownNpcRoutine(a,clock,now,budget){
  if(typeof poiTownDutyRoutine==='function'&&poiTownDutyRoutine(a,clock,now,budget))return;
- if(a.role.role==='visitor'){poiTownNpcVisitorRoutine(a,clock,now,budget);return}
+ if(a.role.role==='visitor'){
+  if(typeof poiTownDailyRoutine!=='function'||!poiTownDailyRoutine(a,clock,now,budget))poiTownNpcVisitorRoutine(a,clock,now,budget);
+  return;
+ }
  if(typeof poiSouthShipmentRoutine==='function'&&poiSouthShipmentRoutine(a,clock,now,budget))return;
+ // The tool merchant's established physical supply transaction takes
+ // priority over the daily timetable; it never mutates ambient shopping.
+ if(a.role.role==='keeper'&&typeof poiTownDailyPlan==='function'&&typeof poiTownDailyRoutine==='function'){
+  const plan=poiTownDailyPlan(a.role,clock);
+  if(plan){
+   if(plan.label==='work'&&typeof poiToolshopSupplyRoutine==='function'&&poiToolshopSupplyRoutine(a,clock,now,budget))return;
+   poiTownDailyRoutine(a,clock,now,budget,plan);return;
+  }
+ }
+ if(a.role.role==='night-porter'&&typeof poiTownDailyRoutine==='function'&&poiTownDailyRoutine(a,clock,now,budget))return;
  const {role,index}=a,m=clock.minute,night=m<POI_TOWN_WAKE||m>=20*60+index*4;
  const traveler=role.role==='adventurer'&&POI_TOWN_INN_BEDS.some(b=>b.residentId===role.id);
  let bed=POI_TOWN_INN_BEDS.find(b=>b.id===a.bedId);
@@ -14798,7 +14913,7 @@ function poiTownNpcRoutine(a,clock,now,budget){
 const POI_TOWN_JOB_LABELS=Object.freeze({
  guildkeeper:'ギルド受付',innkeeper:'宿屋の主人',diningkeeper:'食堂の店主',workshopkeeper:'工房の職人',
  toolkeeper:'道具屋の店主',stablekeeper:'厩舎番',towncook:'食堂の料理人',westpeddler:'行商人',canalcourier:'運河の配達人',
- resadventurer:'冒険者',guestadventurer:'冒険者',southmerchant:'宿場の商人',northgatekeeper:'北門の見張り',northwatchworker:'夜回り',northscout:'北の斥候'
+ resadventurer:'冒険者',guestadventurer:'冒険者',southmerchant:'宿場の商人',northgatekeeper:'北門の見張り',northwatchworker:'夜回り',northscout:'北の斥候',nightporter:'宿屋前の夜番'
 });
 function poiTownNpcDisplayName(role){
  const name=role?.name||'',job=Object.prototype.hasOwnProperty.call(POI_TOWN_JOB_LABELS,role?.id)?POI_TOWN_JOB_LABELS[role.id]:'';
@@ -14807,6 +14922,7 @@ function poiTownNpcDisplayName(role){
 const POI_TOWN_SPEECH=Object.freeze({
  guildkeeper:'ようこそ。町の外に出るなら、帰りの門を覚えておくといいですよ。',
  innkeeper:'旅の疲れは早めに取るもんだ。空き部屋は受付で聞いておくれ。',
+ nightporter:'宿の前の明かりを見て回ってる。部屋のことは宿の主人に聞いておくれ。',
  westpeddler:'西門から野菜を運んできたよ。朝の街道はまだ涼しくてね。',
  northtraveler:'北から歩いてきたんだ。今夜はまた街道沿いで休むつもり。',
  northgatekeeper:'北門は通れるよ。森の様子を知りたければ、日中は斥候が北の野営地にいる。',
@@ -15251,7 +15367,7 @@ function poiTownCounterTalkReachable(a,dx,dz,g){
  return world.some(o=>o.x===x&&o.z===z&&o.y===y&&counter(o.type)&&((o.rot||0)%2===Math.abs(dx)));
 }
 // BEGIN NPC LIVE TALK
-function poiTownDialogueLiveTarget(o,now,engaged,current){
+function poiTownDialogueLiveTarget(o,now,engaged,current,strictFacing=false){
  const edge=poiAimWall(o);
  let graph=null;
  const pass=(x,z,fx,fz)=>{
@@ -15266,7 +15382,7 @@ function poiTownDialogueLiveTarget(o,now,engaged,current){
   const p=poiTownNpcVisualPosition(a,now),x=p.x-o.x,z=p.z-o.z,d=Math.hypot(x,z),held=a===current;
   if(d>(held?1.90:1.65))continue;
   const facing=d>1e-6?(x*o.dir.x+z*o.dir.z)/d:1;
-  if(!held&&facing<-.15)continue;
+  if((!held||strictFacing)&&facing<-.15)continue;
   const dir=poiAimUnit(x,z);
   if(dir&&poiAimWallLimit(o,dir,d,pass)+1e-6<d)continue;
   let blocked=false;
@@ -15284,18 +15400,22 @@ function poiTownDialogueLiveTarget(o,now,engaged,current){
  return best;
 }
 // END NPC LIVE TALK
-function poiTownDialogueTarget(now,selection=null){
+function poiTownDialogueTarget(now,selection=null,expected=null){
  if(!poiTownNpcActive()||!poiTownNpcActors.length)return null;
  const [dx,dz]=[[0,-1],[1,0],[0,1],[-1,0]][poiWalkFacing]||[0,0];
  if(!dx&&!dz)return null;
  const x=poiWalkX+dx,z=poiWalkZ+dz,y=poiWalkLevel,current=poiTownDialogue?.actor;
- const present=a=>!a.recessed&&!a.death&&a.y===y;
+ const present=a=>(!expected||a===expected)&&!a.recessed&&!a.death&&a.y===y;
  const engaged=a=>present(a)&&!a.target&&a.hitAt==null&&
   !(Number.isFinite(a.hurtAt)&&now-a.hurtAt<400)&&!(a!==current&&Number.isFinite(a.gestureAt)&&now-a.gestureAt<1120)&&
   !/^(sleep|rest|fight|buy|seek-inn)/.test(a.activity);
  const live=typeof poiAimOrigin==='function'&&typeof poiTownNpcVisualPosition==='function';
  const origin=live?poiAimOrigin(now):null;
- if(live&&current&&poiTownDialogueLiveTarget(origin,now,a=>a===current&&engaged(a),current))return current;
+ if(live&&current&&poiTownDialogueLiveTarget(origin,now,a=>a===current&&engaged(a),current,!!expected))return current;
+ if(live&&expected&&poiTownDialogueLiveTarget(origin,now,a=>a===expected&&engaged(a),expected,true)){
+  if(selection)selection.movingGreeting=true;
+  return expected;
+ }
  if(!live)for(const [obj,s] of poiMonsterStates)if(s.hp>0&&obj.y===y&&s.x===x&&s.z===z)return null;
  if(!live&&current&&poiTownDialogue.movingGreeting&&engaged(current)&&
     Number.isFinite(poiTownDialogueMovingTarget(current,now,dx,dz,true)))return current;
@@ -15366,8 +15486,12 @@ function poiTownDialogueUpdate(now){
  return d.sleeping?null:d.actor;
 }
 function poiTownDialogueAction(now){
- const selection={},actor=poiTownDialogueTarget(now,selection);
+ const expected=arguments[1]??null;
+ const selection={},actor=poiTownDialogueTarget(now,selection,expected);
  if(poiNpcMenuActive()){
+  // An older touch aimed at the HUD's greeting can never confirm a
+  // different conversation/menu that opened before its release.
+  if(expected)return false;
   const id=poiTownDialogue.rows[poiTownDialogue.index]?.id;
   if(id)poiNpcMenuChoose(id,now);
   return true;
@@ -15390,6 +15514,7 @@ function poiTownDialogueAction(now){
    else if(Math.abs(fz)>Math.abs(fx))facing=fz>0?2:0;
   }
   poiTownNpcFace(actor,facing);
+  if(actor.actorLeg&&typeof poiTownNpcVersion==='number')poiTownNpcVersion++;
  }
  poiNpcMenuRender(now);poiShopSync();return true;
 }
@@ -15493,8 +15618,10 @@ function poiTownResidentsFrame(now){
     a.actorLeg=null;a.path=null;a.fromX=a.x;a.fromZ=a.z;poiTownNpcVersion++;
    }
    else {
-    if(poiTownDialogue?.actor===a)poiTownNpcActorSettle(a,now);
-    poiTownNpcActorRun(a,now,poiTownNpcGraph());
+    // Keep the actual physical/visual footprint on its owned walking
+    // leg. The mover resumes on close, without catch-up or recentering.
+    if(poiTownDialogue?.actor===a&&!poiTownDialogue.sleeping)a.actorLeg.last=now;
+    else poiTownNpcActorRun(a,now,poiTownNpcGraph());
    }
   }
   if(a.target||a.hitAt!=null)poiTownNpcResolve(a,now);
@@ -15537,7 +15664,7 @@ function poiTownNpcVisualPosition(a,now,interpolate=true){
  return {x:t===1?a.x:a.fromX+(a.x-a.fromX)*t,z:t===1?a.z:a.fromZ+(a.z-a.fromZ)*t,y:a.y,t};
 }
 function poiTownNpcVisualCadence(a,now){
- if(a.recessed||a.y!==poiWalkLevel||poiTownNpcStepT(a,now)===1)return 0;
+ if(a.recessed||a.y!==poiWalkLevel||poiTownNpcStepT(a,now)===1||a.actorLeg&&poiTownDialogue?.actor===a&&!poiTownDialogue.sleeping)return 0;
  const d=Math.hypot(a.x-poiWalkX,a.z-poiWalkZ);
  return d<=13?33:d<=24?66:0;
 }
@@ -15746,7 +15873,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v255',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v256',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -15861,7 +15988,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v255';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v256';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -16076,7 +16203,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v255',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v256',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -18616,6 +18743,7 @@ function poiShopSync(){
  const talk=visible&&typeof poiTownDialogueTarget==='function'&&poiTownDialogueTarget(performance.now());
  const prompt=poiShopIsOpen()?'npc-confirm':poiChestIsOpen()?'chest-close':poiKitchenChestReachable()?'chest':typeof poiMineVaultChestReachable==='function'&&poiMineVaultChestReachable()?'vault':typeof poiOtherworldChestReachable==='function'&&poiOtherworldChestReachable()?'otherworld-chest':typeof poiChapelChestReachable==='function'&&poiChapelChestReachable()?'chapel-chest':typeof poiQuestSurveyReachable==='function'&&poiQuestSurveyReachable()?'survey':stay==='rest'?'rest':talk?'talk':typeof poiWayfarerWellReachable==='function'&&poiWayfarerWellReachable()?'well':(typeof poiNorthTrailForkSignReachable==='function'&&poiNorthTrailForkSignReachable()||typeof poiChapelWaymarkReachable==='function'&&poiChapelWaymarkReachable())?'trail-sign':'action';
  const landscape=$('viewWrap')?.hasAttribute?.('data-analog-play')===true;
+ if(action)action._talkActor=prompt==='talk'?talk:null;
  if(action&&(action._shopPrompt!==prompt||!!action._shopLandscape!==landscape)){
   action._shopPrompt=prompt;action._shopLandscape=landscape;action._shopWeapon=undefined;
   if(action.dataset)delete action.dataset.actionArt;
@@ -18626,6 +18754,10 @@ function poiShopSync(){
   else if(landscape&&prompt==='talk')action.textContent='話す';
   else action.innerHTML=label+'<br>決定';
   action.setAttribute('aria-label',aria);
+ }
+ if(action&&prompt==='talk'&&talk?.role&&typeof poiTownNpcDisplayName==='function'){
+  const label=poiTownNpcDisplayName(talk.role)+'と話す';
+  if(action.getAttribute('aria-label')!==label)action.setAttribute('aria-label',label);
  }
  if(landscape&&prompt==='action'&&typeof poiArmedWandIndex==='function'){
   const armed=poiArmedWandIndex()!==null;
@@ -27643,7 +27775,8 @@ function poiAnalogActionAllowed(){
 }
 poiAnalogAction.addEventListener('pointerdown',e=>{
  if(e.pointerType!=='touch'||e.button!==0||poiAnalogActionTouch||!poiAnalogActionLandscape())return;
- poiAnalogActionTouch={id:e.pointerId,x:e.clientX,y:e.clientY,valid:poiAnalogActionAllowed()};
+ const valid=poiAnalogActionAllowed(),talk=valid&&poiAnalogAction._shopPrompt==='talk';
+ poiAnalogActionTouch={id:e.pointerId,x:e.clientX,y:e.clientY,valid,talk,actor:talk?poiAnalogAction._talkActor:null};
 });
 poiAnalogAction.addEventListener('pointermove',e=>{
  const touch=poiAnalogActionTouch;
@@ -27663,6 +27796,12 @@ poiAnalogAction.addEventListener('pointerup',e=>{
  if(!touch.valid||!poiAnalogActionAllowed()||Math.hypot(e.clientX-touch.x,e.clientY-touch.y)>12||
   e.clientX<rect.left||e.clientX>rect.right||e.clientY<rect.top||e.clientY>rect.bottom)return;
  e.preventDefault();
+ if(touch.talk){
+  if(!touch.actor||!poiTownDialogueAction(now,touch.actor)){
+   toast('少し近づいてから話してみよう。');poiShopSync();
+  }
+  return;
+ }
  poiWalkAction();
 });
 for(const event of ['pointercancel','lostpointercapture'])poiAnalogAction.addEventListener(event,e=>{
