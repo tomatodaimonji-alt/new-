@@ -99,8 +99,8 @@ try{
   try{await page.waitForFunction(({name,marker})=>{const s=window.__editorTest.combatLockQA.status();return s.name===name&&(marker===undefined||s.marker===marker)},{name,marker})}
   catch(cause){throw Error('lock '+name+'/'+marker+' not observed: '+JSON.stringify(await status()),{cause})}
  };
- // A naturally spawned archer may acquire first. A lock is sticky by design;
- // isolate only the test targets before checking synthetic capture rules.
+ // Isolate the deterministic candidate positions while leaving the
+ // original browser rendering, line-of-sight and combat input active.
  await op('isolate');
  await op('seed','outside',0,-8.1);
  await op('seed','upper',0,1,1);
@@ -133,19 +133,21 @@ try{
  assert(Math.abs(strafe.p.z-start.p.z)<.12,'the real thumb steers west independent of locked facing');
  assert(Math.abs(Math.atan2(Math.sin(strafe.heading-wanted),Math.cos(strafe.heading-wanted)))<.14,'uploaded avatar geometry still faces south toward held enemy');
  assert.deepEqual(strafe.camera,start.camera,'lock and movement do not turn the camera');
- await op('seed','b',1.5,0);
  await lock('a',true);
  await op('wall',true);
  await lock('a',false);
  await op('wall',false);
  await lock('a',true);
- // The same reachable-in-lock-range enemy cannot be hit by a short sword.
+ // A closer, clear target immediately takes priority over the prior.
+ await op('seed','b',1.5,0);
+ await lock('b',true);
+ // This target is in lock range but still cannot be hit by a short sword.
  const at=(await status()).at;
  await page.locator('#poiWalkAction').tap();
  await page.waitForFunction(at=>{const s=window.__editorTest.combatLockQA.status();return s.at>at&&!s.pending},at);
- assert.equal((await status()).hp.a,100,'lock never extends manual sword reach');
- await op('move','a',0,8.12);
- await lock('b');
+ assert.equal((await status()).hp.b,100,'nearest lock never extends manual sword reach');
+ await op('move','b',8.12,0);
+ await lock('a',true);
  assert.deepEqual(errors,[]);
- console.log('PASS real mobile strafing without camera turn, torso reticle, sticky LOS and 8-tile release, no extended sword damage');
+ console.log('PASS real mobile strafing without camera turn, torso reticle, nearest eligible retarget and 8-tile release, no extended sword damage');
 }finally{await browser?.close();await new Promise(r=>server.close(r))}

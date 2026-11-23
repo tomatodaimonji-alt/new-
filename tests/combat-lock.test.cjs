@@ -37,13 +37,14 @@ test('reticle acquires at eight without changing sword reach or attacking on its
  const shot=h.c.poiAimNewShot({type:'equipWoodSword',profile:{range:1.3}},1000);
  assert.equal(h.c.poiAimTrace(shot,1.3,1000).monster,null);
 });
-test('lock survives a closer enemy, weapon change, and a blocking wall until actor leaves eight',()=>{
+test('retargets to a visible closer enemy while the previous foe is behind a wall',()=>{
  const h=setup();h.c.wand=true;
  const a=h.enemy(4,0);assert.equal(h.draw()?.x,14.5);
- h.enemy(1,0);h.c.wand=false;h.c.wall=x=>x===13;
- assert.equal(h.draw(1200),null,'retain identity but hide obstructed reticle');
- h.c.wall=null;assert.equal(h.draw(1400)?.x,14.5,'reveal the same target after obstruction clears');
- a.x=18.02;assert.equal(h.draw(1600)?.x,11.5);
+ const b=h.enemy(1,0);h.c.wand=false;h.c.wall=x=>x===13;
+ assert.equal(h.draw(1200)?.x,11.5);
+ h.c.wall=null;assert.equal(h.draw(1400)?.x,11.5);
+ b.x=18.02;assert.equal(h.draw(1600)?.x,14.5);
+ assert.equal(a.hp,40);
 });
 test('reticle is projected on torso, not above enemy name and health',()=>{
  const h=setup();h.enemy(.7,0);const point=h.draw();
@@ -58,10 +59,10 @@ test('combat-facing tracks the lock independent of sideways/backwards movement h
  assert.equal(c.poiFreePose.angle,Math.PI/2);assert.equal(c.poiWalkFacing,1);
  assert.equal(a.hp,40);
 });
-test('temporarily hiding marker behind menu does not silently select a different enemy',()=>{
+test('menu hides the marker; reopening shows the current nearest foe',()=>{
  const h=setup();h.c.wand=true;h.enemy(4,0);assert.equal(h.draw()?.x,14.5);
  h.menu.hidden=false;h.enemy(1,0);assert.equal(h.draw(1200),null);
- h.menu.hidden=true;assert.equal(h.draw(1400)?.x,14.5);
+ h.menu.hidden=true;assert.equal(h.draw(1400)?.x,11.5);
 });
 test('a dead target, a different floor and exit from play release prior engagement',()=>{
  const h=setup();h.c.wand=true;const a=h.enemy(4,0);assert.equal(h.draw()?.x,14.5);
@@ -76,4 +77,23 @@ test('initial target must be same-floor and unobstructed',()=>{
  const h=setup();h.c.wand=true;h.enemy(4,0);h.enemy(1,0,1);
  h.c.wall=x=>x===13;assert(h.draw()?.x<12,'a wall-hidden foe is not used as the wand aim point');
  h.c.wall=null;assert.equal(h.draw(1200)?.x,14.5);
+});
+test('moving enemies are compared on the 80 ms scan, and firing refreshes immediately',()=>{
+ const h=setup(),{c}=h;c.wand=true;
+ const a=h.enemy(3,0),b=h.enemy(0,4);assert.equal(h.draw(1000)?.x,13.5);
+ b.z=12.85;
+ assert.equal(h.draw(1030)?.x,13.5,'no extra candidate scan per movement frame');
+ assert.equal(h.draw(1080)?.z,13.35,'closer foe replaces even with a gap under the old .35 tolerance');
+ a.x=12.5;
+ const shot=c.poiAimNewShot({type:'fireWand',profile:{range:8}},1081);
+ assert.equal(shot.dx,1);assert.equal(shot.dz,0);
+ assert.equal(h.draw(1082)?.x,13);
+});
+test('an exactly tied prior is stable; obstruction retains identity only without an eligible target',()=>{
+ const h=setup(),{c}=h;h.enemy(4,0);assert.equal(h.draw(1000)?.x,14.5);
+ const b=h.enemy(0,4);assert.equal(h.draw(1080)?.x,14.5);
+ c.wall=(x,z)=>x===13||z===13;assert.equal(h.draw(1160),null);
+ assert.equal(c.poiCombatLockUpdate(c.poiAimOrigin(1170),1170)?.x,14,'existing hidden target remains when no replacement is visible');
+ c.wall=x=>x===13;assert.equal(h.draw(1240)?.z,14.5);
+ b.hp=0;c.wall=null;assert.equal(h.draw(1241)?.x,14.5,'death releases the active lock immediately');
 });

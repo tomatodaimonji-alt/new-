@@ -20,8 +20,10 @@ test('lock uses strict range and LOS; nearest legitimate target wins',()=>{
  a.equal(m.chooseLock(o,arr,1.5,d=>d.x>0?.5:1.5,null)?.id,'valid');
  a.equal(m.chooseLock(o,arr,1,d=>d.x>0?.5:1,null),null);
 });
-test('lock retains nearby previous eligible target only while valid',()=>{
+test('lock retains previous eligible target only for an exact tie',()=>{
  const m=math(),o={x:0,z:0},arr=[{id:'keep',x:0,z:1.2},{id:'best',x:1,z:0}];
+ a.equal(m.chooseLock(o,arr,2,()=>2,'keep')?.id,'best');
+ arr[0].z=1;
  a.equal(m.chooseLock(o,arr,2,()=>2,'keep')?.id,'keep');
  a.equal(m.chooseLock(o,arr,2,d=>d.z>.5?.7:2,'keep')?.id,'best');
 });
