@@ -7,7 +7,7 @@ import {mkdir} from 'node:fs/promises';
 const require=createRequire(import.meta.url);
 const {chromium}=require(process.env.PLAYWRIGHT_PACKAGE??'playwright');
 const html=readFileSync(process.argv[2]??'world-editor.html','utf8');
-const damageAnchor=" poiPlayerHP=Math.max(0,poiPlayerHP-amount);poiSound('hurt');";
+const damageAnchor=" poiPlayerHP=Math.max(0,poiPlayerHP-amount);";
 assert.equal(html.split(damageAnchor).length,2,'actual damage reducer anchor');
 const swordStateAnchor='  playerWeapon:()=>';
 const actionAnchor='function poiWalkAction(){';

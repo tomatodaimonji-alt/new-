@@ -11,11 +11,11 @@ const begin=html.indexOf('const FACILITY_SITES=Object.freeze('),end=html.indexOf
 assert(begin>=0&&end>begin);
 const site=JSON.parse(JSON.stringify(vm.runInNewContext(html.slice(begin,end)+";buildFacilitySite('base')")));
 const staff='equipLongStaff',archer='monsterSkelArcher',knight='monsterSkelKnight';
-assert(html.includes('staffThrust'),'v201 Long Staff pose must have an authored thrust');
+assert(html.includes("arc:'staff-down'"),'Long Staff has a physically rendered descending strike');
 assert(site.map.world.some(o=>o.type===archer&&o.x===105&&o.z===86&&o.y===0),'real archer fixture');
 assert(site.map.world.some(o=>o.type===knight&&o.x===106&&o.z===78&&o.y===-1),'real knight fixture');
 if(process.env.STAFF_MOTION_LAYOUT_ONLY==='1'){
- console.log('PASS v201 staff thrust and actual authored enemy fixtures');
+ console.log('PASS long-staff downstroke and actual authored enemy fixtures');
  process.exit(0);
 }
 const meshLine=" if(typeof poiCombatLockRenderedHeading!=='undefined')poiCombatLockRenderedHeading=poiCombatLockHeading;";
@@ -31,13 +31,20 @@ const observedHtml=stableRegionalCombat(html,'monsterSkelArcher').replace(wildPi
  .replace(probeAnchor,`  staffContactProbe:()=>{
    const weapon='equipLongStaff',profile=poiPlayerWeaponProfile(weapon);
    const facing=poiWalkFacing,[dx,dz]=[[0,-1],[1,0],[0,1],[-1,0]][facing];
-   const mesh=poiBuildPlayerMesh(weapon,poiPlayerProfilePose(weapon,profile.hit),null,0,[2,3,0,1][facing]);
-   let tip={x:0,z:0},max=0;
-   for(let i=0;i<mesh.p.length;i+=3){
-    const x=mesh.p[i],z=mesh.p[i+2],d=x*dx+z*dz;
-    if(d>max){max=d;tip={x,z}}
-   }
-   return {max,tip,facing};
+   const sample=ms=>{
+    const pose=poiPlayerProfilePose(weapon,ms),rot=[2,3,0,1][facing];
+    pose.meleeReach=poiWorldMeleePlan(weapon,profile,ms);
+    const mesh=poiBuildPlayerMesh(weapon,pose,null,0,rot,0,0,0,null,true);
+    const first=poiBuildPlayerMesh(null,pose,null,0,rot).p.length;
+    let tip={x:0,y:0,z:0},max=-Infinity,high={x:0,y:-Infinity,z:0};
+    for(let i=first;i<mesh.p.length;i+=3){
+     const x=mesh.p[i],y=mesh.p[i+1],z=mesh.p[i+2],d=x*dx+z*dz;
+     if(d>max){max=d;tip={x,y,z}}
+     if(y>high.y)high={x,y,z,forward:d};
+    }
+    return {max,tip,high,phase:pose.staffPhase};
+   };
+   return {at:sample(profile.hit),raised:sample(profile.hit*.515),follow:sample(profile.hit+44),facing};
   },
   enemyMotionCycle:type=>[...poiMonsterStates].find(([o])=>o.type===type)?.[1]?.playerAttack?.start??null,
 ${probeAnchor}`)
@@ -45,7 +52,7 @@ ${probeAnchor}`)
  .replace(meshLine,`${meshLine}
  const renderedStaffMesh=heading=>{
  const renderedPlayerProbe=poiBuildPlayerMesh(weapon,pose,gear,stride,[2,3,0,1][poiWalkFacing],x,y,z,heading,true);
- if(weapon==='equipLongStaff'&&pose?.staffThrust){
+ if(weapon==='equipLongStaff'&&pose?.staffStrike){
   const [dx,dz]=[[0,-1],[1,0],[0,1],[-1,0]][poiWalkFacing];
   let max=-Infinity,tip=null;
   for(let i=0;i<renderedPlayerProbe.p.length;i+=3){
@@ -53,7 +60,7 @@ ${probeAnchor}`)
    const d=xx*dx+zz*dz;
    if(d>max){max=d;tip={x:xx,y:renderedPlayerProbe.p[i+1]-y,z:zz}}
   }
-  (window.__realStaffTips||=[]).push({ms,facing:poiWalkFacing,max,tip});
+  (window.__realStaffTips||=[]).push({ms,phase:pose.staffPhase,facing:poiWalkFacing,max,tip});
  }
  return upload(renderedPlayerProbe);
  };`);
@@ -119,7 +126,13 @@ async function nativeStaff(browser){
   // at the real contact time rather than demanding a particular FPS.
   const hit=await page.evaluate(()=>window.__editorTest.staffContactProbe());
   assert.equal(hit.facing,1,'equipped staff aims east with the player');
-  assert(hit.tip.x>=1.5&&Math.abs(hit.tip.z)<.6,'real uploaded avatar vertices reach into the second cell along the attack ray');
+  assert.equal(hit.raised.phase,'hold');
+  assert(hit.raised.high.y>2.15&&hit.raised.high.forward<.10,'real leading wood is visibly high and drawn back before contact');
+  assert.equal(hit.at.phase,'down');
+  assert(hit.at.tip.x>=1.95&&hit.at.tip.x<=2.08&&Math.abs(hit.at.tip.z)<.3,
+   'real rendered vertices reach into the second cell along the attack ray');
+  assert(hit.at.tip.y>.55&&hit.at.tip.y<.89&&hit.follow.tip.y<hit.at.tip.y,
+   'staff drops through the original contact, then follows through lower');
   const after=await state(page);
   assert.deepEqual(after.position,before.position);
   assert.equal(after.inventory.hotbar[1].durability,47,'only one real hit spends one condition point');

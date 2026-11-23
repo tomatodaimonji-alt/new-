@@ -7,7 +7,7 @@ const anchor='function poiEnemyCancelPlayer(){';
 assert.equal(html.split(anchor).length,2);
 const resolveAnchor='  if(!timely||!covered||poiWalkLevel!==a.y||';
 const hitAnchor='function poiMobHitPlayer(obj,now,attackDamage){';
-const damageAnchor=" poiPlayerHP=Math.max(0,poiPlayerHP-amount);poiSound('hurt');";
+const damageAnchor=" poiPlayerHP=Math.max(0,poiPlayerHP-amount);";
 assert.equal(html.split(damageAnchor).length,2);
 assert.equal(html.split(resolveAnchor).length,2);
 assert.equal(html.split(hitAnchor).length,2);

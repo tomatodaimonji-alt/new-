@@ -8,9 +8,23 @@ import {mkdir} from 'node:fs/promises';
 const require=createRequire(import.meta.url);
 const {chromium}=require(process.env.PLAYWRIGHT_PACKAGE??'playwright');
 const html=readFileSync(process.argv[2]??'world-editor.html','utf8');
+const ambient=' const p=poiWildPick(rng);',api='  freeMovementPose:()=>({x:poiWalkViewX,z:poiWalkViewZ,level:poiWalkLevel}),';
+for(const anchor of [ambient,api])assert.equal(html.split(anchor).length,2,anchor);
+// The test exercises real regional casters and their unforced loot roll.
+// Unrelated random slimes may reserve the same single-tile retreat path;
+// ordinary births and pursuit are exercised separately by their own test.
+const casterFixture=stableRegionalCombat(html,'monsterSkelMage','monsterSkelLongStaff')
+ .replace(ambient,' const p=null;')
+ .replace(api,api+`
+  mageWalkQA:(x,z)=>{
+   const now=performance.now(),block=poiMonsterAt(x,z,true),clip=poiPlayerNpcBodyClip(now);
+   return {now,ready:poiWalkNextReady,monster:block?{type:block[0].type,x:block[1].x,z:block[1].z}:null,
+    walkable:poiWalkCanStep(x,z,poiWalkX,poiWalkZ,undefined,true),
+    npcClear:!clip||poiPlayerNpcCardinalClear(poiFreePose?.x??poiWalkX,poiFreePose?.z??poiWalkZ,x,z,clip)};
+  },`);
 const server=createServer((req,res)=>{
  res.setHeader('Content-Type','text/html; charset=utf-8');
- res.end(req.url.startsWith('/seed')?'<!doctype html><title>Isolated fixtures</title>':stableRegionalCombat(html,'monsterSkelMage','monsterSkelLongStaff'));
+ res.end(req.url.startsWith('/seed')?'<!doctype html><title>Isolated fixtures</title>':casterFixture);
 });
 await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',resolve).once('error',reject));
 const origin='http://127.0.0.1:'+server.address().port;
@@ -67,7 +81,10 @@ async function move(page,d,required=true,touch=false){
    const p=window.__editorTest.facility().position;return p.x===x&&p.z===z;
   },[x+dx,z+dz],{timeout:required?2700:500});
  }catch(err){
-  if(required)throw new Error(`Walk ${arrow[d]} from (${x},${z}) did not reach (${x+dx},${z+dz}). Actual: ${JSON.stringify((await state(page)).position)}`,{cause:err});
+  if(required){
+   const [actual,probe]=await Promise.all([state(page),page.evaluate(([nx,nz])=>window.__editorTest.mageWalkQA(nx,nz),[x+dx,z+dz])]);
+   throw new Error(`Walk ${arrow[d]} from (${x},${z}) did not reach (${x+dx},${z+dz}). Actual: ${JSON.stringify(actual.position)}; blocking/clock: ${JSON.stringify(probe)}`,{cause:err});
+  }
   return;
  }
  await page.waitForTimeout(186);
@@ -233,7 +250,16 @@ async function run(browser){
   // Cold loading a surface combat fixture can reconstruct the mage at its
   // authored home. Compare durable bytes from the original safe approach,
   // outside the mage's leash, rather than while respawned fire can wear armor.
-  for(let z=(await state(page)).position.z;z<95;z++)await move(page,'s');
+  for(let z=(await state(page)).position.z;z<95;z++){
+   await page.waitForFunction(nextZ=>{
+    const q=window.__editorTest.mageWalkQA(40,nextZ);
+    return q.now>=q.ready&&q.walkable&&q.npcClear;
+   },z+1,{timeout:8500}).catch(async cause=>{
+    const probe=await page.evaluate(nextZ=>window.__editorTest.mageWalkQA(40,nextZ),z+1);
+    throw new Error('Safe retreat never cleared at 40,'+(z+1)+': '+JSON.stringify(probe),{cause});
+   });
+   await move(page,'s');
+  }
   assert.deepEqual((await state(page)).position,pos(40,95));
   const persisted=await readStock(page);
   await page.reload();await waitPlay(page);

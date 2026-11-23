@@ -13,8 +13,10 @@ test('two secluded staff skeletons append without changing any old cell',()=>{
  assert(!build('lodging').armedEncounters);
 });
 test('both staff models are real wooden assets, the long staff visibly extends beyond plain',()=>{
- const calls=[],span={},c={cube:(_m,x,y,z,w,h,d)=>calls.push([y,y+h]),naturalBranch:(_m,x,y,z,u,v,w)=>calls.push([y,v])};
- vm.runInNewContext(cut('function poiFantasyEquipmentGeometry(','function decoBase('),c);
+ const calls=[],span={},c={cube:(_m,x,y,z,w,h,d)=>calls.push([y,y+h]),naturalBranch:(_m,x,y,z,u,v,w)=>calls.push([y,v]),
+  tri:(_m,a,b,c)=>calls.push([a[1],b[1],c[1]])};
+ vm.runInNewContext(cut('// BEGIN LONG HARDWOOD STAFF ART','// END LONG HARDWOOD STAFF ART')+
+  cut('function poiFantasyEquipmentGeometry(','function decoBase('),c);
  for(const id of ['equipPlainStaff','equipLongStaff']){
   calls.length=0;c.poiFantasyEquipmentGeometry({},id,0,0,0);
   assert(calls.length>=4);span[id]=Math.max(...calls.flat());

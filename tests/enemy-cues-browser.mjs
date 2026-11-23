@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {createRequire} from 'node:module';
 import {readFileSync} from 'node:fs';
+import {Script} from 'node:vm';
 const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
 const html=readFileSync(process.argv[2]??'world-editor.html','utf8');
 function inject(s,a,b){assert.equal(s.split(a).length,2,a);return s.replace(a,b)}
@@ -13,10 +14,13 @@ let fixture=inject(html,anchor,anchor+`
     // plant a regular actor next to the current square then run the exact
     // enemy begin, live RAF, damage, and renderer with no simulated hits.
     poiEnemyCancelPlayer();poiMonsterStates.clear();
+    // Each native observation starts from the same fixture HP, including
+    // a retry after a timely attack whose draw was starved by hosted GPU.
+    poiPlayerHP=100;poiCombatHud();
     const now=performance.now(),x=poiWalkX+1,z=poiWalkZ,y=poiWalkLevel;
     const obj={x,z,y,type:'monsterSlime',rot:0},s=poiCombatActorMake(obj);
     s.facing=1;poiMonsterStates.set(obj,s);poiMonsterMeshDirty=true;
-    window.__ordinaryCueDraw=[];window.__ordinaryCueGeo=[];window.__ordinaryCueGPU=new WeakMap();
+    window.__ordinaryCueDraw=[];window.__ordinaryCueGeo=[];window.__ordinaryCueGPU=new WeakMap();window.__ordinaryCueOpportunities=[];
     if(!poiEnemyBeginPlayer(obj,s,now))throw Error('ordinary authored slime attack could not begin at the controlled fixture');
     window.__ordinaryCueAttack=s.playerAttack;window.__ordinaryCueResolve=null;
    },
@@ -24,7 +28,7 @@ let fixture=inject(html,anchor,anchor+`
     const a=window.__ordinaryCueAttack,point=a&&poiWorldToScreen(parameters().vp,a.x+.5,terrainY(a.x,a.z)+a.y*1.4+.055,a.z+.5);
     return {now:performance.now(),hp:poiPlayerHP,attack:a?{start:a.start,hit:a.hit,pending:a.pending,resolved:a.visualHitAt,x:a.x,z:a.z}:null,
      screen:!!point&&point.x>=0&&point.x<=canvas.clientWidth&&point.y>=0&&point.y<=canvas.clientHeight,
-     resolution:window.__ordinaryCueResolve,frames:window.__ordinaryCueFrames??0,draw:window.__ordinaryCueDraw??[],geometry:window.__ordinaryCueGeo??[]};
+     resolution:window.__ordinaryCueResolve,frames:window.__ordinaryCueFrames??0,draw:window.__ordinaryCueDraw??[],geometry:window.__ordinaryCueGeo??[],opportunities:window.__ordinaryCueOpportunities??[]};
    },
   },`);
 const resolveAnchor='  const timely=now-a.hit<poiEnemyContactTolerance(a);';
@@ -52,13 +56,25 @@ if(fixture.includes(geo)){
  return m;
 }
 function __ordinaryCueRealTriangles(a,tiles){`);
- fixture=inject(fixture,pipe,pipe+'window.__ordinaryCueFrames=(window.__ordinaryCueFrames??0)+1;');
+ fixture=inject(fixture,pipe,pipe+`
+  window.__ordinaryCueFrames=(window.__ordinaryCueFrames??0)+1;
+  const cueProbe=window.__ordinaryCueAttack;
+  if(cueProbe?.pending&&now>=cueProbe.start&&now<cueProbe.hit)window.__ordinaryCueOpportunities.push(now);
+ `);
  fixture=inject(fixture,draw,` try{for(const {gpu,alpha} of draws){
   gl.blendColor(0,0,0,alpha);draw(gpu,vp);
   const log=window.__ordinaryCueDraw,buffers=window.__ordinaryCueGPU;
   if(log&&buffers){if(!buffers.has(gpu))buffers.set(gpu,log.length+1);
    log.push({now,alpha,vertices:gpu.count,buffer:buffers.get(gpu),blend:gl.isEnabled(gl.BLEND)});}
  }}`);
+}
+if(process.env.ENEMY_CUE_LAYOUT_ONLY==='1'){
+ const scripts=[...fixture.matchAll(/<script(?:\s+([^>]*))?>([\s\S]*?)<\/script>/gi)]
+  .filter(([,attrs])=>!attrs||!/\b(?:src|type)\s*=/.test(attrs));
+ assert(scripts.length>0);
+ for(const [,,source] of scripts)new Script(source);
+ console.log('PASS exact ordinary enemy cue fixture anchors and scripts');
+ process.exit(0);
 }
 const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(req.url==='/seed'?'<!doctype html><title>Enemy cue QA</title>':fixture)});
 await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',resolve).once('error',reject));
@@ -88,26 +104,37 @@ try{
    await p.locator('#pineStartupCover').waitFor({state:'hidden'});
    await when(()=>window.__editorTest?.facility()?.active&&document.querySelector('#viewWrap').hasAttribute('data-analog-play'));
    checkpoint=reducedMotion+': genuine melee windup, draw, contact';
-   let judged;
-   for(let attempt=0;attempt<3;attempt++){
+   let judged,warning;
+   for(let attempt=0;attempt<5;attempt++){
     await p.evaluate(()=>window.__editorTest.ordinaryCueQA.begin());
     await when(()=>window.__editorTest.ordinaryCueQA.state().attack?.pending===false);
     judged=await q();
-    // SwiftShader occasionally skips more than the game's 170ms contact
-    // tolerance. Retry that observed late frame, never a timely wrong result.
-    if(judged.resolution?.timely!==false)break;
-    assert.equal(judged.hp,100,'an expired real attack cannot deal delayed damage');
-    console.log(reducedMotion+' CI frame expired '+Math.round(judged.resolution.late)+'ms after contact; retry '+(attempt+1));
+    // A hosted SwiftShader frame can exceed the game's natural 170ms
+    // contact tolerance. Never accept a late attack dealing damage.
+    if(judged.resolution?.timely===false){
+     assert.equal(judged.hp,100,'an expired real attack cannot deal delayed damage');
+     console.log(reducedMotion+' CI frame expired '+Math.round(judged.resolution.late)+'ms after contact; retry '+(attempt+1));
+     continue;
+    }
+    assert(judged.resolution?.timely&&judged.screen&&judged.hp===94,'normal enemy contact is real and damage balance remains 6: '+JSON.stringify(judged));
+    assert(judged.geometry.some(g=>g.red&&g.vertices>=36&&g.roundedOffsets>=5&&g.tiles===1),
+     'actual submitted VBO starts with red, rounded perimeter geometry rather than a 6-vertex square: '+JSON.stringify(judged));
+    warning=judged.draw.filter(d=>d.now<judged.attack.resolved);
+    assert(warning.length>0&&warning.every(d=>d.blend&&d.vertices>=36&&d.alpha>=.16&&d.alpha<.38),
+     'every observed warning is a real faint alpha-blended rounded GL draw');
+    assert.equal(new Set(warning.map(d=>d.buffer)).size,1,'pulsing does not rebuild the VBO');
+    const samples=warning.map(d=>d.alpha),sampledFrames=new Set(warning.map(d=>d.now)).size;
+    if(reducedMotion==='reduce')assert(samples.every(a=>Math.abs(a-.27)<.001),'reduced-motion browser keeps a steady cue');
+    if(warning.length<2&&judged.opportunities.length===1&&judged.opportunities[0]===warning[0].now){
+     assert.equal(judged.draw.length,warning.length,'no cue drew after a timely hit on this starved attempt');
+     console.log(reducedMotion+' CI only ran one pre-contact GL frame with a correct cue; retry '+(attempt+1));
+     continue;
+    }
+    assert(sampledFrames>=2,'actual GL renders multiple distinct faint alpha-blended warning frames');
+    if(reducedMotion==='no-preference')assert(Math.max(...samples)-Math.min(...samples)>.02,'normal opacity changes smoothly over the real warning');
+    break;
    }
-   assert(judged.resolution?.timely&&judged.screen&&judged.hp===94,'normal enemy contact is real and damage balance remains 6: '+JSON.stringify(judged));
-   assert(judged.geometry.some(g=>g.red&&g.vertices>=36&&g.roundedOffsets>=5&&g.tiles===1),
-    'actual submitted VBO starts with red, rounded perimeter geometry rather than a 6-vertex square: '+JSON.stringify(judged));
-   const warning=judged.draw.filter(d=>d.now<judged.attack.resolved);
-   assert(warning.length>=2&&warning.every(d=>d.blend&&d.vertices>=36&&d.alpha>=.16&&d.alpha<.38),'actual GL renders multiple faint alpha-blended warning frames');
-   assert.equal(new Set(warning.map(d=>d.buffer)).size,1,'pulsing does not rebuild the VBO');
-   const samples=warning.map(d=>d.alpha);
-   if(reducedMotion==='reduce')assert(samples.every(a=>Math.abs(a-.27)<.001),'reduced-motion browser keeps a steady cue');
-   else assert(Math.max(...samples)-Math.min(...samples)>.02,'normal opacity changes smoothly over the real warning');
+   assert(judged.resolution?.timely&&warning?.length>=2,'bounded retries must still observe a timely hit and two real warning frames: '+JSON.stringify(judged));
    checkpoint=reducedMotion+': ordinary cue retires after contact';
    await when(({frames,contact})=>{const s=window.__editorTest.ordinaryCueQA.state();return s.frames>=frames+2&&s.now>contact+120},{frames:judged.frames,contact:judged.attack.resolved});
    const later=await q();
