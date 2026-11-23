@@ -1,0 +1,53 @@
+name: Build and verify standalone landscape-locked Android APK
+on:
+  push:
+    branches: [dot/android-landscape-locked-verify]
+permissions:
+  contents: read
+jobs:
+  build-and-inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Install Android SDK
+        run: |
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+          yes | sdkmanager --licenses || true
+          sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+      - name: Bundle the exact v217 HTML
+        run: |
+          test "$(git hash-object world-editor.html)" = "70bc5a17434750cfa3da15cb958c77e1c8924abd"
+          grep -q '（v217）' world-editor.html
+          grep -q '画面にメモする' world-editor.html
+          mkdir -p app/src/main/assets
+          cp world-editor.html app/src/main/assets/starter.html
+      - run: gradle :app:assembleDebug --no-daemon
+      - name: Verify manifest orientation, separate app identity and assets
+        run: |
+          set -euo pipefail
+          apk=app/build/outputs/apk/debug/app-debug.apk
+          sdk="$ANDROID_HOME/build-tools/35.0.0"
+          mkdir -p qa
+          "$sdk/aapt" dump badging "$apk" > qa/application.txt
+          grep -F "package: name='jp.tsukacchi.moonruins.landscape'" qa/application.txt
+          grep -F "application-label:'3Dワールド工房 横画面固定'" qa/application.txt
+          "$sdk/aapt" dump xmltree "$apk" AndroidManifest.xml > qa/packaged-manifest.txt
+          grep -E 'screenOrientation.*0x6$' qa/packaged-manifest.txt
+          grep -E 'configChanges.*0xd80$' qa/packaged-manifest.txt
+          "$sdk/apksigner" verify --print-certs "$apk" > qa/public-certificate.txt
+          unzip -p "$apk" assets/starter.html | cmp world-editor.html -
+          cp "$apk" qa/3D-world-workshop-v217-landscape-locked.apk
+          ( cd qa && sha256sum 3D-world-workshop-v217-landscape-locked.apk > apk.sha256 )
+      - uses: actions/upload-artifact@v4
+        with:
+          name: workshop-v217-landscape-locked
+          path: qa
+          retention-days: 7

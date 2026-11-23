@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.util.Base64;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
@@ -89,6 +90,11 @@ public class MainActivity extends Activity {
         setContentView(root);
         createWeb();
         checkForUpdate();
+    }
+
+    @Override public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (web != null) web.invalidate();
     }
 
     // An Android app may return from the home screen without running onCreate
