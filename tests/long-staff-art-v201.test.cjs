@@ -5,7 +5,7 @@ test('held long-staff thrust points physically down the active facing at 210 ms'
  const c={mesh,characterHuman(){},deco:(m,type)=>{m.p=[0,2.18,0];m.n=[0,1,0];m.c=[.4,.3,.2]},
   poiPlayerWeaponProfile:()=>({hit:210,pose:400})};
  vm.runInNewContext(cut('function poiPlayerProfilePose(','// Visual release only:')+cut('function poiBuildPlayerMesh(','function poiWalkAvatar(')+
-  cut('function characterArmRotation(','function roundStack(')+cut('function rot2(','function rotY(').split('\n')[0]+cut('function poiLongStaffGripStyle(','function poiBuildPlayerMesh('),c);
+  cut('function characterArmRotation(','function roundStack(')+cut('function rot2(','function rotY(').split('\n')[0]+cut('function poiLongStaffGripStyle(','function poiBuildPlayerMesh(')+cut('function poiRoleToolGripStyle(','function poiStarterGearGeometry('),c);
  const at=ms=>c.poiPlayerProfilePose('equipLongStaff',ms);
  assert.equal(at(210).staffThrust,1);assert(at(100).staffThrust<.8);assert(at(330).staffThrust<.65);assert.equal(at(400),null);
  for(const [r,dx,dz] of [[2,0,-1],[3,1,0],[0,0,1],[1,-1,0]]){

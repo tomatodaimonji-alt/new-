@@ -154,7 +154,7 @@ async function enemyMotion(browser){
    assert.deepEqual([forewarn.warning.x,forewarn.warning.z,forewarn.warning.y],[106,79,-1],'variant warns original adjacent tile');
    assert.equal(forewarn.warning.hit-forewarn.warning.start,700,'pose does not change the prior knight warning window');
    const attack=samples.find(s=>s.cycle===forewarn.cycle&&s.pose.phase==='impact')??samples.find(s=>s.cycle===forewarn.cycle&&s.pose.phase==='recover');
-   assert.equal(forewarn.hp-attack.hp,16,'native contact still does exactly the established knight damage');
+   assert.equal(forewarn.hp-attack.hp,16-2,'native contact does the established knight damage less 2 defense from starting cloth shorts');
    assert.deepEqual([attack.x,attack.z],[106,78],'animation does not move logically occupied enemy tile');
    return attack.pose;
   });

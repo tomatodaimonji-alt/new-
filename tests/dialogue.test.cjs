@@ -8,6 +8,20 @@ function fixture(){
   facilityDoorTiles:new Set(),facilityCellKey:(x,z,y)=>[x,z,y].join(','),facilityFloorOwner:()=>null,facilityHiddenRoof:()=>null,terrainY:()=>0,poiWorldToScreen:()=>({x:150,y:200}),$:id=>id==='poiTownSpeech'?e:null});
  const m=html.match(/\/\/ BEGIN TOWN DIALOGUE\n([\s\S]*?)\/\/ END TOWN DIALOGUE/);
  assert.ok(m,'conversation runtime is present');
+ const section=(start,end)=>{
+  const from=html.indexOf(start),to=html.indexOf(end,from+start.length);
+  assert.ok(from>=0&&to>from,'missing dialogue dependency '+start);
+  return html.slice(from,to);
+ };
+ const declaration=needle=>html.split('\n').find(line=>line.startsWith(needle));
+ const deps=[
+  section('const POI_TOWN_NPC_BASE_GEAR=', 'const POI_TOWN_INN='),
+  section('const POI_ARMOR_DEFENSE=', 'function poiPlayerDefense('),
+  section('const POI_PLAYER_WEAPON_PROFILES=', 'function poiPlayerWeaponCancel('),
+  ...['const POI_PLAYER_MAX_HP=', 'const POI_HOTBAR_POTION_START=', 'const POI_CHEST_SIZE=',
+   'const POI_KNIFE=', 'const POI_TOWN_RESIDENT_HP=','function poiPlayerAttackDamage('].map(declaration).filter(Boolean)
+ ];
+ vm.runInContext(deps.join('\n'),c);
  vm.runInContext(m[1],c);return {actor,e,c,run:(js)=>vm.runInContext(js,c),get faced(){return faced},get synced(){return synced}};
 }
 test('player-led conversation pauses the resident, uses announcements only and stays accessible',()=>{
@@ -109,19 +123,28 @@ test('root has four exact choices and NPC status is derived only from live stats
  const f=fixture();
  Object.assign(f.actor,{hp:74,coins:6,potions:2});
  Object.assign(f.c,{POI_TOWN_RESIDENT_HP:100,POI_TOWN_RESIDENT_MELEE:13});
- Object.assign(f.actor.role,{role:'adventurer',type:'humanKnight'});
+ Object.assign(f.actor.role,{role:'keeper',type:'humanMerchant'});
  assert.equal(f.run('poiTownDialogueAction(100)'),true);
  assert.deepEqual(JSON.parse(f.run('JSON.stringify(poiTownDialogueSnapshot().actions)')),[
   {id:'talk',label:'話す'},{id:'status',label:'状態'},{id:'request',label:'依頼'},{id:'back',label:'戻る'}]);
  assert.equal(f.run("poiNpcMenuChoose('status',101)"),true);
  const s=JSON.parse(f.run('JSON.stringify(poiTownDialogueSnapshot())'));
  assert.equal(s.menu,'status');assert.deepEqual(s.actions,[{id:'back',label:'戻る'}]);
- assert.deepEqual(s.status,{name:f.actor.role.name+'（ギルド受付）',hp:74,maxHP:100,attack:13,equipment:['剣','盾','鎧'],coins:6,herbs:2});
+ const starter={head:'starterCap',torso:'starterTunic',legs:'starterTrousers',feet:'starterBoots'};
+ assert.deepEqual(s.status,{name:f.actor.role.name+'（ギルド受付）',hp:74,maxHP:100,attack:6,defense:3.25,
+  weapon:'equipBallpointPen',gear:{...starter,torso:'armorGuildUniform'},tools:[],
+  equipment:['equipBallpointPen','starterCap','armorGuildUniform','starterTrousers','starterBoots'],coins:6,herbs:2});
  assert.equal(f.run("poiNpcMenuChoose('back',103)"),true);assert.equal(f.run('poiTownDialogueSnapshot().menu'),'root');
- f.actor.role={...f.actor.role,role:'keeper',type:'humanMerchant'};
+ f.actor.role={...f.actor.role,id:'innkeeper',role:'keeper',type:'humanMerchant'};
  assert.equal(f.run("poiNpcMenuChoose('status',104)"),true);
  const ordinary=JSON.parse(f.run('JSON.stringify(poiTownDialogueSnapshot().status)'));
- assert.deepEqual(ordinary.equipment,[]);assert.equal(ordinary.attack,null);
+ assert.deepEqual(ordinary.equipment,[null,'starterCap','armorMerchantCoat','starterTrousers','starterBoots']);
+ assert.equal(ordinary.defense,2.5);assert.equal(ordinary.attack,null);
+ assert.deepEqual(ordinary.gear,{...starter,torso:'armorMerchantCoat'});
+ f.actor.role={...f.actor.role,id:'towncook',role:'visitor',type:'humanVillager'};
+ const cook=JSON.parse(f.run('JSON.stringify(poiTownNpcStatus(poiTownNpcActors[0]))'));
+ assert.deepEqual(cook.tools,['equipLadle']);assert.equal(cook.weapon,'equipFryingPan');
+ assert.equal(cook.attack,12);assert.equal(cook.defense,3);
  assert.deepEqual([f.actor.hp,f.actor.coins,f.actor.potions],[74,6,2],'only reads actor');
 });
 test('bookable inn stays nested inside requests and viewing status does not book',()=>{
@@ -162,7 +185,8 @@ test('only the guild clerk offers a quest; list, back, and confirmed accept rema
 test('actual residents have unique given names and those names label dialogue and status',()=>{
  const a=html.indexOf('const POI_TOWN_RESIDENT_ROLES='),b=html.indexOf('const POI_TOWN_INN=',a);
  const names=vm.runInNewContext(html.slice(a,b)+';POI_TOWN_RESIDENT_ROLES.map(({id,name})=>[id,name])');
- assert.equal(names.length,11);
+ assert.equal(names.length,12);
+ assert.deepEqual(Array.from(names.find(([id])=>id==='towncook')),['towncook','イネス']);
  assert.equal(new Set(names.map(([,name])=>name)).size,names.length);
  assert.deepEqual(Array.from(names[0]),['guildkeeper','リーネ']);
  assert(names.every(([,name])=>!/(役割|店主|受付係|主人|冒険者|配達人|旅人|行商人|厩舎番)/.test(name)));

@@ -161,7 +161,7 @@ async function loot(browser){
     assert(Object.hasOwn(maxima,slot)&&Number.isInteger(value)&&value>=1&&value<maxima[slot]);
     wear+=maxima[slot]-value;
    }
-   assert(wear>=1&&wear<=3&&100-boot.hp===11*wear,'only one armor point per observed native warrior hit may differ');
+   assert(wear>=1&&wear<=3&&100-boot.hp===9*wear,'only one armor point per observed native warrior hit after 2 defense may differ');
   }else assert.equal(boot.hp,100,'without actual contact the original kit remains entirely unchanged');
   const original=await getMap(page);
   assert(original.world.some(o=>o.type===enemy&&o.x===110&&o.z===56&&o.y===-1));

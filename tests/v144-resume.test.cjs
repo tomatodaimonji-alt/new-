@@ -6,7 +6,7 @@ test('an after-hours cold launch uses the traveler’s intact assigned room, not
  const c={poiTownNpcActors:[],poiTownNpcVersion:0,POI_TOWN_CLOSE:1080,POI_TOWN_WAKE:360,
   POI_TOWN_RESIDENT_ROLES:[{id:'guest',role:'adventurer',home:{x:29,z:16,y:1},public:{x:31,z:22,y:0}}],
   POI_TOWN_INN_BEDS:[bed],poiTownNpcExistsBed:()=>true,poiTownNpcStance:()=>true};
- vm.createContext(c);vm.runInContext(cut('const POI_TOWN_RESIDENT_HP=','function poiTownNpcBedOwner('),c);
+ vm.createContext(c);vm.runInContext(cut('const POI_TOWN_NPC_BASE_GEAR=','const POI_TOWN_INN=')+cut('const POI_TOWN_RESIDENT_HP=','function poiTownNpcBedOwner('),c);
  c.poiTownNpcInit({minute:1290,absoluteMinute:1290});
  assert.equal(c.poiTownNpcActors[0].bedId,'inn-west');
  assert.equal(c.poiTownNpcActors[0].y,1);

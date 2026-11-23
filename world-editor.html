@@ -723,7 +723,7 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
 #poiNpcTradeDetail p{margin:3px 0}
 #poiNpcTradeDetail .poiNpcTradeActions{display:flex;grid-column:1/-1;gap:5px;padding:0;border:0;justify-content:flex-start}
 #poiNpcInventoryHeader strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#poiNpcInventoryGear{display:grid;grid-template-rows:repeat(4,var(--poi-bag-cell));gap:3px}
+#poiNpcInventoryGear{display:grid;grid-template-rows:repeat(5,var(--poi-bag-cell));gap:3px}
 #poiNpcInventory :is([data-npc-bag-slot],[data-npc-gear-slot]){position:relative;display:grid;place-items:center;
  width:var(--poi-bag-cell);height:var(--poi-bag-cell);border:1px solid #b7cbb577;border-radius:4px;background:#45645256}
 #poiNpcInventory [data-npc-bag-slot]:nth-child(n+11){background:#15261b8e;border-color:#80977a55}
@@ -1057,7 +1057,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v210）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v211）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -1704,7 +1704,9 @@ function detailedTree(m,id,x,y,z){
 
 // Characters use low-poly silhouettes. +Z is front; the ordinary deco()
 // rotation path handles all four placement directions.
-function characterHuman(m,x,y,z,villager,armPose=null,gear=null){
+function characterHuman(m,x,y,z,villager,armPose=null,gear=null,modest=false){
+ const torsoType=poiHumanGearType(gear?.torso),legsType=poiHumanGearType(gear?.legs);
+ const tunic=torsoType==='starterTunic'?[.48,.53,.43]:poiRoleClothingTone(torsoType);
  const skin=[.77,.59,.43],shade=[.63,.46,.35],hair=[.28,.20,.13];
  const cloth=[.32,.47,.39],linen=[.75,.71,.57],boot=[.26,.21,.18];
  for(const side of [-1,1]){
@@ -1713,11 +1715,17 @@ function characterHuman(m,x,y,z,villager,armPose=null,gear=null){
   if(villager)cube(m,xx,y+.37,z,.17,.24,.21,cloth);
  }
  cube(m,x,y+.49,z,.39,.48,.26,villager?cloth:skin);
+ // Plain shorts cover the live rig without inventing a shirt; editor
+ // humans retain their original clothes and palette.
+ if(modest&&!legsType){
+  cube(m,x,y+.441,z,.395,.126,.268,[.30,.31,.29]);
+  for(const side of [-1,1])cube(m,x+side*.115,y+.345,z,.17,.13,.208,[.30,.31,.29]);
+ }
  for(const side of [-1,1]){
   const start=m.p.length;
   cube(m,x+side*.272,y+.53,z,.135,.46,.17,villager?linen:skin);
   cube(m,x+side*.272,y+.49,z+.028,.145,.12,.17,skin);
-  if((gear?.torso?.type??gear?.torso)==='starterTunic')cube(m,x+side*.272,y+.739,z,.151,.247,.185,[.48,.53,.43]);
+  if(tunic)cube(m,x+side*.272,y+.739,z,.151,.247,.185,tunic);
   if(m.townParts)m.townParts[side>0?'right':'left']=[start,m.p.length];
   const angle=armPose?.[side===1?'strike':'guard']||0;
   const sweep=side===1?(armPose?.sweep||0):0;
@@ -1739,7 +1747,7 @@ function characterHuman(m,x,y,z,villager,armPose=null,gear=null){
  cube(m,x,y+1.095,z+.179,.09,.028,.01,shade);
  if(gear)for(const cell of [gear.head,gear.torso,gear.legs,gear.feet]){
   const type=typeof cell==='string'?cell:cell?.type;
-  if(type)poiStarterGearGeometry(m,type,x,y,z);
+  if(type&&!poiRoleClothingGeometry(m,type,x,y,z))poiStarterGearGeometry(m,type,x,y,z);
  }
  if(villager){
   // Simple tunic, belt and cap distinguish a working villager.
@@ -1751,6 +1759,57 @@ function characterHuman(m,x,y,z,villager,armPose=null,gear=null){
 }
 
 
+function poiHumanGearType(cell){return typeof cell==='string'?cell:cell?.type||null}
+function poiRoleClothingTone(type){
+ if(type==='armorMerchantCoat')return [.21,.42,.39];
+ if(type==='armorGuildUniform')return [.50,.21,.27];
+ if(type==='armorCookApron')return [.73,.72,.57];
+ return null;
+}
+function poiRoleClothingGeometry(m,type,x,y,z){
+ const B=(dx,dy,dz,w,h,d,col)=>cube(m,x+dx,y+dy,z+dz,w,h,d,col);
+ const trim=[.76,.61,.32],dark=[.29,.24,.18],linen=[.91,.88,.73],sage=[.31,.43,.29];
+ const cloth=poiRoleClothingTone(type);
+ if(type==='armorMerchantCoat'){
+  B(0,.405,0,.432,.567,.28,cloth);
+  B(0,.417,.144,.407,.038,.032,trim);
+  B(0,.548,.149,.437,.055,.034,dark);
+  B(-.143,.478,.174,.116,.113,.079,[.39,.27,.16]);
+  B(-.143,.557,.201,.116,.046,.029,trim);
+  B(0,.592,.150,.028,.311,.018,trim);
+  B(0,.913,.025,.245,.063,.262,trim);
+ }else if(type==='armorGuildUniform'){
+  B(0,.476,0,.426,.497,.28,cloth);
+  for(const side of [-1,1]){
+   B(side*.102,.82,.145,.023,.123,.026,trim);
+   B(side*.124,.507,.145,.023,.245,.024,trim);
+  }
+  B(0,.568,.155,.422,.052,.032,dark);
+  B(0,.574,.182,.071,.044,.025,trim);
+  diamond(m,x+.106,y+.828,z+.174,.034,linen);
+ }else if(type==='armorCookApron'){
+  B(0,.51,0,.417,.457,.28,cloth);
+  B(0,.43,.159,.343,.359,.036,sage);
+  B(0,.744,.157,.262,.182,.028,sage);
+  B(0,.677,.035,.431,.047,.228,sage);
+  B(0,.679,-.132,.085,.057,.043,sage);
+  B(-.072,.497,.183,.114,.110,.019,[.365,.49,.34]);
+ }else if(type==='armorCookHat'){
+  B(0,1.397,0,.412,.095,.398,linen);
+  B(0,1.466,0,.435,.226,.409,linen);
+  const shade=[.81,.79,.68];
+  for(const dx of [-.141,0,.141])B(dx,1.499,.205,.041,.176,.022,shade);
+  B(0,1.670,0,.445,.048,.421,[.94,.92,.81]);
+ }else return false;
+ return true;
+}
+// Authored role tools use the same palm attachment as the normal held rig.
+function poiRoleToolGripStyle(type){
+ if(type==='equipFryingPan')return {grip:.19,scaleX:.70,scaleY:.76,scaleZ:.69,tilt:.34};
+ if(type==='equipLadle')return {grip:.20,scaleX:.78,scaleY:.77,scaleZ:.68,tilt:.24};
+ if(type==='equipBallpointPen')return {grip:.17,scaleX:.86,scaleY:.83,scaleZ:.73,tilt:.67};
+ return null;
+}
 function poiStarterGearGeometry(m,type,x,y,z){
  const B=(dx,dy,dz,w,h,d,col)=>cube(m,x+dx,y+dy,z+dz,w,h,d,col);
  if(type==='armorIronTorso'){
@@ -1767,10 +1826,18 @@ function poiStarterGearGeometry(m,type,x,y,z){
   return;
  }
  if(type==='starterCap'){
-  const cloth=[.42,.34,.21],seam=[.59,.48,.31];
-  B(0,1.347,-.023,.41,.119,.392,cloth);
-  B(0,1.443,-.037,.356,.058,.341,cloth);
-  B(0,1.343,.124,.432,.04,.233,seam);
+  const cloth=[.24,.40,.43],crown=[.31,.49,.50],seam=[.53,.66,.64],edge=[.18,.32,.34];
+  B(0,1.353,-.025,.409,.107,.386,cloth);
+  B(0,1.456,-.027,.350,.045,.330,crown);
+  B(0,1.415,.171,.084,.034,.013,seam);
+  const outline=[[-.188,.129],[.188,.129],[.174,.222],[.103,.284],[-.103,.284],[-.174,.222]];
+  const point=(i,h)=>[x+outline[i][0],y+h,z+outline[i][1]];
+  for(let i=0;i<outline.length;i++){
+   const j=(i+1)%outline.length;
+   tri(m,[x,y+1.365,z+.191],point(j,1.365),point(i,1.365),crown);
+   tri(m,[x,y+1.343,z+.191],point(i,1.343),point(j,1.343),edge);
+   quad(m,point(i,1.343),point(i,1.365),point(j,1.365),point(j,1.343),seam);
+  }
  }else if(type==='starterTunic'){
   const linen=[.48,.53,.43],trim=[.65,.65,.49],belt=[.37,.28,.19];
   B(0,.475,0,.418,.466,.285,linen);
@@ -1783,11 +1850,13 @@ function poiStarterGearGeometry(m,type,x,y,z){
    B(side*.115,.117,.107,.162,.048,.012,trim);
   }
  }else if(type==='starterBoots'){
-  const leather=[.35,.244,.168],sole=[.22,.18,.14],edge=[.52,.38,.25];
+  const canvas=[.24,.37,.43],toe=[.32,.46,.51],sole=[.86,.85,.76],lace=[.93,.91,.80];
   for(const side of [-1,1]){
-   B(side*.115,0,.025,.174,.055,.257,sole);
-   B(side*.115,.045,.029,.172,.132,.239,leather);
-   B(side*.115,.159,.001,.181,.036,.197,edge);
+   const xx=side*.115;
+   B(xx,0,.036,.185,.037,.273,sole);
+   B(xx,.035,.007,.171,.084,.205,canvas);
+   B(xx,.035,.109,.166,.067,.123,toe);
+   for(const zz of [.045,.077])B(xx,.117,zz,.110,.009,.014,lace);
   }
  }
 }
@@ -2846,6 +2915,82 @@ function poiPottedPlantGeometry(m,x,y,z){
   naturalBranch(m,b[0],b[1]+.005,b[2],c[0],c[1]+.007,c[2],.006,.0015,vein);
  }
 }
+// Role equipment shares its 3D prop between loot, inspection thumbnails and
+// the existing held-item renderer. +Y runs from grip to working end.
+function poiRoleItemGeometry(m,id,x,y,z){
+ const cubeAt=(dx,dy,dz,w,h,d,tone)=>cube(m,x+dx,y+dy,z+dz,w,h,d,tone);
+ const steel=[.60,.66,.68],edge=[.83,.86,.83],iron=[.25,.28,.28],
+  wood=[.43,.27,.17],linen=[.73,.72,.57],gold=[.76,.60,.30],shade=[.30,.23,.17];
+ if(id==='equipFryingPan'||id==='equipLadle'){
+  const pan=id==='equipFryingPan',cy=pan?.73:.81,r=pan?.273:.14,sy=pan?1:1.19,n=pan?10:8;
+  const v=(a,s,d)=>[x+Math.cos(a)*r*s,y+cy+Math.sin(a)*r*s*sy,z+d];
+  const back=pan?-.061:-.087,lip=pan?.047:.035,inner=pan?-.032:-.058;
+  cubeAt(0,.07,0,pan?.103:.069,pan?.338:.39,.088,wood);
+  cubeAt(0,.03,0,pan?.118:.079,.055,.098,shade);
+  cubeAt(0,.38,0,pan?.077:.048,pan?.169:.31,.057,pan?iron:steel);
+  for(let i=0;i<n;i++){
+   const a=(i+.5)*Math.PI*2/n,b=(i+1.5)*Math.PI*2/n;
+   const ax=v(a,.91,back),bx=v(b,.91,back),al=v(a,1,lip),bl=v(b,1,lip);
+   const ai=v(a,.89,lip),bi=v(b,.89,lip),ab=v(a,pan?.77:.61,inner),bb=v(b,pan?.77:.61,inner);
+   quad(m,bx,bl,al,ax,i%3?pan?iron:steel:pan?[.37,.40,.39]:edge);
+   quad(m,al,bl,bi,ai,pan?steel:edge);
+   quad(m,ai,bi,bb,ab,pan?[.39,.42,.41]:steel);
+   tri(m,[x,y+cy,z+inner],ab,bb,pan?[.31,.35,.34]:edge);
+   tri(m,[x,y+cy,z+back],bx,ax,pan?iron:steel);
+  }
+  return true;
+ }
+ if(id==='equipBallpointPen'){
+  const navy=[.16,.30,.57],blue=[.27,.49,.76];
+  cubeAt(0,.086,0,.071,.51,.077,navy);
+  cubeAt(-.020,.13,.035,.022,.433,.014,blue);
+  cubeAt(0,.05,0,.081,.083,.087,iron);
+  cubeAt(0,.588,0,.055,.052,.055,steel);
+  cubeAt(0,.629,0,.026,.07,.026,edge);
+  cubeAt(.039,.112,.008,.02,.16,.047,edge);
+  return true;
+ }
+ if(id==='armorCookHat'){
+  const offwhite=[.91,.88,.76],warm=[.69,.67,.55],crest=[.97,.94,.82];
+  const v=(i,r,h)=>[x+Math.cos(i*Math.PI/4)*r,y+h,z+Math.sin(i*Math.PI/4)*r*.88];
+  for(let i=0;i<8;i++){
+   quad(m,v(i, .215,0),v(i,.215,.083),v(i+1,.215,.083),v(i+1,.215,0),warm);
+   quad(m,v(i,.215,.083),v(i,.278,.271),v(i+1,.278,.271),v(i+1,.215,.083),i%2?offwhite:crest);
+   tri(m,v(i,.278,.271),[x,y+.288,z],v(i+1,.278,.271),crest);
+  }
+  return true;
+ }
+ if(id!=='armorMerchantCoat'&&id!=='armorGuildUniform'&&id!=='armorCookApron')return false;
+ const merchant=id==='armorMerchantCoat',guild=id==='armorGuildUniform';
+ const body=merchant?[.21,.42,.39]:guild?[.50,.21,.27]:linen,front=merchant?[.30,.54,.48]:guild?[.62,.29,.34]:[.31,.43,.29];
+ const hem=merchant||guild?gold:[.57,.61,.40],center=[x,y+.56,z+.151];
+ cubeAt(0,.135,0,.43,.47,.287,body);
+ for(const side of [-1,1])cubeAt(side*.256,.394,-.005,.155,.191,.25,body);
+ if(merchant){
+  for(const sign of [-1,1]){
+   cubeAt(sign*.116,.022,.010,.205,.184,.29,body);
+   cubeAt(sign*.025,.022,.154,.025,.382,.018,hem);
+  }
+  cubeAt(.142,.129,.17,.135,.123,.072,shade);
+  cubeAt(.142,.229,.203,.105,.034,.016,gold);
+ }else if(guild){
+  cubeAt(0,.106,.15,.426,.042,.023,hem);
+  cubeAt(0,.27,.145,.031,.245,.025,hem);
+  const badge=[x+.115,y+.43,z+.163];
+  quad(m,[badge[0],badge[1]+.055,badge[2]],[badge[0]-.045,badge[1],badge[2]],
+   [badge[0],badge[1]-.055,badge[2]],[badge[0]+.045,badge[1],badge[2]],[.96,.87,.66]);
+ }else{
+  cubeAt(0,.09,.15,.325,.32,.038,front);
+  cubeAt(0,.387,.15,.24,.12,.031,front);
+  cubeAt(0,.337,.175,.338,.038,.025,hem);
+  cubeAt(-.075,.16,.177,.138,.089,.022,hem);
+ }
+ for(const sign of [-1,1]){
+  tri(m,center,[x+sign*.165,y+.593,z+.151],[x+sign*.054,y+.458,z+.163],front);
+  cubeAt(sign*.266,.376,.111,.119,.042,.031,hem);
+ }
+ return true;
+}
 function poiFantasyEquipmentGeometry(m,id,x,y,z){
  const timber=[.43,.28,.15],grain=[.64,.45,.24],dark=[.23,.17,.13],lash=[.69,.58,.39];
  const b=(xx,yy,zz,w,h,d,col)=>cube(m,x+xx,y+yy,z+zz,w,h,d,col);
@@ -3575,6 +3720,9 @@ case 'kitchenKnife':{
   quad(m,pt(blade[i],-.018),pt(blade[j],-.018),pt(blade[j],.018),pt(blade[i],.018),spine);
  }
  break;}
+case 'armorMerchantCoat':case 'armorGuildUniform':case 'armorCookApron':case 'armorCookHat':
+case 'equipFryingPan':case 'equipLadle':case 'equipBallpointPen':
+ poiRoleItemGeometry(m,id,x,y,z);break;
 case 'starterCap':case 'starterTunic':case 'starterTrousers':case 'starterBoots':{
  const bottom={starterCap:1.343,starterTunic:.47,starterTrousers:.108,starterBoots:0}[id];
  poiStarterGearGeometry(m,id,x,y-bottom,z);break;}
@@ -6977,6 +7125,9 @@ function poiKitchenKnifeBuffer(kind){
 // Weapon IDs are shared with the existing equipment catalog. These are
 // synthesized through the same effects bus; no sound files or frame polling.
 const POI_WEAPON_SE={
+ equipFryingPan:{swing:[620,1090,114],impact:[540,1140,150],weight:1.0,cut:.82,ring:[382,.19,.093]},
+ equipLadle:{swing:[950,1820,125],impact:[830,1760,174],weight:.70,cut:.75,ring:[708,.115,.066]},
+ equipBallpointPen:{swing:[1100,2020,125],impact:[1330,2250,150],weight:.40,cut:.62},
  kitchenKnife:    {material:'kitchenKnife'},
  equipStick:      {swing:[790,1220,108],impact:[445,730,150],weight:.82,cut:.92},
  equipClub:       {swing:[610,980,104],impact:[350,620,133],weight:1.20,cut:.78},
@@ -7002,6 +7153,11 @@ function poiWeaponSound(kind,sound,now){
   poiAudioNoiseBurst(contact,.104,knock,1.14,.31*sound.weight,.008);
   poiAudioNoiseBurst(contact+.004,.079,edge,1.06,.21,.009);
   poiAudioThud(contact,body,73,.126,.24*sound.weight,.012);
+  if(sound.ring){
+   const [frequency,duration,gain]=sound.ring;
+   poiAudioTone(frequency,contact+.008,duration,gain,'sine',poiAudioEffects,.005);
+   poiAudioTone(frequency*1.47,contact+.011,duration*.53,gain*.32,'sine',poiAudioEffects,.004);
+  }
  }
 }
 function poiDefeatSound(when){
@@ -7424,11 +7580,11 @@ function poiHasExplicitWeaponDurability(kit){
 }
 function poiHotbarRead(){
  if(poiHotbarState)return poiHotbarState;
- let saved;
- try{saved=JSON.parse(localStorage.getItem(POI_HOTBAR_KEY)||'null')}catch(_e){}
+ let saved,raw;
+ try{raw=localStorage.getItem(POI_HOTBAR_KEY);saved=JSON.parse(raw||'null')}catch(_e){}
  const valid=saved?.version===1&&(saved.weapon===null||!!poiHotbarWeaponForType(saved.weapon))&&
   Number.isInteger(saved.potions)&&saved.potions>=0&&saved.potions<=POI_HOTBAR_POTION_MAX;
- if(!valid)return poiHotbarState={weapon:null,potions:POI_HOTBAR_POTION_START};
+ if(!valid)return poiHotbarState={weapon:null,potions:POI_HOTBAR_POTION_START,...(raw===null?{worn:{...POI_FRESH_ARMOR}}:{})};
  poiMigrateWeaponDurability(saved);
  const kit={weapon:saved.weapon,potions:saved.potions};
  const worn=poiArmorDecode(saved.worn);if(worn)kit.worn=worn;
@@ -7835,10 +7991,30 @@ const POI_KNIFE='kitchenKnife',POI_CANNED='cannedFood',POI_FIRE_WAND='fireWand';
 const POI_FIRE_WAND_MAX_CHARGES=5;
 const POI_GAME_WEAPON_NAMES=Object.freeze({equipWoodSword:'木の剣',kitchenKnife:'包丁',equipWoodBow:'木の弓',
  equipWoodSpear:'木の槍',equipStoneMace:'石のメイス',equipBoneSword:'骨の剣',equipIronSword:'鉄の剣',
- equipPlainStaff:'ただの杖',equipLongStaff:'長い杖'});
+ equipPlainStaff:'ただの杖',equipLongStaff:'長い杖',
+ equipFryingPan:'フライパン',equipLadle:'おたま',equipBallpointPen:'ボールペン'});
 const POI_STARTER_ARMOR=Object.freeze({head:'starterCap',torso:'starterTunic',legs:'starterTrousers',feet:'starterBoots'});
-const POI_STARTER_ARMOR_NAMES=Object.freeze({starterCap:'旅人の帽子',starterTunic:'麻の上着',starterTrousers:'旅人のズボン',starterBoots:'革の靴',armorIronTorso:'鉄の鎧'});
-function poiArmorCategory(type){if(type==='armorIronTorso')return 'torso';return Object.keys(POI_STARTER_ARMOR).find(p=>POI_STARTER_ARMOR[p]===type)||null}
+const POI_FRESH_ARMOR=Object.freeze({head:null,torso:null,legs:null,feet:null});
+const POI_STARTER_ARMOR_NAMES=Object.freeze({starterCap:'キャップ',starterTunic:'布の服',starterTrousers:'布のズボン',starterBoots:'スニーカー',
+ armorIronTorso:'鉄の鎧',armorMerchantCoat:'商人の服',armorGuildUniform:'ギルド制服',armorCookApron:'料理人の服',armorCookHat:'料理人の帽子'});
+const POI_ROLE_ARMOR_PART=Object.freeze({armorIronTorso:'torso',armorMerchantCoat:'torso',armorGuildUniform:'torso',armorCookApron:'torso',armorCookHat:'head'});
+function poiArmorCategory(type){
+ return Object.hasOwn(POI_ROLE_ARMOR_PART,type)?POI_ROLE_ARMOR_PART[type]:Object.keys(POI_STARTER_ARMOR).find(p=>POI_STARTER_ARMOR[p]===type)||null;
+}
+const POI_ARMOR_DEFENSE=Object.freeze({starterCap:.25,starterTunic:.75,starterTrousers:.75,starterBoots:.25,
+ armorMerchantCoat:1.25,armorGuildUniform:2,armorCookApron:1.5,armorCookHat:.5,armorIronTorso:4});
+const POI_ROLE_GEAR_PRICE=Object.freeze({starterCap:5,starterTunic:8,starterTrousers:8,starterBoots:10,
+ armorMerchantCoat:20,armorGuildUniform:28,armorCookApron:18,armorCookHat:10,armorIronTorso:55,
+ equipFryingPan:13,equipLadle:8,equipBallpointPen:4});
+function poiArmorDefense(type){return Object.hasOwn(POI_ARMOR_DEFENSE,type)?POI_ARMOR_DEFENSE[type]:0}
+function poiPlayerDefense(kit=poiHotbarRead()){return Object.values(poiArmorWorn(kit)).reduce((total,type)=>total+poiArmorDefense(type),0)}
+function poiPlayerDamageAfterArmor(base,kit=poiHotbarRead()){
+ if(base<=0)return base;
+ const reduction=Math.ceil(poiPlayerDefense(kit));
+ return Math.max(1,base-reduction);
+}
+function poiEquipmentPrice(type){return Object.hasOwn(POI_ROLE_GEAR_PRICE,type)?POI_ROLE_GEAR_PRICE[type]:
+ (typeof POI_NPC_TRADE_BASE_PRICES!=='undefined'&&Object.hasOwn(POI_NPC_TRADE_BASE_PRICES,type)?POI_NPC_TRADE_BASE_PRICES[type]:null)}
 function poiArmorDecode(raw){
  const pieces=Object.entries(POI_STARTER_ARMOR);
  if(!raw||typeof raw!=='object'||Array.isArray(raw))return null;
@@ -7847,7 +8023,9 @@ function poiArmorDecode(raw){
 const POI_EQUIPMENT_DURABILITY=Object.freeze({equipWoodSword:160,kitchenKnife:POI_KNIFE_DURABILITY,
  starterCap:36,starterTunic:62,starterTrousers:54,starterBoots:46,armorIronTorso:150,
  equipWoodBow:100,equipWoodSpear:120,equipStoneMace:140,equipBoneSword:125,equipIronSword:180,
- equipPlainStaff:80,equipLongStaff:65});
+ equipPlainStaff:80,equipLongStaff:65,
+ armorMerchantCoat:76,armorGuildUniform:92,armorCookApron:70,armorCookHat:48,
+ equipFryingPan:72,equipLadle:45,equipBallpointPen:18});
 const POI_ARMOR_WEAR_ORDER=Object.freeze(['torso','legs','head','feet']);
 function poiEquipmentDurabilityMax(type){
  return Object.prototype.hasOwnProperty.call(POI_EQUIPMENT_DURABILITY,type)?POI_EQUIPMENT_DURABILITY[type]:0;
@@ -9238,9 +9416,20 @@ function poiItemDetailDescription(cell){
   equipIronSword:'鉄で鍛えた近距離用の剣。',
   equipPlainStaff:'簡素な木の杖。近距離で振って攻撃する。',
   equipLongStaff:'遠めの相手を突ける長い木の杖。',
-  armorIronTorso:'鉄で作った胴鎧。'
+  armorIronTorso:'鉄で作った胴鎧。',
+  equipFryingPan:'手近な調理道具。重みを使って近くの敵を叩く。',
+  equipLadle:'軽いおたま。短い間隔で振れる。',
+  equipBallpointPen:'先の細い筆記具。近くの敵を素早く突ける。'
  };
- const info=[descriptions[cell.type]||(typeof poiArmorCategory==='function'&&poiArmorCategory(cell.type)?'見た目を変える装備。防御力は変わらない。':'')];
+ const armor=typeof poiArmorCategory==='function'&&poiArmorCategory(cell.type);
+ const info=[descriptions[cell.type]||(armor?'装備すると受けるダメージを軽減する。':'')];
+ if(armor&&typeof poiArmorDefense==='function')info.push('防御力：'+poiArmorDefense(cell.type));
+ const profile=typeof poiPlayerWeaponProfile==='function'?poiPlayerWeaponProfile(cell.type):null;
+ if(profile)info.push('攻撃力：'+profile.damage,'射程：'+profile.range+'マス');
+ else if(typeof poiHotbarWeaponForType==='function'&&poiHotbarWeaponForType(cell.type)&&typeof poiPlayerAttackDamage==='function')
+  info.push('攻撃力：'+poiPlayerAttackDamage(cell.type),'射程：1マス');
+ const price=typeof poiEquipmentPrice==='function'?poiEquipmentPrice(cell.type):null;
+ if(price!==null&&(armor||profile||typeof poiHotbarWeaponForType==='function'&&poiHotbarWeaponForType(cell.type)))info.push('参考価格：'+price+'G');
  if(poiInventoryStack(cell.type)>1)info.push('所持数：'+cell.count);
  const percent=typeof poiEquipmentDurabilityPercent==='function'?poiEquipmentDurabilityPercent(cell):null;
  if(percent!==null)info.push('耐久：'+percent+'%');
@@ -10066,7 +10255,8 @@ function poiEnemyResolvePlayer(now){
 // END SLIME ATTACK
 
 function poiMobHitPlayer(obj,now){
- const amount=(typeof poiMonsterStatsAt==='function'?poiMonsterStatsAt(obj):POI_MONSTER_STATS[obj.type]).attack;
+ const raw=(typeof poiMonsterStatsAt==='function'?poiMonsterStatsAt(obj):POI_MONSTER_STATS[obj.type]).attack;
+ const amount=typeof poiPlayerDamageAfterArmor==='function'&&typeof poiHotbarHasKit==='function'&&poiHotbarHasKit()?poiPlayerDamageAfterArmor(raw):raw;
  const priorHP=poiPlayerHP;
  poiPlayerHP=Math.max(0,poiPlayerHP-amount);poiSound('hurt');
  if(poiPlayerHP<priorHP){
@@ -10215,8 +10405,36 @@ const POI_TOWN_RESIDENT_ROLES=Object.freeze([
  {id:'northtraveler',name:'セオ',role:'visitor',type:'humanVillager',arrives:520,leaves:1035,
   home:{x:39,z:2,y:0,facing:0},work:{x:58,z:41,y:0,facing:0},public:{x:60,z:41,y:0,facing:2}},
  {id:'canalcourier',name:'リタ',role:'visitor',type:'humanVillager',arrives:555,leaves:1055,
-  home:{x:126,z:66,y:0,facing:1},work:{x:79,z:52,y:0,facing:2},public:{x:80,z:55,y:0,facing:0}}
+  home:{x:126,z:66,y:0,facing:1},work:{x:79,z:52,y:0,facing:2},public:{x:80,z:55,y:0,facing:0}},
+ // A local cook commutes through the south gate instead of occupying the
+ // player's guest bed or any of the other residents' private beds.
+ {id:'towncook',name:'イネス',role:'visitor',type:'humanVillager',arrives:435,leaves:1110,workBuilding:'kitchen',
+  home:{x:30,z:71,y:0,facing:2},work:{x:26,z:42,y:0,facing:3},public:{x:26,z:39,y:0,facing:2}}
 ]);
+const POI_TOWN_NPC_BASE_GEAR=Object.freeze({head:'starterCap',torso:'starterTunic',legs:'starterTrousers',feet:'starterBoots'});
+const POI_TOWN_NPC_MERCHANT_GEAR=Object.freeze({...POI_TOWN_NPC_BASE_GEAR,torso:'armorMerchantCoat'});
+const POI_TOWN_NPC_GUILD_GEAR=Object.freeze({...POI_TOWN_NPC_BASE_GEAR,torso:'armorGuildUniform'});
+const POI_TOWN_NPC_COOK_GEAR=Object.freeze({...POI_TOWN_NPC_BASE_GEAR,head:'armorCookHat',torso:'armorCookApron'});
+const POI_TOWN_NPC_KNIGHT_GEAR=Object.freeze({...POI_TOWN_NPC_BASE_GEAR,torso:'armorIronTorso'});
+const POI_TOWN_NPC_COOK_TOOLS=Object.freeze(['equipLadle']);
+function poiTownNpcLoadout(a){
+ const role=a?.role||{};
+ const adventurer=role.role==='adventurer',guild=role.id==='guildkeeper',cook=role.id==='towncook';
+ const weapon=a?.weapon!==undefined?a.weapon:guild?'equipBallpointPen':cook?'equipFryingPan':adventurer?'equipWoodSword':null;
+ const gear=a?.gear||(guild?POI_TOWN_NPC_GUILD_GEAR:cook?POI_TOWN_NPC_COOK_GEAR:adventurer?POI_TOWN_NPC_KNIGHT_GEAR:
+  role.type==='humanMerchant'?POI_TOWN_NPC_MERCHANT_GEAR:POI_TOWN_NPC_BASE_GEAR);
+ return {weapon,gear,tools:cook?POI_TOWN_NPC_COOK_TOOLS:[]};
+}
+function poiTownNpcAttackPower(a){
+ const {weapon}=poiTownNpcLoadout(a);
+ if(!weapon)return null;
+ if(typeof poiPlayerAttackDamage!=='function')return POI_TOWN_RESIDENT_MELEE;
+ return Math.max(1,Math.round(POI_TOWN_RESIDENT_MELEE*poiPlayerAttackDamage(weapon)/poiPlayerAttackDamage('equipWoodSword')));
+}
+function poiTownNpcDefense(a){
+ if(typeof poiArmorDefense!=='function')return 0;
+ return Object.values(poiTownNpcLoadout(a).gear).reduce((sum,id)=>sum+poiArmorDefense(id),0);
+}
 const POI_TOWN_INN=Object.freeze({hostId:'innkeeper',desk:{x:41,z:32,y:0,facing:0},beds:Object.freeze([
  {id:'inn-west',x:39,z:25,y:1,facing:2,residentId:'guestadventurer',stand:{x:39,z:26,y:1,facing:0}},
  {id:'inn-east',x:44,z:25,y:1,facing:2,residentId:'stablekeeper',stand:{x:44,z:26,y:1,facing:0}},
@@ -10344,7 +10562,8 @@ function poiTownNpcInit(clock){
   const returning=shipment&&poiTownNpcStance(shipment);
   const p=returning?shipment:poiTownNpcStance(start)?start:role.home;
   const morning=clock.absoluteMinute-clock.minute+POI_TOWN_WAKE+(clock.minute>=POI_TOWN_WAKE?1440:0);
-  return {role,...p,index,...(returning?{supplyCarrying:true}:{}),hp:POI_TOWN_RESIDENT_HP,activity:returning?'supply-return':recessed?'offsite':'idle',recessed,attacks:0,coins:0,potions:0,bedId:bed?.id??null,
+  const {weapon,gear}=poiTownNpcLoadout({role});
+  return {role,weapon,gear,...p,index,...(returning?{supplyCarrying:true}:{}),hp:POI_TOWN_RESIDENT_HP,activity:returning?'supply-return':recessed?'offsite':'idle',recessed,attacks:0,coins:0,potions:0,bedId:bed?.id??null,
    bedUntil:bed?morning:null,restUntil:null,path:null,nextPlan:0,attackAt:0,encounterAt:0};
  });
  poiTownNpcVersion++;
@@ -10476,10 +10695,12 @@ function poiTownNpcResolve(a,now){
   const recent=now-a.hitAt<340;
   a.hitAt=null;
   if(recent&&poiTownNpcMelee(a,state)&&a.facing===poiTownNpcFaces(a.x,a.z,state.x,state.z)){
-   a.attacks++;a.lastHitAt=now;state.townHurtAt=now;state.hp=Math.max(0,state.hp-POI_TOWN_RESIDENT_MELEE);poiMonsterMeshDirty=true;
+   const amount=(typeof poiTownNpcAttackPower==='function'?poiTownNpcAttackPower(a):null)??POI_TOWN_RESIDENT_MELEE;
+   const weapon=typeof poiTownNpcLoadout==='function'?poiTownNpcLoadout(a).weapon:'equipWoodSword';
+   a.attacks++;a.lastHitAt=now;state.townHurtAt=now;state.hp=Math.max(0,state.hp-amount);poiMonsterMeshDirty=true;
    if(poiTownNpcCombatNear(state.x,state.z,0)){
-    if(typeof poiDamageNumber==='function')poiDamageNumber(state.x+.5,state.z+.5,terrainY(state.x,state.z)+1.20,POI_TOWN_RESIDENT_MELEE);
-    if(typeof poiSound==='function')poiSound('hit','equipWoodSword',state.hp===0);
+    if(typeof poiDamageNumber==='function')poiDamageNumber(state.x+.5,state.z+.5,terrainY(state.x,state.z)+1.20,amount);
+    if(typeof poiSound==='function')poiSound('hit',weapon,state.hp===0);
     if(!state.hp&&typeof poiMonsterBreak==='function')poiMonsterBreak(obj,state,now);
    }
    if(!state.hp){
@@ -10492,7 +10713,8 @@ function poiTownNpcResolve(a,now){
   state.counterHitAt=null;
   if(recent){state.counterVisualHitAt=now;poiMonsterMeshDirty=true}
   if(recent&&poiTownNpcMelee(a,state)&&a.x===state.counterTargetX&&a.z===state.counterTargetZ){
-   const amount=POI_MONSTER_STATS.monsterSlime.attack||6;
+   const damage=POI_MONSTER_STATS.monsterSlime.attack||6;
+   const amount=Math.max(1,damage-Math.ceil(typeof poiTownNpcDefense==='function'?poiTownNpcDefense(a):0));
    a.hp=Math.max(0,a.hp-amount);a.hurtAt=now;
    if(!a.hp)poiTownNpcKnockOut(a,now);else poiTownNpcEmergencyHeal(a);
    if(poiTownNpcCombatNear(a.x,a.z,a.y)){
@@ -10573,7 +10795,7 @@ function poiTownNpcVisitorRoutine(a,clock,now,budget){
  if(a.recessed){a.recessed=false;poiTownNpcVersion++}
  const goal=poiTownNpcVisitorGoal(role,minute);
  const arrived=poiTownNpcMove(a,goal,'going-visit',now,budget);
- poiTownNpcAct(a,arrived?'visit':'going-visit');
+ poiTownNpcAct(a,arrived?(role.id==='towncook'&&goal===role.work?'work':'visit'):'going-visit');
 }
 // BEGIN TOOLSHOP SUPPLY ROUTINE
 const POI_TOOLSHOP_RUN_START=9*60+30,POI_TOOLSHOP_RUN_LAST=10*60+45;
@@ -10685,7 +10907,7 @@ function poiTownNpcRoutine(a,clock,now,budget){
 // BEGIN TOWN DIALOGUE
 const POI_TOWN_JOB_LABELS=Object.freeze({
  guildkeeper:'ギルド受付',innkeeper:'宿屋の主人',diningkeeper:'食堂の店主',workshopkeeper:'工房の職人',
- toolkeeper:'道具屋の店主',stablekeeper:'厩舎番',westpeddler:'行商人',canalcourier:'運河の配達人',
+ toolkeeper:'道具屋の店主',stablekeeper:'厩舎番',towncook:'食堂の料理人',westpeddler:'行商人',canalcourier:'運河の配達人',
  resadventurer:'冒険者',guestadventurer:'冒険者'
 });
 function poiTownNpcDisplayName(role){
@@ -10699,6 +10921,7 @@ const POI_TOWN_SPEECH=Object.freeze({
  northtraveler:'北から歩いてきたんだ。今夜はまた街道沿いで休むつもり。',
  canalcourier:'運河沿いを回って荷を届けてるよ。橋の上は風が気持ちいいね。',
  diningkeeper:'今日は朝から鍋を火にかけてるよ。外はどうだった？',
+ towncook:'お腹は空いてない？　今ちょうど鍋を火にかけたところだよ。',
  workshopkeeper:'刃物も道具も、手入れしてやれば長く使えるよ。',
  toolkeeper:'草原に出る前に、薬草を持ったか確認していくといい。',
  stablekeeper:'馬は落ち着いてる。厩の近くでは、走らずに通っておくれ。'
@@ -10710,6 +10933,7 @@ const POI_NPC_EXTRA_SPEECH=Object.freeze({
  innkeeper:['東門を出て川下へ。崩れた石壁のそばに、水没した礼拝堂へ下りる階段があるよ。西の回廊なら濡れずに進める。まっすぐ行くと浅瀬で足を取られるよ。','夜が更けると玄関のあたりも静かになるよ。','休めるときに休んでおくといい。旅は長いからね。'],
  toolkeeper:['荷物に空きがあるうちに、必要なものを揃えておくといいよ。','薬草はけがをしてから慌てて探すものじゃないからね。'],
  diningkeeper:['鍋の匂いで、お客さんが足を止めてくれるんだ。','火を絶やさないように、朝は少し早く起きるよ。'],
+ towncook:['熱いうちに食べるのが一番だよ。','午後の仕込みをする前に、食材を切っておかなくちゃ。'],
  workshopkeeper:['手に馴染んだ道具ほど、大切に使いたいものだ。'],
  stablekeeper:['今日は馬の調子もいい。外は歩きやすそうだね。']
 });
@@ -10766,16 +10990,17 @@ function poiNpcMenuRows(d){
   offer})),row('back')];
 }
 function poiTownNpcStatus(actor){
- const role=actor.role,knight=role.type==='humanKnight';
- return {name:poiTownNpcDisplayName(role),
-  hp:actor.hp,maxHP:POI_TOWN_RESIDENT_HP,attack:role.role==='adventurer'?POI_TOWN_RESIDENT_MELEE:null,
-  equipment:knight?['剣','盾','鎧']:[],coins:actor.coins||0,herbs:actor.potions||0};
+ const role=actor.role,{weapon,gear,tools}=poiTownNpcLoadout(actor);
+ const equipment=[weapon,gear.head,gear.torso,gear.legs,gear.feet];
+ return {name:poiTownNpcDisplayName(role),hp:actor.hp,maxHP:POI_TOWN_RESIDENT_HP,
+  attack:poiTownNpcAttackPower(actor),defense:poiTownNpcDefense(actor),weapon,gear,tools,equipment,coins:actor.coins||0,herbs:actor.potions||0};
 }
 function poiNpcStatusView(actor){
  const info=poiTownNpcStatus(actor),view=document.createElement('dl');view.id='poiNpcStatus';
  view.setAttribute('aria-label',info.name+'の状態');
  const fields=[['name','名前',info.name],['hp','HP',info.hp+'/'+info.maxHP]];
  if(info.attack!==null)fields.push(['attack','攻撃力',info.attack]);
+ fields.push(['defense','防御力',info.defense]);
  for(const [key,label,value] of fields){
   const term=document.createElement('dt'),text=document.createElement('dd');
   term.textContent=label;text.dataset.npcStat=key;text.textContent=String(value);if(key==='name')text.title=text.textContent;view.append(term,text);
@@ -10783,13 +11008,16 @@ function poiNpcStatusView(actor){
  return view;
 }
 const poiNpcPortraitCanvases=new Map();
-function poiNpcPortrait(type){
+function poiNpcPortrait(actor){
+ const type=typeof actor==='string'?actor:actor.role.type;
+ const wearer=typeof actor==='string'?null:actor;
+ const key=poiTownNpcGearVisualKey(wearer)||type;
  const portrait=document.createElement('canvas');portrait.id='poiNpcPortrait';portrait.width=96;portrait.height=104;
  portrait.dataset.model=type;portrait.setAttribute('role','img');portrait.setAttribute('aria-label','住人の姿');
- let art=poiNpcPortraitCanvases.get(type);
+ let art=poiNpcPortraitCanvases.get(key);
  if(!art){
   art=document.createElement('canvas');art.width=portrait.width;art.height=portrait.height;
-  if(poiDrawPaperDoll(art,poiTownNpcModel(type)))poiNpcPortraitCanvases.set(type,art);
+  if(poiDrawPaperDoll(art,poiTownNpcModel(type,wearer)))poiNpcPortraitCanvases.set(key,art);
  }
  portrait.getContext('2d')?.drawImage(art,0,0);return portrait;
 }
@@ -10797,6 +11025,7 @@ function poiNpcInventoryItems(info){
  const items=[];
  if(Number.isSafeInteger(info.coins)&&info.coins>0)items.push({type:'gold',count:info.coins});
  if(Number.isSafeInteger(info.herbs)&&info.herbs>0)items.push({type:'healingHerb',count:info.herbs});
+ for(const type of info.tools||[])items.push({type,count:1});
  return items;
 }
 function poiNpcInventoryView(actor){
@@ -10813,7 +11042,7 @@ function poiNpcInventoryView(actor){
   const tile=document.createElement('span'),item=items[i];tile.dataset.npcBagSlot=i;
   if(item){
    tile.dataset.npcItem=item.type;tile.dataset.count=item.count;
-   const isGold=item.type==='gold',label=isGold?'金貨 '+item.count+'G':'薬草 '+item.count+'個';
+   const isGold=item.type==='gold',label=isGold?'金貨 '+item.count+'G':poiInventoryItemName(item.type)+' '+item.count+'個';
    tile.setAttribute('role','img');tile.setAttribute('aria-label',label);tile.title=label;
    const icon=document.createElement('span'),amount=document.createElement('span');
    icon.className='hotbar-icon';amount.className='hotbar-count';tile.append(icon,amount);
@@ -10825,15 +11054,20 @@ function poiNpcInventoryView(actor){
   bag.append(tile);
  }
  const gear=document.createElement('div');gear.id='poiNpcInventoryGear';gear.setAttribute('role','group');gear.setAttribute('aria-label','装備');
- for(const [index,part] of ['weapon','shield','armor','other'].entries()){
+ for(const [index,part] of ['weapon','head','torso','legs','feet'].entries()){
   const tile=document.createElement('span');tile.dataset.npcGearSlot=part;
   const item=info.equipment[index];
-  if(item){tile.dataset.npcEquipment=item;tile.textContent=item;tile.title=item}
+  if(item){
+   tile.dataset.npcEquipment=item;const label=poiInventoryItemName(item)||item;
+   tile.title=label;tile.setAttribute('aria-label',label);
+   const icon=document.createElement('span');icon.className='hotbar-icon';tile.append(icon);
+   poiInventoryPresentItem(tile,{type:item,count:1});
+  }
   else tile.setAttribute('aria-hidden','true');
   gear.append(tile);
  }
  const details=document.createElement('div');details.id='poiNpcInventoryActor';
- details.append(gear,poiNpcPortrait(actor.role.type),poiNpcStatusView(actor));
+ details.append(gear,poiNpcPortrait(actor),poiNpcStatusView(actor));
  body.append(bag,details);return [header,body];
 }
 function poiNpcInventorySync(actor=null){
@@ -11287,7 +11521,7 @@ function poiTownResidentsFrame(now){
 }
 function poiTownResidentsSnapshot(){
  return {actors:poiTownNpcActors.map(a=>({id:a.role.id,name:a.role.name,role:a.role.role,type:a.role.type,
-  x:a.x,z:a.z,y:a.y,facing:a.facing,activity:a.activity,recessed:!!a.recessed,goal:a.goal??null,hp:a.hp,attacks:a.attacks,coins:a.coins,potions:a.potions,bedId:a.bedId,
+  x:a.x,z:a.z,y:a.y,facing:a.facing,activity:a.activity,recessed:!!a.recessed,goal:a.goal??null,hp:a.hp,weapon:a.weapon,gear:a.gear,attacks:a.attacks,coins:a.coins,potions:a.potions,bedId:a.bedId,
   death:a.death??null,swingAt:a.swingAt??null,hitAt:a.hitAt??null,lastHitAt:a.lastHitAt??null,hurtAt:a.hurtAt??null,motion:poiTownNpcMotion(a,poiTownMotionClock),visual:a.recessed||a.y!==poiWalkLevel?null:a.visual??null})),
   encounters:[...poiMonsterStates].filter(([,s])=>s.townOwned).map(([o,s])=>({owner:s.townHunt,type:o.type,
    x:s.x,z:s.z,y:o.y,hp:s.hp,counterAt:s.counterAt??null,counterHitAt:s.counterHitAt??null})),
@@ -11356,12 +11590,51 @@ function poiTownNpcMotionAngles(m){
  }
 }
 const poiTownNpcModelCache=new Map();
-function poiTownNpcModel(type){
- if(!poiTownNpcModelCache.has(type)){
+function poiTownNpcGearVisualKey(actor){
+ const gear=actor?.gear,weapon=poiHumanGearType(actor?.weapon);
+ if(!actor)return '';
+ // A real live actor always has a loadout, including empty equipment.
+ // No baked hat, coat, shield or sword may appear because of its role ID.
+ return ['role-rig',actor?.role?.type,...['head','torso','legs','feet'].map(part=>poiHumanGearType(gear?.[part])||''),weapon||''].join(':');
+}
+function poiTownNpcHeldStyle(type){
+ if(!type)return null;
+ const role=poiRoleToolGripStyle(type);if(role)return role;
+ if(!EQUIPMENT_IDS.includes(type))return null;
+ return {gripX:type==='equipWoodBow'?.34:0,
+  grip:type==='equipWoodBow'?.57:type==='equipWoodSpear'?.58:type==='equipLongStaff'?.34:type==='equipPlainStaff'?.39:.25,
+  scaleX:.58,scaleY:type==='equipLongStaff'?.78:.68,scaleZ:.53,tilt:.30};
+}
+function poiTownNpcHeldPose(actor,age,near,bed){
+ if(!near||bed||!Number.isFinite(age)||age<0||age>=260)return null;
+ return poiTownNpcHeldStyle(poiHumanGearType(actor.weapon))?poiWalkSwordPose(age):poiWalkPunchPose(age);
+}
+function poiTownNpcGaitZ(x,y,stride,pose,roleMotion){
+ if(y<.46&&Math.abs(x)<.24)return x<0?-stride:stride;
+ if(!pose&&!roleMotion&&y<.76&&Math.abs(x)>.25)return x<0?stride*.35:-stride*.35;
+ return 0;
+}
+function poiTownNpcModel(type,actor=null){
+ const signature=poiTownNpcGearVisualKey(actor),key=signature||type;
+ if(!poiTownNpcModelCache.has(key)){
   const m=mesh();if(['humanKnight','humanMerchant','humanVillager'].includes(type))m.townParts={};
-  deco(m,type,0,0,0,0);poiTownNpcModelCache.set(type,m);
+  if(signature){
+   m.townParts={};m.roleRig=true;
+   characterHuman(m,0,0,0,false,null,actor.gear,true);
+   const weapon=poiHumanGearType(actor.weapon),style=poiTownNpcHeldStyle(weapon);
+   if(style){
+    const start=m.p.length,prop=mesh();deco(prop,weapon,0,0,0,0);
+    for(let i=0;i<prop.p.length;i+=3){
+     m.p.push(.272+(prop.p[i]-(style.gripX||0))*style.scaleX,.55+(prop.p[i+1]-style.grip)*style.scaleY,.028+prop.p[i+2]*style.scaleZ);
+     const nx=prop.n[i]/style.scaleX,ny=prop.n[i+1]/style.scaleY,nz=prop.n[i+2]/style.scaleZ,len=Math.hypot(nx,ny,nz)||1;
+     m.n.push(nx/len,ny/len,nz/len);m.c.push(prop.c[i],prop.c[i+1],prop.c[i+2]);
+    }
+    m.townParts.held=[start,m.p.length];m.roleTool=style;
+   }
+  }else deco(m,type,0,0,0,0);
+  poiTownNpcModelCache.set(key,m);
  }
- return poiTownNpcModelCache.get(type);
+ return poiTownNpcModelCache.get(key);
 }
 function poiTownResidentsDraw(now,vp){
  if(!poiTownNpcActive()||!poiTownNpcActors.length)return;
@@ -11375,7 +11648,9 @@ function poiTownResidentsDraw(now,vp){
   walking.set(a,rate);if(!cadence||rate<cadence)cadence=rate;
  }
  // Include the sample interval so start/settle cannot reuse a stale bucket.
- const key=[poiTownNpcVersion,poiWalkLevel,poiWalkX,poiWalkZ,cadence,
+ const outfits=poiTownNpcActors.filter(a=>!a.recessed&&!a.death&&a.y===poiWalkLevel)
+  .map(poiTownNpcGearVisualKey).join('|');
+ const key=[poiTownNpcVersion,poiWalkLevel,poiWalkX,poiWalkZ,cadence,outfits,
   cadence?Math.floor(now/cadence):'idle'].join(':');
  if(key!==poiTownNpcMeshKey){
   const m=mesh();
@@ -11383,7 +11658,7 @@ function poiTownResidentsDraw(now,vp){
    if(a.recessed||a.death||a.y!==poiWalkLevel)continue;
    const sleeping=a.activity==='sleep-home'||a.activity==='sleep-inn'||a.activity==='rest-inn';
    const bed=sleeping?(POI_TOWN_INN_BEDS.find(b=>b.id===a.bedId)||a.role.bed):null;
-   const p=bed||a,part=poiTownNpcModel(a.role.type);
+   const p=bed||a,part=poiTownNpcModel(a.role.type,a);
    const near=poiTownNpcMotionNear(a),motion=poiTownNpcMotion(a,now,near);
    const rate=bed?0:walking.get(a)||0;
    const sample=poiTownNpcVisualPosition(p,now,!!rate),{x,z,t}=sample;
@@ -11391,18 +11666,16 @@ function poiTownResidentsDraw(now,vp){
    const h=(x,z)=>p.y===0?(facilityCreekIndex?.bridgeHeight?.get(x+','+z)??terrainY(x,z)):terrainY(x,z);
    const ground=t===1?h(p.x,p.z):h(a.fromX,a.fromZ)*(1-t)+h(p.x,p.z)*t;
    const y=ground+p.y*1.4+(bed?.57:.025),r=[2,3,0,1][p.facing]||0;
-   const parts=part.townParts,knight=!!parts?.sword;
-   const pose=near&&!bed&&knight&&inTime(a.swingAt,260)?poiWalkSwordPose(now-a.swingAt):null;
+   const parts=part.townParts;
+   const pose=poiTownNpcHeldPose(a,Number.isFinite(a.swingAt)?now-a.swingAt:Infinity,near,bed);
    const roleMotion=near&&!pose?poiTownNpcMotionAngles(motion):null;
    const stride=poiTownNpcVisualStride(a,t);
    const hurt=near&&inTime(a.hurtAt,155)?(1-(now-a.hurtAt)/155)*.33:0;
    const twist=pose?.twist||0,cs=Math.cos(twist),sn=Math.sin(twist);
-   const axisX=knight?.32:a.role.type==='humanMerchant'?.30:.272;
-   const axisY=knight?.90:a.role.type==='humanMerchant'?.90:.869,axisZ=knight?.035:0;
+   const axisX=.272,axisY=.965,axisZ=0;
+   const toolWrist=part.roleTool?characterArmRotation(-(pose?.edgeTilt??part.roleTool.tilt),pose?.edgeYaw||0):null;
    const arm=parts?characterArmRotation(pose?.strike||roleMotion?.right||0,pose?.sweep||roleMotion?.swivel||0):null;
    const guard=pose||roleMotion?characterArmRotation(pose?pose.guard*.58:roleMotion.left,0):null;
-   const wrist=knight?characterArmRotation(-(pose?.edgeTilt??.18),pose?.edgeYaw||0):null;
-   const grab=knight?arm(0,.43-.90,0):null;
    const breath=near&&['idle','sleep','rest'].includes(motion.kind)?(motion.amount-.5)*.036:0;
    const lean=roleMotion?.lean||0;
    const leanX=Math.sin(r*Math.PI/2)*lean,leanZ=Math.cos(r*Math.PI/2)*lean;
@@ -11410,18 +11683,18 @@ function poiTownResidentsDraw(now,vp){
    for(let i=0;i<part.p.length;i+=3){
     let px=part.p[i],py=part.p[i+1],pz=part.p[i+2],nx=part.n[i],ny=part.n[i+1],nz=part.n[i+2];
     if(!bed){
-     if(inPart(i,'sword')){
-      const w=wrist(px-.42,py-.17,pz-.09);
-      px=.32+grab[0]+w[0];py=.90+grab[1]+w[1];pz=.035+grab[2]+w[2]-(pose||roleMotion?0:stride*.35);
-      [nx,ny,nz]=wrist(nx,ny,nz);
+     if(inPart(i,'held')){
+      const hand=arm(0,.55-axisY,.028),item=toolWrist(px-axisX,py-.55,pz-.028);
+      px=axisX+hand[0]+item[0];py=axisY+hand[1]+item[1];
+      pz=hand[2]+item[2]+poiTownNpcGaitZ(axisX,.55,stride,pose,roleMotion);
+      [nx,ny,nz]=toolWrist(nx,ny,nz);
      }else if((pose||roleMotion)&&inPart(i,'right')){
       const w=arm(px-axisX,py-axisY,pz-axisZ);px=axisX+w[0];py=axisY+w[1];pz=axisZ+w[2];
       [nx,ny,nz]=arm(nx,ny,nz);
-     }else if(guard&&(inPart(i,'left')||inPart(i,'shield'))){
+     }else if(guard&&inPart(i,'left')){
       const w=guard(px+axisX,py-axisY,pz-axisZ);px=-axisX+w[0];py=axisY+w[1];pz=axisZ+w[2];
       [nx,ny,nz]=guard(nx,ny,nz);
-     }else if(py<.46&&Math.abs(px)<.24)pz+=px<0?-stride:stride;
-     else if(!pose&&py<.76&&Math.abs(px)>.25)pz+=px<0?stride*.35:-stride*.35;
+     }else if(part.roleRig)pz+=poiTownNpcGaitZ(px,py,stride,pose,roleMotion);
      if(pose&&py>.45){[px,pz]=[px*cs-pz*sn,pz*cs+px*sn];[nx,nz]=[nx*cs-nz*sn,nz*cs+nx*sn]}
     }
     const [xx,zz]=rot2(px*.88,bed?py*.88-.57:pz*.88,r);
@@ -11466,7 +11739,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v210',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v211',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -11581,7 +11854,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v210';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v211';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -11796,7 +12069,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v210',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v211',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -12476,6 +12749,9 @@ const POI_PLAYER_WEAPON_PROFILES=Object.freeze({
  equipIronSword:{range:1,damage:30,hit:0,ready:300,pose:260},
  equipPlainStaff:{range:1,damage:23,hit:140,ready:350,pose:300},
  equipLongStaff:{range:2,damage:20,hit:210,ready:510,pose:400},
+ equipFryingPan:{range:1,damage:26,hit:150,ready:425,pose:320},
+ equipLadle:{range:1,damage:17,hit:95,ready:265,pose:230},
+ equipBallpointPen:{range:1,damage:12,hit:70,ready:195,pose:180},
  fireWand:{range:8,damage:34,hit:0,ready:610,pose:310,cellMs:55,minFlight:55}
 });
 let poiPlayerWeaponPending=null,poiPlayerWeaponVisual=null;
@@ -12792,7 +13068,7 @@ function poiBuildPlayerMesh(weapon,pose,gear,stride=0,r=0,x=0,y=0,z=0){
  const m=mesh(),body=mesh(),twist=pose?.twist||0,twistC=Math.cos(twist),twistS=Math.sin(twist);
  const bowAim=weapon==='equipWoodBow'&&Number.isFinite(pose?.bowDraw);
  if(bowAim)body.townParts={};
- characterHuman(body,0,0,0,false,bowAim?null:pose,gear);
+ characterHuman(body,0,0,0,false,bowAim?null:pose,gear,true);
  for(let i=0;i<body.p.length;i+=3){
   if(bowAim){
    const {left,right}=body.townParts;
@@ -12821,14 +13097,15 @@ function poiBuildPlayerMesh(weapon,pose,gear,stride=0,r=0,x=0,y=0,z=0){
   const handZ=hz-(pose?0:stride*.36);
   const gx=(.272+hx)*twistC-handZ*twistS,gz=handZ*twistC+(.272+hx)*twistS;
   const gy=(.965+hy)*.90;
-  const wrist=characterArmRotation(-(pose?.edgeTilt??.30),pose?.edgeYaw||0);
+  const roleTool=poiRoleToolGripStyle(weapon);
+  const wrist=characterArmRotation(-(pose?.edgeTilt??roleTool?.tilt??.30),pose?.edgeYaw||0);
   const long=weapon==='equipLongStaff'?poiLongStaffGripStyle(pose):null;
-  const gripX=weapon==='equipWoodBow' ? .34 : 0,gripY=long?.grip??(weapon==='equipWoodBow' ? .57 : weapon==='equipWoodSpear' ? .58 : weapon==='equipPlainStaff' ? .39 : .25);
-  const scaleY=long?.scale??.68;
+  const gripX=weapon==='equipWoodBow' ? .34 : 0,gripY=(long?.grip??roleTool?.grip)??(weapon==='equipWoodBow' ? .57 : weapon==='equipWoodSpear' ? .58 : weapon==='equipPlainStaff' ? .39 : .25);
+  const scaleY=long?.scale??roleTool?.scaleY??.68,scaleX=roleTool?.scaleX??.58,scaleZ=roleTool?.scaleZ??.53;
   for(let i=0;i<prop.p.length;i+=3){
-   const [wx,wy,wz]=wrist((prop.p[i]-gripX)*.58,(prop.p[i+1]-gripY)*scaleY,prop.p[i+2]*.53);
+   const [wx,wy,wz]=wrist((prop.p[i]-gripX)*scaleX,(prop.p[i+1]-gripY)*scaleY,prop.p[i+2]*scaleZ);
    const [px,pz]=rot2(gx+wx,gz+wz,r);
-   const [nx,ny,nz]=wrist(prop.n[i]/.58,prop.n[i+1]/scaleY,prop.n[i+2]/.53);
+   const [nx,ny,nz]=wrist(prop.n[i]/scaleX,prop.n[i+1]/scaleY,prop.n[i+2]/scaleZ);
    const [dx,dz]=rot2(nx,nz,r),n=Math.hypot(dx,ny,dz)||1;
    m.p.push(x+px,y+gy+wy,z+pz);
    m.n.push(dx/n,ny/n,dz/n);m.c.push(prop.c[i],prop.c[i+1],prop.c[i+2]);
@@ -12848,7 +13125,7 @@ function poiWalkAvatar(now=performance.now()){
  const kit=typeof poiArmorWorn==='function'&&typeof poiHotbarHasKit==='function'&&poiHotbarHasKit()?poiHotbarRead():null;
  const held=ms>=0&&ms<poseMs&&poiWalkActionWeapon!==undefined?(poiWalkActionWeapon==='fireWand'?null:poiWalkActionWeapon):
   kit?kit.weapon:typeof poiEquippedWeapon==='function'?poiEquippedWeapon():null;
- const weapon=EQUIPMENT_IDS.includes(held)?held:null;
+ const weapon=(EQUIPMENT_IDS.includes(held)||!!poiRoleToolGripStyle(held))?held:null;
  const pose=profile&&ms<poseMs?poiPlayerProfilePose(poiWalkActionWeapon,ms):weapon?poiWalkSwordPose(ms):poiWalkPunchPose(ms);
  const t=Math.max(0,Math.min(1,(now-poiWalkStarted)/(typeof poiWalkStepMs==='number'?poiWalkStepMs:POI_WALK_MS)));
  const x=poiWalkViewX+.5;

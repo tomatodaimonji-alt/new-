@@ -13,9 +13,14 @@ function harness(){
 }
 test('three additional daytime people each reach the city via the appropriate real gate without using any existing inn bed',()=>{
  const {run}=harness(),days=run("POI_TOWN_RESIDENT_ROLES.filter(r=>r.role==='visitor')");
- assert.equal(days.length,3);
+ assert.equal(days.length,4);
+ const cook=days.find(p=>p.id==='towncook');
+ assert(cook&&!cook.bed&&cook.home.z>cook.work.z);
+ assert(cook.arrives<8*60&&cook.leaves>18*60);
+ assert(run(`poiTownFindPath(${JSON.stringify(cook.home)},${JSON.stringify(cook.work)})`)?.length,'cook has no commute');
+ assert(run(`poiTownFindPath(${JSON.stringify(cook.work)},${JSON.stringify(cook.public)})`)?.length,'cook has no public route');
  const gates={westpeddler:[23,49],northtraveler:[34,22],canalcourier:[84,67]};
- for(const p of days){
+ for(const p of days.filter(p=>p!==cook)){
   assert(!p.bed);
   assert(p.arrives<p.leaves&&p.arrives>=8*60&&p.leaves<18*60);
   const route=run(`poiTownFindPath(${JSON.stringify(p.home)},${JSON.stringify(p.work)})`);

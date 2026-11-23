@@ -199,7 +199,7 @@ async function verifyThreat(browser){
   assert.equal(dragon?.hp,150,'the authored elite is a real 150HP enemy, not a scenery actor');
   await page.waitForFunction(()=>window.__editorTest.facility().combat.threats.some(t=>t.type==='monsterDragon'&&t.x===101&&t.z===80&&t.y===-1));
   await page.waitForFunction(h=>window.__editorTest.facility().combat.playerHP<h,before);
-  assert.equal((await state(page)).combat.playerHP,before-22,'the standing player takes the real elite strike');
+  assert.equal((await state(page)).combat.playerHP,before-(22-2),'the standing player takes the real elite strike less 2 defense from starting cloth shorts');
   assert.equal(await openAt(page,100,76),false,'deep reward gate is solid until elite defeat');
   assert.equal((await readStock(page)).otherworldCleared,undefined);
   // Complete the real fight with the starting wooden sword. The boost is only
@@ -215,7 +215,7 @@ async function verifyThreat(browser){
     // This is ★4: use normal carried food through the real shortcut instead
     // of deliberately face-tanking the elite and both approaching guards.
     const live=await state(page);
-    if(live.combat.playerHP<=78){
+    if(live.combat.playerHP<=80){
      assert(live.inventory.hotbar[2]?.type==='cannedFood','a legal canned food is available');
      await page.keyboard.press('3');
     }

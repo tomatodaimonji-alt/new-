@@ -18,7 +18,9 @@ function setup(){
   world:[{...point(1,2),type:'bed'},{...point(1,5),type:'bed'},{...point(4,2,1),type:'bed'},
    {...point(3,3),type:'guildStairUp'},{...point(3,3,1),type:'guildStairDown'},
    {...point(4,3,1),type:'woodfloor'}]};
- vm.createContext(x);vm.runInContext(html.slice(a,b),x);
+ const gear=html.indexOf('const POI_TOWN_NPC_BASE_GEAR='),inn=html.indexOf('const POI_TOWN_INN=',gear);
+ assert(gear>=0&&inn>gear,'missing resident loadout');
+ vm.createContext(x);vm.runInContext(html.slice(gear,inn)+html.slice(a,b),x);
  return x;
 }
 test('paired stairs are entered and left as grid edges, with missing stair and blocked beds rejected',()=>{
