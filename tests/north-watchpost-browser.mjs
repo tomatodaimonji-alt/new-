@@ -135,7 +135,7 @@ async function mainRoad(browser){
   assert.deepEqual(await coords(page),pos(85,2));
   assert.equal(old.quests,undefined);
   for(const [x,z] of roads)await line(page,x,z);
-  await waitMap(page,'水辺の道','★☆☆☆☆');
+  await waitMap(page,'水辺の道','★☆☆☆☆☆☆☆☆☆');
   const s=await state(page);
   assert.notEqual(s.miniMap.location,'森の見張り場','main branch does not cross optional guard sector');
   assert.equal(s.combat.playerHP,100);
@@ -180,7 +180,7 @@ async function watchpost(browser){
   await page.locator('#poiMessageLog').filter({hasText:/東へ.*水辺の道.*南へ.*森の見張り場/}).waitFor({state:'visible'});
   assert.deepEqual(await readStock(page),old,'reading the fork waymarker is optional and read-only');
   await line(page,101,5);await line(page,101,10);
-  await waitMap(page,'外','★☆☆☆☆');
+  await waitMap(page,'外','★☆☆☆☆☆☆☆☆☆');
   if(await openAt(page,101,11))await line(page,101,11);
   await defeat(page);
   await page.waitForFunction(()=>JSON.parse(localStorage.getItem('world-workshop-hotbar-v1'))?.northWatchPostGuardLoot===true);

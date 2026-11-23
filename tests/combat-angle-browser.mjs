@@ -18,6 +18,7 @@ const fixture=raw.replace(npcAction,npcAction+`
     projectile:poiPlayerWeaponVisual?.type,charge:poiInventorySlots(poiHotbarRead())[2]?.charges,npcConfirmed:!!window.__qaNpcConfirmed}),
    npcGate:on=>{window.__qaNpcInteracting=on},
    seed:(mode)=>{
+    if(!window.__qaCombatLaneReady){poiMonsterStates.clear();poiCombatLockReset();window.__qaCombatLaneReady=true}
     if(window.__qaEnemy)poiMonsterStates.delete(window.__qaEnemy);
     poiAimLockAt=0;
     const now=performance.now(),x=poiWalkX,z=poiWalkZ,y=poiWalkLevel;
@@ -63,7 +64,8 @@ try{
  const seed=mode=>page.evaluate(mode=>window.__editorTest.combatQA.seed(mode),mode);
  const rangedAngle=await seed('far');assert(Number.isFinite(rangedAngle),'real world angled lane');
  assert.equal((await status()).charge,2);
- assert.equal((await status()).lock,false,'sword cannot lock outside true range');
+ await page.waitForFunction(()=>window.__editorTest.combatQA.status().lock);
+ assert.equal((await status()).hp,100,'wide encounter lock does not attack or change charge');
  const meleeAngle=await seed('melee');
  await page.waitForFunction(()=>window.__editorTest.combatQA.status().lock);
  assert.equal((await status()).hp,100,'lock never attacks on its own');
@@ -98,5 +100,5 @@ try{
  await page.waitForFunction(()=>window.__editorTest.combatQA.status().hp===66);
  assert.equal((await status()).charge,1);
  assert.deepEqual(errors,[]);
- console.log('PASS 360° melee, exact weapon range/LOS lock, transient wand arm and charged angular cast');
+ console.log('PASS 360° melee, encounter lock, clear line of sight, transient wand arm and charged angular cast');
 }finally{await browser?.close();await new Promise(r=>server.close(r))}

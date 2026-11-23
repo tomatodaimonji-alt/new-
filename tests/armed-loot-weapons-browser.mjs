@@ -1,3 +1,4 @@
+import {stableRegionalCombat} from './outdoor-regional-combat-fixture.mjs';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {createRequire} from 'node:module';
@@ -9,7 +10,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_PACKAGE??'playwright');
 const html=readFileSync(process.argv[2]??'world-editor.html','utf8');
 const observe='function poiEquipmentDurabilityMax(type){';
 assert.equal(html.split(observe).length,2);
-const candidate=html.replace(observe,`window.__qaEquipmentMaximum=type=>poiEquipmentDurabilityMax(type);
+const candidate=stableRegionalCombat(html,'monsterSkelArcher').replace(observe,`window.__qaEquipmentMaximum=type=>poiEquipmentDurabilityMax(type);
 function poiEquipmentDurabilityMax(type){`);
 const server=createServer((req,res)=>{
  res.setHeader('Content-Type','text/html; charset=utf-8');
@@ -217,12 +218,14 @@ async function openBagEquip(page){
  await page.locator('#poiBagClose').tap();
 }
 async function fireRange(browser,mode){
- const where=mode==='bow'?{x:56,z:39}:{x:105,z:81};
+ const where=mode==='bow'?{x:56,z:39}:{x:105,z:83};
  const {ctx,page,errors}=await launch(browser,'base',where,{level:0,width:390,clockStart:morning,kit:rangeKit(mode),facing:2});
  try{
   const original=await getMap(page);
-  if(mode==='bow'){await openBagEquip(page);await relocate(page,105,81,0,2)}
-  const foe='monsterSkelArcher',a=await target(page,foe),p=(await state(page)).position;
+  if(mode==='bow'){await openBagEquip(page);await relocate(page,105,83,0,2)}
+  const foe='monsterSkelArcher';
+  await page.waitForFunction(type=>window.__editorTest.facility().combat.actors.some(t=>t.type===type),foe);
+  const a=await target(page,foe),p=(await state(page)).position;
   assert(a?.level===0&&a.x===p.x&&a.z-p.z===5,'actual target is aligned beyond melee range');
   const expected=a.hp-(mode==='bow'?22:34);
   if(mode==='wand'){

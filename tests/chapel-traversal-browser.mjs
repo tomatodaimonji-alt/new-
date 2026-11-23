@@ -120,7 +120,7 @@ async function chapel(browser){
   await single(page,'n',at(78,88,-1));
   let s=await state(page);
   assert.equal(s.miniMap.location,'水没した礼拝堂');
-  assert.equal(s.miniMap.stars,'★★★☆☆');
+  assert.equal(s.miniMap.stars,'★★★☆☆☆☆☆☆☆');
   assert.equal(s.sceneLayer,'cellar');
   assert.equal(s.combat.threats.length,0,'chapel entrance is safely outside combat');
   assert.equal(s.dungeonEntranceSerial,1);

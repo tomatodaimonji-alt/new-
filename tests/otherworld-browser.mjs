@@ -117,7 +117,7 @@ async function assertPlanet(page){
  const s=await state(page);
  assert.equal(s.sceneLayer,'cellar');
  assert.equal(s.miniMap.location,'星蝕の回廊');
- assert.equal(s.miniMap.stars,'★★★★☆');
+ assert.equal(s.miniMap.stars,'★★★★☆☆☆☆☆☆');
  assert.equal(s.position.level,-1);
  assert.equal(await page.locator('#poiLocationName').textContent(),'星蝕の回廊');
 }

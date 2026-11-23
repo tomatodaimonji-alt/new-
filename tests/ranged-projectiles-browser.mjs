@@ -1,3 +1,4 @@
+import {stableRegionalCombat} from './outdoor-regional-combat-fixture.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {mkdir} from 'node:fs/promises';
@@ -11,14 +12,14 @@ assert(begin>=0&&end>begin);
 const site=JSON.parse(JSON.stringify(vm.runInNewContext(html.slice(begin,end)+";buildFacilitySite('base')")));
 const bow='equipWoodBow',wand='fireWand';
 const cases=[
- {name:'bow-south-hit',type:bow,x:105,z:81,y:0,facing:2,toX:105,toZ:86,range:5,damage:22,target:'monsterSkelArcher'},
+ {name:'bow-south-hit',type:bow,x:105,z:83,y:0,facing:2,toX:105,toZ:88,range:5,damage:22,target:'monsterSkelArcher'},
  {name:'bow-west-miss',type:bow,x:110,z:70,y:0,facing:3,toX:105,toZ:70,range:5,damage:0},
- {name:'flame-east-hit',type:wand,x:97,z:86,y:0,facing:1,toX:105,toZ:86,range:8,damage:34,target:'monsterSkelArcher'}
+ {name:'flame-east-hit',type:wand,x:97,z:88,y:0,facing:1,toX:105,toZ:88,range:8,damage:34,target:'monsterSkelArcher'}
 ];
 assert.match(html,/fireWand:\{range:8,/, 'v200 flame range is eight actual cells, not v199 range five');
 for(const c of cases){
  const tiles=site.map.world.filter(t=>t.x===c.toX&&t.z===c.toZ&&t.y===c.y);
- if(c.target)assert(tiles.some(t=>t.type===c.target),c.name+' authored target exists at exact range');
+ if(c.target)assert(site.armedEncounters.some(t=>t.type===c.target&&t.y===c.y&&Math.hypot(t.x-c.toX,t.z-c.toZ)===2),c.name+' fixture birth is local but distinct from authored loot anchor');
  assert(!tiles.some(t=>/wall|tree|gate/i.test(t.type)),c.name+' unobstructed authored endpoint');
 }
 if(process.env.RANGED_LAYOUT_ONLY==='1'){
@@ -29,7 +30,7 @@ if(process.env.RANGED_LAYOUT_ONLY==='1'){
 // Expose the production mesh sampler on this disposable HTTP fixture only.
 const hook='  playerWeapon:()=>';
 assert(html.includes(hook)&&html.includes('function poiPlayerProjectileSample('),'integrated renderer must expose a common actual projectile sampler');
-const observedHtml=html.replace(hook,`  rangedProjection:()=>poiPlayerWeaponVisual?poiPlayerProjectileSample(poiPlayerWeaponVisual,performance.now()):null,
+const observedHtml=stableRegionalCombat(html,'monsterSkelArcher').replace(hook,`  rangedProjection:()=>poiPlayerWeaponVisual?poiPlayerProjectileSample(poiPlayerWeaponVisual,performance.now()):null,
 ${hook}`);
 const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
 const server=createServer((req,res)=>{
@@ -75,6 +76,7 @@ async function trail(browser,c){
  const {ctx,page,errors}=await launch(browser,c);
  try{
   const original=await map(page),url=page.url();
+  if(c.target)await page.waitForFunction(type=>window.__editorTest.facility().combat.actors.some(t=>t.type===type),c.target);
   const target=(await state(page)).combat.actors.find(t=>t.type===c.target&&t.level===c.y);
   if(c.target){
    assert(target?.hp>c.damage);

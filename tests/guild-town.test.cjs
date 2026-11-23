@@ -69,8 +69,8 @@ test('roof and named safe area are scoped to the destination guild',()=>{
  const region=html.match(/const POI_SAFE_TOWN=[\s\S]*?(?=const poiMiniStatic=)/)[0];
  const f=vm.runInNewContext(region+';poiRegionAt');
  const base={id:'base',buildings:site.buildings};
- assert.deepEqual(norm(f(base,34,15)),{name:'冒険者ギルド',difficulty:0,stars:'☆☆☆☆☆'});
- assert.deepEqual(norm(f(base,53,17)),{name:'拠点',difficulty:0,stars:'☆☆☆☆☆'});
+ assert.deepEqual(norm(f(base,34,15)),{name:'冒険者ギルド',difficulty:0,stars:'☆☆☆☆☆☆☆☆☆☆'});
+ assert.deepEqual(norm(f(base,53,17)),{name:'拠点',difficulty:0,stars:'☆☆☆☆☆☆☆☆☆☆'});
  assert.equal(f(base,19,46).name,'拠点');assert.equal(f(base,19,47).name,'外');
  assert.equal(f(base,79,16).name,'外');assert.equal(f(base,78,46).name,'外');assert.equal(f(base,86,36).name,'外');
  const cut=html.match(/function pineGuildRenewalCutOwner\([\s\S]*?(?=function facilityRoofOwner\()/)[0];

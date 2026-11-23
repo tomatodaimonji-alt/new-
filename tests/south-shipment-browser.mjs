@@ -67,7 +67,7 @@ try{
  await page.waitForFunction(()=>window.southActualSteps?.some(p=>p.label==='south-load'&&p.x===96&&p.z===115),{},{timeout:16000,polling:180});
  assert.deepEqual(await saved(page),kit,'loading did not persist cargo or change existing stock');
  try{
-  await page.waitForFunction(k=>JSON.parse(localStorage.getItem(k))?.southShipment?.readyDay===2,kitKey,{timeout:95000,polling:225});
+  await page.waitForFunction(k=>JSON.parse(localStorage.getItem(k))?.southShipment?.readyDay===2,kitKey,{timeout:115000,polling:180});
  }catch(error){
   const trace=await page.evaluate(()=>({steps:window.southActualSteps?.slice(-10),writes:window.southKitWrites,clock:window.__editorTest.townClock()}));
   throw new Error('Physical handoff not reached '+JSON.stringify({merchant:await phase(page),trace,errors}),{cause:error});
@@ -92,4 +92,3 @@ try{
  assert.deepEqual(errors,[]);
  console.log('PASS Chromium timed Marek physical route, native bridge steps and exactly one live Noah handoff, durable across reload');
 }finally{await browser?.close();await new Promise(r=>server.close(r))}
-

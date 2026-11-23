@@ -15,15 +15,16 @@ test('a clear squash, directed contact pose, and settled recovery leave grid coo
  assert.equal(windup.phase,'lunge');assert.ok(windup.squash<.7);
  assert.equal(contact.phase,'contact');assert.ok(contact.dx>.5&&contact.dz===0&&contact.lift>.15);
  assert.equal(land.phase,'land');assert.ok(land.dx<.1);
- assert.equal(c.poiSlimeAttackPose(mob,770),null);
- assert.deepEqual([mob.x,mob.z,mob.nextAttack],[4,5,1250]);
+ assert.equal(c.poiSlimeAttackPose(mob,770).phase,'recover-rest');
+ assert.equal(c.poiSlimeAttackPose(mob,1060),null);
+ assert.deepEqual([mob.x,mob.z,mob.nextAttack],[4,5,2080]);
 });
 test('only the actual contact hits and only once; dodging and death clear pending hits',()=>{
  const {c,mob,obj,hits}=setup();c.poiEnemyBeginPlayer(obj,mob,100);
  c.poiEnemyResolvePlayer(579);assert.deepEqual(hits,[]);
  c.poiEnemyResolvePlayer(580);c.poiEnemyResolvePlayer(610);assert.deepEqual(hits,[580]);
- c.poiEnemyBeginPlayer(obj,mob,1250);c.poiWalkZ=6;c.poiEnemyResolvePlayer(1730);assert.deepEqual(hits,[580]);
- c.poiWalkZ=5;c.poiEnemyBeginPlayer(obj,mob,2400);mob.hp=0;c.poiEnemyResolvePlayer(2880);assert.deepEqual(hits,[580]);
+ assert(c.poiEnemyBeginPlayer(obj,mob,2080));c.poiWalkZ=6;c.poiEnemyResolvePlayer(2560);assert.deepEqual(hits,[580]);
+ c.poiWalkZ=5;assert(c.poiEnemyBeginPlayer(obj,mob,4060));mob.hp=0;c.poiEnemyResolvePlayer(4540);assert.deepEqual(hits,[580]);
 });
 test('NPC counter uses the same contact pose toward its saved target and does not create a player strike',()=>{
  const {c,mob,hits}=setup();
@@ -47,6 +48,7 @@ test('slow frames pin the displayed peak to the actual contact, not a later land
  c.poiEnemyResolvePlayer(721);assert.deepEqual(hits,[721]);
  assert.equal(c.poiSlimeAttackPose(mob,721).phase,'contact');
  assert.equal(c.poiSlimeAttackPose(mob,721).elapsed,170);
- assert.equal(c.poiSlimeAttackPose(mob,911),null);
- assert.equal(mob.nextAttack,1250,'cooldown remains scheduled from initiation');
+ assert.equal(c.poiSlimeAttackPose(mob,911).phase,'recover-rest');
+ assert.equal(mob.nextAttack,2221,'recovery begins from actual resolution');
 });
+

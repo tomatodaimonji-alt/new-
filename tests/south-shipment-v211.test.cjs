@@ -75,7 +75,7 @@ test('actual movement walks tiles to yard through both bridge decks, enqueues on
  Object.assign(c,{MAP_W:m.width,MAP_H:m.height,facilityCreekIndex:null,terrainHeights:new Map(),bridgeSpanElevation:()=>0,
   isFloor:t=>/^(?:grass|earth|road|stone$|brickfloor|woodfloor|water|river)/.test(t),isWallId:t=>/wall/i.test(t),
   poiWalkPassableDoor:t=>/(?:Door|DoorOpen|Entrance)$/.test(t),mover,clerk,noah,poiWalkActive:true,pineAIActive:false,poiAudioAllowed:()=>true});
- vm.runInContext(slice('const terrainKey=','function shiftMesh(')+slice('function terrainPassable(','function waterfallFace(')+slice('const STAIR_DIRECTIONS=','function elevationStairGeometry(')+slice('function facilityRefreshCreek(','function poiCreekPlayerHeight(')+slice('const POI_TOWN_WALK_DECOR=','function poiTownNpcExistsBed(')+slice('function poiTownNpcMove(','function poiTownNpcReleaseHunt(')+';poiTownNpcActors=[noah,clerk,mover];',c);
+ vm.runInContext(slice('const terrainKey=','function shiftMesh(')+slice('function terrainPassable(','function waterfallFace(')+slice('const STAIR_DIRECTIONS=','function elevationStairGeometry(')+slice('function facilityRefreshCreek(','function poiCreekPlayerHeight(')+slice('const POI_TOWN_WALK_DECOR=','function poiTownNpcExistsBed(')+slice('function poiTownNpcPlayerBlocksStep(','function poiTownNpcReleaseHunt(')+';poiTownNpcActors=[noah,clerk,mover];',c);
  c.facilityRefreshCreek();
  let prev={x:mover.x,z:mover.z},handedAt=null;
  const crossed=new Set();

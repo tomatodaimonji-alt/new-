@@ -9,12 +9,12 @@ const run=(scope={})=>{
 test('explicit town coverage does not grant zero-risk rating to the similarly named outside routes',()=>{
  const {poiRegionAt:region}=run(),base={id:'base',name:'ゲーム世界'};
  for(const [x,z] of [[19,21],[19,46],[60,45],[47,15],[10,41],[37,41],[27,16]])
-  assert.deepEqual({...region(base,x,z)},{name:'拠点',difficulty:0,stars:'☆☆☆☆☆'});
+  assert.deepEqual({...region(base,x,z)},{name:'拠点',difficulty:0,stars:'☆☆☆☆☆☆☆☆☆☆'});
  for(const [x,z] of [[63,45],[19,47],[67,38],[0,0],[86,39]])
-  assert.deepEqual({...region(base,x,z)},{name:'外',difficulty:1,stars:'★☆☆☆☆'});
- assert.deepEqual({...region({id:'stable',name:'厩舎'},15,35)},{name:'厩舎',difficulty:0,stars:'☆☆☆☆☆'});
- assert.equal(region({id:'future',name:'未踏の地',difficulty:8},1,1).stars,'★★★★★');
- assert.equal(region({id:'future',name:'未踏の地',difficulty:-2},1,1).stars,'☆☆☆☆☆');
+  assert.deepEqual({...region(base,x,z)},{name:'外',difficulty:1,stars:'★☆☆☆☆☆☆☆☆☆'});
+ assert.deepEqual({...region({id:'stable',name:'厩舎'},15,35)},{name:'厩舎',difficulty:0,stars:'☆☆☆☆☆☆☆☆☆☆'});
+ assert.equal(region({id:'future',name:'未踏の地',difficulty:8},1,1).stars,'★★★★★☆☆☆☆☆');
+ assert.equal(region({id:'future',name:'未踏の地',difficulty:-2},1,1).stars,'☆☆☆☆☆☆☆☆☆☆');
  assert.equal(region(null,20,20,true).name,'旧・冒険マップ');
 });
 test('mini map follows the active floor and hides for editor/AI while reusing static map on movement/turns',()=>{

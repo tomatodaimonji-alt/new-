@@ -109,7 +109,7 @@ async function realm(page){
  await page.waitForFunction(()=>window.__editorTest.facility().musicZone==='chapel',null,{timeout:9000});
  const s=await api(page);
  assert.equal(s.miniMap.location,'水没した礼拝堂');
- assert.equal(s.miniMap.stars,'★★★☆☆');
+ assert.equal(s.miniMap.stars,'★★★☆☆☆☆☆☆☆');
  assert.equal(s.sceneLayer,'cellar');
  const shown=s.combat.actors.filter(a=>a.visible&&a.hp>0).map(a=>a.type);
  assert(!shown.includes('monsterMineGuard')&&!shown.includes('monsterDragon'),'no floating actors from mine or Star Corridor');

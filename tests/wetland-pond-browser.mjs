@@ -109,7 +109,7 @@ async function road(browser){
    await singleStep(page,x,z);await calm(page);
    assert.equal((await state(page)).combat.threats.filter(t=>t.type===monster).length,0,'pond guard must not threaten the road at '+[x,z]);
   }
-  await expectHud(page,'柳の道','★☆☆☆☆');
+  await expectHud(page,'柳の道','★☆☆☆☆☆☆☆☆☆');
   assert.equal((await state(page)).combat.playerHP,100);
   assert.equal(page.url(),url);
   assert.equal(await stock(page),raw);
@@ -145,13 +145,13 @@ async function bank(browser){
   assert.equal(after.combat.playerHP,cue.hp,'actual dodge leaves committed tile without taking damage from the observed warning');
   assert(monsterAt(after)?.hp<monsterAt(before).hp,'native facing and action make one weapon hit across the wet edge');
   assert.equal(after.walk.stepMs,175);
-  await expectHud(page,'外','★☆☆☆☆');
+  await expectHud(page,'外','★☆☆☆☆☆☆☆☆☆');
   if(out)await page.screenshot({path:out+'/v198-dry-dodge-bank.png'});
   // Exit via the physically traversable north branch.
   for(const [x,z] of [[119,27],[119,26],[120,26],[121,26]]){
    await calm(page);await singleStep(page,x,z);
   }
-  await expectHud(page,'柳の道','★☆☆☆☆');
+  await expectHud(page,'柳の道','★☆☆☆☆☆☆☆☆☆');
   assert.equal(page.url(),url);
   assert.equal(JSON.parse(await stock(page)).quests,JSON.parse(raw).quests);
   await exactProtection(page,original);assert.deepEqual(errors,[]);

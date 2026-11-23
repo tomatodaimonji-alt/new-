@@ -9,6 +9,7 @@ assert.equal(html.split(hook).length,2,'unique test-only API anchor');
 const fixture=html.replace(hook,hook+`
   swordSweepQA:{
    seed:(withWall)=>{
+    if(!window.__qaSwordLaneReady){poiMonsterStates.clear();poiCombatLockReset();window.__qaSwordLaneReady=true}
     for(const p of window.__qaSwordTargets||[])poiMonsterStates.delete(p.obj);
     if(window.__qaSwordWall)world=world.filter(o=>o!==window.__qaSwordWall);
     const x=poiWalkX,z=poiWalkZ,y=poiWalkLevel,now=performance.now();
