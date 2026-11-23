@@ -52,16 +52,19 @@ try{
  const empty=npc.locator('[data-npc-bag-slot="1"]');
  await empty.tap();
  assert.equal(await dialog.evaluate(d=>d.open),false,'empty space does not open details');
- for(const [selector,name,stats,key] of [
-  ['[data-npc-item="equipLadle"]','おたま',/攻撃力：.+耐久：100%/],
-  ['[data-npc-equipment="equipFryingPan"]','フライパン',/攻撃力：.+耐久：100%/,'Enter'],
-  ['[data-npc-equipment="armorCookApron"]','料理人の服',/防御力：.+耐久：100%/]
+ for(const [selector,name,description,damage,key] of [
+  ['[data-npc-item="equipLadle"]','おたま',/耐久：100%/,17],
+  ['[data-npc-equipment="equipFryingPan"]','フライパン',/耐久：100%/,26,'Enter'],
+  ['[data-npc-equipment="armorCookApron"]','料理人の服',/防御力：.+耐久：100%/,null]
  ]){
   const slot=npc.locator(selector);
   if(key){await slot.focus();await page.keyboard.press(key)}else await slot.tap();
   assert.equal(await dialog.evaluate(d=>d.open),true,name+' opens from NPC inventory');
   assert.equal(await dialog.locator('h2').textContent(),name);
-  assert.match(await dialog.locator('#poiItemDetailDescription').textContent(),stats);
+  assert.match(await dialog.locator('#poiItemDetailDescription').textContent(),description);
+  const stats=dialog.locator('#poiItemDetailWeaponStats');
+  assert.equal(await stats.isVisible(),damage!==null);
+  if(damage!==null)assert.equal(await stats.locator('#poiItemDetailAttack').textContent(),String(damage));
   assert.deepEqual(await dialog.locator('button:visible').allTextContents(),['戻る'],'NPC items cannot be used or moved');
   assert(await dialog.locator('#poiItemDetailIcon canvas').isVisible());
   if(out)await page.screenshot({path:out+'/v213-'+name+'.png'});

@@ -14,13 +14,16 @@ let fixture=replace(html,hook,hook+`
     state.hp=80;state.townOwned=true;poiMonsterStates.set(obj,state);poiMonsterMeshDirty=true;
     window.__flashProbe={obj,state};window.__flashDraws=[];
    },
-   hurt:()=>poiMobHitPlayer(window.__flashProbe.obj,performance.now()),
+   hurt:()=>{window.__flashHurtOnDraw=true},
    status:()=>({player:poiPlayerHP,enemy:window.__flashProbe?.state.hp,draws:window.__flashDraws||[],now:performance.now()})
   },`);
 fixture=replace(fixture,'function poiDrawHitFlashSpan(mesh,vp,first,count,amount){',`function poiDrawHitFlashSpan(mesh,vp,first,count,amount){
  if(window.__flashDraws&&amount>0&&window.__flashDraws.length<240)
   window.__flashDraws.push({kind:mesh===poiWalkMesh?'player':'monster',amount,first,count,now:performance.now()});`);
+fixture=replace(fixture,'function poiDrawWalkAvatar(vp,now=performance.now()){',`function poiDrawWalkAvatar(vp,now=performance.now()){
+ if(window.__flashHurtOnDraw){window.__flashHurtOnDraw=false;poiMobHitPlayer(window.__flashProbe.obj,now);}`);
 fixture=replace(fixture,' const p=poiWildPick(rng);',' const p=null;');
+fixture=replace(fixture," if(typeof poiWildRegionalFrame==='function')poiWildRegionalFrame(now,rng);"," if(!window.__flashProbe&&typeof poiWildRegionalFrame==='function')poiWildRegionalFrame(now,rng);");
 const server=createServer((req,res)=>{
  res.setHeader('Content-Type','text/html; charset=utf-8');
  res.end(req.url==='/seed'?'<!doctype html><title>Hit flash QA</title>':fixture);
@@ -43,6 +46,7 @@ try{
  });
  await page.goto(base+'/?resume=1&test=1');
  await page.waitForFunction(()=>window.__editorTest?.facility()?.active&&window.pineStartup&&!pineStartup.loading);
+ await page.waitForFunction(()=>document.querySelector('#pineStartupCover')?.hidden);
  await page.evaluate(()=>window.__editorTest.hitFlashQA.seed());
  const state=()=>page.evaluate(()=>window.__editorTest.hitFlashQA.status());
  const prior=await state();assert.equal(prior.draws.length,0);

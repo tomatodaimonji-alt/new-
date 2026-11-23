@@ -32,11 +32,11 @@ function setup(weapon,{dx=1,dz=0,analog=false}={}){
  const yaw=()=>vm.runInContext('poiAimAttack?.heading',c);
  return {c,contacts,target,attack,yaw,begin:()=>c.poiWalkAction(),frame:at=>{now=at;c.poiPlayerWeaponFrame(at)}};
 }
-for(const weapon of ['equipWoodSword','equipBoneSword','equipIronSword']){
- test(weapon+' hits both 1.5-tile sides in one action, without increasing reach, damage or wear',()=>{
+for(const [weapon,forward] of [['equipWoodSword',1.3],['equipBoneSword',1.55],['equipIronSword',2]]){
+ test(weapon+' hits both 1.5-tile sides and designated exact reach in one action, without increasing damage or wear',()=>{
   const h=setup(weapon);
-  const center=h.target(.6),left=h.target(1.29,-1.49),right=h.target(.96,1.49),reach=h.target(1.30,.71);
-  const off=h.target(.96,1.51),far=h.target(1.31,-.71),rear=h.target(-.10,1.2),otherFloor=h.target(.85,-.8,1);
+  const center=h.target(.6),left=h.target(1.29,-1.49),right=h.target(.96,1.49),reach=h.target(forward,.71);
+  const off=h.target(.96,1.51),far=h.target(forward+.01,-.71),rear=h.target(-.10,1.2),otherFloor=h.target(.85,-.8,1);
   h.attack();
   const damage=h.c.poiPlayerAttackDamage(weapon);
   for(const s of [center,left,right,reach])assert.equal(s.hp,100-damage,'each center within sweep is damaged exactly once');
@@ -55,7 +55,7 @@ test('the same swing tests every target LOS separately, and retains unblocked fl
 });
 test('oblique continuous aim rotates the swing with the avatar rather than along either grid axis',()=>{
  const n=Math.hypot(2,1),dx=2/n,dz=1/n,h=setup('equipIronSword',{dx,dz,analog:true});
- const center=h.target(.57),flank=h.target(1.27,-1.41),outside=h.target(1.14,1.51);
+ const center=h.target(.57),flank=h.target(1.94,-1.41),outside=h.target(1.14,1.51);
  h.attack();
  assert(Math.abs(h.yaw()-Math.atan2(-dx,dz))<1e-6,'visual heading matches oblique combat');
  assert(center.hp<100);assert(flank.hp<100);assert.equal(outside.hp,100);

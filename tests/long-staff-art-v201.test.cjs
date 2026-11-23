@@ -17,9 +17,11 @@ test('held long-staff thrust points physically down the active facing at 210 ms'
  assert(c.poiBuildPlayerMesh('equipLongStaff',null,null,0,0).p[1]>1.40,'loftier visible idle staff');
 });
 test('native prop has visibly longer calibrated silhouette while combat constants remain unchanged',()=>{
- assert.match(html,/equipLongStaff:\{range:2,damage:20,hit:210,ready:510,pose:400\}/);
+ const runtime=vm.runInNewContext(cut('// BEGIN PLAYER WEAPON PROFILES','function poiPlayerWeaponCancel(')+';poiPlayerWeaponProfile("equipLongStaff")');
+ assert.deepEqual([runtime.range,runtime.damage,runtime.hit,runtime.ready,runtime.pose],[2,20,210,510,400]);
  const calls=[],c={cube:(_m,x,y,z,w,h,d)=>calls.push(y+h),naturalBranch:(_m,x,y,z,u,v,w)=>calls.push(Math.max(y,v))};
  vm.runInNewContext(cut('function poiFantasyEquipmentGeometry(','const POI_ARMED_MONSTER_ART='),c);
  c.poiFantasyEquipmentGeometry({},'equipLongStaff',0,0,0);
  assert(Math.max(...calls)>=2.16);
 });
+

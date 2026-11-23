@@ -41,13 +41,14 @@ const fixture=html.replace(routine,routine+`
     const x=poiWalkX+dx,z=poiWalkZ+dz;
     if(!poiWildExterior(x,z)||!poiWalkCanStep(x,z))continue;
     const obj={x,z,y:0,type:'monsterSlime',rot:0};
-    const state={x,z,fromX:x,fromZ:z,moveStarted:-10000,facing:0,hp:POI_MONSTER_STATS.monsterSlime.hp,nextAttack:performance.now()+1500,wildSpawn:true};
+    const state={x,z,fromX:x,fromZ:z,moveStarted:-10000,facing:0,hp:POI_MONSTER_STATS.monsterSlime.hp,nextAttack:Infinity,wildSpawn:true};
     if(!poiMonsterChaseFree(obj,{...state},performance.now(),null,null))continue;
     poiWildActors.add(obj);poiMonsterStates.set(obj,state);poiMonsterMeshDirty=true;
     return {x,z};
    }
    return null;
-  },`).replace(' const p=poiWildPick(rng);',' const p=null;');
+  },`).replace(' const p=poiWildPick(rng);',' const p=null;')
+ .replace(" if(typeof poiWildRegionalFrame==='function')poiWildRegionalFrame(now,rng);",' /* isolated route and seeded chase only */');
 const server=createServer((req,res)=>{
  res.setHeader('Content-Type','text/html; charset=utf-8');res.setHeader('Cache-Control','no-store');
  res.end(req.url==='/seed'?'<!doctype html><title>Fixture</title>':fixture);
