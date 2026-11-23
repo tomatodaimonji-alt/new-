@@ -61,7 +61,9 @@ test('maximum 27-cell stash reloads exactly; full ground pickup and full shop to
  assert.equal(s.potions,243);assert.equal(s.bag.slice(0,18).every(c=>c.count===9),true);assert.equal(s.bag.slice(18).every(c=>c===null),true);
  assert.equal(f.ctx.poiInventoryPickup(4,4),false);assert.equal(f.ctx.poiInventoryPickup(4,3),false);
  assert.equal(f.ctx.poiEconomyBuyPotion().reason,'full');assert.equal(f.writes(),0);assert.deepEqual(f.raw(),original);
- assert.equal(f.ctx.poiInventoryDrop(spot('bag',17)).reason,'full');assert.equal(f.writes(),0);
+ f.ctx.poiWalkCanStep=(x,z,fx,fz)=>x===4&&z===4&&fx===4&&fz===5;
+ assert.equal(f.ctx.poiInventoryDrop(spot('bag',17)).reason,'blocked');assert.equal(f.writes(),0);
+ assert.deepEqual(f.raw(),original);
 });
 test('malformed slot/drop duplication cannot produce a held sword and a ground sword',()=>{
  const sword={type:'equipWoodSword',count:1},ground={type:sword.type,x:4,z:4,y:0};

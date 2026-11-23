@@ -45,7 +45,7 @@ test('The two offline door cues have distinct textured chimes/slides, without cl
  assert.notDeepEqual(wood.slice(1440,2304),stone.slice(1440,2304));
  assert.notDeepEqual(wood,c.poiSurfaceFoleyPcm('wood',24000,1));
 });
-test('One door cue per actual threshold, matched to current floor including basements',()=>{
+test('One opening and one closing per real doorway passage, matched to current floor',()=>{
  const run=(type,doorY,playerY)=>{
   const result=[];
   const ctx=vm.createContext({
@@ -60,9 +60,9 @@ test('One door cue per actual threshold, matched to current floor including base
    between('function poiWalkStep(','function poiWalkAction(')+"poiWalkStep(1,0);poiWalkStep(1,0);",ctx);
   return result;
  };
- assert.deepEqual(run('stonewallDoor',0,0),['door','step']);
+ assert.deepEqual(run('stonewallDoor',0,0),['door-open','door-close','step']);
  assert.deepEqual(run('stonewallDoor',0,-1),['step','step']);
- assert.deepEqual(run('stonewallDoor',-1,-1),['door','step']);
+ assert.deepEqual(run('stonewallDoor',-1,-1),['door-open','door-close','step']);
  assert.deepEqual(run('woodwallDoorOpen',0,0),['step','step']);
 });
 

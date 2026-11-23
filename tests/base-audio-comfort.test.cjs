@@ -60,7 +60,7 @@ test('continuous wind/rustle are gone while the local creek, piano and mixer sta
  for(const a of [k,e])assert.deepEqual([a.wind(),a.rustle(),a.creek()],[undefined,undefined,undefined]);
  for(const a of [b,k,e]){
   assert.deepEqual(a.writes,[]);
-  assert.equal(a.nodes.find(n=>n.kind==='music').gain.value,.38*68/100);
+  assert.equal(a.nodes.find(n=>n.kind==='music').gain.value,.58*68/100);
   assert.equal(a.nodes.find(n=>n.kind==='ambience').gain.value,.39*68/100);
   assert.equal(a.nodes.find(n=>n.kind==='effects').gain.value,.90*90/100);
  }
@@ -69,11 +69,11 @@ test('continuous wind/rustle are gone while the local creek, piano and mixer sta
 });
 test('base footsteps and swings have warmer spectrum and rounded attacks; unrelated cues use the exact previous graph',()=>{
  const b=harness('base'),k=harness('kitchen');
- assert.deepEqual(b.fx('step'),[['filter',550,.29,22],['osc',100,.145,16]]);
+ assert.deepEqual(b.fx('step'),[['filter',490,.225,25],['osc',100,.12,20]]);
  assert.deepEqual(b.fx('attack'),[['filter',790,.41,28],['filter',1120,.18,26],['osc',145,.20,19]]);
- assert.deepEqual(k.fx('step'),[['filter',810,.4,8],['osc',117,.21,8]]);
+ assert.deepEqual(k.fx('step'),[['filter',670,.29,16],['osc',117,.16,14]]);
  assert.deepEqual(k.fx('attack'),[['filter',1250,.58,8],['filter',2100,.32,8],['osc',180,.26,8]]);
- for(const cue of ['door','hit','hurt'])assert.deepEqual(b.fx(cue),k.fx(cue),cue);
+ for(const cue of ['door-open','door-close','hit','hurt'])assert.deepEqual(b.fx(cue),k.fx(cue),cue);
  b.run('document.hidden=true;poiAudioStop(true)');
  assert.equal(b.run('poiAudioTransient.size'),0);
  assert.equal(b.run('poiCreekAudio===null'),true);
@@ -129,16 +129,36 @@ test('wood sound uses one cached dry impulse with a short tail',()=>{
 });
 test('indoor steps and material-aware door openings use short distinct cached effect buffers',()=>{
  const b=harness('base'),k=harness('kitchen');
- assert.deepEqual(b.fx('step','indoor'),[['buffer',104,.58,0]]);
- assert.deepEqual(b.fx('step','outdoor'),[['filter',550,.29,22],['osc',100,.145,16]]);
- assert.deepEqual(k.fx('step','indoor'),[['filter',810,.4,8],['osc',117,.21,8]]);
- assert.deepEqual(b.fx('door','wood'),[['buffer',202,.63,0]]);
- assert.deepEqual(b.fx('door','stone'),[['buffer',228,.63,0]]);
- b.run('poiAudioLevels.se=0');assert.deepEqual(b.fx('door','stone'),[]);assert.deepEqual(b.fx('step','indoor'),[]);
+ assert.deepEqual(b.fx('step','indoor'),[['buffer',104,.46,0]]);
+ assert.deepEqual(b.fx('step','outdoor'),[['filter',490,.225,25],['osc',100,.12,20]]);
+ assert.deepEqual(k.fx('step','indoor'),[['filter',670,.29,16],['osc',117,.16,14]]);
+ assert.deepEqual(b.fx('door-open','wood'),[['buffer',285,.64,0]]);
+ assert.deepEqual(b.fx('door-close','wood',true),[['buffer',164,.68,0,24]]);
+ assert.deepEqual(b.fx('door-open','stone'),[['buffer',310,.64,0]]);
+ assert.deepEqual(b.fx('door-close','stone',true),[['buffer',180,.68,0,24]]);
+ b.run('poiAudioLevels.se=0');assert.deepEqual(b.fx('door-open','stone'),[]);assert.deepEqual(b.fx('door-close','wood'),[]);assert.deepEqual(b.fx('step','indoor'),[]);
 });
 test('only a successful step onto a closed door tile plays the opening cue, using the rendered leaf',()=>{
  const a=html.indexOf('function poiWalkStep('),b=html.indexOf('function poiWalkAction(',a),step=html.slice(a,b);
  assert.match(step,/stairCell\.find\(\(\{type\}\)=>poiWalkPassableDoor\(type\)/);
- assert.match(step,/if\(door\)poiSound\('door',facilityHasDiningStoneLeaf\(door\)\?'stone':'wood'\)/);
+ assert.match(step,/material:door\.type==='ironwallDoor'\?'iron':facilityHasDiningStoneLeaf\(door\)\?'stone':'wood'/);
+ assert.match(step,/if\(after\)poiSound\('door-open',after\.material\)/);
+ assert.match(step,/poiSound\('door-close',before\.material\)/);
  assert.match(step,/else poiSound\('step',poiDungeonThemeAt\(facilitySite,poiWalkX,poiWalkZ,poiWalkLevel\)==='mine'\?'mine-step':\s*facilitySite\?\.id==='base'&&\(poiWalkLevel<0\|\|poiWalkIndoor\(\)\)\?'indoor':'outdoor'\)/);
+});
+
+test('saved percentages are preserved, BGM has headroom, and zero mutes each bus independently',()=>{
+ const a=harness('base'),gain=name=>a.nodes.find(n=>n.kind===name).gain.value;
+ a.run("poiAudioLevels={master:100,bgm:100,se:100};poiAudioApplyLevels()");
+ assert.equal(gain('master'),1);assert.equal(gain('music'),.58);assert.equal(gain('ambience'),.39);assert.equal(gain('effects'),.90);
+ a.run("poiAudioLevels.bgm=0;poiAudioApplyLevels()");
+ assert.equal(gain('music'),0);assert.equal(gain('ambience'),0);assert.equal(gain('effects'),.90);
+ a.run("poiAudioLevels.se=0;poiAudioLevels.bgm=68;poiAudioApplyLevels()");
+ assert.equal(gain('effects'),0);assert(gain('music')>.38*.68);
+ assert.deepEqual(a.writes,[]);
+});
+test('chapel footsteps retain the wet cues but take the edge off the splash',()=>{
+ const a=harness('base');
+ assert.deepEqual(a.fx('chapel-water-step',null,true),[['filter',1120,.073,11,0],['filter',560,.055,14,32]]);
+ assert.deepEqual(a.fx('skater-splash',null,true),[['filter',1760,.112,8,0],['filter',860,.07,14,26]]);
 });

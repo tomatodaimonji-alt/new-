@@ -14,9 +14,15 @@ window.__attackProbeSnapshot=()=>__attackProbe&&({hp:__attackProbe.state.hp,x:__
 document.addEventListener('pointerdown',e=>{
  if(!window.__events||e.pointerType!=='touch'||!e.target.closest('#poiWalkAction'))return;
  if(__attackProbe)poiMonsterStates.delete(__attackProbe.obj);
- const [dx,dz]=[[0,-1],[1,0],[0,1],[-1,0]][poiWalkFacing];
- const obj={type:'monsterSlime',x:poiWalkX+dx,z:poiWalkZ+dz,y:poiWalkLevel,rot:0};
+ const now=performance.now(),o=poiAimOrigin(now),reach=.76,pass=poiAimWall(o);
+ const dir=[o.dir,{x:-o.dir.z,z:o.dir.x},{x:o.dir.z,z:-o.dir.x},{x:-o.dir.x,z:-o.dir.z}]
+  .find(d=>poiAimWallLimit(o,d,reach,pass)>=reach);
+ if(!dir)throw new Error('physical contact fixture has no unobstructed melee trace');
+ const x=o.x+dir.x*reach,z=o.z+dir.z*reach;
+ const obj={type:'monsterSlime',x:poiFreeCell(x),z:poiFreeCell(z),y:poiWalkLevel,rot:0};
  const state=poiCombatActorMake(obj);state.hp=80;state.townOwned=true;
+ const cells=new Set([obj.x+','+obj.z]);
+ state.actorFree={fromX:x,fromZ:z,x,z,start:now-400,ms:380,cells,endCells:cells,heading:0};
  poiMonsterStates.set(obj,state);poiMonsterMeshDirty=true;__attackProbe={obj,state};
 },true);
 `+anchor);

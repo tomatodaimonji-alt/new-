@@ -97,7 +97,13 @@ async function trail(browser,c){
    };
    probe();
   });
-  if(c.type===bow)await page.locator('#poiWalkAction').tap();else await page.locator(bar).tap();
+  if(c.type===wand){
+   await page.locator(bar).tap();
+   const armed=await state(page);
+   assert.equal(armed.inventory.hotbar[1].charges,initial.inventory.hotbar[1].charges,'arming does not spend a charge');
+   assert.equal(await page.evaluate(()=>window.__editorTest.playerWeapon().pending),null,'arming launches no projectile');
+  }
+  await page.locator('#poiWalkAction').tap();
   await page.waitForFunction(({c,hp})=>{
    const s=window.__editorTest,view=s.playerWeapon();
    const seen=window.__rangedSamples.some(v=>v.visual?.type===c.type);
@@ -125,28 +131,35 @@ async function trail(browser,c){
   }
   assert.equal(first.travel,c.range*(c.type===bow?65:55),'visual stays in sync with native per-cell combat timing');
   assert.deepEqual([first.x,first.z,first.y,first.facing],[c.x,c.z,c.y,c.facing],c.name+' launches toward the actual attack facing');
-  const ranged=visible.find(v=>v.toX===c.toX&&v.toZ===c.toZ);
-  assert(ranged,c.name+' visual endpoint exactly matches the real cardinal hit/miss distance');
-  assert.equal(Math.abs(ranged.toX-ranged.x)+Math.abs(ranged.toZ-ranged.z),c.range);
-  assert(flight.every(f=>f.pending.cellMs===(c.type===bow?65:55)));
+  const ranged=visible.find(v=>Math.hypot(v.toX-c.toX,v.toZ-c.toZ)<1e-6);
+  assert(ranged,c.name+' unblocked launch trace retains the true cardinal range');
+  assert.equal(Math.hypot(ranged.toX-ranged.x,ranged.toZ-ranged.z),c.range);
+  const impact=visible.find(v=>v.impact!==undefined);
+  if(impact){
+   const bodyEntry=Math.hypot(impact.toX-impact.x,impact.toZ-impact.z);
+   if(c.target)assert(bodyEntry<=c.range+1e-6&&bodyEntry>=c.range-.35,c.name+' hit visually stops at swept body entry');
+   else assert(Math.abs(bodyEntry-c.range)<1e-6,c.name+' miss reaches maximum actual range');
+  }
+  assert(flight.every(f=>(f.pending.cellMs??f.pending.profile?.cellMs)===(c.type===bow?65:55)));
   const points=frames.filter(f=>f.visual?.type===c.type&&f.point!==null).map(f=>f.point);
   assert(points.length>=2,c.name+' actual render-path samples were observed during flight');
   const dx=Math.sign(c.toX-c.x),dz=Math.sign(c.toZ-c.z);
   const projected=points.map(p=>{
    assert.deepEqual([p.dx,p.dz],[dx,dz],c.name+' geometry orientation tracks real cardinal fire direction');
-   assert(Number.isFinite(p.y)&&p.progress>=0&&p.progress<=1);
+   assert(Number.isFinite(p.y));
+   if(p.progress!==undefined)assert(p.progress>=0&&p.progress<=1);
    assert(Math.abs(dx?p.z-(c.z+.5):p.x-(c.x+.5))<(c.type===bow ? .13 : .03),c.name+' rendered head stays within its bow-grip offset from the gameplay ray');
    return (p.x-c.x-.5)*dx+(p.z-c.z-.5)*dz;
   });
   assert(Math.max(...projected)-Math.min(...projected)>.9,c.name+' visibly advances more than a tile along its ray');
-  assert(projected.every(n=>n>0&&n<=c.range+.3),c.name+' rendered head never outruns the actual endpoint');
+  assert(projected.every(n=>n>=-1e-6&&n<=c.range+1e-6),c.name+' rendered head never outruns the actual endpoint');
   const after=await state(page);
   assert.deepEqual(after.position,initial.position,'attack never moves or teleports the player');
   assert.equal(after.inventory.hotbar[1].type,c.type);
   if(c.type===bow)assert.equal(after.inventory.hotbar[1].durability,c.target?23:24,'wood bow wears once on hit, not on a miss');
   else{
-   assert.equal(after.inventory.weapon,null,'fire wand casts without equipping');
-   assert.equal(after.inventory.hotbar[1].charges,4,'one successful activation consumes exactly one charge');
+   assert.equal(after.inventory.weapon,null,'wand arming does not overwrite the saved equipped-weapon field');
+   assert.equal(after.inventory.hotbar[1].charges,4,'one successful attack consumes exactly one charge');
   }
   const final=await stock(page);
   assert.equal(JSON.parse(final).gold,12);
@@ -169,3 +182,4 @@ try{
  for(const c of cases.filter(c=>!process.env.RANGED_CASE||process.env.RANGED_CASE===c.name))await trail(browser,c);
  console.log('PASS native portrait five-cell directional arrow hit/miss, eight-cell flame hit, and single saved charge');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
+

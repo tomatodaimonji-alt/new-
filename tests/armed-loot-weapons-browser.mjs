@@ -225,8 +225,12 @@ async function fireRange(browser,mode){
   const foe='monsterSkelArcher',a=await target(page,foe),p=(await state(page)).position;
   assert(a?.level===0&&a.x===p.x&&a.z-p.z===5,'actual target is aligned beyond melee range');
   const expected=a.hp-(mode==='bow'?22:34);
-  if(mode==='bow')await page.locator(actionButton).tap();
-  else await page.locator(bar(1)).tap();
+  if(mode==='wand'){
+   await page.locator(bar(1)).tap();
+   assert.equal((await inv(page)).hotbar[1].charges,5,'wand arming does not spend charges');
+   assert.equal(await page.evaluate(()=>window.__editorTest.playerWeapon().pending),null,'wand arming does not fire');
+  }
+  await page.locator(actionButton).tap();
   await page.waitForFunction(({kind,expected})=>window.__editorTest.facility().combat.actors.find(a=>a.type===kind)?.hp===expected,
    {kind:foe,expected},{timeout:5000}).catch(async err=>{
    const s=await state(page);
@@ -237,7 +241,7 @@ async function fireRange(browser,mode){
    assert.equal(i.weapon,bow);
    assert.equal(all(i,bow)[0].durability,23,'true ranged hit uses one point of bow condition');
   }else{
-   assert.equal(i.weapon,null,'casting does not equip the wand as a weapon');
+   assert.equal(i.weapon,null,'wand arming does not overwrite the saved equipped-weapon field');
    assert.deepEqual(i.hotbar[1],{type:wand,count:1,charges:4},'actual fire cast consumes exactly one charge');
   }
   const final=await readStock(page);
@@ -254,4 +258,5 @@ try{
  await loot(browser);await fireRange(browser,'bow');await fireRange(browser,'wand');
  console.log('PASS live armed enemy drop/pickup and persisted condition, native bow equip/ranged hit and charged fire wand');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
+
 

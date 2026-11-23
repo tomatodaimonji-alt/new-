@@ -43,7 +43,9 @@ function digest(mesh,signs){
  return {indexBytes:uploads.get(mesh.indices)?.byteLength??0,geometry:d.digest('hex'),walls:ranges('wallFade'),storeys:ranges('storeyFade'),signs:signHash.digest('hex')};
 }
 sandbox.measure=()=>[count,bufBytes,partialCount,partialBytes];sandbox.digest=digest;sandbox.flush=process.argv[3]==='edited';sandbox.finish=rows=>console.log(JSON.stringify(rows,null,2));
-sandbox.window=sandbox;sandbox.self=sandbox;sandbox.pineStartup={start:f=>f(),failed:false,loading:false};
+sandbox.window=sandbox;sandbox.self=sandbox;
+let boot;
+sandbox.pineStartup={start:f=>{boot=f()},checkpoint:async()=>{},failed:false,loading:false};
 const c=vm.createContext(sandbox);
 const bench=`(()=>{
  facilitySite={...buildFacilitySite('base'),id:'base'}; MAP_W=facilitySite.map.width;MAP_H=facilitySite.map.height;
@@ -60,12 +62,15 @@ const bench=`(()=>{
  }
  return rows;
 })()`;
-try{
+(async()=>{
  const anchor="const workshopResume=workshopResumeRead();",body=scripts.find(x=>x.includes(anchor));
  if(!body.includes(anchor))throw Error('missing harness injection');
  const legacy=process.argv[3]==='legacy',needle="function facilitySharedSurfaceAllowed(cut){";
  if(legacy&&!body.includes(needle))throw Error('missing legacy override');
  const source=legacy?body.replace(needle,needle+"if(facilitySite.buildings[cut]?.id==='lodging')return false;"):body;
  vm.runInContext(source.replace(anchor,'finish('+bench+');return;'+anchor),c,{filename:'bench.html'});
+ // No real animation frames are scheduled in this benchmark; wait for the
+ // startup callback to finish the injected snapshot after its checkpoints.
+ await boot;
  console.error(JSON.stringify({count,bufBytes}));
-}catch(e){console.error(e);process.exitCode=1}
+})().catch(e=>{console.error(e);process.exitCode=1});

@@ -16,7 +16,7 @@ if(process.env.LOOT_PULSE_LAYOUT_ONLY==='1'||process.env.DUNGEON_LOOT_LAYOUT_ONL
 // Expose which saved objects contribute real vertices, without changing
 // their scope, material, mesh, storage, or draw call.
 const filterLine='    if(d.y!==poiWalkLevel||!validPos(d.x,d.z)||!poiDungeonVisualVisible(d.x,d.z,d.y))continue;';
-const rebuildLine='  poiInventoryReleaseMesh();\n  poiInventoryMeshDrops=';
+const rebuildLine='  poiInventoryReleaseMesh();\n  poiInventoryMeshGold=groundGold;poiInventoryMeshDrops=';
 const wildPick=' const p=poiWildPick(rng);';
 const batchLine=' gl.uniform4f(loc.lootHighlight,poiWalkX+.5,poiWalkZ+.5,pulse,1);';
 for(const anchor of [filterLine,rebuildLine,wildPick,batchLine])assert.equal(html.split(anchor).length,2,anchor);
@@ -186,4 +186,5 @@ try{
  if(process.env.DUNGEON_LOOT_CASE!=='scope')for(const c of cases.filter(c=>!process.env.LOOT_PULSE_CASE||process.env.LOOT_PULSE_CASE===c.id))await trial(browser,c);
  console.log('PASS actual depth-tested pulsing loot on night surface and mine, scoped records, pickup and reload');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
+
 
