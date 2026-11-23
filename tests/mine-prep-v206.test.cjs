@@ -1,7 +1,8 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),{createHash}=require('node:crypto');
 const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const build=vm.runInNewContext(h.slice(h.indexOf('const FACILITY_SITES=Object.freeze('),h.indexOf('function workshopResumeDecode('))+';buildFacilitySite');
-const site=JSON.parse(JSON.stringify(build('base'))),world=site.map.world;
+const {beforeChapelApproach}=require('./mine-history-v165.cjs');
+const site=beforeChapelApproach(JSON.parse(JSON.stringify(build('base')))),world=site.map.world;
 const key=(x,z)=>x+','+z,dirs=[[1,0],[-1,0],[0,1],[0,-1]],floor=/^(?:stone|moss|road\w+)$/;
 const at=(x,z)=>world.filter(o=>o.y===-1&&o.x===x&&o.z===z);
 test('western preparation pocket changes one old wall, keeping the exact prior world in place',()=>{
