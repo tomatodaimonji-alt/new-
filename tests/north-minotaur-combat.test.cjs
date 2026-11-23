@@ -11,11 +11,12 @@ function setup(){
  vm.runInContext(html.slice(a,html.indexOf('// END NORTH MINOTAUR COMBAT',a)),env);
  return env;
 }
-test('close axe windup keeps committed angle, sweeps side and grants open window on retreat',()=>{
+test('close axe windup keeps committed angle, sweeps side and grants open window after a close rear dodge',()=>{
  const c=setup();assert.equal(c.poiNorthMinotaurBegin(c.obj,c.state,0),true);
  const a=c.state.playerAttack;assert.equal(a.northAttack,'axe');assert.equal(a.hit,850);
  c.p={x:65.5,z:14.5,y:-1};assert.equal(c.poiNorthMinotaurCovered(a,850),true);
  c.p={x:64,z:17.01,y:-1};assert.equal(c.poiNorthMinotaurCovered(a,850),false);
+ c.p={x:65.1,z:12.75,y:-1};assert.equal(c.poiNorthMinotaurCovered(a,850),false);
  a.pending=false;c.poiNorthMinotaurSettle(c.state,a,850,false);
  assert.equal(c.state.northOpenUntil,1970);
  assert.equal(c.poiNorthMinotaurPose(c.state,950).phase,'open');
@@ -60,7 +61,8 @@ test('real enemy resolver contacts once with move-specific raw damage and never 
  assert.equal(c.state.playerAttack.northAttack,'axe');
  c.wall=true;c.poiEnemyResolvePlayer(4850);
  assert.deepEqual(damage,[[850,33],[2700,26]]);
- assert.equal(c.state.northOpenUntil,5970);
+ assert.equal(c.state.northOpenUntil,0,'cover is safe but does not make the minotaur vulnerable');
+ assert.equal(c.state.nextAttack,5970,'old rest still runs after a shielded miss');
 });
 test('boss chase uses legal steps inside chamber and never moves in punish window or outside room',()=>{
  const c=setup();c.p.z=19;
