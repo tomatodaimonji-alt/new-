@@ -19,7 +19,9 @@ function harness(){
   upload:m=>{renders.push(m);return {...m,buf:{}}},draw:m=>draws.push(m)});
   const attack=html.match(/\/\/ BEGIN SLIME ATTACK\n([\s\S]*?)\/\/ END SLIME ATTACK/);
  assert.ok(attack,'slime attack pose is present');
- vm.runInContext(attack[1]+html.slice(a,b),ctx);
+ const hit=html.match(/\/\/ BEGIN GAME DAMAGE FLASH\n([\s\S]*?)\/\/ END GAME DAMAGE FLASH/);
+ assert.ok(hit,'damage flash runtime used by the render batch is present');
+ vm.runInContext(hit[1]+attack[1]+html.slice(a,b),ctx);
  return {ctx,renders,draws,calls,run:s=>vm.runInContext(s,ctx)};
 }
 test('a dying slime reuses its colored model triangles, scatters, and vanishes from the render batch',()=>{

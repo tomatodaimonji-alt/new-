@@ -14,7 +14,7 @@ const poseAnchor='const pose=poiMonsterPose(obj,state,now);';
 const renderAt=html.indexOf('function poiRenderEnemyHealth('),poseAt=html.indexOf(poseAnchor,renderAt);
 assert.equal(html.split(spawnAnchor).length,2);
 assert.ok(poseAt>renderAt&&poseAt<html.indexOf('function poiMonsterAt(',renderAt));
-const probe="if(state.wildSpawn){window.__enemyProjection={vp:Array.from(vp),pose:{...pose}};}";
+const probe="if(state.wildSpawn){window.__enemyProjection={vp:Array.from(vp),pose:{...pose},anchor:poiEnemyHealthAnchor(vp,pose,poiEnemyHealthEnvelope(poiMonsterRenderType(obj))) };}";
 const instrumented=(html.slice(0,poseAt+poseAnchor.length)+probe+html.slice(poseAt+poseAnchor.length))
  .replace(spawnAnchor,'const p=(poiWalkX===41&&poiWalkZ===73)?{x:42,z:73}:poiWildPick(rng);');
 const server=createServer((req,res)=>{
@@ -79,18 +79,18 @@ async function styleProjection(page){
     (1-(m[1]*x+m[5]*(y+h)+m[9]*z+m[13])/w)*canvas.clientHeight/2];
   };
   const r=bar.getBoundingClientRect(),c=canvas.getBoundingClientRect(),s=getComputedStyle(bar);
-  return {bar:[r.x-c.x+r.width/2,r.bottom-c.y],priorHead:proj(.83),expected:proj(.94),
+  return {bar:[r.x-c.x+r.width/2,r.bottom-c.y],priorHead:proj(.83),expected:[p.anchor?.x,p.anchor?.y],
    width:r.width,height:r.height,radius:parseFloat(s.borderRadius),outline:s.borderTopWidth,
    surface:s.backgroundColor,tint:getComputedStyle(document.querySelector('#poiWalkPad')).backgroundColor,
    opacity:s.opacity,track:getComputedStyle(bar,'::-webkit-progress-bar').backgroundColor};
  },selector);
  assert.ok(visual,'bar is projected from an actual live generated monster');
  const [x,y]=visual.bar;
- assert.ok(Math.abs(x-visual.expected[0])<=1.1&&Math.abs(y-(visual.expected[1]-10))<=1.1,
+ assert.ok(Math.abs(x-visual.expected[0])<=1.1&&Math.abs(y-(visual.expected[1]-13))<=1.1,
   'exact registered pose high anchor + screen offset: '+JSON.stringify(visual));
  assert.ok(visual.priorHead[1]-y>=10,'bottom is above original head anchor by >=10 px');
  assert.ok(visual.priorHead[1]-8-y>=1.5,'raised above the former placement');
- assert.ok(visual.width>=29&&visual.height===8&&visual.radius>=4);
+ assert.ok(visual.width>=25&&visual.width<=34&&visual.height===5&&visual.radius>=4);
  assert.equal(visual.outline,'1px');
  assert.equal(visual.surface,visual.tint,'empty track uses translucent UI tint');
  assert.equal(visual.opacity,'1','whole status bar is not uniformly dimmed');

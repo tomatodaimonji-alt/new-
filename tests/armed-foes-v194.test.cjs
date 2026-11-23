@@ -11,7 +11,7 @@ function run(opts={}){
   poiInventoryAccept:(_k,t,n,source)=>({slots:[{type:t,durability:source.durability}],accepted:opts.full?0:n}),poiInventoryEdited:(k,slots)=>({...k,slots}),
   validPos:(x,z)=>x>=0&&x<128&&z>=0&&z<96,poiEquipmentDurabilityMax:()=>100,
   world:[{type:'moss',x:80,z:75,y:-1}],isFloor:t=>t==='moss',poiEconomyRefresh(){},poiSound:(...a)=>hitSounds.push(a),
-  poiInventoryItemName:t=>t,toast(){},poiWalkCanStep:(x,z)=>!(opts.block&&x===104&&z===86)});
+  poiInventoryItemName:t=>t,toast(){},poiWalkCanStep:(x,z)=>!(opts.block&&x===104&&z===86||opts.diagonalFlank&&x===106&&z===86)});
  vm.runInContext(html.slice(a,b),c);
  return {c,enemy,state,kit:()=>kit,count:()=>saved,block:()=>writes=false,hitSounds};
 }
@@ -33,12 +33,15 @@ test('full bags leave their guaranteed roll on the ground; staff find is once pe
  const g=run();assert.equal(g.c.poiArmedPickup(80,75),true);
  assert.equal(g.kit().fireWandFound,true);assert.equal(g.c.poiArmedPickup(80,75),false);
 });
-test('ranged armed foes cannot shoot diagonally or through a wall and stay in encounter areas',()=>{
+test('ranged armed foes trace diagonal lanes, stop at wall flanks and stay in encounter areas',()=>{
  const f=run({block:true}),o={type:'monsterSkelArcher',x:105,z:86,y:0};
  assert.equal(f.c.poiArmedBound(o,100,86),false);
  assert.equal(f.c.poiArmedBound(o,104,86),true);
  assert.equal(f.c.poiArmedAim(o,{x:105,z:86},102,86),null);
- assert.equal(f.c.poiArmedAim(o,{x:105,z:86},106,87),null);
+ const diag=f.c.poiArmedAim(o,{x:105,z:86},106,87);
+ assert.equal(diag?.angular,true);
+ assert.deepEqual(Array.from(diag.tiles,t=>[t.x,t.z]),[[106,87]]);
+ assert.equal(run({diagonalFlank:true}).c.poiArmedAim(o,{x:105,z:86},106,87),null);
  const clear=run();
  assert.equal(clear.c.poiArmedAim(o,{x:105,z:86},108,86)?.tiles.length,3);
 });

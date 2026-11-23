@@ -315,10 +315,10 @@ header h1{letter-spacing:.015em;white-space:nowrap;flex-shrink:0}
 }
 #poiEnemyHud{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:9}
 .poiEnemyHealth{appearance:none;-webkit-appearance:none;position:absolute;top:0;left:0;display:block;
- width:clamp(29px,8.2vw,43px);height:8px;
- --poi-enemy-fill:linear-gradient(180deg,#ffe6aa 0%,#e9af62 48%,#be7842 100%);
- margin:0;padding:0;border:1px solid #eed5a8c7;border-radius:999px;
- background:var(--workshop-panel-surface);overflow:hidden;box-shadow:0 1px 4px #1219188c}
+ width:clamp(25px,6.8vw,34px);height:5px;
+ --poi-enemy-fill:linear-gradient(180deg,#cfb278df,#ab814ede);
+ margin:0;padding:0;border:1px solid #cbb18b93;border-radius:999px;
+ background:var(--workshop-panel-surface);overflow:hidden;box-shadow:0 1px 2px #12191859}
 .poiEnemyHealth::-webkit-progress-bar{background:transparent}
 .poiEnemyHealth::-webkit-progress-value{border-radius:999px;background:var(--poi-enemy-fill)}
 .poiEnemyHealth::-moz-progress-bar{border-radius:999px;background:var(--poi-enemy-fill)}
@@ -1575,7 +1575,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v233）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v234）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -9361,9 +9361,62 @@ function poiArmedBound(obj,x,z){
  if(runtime?.regionalWild)return poiWildExterior(x,z)&&Math.hypot(x-runtime.roamHome.x,z-runtime.roamHome.z)<=7;
  const [a,b,c,d]=p.bounds;return x>=a&&x<=c&&z>=b&&z<=d;
 }
+// BEGIN ENEMY ANGLES
+function poiEnemyAttackTrace(sx,sz,tx,tz,open){
+ const dx=tx-sx,dz=tz-sz,d=Math.hypot(dx,dz),tiles=[];
+ if(![sx,sz,tx,tz].every(Number.isInteger))return {fx:0,fz:0,tiles,blocked:true};
+ if(!d)return {fx:0,fz:0,tiles,blocked:false};
+ const fx=dx/d,fz=dz/d,ax=Math.sign(dx),az=Math.sign(dz);
+ // Tile centers are integers; exact corner entrances require both legal
+ // flanks/entries but those flanks aren't part of the actual strike.
+ const stepx=dx?1/Math.abs(dx):Infinity,stepz=dz?1/Math.abs(dz):Infinity;
+ let bx=stepx*.5,bz=stepz*.5,x=sx,z=sz,blocked=false;
+ while(x!==tx||z!==tz){
+  if(Math.abs(bx-bz)<1e-7){
+   if(!open(x+ax,z,x,z)||!open(x,z+az,x,z)||
+      !open(x+ax,z+az,x+ax,z)||!open(x+ax,z+az,x,z+az)){blocked=true;break}
+   x+=ax;z+=az;bx+=stepx;bz+=stepz;
+  }else if(bx<bz){
+   if(!open(x+ax,z,x,z)){blocked=true;break}x+=ax;bx+=stepx;
+  }else{
+   if(!open(x,z+az,x,z)){blocked=true;break}z+=az;bz+=stepz;
+  }
+  tiles.push({x,z});
+ }
+ return {fx,fz,tiles,blocked};
+}
+function poiEnemyDiagonalType(obj){
+ if(obj.type==='monsterDragon'){
+  const elite=typeof facilitySite!=='undefined'&&facilitySite?.id==='base'?facilitySite.otherworld?.elite:null;
+  return !elite||elite.type!==obj.type||elite.x!==obj.x||elite.z!==obj.z||elite.y!==obj.y;
+ }
+ return ['monsterSlime','monsterGoblin','monsterSkeleton'].includes(obj.type)&&
+  !(typeof poiChapelEliteMatch==='function'&&poiChapelEliteMatch(obj));
+}
+function poiEnemyCombatEdge(x,z,fx,fz,y=poiWalkLevel,actor=null){
+ return (typeof poiPlayerRayClear!=='function'||poiPlayerRayClear(x,z,y,fx,fz))&&
+  (typeof poiWalkCanStep!=='function'||poiWalkCanStep(x,z,fx,fz,actor));
+}
+function poiEnemyAdjacent(obj,state,x,z){
+ const dx=x-state.x,dz=z-state.z,m=Math.abs(dx)+Math.abs(dz);
+ if(m===1)return true;
+ return Math.abs(dx)===1&&Math.abs(dz)===1&&poiEnemyDiagonalType(obj)&&
+  !poiEnemyAttackTrace(state.x,state.z,x,z,(u,v,fx,fz)=>poiEnemyCombatEdge(u,v,fx,fz,poiWalkLevel,state)).blocked;
+}
+function poiEnemyAngleHitClear(a,x,z,actor){
+ return !poiEnemyAttackTrace(a.sx,a.sz,x,z,(u,v,fx,fz)=>poiEnemyCombatEdge(u,v,fx,fz,a.y,actor)).blocked;
+}
+// END ENEMY ANGLES
 function poiArmedAim(obj,state,x,z){
+
  const p=POI_ARMED_FOES[obj.type];if(!p||!poiArmedBound(obj,x,z))return null;
  const dx=x-state.x,dz=z-state.z,n=Math.abs(dx)+Math.abs(dz);
+ if(dx&&dz&&typeof poiEnemyAttackTrace==='function'&&
+    !(typeof poiNorthWatchGuard==='function'&&poiNorthWatchGuard(obj))){
+  if(p.reach===1?Math.max(Math.abs(dx),Math.abs(dz))>1:Math.hypot(dx,dz)>p.reach+1e-7)return null;
+  const trace=poiEnemyAttackTrace(state.x,state.z,x,z,(u,v,fx,fz)=>poiEnemyCombatEdge(u,v,fx,fz,poiWalkLevel,state));
+  return trace.blocked?null:{...trace,angular:true};
+ }
  if(!n||n>p.reach||dx&&dz)return null;
  const fx=Math.sign(dx),fz=Math.sign(dz),tiles=[];
  for(let i=1;i<=n;i++){
@@ -10711,9 +10764,38 @@ function poiHealPlayerFeedback(healed){
 function poiWorldToScreen(vp,x,y,z){const w=vp[3]*x+vp[7]*y+vp[11]*z+vp[15];if(w<=.05)return null;const a=(vp[0]*x+vp[4]*y+vp[8]*z+vp[12])/w,b=(vp[1]*x+vp[5]*y+vp[9]*z+vp[13])/w;if(Math.abs(a)>1.25||Math.abs(b)>1.25)return null;return {x:(a+1)*.5*canvas.clientWidth,y:(1-b)*.5*canvas.clientHeight}}
 function poiRenderDamageLabels(now,vp){const layer=$('poiDamageLayer');if(!layer)return;const active=poiWalkActive?poiDamageLabels.filter(d=>now-d.time<950):[];poiDamageLabels=active;if(!active.length){if(layer.childElementCount)layer.replaceChildren();return}layer.replaceChildren();for(const d of active){const elapsed=(now-d.time)/950,point=poiWorldToScreen(vp,d.x,d.y+elapsed*.75,d.z);if(!point)continue;const el=document.createElement('span');el.className='poiDamageNumber'+(d.healing?' playerHeal':d.isPlayer?' playerDamage':'');el.textContent=(d.healing?'+':'-')+d.value;el.style.left=point.x+'px';el.style.top=point.y+'px';el.style.opacity=String(Math.min(1,(1-elapsed)*2.5));layer.append(el)}}
 const POI_ENEMY_HEAD_HEIGHT={monsterSlime:.83,monsterGoblin:1.39,monsterSkeleton:1.61,monsterDragon:2.09};
-// A short world-space clearance plus ten screen pixels also works overhead.
-const POI_ENEMY_HEAD_CLEARANCE=.11;
-const POI_ENEMY_BAR_GAP=10;
+const POI_ENEMY_BAR_GAP=13;
+// BEGIN ENEMY HEALTH GEOMETRY
+const poiEnemyHealthModels=new Map();
+function poiEnemyHealthEnvelope(type){
+ if(poiEnemyHealthModels.has(type))return poiEnemyHealthModels.get(type);
+ const part=mesh();deco(part,type,0,0,0,0);
+ let top=0,radiusSquared=0;
+ for(let i=0;i<part.p.length;i+=3){
+  const [x,y,z]=[part.p[i],part.p[i+1],part.p[i+2]];
+  top=Math.max(top,y);radiusSquared=Math.max(radiusSquared,x*x+z*z);
+ }
+ const bounds={top:top||POI_ENEMY_HEAD_HEIGHT[type]||1.2,radius:Math.sqrt(radiusSquared)||.36};
+ poiEnemyHealthModels.set(type,bounds);
+ return bounds;
+}
+function poiEnemyHealthAnchor(vp,pose,bounds){
+ const attack=pose.attack,pitch=attack?.pitch||0,tilt=Math.abs(Math.sin(pitch));
+ const top=Math.max(bounds.top,.59+(bounds.top-.59)*Math.cos(pitch)+bounds.radius*tilt);
+ const radius=(bounds.radius+Math.max(.59,bounds.top-.59)*tilt)*(attack?.width??1);
+ const head=pose.y+top*(attack?.squash??1)+.06;
+ const center=poiWorldToScreen(vp,pose.x,head,pose.z);
+ if(!center)return null;
+ // Camera elevation also projects the creature's floor footprint upwards.
+ // Bounding its actual model keeps the bar clear at overhead and orbit angles.
+ let highest=center.y;
+ for(const dx of [-radius,radius])for(const dz of [-radius,radius]){
+  const corner=poiWorldToScreen(vp,pose.x+dx,head,pose.z+dz);
+  if(corner)highest=Math.min(highest,corner.y);
+ }
+ return {x:center.x,y:highest};
+}
+// END ENEMY HEALTH GEOMETRY
 const poiEnemyBars=new Map();
 let poiEnemyBarFrame=0;
 function poiRenderEnemyHealth(now,vp){
@@ -10725,7 +10807,7 @@ function poiRenderEnemyHealth(now,vp){
     (typeof poiDungeonVisualVisible==='function'&&!poiDungeonVisualVisible(obj.x,obj.z,obj.y))||
     Math.max(Math.abs(state.x-poiWalkX),Math.abs(state.z-poiWalkZ))>10)continue;
   const pose=poiMonsterPose(obj,state,now);
-  const point=poiWorldToScreen(vp,pose.x,pose.y+(POI_ENEMY_HEAD_HEIGHT[obj.type]||1.2)+POI_ENEMY_HEAD_CLEARANCE,pose.z);
+  const point=poiEnemyHealthAnchor(vp,pose,poiEnemyHealthEnvelope(poiMonsterRenderType(obj)));
   if(!point||point.x<0||point.x>canvas.clientWidth||point.y<0||point.y>canvas.clientHeight)continue;
   let bar=poiEnemyBars.get(obj);
   if(!bar){
@@ -11015,13 +11097,16 @@ function poiPondSkaterPose(s,now){
  const a=s.playerAttack;if(!a)return null;
  const facing=a.dx>0?3:a.dx<0?1:a.dz<0?2:0;
  if(a.pending){
-  const draw=Math.min(1,Math.max(0,(now-a.start)/195));
-  return {phase:'draw',dx:-.13*draw*a.dx,dz:-.13*draw*a.dz,lift:0,squash:1-.21*draw,width:1+.075*draw,facing};
+  const rise=Math.min(1,Math.max(0,(now-a.start)/170)),draw=rise*rise*(3-2*rise);
+  return {phase:'draw',dx:-.18*draw*a.dx,dz:-.18*draw*a.dz,lift:0,squash:1-.28*draw,width:1+.13*draw,
+   pitch:-.39*draw,twist:-.32*draw,tell:.80*draw,facing};
  }
  if(!Number.isFinite(a.visualHitAt))return null;
  const t=Math.max(0,(now-a.visualHitAt)/360);if(t>=1)return null;
  const reach=.55*(1-t)*(1-t);
- return {phase:t<.14?'skim':'recover',dx:a.dx*reach,dz:a.dz*reach,lift:.06*(1-t),squash:1,width:1+.07*(1-t),facing};
+ const release=(1-t)*(1-t);
+ return {phase:t<.18?'skim':'recover',dx:a.dx*reach,dz:a.dz*reach,lift:.12*release,squash:1-.10*release,width:1+.10*release,
+  pitch:.42*release,twist:.37*release,facing};
 }
 // END POND SKATER
 // BEGIN SLIME ATTACK
@@ -11029,7 +11114,7 @@ const POI_SLIME_CONTACT_MS=170,POI_SLIME_ATTACK_MS=360;
 const POI_SLIME_RECOVERY_MS=1500,POI_SLIME_SETTLE_MS=480;
 function poiSlimeRecovering(s,now){return now<(s.slimeRecoverUntil||0)}
 const POI_SLIME_ATTACK_KEYS=[
- [0,0,0,1,1],[70,-.055,0,.65,1.16],[125,.28,.32,1.13,.96],
+ [0,0,0,1,1],[70,-.092,0,.56,1.22],[125,.28,.32,1.13,.96],
  [POI_SLIME_CONTACT_MS,.60,.23,.88,1.10],[217,.36,.15,1.10,.96],[280,.035,0,.75,1.18],[POI_SLIME_ATTACK_MS,0,0,1,1]
 ];
 const POI_ENEMY_WINDUP={monsterSlime:480,monsterSkeleton:520,monsterGoblin:550,monsterDragon:640};
@@ -11043,8 +11128,8 @@ function poiSlimeAttackAge(s,now){
   const age=now-start;return s.counterHitAt!=null?Math.min(age,POI_SLIME_CONTACT_MS-.001):age;
  }
  if(!p?.pending)return Infinity;
- // Begin a visible squash, hold it while the red ground warns, then lunge
- // on the original contact curve; the longer recovery begins on resolve.
+ // Begin a visible squash, hold it as the warning, then lunge on the
+ // original contact curve; the longer recovery begins on resolve.
  const age=Math.max(Math.min(now-start,69),now-p.hit+POI_SLIME_CONTACT_MS);
  return Math.min(age,POI_SLIME_CONTACT_MS-.001);
 }
@@ -11071,7 +11156,8 @@ function poiSlimeAttackPose(s,now){
  const [reach,lift,squash,width]=p.slice(1).map((v,j)=>v+(q[j+1]-v)*ease);
  const phase=elapsed<70?'squash':elapsed<POI_SLIME_CONTACT_MS?'lunge':elapsed<195?'contact':elapsed<250?'recover':'land';
  const facing=a.dx>0?3:a.dx<0?1:a.dz<0?2:0;
- return {phase,elapsed,contact:POI_SLIME_CONTACT_MS,dx:a.dx*reach,dz:a.dz*reach,lift,squash,width,facing};
+ const tell=!s.townOwned&&a.pending?Math.min(1,elapsed/66)*Math.max(.25,1-(elapsed-75)/105)*.85:0;
+ return {phase,elapsed,contact:POI_SLIME_CONTACT_MS,dx:a.dx*reach,dz:a.dz*reach,lift,squash,width,tell:Math.min(.85,tell),facing};
 }
 function poiEnemyThreatEnabled(){
  return poiWalkActive&&!pineAIActive&&poiAudioAllowed()&&!poiPlayerDying();
@@ -11158,17 +11244,17 @@ function poiMineGuardPose(s,now){
 // contact yaw, backstep, forward reach, contact lift, recovery milliseconds].
 // They never author a target tile or determine the real contact time.
 const POI_ENEMY_VISUAL_PROFILES=Object.freeze({
- monsterSkeleton:[['bone-swipe',-.22,.44,-.46,.56,.07,.26,.035,300]],
- monsterGoblin:[['low-scramble',.39,.26,.31,-.41,.16,.54,.14,330]],
- monsterSkelWarrior:[['sword-cut',-.34,.42,-.67,.77,.11,.30,.045,345]],
- monsterSkelKnight:[['shield-cleave',-.29,.38,-.65,.77,.10,.38,.055,450],['shield-bash',.22,.45,.22,-.14,.20,.55,.025,400]],
- monsterSkelArcher:[['draw-loose',-.08,.06,-.54,-.18,.09,.09,.025,285]],
- monsterSkelSpearman:[['spear-thrust',-.16,.32,-.12,.15,.19,.65,.038,340]],
- monsterSkelMage:[['ember-cast',-.39,.16,-.24,.42,.04,.12,.065,425]],
- monsterSkelLongStaff:[['staff-push',-.26,.28,.44,-.34,.15,.50,.045,355]],
- monsterChapelWardenVisual:[['mace-drop',-.47,.56,-.38,.37,.11,.37,.07,425]],
- monsterDragon:[['fang-lunge',-.18,.43,-.18,.18,.18,.62,.13,550],['wing-swipe',.15,.13,.79,-.87,.08,.36,.22,500]],
- monsterMineGuard:[['hammer-sweep',-.08,.15,-.56,.61,.09,.22,0,640],['hammer-overhead',-.39,.40,.13,-.09,.06,.32,.10,640]]
+ monsterSkeleton:[['bone-swipe',-.36,.50,-.67,.66,.10,.28,.045,300]],
+ monsterGoblin:[['low-scramble',.57,.36,.36,-.47,.17,.54,.16,330]],
+ monsterSkelWarrior:[['sword-cut',-.46,.49,-.81,.83,.12,.34,.05,345]],
+ monsterSkelKnight:[['shield-cleave',-.42,.45,-.75,.80,.11,.43,.065,450],['shield-bash',.45,.56,.34,-.20,.16,.55,.035,400]],
+ monsterSkelArcher:[['draw-loose',-.13,.14,-.73,-.19,.08,.12,.035,285]],
+ monsterSkelSpearman:[['spear-thrust',-.30,.44,-.42,.22,.16,.64,.050,340]],
+ monsterSkelMage:[['ember-cast',-.53,.32,-.40,.56,.06,.18,.10,425]],
+ monsterSkelLongStaff:[['staff-push',-.37,.39,.59,-.49,.13,.50,.065,355]],
+ monsterChapelWardenVisual:[['mace-drop',-.65,.63,-.47,.44,.11,.40,.08,425]],
+ monsterDragon:[['fang-lunge',-.44,.55,-.20,.23,.16,.60,.14,550],['wing-swipe',.24,.21,.78,-.81,.08,.39,.20,500]],
+ monsterMineGuard:[['hammer-sweep',-.24,.29,-.71,.74,.10,.29,.015,640],['hammer-overhead',-.63,.58,.23,-.21,.07,.35,.09,640]]
 });
 function poiEnemyNextVisualVariant(type,s){
  const count=POI_ENEMY_VISUAL_PROFILES[type]?.length||1;
@@ -11187,13 +11273,15 @@ function poiEnemyVisualAttack(type,s,now){
  const facing=a.dx>0?3:a.dx<0?1:a.dz<0?2:0;
  if(a.pending){
   const span=Math.max(1,a.hit-a.start),t=Math.max(0,Math.min(1,(now-a.start)/span));
-  const prep=Math.min(1,t/.62),draw=prep*prep*(3-2*prep);
-  // The visual strike is held just short of contact until the game
-  // actually resolves; no phantom frame-based hit on a slow phone.
-  const fire=Math.max(0,Math.min(.72,(t-.76)*3));
+  // Readable held anticipation before a fast release. Never show full
+  // extension until the independently timed attack actually resolves.
+  const prep=Math.min(1,t/.40),draw=prep*prep*(3-2*prep);
+  const rise=Math.max(0,Math.min(1,(t-.74)/.26));
+  const fire=.78*rise*rise;
   const l=-back*draw+(back+reach)*fire;
-  return {variant,phase:fire>0?'release':'windup',dx:a.dx*l,dz:a.dz*l,lift:hop*(.21*draw+.35*fire),
-   squash:1+(prePitch<0?.065:-.085)*draw,width:1-.03*draw,facing,
+  return {variant,phase:fire>0?'release':'windup',dx:a.dx*l,dz:a.dz*l,lift:hop*(.16*draw+.48*fire),
+   squash:1+(prePitch<0?.075:-.14)*draw,width:1+(prePitch<0?-.04:.10)*draw,
+   tell:.85*draw*(1-.70*rise),facing,
    pitch:prePitch*draw+(hitPitch-prePitch)*fire,twist:preTwist*draw+(hitTwist-preTwist)*fire};
  }
  if(!Number.isFinite(a.visualHitAt))return null;
@@ -11220,12 +11308,16 @@ function poiEnemyBeginPlayer(obj,s,now){
  const dx=poiWalkX-s.x,dz=poiWalkZ-s.z;
  const sweep=guardian&&now>=Math.max(s.guardSlideUntil||0,s.guardRestUntil||0)&&poiMineGuardHere(obj,s)?poiMineGuardAim(s,dx,dz):null;
  const line=armed?poiArmedAim(obj,s,poiWalkX,poiWalkZ):null;
- if(guardian?!sweep:armed?!line:Math.abs(dx)+Math.abs(dz)!==1)return false;
- const attack=sweep||line;
+ const adjacent=guardian||armed||skater||typeof poiEnemyAdjacent!=='function'?
+  Math.abs(dx)+Math.abs(dz)===1:poiEnemyAdjacent(obj,s,poiWalkX,poiWalkZ);
+ if(guardian?!sweep:armed?!line:!adjacent)return false;
+ const diagonal=!guardian&&!line&&!skater&&dx&&dz&&typeof poiEnemyAttackTrace==='function'?
+  {...poiEnemyAttackTrace(s.x,s.z,poiWalkX,poiWalkZ,(u,v,fx,fz)=>poiEnemyCombatEdge(u,v,fx,fz,poiWalkLevel,s)),angular:true}:null;
+ const attack=sweep||line||diagonal;
  if(line)s.facing=line.fx?(line.fx>0?3:1):(line.fz<0?2:0);
  s.nextAttack=now+(guardian?POI_MINE_GUARD_COOLDOWN:skater?POI_POND_SKATER_COOLDOWN:armed?.cool??POI_ENEMY_COOLDOWN);
  s.playerAttack={obj,start:now,hit:now+windup,x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,
-  sx:s.x,sz:s.z,dx:attack?.fx??dx,dz:attack?.fz??dz,pending:true,motion:typeof poiEnemyNextVisualVariant==='function'?poiEnemyNextVisualVariant(obj.type,s):0,...(attack?{tiles:attack.tiles}:null)};
+  sx:s.x,sz:s.z,dx:attack?.fx??dx,dz:attack?.fz??dz,pending:true,motion:typeof poiEnemyNextVisualVariant==='function'?poiEnemyNextVisualVariant(obj.type,s):0,...(attack?{tiles:attack.tiles}:null),...(attack?.angular?{angular:true}:null)};
  poiEnemyPending.add(s);if(obj.type==='monsterSlime'||guardian||line||skater||typeof poiEnemyVisualAttack==='function')poiMonsterMeshDirty=true;
  return true;
 }
@@ -11274,7 +11366,9 @@ function poiEnemyResolvePlayer(now){
   }
   // Moving changes the player's occupancy, never the recorded strike tile.
   let covered=a.tiles?a.tiles.some(({x,z})=>x===poiWalkX&&z===poiWalkZ):poiWalkX===a.x&&poiWalkZ===a.z;
-  if(mage)covered=covered&&Math.abs(poiWalkX-a.sx)+Math.abs(poiWalkZ-a.sz)<=a.mageReach;
+  if(mage)covered=covered&&(a.mageTiles?a.mageTiles.some(p=>p.x===poiWalkX&&p.z===poiWalkZ):
+  Math.abs(poiWalkX-a.sx)+Math.abs(poiWalkZ-a.sz)<=a.mageReach);
+ if(covered&&a.angular&&typeof poiEnemyAngleHitClear==='function')covered=poiEnemyAngleHitClear(a,poiWalkX,poiWalkZ,s);
   if(!timely||!covered||poiWalkLevel!==a.y||
      (typeof poiDungeonPatrolCanFight==='function'&&!poiDungeonPatrolCanFight(a.obj,poiWalkX,poiWalkZ))||
      (s.wildSpawn&&!poiWildPlayerOutside()))continue;
@@ -11284,12 +11378,44 @@ function poiEnemyResolvePlayer(now){
 }
 // END SLIME ATTACK
 
+// BEGIN GAME DAMAGE FLASH
+const POI_HIT_FLASH_MS=180,poiHitFlashReduced=typeof matchMedia==='function'?matchMedia('(prefers-reduced-motion: reduce)'):null;
+let poiPlayerHitFlashAt=-Infinity,poiMonsterHitFlashUntil=-Infinity;
+function poiHitFlashAmount(at,now){
+ const age=now-at;
+ if(!Number.isFinite(age)||age<0||age>=POI_HIT_FLASH_MS)return 0;
+ return (poiHitFlashReduced?.matches ? .11 : .23)*(1-age/POI_HIT_FLASH_MS);
+}
+function poiHitFlashMonster(state,before,now){
+ if(state.hp>=before||!Number.isFinite(now))return;
+ state.hitFlashAt=now;poiMonsterHitFlashUntil=Math.max(poiMonsterHitFlashUntil,now+POI_HIT_FLASH_MS);
+}
+function poiDrawHitFlashSpan(mesh,vp,first,count,amount){
+ if(!amount){draw(mesh,vp,first,count);return}
+ gl.uniform1f(loc.hitFlash,amount);
+ try{draw(mesh,vp,first,count)}finally{gl.uniform1f(loc.hitFlash,0)}
+}
+function poiDrawMonsterHitFlash(mesh,vp,now){
+ let cursor=0;
+ for(const {first,end,source} of mesh?.hitFlashSpans||[]){
+  const amount=poiHitFlashAmount(source.hitFlashAt,now);
+  if(!amount)continue;
+  if(first>cursor)draw(mesh,vp,cursor,first-cursor);
+  poiDrawHitFlashSpan(mesh,vp,first,end-first,amount);
+  cursor=end;
+ }
+ if(mesh?.count>cursor)draw(mesh,vp,cursor,mesh.count-cursor);
+}
+// END GAME DAMAGE FLASH
 function poiMobHitPlayer(obj,now){
  const raw=(typeof poiMonsterStatsAt==='function'?poiMonsterStatsAt(obj):POI_MONSTER_STATS[obj.type]).attack;
  const amount=typeof poiPlayerDamageAfterArmor==='function'&&typeof poiHotbarHasKit==='function'&&poiHotbarHasKit()?poiPlayerDamageAfterArmor(raw):raw;
  const priorHP=poiPlayerHP;
  poiPlayerHP=Math.max(0,poiPlayerHP-amount);poiSound('hurt');
  if(poiPlayerHP<priorHP){
+  if(typeof poiPlayerHitFlashAt!=='undefined'&&Number.isFinite(now)){
+   poiPlayerHitFlashAt=now;poiMonsterHitFlashUntil=Math.max(poiMonsterHitFlashUntil,now+POI_HIT_FLASH_MS);
+  }
   if(typeof poiMineUnlockCancel==='function')poiMineUnlockCancel(true);
   if(typeof poiEquipmentWearArmor==='function')poiEquipmentWearArmor();
  }
@@ -11460,7 +11586,10 @@ function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMo
  }
  if(armed){
   if(!poiArmedBound(obj,poiWalkX,poiWalkZ)){if(patrol&&poiDungeonPatrolStep(obj,state,now,patrol))changed=true;continue}
-  if(poiArmedAim(obj,state,poiWalkX,poiWalkZ)){if(now>=state.nextAttack)poiEnemyBeginPlayer(obj,state,now);continue}
+  if(poiArmedAim(obj,state,poiWalkX,poiWalkZ)){
+   if(state.actorFree&&poiMonsterActorSettle(obj,state,now))continue;
+   if(now>=state.nextAttack)poiEnemyBeginPlayer(obj,state,now);continue;
+  }
  }
  if(obj.type==='monsterPondSkater'&&typeof poiPondSkaterGuard==='function'){
   const pond=poiPondSkaterGuard(obj);
@@ -11478,10 +11607,13 @@ function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMo
   }
  }
  if(obj.type==='monsterMineGuard'){if(poiMineGuardFrame(obj,state,now))changed=true;continue}
- if(dist>6.5){if(state.actorFree&&poiMonsterActorSettle(obj,state,now))continue;if(pineGameActive&&Math.random()<.32){const [rx,rz]=[[0,1],[0,-1],[1,0],[-1,0]][Math.floor(Math.random()*4)],nx=state.x+rx,nz=state.z+rz;if((state.wildSpawn||Math.max(Math.abs(nx-24),Math.abs(nz-24))>=10)&&poiMineEarlyMayMove(obj,nx,nz)&&poiMonsterCanMove(nx,nz,state)){state.fromX=state.x;state.fromZ=state.z;state.x=nx;state.z=nz;state.moveStarted=now;state.facing=rx?rx>0?3:1:rz<0?2:0;changed=true}}continue;}if(Math.abs(dx)+Math.abs(dz)===1){if(state.actorFree&&poiMonsterActorSettle(obj,state,now))continue;if(now>=state.nextAttack)poiEnemyBeginPlayer(obj,state,now);continue}
+ if(dist>6.5){if(state.actorFree&&poiMonsterActorSettle(obj,state,now))continue;if(pineGameActive&&Math.random()<.32){const [rx,rz]=[[0,1],[0,-1],[1,0],[-1,0]][Math.floor(Math.random()*4)],nx=state.x+rx,nz=state.z+rz;if((state.wildSpawn||Math.max(Math.abs(nx-24),Math.abs(nz-24))>=10)&&poiMineEarlyMayMove(obj,nx,nz)&&poiMonsterCanMove(nx,nz,state)){state.fromX=state.x;state.fromZ=state.z;state.x=nx;state.z=nz;state.moveStarted=now;state.facing=rx?rx>0?3:1:rz<0?2:0;changed=true}}continue;}if(typeof poiEnemyAdjacent==='function'?poiEnemyAdjacent(obj,state,poiWalkX,poiWalkZ):Math.abs(dx)+Math.abs(dz)===1){if(state.actorFree&&poiMonsterActorSettle(obj,state,now))continue;if(now>=state.nextAttack)poiEnemyBeginPlayer(obj,state,now);continue}
  if(typeof poiMonsterChaseFree==='function'&&poiMonsterChaseFree(obj,state,now,patrol,armed)){changed=true;continue}
  if(state.actorFree&&poiMonsterActorSettle(obj,state,now))continue;
  const steps=[[Math.sign(dx),0],[0,Math.sign(dz)]].filter(([sx,sz])=>sx||sz).sort((a,b)=>Math.abs(a[0]*dx+a[1]*dz)>Math.abs(b[0]*dx+b[1]*dz)?-1:1);
+ if(typeof poiEnemyDiagonalType==='function'&&Math.abs(dx)===1&&Math.abs(dz)===1&&
+    (poiEnemyDiagonalType(obj)||armed&&!(typeof poiNorthWatchGuard==='function'&&poiNorthWatchGuard(obj))))
+  steps.push([-Math.sign(dx),0],[0,-Math.sign(dz)]);
  for(const [sx,sz] of steps){const nx=state.x+sx,nz=state.z+sz;if((!pineGameActive||Math.max(Math.abs(nx-24),Math.abs(nz-24))>=10)&&poiMineEarlyMayMove(obj,nx,nz)&&(!patrol||poiDungeonPatrolCanFight(obj,nx,nz,patrol))&&(!armed||poiArmedBound(obj,nx,nz))&&(typeof poiOtherworldEnemyMayFight!=='function'||poiOtherworldEnemyMayFight(obj,nx,nz))&&poiMonsterCanMove(nx,nz,state)){state.fromX=state.x;state.fromZ=state.z;state.x=nx;state.z=nz;state.moveStarted=now;state.facing=sx?sx>0?3:1:sz<0?2:0;changed=true;break}}
  }if(changed)poiMonsterMeshDirty=true;if(pineGameActive)pineGameSave()}
 
@@ -11932,7 +12064,10 @@ function poiTownNpcResolve(a,now){
   if(recent&&poiTownNpcMelee(a,state)&&a.facing===poiTownNpcFaces(a.x,a.z,state.x,state.z)){
    const amount=(typeof poiTownNpcAttackPower==='function'?poiTownNpcAttackPower(a):null)??POI_TOWN_RESIDENT_MELEE;
    const weapon=typeof poiTownNpcLoadout==='function'?poiTownNpcLoadout(a).weapon:'equipWoodSword';
-   a.attacks++;a.lastHitAt=now;state.townHurtAt=now;state.hp=Math.max(0,state.hp-amount);poiMonsterMeshDirty=true;
+   const before=state.hp;
+   a.attacks++;a.lastHitAt=now;state.hp=Math.max(0,state.hp-amount);
+   if(typeof poiHitFlashMonster==='function')poiHitFlashMonster(state,before,now);
+   poiMonsterMeshDirty=true;
    if(poiTownNpcCombatNear(state.x,state.z,0)){
     if(typeof poiDamageNumber==='function')poiDamageNumber(state.x+.5,state.z+.5,terrainY(state.x,state.z)+1.20,amount);
     if(typeof poiSound==='function')poiSound('hit',weapon,state.hp===0);
@@ -13168,7 +13303,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v233',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v234',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -13283,7 +13418,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v233';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v234';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -13498,7 +13633,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v233',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v234',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -14461,7 +14596,9 @@ function poiPlayerDamageTarget(monster,x,z,amount,weapon,now,silent=false){
   const p=poiMonsterActorPoint(state.actorFree,now);
   state.x=Math.floor(p.x+.5);state.z=Math.floor(p.z+.5);
  }
+ const before=state.hp;
  state.hp=Math.max(0,state.hp-amount);
+ if(typeof poiHitFlashMonster==='function')poiHitFlashMonster(state,before,now);
  if(!silent)poiSound('hit',weapon,state.hp===0);
  const contact=obj.type==='monsterMineGuard'||state.actorFree;
  const hx=contact?x:state.x,hz=contact?z:state.z;
@@ -14644,6 +14781,17 @@ function poiPlayerProfilePose(type,ms){
 // Visual release only: the enemy attack engine owns damage and telegraph timing.
 function poiEnemyMageBoltRelease(a,now){
  if(a?.obj?.type!=='monsterSkelMage'||!poiWalkActive||poiWalkLevel!==a.y)return 0;
+ if(a.angular&&typeof poiEnemyAttackTrace==='function'){
+  const path=poiEnemyAttackTrace(a.sx,a.sz,a.x,a.z,(x,z,fx,fz)=>poiEnemyCombatEdge(x,z,fx,fz,a.y,typeof poiMonsterStates==='undefined'?null:poiMonsterStates.get(a.obj)));
+  const allowed=new Set((a.tiles||[]).map(p=>p.x+','+p.z));
+  a.mageTiles=path.tiles.filter(p=>allowed.has(p.x+','+p.z));
+  const end=a.mageTiles.at(-1);
+  if(end){
+   if(poiEnemyMageBolts.length>=4)poiEnemyMageBolts.shift();
+   poiEnemyMageBolts.push({type:'monsterSkelMage',x:a.sx,z:a.sz,y:a.y,toX:end.x,toZ:end.z,started:now,travel:180});
+  }
+  return a.mageTiles.length;
+ }
  const dx=Math.sign(a.x-a.sx),dz=Math.sign(a.z-a.sz),length=Math.abs(a.x-a.sx)+Math.abs(a.z-a.sz);
  if((!dx&&!dz)||(dx&&dz)||!Number.isInteger(length)||length>8)return 0;
  let x=a.sx,z=a.sz,n=0;
@@ -14728,7 +14876,7 @@ function poiAppendWeaponProjectile(m,v,now){
   const progress=Math.max(0,Math.min(1,(now-v.started)/(v.travel||v.profile.hit)));
   const x=v.x+(v.toX-v.x)*progress+.5,z=v.z+(v.toZ-v.z)*progress+.5;
   const y=terrainY(Math.floor(x),Math.floor(z))+(facilitySite?v.y*1.4:0)+.74;
-  const dx=Math.sign(v.toX-v.x),dz=Math.sign(v.toZ-v.z);
+  const len=Math.hypot(v.toX-v.x,v.toZ-v.z)||1,dx=(v.toX-v.x)/len,dz=(v.toZ-v.z)/len;
   cube(m,x-dx*.19,y-.012,z-dz*.19,.16,.17,.16,[.72,.22,.08]);
   cube(m,x,y,z,.23,.25,.23,[1,.50,.16]);
   cube(m,x+dx*.10,y+.06,z+dz*.10,.13,.13,.13,[.83,.88,1]);
@@ -14966,6 +15114,7 @@ function poiMonsterBreak(obj,state,now,random=Math.random,actorEffect=null){
  });
  if(poiMonsterBreaks.length>=POI_MONSTER_BREAK_LIMIT)poiMonsterBreaks.shift();
  poiMonsterBreaks.push({...pose,type:obj.type,parts,start:now,floor:obj.y,facing,settled:null,
+  hitFlashAt:actorEffect?.hitFlashAt??state.hitFlashAt,
   ...(actorEffect?{actor:actorEffect.actor,actorId:actorEffect.actorId}:null)});
  poiMonsterMeshDirty=true;
 }
@@ -15004,11 +15153,11 @@ function poiMonsterAppendDebris(m,e,t,fade=1){
   }
  }
 }
-function poiMonsterDrawBreaks(m,now){
+function poiMonsterDrawBreaks(m,now,hitFlashSpans){
  for(const effect of poiMonsterBreaks){
   if((facilitySite&&effect.floor!==poiWalkLevel)||
    (typeof poiDungeonVisualVisible==='function'&&!poiDungeonVisualVisible(Math.floor(effect.x),Math.floor(effect.z),effect.floor)))continue;
-  const age=now-effect.start,phase=poiMonsterBreakPhase(age,effect);
+  const age=now-effect.start,phase=poiMonsterBreakPhase(age,effect),first=m.p.length/3;
   if(age>=POI_MONSTER_FLIGHT_MS&&!effect.settled){
    effect.settled=mesh();poiMonsterAppendDebris(effect.settled,effect,1);
   }
@@ -15016,6 +15165,8 @@ function poiMonsterDrawBreaks(m,now){
    for(const channel of ['p','n','c'])m[channel].push(...effect.settled[channel]);
   }else if(phase==='flight')poiMonsterAppendDebris(m,effect,Math.max(0,age/POI_MONSTER_FLIGHT_MS));
   else poiMonsterAppendDebris(m,effect,1,Math.max(0,1-(age-poiMonsterBreakFadeAt(effect))/(poiMonsterBreakTTL(effect)-poiMonsterBreakFadeAt(effect))));
+  if(hitFlashSpans&&Number.isFinite(effect.hitFlashAt)&&m.p.length/3>first)
+   hitFlashSpans.push({first,end:m.p.length/3,source:effect});
  }
 }
 let poiSlimeMeshAnimating=false;
@@ -15030,7 +15181,7 @@ function poiMonsterRender(now,vp){
   (typeof poiDungeonVisualVisible!=='function'||poiDungeonVisualVisible(Math.floor(effect.x),Math.floor(effect.z),effect.floor))&&
   (!effect.settled||poiMonsterBreakPhase(now-effect.start,effect)==='fade'))||
   [...poiMonsterStates].some(([o,s])=>onSlice(o)&&s.hp>0&&(now-s.moveStarted<(s.guardMoveMs||380)+70||
-   (s.townOwned&&(now-s.counterAt<390||now-s.townHurtAt<158))));
+   (s.townOwned&&now-s.counterAt<390)));
  let slimeAttack=false;
  for(const [o,s] of poiMonsterStates){
   if(s.hp<=0||!onSlice(o))continue;
@@ -15038,15 +15189,18 @@ function poiMonsterRender(now,vp){
  }
  const settle=poiSlimeMeshAnimating&&!slimeAttack;poiSlimeMeshAnimating=slimeAttack;
  if(!poiMonsterMesh||poiMonsterMeshDirty||settle||((animate||slimeAttack)&&now-poiMonsterMeshLast>(slimeAttack?30:48))){
-  const m=mesh();
+  const m=mesh(),hitFlashSpans=[];
   for(const [obj,s] of poiMonsterStates){
    if(!onSlice(obj)||s.hp<=0)continue;
    const {x:cx,y,z:cz,attack,heading}=poiMonsterPose(obj,s,now),part=mesh();
    deco(part,poiMonsterRenderType(obj),cx,y,cz,0);
    const facing=attack?.facing??(s.facing||0);
-   const angle=Number.isFinite(heading)?heading:null,c=Math.cos(angle??0),sine=Math.sin(angle??0);
+   const swing=attack&&s.playerAttack?.angular?s.playerAttack:null;
+   const angle=swing?Math.atan2(-swing.dx,swing.dz):Number.isFinite(heading)?heading:null,c=Math.cos(angle??0),sine=Math.sin(angle??0);
    const rotate=angle===null?(x,z)=>rot2(x,z,facing):(x,z)=>[x*c-z*sine,x*sine+z*c];
-   const flash=s.townOwned&&Number.isFinite(s.townHurtAt)?Math.max(0,1-(now-s.townHurtAt)/115)*.26:0;
+   const first=m.p.length/3;
+   // A small warm light on the acting monster only, never on the floor.
+   const tell=(attack?.tell||0)*.17;
    const articulate=attack?.pitch!==undefined,pitch=attack?.pitch||0,twist=attack?.twist||0;
    const cp=Math.cos(pitch),sp=Math.sin(pitch),ct=Math.cos(twist),st=Math.sin(twist);
    for(let i=0;i<part.p.length;i+=3){
@@ -15071,14 +15225,18 @@ function poiMonsterRender(now,vp){
      m.p.push(cx+px,part.p[i+1],cz+pz);
      m.n.push(nx,part.n[i+1],nz);
     }
-    m.c.push(Math.min(1,part.c[i]+flash),part.c[i+1]*(1-flash*.44),part.c[i+2]*(1-flash*.37));
+    m.c.push(Math.min(1,part.c[i]+tell),Math.min(1,part.c[i+1]+tell*.89),
+     Math.min(1,part.c[i+2]+tell*.62));
    }
+   if(m.p.length/3>first)hitFlashSpans.push({first,end:m.p.length/3,source:s});
   }
-  poiMonsterDrawBreaks(m,now);
+  poiMonsterDrawBreaks(m,now,hitFlashSpans);
   if(poiMonsterMesh)gl.deleteBuffer(poiMonsterMesh.buf);
-  poiMonsterMesh=upload(m);poiMonsterMeshLast=now;poiMonsterMeshDirty=false;
+  poiMonsterMesh=upload(m);poiMonsterMesh.hitFlashSpans=hitFlashSpans;
+  poiMonsterMeshLast=now;poiMonsterMeshDirty=false;
  }
- draw(poiMonsterMesh,vp);
+ if(now<poiMonsterHitFlashUntil)poiDrawMonsterHitFlash(poiMonsterMesh,vp,now);
+ else draw(poiMonsterMesh,vp);
 }
 // BEGIN PLAYER DEFEAT
 const POI_DEATH_PAUSE=1200,POI_DEATH_FADE=450,POI_DEATH_BLACK=120;
@@ -15107,7 +15265,7 @@ function poiPlayerDeathBegin(now){
  if(typeof poiShopClose==='function')poiShopClose();
  const x=poiWalkX,z=poiWalkZ,y=poiWalkLevel;
  const pose={x:poiWalkViewX+.5,y:poiCreekPlayerHeight(now)+y*1.4+.03,z:poiWalkViewZ+.5};
- poiMonsterBreak({type:'humanBare',x,z,y},{x,z,facing:[2,3,0,1][poiWalkFacing]},now,Math.random,{actor:'player',pose});
+ poiMonsterBreak({type:'humanBare',x,z,y},{x,z,facing:[2,3,0,1][poiWalkFacing]},now,Math.random,{actor:'player',pose,hitFlashAt:typeof poiPlayerHitFlashAt!=='undefined'?poiPlayerHitFlashAt:null});
  if(typeof poiSound==='function')poiSound('player-defeat');
  const notice='死んでしまった。';
  if(typeof poiMessagePush!=='function'||!poiMessagePush(notice,'defeat',now))toast(notice);
@@ -15819,6 +15977,7 @@ function poiWalkAction(){
  // Interactions without an assigned action are intentionally silent.
 }
 function poiWalkReset(x,z){
+ if(typeof poiPlayerHitFlashAt!=='undefined')poiPlayerHitFlashAt=-Infinity;
  if(typeof poiCombatLockReset==='function')poiCombatLockReset();
  if(typeof poiArmedWand!=='undefined')poiArmedWand=null;
  poiWalkDoorOpen=null;poiFreePose=null;
@@ -16840,6 +16999,7 @@ varying vec3 vCol;
 varying mediump float vWorldHeight;
 varying mediump vec2 vLootXZ;
 uniform vec3 uTownDaylight;
+uniform float uHitFlash;
 uniform vec4 uLootHighlight;
 uniform OCCP vec4 uOcclusionShape;
 uniform OCCP vec4 uOcclusionInfo;
@@ -16877,17 +17037,17 @@ void main(){
   vec3 litLoot=paint*(1.28+.19*uLootHighlight.z)+paint*.16;
   color=mix(color,litLoot,nearLoot);
  }
- gl_FragColor=vec4(color,1.0);
+ gl_FragColor=vec4(mix(color,vec3(1.0,.13,.14),uHitFlash),1.0);
 }`;
 function sh(t,src){const s=gl.createShader(t);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s}
 let program;try{program=gl.createProgram();gl.attachShader(program,sh(gl.VERTEX_SHADER,VERT));gl.attachShader(program,sh(gl.FRAGMENT_SHADER,FRAG));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program))}catch(e){window.pineStartup.fail(e);return}
 gl.useProgram(program);gl.enable(gl.DEPTH_TEST);gl.depthMask(true);gl.depthFunc(gl.LESS);gl.clearColor(0,0,0,0);const loc={p:gl.getAttribLocation(program,'aPos'),n:gl.getAttribLocation(program,'aNorm'),c:gl.getAttribLocation(program,'aCol'),mvp:gl.getUniformLocation(program,'uMVP'),
- daylight:gl.getUniformLocation(program,'uTownDaylight'),lootHighlight:gl.getUniformLocation(program,'uLootHighlight'),occlusionShape:gl.getUniformLocation(program,'uOcclusionShape'),occlusionInfo:gl.getUniformLocation(program,'uOcclusionInfo')};
+ daylight:gl.getUniformLocation(program,'uTownDaylight'),lootHighlight:gl.getUniformLocation(program,'uLootHighlight'),occlusionShape:gl.getUniformLocation(program,'uOcclusionShape'),occlusionInfo:gl.getUniformLocation(program,'uOcclusionInfo'),hitFlash:gl.getUniformLocation(program,'uHitFlash')};
 try{initSignProgram()}catch(e){console.warn('2D sign textures unavailable',e)}
 function mult(a,b){const c=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++)for(let k=0;k<4;k++)c[j*4+i]+=a[k*4+i]*b[j*4+k];return c}
 function ortho(l,r,b,t,n,f){return new Float32Array([2/(r-l),0,0,0,0,2/(t-b),0,0,0,0,-2/(f-n),0,-(r+l)/(r-l),-(t+b)/(t-b),-(f+n)/(f-n),1])}
 function look(eye,target){let f=eye.map((v,i)=>v-target[i]),len=Math.hypot(...f);f=f.map(v=>v/len);let right=[f[2],0,-f[0]];len=Math.hypot(...right);right=right.map(v=>v/len);const up=[f[1]*right[2]-f[2]*right[1],f[2]*right[0]-f[0]*right[2],f[0]*right[1]-f[1]*right[0]];return new Float32Array([right[0],up[0],f[0],0,right[1],up[1],f[1],0,right[2],up[2],f[2],0,-right.reduce((s,v,i)=>s+v*eye[i],0),-up.reduce((s,v,i)=>s+v*eye[i],0),-f.reduce((s,v,i)=>s+v*eye[i],0),1])}
-function draw(mesh,vp){if(!mesh||!mesh.count)return;gl.bindBuffer(gl.ARRAY_BUFFER,mesh.buf);for(const [a,offset] of [[loc.p,0],[loc.n,12],[loc.c,24]]){gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,3,gl.FLOAT,false,36,offset)}gl.uniformMatrix4fv(loc.mvp,false,vp);gl.drawArrays(gl.TRIANGLES,0,mesh.count)}
+function draw(mesh,vp,first=0,count=mesh?.count){if(!mesh||!count)return;gl.bindBuffer(gl.ARRAY_BUFFER,mesh.buf);for(const [a,offset] of [[loc.p,0],[loc.n,12],[loc.c,24]]){gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,3,gl.FLOAT,false,36,offset)}gl.uniformMatrix4fv(loc.mvp,false,vp);gl.drawArrays(gl.TRIANGLES,first,count)}
 function layout(){const dpr=Math.min(devicePixelRatio||1,1.5),w=Math.max(1,Math.round(canvas.clientWidth*dpr)),h=Math.max(1,Math.round(canvas.clientHeight*dpr));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h)}return{w:canvas.clientWidth,h:canvas.clientHeight,aspect:canvas.clientWidth/canvas.clientHeight}}
 function zoomForFullMap(){
  const aspect=Math.max(.25,canvas.clientWidth/Math.max(1,canvas.clientHeight));
@@ -17381,7 +17541,7 @@ function poiDrawSceneOcclusion(m,vp,spans=null){
  }
  if(from<m.count)submit(from,m.count);
 }
-function poiDrawWalkAvatar(vp){
+function poiDrawWalkAvatar(vp,now=performance.now()){
  if(!poiWalkMesh)return;
  if(!pineAIActive){
   // Write no depth: only scene/actor occluders matter, not the player's
@@ -17391,7 +17551,7 @@ function poiDrawWalkAvatar(vp){
   try{draw(poiWalkMesh,vp)}
   finally{gl.uniform4f(loc.occlusionInfo,0,0,0,0);gl.depthFunc(gl.LESS);gl.depthMask(true)}
  }
- draw(poiWalkMesh,vp);
+ poiDrawHitFlashSpan(poiWalkMesh,vp,0,poiWalkMesh.count,poiHitFlashAmount(poiPlayerHitFlashAt,now));
 }
 function poiAvatarOcclusion(p,now){
  if(!poiWalkActive||!poiThirdPerson||cameraTopDown||pineAIActive)return {active:false};
@@ -17422,56 +17582,6 @@ function poiOcclusionBegin(p,now){
 }
 function poiOcclusionEnd(){
  if(poiOcclusionFrame.active)gl.uniform4f(loc.occlusionInfo,0,0,0,0);
-}
-const POI_ENEMY_THREAT_TINT=[1,.54,.49];
-let poiEnemyThreatMesh=null,poiEnemyThreatWorld=null;
-const poiEnemyThreatHeights=new Map();
-const poiEnemyThreatVp=new Float32Array(16);
-function poiEnemyThreatAlpha(tile,now){
- if(now<tile.start||now>=tile.hit||tile.hit<=tile.start)return 0;
- const p=(now-tile.start)/(tile.hit-tile.start);
- return .085+.27*(1-(1-p)*(1-p));
-}
-function poiEnemyThreatHeight({x,z,y}){
- const key=x+','+z+','+y;
- if(poiEnemyThreatHeights.has(key))return poiEnemyThreatHeights.get(key);
- const bridge=y===0?facilityCreekIndex?.bridgeHeight?.get(x+','+z):null;
- const raised=bridge==null&&world.some(o=>o.x===x&&o.z===z&&o.y===y&&
-  (ROAD_IDS.has(o.type)||/^(?:stone|woodfloor(?:Light|Dark)?|brickfloor|basicfloor|plasterfloor|mossfloor|ironfloor)$/.test(o.type)));
- const height=y*1.4+(bridge??(terrainY(x,z)+(raised ? .13 : 0)))+.02;
- poiEnemyThreatHeights.set(key,height);return height;
-}
-function poiEnemyThreatDrawAt(vp,tile,alpha){
- if(!poiEnemyThreatMesh){
-  const m=mesh(),center=[0,0,0],outline=[
-   [-.34,0,-.45],[-.45,0,-.34],[-.45,0,.34],[-.34,0,.45],
-   [.34,0,.45],[.45,0,.34],[.45,0,-.34],[.34,0,-.45]];
-  for(let i=0;i<outline.length;i++)tri(m,center,outline[i],outline[(i+1)%outline.length],POI_ENEMY_THREAT_TINT);
-  poiEnemyThreatMesh=upload(m);
- }
- const x=tile.x+.5,y=poiEnemyThreatHeight(tile),z=tile.z+.5;
- poiEnemyThreatVp.set(vp);
- // Multiply the view-projection by a translation without allocating a matrix.
- for(let i=0;i<4;i++)poiEnemyThreatVp[12+i]=vp[i]*x+vp[4+i]*y+vp[8+i]*z+vp[12+i];
- gl.blendColor(0,0,0,alpha);
- draw(poiEnemyThreatMesh,poiEnemyThreatVp);
-}
-function poiDrawEnemyThreatTiles(now,vp){
- const threats=poiWalkActive&&!pineAIActive&&typeof poiEnemyThreatTiles==='function'?poiEnemyThreatTiles(now):null;
- if(!threats?.length){if(poiEnemyThreatHeights.size)poiEnemyThreatHeights.clear();return}
- if(poiEnemyThreatWorld!==world||poiEnemyThreatHeights.size>32){poiEnemyThreatWorld=world;poiEnemyThreatHeights.clear()}
- const hits=new Map();
- for(const tile of threats){
-  if(tile.y!==poiWalkLevel||!validPos(tile.x,tile.z)||
-   (typeof poiDungeonVisualVisible==='function'&&!poiDungeonVisualVisible(tile.x,tile.z,tile.y)))continue;
-  const alpha=poiEnemyThreatAlpha(tile,now),key=tile.x+','+tile.z;
-  if(alpha>(hits.get(key)?.alpha??0))hits.set(key,{tile,alpha});
- }
- if(!hits.size)return;
- // Keep depth testing active so walls, rails and terrain still occlude a threat.
- gl.enable(gl.BLEND);gl.blendFunc(gl.CONSTANT_ALPHA,gl.ONE_MINUS_CONSTANT_ALPHA);gl.depthMask(false);
- try{for(const {tile,alpha} of hits.values())poiEnemyThreatDrawAt(vp,tile,alpha)}
- finally{gl.depthMask(true);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.disable(gl.BLEND)}
 }
 function render(){
  if(window.pineStartup.failed)return;
@@ -17508,12 +17618,11 @@ function render(){
  poiOcclusionEnd();
  poiDrawEditorGhostRoof(p.vp);
  drawSignOverlays(p.vp,daylight);pineDrawEditCursor(p.vp);
- poiDrawEnemyThreatTiles(now,p.vp);
  if(poiWalkActive){
   poiEconomyDraw(p.vp,now);poiInventoryDraw(p.vp,now);
   if(typeof poiTownResidentsDraw==='function')poiTownResidentsDraw(now,p.vp);
   poiMonsterRender(now,p.vp);
-  if(!poiPlayerDeath||poiPlayerDeath.relocated)poiDrawWalkAvatar(p.vp);
+  if(!poiPlayerDeath||poiPlayerDeath.relocated)poiDrawWalkAvatar(p.vp,now);
   poiPlayerWeaponDraw(now,p.vp);
  }
  poiRenderEnemyHealth(now,p.vp);poiRenderDamageLabels(now,p.vp);poiMineUnlockDraw(p.vp);poiTownDialogueDraw(now,p.vp);pineDrawChecks(p.vp);

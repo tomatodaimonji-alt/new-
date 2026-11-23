@@ -6,7 +6,7 @@ test('mask follows actual viewport and body position, strictly third-person Play
   poiWalkViewX:0,poiWalkViewZ:0,poiWalkLevel:0,poiCameraYaw:0,poiCreekPlayerHeight:()=>0,
   canvas:{width:480,height:840}};
  const p={vp:[1,0,0,0, 0,1,0,0, 0,0,1,1, 0,0,0,5]};
- vm.createContext(x);vm.runInContext('const POI_OCCLUSION_OPACITY=.16;'+block('let poiOcclusionFrame=','const POI_ENEMY_THREAT_TINT'),x);
+ vm.createContext(x);vm.runInContext('const POI_OCCLUSION_OPACITY=.16;'+block('function poiAvatarOcclusion(','function poiOcclusionBegin('),x);
  const a=x.poiAvatarOcclusion(p,100);
  assert(a.active);assert.equal(a.opacity,.16);
  assert(a.head[1]>a.foot[1]+25);assert(a.radius>10&&a.radius<90);
@@ -25,6 +25,6 @@ test('single world program dither is foreground/height gated and disabled before
  assert.match(frag,/gl_FragCoord\.w>uOcclusionInfo\.x/);
  assert.match(frag,/vWorldHeight>uOcclusionInfo\.y/);
  assert.match(frag,/smoothstep\([\s\S]*discard/);
- assert.match(render,/poiOcclusionBegin\(p,now\);[\s\S]*poiDrawSceneOcclusion\(sceneMesh,p\.vp\);facilityDrawRoofs\(p\.vp\);poiDrawGameRoofs\(p\.vp\);[\s\S]*poiOcclusionEnd\(\);[\s\S]*poiDrawEditorGhostRoof[\s\S]*poiDrawWalkAvatar\(p\.vp\)/);
- assert.doesNotMatch(block('function poiAvatarOcclusion(','const POI_ENEMY_THREAT_TINT'),/makeScene\(|upload\(|readPixels\(/);
+ assert.match(render,/poiOcclusionBegin\(p,now\);[\s\S]*poiDrawSceneOcclusion\(sceneMesh,p\.vp\);facilityDrawRoofs\(p\.vp\);poiDrawGameRoofs\(p\.vp\);[\s\S]*poiOcclusionEnd\(\);[\s\S]*poiDrawEditorGhostRoof[\s\S]*poiDrawWalkAvatar\(p\.vp,now\)/);
+ assert.doesNotMatch(block('function poiAvatarOcclusion(','function render()'),/makeScene\(|upload\(|readPixels\(/);
 });
