@@ -54,12 +54,13 @@ fixture=inject(fixture,'   const {x:cx,y,z:cz,attack,heading}=poiMonsterPose(obj
    if(obj.x===64&&obj.z===13&&obj.y===-1&&attack){const log=window.__qaFortDraw??=[];if(log.length<120)log.push({phase:attack.phase,tell:attack.tell??0,now,kind:s.playerAttack?.northAttack});}`);
 // Record actual submitted VBO vertex count and active blend opacity, after
 // the real WebGL drawing call has completed. Baseline remains red by behavior.
-const axeDraw=' try{draw(gpu,vp)}';
+const axeDraw=' try{for(const {gpu,alpha} of draws){gl.blendColor(0,0,0,alpha);draw(gpu,vp)}}';
 if(fixture.includes('function poiDrawNorthAxeCue(now,vp){')){
- fixture=inject(fixture,axeDraw,` try{draw(gpu,vp);
+ fixture=inject(fixture,axeDraw,` try{for(const {gpu,alpha} of draws){
+  gl.blendColor(0,0,0,alpha);draw(gpu,vp);
   const log=window.__qaFortAxeCue??=[];
   if(log.length<120)log.push({now,drawn:gpu.count,alpha});
- }`);
+ }}`);
 }
 const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(req.url==='/seed'?'<!doctype html><title>North Fort QA</title>':fixture)});
 await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',resolve).once('error',reject));
@@ -179,8 +180,8 @@ async function battle(mode){
   if(axEdge){
    const from=Math.hypot(start.pos.x-threat.sx,start.pos.z-threat.sz);
    assert(Math.abs(from-4)<.01,'the real strike begins at the exact new four-tile boundary');
-   assert(after.axeCue.some(a=>a.drawn>=96&&a.alpha>=.06&&a.now>=threat.start&&a.now<threat.hit),'a real semicircle WebGL cue draws during the committed wind-up');
-   await when(hit=>window.__editorTest.northFortQA.status().axeCue.some(a=>a.now>=hit&&a.drawn>=96&&a.alpha>.32),threat.hit,750);
+   assert(after.axeCue.some(a=>a.drawn>=96&&a.alpha>=.16&&a.alpha<.38&&a.now>=threat.start&&a.now<threat.hit),'a real semicircle WebGL cue draws during the committed wind-up');
+   await when(hit=>window.__editorTest.northFortQA.status().axeCue.some(a=>a.now>=hit&&a.drawn>=96&&a.alpha>=.26&&a.alpha<=.37),threat.hit,750);
   }
   if(edgeAvoid){
    assert(Math.hypot(after.pos.x-threat.sx,after.pos.z-threat.sz)>4.07,'physical side-step clears the arc even though still in front');

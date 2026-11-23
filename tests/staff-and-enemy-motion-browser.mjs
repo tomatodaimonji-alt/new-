@@ -18,7 +18,10 @@ if(process.env.STAFF_MOTION_LAYOUT_ONLY==='1'){
  console.log('PASS v201 staff thrust and actual authored enemy fixtures');
  process.exit(0);
 }
-const meshLine='poiWalkMesh=upload(poiBuildPlayerMesh(weapon,pose,gear,stride,[2,3,0,1][poiWalkFacing],x,y,z));';
+const meshLine=" if(typeof poiCombatLockRenderedHeading!=='undefined')poiCombatLockRenderedHeading=poiCombatLockHeading;";
+const meshCalls=/poiWalkMesh=upload\(poiBuildPlayerMesh\(weapon,pose,gear,stride,\[2,3,0,1\]\[poiWalkFacing\],x,y,z,(aim\.heading|poiCombatLockHeading|free\.angle|null),true\)\);/g;
+assert.deepEqual([...html.matchAll(meshCalls)].map(m=>m[1]),['aim.heading','poiCombatLockHeading','free.angle','null'],
+ 'all four production player-mesh branches use the same instrumented upload');
 const wildPick=' const p=poiWildPick(rng);',enemyEntry='function poiEnemyBeginPlayer(obj,s,now){',probeAnchor='  playerWeapon:()=>';
 for(const anchor of [meshLine,wildPick,enemyEntry,probeAnchor])assert.equal(html.split(anchor).length,2,anchor);
 // Observe the exact vertex batch fed to WebGL and keep unrelated ambient RNG
@@ -38,8 +41,10 @@ const observedHtml=stableRegionalCombat(html,'monsterSkelArcher').replace(wildPi
   },
   enemyMotionCycle:type=>[...poiMonsterStates].find(([o])=>o.type===type)?.[1]?.playerAttack?.start??null,
 ${probeAnchor}`)
- .replace(meshLine,`
- const renderedPlayerProbe=poiBuildPlayerMesh(weapon,pose,gear,stride,[2,3,0,1][poiWalkFacing],x,y,z);
+ .replace(meshCalls,'poiWalkMesh=renderedStaffMesh($1);')
+ .replace(meshLine,`${meshLine}
+ const renderedStaffMesh=heading=>{
+ const renderedPlayerProbe=poiBuildPlayerMesh(weapon,pose,gear,stride,[2,3,0,1][poiWalkFacing],x,y,z,heading,true);
  if(weapon==='equipLongStaff'&&pose?.staffThrust){
   const [dx,dz]=[[0,-1],[1,0],[0,1],[-1,0]][poiWalkFacing];
   let max=-Infinity,tip=null;
@@ -50,7 +55,8 @@ ${probeAnchor}`)
   }
   (window.__realStaffTips||=[]).push({ms,facing:poiWalkFacing,max,tip});
  }
- poiWalkMesh=upload(renderedPlayerProbe);`);
+ return upload(renderedPlayerProbe);
+ };`);
 const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
 const server=createServer((req,res)=>{
  res.setHeader('Content-Type','text/html; charset=utf-8');

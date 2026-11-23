@@ -6,7 +6,13 @@ import {mkdir} from 'node:fs/promises';
 
 const require=createRequire(import.meta.url);
 const {chromium}=require(process.env.PLAYWRIGHT_PACKAGE??'playwright');
-const html=readFileSync(process.argv[2]??'world-editor.html','utf8');
+const source=readFileSync(process.argv[2]??'world-editor.html','utf8');
+const renderAnchor=' const p=parameters();';
+assert.equal(source.split(renderAnchor).length,2,'unique 3D render camera boundary');
+const html=source.replace(renderAnchor,renderAnchor+`
+ if(!window.__qaResetFirstView&&poiWalkActive&&facilitySite?.id==='base')
+  window.__qaResetFirstView={third:poiThirdPerson,top:cameraTopDown};
+`);
 // Read the real loot branch, overriding only its single random sample
 // in the /tower fixture; never alter saved results or placement rules.
 const sampleAnchor='const sample=roll();';
@@ -90,9 +96,15 @@ const kit={version:1,weapon:'equipWoodSword',potions:1,gold:91,claimedCaches:['g
  drops:[{type:'healingHerb',x:42,z:43,y:0}]};
 const progress=page=>page.evaluate(([kitKey,clockKey,resumeKey])=>[kitKey,clockKey,resumeKey]
  .map(k=>localStorage.getItem(k)),[kitKey,clockKey,resumeKey]);
+async function resetCamera(page,expected){
+ await page.locator('#pineStartupCover').waitFor({state:'hidden'});
+ await page.waitForFunction(()=>!!window.__qaResetFirstView);
+ assert.deepEqual(await page.evaluate(()=>window.__qaResetFirstView),expected,'camera applied on the first actual rendered gameplay frame');
+}
 async function inspectReset(browser){
  const {ctx,page,errors}=await launch(browser,'base',{x:45,z:43},{kit,clockStart:19*60,width:320});
  try{
+  await resetCamera(page,{third:false,top:false}); // existing non-reset saved overview
   const original=await take(page);
   const before=await progress(page);
   assert.equal((await state(page)).economy.gold,91);
@@ -112,6 +124,9 @@ async function inspectReset(browser){
    const f=window.__editorTest?.facility?.();
    return f?.active&&f.economy.gold===0&&f.position.x===f.spawn.x&&f.position.z===f.spawn.z;
   });
+  await resetCamera(page,{third:true,top:false});
+  assert.equal((await page.locator('#poiThirdView').textContent()).trim(),'視点：三人称');
+  assert(!new URL(page.url()).searchParams.has('reset-camera'),'one-shot reset marker is consumed before play');
   const backup=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)),backupKey);
   assert.equal(backup.version,1);assert.equal(backup.phase,'complete');
   assert.deepEqual(Object.keys(backup.before).sort(),[kitKey,clockKey,resumeKey].sort(),'backup scopes exactly to this playthrough');
@@ -125,6 +140,15 @@ async function inspectReset(browser){
   assert.ok((await page.evaluate(()=>window.__editorTest.townClock())).minute<9*60,'game clock starts at morning');
   assert.deepEqual(await take(page),original,'authored world remains identical');
   await unchanged(page);
+  await page.locator('#poiThirdView').tap(); // existing cycle: third-person → overhead
+  await page.waitForFunction(()=>document.querySelector('#poiThirdView')?.textContent==='視点：真上');
+  await page.waitForFunction(key=>{
+   const view=JSON.parse(localStorage.getItem(key)||'null')?.view;
+   return view?.top===true&&view.third===false;
+  },resumeKey,{polling:40,timeout:4500});
+  await reload(page);
+  await resetCamera(page,{third:false,top:true});
+  assert.equal((await page.locator('#poiThirdView').textContent()).trim(),'視点：真上','a normal reload honors the manually selected later camera');
   await page.goto(origin+'/?facility-return=1&test=1');
   await page.locator('#enterGameWorld').waitFor({state:'visible'});
   assert.equal((await page.locator('#enterGameWorld').innerText()).trim(),'ゲーム世界へ','ordinary Editor retains original entry label, never a reset trigger');
@@ -147,7 +171,9 @@ async function repeatTowerFromReset(page){
  await page.evaluate(({key,pos})=>{
   const raw=JSON.parse(localStorage.getItem(key)||'null');
   localStorage.setItem(key,JSON.stringify({...raw,version:1,route:'facility',id:'base',play:true,townLayout:5,
-   position:{...pos,y:0,facing:0}}));
+   // This repeatable RNG scenario measures authored map-direction moves,
+   // independent from the separate reset-camera transition assertions.
+   position:{...pos,y:0,facing:0},view:{...raw?.view,third:false,top:false}}));
  },{key:resumeKey,pos:pass});
  await page.goto(origin+'/tower?resume=1&test=1');
  await page.waitForFunction(()=>window.__editorTest?.facility?.().active);

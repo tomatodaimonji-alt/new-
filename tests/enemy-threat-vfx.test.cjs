@@ -8,7 +8,7 @@ test('a normal gameplay render with a pending threat submits the scene and monst
  const calls=[];
  const s=vm.createContext({
   window:{pineStartup:{failed:false,loading:false}},performance:{now:()=>350},poiScreenNoteFrozen:()=>false,
-  poiWalkActive:true,pineGameActive:false,pineAIActive:false,document:{hidden:false},poiWalkX:5,poiWalkZ:5,poiWalkLevel:0,facilitySite:{id:'base'},facilityRoofMeshes:[1],level:0,hideUpper:false,
+  poiWalkActive:true,pineGameActive:false,pineAIActive:false,document:{hidden:false},poiWalkX:5,poiWalkZ:5,poiWalkLevel:0,facilitySite:{id:'base'},facilityRoofMeshes:[1],level:0,hideUpper:false,world:[],poiEnemyPending:new Set(),
   facilityRenderScene:()=>({mesh:{ground:'ground'},signs:[]}),sceneMesh:null,dirty:false,cursorDirty:false,
   parameters:()=>({vp:[]}),poiTownSceneLight:()=>[1,1,1],gl:{uniform3f(){},clear(){}},loc:{},poiPlayerDeath:null,
   signOverlays:[],poiEnemyThreatTiles:()=>[{x:5,z:5,y:0,start:100,hit:620}],

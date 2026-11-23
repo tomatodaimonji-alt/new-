@@ -42,7 +42,7 @@ test('only a walking base routes to a clean same-path URL and the departed page 
   workshopResumeLeaving:false,facilityLeaving:false});
  assert.equal(f.c.poiGameReset().reason,'unavailable');assert.equal(f.ops.length,0);
  f.c.facilitySite.id='base';assert.equal(f.c.poiGameReset().ok,true);
- assert.deepEqual(urls,['https://example.com/world-editor.html?facility=base&facility-play=1&test=1']);
+ assert.deepEqual(urls,['https://example.com/world-editor.html?facility=base&facility-play=1&reset-camera=1&test=1']);
  assert.equal(f.c.workshopResumeLeaving,true);assert.equal(f.c.facilityLeaving,true);
  for(const fn of ['poiHotbarSave','poiTownClockSave','workshopResumeWrite']){
   const i=h.indexOf('function '+fn+'(');
