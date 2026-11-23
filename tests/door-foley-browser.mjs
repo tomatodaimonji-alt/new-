@@ -3,7 +3,7 @@ import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {createServer} from 'node:http';
 const html=readFileSync(process.argv[2]??'world-editor.html','utf8');
-const audio='function poiSound(kind,weapon=null,defeated=false,atContact=false){',random=' const p=poiWildPick(rng);';
+const audio='function poiSound(kind,weapon=null,defeated=false,atContact=false,targetType=null){',random=' const p=poiWildPick(rng);';
 const played=' poiPlayImpactBuffer(poiRecordedFoley(id),when,level);';
 const clip='function poiTryRecordedFoley(id,when,level){';
 const inject=(h,anchor,extra)=>{assert.equal(h.split(anchor).length,2);return h.replace(anchor,anchor+extra);};

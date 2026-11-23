@@ -9,5 +9,8 @@ These clips are bundled as mono 24 kHz signed little-endian PCM16 in `world-edit
 | Steel-air swing | [SwordSwing01](https://freesound.org/people/32cheeseman32/sounds/180837/) by 32cheeseman32 (HQ preview MP3) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | 0.012–0.340 s, 328 ms | `e7f6237e7c83561f0915a91f1ab7190c3bdc8ac6933b55c57b2326b986b82513` |
 | Steel contact | [Single Sword Clash.MP3](https://freesound.org/people/FunWithSound/sounds/361482/) by FunWithSound (HQ preview MP3) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 1.743–2.290 s, 547 ms | `97d49563d7c5c8d9b34a5824efcb004d329c14216636088772ee8464d329e82c` |
 | Item goes into a bag | [Book Put into Old Backpack.wav](https://freesound.org/people/Kawgrim/sounds/584864/) by Kawgrim (HQ preview MP3) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 6.725–7.150 s, 425 ms | `9893f5e8f7911d6136bef7f8213638769ddb02918222e6e5b1b1a165bcedb8f4` |
+| Slime contact | [Gelatinous Cube Approach](https://freesound.org/people/e_r_r_1012/sounds/837146/) by e_r_r_1012 (public preview) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 4.075–4.345 seconds | `b389ccf1065bf4be3bbfbb2829aec3f4766b50e431001bb8a07d05093e0bd22a` |
 
 The sword-air recording is excerpted and processed as noted above. Its required attribution is also displayed in the in-game sound panel. The other pre-existing Foley, including the separately mixed coin sound, is unchanged.
+
+For the kitchen knife and iron sword, contact against slime uses this one shared recording instead of the steel clash or the common defeat sample. The recorded swing and other targets are unchanged.
