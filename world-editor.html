@@ -1575,7 +1575,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v232）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v233）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -9357,6 +9357,8 @@ function poiArmedBound(obj,x,z){
  const box=poiNorthWatchGuard(obj)?.leash;
  if(box)return x>=box.x1&&x<=box.x2&&z>=box.z1&&z<=box.z2;
  const p=POI_ARMED_FOES[obj.type];if(!poiArmedExact(p,obj))return true;
+ const runtime=typeof poiMonsterStates!=='undefined'?poiMonsterStates.get(obj):null;
+ if(runtime?.regionalWild)return poiWildExterior(x,z)&&Math.hypot(x-runtime.roamHome.x,z-runtime.roamHome.z)<=7;
  const [a,b,c,d]=p.bounds;return x>=a&&x<=c&&z>=b&&z<=d;
 }
 function poiArmedAim(obj,state,x,z){
@@ -10636,7 +10638,7 @@ function poiHotbarUse(slot){
  else if(result.reason==='storage')toast(poiInventoryItemName(item)+'を保存できませんでした');
 }
 function poiCombatActorMake(o){const stats=typeof poiMonsterStatsAt==='function'?poiMonsterStatsAt(o):POI_MONSTER_STATS[o.type];return {x:o.x,z:o.z,fromX:o.x,fromZ:o.z,moveStarted:-10000,facing:0,hp:stats.hp,nextAttack:0}}
-function poiResetCombat(){poiWildClear();poiPlayerHP=POI_PLAYER_MAX_HP;poiMonsterStates=new Map();const population=typeof poiDungeonPopulationDecode==='function'&&facilitySite?.id==='base'?poiDungeonPopulationDecode(poiHotbarRead().dungeonPopulation):null;for(const o of world){if(poiIsMonster(o.type)&&!(typeof poiNorthWatchGuardDefeated==='function'&&poiNorthWatchGuardDefeated(o))&&!(population&&poiDungeonActorAbsent(o,population)))poiMonsterStates.set(o,poiCombatActorMake(o))}poiDamageLabels=[];poiNextMobTick=0;poiAttackReady=0;poiMonsterMeshDirty=true;poiCombatHud();dirty=true}
+function poiResetCombat(){poiWildClear();poiPlayerHP=POI_PLAYER_MAX_HP;poiMonsterStates=new Map();const population=typeof poiDungeonPopulationDecode==='function'&&facilitySite?.id==='base'?poiDungeonPopulationDecode(poiHotbarRead().dungeonPopulation):null;for(const o of world){if(poiIsMonster(o.type)&&!(typeof poiWildFieldFixedPolicy==='function'&&poiWildFieldFixedPolicy(o))&&!(typeof poiNorthWatchGuardDefeated==='function'&&poiNorthWatchGuardDefeated(o))&&!(population&&poiDungeonActorAbsent(o,population)))poiMonsterStates.set(o,poiCombatActorMake(o))}poiDamageLabels=[];poiNextMobTick=0;poiAttackReady=0;poiMonsterMeshDirty=true;poiCombatHud();dirty=true}
 const POI_MESSAGE_LIFETIME=5000,POI_MESSAGE_MAX=2;
 const poiMessageLines=[];
 let poiMessageSpeech=null;
@@ -10765,6 +10767,100 @@ function poiMonsterAt(x,z,reserveSlide=false,except=null){
  return null;
 }
 const POI_WILD_MAX=3;
+// BEGIN OUTDOOR WILD RUNTIME
+const POI_REGIONAL_WILD_TYPES=new Set(['monsterSkelArcher','monsterSkelMage','monsterSkelLongStaff']);
+const poiRegionalWildRuntime=new Map();
+let poiRegionalWildNext=0;
+const POI_WILD_ROAM_LEASH=5,POI_WILD_ROAM_STEP=.68;
+function poiWildProtectedArea(x,z,site=facilitySite){
+ const n=site?.northTrail,pond=n?.marsh?.pond?.bounds;
+ const inside=p=>p&&x>=p.x1&&x<=p.x2&&z>=p.z1&&z<=p.z2;
+ return inside(pond)||!!n?.regions?.some(r=>r.outdoorLandmark&&inside(r.bounds));
+}
+function poiWildNearResident(x,z,pad=1){
+ if(typeof poiTownNpcActors==='undefined')return false;
+ return poiTownNpcActors.some(a=>a.y===0&&!a.recessed&&!a.death&&Math.abs(a.x-x)<pad&&Math.abs(a.z-z)<pad);
+}
+function poiWildFieldFixedPolicy(obj,site=facilitySite){
+ if(site?.id!=='base'||obj.y!==0||!poiWildExterior(obj.x,obj.z))return null;
+ if(POI_REGIONAL_WILD_TYPES.has(obj.type)&&site.armedEncounters?.some(o=>o.y===0&&o.type===obj.type&&o.x===obj.x&&o.z===obj.z))return 'regional';
+ return ['monsterSlime','monsterGoblin','monsterSkeleton'].includes(obj.type)?'ambient':null;
+}
+function poiWildRegionalPick(home,player,rng,canTravel,canSpawn){
+ const q=[{x:home.x,z:home.z}],seen=new Set([home.x+','+home.z]),choices=[];
+ for(let i=0;i<q.length;i++){
+  const p=q[i],x=p.x,z=p.z,d=Math.hypot(x-home.x,z-home.z);
+  if(d>=1.5&&d<=5&&Math.hypot(x-player.x,z-player.z)>=3&&canSpawn(x,z))choices.push(p);
+  for(const [dx,dz] of [[1,0],[0,1],[-1,0],[0,-1]]){
+   const u=x+dx,v=z+dz,k=u+','+v;
+   if(seen.has(k)||Math.hypot(u-home.x,v-home.z)>5||!canTravel(u,v,x,z))continue;
+   seen.add(k);q.push({x:u,z:v});
+  }
+ }
+ return choices.length?choices[Math.min(choices.length-1,Math.floor(rng()*choices.length))]:null;
+}
+function poiWildRegionalFrame(now,rng){
+ const line=facilitySite?.armedEncounters;
+ if(!line?.length||now<poiRegionalWildNext)return;
+ poiRegionalWildNext=now+1050;
+ let occupied=false;
+ for(const [obj,state] of poiRegionalWildRuntime){
+  if(state?.hp<=0)continue;
+  if(state&&poiMonsterStates.get(obj)===state&&Math.hypot(state.x-poiWalkX,state.z-poiWalkZ)<=22){occupied=true;continue}
+  if(state){poiRegionalWildRuntime.delete(obj);poiMonsterStates.delete(obj);poiMonsterMeshDirty=true}
+ }
+ if(occupied)return;
+ const p={x:poiWalkX,z:poiWalkZ};
+ const home=line.filter(o=>o.y===0&&POI_REGIONAL_WILD_TYPES.has(o.type)&&Math.hypot(p.x-o.x,p.z-o.z)<=12)
+  .sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z))[0];
+ if(!home)return;
+ const obj=world.find(o=>o.x===home.x&&o.z===home.z&&o.y===home.y&&o.type===home.type);
+ if(!obj||poiWildFieldFixedPolicy(obj)!=='regional'||poiRegionalWildRuntime.has(obj))return;
+ poiWildSpawnTerrain();
+ const traversable=(x,z,fx,fz)=>poiWildExterior(x,z)&&!facilityCreekIndex?.water.has(x+','+z)&&
+   !poiWildGateBlocked.has(x+','+z)&&terrainPassable(fx,fz,x,z);
+ const spawn=poiWildRegionalPick(home,p,rng,traversable,(x,z)=>
+  poiWildExterior(x,z,2)&&!poiWildNearResident(x,z,2)&&!poiMonsterAt(x,z,true)&&poiWalkCanStep(x,z)&&
+  !poiWildGateBlocked.has(x+','+z));
+ if(!spawn)return;
+ const state={...poiCombatActorMake(obj),...spawn,fromX:spawn.x,fromZ:spawn.z,wildSpawn:true,regionalWild:true,
+  roamHome:{x:home.x,z:home.z},nextAttack:now+1500};
+ poiRegionalWildRuntime.set(obj,state);poiMonsterStates.set(obj,state);poiMonsterMeshDirty=true;
+}
+function poiWildRoamBearings(from,home,prior,rng){
+ const distance=Math.hypot(from.x-home.x,from.z-home.z),inward=Math.atan2(home.z-from.z,home.x-from.x);
+ const turn=(rng()-.5)*.60,base=distance>POI_WILD_ROAM_LEASH-.9?inward:
+  Number.isFinite(prior)?prior+turn:rng()*Math.PI*2;
+ return [base,base+.63,base-.63,base+1.33,base-1.33,inward,base+Math.PI];
+}
+function poiWildRoamStep(obj,state,now,rng=Math.random){
+ const prior=state.actorFree,from=prior&&poiFreeCell(prior.x)===state.x&&poiFreeCell(prior.z)===state.z?prior:state;
+ const home=state.roamHome||{x:obj.x,z:obj.z};
+ const leash=Math.max(POI_WILD_ROAM_LEASH,Math.hypot(from.x-home.x,from.z-home.z)-.10);
+ const legal=(x,z,fx,fz)=>Math.hypot(x-home.x,z-home.z)<=leash&&
+  poiActorSameGrade(x,z,fx,fz)&&!poiWildNearResident(x,z)&&!poiTownNpcActorOccupied(x,z,poiWalkLevel)&&poiMonsterCanMove(x,z,state,fx,fz);
+ const cache=new Map();
+ for(const angle of poiWildRoamBearings(from,home,state.roamBearing,rng)){
+  const dx=Math.cos(angle)*POI_WILD_ROAM_STEP,dz=Math.sin(angle)*POI_WILD_ROAM_STEP;
+  const to={x:from.x+dx,z:from.z+dz};
+  if(Math.hypot(to.x-home.x,to.z-home.z)>leash||!poiWildExterior(poiFreeCell(to.x),poiFreeCell(to.z)))continue;
+  const cells=poiMonsterActorFootprint(from.x,from.z);
+  const next=poiActorAdvance(from,to,POI_WILD_ROAM_STEP,(x,z,fx,fz)=>{
+   const key=x+','+z+','+fx+','+fz;
+   if(!cache.has(key))cache.set(key,legal(x,z,fx,fz));
+   const pass=cache.get(key);if(pass)cells.add(x+','+z);return pass;
+  },()=>true);
+  if(next.stopped||Math.hypot(next.x-to.x,next.z-to.z)>1e-5||
+     [...poiMonsterActorFootprint(next.x,next.z)].some(k=>!cells.has(k)))continue;
+  poiMonsterActorStart(obj,state,now,from,next.x,next.z,POI_MONSTER_FREE_TICK,cells);
+  state.roamBearing=angle;
+  state.facing=Math.abs(dx)>=Math.abs(dz)?(dx>0?3:1):(dz<0?2:0);
+  return true;
+ }
+ return false;
+}
+// END OUTDOOR WILD RUNTIME
+
 const POI_WILD_LANDMARKS=[[84,34,88,38],[77,45,79,47]];
 const POI_WILD_GATES=[
  {threshold:[18,47,20,47],approach:[15,48,25,52],meadow:[10,49,39,55]},
@@ -10784,6 +10880,9 @@ function poiWildInvalidate(){poiWildTerrain=null;poiWildGateBlocked=null;poiWild
 function poiWildClear(){
  for(const actor of poiWildActors)poiMonsterStates.delete(actor);
  if(poiWildActors.size)poiMonsterMeshDirty=true;
+ for(const obj of poiRegionalWildRuntime.keys())poiMonsterStates.delete(obj);
+ if(poiRegionalWildRuntime.size)poiMonsterMeshDirty=true;
+ poiRegionalWildRuntime.clear();poiRegionalWildNext=0;
  poiWildActors.clear();poiWildLastFrame=null;poiWildRemaining=0;poiWildInvalidate();
 }
 function poiWildZone(rects,x,z,margin=0){
@@ -10792,7 +10891,7 @@ function poiWildZone(rects,x,z,margin=0){
 }
 function poiWildExterior(x,z,buffer=0){
  return validPos(x,z)&&!POI_WILD_GATES.some(g=>(!g.expansion||facilitySite?.townOffset)&&poiWildZone([g.threshold],x,z))&&!poiWildZone(POI_SAFE_TOWN,x,z,buffer)&&
-  !poiWildZone(POI_WILD_LANDMARKS,x,z)&&!(typeof poiWayfarerWellSheltered==='function'&&poiWayfarerWellSheltered(x,z))&&
+  !poiWildZone(POI_WILD_LANDMARKS,x,z)&&!(typeof poiWildProtectedArea==='function'&&poiWildProtectedArea(x,z))&&!(typeof poiWayfarerWellSheltered==='function'&&poiWayfarerWellSheltered(x,z))&&
   !(typeof poiSouthTownContains==='function'&&poiSouthTownContains(facilitySite,x,z,0))&&facilityFloorOwner(x,z,0)===null;
 }
 function poiWildActive(){
@@ -10800,7 +10899,7 @@ function poiWildActive(){
 }
 function poiWildPlayerOutside(){return poiWildActive()&&poiWildExterior(poiWalkX,poiWalkZ)}
 function poiWildMobMayMove(state,x,z,fromX=state.x,fromZ=state.z){
- return poiWildExterior(x,z)&&!facilityCreekIndex?.water.has(x+','+z)&&terrainPassable(fromX,fromZ,x,z)&&
+ return poiWildExterior(x,z)&&(!state.regionalWild||Math.hypot(x-state.roamHome.x,z-state.roamHome.z)<=6)&&!(typeof poiWildNearResident==='function'&&poiWildNearResident(x,z))&&!facilityCreekIndex?.water.has(x+','+z)&&terrainPassable(fromX,fromZ,x,z)&&
   !world.some(o=>o.x===x&&o.z===z&&o.y===0&&(o.type==='poiFortWall'||o.type==='poiFortCorner'||o.type==='poiFortBoundary'));
 }
 function poiWildSpawnTerrain(){
@@ -10861,6 +10960,7 @@ function poiWildSpawnFrame(now,rng=Math.random){
   poiWildActors.delete(key);poiMonsterStates.delete(key);poiMonsterMeshDirty=true;
  }
  if(!poiWildExterior(poiWalkX,poiWalkZ)){poiWildPause();return}
+ if(typeof poiWildRegionalFrame==='function')poiWildRegionalFrame(now,rng);
  if(!poiWildRemaining)poiWildRemaining=5500+rng()*3500;
  const dt=poiWildLastFrame===null?0:Math.max(0,Math.min(now-poiWildLastFrame,1000));
  poiWildLastFrame=now;
@@ -10926,6 +11026,8 @@ function poiPondSkaterPose(s,now){
 // END POND SKATER
 // BEGIN SLIME ATTACK
 const POI_SLIME_CONTACT_MS=170,POI_SLIME_ATTACK_MS=360;
+const POI_SLIME_RECOVERY_MS=1500,POI_SLIME_SETTLE_MS=480;
+function poiSlimeRecovering(s,now){return now<(s.slimeRecoverUntil||0)}
 const POI_SLIME_ATTACK_KEYS=[
  [0,0,0,1,1],[70,-.055,0,.65,1.16],[125,.28,.32,1.13,.96],
  [POI_SLIME_CONTACT_MS,.60,.23,.88,1.10],[217,.36,.15,1.10,.96],[280,.035,0,.75,1.18],[POI_SLIME_ATTACK_MS,0,0,1,1]
@@ -10942,14 +11044,28 @@ function poiSlimeAttackAge(s,now){
  }
  if(!p?.pending)return Infinity;
  // Begin a visible squash, hold it while the red ground warns, then lunge
- // on the old contact curve. The recovery still lasts exactly as before.
+ // on the original contact curve; the longer recovery begins on resolve.
  const age=Math.max(Math.min(now-start,69),now-p.hit+POI_SLIME_CONTACT_MS);
  return Math.min(age,POI_SLIME_CONTACT_MS-.001);
 }
 function poiSlimeAttackPose(s,now){
  const a=s.townOwned?{start:s.counterAt,dx:s.counterTargetX-s.x,dz:s.counterTargetZ-s.z}:s.playerAttack;
  const elapsed=poiSlimeAttackAge(s,now);
- if(!Number.isFinite(elapsed)||elapsed<0||elapsed>=POI_SLIME_ATTACK_MS)return null;
+ if(!Number.isFinite(elapsed)||elapsed>=POI_SLIME_ATTACK_MS){
+  if(!s.townOwned&&a&&poiSlimeRecovering(s,now)){
+   const age=now-(s.slimeRecoverUntil-POI_SLIME_RECOVERY_MS);
+   if(age<POI_SLIME_SETTLE_MS){
+    const start=Number.isFinite(a.visualHitAt)?POI_SLIME_ATTACK_MS-POI_SLIME_CONTACT_MS:0;
+    const t=Math.max(0,Math.min(1,(age-start)/105));
+    const release=Math.max(0,Math.min(1,(POI_SLIME_SETTLE_MS-age)/125));
+    const rest=.14*t*release;
+    const facing=a.dx>0?3:a.dx<0?1:a.dz<0?2:0;
+    return {phase:'recover-rest',dx:0,dz:0,lift:0,squash:1-rest,width:1+rest*.65,facing};
+   }
+  }
+  return null;
+ }
+ if(elapsed<0)return null;
  const i=POI_SLIME_ATTACK_KEYS.findIndex(k=>k[0]>elapsed);
  const p=POI_SLIME_ATTACK_KEYS[i-1],q=POI_SLIME_ATTACK_KEYS[i],t=(elapsed-p[0])/(q[0]-p[0]),ease=t*t*(3-2*t);
  const [reach,lift,squash,width]=p.slice(1).map((v,j)=>v+(q[j+1]-v)*ease);
@@ -11142,6 +11258,11 @@ function poiEnemyResolvePlayer(now){
   if(now<a.hit)continue;
   poiEnemyPending.delete(s);a.pending=false;
   const timely=now-a.hit<poiEnemyContactTolerance(a);
+  if(a.obj.type==='monsterSlime'){
+   // A committed strike leaves the same opening even if the player dodged
+   // or a late frame made the hit expire. The lock is not charged in windup.
+   s.slimeRecoverUntil=now+POI_SLIME_RECOVERY_MS;s.nextAttack=s.slimeRecoverUntil;
+  }
   if(a.obj.type==='monsterMineGuard')s.guardRestUntil=now+POI_MINE_GUARD_REST_MS;
   if(a.obj.type==='monsterPondSkater'){
    s.skaterRestUntil=now+POI_POND_SKATER_RECOVER;poiMonsterMeshDirty=true;
@@ -11319,7 +11440,8 @@ function poiMonsterChaseFree(obj,state,now,patrol,armed){
  state.facing=Math.abs(ax)>=Math.abs(az)?(ax>0?3:1):(az<0?2:0);
  return true;
 }
-function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMobTick=now+380;let changed=false;for(const [obj,state] of poiMonsterStates){if((facilitySite&&obj.y!==poiWalkLevel)||state.hp<=0||state.townOwned||(state.wildSpawn&&!poiWildPlayerOutside())||state.playerAttack?.pending)continue;
+function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMobTick=now+380;let changed=false;for(const [obj,state] of poiMonsterStates){if((facilitySite&&obj.y!==poiWalkLevel)||state.hp<=0||state.townOwned||(state.wildSpawn&&!poiWildPlayerOutside())||state.playerAttack?.pending||
+ (obj.type==='monsterSlime'&&typeof poiSlimeRecovering==='function'&&poiSlimeRecovering(state,now)))continue;
  if(state.actorFree&&poiMonsterActorPoint(state.actorFree,now).t<1)continue;
  const patrol=typeof poiDungeonPatrolSite==='function'&&!state.wildSpawn?poiDungeonPatrolSite(obj):null;
  const allowed=poiMineEarlyMayMove(obj,poiWalkX,poiWalkZ)&&
@@ -11332,6 +11454,10 @@ function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMo
   continue;
  }
  const armed=typeof POI_ARMED_FOES==='object'?POI_ARMED_FOES[obj.type]:null;
+ if(state.wildSpawn&&(dist>6.5||state.regionalWild&&!poiArmedBound(obj,poiWalkX,poiWalkZ))){
+  if(poiWildRoamStep(obj,state,now))changed=true;
+  continue;
+ }
  if(armed){
   if(!poiArmedBound(obj,poiWalkX,poiWalkZ)){if(patrol&&poiDungeonPatrolStep(obj,state,now,patrol))changed=true;continue}
   if(poiArmedAim(obj,state,poiWalkX,poiWalkZ)){if(now>=state.nextAttack)poiEnemyBeginPlayer(obj,state,now);continue}
@@ -11352,7 +11478,7 @@ function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMo
   }
  }
  if(obj.type==='monsterMineGuard'){if(poiMineGuardFrame(obj,state,now))changed=true;continue}
- if(dist>6.5){if(state.actorFree&&poiMonsterActorSettle(obj,state,now))continue;if((pineGameActive||state.wildSpawn)&&Math.random()<(state.wildSpawn?.22:.32)){const [rx,rz]=[[0,1],[0,-1],[1,0],[-1,0]][Math.floor(Math.random()*4)],nx=state.x+rx,nz=state.z+rz;if((state.wildSpawn||Math.max(Math.abs(nx-24),Math.abs(nz-24))>=10)&&poiMineEarlyMayMove(obj,nx,nz)&&poiMonsterCanMove(nx,nz,state)){state.fromX=state.x;state.fromZ=state.z;state.x=nx;state.z=nz;state.moveStarted=now;state.facing=rx?rx>0?3:1:rz<0?2:0;changed=true}}continue;}if(Math.abs(dx)+Math.abs(dz)===1){if(state.actorFree&&poiMonsterActorSettle(obj,state,now))continue;if(now>=state.nextAttack)poiEnemyBeginPlayer(obj,state,now);continue}
+ if(dist>6.5){if(state.actorFree&&poiMonsterActorSettle(obj,state,now))continue;if(pineGameActive&&Math.random()<.32){const [rx,rz]=[[0,1],[0,-1],[1,0],[-1,0]][Math.floor(Math.random()*4)],nx=state.x+rx,nz=state.z+rz;if((state.wildSpawn||Math.max(Math.abs(nx-24),Math.abs(nz-24))>=10)&&poiMineEarlyMayMove(obj,nx,nz)&&poiMonsterCanMove(nx,nz,state)){state.fromX=state.x;state.fromZ=state.z;state.x=nx;state.z=nz;state.moveStarted=now;state.facing=rx?rx>0?3:1:rz<0?2:0;changed=true}}continue;}if(Math.abs(dx)+Math.abs(dz)===1){if(state.actorFree&&poiMonsterActorSettle(obj,state,now))continue;if(now>=state.nextAttack)poiEnemyBeginPlayer(obj,state,now);continue}
  if(typeof poiMonsterChaseFree==='function'&&poiMonsterChaseFree(obj,state,now,patrol,armed)){changed=true;continue}
  if(state.actorFree&&poiMonsterActorSettle(obj,state,now))continue;
  const steps=[[Math.sign(dx),0],[0,Math.sign(dz)]].filter(([sx,sz])=>sx||sz).sort((a,b)=>Math.abs(a[0]*dx+a[1]*dz)>Math.abs(b[0]*dx+b[1]*dz)?-1:1);
@@ -13042,7 +13168,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v232',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v233',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -13157,7 +13283,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v232';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v233';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -13372,7 +13498,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v232',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v233',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -14759,7 +14885,8 @@ function poiMonsterPose(obj,s,now,locomotionOnly=false){
  let z=p?p.z:(s.fromZ??s.z)+(s.z-(s.fromZ??s.z))*e;
  const phase=p?p.t:t;
  const moving=phase<1&&(free||((s.fromX??s.x)!==s.x||(s.fromZ??s.z)!==s.z));
- let bounce=moving?.10*Math.sin(phase*Math.PI):.02*Math.sin(now*.003+obj.x);
+ const resting=obj.type==='monsterSlime'&&typeof poiSlimeRecovering==='function'&&poiSlimeRecovering(s,now);
+ let bounce=moving?.10*Math.sin(phase*Math.PI):resting?0:.02*Math.sin(now*.003+obj.x);
  const attack=locomotionOnly?null:typeof poiEnemyVisualAttack==='function'?poiEnemyVisualAttack(obj.type,s,now):
   obj.type==='monsterSlime'?poiSlimeAttackPose(s,now):obj.type==='monsterMineGuard'?poiMineGuardPose(s,now):obj.type==='monsterPondSkater'?poiPondSkaterPose(s,now):null;
  if(attack){x+=attack.dx;z+=attack.dz;bounce+=attack.lift}
@@ -16847,6 +16974,60 @@ function facilityWatchtowerCameraEye(target,desired){
  }
  return target.map((v,i)=>v+bestFraction*best[i]);
 }
+// BEGIN MINE CAMERA WALL CLIP
+const facilityMineCameraMeshWalls=new WeakMap();
+function facilityMineCameraWalls(mesh){
+ if(!mesh?.wallFade?.length)return [];
+ if(facilityMineCameraMeshWalls.has(mesh))return facilityMineCameraMeshWalls.get(mesh);
+ const walls=[],seen=new Set();
+ for(const part of mesh.wallFade){
+  if(part.owner!=='abandoned-mine'||part.y!==-1||part.trim||seen.has(part.start)||
+     !/^(?:stone|moss)wall(?:All|Plain|Double|corner)?$/.test(part.type))continue;
+  seen.add(part.start);walls.push(part);
+ }
+ facilityMineCameraMeshWalls.set(mesh,walls);return walls;
+}
+function facilityMineCameraArm(origin,ray,walls){
+ let best=1;
+ for(const {min,max} of walls){
+  let lo=0,hi=best;
+  for(let i=0;i<3;i++){
+   const v=ray[i],a=min[i]-.032-origin[i],b=max[i]+.032-origin[i];
+   if(Math.abs(v)<1e-7){if(a>0||b<0){lo=1;hi=0;break}continue}
+   lo=Math.max(lo,Math.min(a/v,b/v));hi=Math.min(hi,Math.max(a/v,b/v));
+   if(lo>hi)break;
+  }
+  if(lo>1e-6&&lo<=hi&&lo<best)best=lo;
+ }
+ return best;
+}
+function facilityMineCameraEye(target,desired,walls){
+ if(!walls.length)return desired;
+ const ray=desired.map((v,i)=>v-target[i]),distance=Math.hypot(...ray);
+ if(distance<1e-6)return desired;
+ // Cheap broad phase around the ray's entire reachable horizontal sector.
+ // No map scan or mesh creation while the thumb is turning.
+ const margin=Math.hypot(ray[0],ray[2])+.04;
+ const near=walls.filter(w=>w.max[0]>=target[0]-margin&&w.min[0]<=target[0]+margin&&
+  w.max[2]>=target[2]-margin&&w.min[2]<=target[2]+margin);
+ const clip=v=>facilityMineCameraArm(target,v,near);
+ const first=clip(ray);
+ if(first===1)return desired;
+ const arm=f=>f===1?distance:Math.max(f*distance*.53,f*distance-.19);
+ let vector=ray,length=arm(first);
+ if(length<1.8&&margin>.05){
+  const pitch=Math.atan2(ray[1],margin-.04);
+  for(let i=1;i<=10;i++){
+   const next=pitch+(Math.max(pitch,1.15)-pitch)*i/10,horizontal=distance*Math.cos(next);
+   const trial=[ray[0]*horizontal/(margin-.04),distance*Math.sin(next),ray[2]*horizontal/(margin-.04)];
+   const room=arm(clip(trial));
+   if(room>length){vector=trial;length=room}
+   if(length>=1.8)break;
+  }
+ }
+ return target.map((v,i)=>v+vector[i]*length/distance);
+}
+// END MINE CAMERA WALL CLIP
 function facilityWatchtowerCloseFov(distance){
  // A short safe arm would otherwise fill the screen with the character.
  // A wider lens, only when clipped, keeps the doorway and avatar readable.
@@ -16865,7 +17046,10 @@ function parameters(){
   const horizontal=poiCameraDistance*Math.cos(poiCameraPitch);
   const desired=[x-horizontal*Math.sin(poiCameraYaw),ground+1.1+poiCameraDistance*Math.sin(poiCameraPitch),z-horizontal*Math.cos(poiCameraYaw)];
   const target=[x,ground+1.1,z];
-  const eye=facilityWatchtowerCameraEye(target,desired);
+  const mineCamera=facilitySite?.id==='base'&&poiWalkLevel===-1&&
+   poiDungeonPointIn(facilitySite.mine?.bounds,Math.floor(x),Math.floor(z),poiWalkLevel)&&
+   !poiDungeonTravelKey(facilitySite,Math.floor(x),Math.floor(z),poiWalkLevel);
+  const eye=mineCamera?facilityMineCameraEye(target,desired,facilityMineCameraWalls(sceneMesh)):facilityWatchtowerCameraEye(target,desired);
   const arm=eye===desired?poiCameraDistance:Math.hypot(...eye.map((v,i)=>v-target[i]));
   const near=eye!==desired&&arm<1.81?.08:.45;
   const fov=eye===desired?Math.PI/3:facilityWatchtowerCloseFov(arm);
@@ -22573,6 +22757,9 @@ function facilityIsRoofPiece(o){
 }
 function facilityViewLevel(){return poiWalkActive?poiWalkLevel:level}
 function facilityObjectVisible(o,cut=facilityVisibilityOwner()){
+ // Omit only the large plaque above the Game World town guild entrance.
+ // The shared authored map, saved/standalone guilds and sign assets stay intact.
+ if(o.type==='guildFacadeSign'&&facilitySite?.id==='base'&&o.x===56&&o.z===38&&o.y===0&&(o.rot??0)===0)return false;
  const floor=facilityViewLevel();
  if(floor>=0&&poiWalkActive&&facilityIsRoofPiece(o)&&facilityRoofOwner(o)!==null)return false;
  if(floor<0){

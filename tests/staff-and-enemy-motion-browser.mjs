@@ -1,3 +1,4 @@
+import {stableRegionalCombat} from './outdoor-regional-combat-fixture.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {mkdir} from 'node:fs/promises';
@@ -22,7 +23,7 @@ const wildPick=' const p=poiWildPick(rng);',enemyEntry='function poiEnemyBeginPl
 for(const anchor of [meshLine,wildPick,enemyEntry,probeAnchor])assert.equal(html.split(anchor).length,2,anchor);
 // Observe the exact vertex batch fed to WebGL and keep unrelated ambient RNG
 // out of this disposable fixture. Native player/enemy behavior is unchanged.
-const observedHtml=html.replace(wildPick,' const p=null;')
+const observedHtml=stableRegionalCombat(html,'monsterSkelArcher').replace(wildPick,' const p=null;')
  .replace(enemyEntry,enemyEntry+"\n if(window.__isolatedKnight&&obj.type!=='monsterSkelKnight')return false;")
  .replace(probeAnchor,`  staffContactProbe:()=>{
    const weapon='equipLongStaff',profile=poiPlayerWeaponProfile(weapon);
@@ -93,15 +94,19 @@ async function launch(browser,start,facing,holding){
  return {ctx,page,errors};
 }
 async function nativeStaff(browser){
- const {ctx,page,errors}=await launch(browser,pos(103,86,0),1,true);
+ const {ctx,page,errors}=await launch(browser,pos(102,88,0),1,true);
  try{
-  const before=await state(page),world=await map(page),target=before.combat.actors.find(o=>o.type===archer);
-  assert.deepEqual([target.x,target.z],[105,86],'actual archer at second authored tile');
+  await page.waitForFunction(type=>window.__editorTest.facility().combat.actors.some(t=>t.type===type&&t.level===0),archer);
+  await page.keyboard.press('ArrowRight');
+  await page.waitForFunction(()=>window.__editorTest.facility().position.x===103);
+  await page.waitForTimeout(190);
+  const before=await state(page),world=await map(page),target=before.combat.actors.find(o=>o.type===archer&&o.level===0);
+  assert.deepEqual([target.x,target.z],[105,88],'regional archer birth is two tiles ahead');
   assert.equal(before.inventory.weapon,null);
   await page.locator('#poiHotbar [data-hotbar-slot="1"]').tap();
   assert.equal((await state(page)).inventory.weapon,staff);
   await page.locator('#poiWalkAction').tap();
-  await page.waitForFunction(({archer,hp})=>window.__editorTest.facility().combat.actors.find(a=>a.type===archer)?.hp===hp,
+  await page.waitForFunction(({archer,hp})=>window.__editorTest.facility().combat.actors.find(a=>a.type===archer&&a.level===0)?.hp===hp,
    {archer,hp:target.hp-20});
   // Some software-rendered frames skip over the narrow maximum extension.
   // The hit above is live; independently sample the exact production mesh

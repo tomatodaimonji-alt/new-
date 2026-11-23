@@ -1,3 +1,4 @@
+import {stableRegionalCombat} from './outdoor-regional-combat-fixture.mjs';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {createRequire} from 'node:module';
@@ -9,7 +10,9 @@ const {chromium}=require(process.env.PLAYWRIGHT_PACKAGE??'playwright');
 const html=readFileSync(process.argv[2]??'world-editor.html','utf8');
 const observe='function poiEquipmentDurabilityMax(type){';
 assert.equal(html.split(observe).length,2);
-const candidate=html.replace(observe,`window.__qaEquipmentMaximum=type=>poiEquipmentDurabilityMax(type);
+const candidate=stableRegionalCombat(html,'monsterSkelArcher')
+ .replace("function poiEnemyBeginPlayer(obj,s,now){","function poiEnemyBeginPlayer(obj,s,now){\n if(s.regionalWild&&obj.type==='monsterSkelArcher')return false;")
+ .replace(observe,`window.__qaEquipmentMaximum=type=>poiEquipmentDurabilityMax(type);
 function poiEquipmentDurabilityMax(type){`);
 const server=createServer((req,res)=>{
  res.setHeader('Content-Type','text/html; charset=utf-8');
@@ -129,7 +132,9 @@ const bar=i=>'#poiHotbar [data-hotbar-slot="'+i+'"]';
 const bag=i=>'#poiBagGrid [data-bag-slot="'+i+'"]';
 const oldKit={version:1,weapon:sword,potions:3,gold:12,claimedCaches:['glade']};
 const inv=async page=>(await state(page)).inventory;
-const target=async(page,type)=>(await state(page)).combat.actors.find(a=>a.type===type);
+const target=async(page,type)=>{
+ const live=await state(page);return live.combat.actors.find(a=>a.type===type&&a.level===live.position.level);
+};
 const pos=(x,z,level=0)=>({x,z,level});
 const all=(i,type)=>[...i.hotbar,...i.bag].filter(c=>c?.type===type);
 async function waitPlay(page){await page.waitForFunction(()=>window.__editorTest?.facility?.().active)}
@@ -217,12 +222,14 @@ async function openBagEquip(page){
  await page.locator('#poiBagClose').tap();
 }
 async function fireRange(browser,mode){
- const where=mode==='bow'?{x:56,z:39}:{x:105,z:81};
+ const where=mode==='bow'?{x:56,z:39}:{x:105,z:83};
  const {ctx,page,errors}=await launch(browser,'base',where,{level:0,width:390,clockStart:morning,kit:rangeKit(mode),facing:2});
  try{
   const original=await getMap(page);
-  if(mode==='bow'){await openBagEquip(page);await relocate(page,105,81,0,2)}
-  const foe='monsterSkelArcher',a=await target(page,foe),p=(await state(page)).position;
+  if(mode==='bow'){await openBagEquip(page);await relocate(page,105,83,0,2)}
+  const foe='monsterSkelArcher';
+  await page.waitForFunction(type=>window.__editorTest.facility().combat.actors.some(t=>t.type===type&&t.level===0),foe);
+  const a=await target(page,foe),p=(await state(page)).position;
   assert(a?.level===0&&a.x===p.x&&a.z-p.z===5,'actual target is aligned beyond melee range');
   const expected=a.hp-(mode==='bow'?22:34);
   if(mode==='wand'){
@@ -231,7 +238,7 @@ async function fireRange(browser,mode){
    assert.equal(await page.evaluate(()=>window.__editorTest.playerWeapon().pending),null,'wand arming does not fire');
   }
   await page.locator(actionButton).tap();
-  await page.waitForFunction(({kind,expected})=>window.__editorTest.facility().combat.actors.find(a=>a.type===kind)?.hp===expected,
+  await page.waitForFunction(({kind,expected})=>window.__editorTest.facility().combat.actors.find(a=>a.type===kind&&a.level===0)?.hp===expected,
    {kind:foe,expected},{timeout:5000}).catch(async err=>{
    const s=await state(page);
    throw Error(mode+': '+JSON.stringify({actual:await target(page,foe),expected,position:s.position,kit:await readStock(page),errors}),{cause:err});

@@ -1,3 +1,4 @@
+import {stableRegionalCombat} from './outdoor-regional-combat-fixture.mjs';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {createRequire} from 'node:module';
@@ -9,7 +10,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_PACKAGE??'playwright');
 const html=readFileSync(process.argv[2]??'world-editor.html','utf8');
 const server=createServer((req,res)=>{
  res.setHeader('Content-Type','text/html; charset=utf-8');
- res.end(req.url.startsWith('/seed')?'<!doctype html><title>Isolated fixtures</title>':html);
+ res.end(req.url.startsWith('/seed')?'<!doctype html><title>Isolated fixtures</title>':stableRegionalCombat(html,'monsterSkelMage','monsterSkelLongStaff'));
 });
 await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',resolve).once('error',reject));
 const origin='http://127.0.0.1:'+server.address().port;
@@ -122,7 +123,7 @@ const sword='equipWoodSword',long='equipLongStaff',plain='equipPlainStaff',wand=
 const mage='monsterSkelMage',staff='monsterSkelLongStaff';
 const actionButton='#poiWalkAction',detail='#poiItemDetail';
 const kit={version:1,weapon:sword,potions:3,gold:12,claimedCaches:['glade']};
-const target=async(page,type)=>(await state(page)).combat.actors.find(a=>a.type===type);
+const target=async(page,type)=>(await state(page)).combat.actors.find(a=>a.type===type&&a.level===0);
 const inv=async page=>(await state(page)).inventory;
 const pos=(x,z)=>({x,z,level:0});
 const physical=(page,d)=>page.locator('[data-poi-dir="'+d+'"]');
@@ -142,7 +143,7 @@ async function hit(page,type){
  assert(before>0);
  await page.locator(actionButton).tap();
  await page.waitForFunction(({type,before})=>{
-  const a=window.__editorTest.facility().combat.actors.find(a=>a.type===type);
+  const a=window.__editorTest.facility().combat.actors.find(a=>a.type===type&&a.level===0);
   return !a||a.hp<before;
  },{type,before},{timeout:6000});
  const after=(await target(page,type))?.hp??0;
@@ -160,7 +161,7 @@ async function finish(page,type,wait=540){
 async function pickLong(page){
  await page.waitForFunction(type=>JSON.parse(localStorage.getItem('world-workshop-hotbar-v1'))?.armedDrops?.some(d=>d.type===type),long);
  const d=(await readDrops(page)).find(o=>o.type===long);
- assert.deepEqual([d.x,d.z,d.y],[43,7,0]);
+ assert.deepEqual([d.x,d.z,d.y],[43,9,0]);
  await move(page,'n',true,true);
  const i=await inv(page),bagIndex=i.bag.findIndex(c=>c?.type===long),hotIndex=i.hotbar.findIndex(c=>c?.type===long);
  assert(bagIndex>=0||hotIndex>=0,'physical step picked up unique staff');
@@ -175,28 +176,31 @@ async function pickLong(page){
  assert.equal((await inv(page)).weapon,long);
 }
 async function targetedMage(page){
- await page.waitForFunction(type=>window.__editorTest.facility().combat.threats.some(t=>t.type===type),mage);
- return (await state(page)).combat.threats.filter(t=>t.type===mage);
+ await page.waitForFunction(type=>window.__editorTest.facility().combat.threats.some(t=>t.type===type&&t.y===0),mage);
+ return (await state(page)).combat.threats.filter(t=>t.type===mage&&t.y===0);
 }
 async function run(browser){
- const {ctx,page,errors}=await launch(browser,'base',{x:43,z:8},{level:0,width:390,clockStart:morning,kit,facing:0});
+ const {ctx,page,errors}=await launch(browser,'base',{x:43,z:12},{level:0,width:390,clockStart:morning,kit,facing:0});
  try{
   const original=await getMap(page);
   assert(original.world.some(o=>o.type===staff&&o.x===43&&o.z===7&&o.y===0));
   assert(original.world.some(o=>o.type===mage&&o.x===40&&o.z===88&&o.y===0));
+  await page.waitForFunction(type=>window.__editorTest.facility().combat.actors.some(t=>t.type===type&&t.level===0),staff);
+  await move(page,'n');await move(page,'n');
   await finish(page,staff,425);
   await pickLong(page);
   // Start outside the mage's leash, then enter on a known native step.
   // That leaves the full windup rather than sampling an attack during reload.
-  await relocate(page,40,93,0);
+  await relocate(page,40,95,0);
+  await page.waitForFunction(type=>window.__editorTest.facility().combat.actors.some(t=>t.type===type&&t.level===0),mage);
   const life=(await state(page)).combat.playerHP;
   const startTrace=page.waitForFunction(type=>window.__editorTest.playerWeapon().enemyBolts.some(b=>
-   b.type===type&&b.x===40&&b.toX===40&&b.z===88&&b.y===0),mage);
+   b.type===type&&b.x===40&&b.toX===40&&b.z===90&&b.y===0),mage);
   await page.keyboard.press('ArrowUp');
-  await page.waitForFunction(()=>window.__editorTest.facility().position.z===92);
+  await page.waitForFunction(()=>window.__editorTest.facility().position.z===94);
   const marks=await targetedMage(page);
-  assert(marks.some(t=>t.x===40&&t.z===92&&t.y===0),'the actual occupied tile is threatened');
-  assert(marks.every(t=>t.x===40&&t.y===0&&t.z>88),'only a cardinal line is announced');
+  assert(marks.some(t=>t.x===40&&t.z===94&&t.y===0),'the actual occupied tile is threatened');
+  assert(marks.every(t=>t.x===40&&t.y===0&&t.z>90),'only a cardinal line is announced');
   await page.waitForTimeout(185);
   // A single real key is deterministic after a recent accepted tile lock;
   // the same movement path is exercised via touch in the rest of the run.
@@ -208,9 +212,10 @@ async function run(browser){
   await page.waitForFunction(()=>window.__editorTest.facility().position.x===39,undefined,{timeout:5000});
   await startTrace;
   await page.waitForTimeout(220);
-  assert.deepEqual((await state(page)).position,pos(39,92));
+  assert.deepEqual((await state(page)).position,pos(39,94));
   assert.equal((await state(page)).combat.playerHP,life,'sidestep evades the committed fire line');
-  await relocate(page,40,90,0);
+  await move(page,'e');await move(page,'n');await move(page,'n');
+  await page.waitForTimeout(540);
   const first=await hit(page,mage);
   assert.equal(first.before-first.after,20,'long staff has full damage at two tiles');
   await move(page,'n',true,true);
@@ -221,18 +226,18 @@ async function run(browser){
   await finish(page,mage);
   await page.waitForFunction(type=>JSON.parse(localStorage.getItem('world-workshop-hotbar-v1'))?.armedDrops?.some(d=>d.type===type),plain);
   const fallen=await readDrops(page),item=fallen.find(o=>o.type===plain),bonus=fallen.find(o=>o.type===wand);
-  assert.deepEqual([item.x,item.z,item.y],[40,88,0]);
+  assert.deepEqual([item.x,item.z,item.y],[40,90,0]);
   if(bonus)assert(Number.isInteger(bonus.charges)&&bonus.charges>=2&&bonus.charges<=5,'optional naturally rolled wand has 2–5 charges');
   console.log('mage native loot:',bonus?'staff + wand, charges='+bonus.charges:'staff, no wand this run');
   if(out)await page.screenshot({path:out+'/v195-mage-drop.png'});
   // Cold loading a surface combat fixture can reconstruct the mage at its
   // authored home. Compare durable bytes from the original safe approach,
   // outside the mage's leash, rather than while respawned fire can wear armor.
-  for(let z=(await state(page)).position.z;z<93;z++)await move(page,'s');
-  assert.deepEqual((await state(page)).position,pos(40,93));
+  for(let z=(await state(page)).position.z;z<95;z++)await move(page,'s');
+  assert.deepEqual((await state(page)).position,pos(40,95));
   const persisted=await readStock(page);
   await page.reload();await waitPlay(page);
-  assert.deepEqual((await state(page)).position,pos(40,93));
+  assert.deepEqual((await state(page)).position,pos(40,95));
   assert.deepEqual(await readStock(page),persisted,'the genuine unforced loot roll, worn armor and staff durability persist');
   assert.deepEqual(await getMap(page),original);
   await unchanged(page);assert.deepEqual(errors,[]);
