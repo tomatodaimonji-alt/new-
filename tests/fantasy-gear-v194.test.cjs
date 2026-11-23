@@ -4,7 +4,7 @@ function fixture(saved=null){
  let failure=false,raw=saved&&JSON.stringify(saved),writes=0;
  const ctx={MAX_MAP:128,poiPlayerHP:100,POI_PLAYER_MAX_HP:100,facilitySite:{id:'base'},poiWalkActive:true,pineAIActive:false,poiWalkX:4,poiWalkZ:5,poiWalkLevel:0,poiWalkFacing:0,world:[],
  localStorage:{getItem(){return raw},setItem(_key,v){if(failure)throw Error('quota');raw=v;writes++}},
- poiWalkCanStep:()=>true,isFloor:()=>true,poiWalkAvatar(){},document:{querySelectorAll:()=>[]},$(){return null},toast(){}};
+ poiWalkCanStep:()=>true,isFloor:()=>true,poiWalkAvatar(){},poiBagSetOpen(){},poiShopSync(){},document:{querySelectorAll:()=>[]},$(){return null},toast(){}};
  vm.createContext(ctx);
  const a=h.indexOf('const POI_HOTBAR_KEY='),b=h.indexOf('function poiResetCombat(',a);
  vm.runInContext(h.slice(a,b),ctx);
@@ -49,16 +49,18 @@ test('old two-weapon migration does not scale new weapons',()=>{
  assert.equal(c.poiInventorySnapshot().hotbar[0].durability,40);
  assert.equal(c.poiInventorySnapshot().hotbar[2].durability,5);
 });
-test('both inventory use routes defer to a single cast handler and separate chest copies keep independent charges',()=>{
+test('both inventory use routes arm without charge; attack spending uses only the armed copy',()=>{
  const saved={version:1,weapon:'equipWoodSword',potions:0,slots:Array(27).fill(null),
   kitchenChest:{version:1,slots:Array(18).fill(null)},mineGateCleared:true,mineTreasureChest:{version:1,slots:Array(18).fill(null)}};
  saved.slots[0]=cell('equipWoodSword');saved.slots[3]=cell(W,{charges:5});saved.slots[9]=cell(W,{charges:4});
  saved.kitchenChest.slots[0]=cell(W,{charges:2});saved.mineTreasureChest.slots[0]=cell(W,{charges:3});
- const f=fixture(saved), c=f.ctx, calls=[];
- c.poiPlayerCastFireWand=i=>{calls.push(i);return {ok:c.poiInventorySpendFireWand(i),reason:null}};
- c.poiHotbarUse(3);assert.equal(c.poiUseBagItem(0).ok,true);
- assert.deepEqual(calls,[3,9]);assert.equal(c.poiEquippedWeapon(),'equipWoodSword');
- assert.equal(c.poiInventorySnapshot().hotbar[3].charges,4);assert.equal(c.poiInventorySnapshot().bag[0].charges,3);
+ const f=fixture(saved), c=f.ctx;
+ c.poiHotbarUse(3);assert.equal(c.poiArmedWandIndex(),3);
+ assert.equal(c.poiUseBagItem(0).ok,true);assert.equal(c.poiArmedWandIndex(),9);
+ assert.equal(f.writes(),0);assert.equal(c.poiEquippedWeapon(),'equipWoodSword');
+ assert.equal(c.poiInventorySnapshot().hotbar[3].charges,5);assert.equal(c.poiInventorySnapshot().bag[0].charges,4);
+ assert.equal(c.poiInventorySpendFireWand(c.poiArmedWandIndex()),true);
+ assert.equal(c.poiArmedWandIndex(),9);assert.equal(c.poiInventorySnapshot().bag[0].charges,3);
  assert.equal(f.raw().kitchenChest.slots[0].charges,2);assert.equal(f.raw().mineTreasureChest.slots[0].charges,3);
- assert.equal(c.poiInventoryCellName(c.poiInventorySnapshot().hotbar[3]),'火の杖（4）');
+ assert.equal(c.poiInventoryCellName(c.poiInventorySnapshot().hotbar[3]),'火の杖（5）');
 });
