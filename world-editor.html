@@ -1585,7 +1585,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v249）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v250）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -13427,7 +13427,136 @@ function poiMonsterChaseFree(obj,state,now,patrol,armed){
  state.facing=Math.abs(ax)>=Math.abs(az)?(ax>0?3:1):(az<0?2:0);
  return true;
 }
-function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMobTick=now+380;let changed=false;for(const [obj,state] of poiMonsterStates){if((facilitySite&&obj.y!==poiWalkLevel)||state.hp<=0||state.townOwned||(state.wildSpawn&&!poiWildPlayerOutside())||state.playerAttack?.pending||
+// BEGIN MONSTER CROWD SPACING
+const POI_CROWD_DIRECTIONS=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]];
+const POI_CROWD_NORMAL=new Set(['monsterSlime','monsterGoblin','monsterSkeleton']);
+const poiMonsterCrowdGoals=new WeakMap();
+function poiMonsterCrowdNormal(obj){
+ if(!POI_CROWD_NORMAL.has(obj.type)||obj.y!==poiWalkLevel||
+    typeof poiChapelEliteMatch==='function'&&poiChapelEliteMatch(obj))return false;
+ const mine=facilitySite?.mine,west=facilitySite?.chapel?.expansion?.guard;
+ const match=m=>m&&m.type===obj.type&&m.x===obj.x&&m.z===obj.z&&m.y===obj.y;
+ return !match(mine?.early)&&!mine?.earlyRoom?.slimes?.some(match)&&!match(west);
+}
+function poiMonsterCrowdPrepare(now){
+ const x=poiWalkX,z=poiWalkZ,y=poiWalkLevel,actors=[];
+ for(const [o,s] of poiMonsterStates){
+  if(s.hp<=0||s.townOwned||!poiMonsterCrowdNormal(o)||
+     s.wildSpawn&&!poiWildPlayerOutside()||Math.hypot(s.x-x,s.z-z)>6.5)continue;
+  if(!poiMineEarlyMayMove(o,x,z)||
+     typeof poiOtherworldEnemyMayFight==='function'&&!poiOtherworldEnemyMayFight(o,x,z)||
+     typeof poiDungeonPatrolCanFight==='function'&&!poiDungeonPatrolCanFight(o,x,z))continue;
+  actors.push(s);
+ }
+ if(actors.length<3)return null;
+ const doors=new Set(),subjects=new Set(actors);
+ // The regular player permits threshold crossings; the group detour must
+ // not silently route through a still-present leaf or a special boundary.
+ for(const o of world){
+  if(o.y===y&&(o.type==='door'||/Door$/.test(o.type))&&poiWalkPassableDoor(o.type))doors.add(o.x+','+o.z);
+ }
+ if(typeof poiWalkDoorOpen!=='undefined'&&poiWalkDoorOpen?.y===y)doors.delete(poiWalkDoorOpen.x+','+poiWalkDoorOpen.z);
+ const free=typeof poiFreePose!=='undefined'&&poiFreePose?.level===y?poiFreePose:null;
+ const px=free?.x??poiWalkViewX,pz=free?.z??poiWalkViewZ;
+ return {now,x,z,y,px,pz,doors,subjects,claims:new Map(),budget:4};
+}
+function poiMonsterCrowdEdge(g,obj,state,patrol,x,z,fx,fz){
+ const key=x+','+z;
+ if(g.doors.has(key)||x===g.x&&z===g.z||
+    pineGameActive&&Math.max(Math.abs(x-24),Math.abs(z-24))<10||
+    !poiMineEarlyMayMove(obj,x,z)||patrol&&!poiDungeonPatrolCanFight(obj,x,z,patrol)||
+    typeof poiOtherworldEnemyMayFight==='function'&&!poiOtherworldEnemyMayFight(obj,x,z)||
+    !poiActorSameGrade(x,z,fx,fz))return false;
+ // Cardinal peers keep their vacated rendered source until the existing
+ // interpolation finishes; active free legs use their swept reservations.
+ for(const [o,s] of poiMonsterStates)
+  if(s!==state&&o.y===g.y&&s.hp>0&&!s.actorFree&&g.now-s.moveStarted<380&&s.fromX===x&&s.fromZ===z)return false;
+ return poiMonsterCanMove(x,z,state,fx,fz);
+}
+function poiMonsterCrowdGoal(g,state,can){
+ const old=poiMonsterCrowdGoals.get(state),same=old?.x===g.x&&old?.z===g.z&&old?.y===g.y;
+ const candidates=POI_CROWD_DIRECTIONS.map(([dx,dz],i)=>{
+  const x=g.x+dx,z=g.z+dz,k=x+','+z;
+  const bias=i*.005+((state.z+(state.x||0))%2!==0?dx:-dx)*.035;
+  const cost=Math.abs(x-state.x)+Math.abs(z-state.z)+bias-(same&&old.k===k?.65:0);
+  return {x,z,k,dx,dz,cost};
+ }).sort((a,b)=>a.cost-b.cost);
+ for(const p of candidates){
+  if(g.claims.has(p.k)&&g.claims.get(p.k)!==state||g.doors.has(p.k)||
+     poiMonsterAt(p.x,p.z,true,state))continue;
+  // Validate a real directed inbound edge, not a zero-length stand probe:
+  // the wild terrain limiter intentionally accepts only cardinal crossings.
+  const approaches=POI_CROWD_DIRECTIONS.slice(0,4).map(([dx,dz])=>[p.x+dx,p.z+dz])
+   .filter(([x,z])=>(x!==g.x||z!==g.z)&&!g.doors.has(x+','+z))
+   .sort((a,b)=>(Math.abs(a[0]-state.x)+Math.abs(a[1]-state.z))-(Math.abs(b[0]-state.x)+Math.abs(b[1]-state.z)));
+  if(!approaches.slice(0,2).some(([x,z])=>can(p.x,p.z,x,z)))continue;
+  // A diagonal is an attack position only if both flanks can actually
+  // pass the existing combat trace; no trapping at a blind wall corner.
+  const open=(x,z,fx,fz)=>!g.doors.has(x+','+z)&&
+   (typeof poiEnemyCombatEdge==='function'?poiEnemyCombatEdge(x,z,fx,fz,g.y,state):poiPlayerRayClear(x,z,g.y,fx,fz));
+  if(typeof poiEnemyAttackTrace==='function'&&poiEnemyAttackTrace(p.x,p.z,g.x,g.z,open).blocked)continue;
+  return p;
+ }
+ return null;
+}
+function poiMonsterCrowdStep(obj,state,now,patrol,g){
+ if(!g?.subjects.has(state)||g.budget<=0||typeof poiActorAdvance!=='function')return false;
+ g.budget--;
+ const cache=new Map();
+ const can=(x,z,fx,fz)=>{
+  const k=x+','+z+','+fx+','+fz;
+  if(!cache.has(k))cache.set(k,poiMonsterCrowdEdge(g,obj,state,patrol,x,z,fx,fz));
+  return cache.get(k);
+ };
+ const goal=poiMonsterCrowdGoal(g,state,can);
+ if(!goal)return false;
+ const prior=state.actorFree,from=prior&&poiFreeCell(prior.x)===state.x&&poiFreeCell(prior.z)===state.z?prior:state;
+ const directions=POI_CROWD_DIRECTIONS.slice(0,4);
+ const dist=(x,z)=>Math.abs(goal.x-x)+Math.abs(goal.z-z);
+ const playerClear=(x,z)=>{
+  const ax=from.x-g.px,az=from.z-g.pz,dx=x-from.x,dz=z-from.z;
+  const amount=Math.max(0,Math.min(1,-(ax*dx+az*dz)/(dx*dx+dz*dz||1)));
+  const radius=.41;
+  return Math.hypot(ax+dx*amount,az+dz*amount)+1e-6>=Math.min(radius,Math.hypot(ax,az));
+ };
+ // A short, bounded search may take a neutral first sidestep, but only if
+ // the endpoint improves the distance to the unoccupied attack pocket.
+ const q=[{x:state.x,z:state.z,depth:0,first:null}],seen=new Set([state.x+','+state.z]);
+ let best=null,checks=0;
+ while(q.length&&checks<18){
+  const v=q.shift();if(v.depth>=3)continue;
+  const ordered=[...directions].sort((a,b)=>dist(v.x+a[0],v.z+a[1])-dist(v.x+b[0],v.z+b[1]));
+  for(const [dx,dz] of ordered){
+   const x=v.x+dx,z=v.z+dz,k=x+','+z;
+   if(seen.has(k)||checks>=18)continue;
+   checks++;
+   if(!can(x,z,v.x,v.z))continue;
+   seen.add(k);
+   const first=v.first??{x,z},d=dist(x,z),entry={x,z,depth:v.depth+1,first};
+   if(d<dist(state.x,state.z)&&(!best||d<best.d)){best={first,d};if(d===0)break}
+   q.push(entry);
+  }
+  if(best?.d===0)break;
+ }
+ if(!best)return false;
+ const cells=poiMonsterActorFootprint(from.x,from.z);
+ const legal=(x,z,fx,fz)=>{
+  const pass=can(x,z,fx,fz);if(pass)cells.add(x+','+z);return pass;
+ };
+ const to=best.first,next=poiActorAdvance(from,to,1,legal,()=>true);
+ if(next.stopped||next.distance<.06||!playerClear(next.x,next.z)||
+    [...poiMonsterActorFootprint(next.x,next.z)].some(k=>!cells.has(k))||
+    Math.abs(next.distance-Math.hypot(next.x-from.x,next.z-from.z))>1e-5)return false;
+ const dx=next.x-from.x,dz=next.z-from.z;
+ if(Math.abs(dx*(to.z-from.z)-dz*(to.x-from.x))>1e-5)return false;
+ poiMonsterActorStart(obj,state,now,from,next.x,next.z,POI_MONSTER_FREE_TICK,cells);
+ g.claims.set(goal.k,state);poiMonsterCrowdGoals.set(state,{x:g.x,z:g.z,y:g.y,k:goal.k});
+ state.facing=Math.abs(dx)>=Math.abs(dz)?(dx>0?3:1):(dz<0?2:0);
+ return true;
+}
+// END MONSTER CROWD SPACING
+
+function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMobTick=now+380;let changed=false,crowdRead=false,crowd=null;for(const [obj,state] of poiMonsterStates){if((facilitySite&&obj.y!==poiWalkLevel)||state.hp<=0||state.townOwned||(state.wildSpawn&&!poiWildPlayerOutside())||state.playerAttack?.pending||
  (obj.type==='monsterSlime'&&typeof poiSlimeRecovering==='function'&&poiSlimeRecovering(state,now)))continue;
  if(obj.type==='monsterNorthMinotaur'){if(typeof poiNorthMinotaurFrame==='function'&&poiNorthMinotaurFrame(obj,state,now))changed=true;continue}
  if(state.actorFree&&poiMonsterActorPoint(state.actorFree,now).t<1)continue;
@@ -13477,6 +13606,10 @@ function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMo
     (poiEnemyDiagonalType(obj)||armed&&!(typeof poiNorthWatchGuard==='function'&&poiNorthWatchGuard(obj))))
   steps.push([-Math.sign(dx),0],[0,-Math.sign(dz)]);
  for(const [sx,sz] of steps){const nx=state.x+sx,nz=state.z+sz;if((!pineGameActive||Math.max(Math.abs(nx-24),Math.abs(nz-24))>=10)&&poiMineEarlyMayMove(obj,nx,nz)&&(!patrol||poiDungeonPatrolCanFight(obj,nx,nz,patrol))&&(!armed||poiArmedBound(obj,nx,nz))&&(typeof poiOtherworldEnemyMayFight!=='function'||poiOtherworldEnemyMayFight(obj,nx,nz))&&poiMonsterCanMove(nx,nz,state)){state.fromX=state.x;state.fromZ=state.z;state.x=nx;state.z=nz;state.moveStarted=now;state.facing=sx?sx>0?3:1:sz<0?2:0;changed=true;break}}
+ if(state.moveStarted!==now&&typeof poiMonsterCrowdNormal==='function'&&poiMonsterCrowdNormal(obj)){
+  if(!crowdRead){crowd=poiMonsterCrowdPrepare(now);crowdRead=true}
+  if(crowd&&poiMonsterCrowdStep(obj,state,now,patrol,crowd))changed=true;
+ }
  }if(changed)poiMonsterMeshDirty=true;if(pineGameActive)pineGameSave()}
 
 // Hand-authored standing points in the built Game World, never saved outside it.
@@ -15239,7 +15372,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v249',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v250',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -15354,7 +15487,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v249';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v250';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -15569,7 +15702,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v249',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v250',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);

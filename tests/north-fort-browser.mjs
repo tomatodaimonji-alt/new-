@@ -28,7 +28,7 @@ let fixture=inject(html,anchor,anchor+`
      mini:map.miniMap,hp:poiPlayerHP,type:o?.type,bossHP:s?.hp,boss:s?{x:s.x,z:s.z}:null,openUntil:s?.northOpenUntil??s?.northRecoverUntil??0,
      screen:!!point&&point.x>=0&&point.x<=canvas.clientWidth&&point.y>=0&&point.y<=canvas.clientHeight,
      strike:a?{kind:a.northAttack,dx:a.dx,dz:a.dz,sx:a.sx,sz:a.sz,start:a.start,hit:a.hit,pending:a.pending,visualHitAt:a.visualHitAt}:null,
-     tell:window.__qaFortDraw??[],hits:window.__qaFortHits??[],action:poiWalkActionStarted,pending:!!poiPlayerWeaponPending,
+     tell:window.__qaFortDraw??[],hits:window.__qaFortHits??[],counters:window.__qaFortCounters??[],action:poiWalkActionStarted,pending:!!poiPlayerWeaponPending,
      locked:!!o&&poiAimLocked?.id===o};
    }
   },`);
@@ -49,6 +49,12 @@ fixture=inject(fixture,'function poiMobHitPlayer(obj,now',`function poiMobHitPla
  finally{if(obj.x===64&&obj.z===13&&obj.y===-1)(window.__qaFortHits??=[]).push({type:obj.type,before,after:poiPlayerHP,now})}
 }
 function __qaFortMobHit(obj,now`);
+const counterProbe='function poiPlayerDamageTarget(monster,x,z,amount,weapon,now,silent=false,atContact=false,source=null){';
+fixture=inject(fixture,counterProbe,counterProbe+`
+ const [observedBoss,observedBossState]=monster||[];
+ if(observedBoss?.type==='monsterNorthMinotaur')
+  (window.__qaFortCounters??=[]).push({now,openUntil:observedBossState.northOpenUntil,amount,weapon});
+`);
 fixture=inject(fixture,'   const {x:cx,y,z:cz,attack,heading}=poiMonsterPose(obj,s,now),part=mesh();',`
    const {x:cx,y,z:cz,attack,heading}=poiMonsterPose(obj,s,now),part=mesh();
    if(obj.x===64&&obj.z===13&&obj.y===-1&&attack){const log=window.__qaFortDraw??=[];if(log.length<120)log.push({phase:attack.phase,tell:attack.tell??0,now,kind:s.playerAttack?.northAttack});}`);
@@ -166,9 +172,10 @@ async function battle(mode){
   }
   if(evade){
    checkpoint=tag+': physical analog across lane';
-   // Clear the narrow (.48) horn lane first at full lateral speed. A
-   // shallower diagonal could clear it only after contact on slow WebGL.
-   await touch('touchMove',[{...left,x:left.x+53}]);
+   // Stay mostly lateral to clear the .48 lane in time. A slight forward
+   // component simultaneously brings the sword in range, before recovery
+   // begins, instead of a second CDP gesture consuming the open window.
+   await touch('touchMove',[{...left,x:left.x+53,y:left.y-36}]);
    await when(()=>window.__editorTest.northFortQA.motion().x>=64.60,null,1800);
    await touch('touchEnd',[]);
   }
@@ -196,16 +203,16 @@ async function battle(mode){
    assert.equal(after.hp,100);assert.equal(after.hits.length,0);
    checkpoint=tag+': await drawn vulnerability and counter';
    await when(start=>window.__editorTest.northFortQA.status().tell.some(d=>d.kind==='horn'&&d.phase==='open'&&d.now>=start),threat.hit,1250);
-   let near=await q();
-   if(Math.hypot(near.pos.x-near.boss.x,near.pos.z-near.boss.z)>1.23){
-    await touch('touchStart',[left]);await touch('touchMove',[{...left,x:left.x-13,y:left.y-37}]);
-    await when(()=>{const s=window.__editorTest.northFortQA.status();return Math.hypot(s.pos.x-s.boss.x,s.pos.z-s.boss.z)<=1.14},null,850);
-    await touch('touchEnd',[]);near=await q();
-   }
+   const near=await q();
+   assert(Math.hypot(near.pos.x-near.boss.x,near.pos.z-near.boss.z)<=1.23,
+    'the physical sidestep already leaves the player in sword range');
    assert(near.openUntil>near.now,'the visible recovery is still active when the player attacks');
    await p.touchscreen.tap(action.x+action.width/2,action.y+action.height/2);
    await when(at=>{const s=window.__editorTest.northFortQA.status();return s.action>at&&!s.pending},near.action,3200);
-   assert.equal(224-(await q()).bossHP,28,'real wooden-sword contact during the open horn recovery');
+   const struck=await q();
+   assert.equal(224-struck.bossHP,28,'real wooden-sword contact during the open horn recovery');
+   assert(struck.counters.some(c=>c.weapon==='equipWoodSword'&&c.amount===28&&c.now>=actual.now&&c.now<c.openUntil),
+    'the real player damage callback occurred before the same recovery expired');
   }
   assert.deepEqual(errors,[]);
   console.log('PASS connected North Fort '+tag+' render and combat');
