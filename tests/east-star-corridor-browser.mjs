@@ -61,7 +61,11 @@ if(process.env.STAR_EXPANSION_LAYOUT_ONLY==='1'){
 }
 const spawn='if(poiIsMonster(o.type)&&';
 assert.equal(html.split(spawn).length,2,'one actor construction anchor');
-const suppressed='!'+JSON.stringify(newActors)+'.some(a=>a.type===o.type&&a.x===o.x&&a.z===o.z&&a.y===o.y)&&';
+// These two old arena roamers can now reach the approach while the
+// fixture walks the topology. Keep them live in the separate production
+// launch below; this quiet route intentionally verifies traversal and loot.
+const oldRoamers=[{type:'monsterGoblin',x:97,z:82,y:-1},{type:'monsterSkeleton',x:104,z:81,y:-1}];
+const suppressed='!'+JSON.stringify([...newActors,...oldRoamers])+'.some(a=>a.type===o.type&&a.x===o.x&&a.z===o.z&&a.y===o.y)&&';
 const fixtureHtml=html.replace(spawn,spawn+suppressed);
 const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
 const server=createServer((req,res)=>{
@@ -107,11 +111,18 @@ const keys={[key(1,0)]:'ArrowRight',[key(-1,0)]:'ArrowLeft',[key(0,1)]:'ArrowDow
 async function step(page,x,z){
  const cur=await current(page),d=keys[key(x-cur.x,z-cur.z)];
  assert(d,'one real cardinal step');
+ const reached=([x,z])=>{const p=window.__editorTest.facility().position;return p.x===x&&p.z===z&&p.level===-1};
  await page.keyboard.press(d);
- await page.waitForFunction(([x,z])=>{
-  const p=window.__editorTest.facility().position;
-  return p.x===x&&p.z===z&&p.level===-1;
- },[x,z],{timeout:3500});
+ try{await page.waitForFunction(reached,[x,z],{timeout:1400})}
+ catch(e){
+  // Retry only from the same original cell when the target is currently
+  // legal; never skip an authored traversal or an actual blocker.
+  const p=await current(page);
+  if(p.x!==cur.x||p.z!==cur.z||p.level!==cur.level||!(await canStep(page,x,z,cur.x,cur.z)))
+   throw new Error('Native east corridor tile '+[x,z]+' blocked from '+JSON.stringify(p),{cause:e});
+  await page.keyboard.press(d);
+  await page.waitForFunction(reached,[x,z],{timeout:3500});
+ }
  await page.waitForTimeout(210);
 }
 async function region(page){
@@ -173,7 +184,7 @@ async function originalActors(browser){
  const {ctx,page,errors}=await launch(browser,pos(121,84),2,false);
  try{
   const base=await state(page);
-  for(const wanted of newActors)assert(base.combat.actors.some(a=>a.type===wanted.type&&a.level===-1&&a.visible&&a.hp>0),'production gameplay still has '+wanted.type);
+  for(const wanted of [...newActors,...oldRoamers])assert(base.combat.actors.some(a=>a.type===wanted.type&&a.level===-1&&a.visible&&a.hp>0),'production gameplay still has '+wanted.type);
   assert(base.combat.actors.some(a=>a.type==='monsterDragon'&&a.visible&&a.hp===150),'original guardian remains in same realm');
   await page.locator('#poiWalkAction').tap(); // trusted wake outside any adjacent socket/switch
   await region(page);await guardedVault(page);
@@ -190,3 +201,4 @@ try{
  if(process.env.STAR_EXPANSION_CASE!=='route')await originalActors(browser);
  console.log('PASS native portrait portal to expanded east loop, actual chest gate scope and distinct existing/new enemies');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
+

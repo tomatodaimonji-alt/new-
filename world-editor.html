@@ -670,7 +670,8 @@ header #batteryIndicator.unknown .batteryFill{background:#536c5b}
  -webkit-backdrop-filter:none;backdrop-filter:none}
 #poiMiniMap{display:block;width:100%;height:auto;aspect-ratio:1;border-radius:6px}
 #poiLocationPanel{min-width:0;display:flex;align-items:baseline;gap:3px;text-align:left;
- border-radius:4px;padding:4px 6px;line-height:1.2}
+ border-radius:4px;padding:4px 6px;line-height:1.2;transform-origin:left center}
+@media (prefers-reduced-motion: reduce){#poiLocationPanel{transform:none!important}}
 #poiLocationPanel:is([data-otherworld],[data-north-trail]){display:grid;gap:1px}
 #poiLocationName{flex:0 1 auto;min-width:0;font-size:clamp(10px,2.8vw,12px);font-weight:800;
  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1056,7 +1057,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v209）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v210）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -7326,6 +7327,86 @@ function poiQuestAccept(id,actor,now){
  if(typeof poiMiniUpdate==='function')poiMiniUpdate();
  return result(null);
 }
+// BEGIN DUNGEON POPULATION
+const POI_DUNGEON_COOLDOWN=7*1440;
+const POI_DUNGEON_SPAWN_ROWS=Object.freeze([
+ // Names are immutable even when an authored spawn is moved or removed.
+ ['mine.entry-slime','monsterSlime',115,59],['mine.side-slime','monsterSlime',120,62],
+ ['mine.golem','monsterMineGuard',120,55],
+ ['chapel.slime','monsterSlime',76,79],['chapel.west-slime','monsterSlime',64,81],
+ ['chapel.elite','monsterSkeleton',79,78],
+ ['otherworld.goblin','monsterGoblin',97,82],['otherworld.skeleton','monsterSkeleton',104,81],
+ ['otherworld.elite','monsterDragon',101,79],['otherworld.archive-archer','monsterSkelArcher',109,88],
+ ['otherworld.cloister-mage','monsterSkelLongStaff',120,82]
+]);
+const POI_DUNGEON_SPAWN_KEYS=new Map(POI_DUNGEON_SPAWN_ROWS.map(([id,type,x,z])=>[type+':'+x+':'+z,id]));
+const POI_DUNGEON_SPAWN_TYPES=new Map(POI_DUNGEON_SPAWN_ROWS.map(([id,type])=>[id,type]));
+const POI_DUNGEON_QUEST_ENTRIES=Object.freeze({'mine-survey@1':{quest:'mine-survey',realm:'mine'}});
+function poiDungeonPopulationMinute(){
+ poiTownClockRead();
+ return poiTownClockSnapshot().absoluteMinute;
+}
+function poiDungeonPopulationDecode(raw,minute=poiDungeonPopulationMinute()){
+ if(raw?.version!==1)return null;
+ const dead={},questEntries={};
+ for(const [id] of POI_DUNGEON_SPAWN_ROWS){
+  const when=raw.dead?.[id];
+  if(Number.isSafeInteger(when)&&when>=0&&when<=minute&&minute-when<POI_DUNGEON_COOLDOWN)dead[id]=when;
+ }
+ for(const id of Object.keys(POI_DUNGEON_QUEST_ENTRIES))if(raw.questEntries?.[id]===true)questEntries[id]=true;
+ return Object.keys(dead).length||Object.keys(questEntries).length?{version:1,dead,questEntries}:null;
+}
+function poiDungeonSpawnId(o){
+ if(facilitySite?.id!=='base'||o?.y!==-1)return null;
+ if(o.dungeonSpawnId&&POI_DUNGEON_SPAWN_TYPES.get(o.dungeonSpawnId)===o.type)return o.dungeonSpawnId;
+ return POI_DUNGEON_SPAWN_KEYS.get(o.type+':'+o.x+':'+o.z)||null;
+}
+function poiDungeonActorAbsent(o,population){
+ const id=poiDungeonSpawnId(o);
+ if(!id)return false;
+ if(population===undefined)population=poiDungeonPopulationDecode(poiHotbarRead().dungeonPopulation);
+ return Object.hasOwn(population?.dead||{},id);
+}
+function poiDungeonRememberDefeat(o,state){
+ if(!poiWalkActive||pineAIActive||poiWalkLevel!==o.y||state?.hp!==0)return false;
+ const id=poiDungeonSpawnId(o);
+ if(!id)return false;
+ // A failed gate transaction must not strand a reward behind an absent boss.
+ if((id==='mine.golem'&&!poiMineVaultGateOpen())||
+    (id==='chapel.elite'&&!poiChapelGateOpen())||
+    (id==='otherworld.elite'&&!poiOtherworldGateOpen()))return false;
+ const kit=poiHotbarRead(),minute=poiDungeonPopulationMinute();
+ const old=poiDungeonPopulationDecode(kit.dungeonPopulation,minute);
+ if(Object.hasOwn(old?.dead||{},id))return false;
+ poiTownClockSave(true);
+ return poiEconomyWrite({...kit,dungeonPopulation:{version:1,dead:{...old?.dead,[id]:minute},questEntries:old?.questEntries||{}}});
+}
+function poiDungeonArrive(x,z,fromY,toY){
+ if(!poiWalkActive||pineAIActive||fromY!==0||toY>=0)return false;
+ const realm=poiDungeonThemeAt(facilitySite,x,z,toY);
+ if(!realm)return false;
+ const kit=poiHotbarRead(),minute=poiDungeonPopulationMinute();
+ let population=poiDungeonPopulationDecode(kit.dungeonPopulation,minute);
+ const next={version:1,dead:{...population?.dead},questEntries:{...population?.questEntries}};
+ let refreshed=false;
+ for(const [id,rule] of Object.entries(POI_DUNGEON_QUEST_ENTRIES)){
+  if(rule.realm!==realm||next.questEntries[id]||poiQuestProgress(rule.quest)!=='accepted')continue;
+  next.questEntries[id]=true;
+  for(const id of Object.keys(next.dead))if(id.startsWith(realm+'.'))delete next.dead[id];
+  refreshed=true;
+ }
+ if(refreshed&&poiEconomyWrite({...kit,dungeonPopulation:next}))population=next;
+ let changed=false;
+ for(const o of world){
+  const id=poiDungeonSpawnId(o);
+  if(!id?.startsWith(realm+'.')||Object.hasOwn(population?.dead||{},id)||poiMonsterStates.get(o)?.hp>0)continue;
+  if(o.x===x&&o.z===z&&o.y===toY)continue;
+  poiMonsterStates.set(o,poiCombatActorMake(o));changed=true;
+ }
+ if(changed)poiMonsterMeshDirty=true;
+ return changed;
+}
+// END DUNGEON POPULATION
 function poiHotbarHasKit(){return facilitySite?.id==='base'}
 // Version 1 saves keep their original condition ratio, with no write on read.
 function poiMigrateWeaponDurability(saved){
@@ -7362,6 +7443,7 @@ function poiHotbarRead(){
  const goldBagOrder=poiGoldBagDecode(saved.goldBagOrder);if(goldBagOrder)kit.goldBagOrder=goldBagOrder;
  const quests=poiQuestDecode(saved.quests);if(quests)kit.quests=quests;
  if(quests?.includes('mine-survey')&&(saved.mineSurvey==='surveyed'||saved.mineSurvey==='reported'))kit.mineSurvey=saved.mineSurvey;
+ if(saved.dungeonPopulation){const populated=poiDungeonPopulationDecode(saved.dungeonPopulation);if(populated)kit.dungeonPopulation=populated}
  if(Number.isSafeInteger(saved.gold)&&saved.gold>=0&&saved.gold<=POI_ECONOMY_GOLD_MAX&&saved.gold)kit.gold=saved.gold;
  if(Array.isArray(saved.claimedCaches)){
   const claims=POI_ECONOMY_CACHES.filter(({id})=>saved.claimedCaches.includes(id)).map(({id})=>id);
@@ -7422,11 +7504,12 @@ function poiHotbarSave(kit=poiHotbarState){
  try{
   const goldHotbarSlot=poiGoldHotbarSlot(kit);
   if(goldHotbarSlot!==null&&poiInventorySlots(kit)[goldHotbarSlot])return false;
+  const dungeonPopulation=kit.dungeonPopulation?poiDungeonPopulationDecode(kit.dungeonPopulation):null;
   const {weapon,potions,gold,claimedCaches,sword,drops,slots,towerFind,kitchenChest,worn,wornDurability,woodSwordBroken,npcTrade,goldBagOrder,quests,mineSurvey,mineGateCleared,mineTreasureChest,mineFindClaims,mineFindRolls,otherworldCleared,otherworldChest,chapelCleared,chapelChest,toolshopSupply}=kit;
   localStorage.setItem(POI_HOTBAR_KEY,JSON.stringify({version:1,weapon,potions:Math.min(potions,POI_HOTBAR_POTION_MAX),
    ...(poiHasExplicitWeaponDurability(kit)?{weaponDurabilityVersion:2}:{}),...(toolshopSupply?{toolshopSupply}:{}),...(kit.armedDrops?.length?{armedDrops:kit.armedDrops}:{}),...(kit.fireWandFound?{fireWandFound:true}:{}),...(kit.northTrailCampSupplies===true?{northTrailCampSupplies:true}:{}),...(kit.northWatchPostSupplies===true?{northWatchPostSupplies:true}:{}),...(kit.otherworldEastSupplyFound===true?{otherworldEastSupplyFound:true}:{}),...(kit.chapelWestSupplyFound===true?{chapelWestSupplyFound:true}:{}),...(kit.northMarshHerbFound===true?{northMarshHerbFound:true}:{}),...(kit.northWatchPostGuardLoot===true?{northWatchPostGuardLoot:true}:{}),
    ...(gold?{gold}:{}),...(claimedCaches?.length?{claimedCaches}:{}),...(towerFind?{towerFind}:{}),...(kitchenChest?{kitchenChest}:{}),...(worn?{worn}:{}),...(wornDurability?{wornDurability}:{}),...(woodSwordBroken?{woodSwordBroken}:{}),...(npcTrade?{npcTrade}:{}),...(goldBagOrder?{goldBagOrder}:{}),...(goldHotbarSlot!==null?{goldHotbarSlot}:{}),...(quests?.length?{quests}:{}),...(mineSurvey?{mineSurvey}:{}),...(mineGateCleared?{mineGateCleared}:{}),...(mineTreasureChest?{mineTreasureChest}:{}),...(mineFindClaims?.length?{mineFindClaims}:{}),...(mineFindRolls?{mineFindRolls}:{}),...(otherworldCleared?{otherworldCleared}:{}),...(otherworldChest?{otherworldChest}:{}),...(chapelCleared?{chapelCleared}:{}),...(chapelChest?{chapelChest}:{}),
-   ...(sword===false?{sword}:{}),...(drops?.length?{drops}:{}),...(slots?{slots}:{})}));
+   ...(dungeonPopulation?{dungeonPopulation}:{}),...(sword===false?{sword}:{}),...(drops?.length?{drops}:{}),...(slots?{slots}:{})}));
   return true;
  }catch(_e){return false}
 }
@@ -8856,6 +8939,7 @@ function poiOtherworldUseStep(x,z,now){
  poiWalkAttackPosePending=false;poiWalkActionStarted=-10000;poiMonsterMeshDirty=true;poiDamageLabels=[];
  $('level').value=String(level);$('app').classList.toggle('facilityCellar',to.y<0);
  dirty=true;cursorDirty=true;poiCreekAudioSync();poiWalkRoof();poiWalkAvatar();poiWalkCamera();poiWalkStatus();workshopResumeWrite();
+ if(typeof poiDungeonArrive==='function')poiDungeonArrive(to.x,to.z,prior,to.y);
  if(typeof poiDungeonEnterEffect==='function')poiDungeonEnterEffect(to.x,to.z,prior,to.y);
  toast(to.y<0?realm.name+'に入った。':realm.name+'を出た。');return true;
 }
@@ -9459,7 +9543,8 @@ function poiHotbarUse(slot){
  if(result.reason==='healthy')toast('HPは満タンです。');
  else if(result.reason==='storage')toast(poiInventoryItemName(item)+'を保存できませんでした');
 }
-function poiResetCombat(){poiWildClear();poiPlayerHP=POI_PLAYER_MAX_HP;poiMonsterStates=new Map();for(const o of world){if(poiIsMonster(o.type)&&!(typeof poiNorthWatchGuardDefeated==='function'&&poiNorthWatchGuardDefeated(o))){const stats=typeof poiMonsterStatsAt==='function'?poiMonsterStatsAt(o):POI_MONSTER_STATS[o.type];poiMonsterStates.set(o,{x:o.x,z:o.z,fromX:o.x,fromZ:o.z,moveStarted:-10000,facing:0,hp:stats.hp,nextAttack:0})}}poiDamageLabels=[];poiNextMobTick=0;poiAttackReady=0;poiMonsterMeshDirty=true;poiCombatHud();dirty=true}
+function poiCombatActorMake(o){const stats=typeof poiMonsterStatsAt==='function'?poiMonsterStatsAt(o):POI_MONSTER_STATS[o.type];return {x:o.x,z:o.z,fromX:o.x,fromZ:o.z,moveStarted:-10000,facing:0,hp:stats.hp,nextAttack:0}}
+function poiResetCombat(){poiWildClear();poiPlayerHP=POI_PLAYER_MAX_HP;poiMonsterStates=new Map();const population=typeof poiDungeonPopulationDecode==='function'&&facilitySite?.id==='base'?poiDungeonPopulationDecode(poiHotbarRead().dungeonPopulation):null;for(const o of world){if(poiIsMonster(o.type)&&!(typeof poiNorthWatchGuardDefeated==='function'&&poiNorthWatchGuardDefeated(o))&&!(population&&poiDungeonActorAbsent(o,population)))poiMonsterStates.set(o,poiCombatActorMake(o))}poiDamageLabels=[];poiNextMobTick=0;poiAttackReady=0;poiMonsterMeshDirty=true;poiCombatHud();dirty=true}
 const POI_MESSAGE_LIFETIME=5000,POI_MESSAGE_MAX=2;
 const poiMessageLines=[];
 let poiMessageSpeech=null;
@@ -9912,6 +9997,7 @@ function poiEnemyBeginPlayer(obj,s,now){
     poiMonsterStates.get(obj)!==s||s.hp<=0||(facilitySite&&obj.y!==poiWalkLevel)||
     (s.wildSpawn&&!poiWildPlayerOutside())||
     (typeof poiMineEarlyMayMove==='function'&&!poiMineEarlyMayMove(obj,poiWalkX,poiWalkZ)))return false;
+ if(typeof poiDungeonPatrolCanFight==='function'&&!poiDungeonPatrolCanFight(obj,poiWalkX,poiWalkZ))return false;
  if(skater){
   const pond=poiPondSkaterGuard(obj);
   if((pond&&!poiPondSkaterIn(pond,poiWalkX,poiWalkZ))||now<(s.skaterRestUntil||0)||
@@ -9971,6 +10057,7 @@ function poiEnemyResolvePlayer(now){
   let covered=a.tiles?a.tiles.some(({x,z})=>x===poiWalkX&&z===poiWalkZ):poiWalkX===a.x&&poiWalkZ===a.z;
   if(mage)covered=covered&&Math.abs(poiWalkX-a.sx)+Math.abs(poiWalkZ-a.sz)<=a.mageReach;
   if(!timely||!covered||poiWalkLevel!==a.y||
+     (typeof poiDungeonPatrolCanFight==='function'&&!poiDungeonPatrolCanFight(a.obj,poiWalkX,poiWalkZ))||
      (s.wildSpawn&&!poiWildPlayerOutside()))continue;
   if(poiMobHitPlayer(a.obj,now)){poiEnemyCancelPlayer();return true}
  }
@@ -10001,10 +10088,76 @@ function poiMineEarlyMayMove(obj,x,z){
  if(!e||!match(e))return true;
  return x>=e.x-1&&x<=e.x+2&&z>=e.z&&z<=mine.stairs.z;
 }
-function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMobTick=now+380;let changed=false;for(const [obj,state] of poiMonsterStates){if((facilitySite&&obj.y!==poiWalkLevel)||state.hp<=0||state.townOwned||(state.wildSpawn&&!poiWildPlayerOutside())||state.playerAttack?.pending||!poiMineEarlyMayMove(obj,poiWalkX,poiWalkZ)||(typeof poiOtherworldEnemyMayFight==='function'&&!poiOtherworldEnemyMayFight(obj,poiWalkX,poiWalkZ)))continue;const dx=poiWalkX-state.x,dz=poiWalkZ-state.z,dist=Math.hypot(dx,dz);
+// BEGIN DUNGEON PATROL
+const POI_DUNGEON_PATROL_TYPES=new Set(['monsterSlime','monsterGoblin','monsterSkeleton',
+ 'monsterSkelWarrior','monsterSkelKnight','monsterSkelArcher','monsterSkelSpearman','monsterSkelMage','monsterSkelLongStaff']);
+let poiDungeonPatrolGroundCache=null;
+function poiDungeonPatrolSite(obj){
+ if(facilitySite?.id!=='base'||obj.y!==-1||!POI_DUNGEON_PATROL_TYPES.has(obj.type)||
+  (typeof poiChapelEliteMatch==='function'&&poiChapelEliteMatch(obj)))return null;
+ for(const name of ['mine','chapel','otherworld']){
+  const realm=facilitySite[name];
+  if(poiDungeonPointIn(realm?.bounds,obj.x,obj.z,obj.y))return {name,realm};
+ }
+ return null;
+}
+function poiDungeonPatrolCanFight(obj,x,z,site=poiDungeonPatrolSite(obj)){
+ if(!site)return true;
+ const {name,realm}=site;
+ if(!poiDungeonPointIn(realm.bounds,x,z,obj.y))return false;
+ if(name==='mine'){
+  if(poiDungeonPointIn(realm.earlyRoom?.safe,x,z,obj.y))return false;
+  return !realm.stairs||Math.abs(x-realm.stairs.x)+Math.abs(z-realm.stairs.z)>2;
+ }
+ const entrance=realm.dungeonStand;
+ return !entrance||Math.abs(x-entrance.x)+Math.abs(z-entrance.z)>3;
+}
+function poiDungeonPatrolGround(x,z){
+ if(poiDungeonPatrolGroundCache?.world!==world){
+  const floors=new Set(),obstacles=new Set();
+  for(const o of world){
+   if(o.y!==-1)continue;
+   const k=o.x+','+o.z;
+   if(isFloor(o.type)){if(!/^(?:water|river|lake|sea)$/.test(o.type))floors.add(k);else obstacles.add(k)}
+   else if(!o.type.startsWith('monster'))obstacles.add(k);
+  }
+  poiDungeonPatrolGroundCache={world,floors,obstacles};
+ }
+ const k=x+','+z,cache=poiDungeonPatrolGroundCache;
+ return cache.floors.has(k)&&!cache.obstacles.has(k);
+}
+function poiDungeonPatrolStep(obj,s,now,site=poiDungeonPatrolSite(obj)){
+ if(!site||poiWalkLevel!==obj.y||now-s.moveStarted<380||Math.hypot(s.x-poiWalkX,s.z-poiWalkZ)>12)return false;
+ const seed=(obj.x*37+obj.z*53)%750;
+ if(s.nextPatrol===undefined){s.nextPatrol=now+800+seed;return false}
+ if(now<s.nextPatrol)return false;
+ s.nextPatrol=now+1580+seed;
+ const dirs=[[0,1],[1,0],[0,-1],[-1,0]],start=(seed+(s.patrolTurn||0))%4;
+ s.patrolTurn=(s.patrolTurn||0)+1;
+ for(let i=0;i<4;i++){
+  const [dx,dz]=dirs[(start+i)%4],x=s.x+dx,z=s.z+dz;
+  if(Math.abs(x-obj.x)+Math.abs(z-obj.z)>4||
+   !poiDungeonPatrolCanFight(obj,x,z,site)||!poiMineEarlyMayMove(obj,x,z)||!poiArmedBound(obj,x,z)||
+   !poiOtherworldEnemyMayFight(obj,x,z)||!poiDungeonPatrolGround(x,z)||!poiMonsterCanMove(x,z,s))continue;
+  s.fromX=s.x;s.fromZ=s.z;s.x=x;s.z=z;s.moveStarted=now;s.facing=dx?(dx>0?3:1):(dz<0?2:0);
+  return true;
+ }
+ return false;
+}
+// END DUNGEON PATROL
+function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMobTick=now+380;let changed=false;for(const [obj,state] of poiMonsterStates){if((facilitySite&&obj.y!==poiWalkLevel)||state.hp<=0||state.townOwned||(state.wildSpawn&&!poiWildPlayerOutside())||state.playerAttack?.pending)continue;
+ const patrol=typeof poiDungeonPatrolSite==='function'&&!state.wildSpawn?poiDungeonPatrolSite(obj):null;
+ const allowed=poiMineEarlyMayMove(obj,poiWalkX,poiWalkZ)&&
+  (typeof poiOtherworldEnemyMayFight!=='function'||poiOtherworldEnemyMayFight(obj,poiWalkX,poiWalkZ))&&
+  (!patrol||poiDungeonPatrolCanFight(obj,poiWalkX,poiWalkZ,patrol));
+ const dx=poiWalkX-state.x,dz=poiWalkZ-state.z,dist=Math.hypot(dx,dz);
+ if(!allowed||patrol&&dist>6.5){
+  if(patrol&&poiDungeonPatrolStep(obj,state,now,patrol))changed=true;
+  continue;
+ }
  const armed=typeof POI_ARMED_FOES==='object'?POI_ARMED_FOES[obj.type]:null;
  if(armed){
-  if(!poiArmedBound(obj,poiWalkX,poiWalkZ))continue;
+  if(!poiArmedBound(obj,poiWalkX,poiWalkZ)){if(patrol&&poiDungeonPatrolStep(obj,state,now,patrol))changed=true;continue}
   if(poiArmedAim(obj,state,poiWalkX,poiWalkZ)){if(now>=state.nextAttack)poiEnemyBeginPlayer(obj,state,now);continue}
  }
  if(obj.type==='monsterPondSkater'&&typeof poiPondSkaterGuard==='function'){
@@ -10025,7 +10178,7 @@ function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMo
  if(obj.type==='monsterMineGuard'){if(poiMineGuardFrame(obj,state,now))changed=true;continue}
  if(dist>6.5){if((pineGameActive||state.wildSpawn)&&Math.random()<(state.wildSpawn?.22:.32)){const [rx,rz]=[[0,1],[0,-1],[1,0],[-1,0]][Math.floor(Math.random()*4)],nx=state.x+rx,nz=state.z+rz;if((state.wildSpawn||Math.max(Math.abs(nx-24),Math.abs(nz-24))>=10)&&poiMineEarlyMayMove(obj,nx,nz)&&poiMonsterCanMove(nx,nz,state)){state.fromX=state.x;state.fromZ=state.z;state.x=nx;state.z=nz;state.moveStarted=now;state.facing=rx?rx>0?3:1:rz<0?2:0;changed=true}}continue;}if(Math.abs(dx)+Math.abs(dz)===1){if(now>=state.nextAttack)poiEnemyBeginPlayer(obj,state,now);continue}
  const steps=[[Math.sign(dx),0],[0,Math.sign(dz)]].filter(([sx,sz])=>sx||sz).sort((a,b)=>Math.abs(a[0]*dx+a[1]*dz)>Math.abs(b[0]*dx+b[1]*dz)?-1:1);
- for(const [sx,sz] of steps){const nx=state.x+sx,nz=state.z+sz;if((!pineGameActive||Math.max(Math.abs(nx-24),Math.abs(nz-24))>=10)&&poiMineEarlyMayMove(obj,nx,nz)&&(!armed||poiArmedBound(obj,nx,nz))&&(typeof poiOtherworldEnemyMayFight!=='function'||poiOtherworldEnemyMayFight(obj,nx,nz))&&poiMonsterCanMove(nx,nz,state)){state.fromX=state.x;state.fromZ=state.z;state.x=nx;state.z=nz;state.moveStarted=now;state.facing=sx?sx>0?3:1:sz<0?2:0;changed=true;break}}
+ for(const [sx,sz] of steps){const nx=state.x+sx,nz=state.z+sz;if((!pineGameActive||Math.max(Math.abs(nx-24),Math.abs(nz-24))>=10)&&poiMineEarlyMayMove(obj,nx,nz)&&(!patrol||poiDungeonPatrolCanFight(obj,nx,nz,patrol))&&(!armed||poiArmedBound(obj,nx,nz))&&(typeof poiOtherworldEnemyMayFight!=='function'||poiOtherworldEnemyMayFight(obj,nx,nz))&&poiMonsterCanMove(nx,nz,state)){state.fromX=state.x;state.fromZ=state.z;state.x=nx;state.z=nz;state.moveStarted=now;state.facing=sx?sx>0?3:1:sz<0?2:0;changed=true;break}}
  }if(changed)poiMonsterMeshDirty=true;if(pineGameActive)pineGameSave()}
 
 // Hand-authored standing points in the built Game World, never saved outside it.
@@ -11313,7 +11466,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v209',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v210',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -11428,7 +11581,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v209';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v210';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -11643,7 +11796,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v209',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v210',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -12378,6 +12531,7 @@ function poiPlayerDamageTarget(monster,x,z,amount,weapon,now){
    if(typeof poiMineGuardianDefeat==='function')poiMineGuardianDefeat(obj,state);
   }
   if(typeof poiArmedEnemyLoot==='function')poiArmedEnemyLoot(obj,state);
+  if(typeof poiDungeonRememberDefeat==='function')poiDungeonRememberDefeat(obj,state);
   if(typeof poiAnnounceDefeat==='function')poiAnnounceDefeat(obj.type,now);else toast('モンスターを倒した');
  }
  poiMonsterMeshDirty=true;
@@ -13126,6 +13280,30 @@ function poiRegionAt(site,x,z,legacy=false,floor=null){
  }
  return {name,difficulty,stars:'★'.repeat(difficulty)+'☆'.repeat(5-difficulty)};
 }
+// BEGIN LOCATION PANEL MOTION
+let poiLocationLastArea=null,poiLocationAnimation=null;
+function poiLocationMotion(panel,area){
+ if(!area||!panel){
+  poiLocationLastArea=null;poiLocationAnimation?.cancel();poiLocationAnimation=null;return;
+ }
+ const prior=poiLocationLastArea;
+ if(prior?.name===area.name&&prior.stars===area.stars)return;
+ poiLocationLastArea={name:area.name,stars:area.stars};
+ // The boot session places at the default spawn before applying Resume.
+ // Neither update is visible behind the startup cover, so baseline silently.
+ if(!prior||window.pineStartup?.loading)return;
+ poiLocationAnimation?.cancel();poiLocationAnimation=null;
+ if(typeof panel.animate!=='function'||(typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches))return;
+ poiLocationAnimation=panel.animate([
+  {transform:'translateX(5px) scale(1.12)',offset:0,easing:'ease-out'},
+  {transform:'translateX(7px) scale(1.24)',offset:.12},
+  {transform:'translateX(7px) scale(1.24)',offset:.26,easing:'cubic-bezier(.22,.75,.39,1)'},
+  {transform:'translateX(0) scale(1)',offset:1}
+ ],{duration:1050,fill:'none'});
+ const current=poiLocationAnimation;
+ current.onfinish=()=>{if(poiLocationAnimation===current)poiLocationAnimation=null};
+}
+// END LOCATION PANEL MOTION
 const poiMiniStatic=new Map();
 let poiMiniLast=null,poiMiniBuilds=0;
 function poiMiniInvalidate(){poiMiniStatic.clear();poiMiniLast=null}
@@ -13184,11 +13362,11 @@ function poiMiniQuestMark(g,x,z){
  g.fillStyle='#9de9dd';g.strokeStyle='#183b3b';g.lineWidth=1.6;g.fill();g.stroke();
 }
 function poiMiniUpdate(){
- const hud=$('poiMiniHud'),cv=$('poiMiniMap');
+ const hud=$('poiMiniHud'),cv=$('poiMiniMap'),panel=$('poiLocationPanel');
  if(!hud||!cv)return;
  const active=poiWalkActive&&!pineAIActive;
  if(hud.hidden===active)hud.hidden=!active;
- if(!active){poiMiniLast=null;return}
+ if(!active){poiMiniLast=null;poiLocationMotion(panel,null);return}
  const g=cv.getContext('2d');if(!g)return;
  const floor=poiWalkLevel,{width,height}=cv;
  const dungeon=typeof poiDungeonTravelKey==='function'?poiDungeonTravelKey(facilitySite,poiWalkX,poiWalkZ,floor):
@@ -13206,8 +13384,9 @@ function poiMiniUpdate(){
  const quests=facilitySite?.id==='base'&&typeof poiQuestMiniTargets==='function'?
   poiQuestMiniTargets().filter(q=>q.y===floor&&(!realm||q.x>=realm.x1&&q.x<=realm.x2&&q.z>=realm.z1&&q.z<=realm.z2)&&Number.isInteger(q.x)&&Number.isInteger(q.z)&&q.x>=0&&q.x<MAP_W&&q.z>=0&&q.z<MAP_H):[];
  const questKey=quests.map(q=>q.x+','+q.z).join(';');
- $('poiLocationPanel')?.toggleAttribute('data-otherworld',!!realm);
- $('poiLocationPanel')?.toggleAttribute('data-north-trail',!!poiNorthTrailRegion(facilitySite,poiWalkX,poiWalkZ,floor));
+ panel?.toggleAttribute('data-otherworld',!!realm);
+ panel?.toggleAttribute('data-north-trail',!!poiNorthTrailRegion(facilitySite,poiWalkX,poiWalkZ,floor));
+ poiLocationMotion(panel,area);
  const last=poiMiniLast;
  if(last?.questKey===questKey&&last.x===poiWalkX&&last.z===poiWalkZ&&last.level===floor&&last.facing===poiWalkFacing&&last.location===area.name&&last.stars===area.stars)return;
  if(last?.location!==area.name){const label=$('poiLocationName');label.textContent=area.name;label.title=area.name}
@@ -13359,6 +13538,7 @@ function poiWalkStep(dx,dz){
    o.x===poiWalkX&&o.z===poiWalkZ&&o.y===next&&o.type===(direction>0?'guildStairDown':'guildStairUp'))){
    const prior=poiWalkLevel;
    poiWalkLevel=next;level=next;$('level').value=String(level);dirty=true;cursorDirty=true;
+   if(typeof poiDungeonArrive==='function')poiDungeonArrive(poiWalkX,poiWalkZ,prior,next);
    if(typeof poiDungeonEnterEffect==='function')poiDungeonEnterEffect(poiWalkX,poiWalkZ,prior,next);
    if(facilitySite){
     $('app').classList.toggle('facilityCellar',next<0);
@@ -18146,7 +18326,34 @@ function buildFacilitySite(id){
  extendTownWorldMinePrep(mine,expanded.map.world);
  extendTownWorldChapelApproach(chapel,expanded.map.world);
  const southRoad=extendTownWorldSouthRoad(expanded);
+ extendTownWorldMineApproach(mine,expanded.map.world);
  return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad};
+}
+
+// Delay the guardian encounter until after the western storeroom. Preserve
+// the older landmarks and keep the old shortcuts visible as blocked seams.
+function extendTownWorldMineApproach(mine,world){
+ const y=-1,find=(x,z,pred)=>world.find(o=>o.x===x&&o.z===z&&o.y===y&&pred(o.type));
+ const floor=t=>t==='stone'||t==='moss',wall=t=>t==='stonewall'||t==='mosswall';
+ const closed=[[115,57],[120,57]],cuts=[[113,55],[116,54]];
+ const closures=closed.map(([x,z])=>find(x,z,floor));
+ const openings=cuts.map(([x,z])=>find(x,z,wall));
+ const left=mine.early,slime=left&&find(left.x,left.z,t=>t===left.type);
+ const add=[
+  [113,54,'stone'],[114,54,'moss'],[115,54,'stone'],
+  [113,53,'mosswall'],[114,53,'stonewall'],[115,53,'mosswall']
+ ];
+ if(!slime||closures.some(o=>!o)||openings.some(o=>!o)||add.some(([x,z])=>find(x,z,()=>true)))
+  throw Error('廃坑の新しい通路が旧配置と重なっています');
+ for(const o of closures)o.type='mosswall';
+ for(const o of openings)o.type='stone';
+ world.splice(world.indexOf(slime),1);
+ for(const [x,z,type] of add)world.push({x,z,y,type,rot:0});
+ world.push({x:114,z:53,y,type:'poiWallSconce',rot:0});
+ mine.early=null;
+ mine.earlyRoom.slimes=mine.earlyRoom.slimes.filter(p=>p!==left);
+ mine.approach={closed:closed.map(([x,z])=>({x,z,y,fallback:{x,z:z+1,y}})),
+  tunnel:cuts.map(([x,z])=>({x,z,y}))};
 }
 
 // This extension adds only surface tiles; the town and all older dungeons
@@ -19777,6 +19984,12 @@ function workshopResumeApplyView(v){
  poiSyncCameraModeUI();dirty=true;cursorDirty=true;
 }
 function workshopResumeRestorePosition(p){
+ // The two former shortcut doorways now have walls. Preserve that exact
+ // old save's floor, facing and nearby room instead of restarting in town.
+ if(p&&facilitySite?.id==='base'&&p.y===-1){
+  const exit=facilitySite.mine?.approach?.closed?.find(c=>c.x===p.x&&c.z===p.z&&c.y===p.y)?.fallback;
+  if(exit)p={...p,...exit};
+ }
  if(!p||!poiWalkActive||(!facilitySite&&p.y<0)||!validPos(p.x,p.z)||
     (typeof poiMineVaultResumeBlocked==='function'&&poiMineVaultResumeBlocked(p))||
     (typeof poiOtherworldResumeBlocked==='function'&&poiOtherworldResumeBlocked(p))||

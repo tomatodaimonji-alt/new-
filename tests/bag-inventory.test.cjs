@@ -1,14 +1,24 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 function fixture(saved=null){
- let failure=false,raw=saved&&JSON.stringify(saved),writes=0;
+ let failure=false,raw=saved&&JSON.stringify(saved),writes=0,clockRaw=null,clockWrites=0;
  const ctx={MAX_MAP:128,poiPlayerHP:100,POI_PLAYER_MAX_HP:100,facilitySite:{id:'base'},poiWalkActive:true,pineAIActive:false,poiWalkX:4,poiWalkZ:5,poiWalkLevel:0,poiWalkFacing:0,world:[],
- localStorage:{getItem(){return raw},setItem(_key,v){if(failure)throw Error('quota');raw=v;writes++}},
+ poiMonsterStates:new Map(),
+ localStorage:{getItem(key){return key==='world-workshop-town-clock-v1'?clockRaw:raw},setItem(key,v){
+  if(failure)throw Error('quota');
+  if(key==='world-workshop-town-clock-v1'){clockRaw=v;clockWrites++;return}
+  raw=v;writes++;
+ }},
  poiWalkCanStep:()=>true,isFloor:()=>true,poiWalkAvatar(){},document:{querySelectorAll:()=>[]},$(){return null},toast(){}};
  vm.createContext(ctx);
+ // Travel calls the real dungeon population hook and its shared realm/clock helpers.
+ const theme=h.indexOf('function poiDungeonThemeAt('),themeEnd=h.indexOf('function poiDungeonEnterEffect(',theme);
+ const clock=h.indexOf('const POI_TOWN_CLOCK_KEY='),clockEnd=h.indexOf('function poiTownClockSuspend(',clock);
+ assert.ok(theme>=0&&themeEnd>theme&&clock>=0&&clockEnd>clock);
+ vm.runInContext(h.slice(theme,themeEnd)+h.slice(clock,clockEnd),ctx);
  const a=h.indexOf('const POI_HOTBAR_KEY='),b=h.indexOf('function poiResetCombat(',a);
  vm.runInContext(h.slice(a,b),ctx);
- return {ctx,raw:()=>JSON.parse(raw),writes:()=>writes,fail:v=>failure=v};
+ return {ctx,raw:()=>JSON.parse(raw),writes:()=>writes,clockWrites:()=>clockWrites,fail:v=>failure=v};
 }
 const spot=(zone,index)=>({zone,index});
 test('legacy state opens with no writes and migrates atomically when rearranged',()=>{
@@ -440,7 +450,7 @@ test('reciprocal portal steps land off both arches without quest or kit writes',
  assert.equal(c.poiOtherworldEnemyMayFight({x:101,z:79,y:-1},100,76),false,'realm enemies stop at the treasury gate even after it has opened');
  assert.equal(c.poiOtherworldUseStep(100,91,400),true);
  assert.deepEqual([c.poiWalkX,c.poiWalkZ,c.poiWalkLevel,c.poiWalkFacing],[118,87,0,0]);
- assert.equal(pauses,2);assert.equal(resumes,2);assert.deepEqual(f.raw(),start);assert.equal(f.writes(),0);
+ assert.equal(pauses,2);assert.equal(resumes,2);assert.deepEqual(f.raw(),start);assert.equal(f.writes(),0);assert.equal(f.clockWrites(),0);
 });
 test('chapel wet cells use a real separate 265ms shallow route with normal 175ms walk elsewhere',()=>{
  const f=fixture(),c=f.ctx;
@@ -481,7 +491,7 @@ test('real chapel stair pair lands away from each end, saves only resume, and ne
  assert.equal(c.poiDungeonTravelKey(c.facilitySite,78,88,-1),'chapel');
  assert.equal(c.poiOtherworldUseStep(78,89,400),true);
  assert.deepEqual([c.poiWalkX,c.poiWalkZ,c.poiWalkLevel,c.poiWalkFacing],[124,82,0,2]);
- assert.deepEqual(f.raw(),start);assert.equal(f.writes(),0);
+ assert.deepEqual(f.raw(),start);assert.equal(f.writes(),0);assert.equal(f.clockWrites(),0);
 });
 test('toolshop state and chapel rewards survive the same authoritative kit transaction',()=>{
  const start={version:1,weapon:null,potions:3,gold:20,toolshopSupply:{version:1,stock:6,delivered:1,cargo:0},

@@ -163,7 +163,12 @@ async function scope(browser,start,realm){
   if(realm)assert(!rendered.some(a=>a.type==='monsterMineGuard'||a.type==='monsterSlime'));
   else{
    assert(rendered.some(a=>a.type==='monsterMineGuard'),'mine golem stays render-eligible');
-   assert(rendered.filter(a=>a.type==='monsterSlime').length>=2,'native mine slimes stay render-eligible');
+   const authored=(await map(page)).world;
+   assert(!authored.some(o=>o.type==='monsterSlime'&&o.x===115&&o.z===59&&o.y===-1),'removed left shelter slime is not retained in the authored floor');
+   assert(authored.some(o=>o.type==='monsterSlime'&&o.x===120&&o.z===62&&o.y===-1),'right branch keeps its authored slime');
+   const present=rendered.filter(a=>a.type==='monsterSlime');
+   assert.equal(present.length,1,'only the remaining right branch slime renders within the mine slice');
+   assert(Math.abs(present[0].x-120)+Math.abs(present[0].z-62)<=4,'real remaining slime appears at its authored spawn or within its patrol tether');
   }
   if(out)await page.screenshot({path:out+'/v205-'+(realm?'otherworld':'mine')+'-scoped.png'});
   assert.deepEqual(errors,[]);
@@ -181,3 +186,4 @@ try{
  if(process.env.DUNGEON_LOOT_CASE!=='scope')for(const c of cases.filter(c=>!process.env.LOOT_PULSE_CASE||process.env.LOOT_PULSE_CASE===c.id))await trial(browser,c);
  console.log('PASS actual depth-tested pulsing loot on night surface and mine, scoped records, pickup and reload');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
+

@@ -145,9 +145,26 @@ async function relocate(page,x,z,y,facing){
 async function loot(browser){
  const {ctx,page,errors}=await launch(browser,'base',{x:109,z:56},{level:-1,width:390,clockStart:morning,kit:oldKit,facing:1});
  try{
+  // Observe durable kit and live HP in the same browser task before any
+  // map serialization. A slow first frame can legitimately let the real
+  // adjacent warrior land a strike; no field except proven armor wear may change.
+  const boot=await page.evaluate(()=>({
+   saved:JSON.parse(localStorage.getItem('world-workshop-hotbar-v1')),
+   hp:window.__editorTest.facility().combat.playerHP
+  }));
+  const {wornDurability,...base}=boot.saved;
+  assert.deepEqual(base,oldKit,'legacy inventory bytes decode without unrelated changes');
+  if(wornDurability){
+   const maxima={head:36,torso:62,legs:54,feet:46};
+   let wear=0;
+   for(const [slot,value] of Object.entries(wornDurability)){
+    assert(Object.hasOwn(maxima,slot)&&Number.isInteger(value)&&value>=1&&value<maxima[slot]);
+    wear+=maxima[slot]-value;
+   }
+   assert(wear>=1&&wear<=3&&100-boot.hp===11*wear,'only one armor point per observed native warrior hit may differ');
+  }else assert.equal(boot.hp,100,'without actual contact the original kit remains entirely unchanged');
   const original=await getMap(page);
   assert(original.world.some(o=>o.type===enemy&&o.x===110&&o.z===56&&o.y===-1));
-  assert.deepEqual(await readStock(page),oldKit,'previous kit read is byte-compatible before real gameplay mutation');
   assert.equal(all(await inv(page),bone).length,0);
   let hp=(await target(page,enemy)).hp;
   for(let n=0;n<7&&hp>0;n++){
@@ -237,3 +254,4 @@ try{
  await loot(browser);await fireRange(browser,'bow');await fireRange(browser,'wand');
  console.log('PASS live armed enemy drop/pickup and persisted condition, native bow equip/ranged hit and charged fire wand');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
+

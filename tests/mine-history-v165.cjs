@@ -12,7 +12,22 @@ function beforeMineDepths(world){
   [5799,121,50,'stonewall'],[5828,115,57,'mosswall']])restored.splice(i,0,{x,z,y:-1,type,rot:0});
  return restored;
 }
+function beforeMineLongApproach(site){
+ if(!site.mine?.approach)return site;
+ const {approach,...mine}=site.mine,world=Array.from(site.map.world.slice(0,-7));
+ const early={x:115,z:59,y:-1,type:'monsterSlime'};
+ world.splice(5813,0,{...early,rot:0});
+ for(const [i,x,z,type,restored] of [[5723,120,57,'mosswall','stone'],[5803,116,54,'stone','mosswall'],
+   [5909,115,57,'mosswall','stone'],[6017,113,55,'stone','stonewall']]){
+  assert.deepEqual({...world[i]},{x,z,y:-1,type,rot:0});
+  world[i]={x,z,y:-1,type:restored,rot:0};
+ }
+ assert.equal(createHash('sha256').update(JSON.stringify(world)).digest('hex'),
+  'b2a465823a0f57e60d520f890e17b01c67c1264b3ab2a81868acba7ebe6dc379','exact v209 world before mine approach revision');
+ return {...site,mine:{...mine,early,earlyRoom:{...mine.earlyRoom,slimes:[early,...mine.earlyRoom.slimes]}},map:{...site.map,world}};
+}
 function beforeSouthRoad(site){
+ site=beforeMineLongApproach(site);
  if(!site.southRoad)return site;
  const {southRoad,...old}=site,world=site.map.world.slice(0,7456);
  assert.equal(createHash('sha256').update(JSON.stringify(world)).digest('hex'),
@@ -146,4 +161,4 @@ function beforeAbandonedMine(site){
  assert.equal(digest,exactMine,'only the exact v167 mine records are exempt; untouched v166 mine records are pinned separately');
  return {...other,map:{...map,world:world.slice(0,oldLength)}};
 }
-module.exports={beforeSouthRoad,beforeArtisanPlant,beforeChapelApproach,beforeMinePrep,beforeChapelWest,beforeAbandonedMine,beforeMineDepths,beforeOtherworld,beforeMineEntry,beforeChapel,beforeArmedEncounters,beforeNorthTrail,beforeForestWatchPost,beforePondMarsh,beforeWayfarer,beforeOtherworldDepths};
+module.exports={beforeMineLongApproach,beforeSouthRoad,beforeArtisanPlant,beforeChapelApproach,beforeMinePrep,beforeChapelWest,beforeAbandonedMine,beforeMineDepths,beforeOtherworld,beforeMineEntry,beforeChapel,beforeArmedEncounters,beforeNorthTrail,beforeForestWatchPost,beforePondMarsh,beforeWayfarer,beforeOtherworldDepths};

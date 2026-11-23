@@ -159,18 +159,22 @@ async function mineArrival(browser){
   await waitZone(page,'mine');
   assert.equal((await state(page)).dungeonEntranceSerial,1,'the actual mine stairs play one transition');
   const formed=original.world.filter(o=>o.y===-1&&o.type==='monsterSlime'&&o.x>=114&&o.x<=122&&o.z>=59&&o.z<=64);
-  assert.equal(formed.length,2,'two true authored slimes deeper in the mine');
-  assert.deepEqual(formed.map(({x,z})=>[x,z]).sort(),[[115,59],[120,62]]);
+  assert.deepEqual(formed.map(({x,z})=>[x,z]),[[120,62]],'right branch remains and removed left entrance slime is absent');
+  // Patrol away from the arrival pad is intentional. A living slime can
+  // change its logical cell, but never enter the safe rectangle or hit us.
   await page.waitForTimeout(2500);
-  let s=await state(page);
-  assert.equal(s.combat.playerHP,100,'arriving player cannot be harmed by nearby encounters over multiple simulation ticks');
+  const s=await state(page);
+  assert.equal(s.combat.playerHP,100,'arriving player cannot be harmed over multiple simulation ticks');
   assert.equal(s.combat.threats.length,0);
-  assert.equal(s.combat.actors.filter(a=>a.type==='monsterSlime'&&a.level===-1&&a.hp>0&&a.x>=114&&a.x<=122&&a.z>=59&&a.z<=64).length,2);
-  await move(page,'n',true,true);await move(page,'n',true,true);await move(page,'n',true,true);
+  const roaming=s.combat.actors.filter(a=>a.type==='monsterSlime'&&a.level===-1&&a.visible&&a.hp>0);
+  assert.equal(roaming.length,1);
+  const [slime]=roaming;
+  assert(Math.abs(slime.x-120)+Math.abs(slime.z-62)<=4,'patrol retains authored tether');
+  assert(!(slime.x>=114&&slime.x<=117&&slime.z>=60&&slime.z<=62),'live slime cannot enter arrival shelter');
+  for(let i=0;i<3;i++)await move(page,'n',true,false);
   assert.deepEqual((await state(page)).position,at(116,59,-1));
-  await page.waitForFunction(()=>window.__editorTest.facility().combat.threats.some(t=>t.type==='monsterSlime'&&t.y===-1));
   // Walk back to the original paired stair; activation must not take a quest.
-  for(let i=0;i<3;i++)await move(page,'s',true,true);
+  for(let i=0;i<3;i++)await move(page,'s',true,false);
   await page.waitForFunction(()=>window.__editorTest.facility().position.level===0);
   await waitZone(page,'outside');
   assert.equal((await state(page)).dungeonEntranceSerial,1,'mine exit does not replay the entrance effect');
@@ -184,5 +188,6 @@ try{
  browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
   args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
  await ordinaryWalk(browser);await mineArrival(browser);
- console.log('PASS native normal taps and held walk, safe actual Mine arrival, two live slimes and mine/BGM scope');
+ console.log('PASS native normal taps and held walk, safe actual Mine arrival, nearby right patrol and mine/BGM scope');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
+

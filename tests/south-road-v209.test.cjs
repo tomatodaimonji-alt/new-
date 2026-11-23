@@ -1,8 +1,9 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),{createHash}=require('node:crypto');
+const {beforeMineLongApproach}=require('./mine-history-v165.cjs');
 const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const build=vm.runInNewContext(h.slice(h.indexOf('const FACILITY_SITES=Object.freeze('),h.indexOf('function workshopResumeDecode('))+';buildFacilitySite');
 const plain=s=>JSON.parse(JSON.stringify(s)),sha=s=>createHash('sha256').update(JSON.stringify(s)).digest('hex');
-const base=plain(build('base')),world=base.map.world,head=world.slice(0,7456),added=world.slice(7456);
+const base=beforeMineLongApproach(plain(build('base'))),world=base.map.world,head=world.slice(0,7456),added=world.slice(7456);
 const at=(x,z)=>world.filter(o=>o.x===x&&o.z===z&&o.y===0);
 const edge=(a,b)=>Math.abs(a.x-b.x)+Math.abs(a.z-b.z);
 test('only the base southern limit grows; no authored object moves or changes',()=>{
