@@ -21,7 +21,7 @@ let fixture=inject(html,anchor,anchor+`
     window.__qaFortArm=true;
    },
    motion:()=>{const now=performance.now(),a=[...poiMonsterStates].find(([o])=>o.type==='monsterNorthMinotaur')?.[1]?.playerAttack;
-    return {now,x:poiWalkViewX,z:poiWalkViewZ,strike:a?{kind:a.northAttack,dx:a.dx,dz:a.dz,sx:a.sx,sz:a.sz,start:a.start,hit:a.hit,pending:a.pending}:null};
+    return {now,nextMob:poiNextMobTick,x:poiWalkViewX,z:poiWalkViewZ,strike:a?{kind:a.northAttack,dx:a.dx,dz:a.dz,sx:a.sx,sz:a.sz,start:a.start,hit:a.hit,pending:a.pending}:null};
    },
    status:()=>{
     const spec=facilitySite?.northFort;
@@ -78,13 +78,17 @@ const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html; c
 await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',resolve).once('error',reject));
 const origin='http://127.0.0.1:'+server.address().port;
 let browser,checkpoint='launch';
-const watchdog=setTimeout(()=>{console.error('North Fort browser stalled at '+checkpoint);process.exit(1)},65000);
+const watchdog=setTimeout(()=>{console.error('North Fort browser stalled at '+checkpoint);process.exit(1)},110000);
 const directions={'ArrowUp':[0,-1],'ArrowDown':[0,1],'ArrowLeft':[-1,0],'ArrowRight':[1,0]};
 const same=(a,b)=>a.x===b.x&&a.z===b.z&&a.y===b.y;
 async function boot(position,{night=false,kit={},gateCombat=false}={}){
  const ctx=await browser.newContext({viewport:{width:844,height:390},deviceScaleFactor:.60,isMobile:true,hasTouch:true});
  const p=await ctx.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));p.setDefaultTimeout(12500);
- if(gateCombat)await p.addInitScript(()=>{window.__qaFortGateCombat=true});
+ const clockStart=new Date('2026-11-23T12:00:00Z');
+ if(gateCombat){
+  await p.clock.install({time:clockStart});
+  await p.addInitScript(()=>{window.__qaFortGateCombat=true});
+ }
  await p.goto(origin+'/seed');
  await p.evaluate(({position,night,kit})=>{
   const worn={head:null,torso:null,legs:null,feet:null};
@@ -109,11 +113,18 @@ async function boot(position,{night=false,kit={},gateCombat=false}={}){
   catch(e){throw new Error('Actual '+key+' from '+JSON.stringify(have)+' to '+JSON.stringify(target)+' stalled at '+JSON.stringify(await q()),{cause:e})}
   return await q();
  };
+ if(gateCombat){
+  // Pausing shortly beyond page time preserves all initialized
+  // timestamps. From here real CDP events drive the real input handlers, while
+  // game/RAF time advances only explicitly and cannot be starved by WebGL.
+  const wall=await p.evaluate(()=>Date.now());
+  await p.clock.pauseAt(wall+1500);
+ }
  return {p,ctx,errors,q,when,step};
 }
 async function counter(far){
  const tag=far?'far axe escape':'close axe flank';
- const {p,ctx,errors,q,when}=await boot({x:64,z:far?17:14,y:-1},{gateCombat:true});
+ const {p,ctx,errors,q}=await boot({x:64,z:far?17:14,y:-1},{gateCombat:true});
  let cdp;
  try{
   checkpoint=tag+' ready';
@@ -130,26 +141,39 @@ async function counter(far){
   const corner=!far?await p.evaluate(()=>window.__editorTest.northFortQA.motion()):null;
   if(corner)assert(Math.abs(corner.x-64.78)<.001&&Math.abs(corner.z-13.84)<.001);
   await touch('touchStart',[left]);
+  assert.equal((await p.evaluate(()=>window.__editorTest.northFortQA.motion())).strike,null,
+   "the boss did not precommit before the real thumb contact");
   await p.evaluate(()=>window.__editorTest.northFortQA.arm(false));
-  const started=await when(()=>{const s=window.__editorTest.northFortQA.motion();return s.strike?.pending&&s.strike},null,4000);
-  if(!far)await ret(0,-53); // start as soon as the genuine tell is observed
-  const swing=await started.jsonValue();
+  const motion=()=>p.evaluate(()=>window.__editorTest.northFortQA.motion());
+  let swing;
+  const armedAt=await motion();
+  let observed=armedAt;
+  // poiMobFrame visits enemies every 380ms, even when the fixture's boss
+  // gate is disarmed. Wait up to two real scheduler periods, peeking in
+  // small increments so a newly committed tell never loses its windup.
+  for(let i=0;i<28&&!swing;i++){
+   await p.clock.runFor(32);
+   observed=await motion();
+   if(observed.strike?.pending)swing=observed.strike;
+  }
+  assert(swing,'normal RAF starts a pending boss tell: '+JSON.stringify({armedAt,observed}));
   assert.equal(swing.kind,'axe');
   if(far)assert(Math.abs(swing.dx)<.04&&swing.dz>.93,'far swing still commits straight south');
   else assert(swing.dx>.55&&swing.dz>.55,'boss commits its real attack toward the southeast flank');
   checkpoint=tag+' genuine stick evasion';
-  if(far){
-   await ret(53,0);
-   await when(()=>window.__editorTest.northFortQA.motion().x>64.9,null,2200);
-  }else{
-   // Only ONE northward input during the real 850ms tell: no serial
-   // lateral-to-north turn competing with WebGL or consuming the windup.
-   const behind=swing.sz-(corner.x-swing.sx)*swing.dx/swing.dz-.055;
-   await when(goal=>window.__editorTest.northFortQA.motion().z<=goal,behind,1900);
+  const voluntarilySafe=m=>far?m.x>65.10:
+   (m.x-swing.sx)*swing.dx+(m.z-swing.sz)*swing.dz<-.04&&Math.hypot(m.x-swing.sx,m.z-swing.sz)<=1.24;
+  await ret(far?53:0,far?0:-53);
+  let stance;
+  for(let i=0;i<45;i++){
+   await p.clock.runFor(16);
+   stance=await motion();
+   if(voluntarilySafe(stance))break;
   }
+  assert(voluntarilySafe(stance)&&stance.now<swing.hit,'genuine stick reaches a safe counter stance during the original windup: '+JSON.stringify({swing,stance}));
   await touch('touchEnd',[]);
   checkpoint=tag+' actual contact';
-  await when(at=>{const s=window.__editorTest.northFortQA.motion();return s.strike?.start===at&&!s.strike.pending},swing.start,3900);
+  await p.clock.runFor(Math.ceil(swing.hit-stance.now)+64);
   const settled=await q(),contact=settled.contacts.find(t=>t.kind==='axe'&&t.now>=swing.hit);
   assert(contact&&settled.strike.dx===swing.dx&&settled.strike.dz===swing.dz);
   const dx=contact.x-swing.sx,dz=contact.z-swing.sz,radius=Math.hypot(dx,dz);
@@ -158,12 +182,11 @@ async function counter(far){
   if(far){
    assert(radius>4.02,'at hit time actual position is outside the 4-tile arc: '+JSON.stringify(contact));
    assert(settled.openUntil<=contact.now,'far whiff does not grant full-damage exposure in the actual state');
-   await when(at=>{
-    const s=window.__editorTest.northFortQA.status();
-    return s.tell.some(d=>d.kind==='axe'&&d.now>=at&&['recover','braced'].includes(d.phase)&&!d.exposed);
-   },contact.now,1200);
-   const observed=await q();
-   assert(observed.tell.filter(d=>d.kind==='axe'&&d.now>=contact.now).every(d=>d.phase!=='open'&&!d.exposed),
+   await p.clock.runFor(96);
+   const farPose=await q();
+   assert(farPose.tell.some(d=>d.kind==='axe'&&d.now>=contact.now&&['recover','braced'].includes(d.phase)&&!d.exposed),
+    'actual post-whiff render reaches a braced recovery pose');
+   assert(farPose.tell.filter(d=>d.kind==='axe'&&d.now>=contact.now).every(d=>d.phase!=='open'&&!d.exposed),
     'the real post-whiff WebGL pose stays braced rather than displaying the full opening');
   }else{
    assert(dx*swing.dx+dz*swing.dz<0&&radius<=1.62+1e-6,
@@ -171,26 +194,14 @@ async function counter(far){
    assert(settled.openUntil>settled.now,'close escape exposes the boss to a practical counter');
   }
   if(!far){
-   const getMotion=()=>p.evaluate(()=>window.__editorTest.northFortQA.motion());
-   let stance=await getMotion(),gap=Math.hypot(stance.x-swing.sx,stance.z-swing.sz);
-   if(gap>1.24){
-    // The bull is already genuinely exposed. A delayed SwiftShader touch
-    // release can finish a few tenths outside sword reach. Use a short real
-    // follow-up thumb step during recovery, not a coordinate write or a
-    // relaxed attack-range assertion.
-    checkpoint=tag+' short real inward correction';
-    const pull=33,px=Math.round(pull*(swing.sx-stance.x)/gap),pz=Math.round(pull*(swing.sz-stance.z)/gap);
-    await touch('touchStart',[left]);await ret(px,pz);
-    await when(({sx,sz})=>{const m=window.__editorTest.northFortQA.motion();return Math.hypot(m.x-sx,m.z-sz)<=1.18},swing,700);
-    await touch('touchEnd',[]);
-    stance=await getMotion();gap=Math.hypot(stance.x-swing.sx,stance.z-swing.sz);
-   }
-   assert(gap<=1.30&&stance.now<settled.openUntil,'real wooden sword starts inside 1.30 while the same dodge is still open: '+JSON.stringify({gap,stance}));
+   const actualStance=await motion(),gap=Math.hypot(actualStance.x-swing.sx,actualStance.z-swing.sz);
+   assert(gap<=1.30&&actualStance.now<settled.openUntil,'real wooden sword starts inside 1.30 while the same dodge is still open: '+JSON.stringify({gap,actualStance}));
   }
   checkpoint=tag+' actual wooden sword';
   await p.touchscreen.tap(action.x+action.width/2,action.y+action.height/2);
-  await when(at=>{const s=window.__editorTest.northFortQA.status();return s.action>at&&!s.pending},settled.action,3500);
+  await p.clock.runFor(192);
   const end=await q();
+  assert(end.action>settled.action&&!end.pending,'actual touchscreen tap dispatches and completes wooden sword');
   if(far){
    assert.equal(end.bossHP,start.bossHP,'same real wooden sword cannot counter from the safe outside position');
    assert.equal(end.durability,start.durability,'far empty swing spends no weapon durability');
