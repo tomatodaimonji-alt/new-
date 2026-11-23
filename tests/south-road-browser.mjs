@@ -118,9 +118,18 @@ async function trial(browser){
     await walk(page,branch.slice(0,-1).reverse());
    }
   }
+  // This same browser journey now crosses the native paired span when authored.
+  for(const part of site.southRoad.creek?.bridgePairs.flat()||[]){
+   assert(original.some(([x,z])=>x===part.x&&z===part.z),'native crossing lies on the same tested walk');
+   assert(world.world.some(o=>o.x===part.x&&o.z===part.z&&o.y===0&&o.type==='river'));
+   assert(world.world.some(o=>o.x===part.x&&o.z===part.z&&o.y===0&&o.type===part.type&&o.rot===part.rot));
+  }
+  const expectedMusic=site.southRoad.town?'market':'outside';
+  await page.waitForFunction(zone=>window.__editorTest.facility().musicZone===zone,expectedMusic);
   const end=await api(page);
   assert.deepEqual(end.position,pos(105,111,0));
-  assert.equal(end.musicZone,'outside');assert.equal(end.sceneLayer,'surface');
+  assert.equal(end.musicZone,expectedMusic);assert.equal(end.sceneLayer,'surface');
+  if(site.southRoad.town)assert.equal(end.miniMap.location,site.southRoad.town.name);
   assert.equal(end.dungeonEntranceSerial,entry.dungeonEntranceSerial);
   assert.equal(page.url(),url);
   assert.equal(await stock(page),picked,'ordinary travel never grants equipment or quest progress');

@@ -1,4 +1,4 @@
-const {beforeAbandonedMine,beforeOtherworld}=require('./mine-history-v165.cjs');
+const {beforeSouthCreek,beforeAbandonedMine,beforeOtherworld}=require('./mine-history-v165.cjs');
 const {kitchenChestAddedV162}=require('./kitchen-chest-history.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -7,8 +7,11 @@ const {test} = require('node:test');
 const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const source=html.match(/const FACILITY_SITES[\s\S]*?(?=function facilityNavigate\()/)?.[0];
 assert(source,'authored facility script not found');
-const {FACILITY_SITES,buildFacilitySite}=vm.runInNewContext(source+'\n;({FACILITY_SITES,buildFacilitySite})');
+const {FACILITY_SITES,buildFacilitySite:buildCurrentFacilitySite}=vm.runInNewContext(source+'\n;({FACILITY_SITES,buildFacilitySite})');
 const ids=['lodging','kitchen','workshop','artisan','stable','homes','toolshop','base'];
+// This suite pins the original ten-town facility layouts. The distant
+// town has separate footprint, room and route assertions.
+const buildFacilitySite=id=>id==='base'?beforeSouthCreek(buildCurrentFacilitySite(id)):buildCurrentFacilitySite(id);
 const buildingIds=['lodging','kitchen','workshop','artisan','stable','cottage','rowhouse','gardener','toolshop','townGuild'];
 const key=(x,z,y)=>[x,z,y].join(',');
 const floorIds=/^(?:woodfloor(?:Dark|Light)?|stone|brickfloor|road(?:Cobble|CutStone|Gravel)Full|earth|plasterfloor|grass(?:Wild|Trampled|Flowers|Patch))$/;

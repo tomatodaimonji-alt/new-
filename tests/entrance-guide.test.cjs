@@ -30,3 +30,16 @@ test('only true authored main doors under a live approved roof have a guide',()=
   assert.equal(read({...b,id:'guildsaved'},b.map.world).length,0);
  }
 });
+test('south town guides face the main road and not the market receiving door',()=>{
+ const isRoof=o=>/^roof/.test(o.type)&&o.y>0;
+ const read=vm.runInNewContext(extract('function facilityCollectEntranceGuides(','function facilityDrawEntranceGuides(')+';facilityCollectEntranceGuides',
+  {facilityIsRoofPiece:isRoof,rot2:(x,z,r)=>[[x,z],[-z,x],[-x,-z],[z,-x]][r]});
+ const b=build('base'),tiles=b.map.world;
+ for(const [id,x,z,doorX,doorZ] of [['southMarket',103,112,102,112],['southInn',107,116,108,116]]){
+  const guides=(world)=>Array.from(read(b,world).filter(g=>g.id===id),g=>[g.x,g.z,g.doorX,g.doorZ]);
+  assert.deepEqual(guides(tiles),[[x,z,doorX,doorZ]]);
+  const atDoor=o=>o.x===doorX&&o.z===doorZ;
+  assert.equal(guides(tiles.filter(o=>!atDoor(o)||!isRoof(o))).length,0);
+  assert.equal(guides(tiles.filter(o=>!atDoor(o)||!o.type.endsWith('Door'))).length,0);
+ }
+});

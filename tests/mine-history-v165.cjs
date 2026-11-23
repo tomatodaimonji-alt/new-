@@ -12,7 +12,29 @@ function beforeMineDepths(world){
   [5799,121,50,'stonewall'],[5828,115,57,'mosswall']])restored.splice(i,0,{x,z,y:-1,type,rot:0});
  return restored;
 }
+function beforeSouthTown(site){
+ if(!site.southRoad?.town)return site;
+ const {town,...southRoad}=site.southRoad,world=site.map.world.slice(0,7656);
+ assert.deepEqual(Array.from(site.buildings.slice(-2),b=>b.id),['southMarket','southInn']);
+ assert.equal(createHash('sha256').update(JSON.stringify(world)).digest('hex'),
+  '2fa9160b2c99b8b4fe6a9764ddc2a767bbf5e03b4dee0c978cde9d4eef9ea2ed','exact river-only Game World before distant town');
+ return {...site,southRoad,buildings:site.buildings.slice(0,-2),map:{...site.map,world}};
+}
+function beforeSouthCreek(site){
+ site=beforeSouthTown(site);
+ if(!site.southRoad?.creek)return site;
+ const {creek,...southRoad}=site.southRoad,world=Array.from(site.map.world.slice(0,7578));
+ for(const z of [104,105]){
+  const i=world.findIndex(o=>o.x===101&&o.z===z&&o.y===0&&o.type==='river'&&o.rot===0);
+  assert(i>=0,'known native crossing substrate '+z);
+  world[i]={...world[i],type:'roadGravelFull'};
+ }
+ assert.equal(createHash('sha256').update(JSON.stringify(world)).digest('hex'),
+  '8fe11e1cf6f3fb771d952c85cbe32d78bf72d0632515637bf4c7c8a2869d21d4','exact v211 Game World before the south creek');
+ return {...site,southRoad,map:{...site.map,world}};
+}
 function beforeMineLongApproach(site){
+ site=beforeSouthCreek(site);
  if(!site.mine?.approach)return site;
  const {approach,...mine}=site.mine,world=Array.from(site.map.world.slice(0,-7));
  const early={x:115,z:59,y:-1,type:'monsterSlime'};
@@ -161,4 +183,4 @@ function beforeAbandonedMine(site){
  assert.equal(digest,exactMine,'only the exact v167 mine records are exempt; untouched v166 mine records are pinned separately');
  return {...other,map:{...map,world:world.slice(0,oldLength)}};
 }
-module.exports={beforeMineLongApproach,beforeSouthRoad,beforeArtisanPlant,beforeChapelApproach,beforeMinePrep,beforeChapelWest,beforeAbandonedMine,beforeMineDepths,beforeOtherworld,beforeMineEntry,beforeChapel,beforeArmedEncounters,beforeNorthTrail,beforeForestWatchPost,beforePondMarsh,beforeWayfarer,beforeOtherworldDepths};
+module.exports={beforeSouthTown,beforeSouthCreek,beforeMineLongApproach,beforeSouthRoad,beforeArtisanPlant,beforeChapelApproach,beforeMinePrep,beforeChapelWest,beforeAbandonedMine,beforeMineDepths,beforeOtherworld,beforeMineEntry,beforeChapel,beforeArmedEncounters,beforeNorthTrail,beforeForestWatchPost,beforePondMarsh,beforeWayfarer,beforeOtherworldDepths};

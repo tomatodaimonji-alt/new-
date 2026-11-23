@@ -59,18 +59,16 @@ if(process.env.STAR_EXPANSION_LAYOUT_ONLY==='1'){
  console.log('PASS v202 authored wide loop, new actors, original route and unbypassed vault');
  process.exit(0);
 }
-const spawn='if(poiIsMonster(o.type)&&';
-assert.equal(html.split(spawn).length,2,'one actor construction anchor');
-// These two old arena roamers can now reach the approach while the
-// fixture walks the topology. Keep them live in the separate production
-// launch below; this quiet route intentionally verifies traversal and loot.
-const oldRoamers=[{type:'monsterGoblin',x:97,z:82,y:-1},{type:'monsterSkeleton',x:104,z:81,y:-1}];
-const suppressed='!'+JSON.stringify([...newActors,...oldRoamers])+'.some(a=>a.type===o.type&&a.x===o.x&&a.z===o.z&&a.y===o.y)&&';
-const fixtureHtml=html.replace(spawn,spawn+suppressed);
+// Use native one-week persistence for the quiet route: merely omitting
+// construction on reset is insufficient because entering through the real
+// portal calls poiDungeonArrive, which repopulates eligible absent actors.
+const oldRoamers=[{type:'monsterGoblin',x:97,z:82,y:-1},{type:'monsterSkeleton',x:104,z:81,y:-1},{type:'monsterSkelKnight',x:106,z:78,y:-1}];
+const recentlyDefeated={'otherworld.goblin':0,'otherworld.skeleton':0,
+ 'otherworld.archive-archer':0,'otherworld.cloister-mage':0,'otherworld.arena-knight':0};
 const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
 const server=createServer((req,res)=>{
  res.setHeader('Content-Type','text/html; charset=utf-8');
- res.end(req.url.startsWith('/seed')?'<!doctype html><title>Isolated fixtures</title>':req.url.startsWith('/quiet')?fixtureHtml:html);
+ res.end(req.url.startsWith('/seed')?'<!doctype html><title>Isolated fixtures</title>':html);
 });
 await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',resolve).once('error',reject));
 const origin='http://127.0.0.1:'+server.address().port;
@@ -89,7 +87,8 @@ async function launch(browser,start,facing,quiet=false){
  const page=await ctx.newPage(),errors=[];
  page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(15000);
  await page.goto(origin+'/seed');
- const kit={version:1,weapon:'equipWoodSword',potions:0,gold:12,claimedCaches:['glade']};
+ const kit={version:1,weapon:'equipWoodSword',potions:0,gold:12,claimedCaches:['glade'],
+  ...(quiet?{dungeonPopulation:{version:1,dead:recentlyDefeated,questEntries:{}}}:{})};
  await page.evaluate(({start,facing,kit,kitKey,resumeKey,editorKey,personalEditor})=>{
   localStorage.setItem(kitKey,JSON.stringify(kit));
   localStorage.setItem(editorKey,personalEditor);
@@ -99,7 +98,7 @@ async function launch(browser,start,facing,quiet=false){
    position:{x:start.x,z:start.z,y:start.level,facing},townLayout:5,
    view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:start.level,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.24,orbitDistance:5.5}}));
  },{start,facing,kit,kitKey,resumeKey,editorKey,personalEditor});
- await page.goto(origin+(quiet?'/quiet':'/')+'?resume=1&test=1');
+ await page.goto(origin+'/?resume=1&test=1');
  await page.waitForFunction(()=>window.__editorTest?.facility?.().active);
  assert.deepEqual((await state(page)).position,start);
  return {ctx,page,errors};
@@ -146,15 +145,12 @@ async function portalBranch(browser){
   await page.waitForFunction(()=>{const p=window.__editorTest.facility().position;return p.x===100&&p.z===90&&p.level===-1});
   await region(page);await page.waitForTimeout(210);
   assert.equal(await stock(page),initial,'old portal requires no kit/quest changes');
+  const arrived=(await state(page)).combat.actors;
+  for(const wanted of [...newActors,...oldRoamers])assert(!arrived.some(a=>a.type===wanted.type&&a.level===-1&&a.hp>0&&a.visible),
+   'native portal respects the recent defeat of '+wanted.type);
+  assert(arrived.some(a=>a.type==='monsterDragon'&&a.level===-1&&a.hp===150),'quiet route retains the live guardian');
   const path=steps(branch),nextCount=canCount((await state(page)).inventory)+1;
   for(const [x,z] of path){
-   // An old arena opponent can still patrol at this exit. Observe the
-   // authored physical transition without assuming it is a safe room.
-   if(x===107&&z===81&&!(await canStep(page,x,z,108,81))){
-    const p=(await state(page)).combat.actors.some(a=>a.hp>0&&a.x===107&&a.z===81&&a.level===-1);
-    assert(p,'only a live arena actor may transiently block the last tile');
-    break;
-   }
    await step(page,x,z);
    if(x===121&&z===84){
     await region(page);
@@ -171,8 +167,7 @@ async function portalBranch(browser){
     assert.equal(await stock(page),taken);
    }
   }
-  const exit=await current(page);
-  assert(exit.z===81&&(exit.x===107||exit.x===108),'avatar reaches the old arena gate from the optional east loop');
+  assert.deepEqual(await current(page),pos(107,81),'avatar reaches the old arena from the optional east loop');
   await region(page);await guardedVault(page);
   assert.equal(page.url(),url);
   assert.deepEqual(await map(page),world);

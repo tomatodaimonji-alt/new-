@@ -1,3 +1,4 @@
+const {beforeSouthCreek}=require('./mine-history-v165.cjs');
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const html=fs.readFileSync(process.env.HTML||path.join(__dirname,'../world-editor.html'),'utf8');
 const a=html.indexOf('const FACILITY_SITES=Object.freeze('),b=html.indexOf('function workshopResumeDecode(',a);
@@ -23,7 +24,7 @@ test('four wide gates connect to genuine meadows and preserve both old routes',(
 test('translation preserves all old frame records and nested authored hydrology, and no standalone map moves',()=>{
  assert(api.old);
  const framed=clean(api.old('base'));
- const previous=require('./town-frame-v144-projection.cjs').originalFrame(site);
+ const previous=require('./town-frame-v144-projection.cjs').originalFrame(beforeSouthCreek(site));
  const seek=new Set(previous.map.world.map(o=>JSON.stringify(o)));
  for(const o of framed.map.world)assert(seek.has(JSON.stringify({...o,x:o.x+12,z:o.z+12})));
  const unshift=v=>Array.isArray(v)?v.map(unshift):v&&typeof v==='object'?Object.fromEntries(Object.entries(v).map(([k,val])=>[k,
