@@ -1,8 +1,8 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),{createHash}=require('node:crypto');
-const {beforeArtisanPlant}=require('./mine-history-v165.cjs');
+const {beforeArtisanPlant,beforeSouthRoad}=require('./mine-history-v165.cjs');
 const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const build=vm.runInNewContext(h.slice(h.indexOf('const FACILITY_SITES=Object.freeze('),h.indexOf('function workshopResumeDecode('))+';buildFacilitySite');
-const s=JSON.parse(JSON.stringify(build('base'))),w=s.map.world,at=(x,z)=>w.filter(o=>o.x===x&&o.z===z&&o.y===0);
+const s=beforeSouthRoad(JSON.parse(JSON.stringify(build('base')))),w=s.map.world,at=(x,z)=>w.filter(o=>o.x===x&&o.z===z&&o.y===0);
 test('signed dry path leaves the old southeastern trail and reaches the existing ruined chapel stair',()=>{
  const c=s.chapel,a=c.approach;
  assert.deepEqual(a.waymark,{x:119,z:84,y:0,type:'ruinStonePost'});

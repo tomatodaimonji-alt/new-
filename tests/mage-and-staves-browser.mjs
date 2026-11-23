@@ -225,9 +225,15 @@ async function run(browser){
   if(bonus)assert(Number.isInteger(bonus.charges)&&bonus.charges>=2&&bonus.charges<=5,'optional naturally rolled wand has 2–5 charges');
   console.log('mage native loot:',bonus?'staff + wand, charges='+bonus.charges:'staff, no wand this run');
   if(out)await page.screenshot({path:out+'/v195-mage-drop.png'});
+  // Cold loading a surface combat fixture can reconstruct the mage at its
+  // authored home. Compare durable bytes from the original safe approach,
+  // outside the mage's leash, rather than while respawned fire can wear armor.
+  for(let z=(await state(page)).position.z;z<93;z++)await move(page,'s');
+  assert.deepEqual((await state(page)).position,pos(40,93));
   const persisted=await readStock(page);
   await page.reload();await waitPlay(page);
-  assert.deepEqual(await readStock(page),persisted,'the genuine unforced loot roll and staff wear persist');
+  assert.deepEqual((await state(page)).position,pos(40,93));
+  assert.deepEqual(await readStock(page),persisted,'the genuine unforced loot roll, worn armor and staff durability persist');
   assert.deepEqual(await getMap(page),original);
   await unchanged(page);assert.deepEqual(errors,[]);
  }finally{await ctx.close()}
@@ -239,3 +245,4 @@ try{
  await run(browser);
  console.log('PASS real cardinal fire release & sidestep, guaranteed staves, native long staff equal damage and persistent optional caster loot');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
+

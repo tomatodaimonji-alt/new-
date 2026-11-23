@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),vm=require(
 const h=fs.readFileSync(process.env.HTML||path.join(__dirname,'..','world-editor.html'),'utf8');
 function setup(initial=null){
  let raw=JSON.stringify(initial),failed=false,writes=0,avatars=0;
- const c=vm.createContext({facilitySite:{id:'base'},poiWalkActive:true,pineAIActive:false,poiWalkLevel:0,poiWalkFacing:0,poiWalkX:4,poiWalkZ:5,
+ const c=vm.createContext({MAX_MAP:128,facilitySite:{id:'base'},poiWalkActive:true,pineAIActive:false,poiWalkLevel:0,poiWalkFacing:0,poiWalkX:4,poiWalkZ:5,
   POI_PLAYER_ATTACK:20,poiWalkCanStep:()=>true,world:[],isFloor:()=>true,$:()=>null,document:{querySelectorAll:()=>[]},
   poiWalkAvatar(){avatars++},toast(){},localStorage:{getItem:()=>raw,setItem(_k,v){if(failed)throw Error('quota');raw=v;writes++}}});
  const a=h.indexOf('const POI_HOTBAR_KEY='),b=h.indexOf('function poiResetCombat(',a);vm.runInContext(h.slice(a,b),c);

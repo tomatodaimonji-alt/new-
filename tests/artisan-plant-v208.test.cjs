@@ -1,9 +1,10 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),{createHash}=require('node:crypto');
+const {beforeSouthRoad}=require('./mine-history-v165.cjs');
 const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const build=vm.runInNewContext(h.slice(h.indexOf('const FACILITY_SITES=Object.freeze('),h.indexOf('function workshopResumeDecode('))+';buildFacilitySite');
 const plain=s=>JSON.parse(JSON.stringify(s)),sha=s=>createHash('sha256').update(JSON.stringify(s)).digest('hex');
 test('only the overlapping artisan façade plant moves to an otherwise empty edge tile, not the door lane',()=>{
- const s=plain(build('base')),w=s.map.world,at=(x,z)=>w.filter(o=>o.x===x&&o.z===z&&o.y===0);
+ const s=beforeSouthRoad(plain(build('base'))),w=s.map.world,at=(x,z)=>w.filter(o=>o.x===x&&o.z===z&&o.y===0);
  assert.deepEqual(at(66,52),[{x:66,z:52,y:0,type:'poiPottedPlant',rot:0}]);
  assert.deepEqual(at(71,52).map(o=>o.type),['roadCobbleFull','benchWood']);
  assert.deepEqual(at(69,52).map(o=>o.type),['roadCobbleFull']);

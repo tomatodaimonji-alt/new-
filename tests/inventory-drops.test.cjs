@@ -3,7 +3,7 @@ const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 function setup(raw){
  const a=html.indexOf('const POI_HOTBAR_KEY='),b=html.indexOf('function poiHotbarSwordIcon(',a);
  let mem=JSON.stringify(raw),fail=false;
- const x={facilitySite:{id:'base'},poiWalkActive:true,pineAIActive:false,poiWalkLevel:0,poiWalkX:3,poiWalkZ:4,poiWalkFacing:1,
+ const x={MAX_MAP:128,facilitySite:{id:'base'},poiWalkActive:true,pineAIActive:false,poiWalkLevel:0,poiWalkX:3,poiWalkZ:4,poiWalkFacing:1,
   poiWalkCanStep:()=>true,poiHotbarRender(){},poiWalkAvatar(){},poiShopIsOpen:()=>false,toast(){},isFloor:t=>t==='river',
   world:[],localStorage:{getItem:()=>mem,setItem(_k,v){if(fail)throw Error('disk');mem=v}}};
  vm.createContext(x);vm.runInContext(html.slice(a,b),x);
@@ -35,7 +35,7 @@ test('one herb per swipe, invalid/blocked/wet destinations and full pickup never
  assert(x.poiInventoryPickup(4,4));assert.equal(h.save().potions,3);
 });
 test('impossible ground location in a damaged save cannot strand the starting sword',()=>{
- const h=setup({version:1,weapon:null,potions:3,sword:false,drops:[{type:'equipWoodSword',x:50,z:100,y:0}]});
+ const h=setup({version:1,weapon:null,potions:3,sword:false,drops:[{type:'equipWoodSword',x:50,z:128,y:0}]});
  assert.equal(h.x.poiInventorySnapshot().sword,true);
  assert.equal(h.x.poiInventorySnapshot().drops.length,0);
 });

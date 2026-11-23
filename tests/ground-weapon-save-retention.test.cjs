@@ -4,7 +4,7 @@ const a=html.indexOf('const POI_HOTBAR_KEY='),b=html.indexOf('function poiResetC
 const plain=v=>v===undefined?undefined:JSON.parse(JSON.stringify(v));
 function launch(raw,{x=109,z=88,y=-1,id='base'}={}){
  let writes=0;
- const c={POI_PLAYER_MAX_HP:100,poiPlayerHP:100,poiWalkActive:true,pineAIActive:false,poiWalkX:x,poiWalkZ:z,poiWalkLevel:y,poiWalkFacing:1,
+ const c={MAX_MAP:128,POI_PLAYER_MAX_HP:100,poiPlayerHP:100,poiWalkActive:true,pineAIActive:false,poiWalkX:x,poiWalkZ:z,poiWalkLevel:y,poiWalkFacing:1,
   facilitySite:{id,otherworld:{expansion:{guard:[{x:109,z:88,y:-1,type:'monsterSkelArcher'},{x:120,z:82,y:-1,type:'monsterSkelLongStaff'}]}}},world:[],
   document:{querySelectorAll:()=>[]},$(){return null},isFloor:t=>t==='stone',poiWildExterior:()=>true,validPos:()=>true,poiWalkCanStep:()=>true,
   poiWalkAvatar(){},poiSound(){},toast(){},localStorage:{getItem:()=>raw,setItem(k,v){assert.equal(k,'world-workshop-hotbar-v1');raw=v;writes++}}};

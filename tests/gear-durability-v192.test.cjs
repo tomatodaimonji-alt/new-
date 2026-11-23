@@ -5,7 +5,7 @@ function fixture(saved=null){
  let raw=saved&&JSON.stringify(saved),writes=0;
  const progress={},el={hidden:true,style:{},querySelector:()=>progress},canvas={clientWidth:320,clientHeight:480};
  const point={x:150,y:220},cells={};
- const c=vm.createContext({facilitySite:{id:'base',mine:{vault:{chest:{x:121,z:43,y:-1}}},otherworld:{chest:{x:100,z:74,y:-1}}},
+ const c=vm.createContext({MAX_MAP:128,facilitySite:{id:'base',mine:{vault:{chest:{x:121,z:43,y:-1}}},otherworld:{chest:{x:100,z:74,y:-1}}},
   poiWalkLevel:-1,poiWalkActive:true,pineAIActive:false,world:[],canvas,terrainY:()=>0,
   poiWorldToScreen:(_vp,x,y,z)=>{cells.position=[x,y,z];return point},$:(id)=>id==='poiMineUnlockProgress'?el:null,poiWalkAvatar(){},
   localStorage:{getItem:()=>raw,setItem(_k,v){writes++;raw=v}},document:{querySelectorAll:()=>[]}});

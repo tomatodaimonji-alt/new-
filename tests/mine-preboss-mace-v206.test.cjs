@@ -3,7 +3,7 @@ const h=fs.readFileSync(process.env.QA_HTML||'world-editor.html','utf8');
 const reward={id:'mine-preboss-mace',x:94,z:62,y:-1,type:'equipStoneMace',count:1,durability:100};
 function launch(raw=null){
  let writes=0;
- const c={poiPlayerHP:100,POI_PLAYER_MAX_HP:100,facilitySite:{id:'base',mine:{preBossSupply:reward,sideFinds:[{id:'mine-storeroom',type:'cannedFood',count:1,x:107,z:56,y:-1}]}},
+ const c={MAX_MAP:128,poiPlayerHP:100,POI_PLAYER_MAX_HP:100,facilitySite:{id:'base',mine:{preBossSupply:reward,sideFinds:[{id:'mine-storeroom',type:'cannedFood',count:1,x:107,z:56,y:-1}]}},
   poiWalkActive:true,pineAIActive:false,poiWalkLevel:-1,poiWalkX:reward.x,poiWalkZ:reward.z,world:[{x:reward.x,z:reward.z,y:-1,type:'stone'}],poiWalkCanStep:()=>true,validPos:()=>true,poiWalkAvatar(){},document:{querySelectorAll:()=>[]},$(){return null},toast(){},poiSound(){},
   localStorage:{getItem:()=>raw,setItem(_k,v){if(c.fail)throw Error('quota');writes++;raw=v}}};
  vm.createContext(c);const a=h.indexOf('const POI_HOTBAR_KEY='),b=h.indexOf('function poiResetCombat(',a);

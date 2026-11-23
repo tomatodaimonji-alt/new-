@@ -165,7 +165,7 @@ async function run(browser){
  const {ctx,page,errors}=await launch(browser,'base',{x:38,z:4},{width:390,clockStart:morning,kit,facing:0});
  try{
   const original=await getMap(page),base=(await state(page)).buildings,url=page.url();
-  assert.deepEqual([original.width,original.height],[128,96]);
+  assert.deepEqual([original.width,original.height],[128,128]);
   assert.deepEqual(await coords(page),pos(38,4),'starts on the existing north access track');
   assert(original.world.some(o=>o.x===38&&o.z===4&&o.y===0&&o.type==='earth'),'existing north earth trail is still authored');
   assert(original.world.some(o=>o.x===76&&o.z===4&&o.y===0&&o.type==='ruinStonePost'),'existing route reaches the actual new waymarker');
