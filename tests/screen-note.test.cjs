@@ -27,7 +27,8 @@ test('midpoint-stabilized strokes are continuous and arrive at the last real tou
 });
 test('annotation is landscape-scoped and never calls save, upload, or picture delivery',()=>{
  assert.ok(h.includes('data-landscape-action="note">画面にメモする'));
- assert.ok(h.includes('if(poiScreenNoteFrozen())return;'));
+ const render=h.slice(h.indexOf('function render(){'),h.indexOf(' poiTownClockFrame(now);poiWalkFrame(now);'));
+ assert.match(render,/if\(poiScreenNoteFrozen\(\)\)\s*(?:return;|\{[^}]*return;\s*\})/);
  const a=h.indexOf('// BEGIN SCREEN NOTE UI'),b=h.indexOf('// END SCREEN NOTE UI',a);
  assert.ok(a>=0&&b>a);
  const code=h.slice(a,b);

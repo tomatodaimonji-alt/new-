@@ -1576,7 +1576,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v236）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v237）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -13392,7 +13392,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v236',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v237',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -13507,7 +13507,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v236';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v237';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -13722,7 +13722,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v236',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v237',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -14690,6 +14690,37 @@ function poiPlayerWeaponTrace(shot,maxRange=shot.profile.range){
  }
  return {x,z,distance:Math.abs(x-shot.x)+Math.abs(z-shot.z),monster:null};
 }
+// BEGIN PLAYER HITSTOP
+const POI_HITSTOP_MELEE_MS=48,POI_HITSTOP_PROJECTILE_MS=38;
+let poiPlayerHitstop=null;
+function poiHitstopReset(){poiPlayerHitstop=null}
+function poiHitstopCurrent(s){
+ return !!s&&poiWalkActive&&!document.hidden&&s.level===poiWalkLevel&&s.site===facilitySite&&
+  s.travel===poiOtherworldTravelSerial&&canvas.width===s.w&&canvas.height===s.h;
+}
+function poiHitstopRequest(now,weapon){
+ // The VM tests of older releases isolate the damage reducer; browser
+ // rendering alone owns presentation and never needs a persisted field.
+ if(typeof canvas==='undefined'||!poiWalkActive||document.hidden||!Number.isFinite(now))return false;
+ const old=poiPlayerHitstop;
+ if(poiHitstopCurrent(old)&&(old.until===null||now<old.until))return false;
+ const ms=weapon==='equipWoodBow'||weapon==='fireWand'?POI_HITSTOP_PROJECTILE_MS:POI_HITSTOP_MELEE_MS;
+ poiPlayerHitstop={contact:now,weapon,ms,until:null,level:poiWalkLevel,site:facilitySite,
+  travel:poiOtherworldTravelSerial,w:canvas.width,h:canvas.height};
+ return true;
+}
+function poiHitstopPending(){return poiHitstopCurrent(poiPlayerHitstop)&&poiPlayerHitstop.until===null}
+function poiHitstopHold(now){
+ const s=poiPlayerHitstop;
+ if(!poiHitstopCurrent(s)||s.until!==null&&now>=s.until){poiHitstopReset();return false}
+ return s.until!==null;
+}
+function poiHitstopMarkDrawn(now){
+ if(!poiHitstopPending())return false;
+ poiPlayerHitstop.until=now+poiPlayerHitstop.ms;
+ return true;
+}
+// END PLAYER HITSTOP
 function poiPlayerDamageTarget(monster,x,z,amount,weapon,now,silent=false,atContact=false){
  const [obj,state]=monster;
  if(state.actorFree&&typeof poiMonsterActorPoint==='function'){
@@ -14703,6 +14734,7 @@ function poiPlayerDamageTarget(monster,x,z,amount,weapon,now,silent=false,atCont
   if(atContact)poiSound('hit',weapon,state.hp===0,true);
   else poiSound('hit',weapon,state.hp===0);
  }
+ if(state.hp<before&&typeof poiHitstopRequest==='function')poiHitstopRequest(now,weapon);
  const contact=obj.type==='monsterMineGuard'||state.actorFree;
  const hx=contact?x:state.x,hz=contact?z:state.z;
  poiDamageNumber(hx+.5,hz+.5,terrainY(hx,hz)+1.8+(facilitySite?poiWalkLevel*1.4:0),amount);
@@ -15437,6 +15469,7 @@ function poiWalkFrame(now){
  poiWalkViewZ=free?free.z:poiWalkFromZ+(poiWalkZ-poiWalkFromZ)*smooth;
  panX=poiWalkViewX+.5-MAP_W/2;panZ=poiWalkViewZ+.5-MAP_H/2;
  if(lockTurn||(free?free.changed:now-poiWalkStarted<=poiWalkStepMs+32)||poiWalkAttackPosePending){poiWalkAvatar(now);if(free)free.changed=false}
+ if(typeof poiHitstopPending==='function'&&poiHitstopPending())return;
  if(poiEnemyResolvePlayer(now))return;
  poiWildSpawnFrame(now);poiMobFrame(now);poiMineUnlockFrame(now);
 }
@@ -16087,6 +16120,7 @@ function poiWalkAction(){
  // Interactions without an assigned action are intentionally silent.
 }
 function poiWalkReset(x,z){
+ if(typeof poiHitstopReset==='function')poiHitstopReset();
  if(typeof poiPlayerHitFlashAt!=='undefined')poiPlayerHitFlashAt=-Infinity;
  if(typeof poiCombatLockReset==='function')poiCombatLockReset();
  if(typeof poiArmedWand!=='undefined')poiArmedWand=null;
@@ -17696,10 +17730,17 @@ function poiOcclusionEnd(){
 function render(){
  if(window.pineStartup.failed)return;
  requestAnimationFrame(render);
- if(poiScreenNoteFrozen())return;
+ if(poiScreenNoteFrozen()){
+  if(typeof poiHitstopReset==='function')poiHitstopReset();
+  return;
+ }
  const now=performance.now();
+ // Keep the last presented WebGL frame; never clear/redraw or rebase the
+ // real simulation clock during this very brief contact presentation.
+ if(typeof poiHitstopHold==='function'&&poiHitstopHold(now))return;
  poiTownClockFrame(now);poiWalkFrame(now);poiMessageUpdate(now);
- if(typeof poiTownResidentsFrame==='function')poiTownResidentsFrame(now);
+ if(typeof poiTownResidentsFrame==='function'&&
+    !(typeof poiHitstopPending==='function'&&poiHitstopPending()))poiTownResidentsFrame(now);
  const p=parameters();
  const walking=poiWalkActive&&!pineGameActive&&!facilitySite,key=level+':'+(hideUpper?1:0);
  if(facilitySite&&poiWalkActive){
@@ -17752,6 +17793,7 @@ function render(){
     canvas.clientWidth>0&&canvas.clientHeight>0&&p.vp.every(Number.isFinite)&&!gl.isContextLost()){
   poiGameResetSync();window.pineStartup.rendered();
  }
+ if(typeof poiHitstopMarkDrawn==='function')poiHitstopMarkDrawn(performance.now());
 }
 let savedMapRestoreFailed=false;
 function saveLocal(){

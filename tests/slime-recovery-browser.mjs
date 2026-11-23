@@ -5,7 +5,7 @@ import {createServer} from 'node:http';
 const html=readFileSync(process.argv[2]||'world-editor.html','utf8');
 const anchor='function poiEnemyCancelPlayer(){';
 assert.equal(html.split(anchor).length,2);
-const drawAnchor=" if(typeof poiTownResidentsFrame==='function')poiTownResidentsFrame(now);\n const p=parameters();";
+const drawAnchor=' const p=parameters();';
 assert.equal(html.split(drawAnchor).length,2);
 const hitAnchor='  const timely=now-a.hit<poiEnemyContactTolerance(a);';
 assert.equal(html.split(hitAnchor).length,2);
