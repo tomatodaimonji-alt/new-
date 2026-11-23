@@ -1050,7 +1050,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v204）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v205）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -4798,7 +4798,7 @@ function pineEastGroundColor(x,z,floors,offset=0){
  }
  return blend(west.map((v,i)=>v+(local[i]-v)*east));
 }
-function addFloorTile(m,x,z,kind,area=256,roadMask=0,ambientTint=null){if(ROAD_IDS.has(kind)){roadTile(m,x,z,kind,roadMask,area);return;}
+function addFloorTile(m,x,z,kind,area=256,roadMask=0,ambientTint=null,joinedGround=false){if(ROAD_IDS.has(kind)){roadTile(m,x,z,kind,roadMask,area);return;}
 const r=.25+smoothSurfaceNoise(x*.16,z*.16)*.55+smoothSurfaceNoise(x*.42+13,z*.42-7)*.20;
 const c=kind==='earth'?[.43+r*.09,.35+r*.07,.25+r*.05]:kind==='moss'?[.33+r*.07,.49+r*.08,.31+r*.05]:kind==='stone'?[.55+r*.07,.58+r*.08,.53+r*.06]:kind==='woodfloor'?[.51+r*.05,.39+r*.07,.26+r*.04]:kind==='woodfloorLight'?[.70+r*.05,.55+r*.07,.37+r*.04]:kind==='woodfloorDark'?[.30+r*.05,.21+r*.04,.13+r*.03]:kind==='brickfloor'?[.40+r*.045,.23+r*.03,.19+r*.02]:
 kind==='basicfloor'?[.75+r*.045,.77+r*.035,.70+r*.035]:
@@ -4824,7 +4824,7 @@ kind==='grassMeadow'?[.36+r*.09,.54+r*.11,.29+r*.07]:
 kind==='ironfloor'?[.24,.28,.31]:kind==='mossfloor'?[.32,.41,.33]:
 kind==='plasterfloor'?[.63,.60,.53]:kind==='basicfloor'?[.51,.55,.51]:null;
 if(groutColor)c.splice(0,3,...groutColor);
-const inset=ambientTint?0:.006;
+const inset=ambientTint||joinedGround?0:.006;
 const x0=x+inset,x1=x+1-inset,z0=z+inset,z1=z+1-inset;
 quad(m,[x0,0,z0],[x0,0,z1],[x1,0,z1],[x1,0,z0],c);
 // Same quad and vertex count: neighboring ambient grass tiles share edge colors.
@@ -7669,80 +7669,33 @@ function poiEconomySnapshot(){
  return {gold:poiEconomyGold(),potions:poiHotbarHasKit()?poiHotbarRead().potions:0,
   caches:[...poiEconomyCaches.values()],drops:[...poiEconomyDrops.values()]};
 }
-function poiEconomyDraw(vp){
+function poiEconomyDraw(vp,now){
  if(!poiEconomyAllowed())return;
  if(poiEconomyMeshDirty){
   poiEconomyMeshDirty=false;
   if(poiEconomyMesh){gl.deleteBuffer(poiEconomyMesh.buf);poiEconomyMesh=null}
-  const m=mesh(),face=[.98,.74,.24],rim=[.84,.54,.13],core=[1,.88,.39];
+  const m=mesh(),face=[1,.78,.27],rim=[.84,.52,.12],core=[1,.94,.52];
   const drawPile=({x,z,id})=>{
    const y=terrainY(x,z)+.038+(id==='lookout-tower'&&typeof poiLookoutLootTop==='function'?poiLookoutLootTop(x,z,0):0);
    for(const [dx,dz,lift] of [[-.095,.065,0],[.082,-.062,0],[.122,.087,.026]]){
     const cx=x+.5+dx,cz=z+.5+dz;
-    roundStack(m,cx,y+lift,cz,[[0,.101,.101],[.043,.101,.101]],8,rim);
-    roundStack(m,cx,y+lift+.043,cz,[[0,.092,.092],[.005,.092,.092]],8,face);
-    roundStack(m,cx,y+lift+.049,cz,[[0,.045,.045],[.004,.045,.045]],6,core);
+    roundStack(m,cx,y+lift,cz,[[0,.116,.116],[.043,.116,.116]],8,rim);
+    roundStack(m,cx,y+lift+.043,cz,[[0,.106,.106],[.005,.106,.106]],8,face);
+    roundStack(m,cx,y+lift+.049,cz,[[0,.049,.049],[.004,.049,.049]],6,core);
    }
   };
   poiEconomyCaches.forEach(drawPile);poiEconomyDrops.forEach(drawPile);
   if(m.p.length)poiEconomyMesh=upload(m);
  }
- if(poiEconomyMesh)draw(poiEconomyMesh,vp);
+ if(poiEconomyMesh)poiDrawLootMesh(poiEconomyMesh,vp,now);
 }
-const POI_LOOT_MARK_RADIUS=12,POI_LOOT_MARK_CAP=12;
-let poiLootMarksState=null,poiLootMarksMesh=null;
-function poiLootMark(m,x,y,z,item){
- const ink=item?[.30,.80,.86]:[.84,.62,.22];
- const stem=item?[.49,.94,.99]:[1,.78,.35];
- const glint=item?[.77,1,1]:[1,.93,.60];
- const floor=y+.018,height=item?1.22:.94,width=item?.072:.061;
- const point=(a,r)=>[x+Math.sin(a)*r,floor,z+Math.cos(a)*r];
- for(let i=0;i<4;i++){
-  const a=i*Math.PI/2+.10,b=a+.49;
-  quad(m,point(a,.34),point(b,.34),point(b,.29),point(a,.29),ink);
- }
- // A slim, depth-tested beacon. The brighter gem reads above grass,
- // without a particle emitter, HUD icon, or a marker through walls.
- cube(m,x,y+.075,z,width,height-.105,width,stem);
- diamond(m,x,y+height,z,item?.116:.095,glint);
-}
-function poiLootMarksDraw(vp){
- const active=poiWalkActive&&!pineAIActive&&poiHotbarHasKit();
- const old=poiLootMarksState;
- if(!active){
-  if(poiLootMarksMesh)gl.deleteBuffer(poiLootMarksMesh.buf);
-  poiLootMarksMesh=null;poiLootMarksState=null;return;
- }
- // Existing item batches are rebuilt first; their identities are loot revisions.
- const x=poiWalkX,z=poiWalkZ,level=poiWalkLevel,coins=poiEconomyMesh,inventory=poiInventoryMesh;
- if(!old||old.x!==x||old.z!==z||old.level!==level||old.coins!==coins||old.inventory!==inventory){
-  if(poiLootMarksMesh)gl.deleteBuffer(poiLootMarksMesh.buf);
-  poiLootMarksMesh=null;poiLootMarksState={x,z,level,coins,inventory};
-  const near=new Map();
-  const add=(d,item)=>{
-   const q=(d.x-x)**2+(d.z-z)**2;
-   if(q>POI_LOOT_MARK_RADIUS**2||!validPos(d.x,d.z))return;
-   const key=d.x+','+d.z,prior=near.get(key);
-   if(!prior||item)near.set(key,{x:d.x,z:d.z,q,item});
-  };
-  if(level===0){
-   for(const d of poiEconomyCaches.values())add(d,false);
-   for(const d of poiEconomyDrops.values())add(d,false);
-  }
-  for(const d of poiInventoryVisibleLoot)if(d.y===level&&poiInventoryStack(d.type))add(d,true);
-  if(near.size){
-   const m=mesh();
-   for(const d of [...near.values()].sort((a,b)=>a.q-b.q).slice(0,POI_LOOT_MARK_CAP)){
-    const tile=d.item&&world.find(o=>o.x===d.x&&o.z===d.z&&o.y===level&&isFloor(o.type));
-    const top=/^(?:woodfloor(?:Light|Dark)?|brickfloor|basicfloor|plasterfloor|mossfloor|ironfloor)$/.test(tile?.type||'')?.13:0;
-    const lookout=typeof poiLookoutLootTop==='function'?poiLookoutLootTop(d.x,d.z,level):0;
-    poiLootMark(m,d.x+.5,level*1.4+terrainY(d.x,d.z)+Math.max(top,lookout),d.z+.5,d.item);
-   }
-   poiLootMarksMesh=upload(m);
-  }
- }
- // Normal depth-tested scene geometry: no HUD, postprocessing or animation.
- if(poiLootMarksMesh)draw(poiLootMarksMesh,vp);
+// Re-light the real mesh rather than adding world markers. Its usual
+// opaque depth pass still hides an item behind a wall, even at night.
+function poiDrawLootMesh(batch,vp,now=performance.now()){
+ const pulse=.5+.5*Math.sin((now%2400)*Math.PI/1200);
+ gl.uniform4f(loc.lootHighlight,poiWalkX+.5,poiWalkZ+.5,pulse,1);
+ try{draw(batch,vp)}
+ finally{gl.uniform4f(loc.lootHighlight,0,0,0,0)}
 }
 const poiLootContentIcons=new Map();
 function poiLootContentIcon(type){
@@ -8495,7 +8448,6 @@ function poiInventoryPickup(x,z){
  return true;
 }
 function poiInventoryReleaseMesh(){
- poiInventoryVisibleLoot=[];
  if(poiInventoryMesh)gl.deleteBuffer(poiInventoryMesh.buf);
  poiInventoryMesh=null;poiInventoryMeshDrops=null;poiInventoryMeshFloor=null;poiInventoryMeshFinds=null;
 }
@@ -8551,9 +8503,8 @@ function poiNorthTrailPickup(x,z){
  toast(watch?'森の見張り場で缶詰を拾った。':marsh?'池のほとりで薬草を拾った。':east?'東の貯蔵室で缶詰を拾った。':chapelWest?'礼拝堂の西側で缶詰を見つけた。':'たき火のそばで薬草を2つ拾った。');return true;
 }
 // END NORTH TRAIL CAMP
-let poiInventoryVisibleLoot=[];
 let poiInventoryMeshArmed=null,poiInventoryMeshCamp=null,poiInventoryMeshWatch=null,poiInventoryMeshMarsh=null,poiInventoryMeshRealm=null,poiInventoryMeshOtherworldEast=null,poiInventoryMeshChapelWest=null;
-function poiInventoryDraw(vp){
+function poiInventoryDraw(vp,now){
  if(!poiHotbarHasKit()||!poiWalkActive||pineAIActive)return;
  const kit=poiHotbarRead(),list=kit.drops||null,finds=poiMineFindList(kit),armed=poiArmedDrawList(kit),camp=poiNorthTrailSupply(kit),watch=poiNorthTrailWatchSupply(kit),marsh=poiNorthTrailMarshSupply(kit),east=poiOtherworldEastSupply(kit),chapelWest=poiChapelWestSupply(kit);
  const realm=poiDungeonTravelKey(facilitySite,poiWalkX,poiWalkZ,poiWalkLevel);
@@ -8565,7 +8516,6 @@ function poiInventoryDraw(vp){
    const m=mesh();
    for(const d of [...(list||[]),...(finds||[]),...(armed||[]),...nearby]){
     if(d.y!==poiWalkLevel||!validPos(d.x,d.z)||!poiDungeonVisualVisible(d.x,d.z,d.y))continue;
-    poiInventoryVisibleLoot.push(d);
     const surface=world.find(o=>o.x===d.x&&o.z===d.z&&o.y===d.y&&isFloor(o.type));
     const floorTop=/^(?:woodfloor(?:Light|Dark)?|brickfloor|basicfloor|plasterfloor|mossfloor|ironfloor)$/.test(surface?.type||'')?.13:0;
     const lookout=typeof poiLookoutLootTop==='function'?poiLookoutLootTop(d.x,d.z,d.y):0;
@@ -8577,7 +8527,7 @@ function poiInventoryDraw(vp){
     else{
      const item=mesh();deco(item,d.type,0,0,0,0);
      for(let i=0;i<item.p.length;i+=3){
-      m.p.push(x+item.p[i]*.66,y+item.p[i+2]*.66,z-(item.p[i+1]-(d.type===POI_KNIFE ? .39 : .65))*.66);
+      m.p.push(x+item.p[i]*.66,y+.035+item.p[i+2]*.66,z-(item.p[i+1]-(d.type===POI_KNIFE ? .39 : .65))*.66);
       m.n.push(item.n[i],item.n[i+2],-item.n[i+1]);m.c.push(item.c[i],item.c[i+1],item.c[i+2]);
      }
     }
@@ -8585,7 +8535,7 @@ function poiInventoryDraw(vp){
    if(m.p.length)poiInventoryMesh=upload(m);
   }
  }
- if(poiInventoryMesh)draw(poiInventoryMesh,vp);
+ if(poiInventoryMesh)poiDrawLootMesh(poiInventoryMesh,vp,now);
 }
 // BEGIN MINE VAULT
 const POI_MINE_UNLOCK_MS=3000,POI_MINE_FIND_IDS=['mine-storeroom','mine-breakroom','mine-cut'];
@@ -11275,7 +11225,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v204',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v205',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -11390,7 +11340,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v204';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v205';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -11605,7 +11555,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v204',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v205',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -14178,6 +14128,11 @@ function poiChapelWetFloor(m,x,z,shallow){
   tri(m,[x+w,y+.003,z+u],[x+w+.16,y+.003,z+u+.041+offset],[x+w+.35,y+.003,z+u+.015],c);
  }
 }
+function pinePlayJoinedNaturalGrade(kind,site,walking){
+ // The editor's hairline tile inset leaves the Play canvas backdrop visible
+ // between authored ground tiles. Join only the ground under Game World play.
+ return walking&&site?.id==='base'&&(kind==='earth'||kind==='moss'||/^grass(?:Meadow|Wild|Forest|Dry|Tuft|Flowers|Pebbles|Patch|Weeds|Trampled)?$/.test(kind));
+}
 function makeScene(){
  const wallFade=poiWalkActive&&facilitySite?[]:null,storeyFade=wallFade?[]:null;
  const cut=facilitySite&&!facilityBuildFullSurface?facilityVisibilityOwner():null;
@@ -14233,7 +14188,7 @@ function makeScene(){
   if(woodlandRiver(x,z))facilityWoodlandWater(tmp,x,z,floors,creekWater,creekShoals,canalWater.has(x+','+z),x-baseOffset);
   else{
    if(townGuildWood(x,z,kind))pineDrawTownGuildFloor(tmp,x,z,kind);
-   else addFloorTile(tmp,x,z,kind,MAP_W*MAP_H,ROAD_DIAGONALS.has(kind)?roadDiagonalConnections(floors,x,z,kind):ROAD_IDS.has(kind)&&!kind.endsWith('Full')?roadConnections(floors,x,z,kind):0,ambientTint||eastBlend);
+   else addFloorTile(tmp,x,z,kind,MAP_W*MAP_H,ROAD_DIAGONALS.has(kind)?roadDiagonalConnections(floors,x,z,kind):ROAD_IDS.has(kind)&&!kind.endsWith('Full')?roadConnections(floors,x,z,kind):0,ambientTint||eastBlend,pinePlayJoinedNaturalGrade(kind,facilitySite,poiWalkActive));
    if(!canalQuays.has(x+','+z)&&!(creekWater&&x-baseOffset>=67&&facilityWoodlandBank(tmp,x,z,kind,woodlandRiver,groundCorner))&&floors.has(x+','+z))shoreline(tmp,x,z,floors);
   }
   pineBakeFloorLighting(tmp,x,z,0,pineShadows,pineWarmLamps);
@@ -14412,7 +14367,7 @@ function makeScene(){
 }
 function upload(m,reuse=null,usage=gl.STATIC_DRAW){const n=m.p.length/3,data=new Float32Array(n*9);for(let i=0;i<n;i++){const a=i*9,b=i*3;for(let j=0;j<3;j++){data[a+j]=m.p[b+j];data[a+3+j]=m.n[b+j];data[a+6+j]=m.c[b+j]}}const vbo=reuse||gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vbo);gl.bufferData(gl.ARRAY_BUFFER,data,usage);return{buf:vbo,count:n}}
 const POI_OCCLUSION_OPACITY=.16;
-const VERT='precision highp float;attribute vec3 aPos;attribute vec3 aNorm;attribute vec3 aCol;uniform mat4 uMVP;varying vec3 vCol;varying mediump float vWorldHeight;void main(){gl_Position=uMVP*vec4(aPos,1.0);vWorldHeight=aPos.y;float l=.60+.40*max(dot(normalize(aNorm),normalize(vec3(-.4,1.0,.35))),0.0);vCol=aCol*l;}';
+const VERT='precision highp float;attribute vec3 aPos;attribute vec3 aNorm;attribute vec3 aCol;uniform mat4 uMVP;varying vec3 vCol;varying mediump float vWorldHeight;varying mediump vec2 vLootXZ;void main(){gl_Position=uMVP*vec4(aPos,1.0);vWorldHeight=aPos.y;vLootXZ=aPos.xz;float l=.60+.40*max(dot(normalize(aNorm),normalize(vec3(-.4,1.0,.35))),0.0);vCol=aCol*l;}';
 const FRAG=`precision mediump float;
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 #define OCCP highp
@@ -14421,7 +14376,9 @@ const FRAG=`precision mediump float;
 #endif
 varying vec3 vCol;
 varying mediump float vWorldHeight;
+varying mediump vec2 vLootXZ;
 uniform vec3 uTownDaylight;
+uniform vec4 uLootHighlight;
 uniform OCCP vec4 uOcclusionShape;
 uniform OCCP vec4 uOcclusionInfo;
 float workshopDither2(vec2 p){return 2.0*p.x+3.0*p.y-4.0*p.x*p.y;}
@@ -14451,12 +14408,19 @@ void main(){
    if(bit>keep)discard;
   }
  }
- gl_FragColor=vec4(pow(max(vCol,vec3(0.0)),vec3(.92))*uTownDaylight,1.0);
+ vec3 paint=pow(max(vCol,vec3(0.0)),vec3(.92));
+ vec3 color=paint*uTownDaylight;
+ if(uLootHighlight.w>0.0){
+  float nearLoot=1.0-smoothstep(9.0,12.0,length(vLootXZ-uLootHighlight.xy));
+  vec3 litLoot=paint*(1.28+.19*uLootHighlight.z)+paint*.16;
+  color=mix(color,litLoot,nearLoot);
+ }
+ gl_FragColor=vec4(color,1.0);
 }`;
 function sh(t,src){const s=gl.createShader(t);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s}
 let program;try{program=gl.createProgram();gl.attachShader(program,sh(gl.VERTEX_SHADER,VERT));gl.attachShader(program,sh(gl.FRAGMENT_SHADER,FRAG));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program))}catch(e){window.pineStartup.fail(e);return}
 gl.useProgram(program);gl.enable(gl.DEPTH_TEST);gl.depthMask(true);gl.depthFunc(gl.LESS);gl.clearColor(0,0,0,0);const loc={p:gl.getAttribLocation(program,'aPos'),n:gl.getAttribLocation(program,'aNorm'),c:gl.getAttribLocation(program,'aCol'),mvp:gl.getUniformLocation(program,'uMVP'),
- daylight:gl.getUniformLocation(program,'uTownDaylight'),occlusionShape:gl.getUniformLocation(program,'uOcclusionShape'),occlusionInfo:gl.getUniformLocation(program,'uOcclusionInfo')};
+ daylight:gl.getUniformLocation(program,'uTownDaylight'),lootHighlight:gl.getUniformLocation(program,'uLootHighlight'),occlusionShape:gl.getUniformLocation(program,'uOcclusionShape'),occlusionInfo:gl.getUniformLocation(program,'uOcclusionInfo')};
 try{initSignProgram()}catch(e){console.warn('2D sign textures unavailable',e)}
 function mult(a,b){const c=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++)for(let k=0;k<4;k++)c[j*4+i]+=a[k*4+i]*b[j*4+k];return c}
 function ortho(l,r,b,t,n,f){return new Float32Array([2/(r-l),0,0,0,0,2/(t-b),0,0,0,0,-2/(f-n),0,-(r+l)/(r-l),-(t+b)/(t-b),-(f+n)/(f-n),1])}
@@ -14991,13 +14955,12 @@ function render(){
  drawSignOverlays(p.vp,daylight);pineDrawEditCursor(p.vp);
  poiDrawEnemyThreatTiles(now,p.vp);
  if(poiWalkActive){
-  poiEconomyDraw(p.vp);poiInventoryDraw(p.vp);
+  poiEconomyDraw(p.vp,now);poiInventoryDraw(p.vp,now);
   if(typeof poiTownResidentsDraw==='function')poiTownResidentsDraw(now,p.vp);
   poiMonsterRender(now,p.vp);
   if(!poiPlayerDeath||poiPlayerDeath.relocated)poiDrawWalkAvatar(p.vp);
   poiPlayerWeaponDraw(now,p.vp);
  }
- poiLootMarksDraw(p.vp);
  poiRenderEnemyHealth(now,p.vp);poiRenderDamageLabels(now,p.vp);poiMineUnlockDraw(p.vp);poiTownDialogueDraw(now,p.vp);pineDrawChecks(p.vp);
  facilityDrawEntranceGuides(p);
  // Prepare the opposite visibility state before the next doorway crossing.

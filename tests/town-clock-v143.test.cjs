@@ -45,7 +45,9 @@ test('light cycles smoothly across sunrise, noon and midnight, only in Game Worl
 });
 test('day label is beside the existing time and light is confined to 3D programs',()=>{
  assert.match(h,/<div id="poiClockHud" hidden><span id="poiClockDay">1日目<\/span><strong id="poiClockValue">08:00/);
- assert.match(h,/gl_FragColor=vec4\(pow\(max\(vCol,[^\n]*\*uTownDaylight,1\.0\)/);
+ assert.match(h,/vec3 paint=pow\(max\(vCol,[^\n]*/);
+ assert.match(h,/vec3 color=paint\*uTownDaylight;/);
+ assert.match(h,/if\(uLootHighlight.w>0.0\)\{[\s\S]*?\n \}\n gl_FragColor=vec4\(color,1\.0\)/);
  assert.match(h,/gl_FragColor=vec4\(c.rgb\*uTownDaylight,c.a\)/);
  assert.match(h,/gl.uniform3f\(loc.daylight,\.\.\.daylight\)/);
  assert.doesNotMatch(h,/#view(?:Wrap)?\{[^}]*filter:brightness/);
