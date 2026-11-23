@@ -91,7 +91,7 @@ async function trial(browser,reduced,viewport={width:320,height:740}){
   assert.equal(await count(page),0,"hidden fallback spawn does not count as a displayed transition");
   await assertTwoRows(page);
   await step(page,'ArrowRight',113,9);
-  assert.equal(await page.locator('#poiLocationName').innerText(),'水辺の道');
+  assert.equal(await page.locator('#poiLocationName').innerText(),'外','leaving the named forest reaches ordinary exterior on the waterside road');
   assert.equal(await count(page),reduced?0:1);
   await assertTwoRows(page);
   if(!reduced){

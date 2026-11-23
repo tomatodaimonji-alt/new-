@@ -20,7 +20,7 @@ function setup({open=true,origin='wallet',funds=21,areaPanel=false,split=false}=
   poiWalletGold:()=>funds,poiHotbarRead:()=>({}),poiItemDetailCell:ref=>(split||ref.zone==='wallet')&&funds?{type:'gold',count:funds}:null,
   poiInventoryCell:()=>({type:'healingHerb'}),poiInventoryDrop:ref=>{dropLog.push(ref);return{ok:true}},poiMoveGoldToBag:r=>{moveLog.push(r);return{ok:true}},
   poiChestCloseFromUi(){},poiItemDetailOpen(button){details.push(button)},poiItemDetailIsOpen:()=>false,poiInventoryMove:()=>({ok:true}),toast(){},performance:{now:()=>100}};
- const gameplay=span('function poiBagGestureTarget(','function poiItemDragPosition(')+span('function poiBagWire(','function poiHotbarRender(');
+ const gameplay=span('function poiBagGestureTarget(','function poiItemDragPosition(')+span('function poiWireMovingWeaponShortcuts(','function poiHotbarRender(');
  vm.runInNewContext(gameplay+';poiBagWire();',c);
  const common={isPrimary:true,button:0,pointerId:8,preventDefault(){}};
  const container=open?bag:bar;

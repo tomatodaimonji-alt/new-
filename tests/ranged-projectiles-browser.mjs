@@ -131,7 +131,7 @@ async function trail(browser,c){
   const first=visible[0];
   if(c.type===bow){
    const windup=frames.find(f=>f.pending?.type===bow&&f.pending.phase!=='flight');
-   assert(windup&&first.started-windup.pending.started>=650,'arrow follows drawing/release, not immediate input');
+   assert(windup&&first.started-windup.pending.started>=325,'arrow follows the half-length drawing animation, not immediate input');
   }
   assert.equal(first.travel,c.range*(c.type===bow?65:55),'visual stays in sync with native per-cell combat timing');
   assert.deepEqual([first.x,first.z,first.y,first.facing],[c.x,c.z,c.y,c.facing],c.name+' launches toward the actual attack facing');

@@ -127,7 +127,7 @@ async function talk(page,id){
 }
 const kit={version:1,weapon:'equipWoodSword',potions:3,gold:12,claimedCaches:['glade']};
 const pos=(x,z)=>({x,z,level:0});
-const inside='北の森の道',camp='外';
+const inside='外',camp='外';
 const dirSel=d=>'[data-poi-dir="'+d+'"]';
 const amount=s=>[...s.inventory.hotbar,...s.inventory.bag].reduce((n,c)=>n+(c?.type==='healingHerb'?c.count:0),0);
 const coords=async page=>(await state(page)).position;
@@ -175,6 +175,7 @@ async function run(browser){
   for(const [x,z,y,type] of [[56,38,0,'stonewallDoor'],[116,62,0,'guildStairDown'],[118,88,0,'otherworldPortal'],[124,81,0,'guildStairDown']])
    assert(original.world.some(o=>o.x===x&&o.z===z&&o.y===y&&o.type===type),'old POI entrance still authored '+[x,z,y,type]);
   await line(page,39,4);await waitMap(page,inside);
+  assert.equal(await page.locator('#poiLocationPanel').evaluate(el=>el.getAnimations().length),0,'no named popup when entering 北の森の道');
   for(const [x,z] of [[46,4],[46,3],[57,3],[57,4],[61,4]])await line(page,x,z);
   assert.equal(amount(await state(page)),3,'scenic route never grants reward unprompted');
   assert.equal((await readStock(page)).northTrailCampSupplies,undefined);

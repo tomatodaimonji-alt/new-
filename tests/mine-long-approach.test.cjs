@@ -20,6 +20,19 @@ function route(start,goal,blocked=[]){
  }
  return null;
 }
+// v238 intentionally changed only these four area-HUD classifications.
+// Restore exactly these flags in a historical serialization, not in the live map.
+function normalizeV238OutdoorMetadata(site){
+ const allowed=new Set(['北の森の道:39,1,86,4,0','水辺の道:109,8,120,16,0',
+  '柳の道:116,17,121,23,0','柳の道:121,24,122,29,0']);
+ for(const r of site.northTrail.regions){
+  const {x1,z1,x2,z2,y}=r.bounds;
+  if(!allowed.delete(r.name+':'+[x1,z1,x2,z2,y]))continue;
+  assert.equal(r.outdoorLandmark,true,'remove only the intended v238 outdoor flag');
+  delete r.outdoorLandmark;
+ }
+ assert.equal(allowed.size,0,'all four intended descriptors were found');
+}
 test('only the right slime remains; west storeroom route is the sole connection to guardian and not a vault bypass',()=>{
  assert.equal(mine.early,null);
  assert.deepEqual(mine.earlyRoom.slimes,[{x:120,z:62,y:-1,type:'monsterSlime'}]);
@@ -38,7 +51,9 @@ test('only the right slime remains; west storeroom route is the sole connection 
 });
 
 test('restoring two seals, two cuts and one slime reproduces prior authored map and metadata',()=>{
- const previous=beforeMineLongApproach(base),{world,...map}=previous.map;
+ const previous=beforeMineLongApproach(JSON.parse(JSON.stringify(base)));
+ normalizeV238OutdoorMetadata(previous);
+ const {world,...map}=previous.map;
  const hash=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
  assert.equal(world.length,7572);
  assert.equal(hash({...previous,map}),'e8ab4d8b17343d9b1aab81a79bcad5420b421ff11cc25e5de7970459ff64c722');

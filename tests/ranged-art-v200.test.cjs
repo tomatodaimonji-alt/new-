@@ -16,13 +16,16 @@ test('bow holds its pull until release and the string, grips, arrow nock align t
  }
 });
 test('player projectiles use an arrow silhouette and flame facets, leaving the old Mage recipe alone',()=>{
- const calls=[],c={terrainY:()=>0,facilitySite:null,
+ const calls=[],c={terrainY:()=>0,facilitySite:null,mesh:()=>({p:[],n:[],c:[]}),
   tri:(_m,...p)=>calls.push(['tri',...p]),quad:(_m,...p)=>calls.push(['quad',...p]),
   cube:(_m,...p)=>calls.push(['cube',...p])};
  vm.runInNewContext(cut('function poiPlayerProjectileSample(','function poiPlayerWeaponDraw('),c);
- const draw=(type,toX,toZ,now=50,impact)=>{calls.length=0;c.poiAppendWeaponProjectile({},{
-  type,x:2,z:2,y:0,facing:1,started:0,travel:100,toX,toZ,...(impact===undefined?{}:{impact})
- },now);return calls.slice()};
+ let last;
+ const draw=(type,toX,toZ,now=50,impact)=>{
+  calls.length=0;last=c.mesh();c.poiAppendWeaponProjectile(last,{
+   type,x:2,z:2,y:0,facing:1,started:0,travel:100,toX,toZ,...(impact===undefined?{}:{impact})
+  },now);return calls.slice()
+ };
  const east=draw('equipWoodBow',7,2),north=draw('equipWoodBow',2,0);
  assert(east.some(n=>n[0]==='tri')&&north.some(n=>n[0]==='tri'));
  const sample=c.poiPlayerProjectileSample({type:'equipWoodBow',x:2,z:2,y:0,facing:1,started:0,travel:100,toX:7,toZ:2},0);
@@ -30,8 +33,10 @@ test('player projectiles use an arrow silhouette and flame facets, leaving the o
  const stopped=c.poiPlayerProjectileSample({type:'equipWoodBow',x:2,z:2,y:0,facing:3,started:0,travel:100,toX:2,toZ:2,impact:10},15);
  assert.equal(stopped.progress,1);assert.equal(stopped.x,2.5);assert.equal(stopped.z,2.5);assert.equal(stopped.dx,-1);
  const fire=draw('fireWand',7,2);assert(fire.filter(n=>n[0]==='tri').length>=12);assert(fire.every(n=>n[0]!=='cube'));
+ assert(last.fireGlow?.alpha>0&&last.fireGlow.alpha<.30,'only player fire gets the bounded warm halo');
  assert.notDeepEqual(fire,draw('fireWand',7,2,90));
  assert.deepEqual(draw('monsterSkelMage',7,2).map(d=>d[0]),['cube','cube','cube']);
+ assert.equal(last.fireGlow,undefined,'enemy mage remains the same non-glow recipe');
  assert.notDeepEqual(draw('fireWand',7,2,108,100),draw('fireWand',7,2,165,100));
 });
 test('a projectile tip aligns with the resolved tile center at first and later cell contact',()=>{

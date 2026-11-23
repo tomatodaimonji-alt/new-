@@ -1330,6 +1330,8 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  linear-gradient(currentColor,currentColor) right center/5px 1px,
  radial-gradient(circle,currentColor 0 1px,transparent 1.65px) center/5px 5px;background-repeat:no-repeat}
 #poiAimLockMarker::before{content:"";position:absolute;inset:4px;border:1px solid currentColor;border-radius:50%;opacity:.75}
+#poiAimLockMarker[data-aim="wand"]{color:rgba(255,181,82,.90);filter:drop-shadow(0 0 4px rgba(255,93,24,.70))}
+#poiAimLockMarker[data-aim="wand"]::before{inset:5px;border-radius:2px;transform:rotate(45deg);opacity:.85}
 #poiAimLockMarker[hidden],#viewWrap:has(#poiLandscapeMenu:not([hidden])) #poiAimLockMarker,#viewWrap[data-screen-note] #poiAimLockMarker{display:none}
 
 /* Larger landscape inventory and shortcut targets */
@@ -1576,7 +1578,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v237）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v238）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -8289,7 +8291,7 @@ function poiHotbarRead(){
  const stacks=poiGoldStacksDecode(saved.goldStacks,result.gold,ordinary,ordinary[shortcut]?null:shortcut);
  if(stacks.length)result.goldStacks=stacks;
  if(shortcut!==null&&!ordinary[shortcut]&&poiWalletGold(result)>0)result.goldHotbarSlot=shortcut;
- return poiHotbarState=result;
+ return poiHotbarState=typeof poiArmedWithoutDuplicateWeapons==='function'?poiArmedWithoutDuplicateWeapons(result):result;
 }
 function poiHotbarSave(kit=poiHotbarState){
  if(typeof poiGameResetDeparture!=='undefined'&&(poiGameResetDeparture||poiGameResetBlocked))return false;
@@ -8318,6 +8320,7 @@ function poiEconomyAllowed(){
 }
 function poiEconomyGold(){return poiHotbarHasKit()?poiHotbarRead().gold||0:0}
 function poiEconomyWrite(kit){
+ if(typeof poiArmedWithoutDuplicateWeapons==='function')kit=poiArmedWithoutDuplicateWeapons(kit);
  if(Array.isArray(kit.goldStacks)){
   kit={...kit};const stacks=poiGoldStacksDecode(kit.goldStacks,kit.gold,poiInventoryOrdinarySlots(kit),kit.goldHotbarSlot);
   if(stacks.length)kit.goldStacks=stacks;else delete kit.goldStacks;
@@ -9082,8 +9085,8 @@ function poiEquipmentWearArmor(){
 }
 
 let poiHotbarEmptySlot=2,poiInventoryMesh=null,poiInventoryMeshDrops=null,poiInventoryMeshFloor=null,poiInventoryMeshFinds=null;
-// The source-armed loot can replace a discarded monster weapon. The
-// original pile stays on its tile; only held inventory/chests are unique.
+// Source loot can replace a discarded monster weapon. The original
+// manually discarded pile remains independent of enemy-generated drops.
 const POI_REPEATABLE_MONSTER_WEAPONS=new Set(['equipWoodBow','equipWoodSpear','equipStoneMace',
  'equipBoneSword','equipIronSword','equipPlainStaff','equipLongStaff']);
 function poiRepeatableMonsterWeapon(type){return POI_REPEATABLE_MONSTER_WEAPONS.has(type)}
@@ -9168,6 +9171,8 @@ function poiInventoryCell(kit,ref){return kit&&poiInventorySlots(kit)[poiInvento
 function poiInventorySelected(index){
  if(!poiHotbarHasKit())return false;
  const kit=poiHotbarRead(),slots=poiInventorySlots(kit),cell=slots[index];
+ const wand=poiArmedWandIndex();
+ if(wand!==null)return index===wand;
  if(kit.weapon)return cell?.type===kit.weapon;
  const reserved=poiGoldHotbarSlot(kit),empty=poiInventoryEmptyHotbar(kit,slots);
  return index!==reserved&&!cell&&index===(slots[poiHotbarEmptySlot]||poiHotbarEmptySlot===reserved?empty:poiHotbarEmptySlot);
@@ -9529,6 +9534,18 @@ function poiArmedDropDecode(raw){
  }
  return result.length?result:null;
 }
+function poiArmedDuplicateWeapon(kit,type){
+ return typeof poiRepeatableMonsterWeapon==='function'&&poiRepeatableMonsterWeapon(type)&&
+  (poiInventoryOrdinarySlots(kit).some(c=>c?.type===type)||poiAnyChestHas(kit,type));
+}
+function poiArmedWithoutDuplicateWeapons(kit){
+ if(!kit.armedDrops?.length)return kit;
+ const keep=kit.armedDrops.filter(d=>!poiArmedDuplicateWeapon(kit,d.type));
+ if(keep.length===kit.armedDrops.length)return kit;
+ const next={...kit};
+ if(keep.length)next.armedDrops=keep;else delete next.armedDrops;
+ return next;
+}
 function poiArmedEnemyLoot(obj,state,rng=Math.random){
  if(facilitySite?.id!=='base'||!poiWalkActive||pineAIActive||state?.hp!==0||obj.y!==poiWalkLevel||
     !Number.isInteger(state.x)||!Number.isInteger(state.z)||!validPos(state.x,state.z))return false;
@@ -9537,7 +9554,7 @@ function poiArmedEnemyLoot(obj,state,rng=Math.random){
  if(!options.length||watch&&kit.northWatchPostGuardLoot===true||old.some(d=>d.id===options[0][0]))return false;
  const drops=old.slice();
  for(const [id,type] of options){
-  if(drops.some(d=>d.id===id))continue;
+  if(drops.some(d=>d.id===id)||poiArmedDuplicateWeapon(kit,type))continue;
   if(type==='fireWand'){
    const charges=2+Math.floor(Math.min(.999,Math.max(0,rng()))*4);
    drops.push({id,type,x:state.x,z:state.z,y:obj.y,charges});continue;
@@ -9546,8 +9563,9 @@ function poiArmedEnemyLoot(obj,state,rng=Math.random){
   const durability=Math.max(1,Math.round(max*(.30+Math.min(.999,Math.max(0,rng()))*.50)));
   drops.push({id,type,x:state.x,z:state.z,y:obj.y,durability});
  }
- if(!poiEconomyWrite({...kit,armedDrops:drops,...(watch?{northWatchPostGuardLoot:true}:{})}))return false;
- if(typeof poiSound==='function')poiSound('enemy-loot');return true;
+ const newDrop=drops.length>old.length;
+ if((!watch&&!newDrop)||!poiEconomyWrite({...kit,armedDrops:drops,...(watch?{northWatchPostGuardLoot:true}:{})}))return false;
+ if(newDrop&&typeof poiSound==='function')poiSound('enemy-loot');return true;
 }
 function poiArmedWandAvailable(kit){
  return !kit.fireWandFound&&facilitySite?.id==='base'&&!!facilitySite.chapel&&poiWalkLevel===-1&&
@@ -10316,7 +10334,7 @@ function poiBagUiRender(){
   button.title=name+condition+(legacy?'・以前の持ち物（取り出し専用）':type?'・長押しせずドラッグで移動':'');
   if(legacy)button.dataset.bagLegacy='';else delete button.dataset.bagLegacy;
   button.setAttribute('aria-label',name+(cell?.count>1?' ×'+cell.count:'')+condition+(legacy?'（取り出し専用）':''));
-  if(hot&&kit&&(weapon||!type))button.setAttribute('aria-pressed',String(poiInventorySelected(index)));
+  if(hot&&kit&&(weapon||!type||type===POI_FIRE_WAND))button.setAttribute('aria-pressed',String(poiInventorySelected(index)));
   else button.removeAttribute('aria-pressed');
   poiInventoryPresentItem(button,cell,true);
  }
@@ -10548,6 +10566,52 @@ function poiItemDragRender(ghost,event,drag){
  const [x,y]=poiItemDragPosition(event.clientX,event.clientY,drag.previewSize,innerWidth,innerHeight,event.pointerType);
  ghost.style.transform='translate3d('+x+'px,'+y+'px,0)';
 }
+// Independent right-thumb tap while the left thumb owns the movement pad.
+function poiWireMovingWeaponShortcuts(bar,bag,find){
+ let right=null;
+ const clicks=[];
+ const allowed=()=>bag.hidden&&!poiBagKeySource&&$('viewWrap').hasAttribute('data-analog-play')&&
+  poiAnalogAllowed()&&poiInventoryAllowed();
+ const weaponSlot=button=>{
+  const raw=button?.dataset.hotbarSlot,slot=Number(raw);
+  if(raw===undefined||button.disabled||!Number.isInteger(slot)||slot<0||slot>=POI_HOTBAR_SIZE)return null;
+  const type=poiInventorySlot(poiHotbarRead(),slot);
+  return type===POI_FIRE_WAND||!!poiHotbarWeaponForType(type)?slot:null;
+ };
+ const clear=()=>{right=null;clicks.length=0};
+ bar.addEventListener('pointerdown',e=>{
+  if(right||e.pointerType!=='touch'||e.isPrimary||e.button!==0||!poiAnalogContact||!allowed())return;
+  const button=find(e.target),slot=weaponSlot(button);
+  if(slot===null)return;
+  right={button,slot,id:e.pointerId,x:e.clientX,y:e.clientY,moved:false};
+  try{button.setPointerCapture(e.pointerId)}catch(_e){}
+ });
+ bar.addEventListener('pointermove',e=>{
+  if(right?.id===e.pointerId&&Math.hypot(e.clientX-right.x,e.clientY-right.y)>=10)right.moved=true;
+ });
+ bar.addEventListener('pointerup',e=>{
+  if(right?.id!==e.pointerId)return;
+  const {button,slot,id,x,y,moved}=right;
+  right=null;
+  const now=performance.now();
+  while(clicks.length&&(clicks[0].until<now||clicks.length>=6))clicks.shift();
+  clicks.push({button,id,x:e.clientX,y:e.clientY,until:now+650});
+  if(moved||Math.hypot(e.clientX-x,e.clientY-y)>=10||!allowed()||weaponSlot(button)!==slot||
+     find(document.elementFromPoint(e.clientX,e.clientY))!==button)return;
+  e.preventDefault();poiStorageTapGate?.cancel();poiHotbarUse(slot);
+ });
+ for(const name of ['pointercancel','lostpointercapture'])bar.addEventListener(name,e=>{if(right?.id===e.pointerId)right=null});
+ bar.addEventListener('click',e=>{
+  if(e.pointerType!=='touch'&&(e.pointerType||!e.sourceCapabilities?.firesTouchEvents))return;
+  const now=performance.now(),button=find(e.target);
+  const i=clicks.findIndex(t=>t.button===button&&now<=t.until&&
+   (e.pointerType==='touch'&&e.pointerId>0?t.id===e.pointerId:Math.hypot(t.x-e.clientX,t.y-e.clientY)<=2));
+  if(i<0)return;
+  clicks.splice(i,1);e.preventDefault();e.stopImmediatePropagation();
+ },true);
+ window.addEventListener('blur',clear);
+ document.addEventListener('visibilitychange',()=>{if(document.hidden)clear()});
+}
 function poiBagWire(){
  const bar=$('poiHotbar'),bag=$('poiBagPanel'),toggle=$('poiBagToggle'),chest=$('poiChestPanel'),ghost=$('poiItemDragPreview');
  let drag=null,suppress=null;
@@ -10560,6 +10624,7 @@ function poiBagWire(){
  const detailZone=zone=>zone==='bag'||zone==='chest'||zone==='hotbar'&&!bag.hidden;
  const walletTarget=zone=>zone==='wallet'||zone==='wallet-home'||zone==='bag'||zone==='hotbar';
  const find=node=>node?.closest?.('button[data-hotbar-slot],button[data-bag-slot],button[data-chest-slot],button[data-gear-slot],button[data-wallet-slot]');
+ poiWireMovingWeaponShortcuts(bar,bag,find);
  const clear=()=>{
   stopHold();
   if(drag){delete drag.source.dataset.dragging;if(drag.over)delete drag.over.dataset.dragOver}
@@ -10754,7 +10819,7 @@ function poiHotbarRender(){
   const name=sword?'木の剣':herb?'薬草':'空きスロット '+(i+1);
   button.title=name+(herb?'（HPを最大30回復）':'')+(item?'・外へスワイプで地面に置く':kit?'（素手に切替）':'');
   button.setAttribute('aria-label',name);
-  if(kit&&(sword||!item))button.setAttribute('aria-pressed',String(poiInventorySelected(i)));
+  if(kit&&(sword||!item||item===POI_FIRE_WAND))button.setAttribute('aria-pressed',String(poiInventorySelected(i)));
   else button.removeAttribute('aria-pressed');
   button.disabled=!kit;button.setAttribute('aria-disabled',String(button.disabled));
   const icon=button.querySelector('.hotbar-icon'),preview=sword?poiHotbarSwordIcon():
@@ -10773,6 +10838,7 @@ function poiHotbarUse(slot){
   const weapon=poiHotbarWeaponForType(item);
   if(kit.weapon!==weapon&&!poiEconomyWrite({...kit,weapon})){toast('装備を保存できませんでした');return}
   if(!weapon)poiHotbarEmptySlot=slot;
+  if(typeof poiWandDisarm==='function')poiWandDisarm();
   poiHotbarRender();if(kit.weapon!==weapon)poiWalkAvatar();return;
  }
  const result=poiUseStorageConsumable(kit,slot);
@@ -13392,7 +13458,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v237',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v238',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -13507,7 +13573,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v237';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v238';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -13722,7 +13788,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v237',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v238',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -14610,12 +14676,25 @@ function poiAimRenderMarker(now,vp,layer){
  if(!poiAimMarker){poiAimMarker=document.createElement('span');poiAimMarker.id='poiAimLockMarker';poiAimMarker.hidden=true;poiAimMarker.setAttribute('aria-hidden','true');layer.append(poiAimMarker)}
  let point=null;
  const o=poiAimOrigin(now),lock=poiCombatLockUpdate(o,now);
- if(lock&&!document.hidden&&$('poiBagPanel')?.hidden!==false&&!poiTownDialogue&&
+ const wand=typeof poiArmedWandIndex==='function'&&poiArmedWandIndex()!==null;
+ const mode=wand?'wand':'lock';
+ if(poiAimMarker.dataset.aim!==mode)poiAimMarker.dataset.aim=mode;
+ if(poiWalkActive&&!pineAIActive&&!(typeof poiPlayerDying==='function'&&poiPlayerDying())&&
+    !document.hidden&&$('poiBagPanel')?.hidden!==false&&!poiTownDialogue&&
     $('poiLandscapeMenu')?.hidden!==false&&$('poiScreenNoteLayer')?.hidden!==false&&
-    !document.querySelector('dialog[open],.modal.open')&&poiCombatLockVisible(o,lock,now)){
-  const p=poiMonsterPose(lock.id,lock.state,now);
-  const h=POI_COMBAT_TORSO_HEIGHT[lock.id.type]??(POI_ENEMY_HEAD_HEIGHT[lock.id.type]||1.2)*.54;
-  point=poiWorldToScreen(vp,p.x,p.y+h,p.z);
+    !document.querySelector('dialog[open],.modal.open')){
+  if(lock&&poiCombatLockVisible(o,lock,now)){
+   const p=poiMonsterPose(lock.id,lock.state,now);
+   const h=POI_COMBAT_TORSO_HEIGHT[lock.id.type]??(POI_ENEMY_HEAD_HEIGHT[lock.id.type]||1.2)*.54;
+   point=poiWorldToScreen(vp,p.x,p.y+h,p.z);
+  }else if(wand){
+   // Same bearing and wall clamp as the shot, without marking a hidden enemy.
+   const dir=(lock&&poiAimUnit(lock.x-o.x,lock.z-o.z))||o.dir;
+   const ahead=Math.max(0,poiAimWallLimit(o,dir,1,poiAimWall(o))-.06);
+   const x=o.x+.5+dir.x*ahead,z=o.z+.5+dir.z*ahead;
+   const y=terrainY(Math.floor(x),Math.floor(z))+(facilitySite?o.y*1.4:0)+.77;
+   point=poiWorldToScreen(vp,x,y,z);
+  }
  }
  const visible=!!point&&point.x>=0&&point.y>=0&&point.x<=canvas.clientWidth&&point.y<=canvas.clientHeight;
  if(poiAimMarker.hidden===visible)poiAimMarker.hidden=!visible;
@@ -14633,9 +14712,9 @@ const POI_UNARMED_WEAPON_GRADES=Object.freeze({speed:3,reach:1});
 const POI_PLAYER_WEAPON_PROFILES=Object.freeze({
  kitchenKnife:{range:1,get damage(){return POI_PLAYER_ATTACK+POI_KNIFE_BONUS},hit:80,ready:225,pose:190,
   commitAim:true,contactSound:true,speed:4,reach:1},
- equipWoodBow:{range:5,damage:22,hit:650,ready:1030,pose:850,cellMs:65,minFlight:70,speed:1,reach:4},
+ equipWoodBow:{range:5,damage:22,hit:325,ready:1030,pose:525,cellMs:65,minFlight:70,speed:1,reach:4},
  equipWoodSpear:{range:3,damage:24,tipLength:.75,shaftScale:.75,hit:240,ready:540,pose:410,speed:2,reach:3},
- equipStoneMace:{range:1,damage:32,hit:380,ready:760,pose:620,speed:1,reach:1},
+ equipStoneMace:{range:1,damage:32,hit:380,ready:760,pose:620,commitAim:true,speed:1,reach:1},
  equipWoodSword:{...POI_SWORD_PROFILE,get damage(){return POI_PLAYER_ATTACK+POI_HOTBAR_SWORD_BONUS}},
  equipBoneSword:{...POI_SWORD_PROFILE,range:1.55,damage:24},
  equipIronSword:{...POI_SWORD_PROFILE,range:2,damage:30},
@@ -14987,28 +15066,78 @@ function poiWeaponArrowGeometry(m,x,y,z,dx,dz,fade=1,length=.61){
  tri(m,V(tail,0,.008),V(nock,.066,-.017),V(nock+.066,0,0),f);
 }
 function poiPlayerFireGeometry(m,p,now,impact){
- const {x,y,z,dx,dz}=p,W=(d,u,h)=>[x+1.17*(dx*d+dz*u),y+1.17*h,z+1.17*(dz*d-dx*u)];
- const phase=now*.029,death=impact===undefined?0:Math.max(0,Math.min(1,(now-impact)/160));
- const strength=1-death;if(strength<=0)return;
- const flash=impact===undefined?1:1.16+death*.35;
- const hues=[[1,.22,.037],[1,.39,.05],[1,.61,.10],[1,.86,.25],[1,.95,.67]];
- const tint=col=>col.map(c=>c*(.76+.24*strength));
- const body=W(.018,0,-.014),nose=W(.20*flash,0,.005),tail=W(-(.48+.044*Math.sin(phase))*strength,0,.083);
- const ring=[[0,.14],[.14,0],[0,-.13],[-.14,0]],hot=[[0,.075],[.071,0],[0,-.056],[-.071,0]];
- for(let i=0;i<4;i++){
-  const j=(i+1)%4,roll=.93+.18*Math.sin(phase+i*1.75);
-  const a=ring[i],b=ring[j],A=W(-.063,a[0]*roll*flash,a[1]*roll*flash),B=W(-.063,b[0]*flash,b[1]*flash);
-  tri(m,nose,A,B,tint(hues[1+i%2]));
-  tri(m,A,tail,B,tint(hues[i%2]));
-  const H=hot[i],J=hot[j];
-  tri(m,W(.209,0,.021),W(.026,H[0],H[1]),W(.026,J[0],J[1]),tint(hues[3+i%2]));
+ const {x,y,z,dx,dz}=p;
+ const phase=now*.032,death=impact===undefined?0:Math.max(0,Math.min(1,(now-impact)/160));
+ if(death>=1)return;
+ const alpha=1-death,pulse=.86+.14*Math.sin(phase*.83),burst=impact===undefined?1:1.24+.30*Math.sin(Math.PI*death);
+ const taper=impact===undefined?1:1-.69*death;
+ const W=(d,u,h)=>[x+1.63*(dx*d+dz*u),y+1.63*h,z+1.63*(dz*d-dx*u)];
+ const heat=(r,g,b,k=1)=>[r*k,g*k,b*k],glow=impact===undefined?.90+.12*pulse:1.07-.27*death;
+ const core=heat(1.89,1.52,.71,glow),gold=heat(1.68,.94,.20,glow);
+ const orange=heat(1.31,.42,.054,glow),ember=heat(.92,.18,.028,glow);
+ const n=6,rim=[],inner=[];
+ for(let i=0;i<n;i++){
+  const a=i*Math.PI*2/n,twist=.12*Math.sin(phase+i*1.7);
+  const u=Math.cos(a),h=Math.sin(a),roll=1+.16*Math.sin(phase*1.17+i*2.6);
+  rim.push(W(-.026+twist*.18,u*.176*burst*taper*roll,h*.173*burst*taper*roll+.025));
+  inner.push(W(.165,u*.098*taper,h*.101*taper+.045));
  }
- // Asymmetric points trail from the hot body, not from a cube.
- for(let i=0;i<3;i++){
-  const side=i%2?-.1:.12,flick=Math.sin(phase*1.7+i*2.13);
-  const tongue=W(-(.31+i*.11+.057*flick)*strength,side*(1+flick*.40),.19+i*.041);
-  tri(m,body,W(-.15,side*.77,.055),tongue,tint(hues[i%2]));
-  tri(m,body,tongue,W(-.20,side*.39,.118),tint(hues[2]));
+ const fill=W(.304*taper,0,.041),head=W(.278*taper,0,.022),body=W(.028,0,.053);
+ const tail=W(-(.68+.11*Math.sin(phase*.74))*taper,0,.092);
+ for(let i=0;i<n;i++){
+  const j=(i+1)%n;
+  tri(m,head,rim[i],rim[j],i%2?orange:gold);
+  tri(m,rim[i],tail,rim[j],i%3?ember:orange);
+  tri(m,fill,inner[i],inner[j],i%2?core:gold);
+ }
+ // Independent flame tongues lean back and curl upwards. No RNG, trail
+ // history or timer is shared with collision; each real frame is bounded.
+ for(let i=0;i<6;i++){
+  const side=i%2?-1:1,osc=Math.sin(phase*(1.06+.13*(i%3))+i*2.23);
+  const drive=.8+.18*Math.sin(phase*.57+i*1.38);
+  const width=side*(.109+.047*(i%3));
+  const tip=W(-(.31+.084*i+.087*osc)*taper,width*(1.45+osc*.72)*burst,
+   (.185+.030*i+.085*osc)*drive*burst*taper);
+  const bend=W(-(.18+.030*i)*taper,width*(1.47-.26*osc)*burst,(.096+.034*osc)*burst*taper);
+  tri(m,body,bend,tip,i%2?ember:orange);
+  tri(m,body,tip,W(-.16*taper,width*.59*burst,(.136+.033*osc)*taper),i%2?orange:gold);
+ }
+ if(impact!==undefined){
+  // A quick fan of ember fragments shows the same hit point as the flare.
+  // No particles survive independently of the existing projectile visual.
+  const reach=.18+.37*Math.sin(Math.PI*death*.78);
+  for(let i=0;i<7;i++){
+   const a=i*2.399963+phase*.079,spread=reach*(.75+.25*Math.sin(i+phase*.3));
+   const r=Math.sin(a)*spread,h=(.083+.17*(i%3)/2+.29*death)*alpha;
+   const d=Math.cos(a)*spread*(.83+.14*pulse);
+   tri(m,W(d-.028*alpha,r,h),W(d+.055*alpha,r+.027*alpha,h+.085*alpha),
+      W(d+.024*alpha,r-.032*alpha,h),i%2?gold:orange);
+  }
+ }
+ // Contrasting warm aura. It is a small, separate depth-tested additive mesh,
+ // not dynamic scene lighting and not part of any projectile collision.
+ const aura=m.fireGlow||(m.fireGlow=mesh());
+ aura.alpha=(impact===undefined?.15+.035*pulse:.23)*alpha;
+ const outer=[],aurora=heat(.80,.23,.043,glow),big=burst*(.235+.035*pulse)*taper;
+ for(let i=0;i<n;i++){
+  const a=i*Math.PI*2/n;
+  outer.push(W(-.05,Math.cos(a)*big,Math.sin(a)*big+.041));
+ }
+ const haloHead=W(.34*taper,0,.033),haloTail=W(-.78*taper,0,.084);
+ for(let i=0;i<n;i++){
+  const j=(i+1)%n;
+  tri(aura,haloHead,outer[i],outer[j],aurora);
+  tri(aura,haloTail,outer[j],outer[i],aurora);
+ }
+}
+function poiDrawPlayerFireGlow(glow,vp){
+ if(!glow?.p.length||!(glow.alpha>0))return;
+ const data=upload(glow);
+ gl.enable(gl.BLEND);gl.blendColor(0,0,0,glow.alpha);
+ gl.blendFunc(gl.CONSTANT_ALPHA,gl.ONE);gl.depthMask(false);
+ try{draw(data,vp)}finally{
+  gl.depthMask(true);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.blendColor(0,0,0,0);
+  gl.disable(gl.BLEND);gl.deleteBuffer(data.buf);
  }
 }
 function poiAppendWeaponProjectile(m,v,now){
@@ -15044,6 +15173,7 @@ function poiPlayerWeaponDraw(now,vp){
  for(const bolt of poiEnemyMageBolts)poiAppendWeaponProjectile(m,bolt,now);
  if(!m.p.length)return;
  const data=upload(m);try{draw(data,vp)}finally{gl.deleteBuffer(data.buf)}
+ if(m.fireGlow)poiDrawPlayerFireGlow(m.fireGlow,vp);
 }
 // END PLAYER WEAPON PROFILES
 let poiWalkActionWeapon,poiWalkAttackPosePending=false;
@@ -21106,7 +21236,7 @@ function extendTownWorldNorthTrail(world){
   [60,6,'fallenLog',1],[60,7,'benchWood',3],[62,7,'crate',1],[62,6,'sack',1],[62,8,'rockMossy',1],[60,8,'tallGrass']
  ])add(xx,zz,t,r);
  const regions=[
-  {name:'北の森の道',difficulty:1,bounds:{x1:39,x2:86,z1:1,z2:4,y:0}},
+  {name:'北の森の道',difficulty:1,outdoorLandmark:true,bounds:{x1:39,x2:86,z1:1,z2:4,y:0}},
   {name:'たき火のあと',difficulty:1,outdoorLandmark:true,bounds:{x1:59,x2:63,z1:5,z2:8,y:0}}
  ];
  return {name:'北の森の道',entry:{...route[0],y:0},end:{...route.at(-1),y:0},route,
@@ -21161,7 +21291,7 @@ function extendTownWorldForestWatchPost(northTrail,world){
  northTrail.continuation=continuation;northTrail.watchPost=watchPost;northTrail.lowland=lowland;
  northTrail.regions.push(
   {name:'北の林道',difficulty:1,bounds:{x1:86,x2:112,z1:2,z2:9,y:0}},
-  {name:lowland.name,difficulty:lowland.difficulty,bounds:lowland.bounds},
+  {name:lowland.name,difficulty:lowland.difficulty,outdoorLandmark:true,bounds:lowland.bounds},
   {name:watchPost.name,difficulty:watchPost.difficulty,outdoorLandmark:true,bounds:watchPost.bounds}
  );
  return northTrail;
@@ -21204,8 +21334,8 @@ function extendTownWorldPondMarsh(northTrail,world){
   reward:{id:'north-marsh-herb',type:'healingHerb',count:1,x:115,z:32,y:0}};
  northTrail.marsh={name:'柳の道',path,pond};
  northTrail.regions.push(
-  {name:'柳の道',difficulty:1,bounds:{x1:116,x2:121,z1:17,z2:23,y:0}},
-  {name:'柳の道',difficulty:1,bounds:{x1:121,x2:122,z1:24,z2:29,y:0}}
+  {name:'柳の道',difficulty:1,outdoorLandmark:true,bounds:{x1:116,x2:121,z1:17,z2:23,y:0}},
+  {name:'柳の道',difficulty:1,outdoorLandmark:true,bounds:{x1:121,x2:122,z1:24,z2:29,y:0}}
  );
  return northTrail;
 }

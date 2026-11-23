@@ -135,7 +135,7 @@ async function mainRoad(browser){
   assert.deepEqual(await coords(page),pos(85,2));
   assert.equal(old.quests,undefined);
   for(const [x,z] of roads)await line(page,x,z);
-  await waitMap(page,'水辺の道','★☆☆☆☆☆☆☆☆☆');
+  await waitMap(page,'外','★☆☆☆☆☆☆☆☆☆'); // The trail remains authored but has no own area HUD.
   const s=await state(page);
   assert.notEqual(s.miniMap.location,'森の見張り場','main branch does not cross optional guard sector');
   assert.equal(s.combat.playerHP,100);

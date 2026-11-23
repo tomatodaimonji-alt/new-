@@ -6,10 +6,25 @@ const plain=s=>JSON.parse(JSON.stringify(s)),sha=s=>createHash('sha256').update(
 const base=beforeMineLongApproach(plain(build('base'))),world=base.map.world,head=world.slice(0,7456),added=world.slice(7456);
 const at=(x,z)=>world.filter(o=>o.x===x&&o.z===z&&o.y===0);
 const edge=(a,b)=>Math.abs(a.x-b.x)+Math.abs(a.z-b.z);
+
+// v238 intentionally changed only these four area-HUD classifications.
+// Restore exactly these flags in a historical serialization, not in the live map.
+function normalizeV238OutdoorMetadata(site){
+ const allowed=new Set(['北の森の道:39,1,86,4,0','水辺の道:109,8,120,16,0',
+  '柳の道:116,17,121,23,0','柳の道:121,24,122,29,0']);
+ for(const r of site.northTrail.regions){
+  const {x1,z1,x2,z2,y}=r.bounds;
+  if(!allowed.delete(r.name+':'+[x1,z1,x2,z2,y]))continue;
+  assert.equal(r.outdoorLandmark,true,'remove only the intended v238 outdoor flag');
+  delete r.outdoorLandmark;
+ }
+ assert.equal(allowed.size,0,'all four intended descriptors were found');
+}
 test('only the base southern limit grows; no authored object moves or changes',()=>{
  assert.deepEqual([base.map.width,base.map.height,base.map.size,base.townOffset],[128,128,128,22]);
  assert.equal(sha(head),'94aec8afd4ce646ea255d19d5bd90b71a5ad93de0a9197285d49323b4ad76b3c');
  const {southRoad,...historical}=plain(base);
+ normalizeV238OutdoorMetadata(historical);
  historical.map.height=96;delete historical.map.world;
  assert.equal(sha(historical),'f84cf093eb3ca246172bbc5c8f4106f5a9a408452a24402bf82c163881e2d381','all other original base metadata');
 

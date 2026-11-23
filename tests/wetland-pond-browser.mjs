@@ -104,12 +104,15 @@ async function road(browser){
  const {ctx,page,errors}=await launch(browser,at(117,9));
  try{
   const original=await map(page),raw=await stock(page),url=page.url();
+  await expectHud(page,'外','★☆☆☆☆☆☆☆☆☆');
   for(let i=1;i<path.length;i++) {
    const {x,z}=path[i];
    await singleStep(page,x,z);await calm(page);
+   assert.equal(await page.locator('#poiLocationName').innerText(),'外','water to willow stays the same exterior region');
+   assert.equal(await page.locator('#poiLocationPanel').evaluate(el=>el.getAnimations().length),0,'no travel popup for either road');
    assert.equal((await state(page)).combat.threats.filter(t=>t.type===monster).length,0,'pond guard must not threaten the road at '+[x,z]);
   }
-  await expectHud(page,'柳の道','★☆☆☆☆☆☆☆☆☆');
+  await expectHud(page,'外','★☆☆☆☆☆☆☆☆☆');
   assert.equal((await state(page)).combat.playerHP,100);
   assert.equal(page.url(),url);
   assert.equal(await stock(page),raw);
@@ -151,7 +154,7 @@ async function bank(browser){
   for(const [x,z] of [[119,27],[119,26],[120,26],[121,26]]){
    await calm(page);await singleStep(page,x,z);
   }
-  await expectHud(page,'柳の道','★☆☆☆☆☆☆☆☆☆');
+  await expectHud(page,'外','★☆☆☆☆☆☆☆☆☆');
   assert.equal(page.url(),url);
   assert.equal(JSON.parse(await stock(page)).quests,JSON.parse(raw).quests);
   await exactProtection(page,original);assert.deepEqual(errors,[]);

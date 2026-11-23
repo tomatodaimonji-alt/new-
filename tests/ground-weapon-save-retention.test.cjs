@@ -65,7 +65,7 @@ test('repeatable staff sources keep distinct ordinary drops; can choose one, not
  assert.equal(c.poiArmedPickup(120,82),false);
  f=launch(f.raw(),{x:120,z:82});c=f.c;expectCore(c,staff,33);
  assert.equal(c.poiHotbarRead().drops[0].durability,17);
- assert.equal(c.poiHotbarRead().armedDrops[0].durability,46);
+ assert.equal(c.poiHotbarRead().armedDrops,undefined,'the unpickable enemy duplicate was removed after acquiring another staff');
 });
 test('a chest replacement and independently dropped bow both survive reload',()=>{
  const initial=seed();const replacement=initial.slots[2];
@@ -111,4 +111,53 @@ test('first 3G coin collection after affected reload preserves all slots and the
  assert.deepEqual(JSON.parse(f.raw()).slots,JSON.parse(affected).slots);
  f=launch(f.raw());expectCore(f.c,bow,70,43);
  assert.equal(f.c.poiHotbarRead().drops[0].durability,17);
+});
+
+test('an equipped wooden bow prevents an automatic duplicate on enemy defeat, but replacing it after discarding still works',()=>{
+ const f=launch(JSON.stringify(seed())),c=f.c;
+ const archer={type:'monsterSkelArcher',x:109,z:88,y:-1},defeated={x:109,z:88,hp:0};
+ assert.equal(c.poiArmedEnemyLoot(archer,defeated,()=>.8),false);
+ assert.equal(f.writes(),0);
+ assert.equal(c.poiInventoryDrop(2).ok,true);
+ assert.equal(c.poiArmedEnemyLoot(archer,defeated,()=>.8),true);
+ assert.equal(c.poiArmedPickup(109,88),true);
+ assert.equal(c.poiHotbarRead().drops[0].durability,17,'manually dropped original remains a distinct item');
+});
+test('old duplicate automatic equipment is removed from the live ground on read, without rewriting; genuine ground loot persists',()=>{
+ const initial=seed(),held=initial.slots[2];initial.weapon=null;initial.slots[2]=null;
+ initial.kitchenChest={version:1,slots:[held,...Array(17).fill(null)]};
+ initial.drops=[{type:bow,x:110,z:88,y:-1,durability:55}];
+ initial.armedDrops=[{id:'otherworld-east-archer',type:bow,x:109,z:88,y:-1,durability:23},
+  {id:'otherworld-east-staff',type:staff,x:120,z:82,y:-1,durability:46}];
+ const f=launch(JSON.stringify(initial)),c=f.c,k=c.poiHotbarRead();
+ assert.deepEqual(plain(c.poiArmedDrawList(k)),[initial.armedDrops[1]]);
+ assert.equal(f.writes(),0);
+ assert.equal(k.kitchenChest.slots[0].durability,17);
+ assert.equal(k.drops[0].durability,55);
+ c.poiWalkLevel=0;assert(c.poiEconomyBuyPotion().ok);
+ const reloaded=launch(f.raw());assert.deepEqual(plain(reloaded.c.poiHotbarRead().armedDrops),[initial.armedDrops[1]]);
+});
+test('a genuinely new bow stays on the ground if all usable slots are full',()=>{
+ const initial=seed();initial.weapon=null;initial.goldHotbarSlot=undefined;
+ initial.slots=initial.slots.map((c,i)=>i===0?c:{type:'cannedFood',count:1});
+ const f=launch(JSON.stringify(initial),{x:105,z:86,y:0}),c=f.c;
+ const archer={type:'monsterSkelArcher',x:105,z:86,y:0},defeated={x:104,z:86,hp:0};
+ assert.equal(c.poiArmedEnemyLoot(archer,defeated,()=>.8),true);
+ assert.equal(c.poiArmedPickup(104,86),false);
+ const drops=plain(c.poiHotbarRead().armedDrops);
+ assert.equal(drops[0].type,bow);
+ assert.deepEqual(plain(launch(f.raw(),{x:105,z:86,y:0}).c.poiHotbarRead().armedDrops),drops);
+});
+test('the authored watch guard still unlocks after defeat if its weapon is already owned, without a loot sound or duplicate',()=>{
+ const f=launch(JSON.stringify(seed('equipBoneSword')),{x:109,z:88,y:0}),c=f.c,sounds=[];
+ const guard={type:'monsterSkelWarrior',x:109,z:88,y:0};
+ c.facilitySite.northTrail={watchPost:{guard}};
+ c.poiSound=(...args)=>sounds.push(args);
+ assert.equal(c.poiArmedEnemyLoot(guard,{x:109,z:88,hp:0},()=>.8),true);
+ assert.equal(f.writes(),1);
+ const stored=JSON.parse(f.raw());assert.equal(stored.northWatchPostGuardLoot,true);
+ assert.equal(stored.armedDrops,undefined);assert.deepEqual(sounds,[]);
+ assert.equal(c.poiArmedEnemyLoot(guard,{x:109,z:88,hp:0},()=>.8),false);
+ assert.equal(f.writes(),1);
+ const reloaded=launch(f.raw(),{x:109,z:88,y:0});assert.equal(reloaded.c.poiHotbarRead().northWatchPostGuardLoot,true);
 });

@@ -5,12 +5,12 @@ function cut(a,b){
 }
 function setup(){
  const origin={x:10,z:10},canvas={clientWidth:600,clientHeight:600},targets=new Map(),samples=[],avatars=[];
- const style={}; const marker={hidden:true,style,setAttribute(){}};const layer={append(){}};
+ const style={}; const marker={hidden:true,style,dataset:{},setAttribute(){}};const layer={append(){}};
  const bag={hidden:true},menu={hidden:true},note={hidden:true};
  const c={poiWalkActive:true,pineAIActive:false,poiMonsterStates:targets,poiWalkX:10,poiWalkZ:10,poiWalkLevel:0,
   poiWalkViewX:10,poiWalkViewZ:10,poiWalkFromX:10,poiWalkFromZ:10,poiWalkStarted:0,poiWalkStepMs:160,poiWalkFacing:1,
   poiFreePose:{x:10,z:10,level:0,angle:-Math.PI/2,walking:false,distance:0}, poiWalkActionStarted:-10000,
-  POI_WALK_MS:160,poiWalkActionWeapon:null,poiWalkAttackPosePending:false,poiWalkMesh:null,
+  POI_WALK_MS:160,facilitySite:null,terrainY:()=>0,poiWalkActionWeapon:null,poiWalkAttackPosePending:false,poiWalkMesh:null,
   document:{hidden:false,createElement:()=>marker,querySelector:()=>null},canvas,poiTownDialogue:null,poiPlayerDying:()=>false,
   $(id){return id==='poiBagPanel'?bag:id==='poiLandscapeMenu'?menu:id==='poiScreenNoteLayer'?note:null},
   held:'equipWoodSword',wand:false,poiEquippedWeapon:()=>c.held,poiArmedWandIndex:()=>c.wand?0:null,
@@ -66,7 +66,7 @@ test('temporarily hiding marker behind menu does not silently select a different
 test('a dead target, a different floor and exit from play release prior engagement',()=>{
  const h=setup();h.c.wand=true;const a=h.enemy(4,0);assert.equal(h.draw()?.x,14.5);
  const b=h.enemy(5,0);a.hp=0;assert.equal(h.draw(1200)?.x,15.5);
- h.c.poiWalkLevel=1;assert.equal(h.draw(1400),null);
+ h.c.poiWalkLevel=1;assert(h.draw(1400)?.x<12,'no enemy on this floor; only the wand free-aim cursor remains');
  h.c.poiWalkLevel=0;assert.equal(h.draw(1600)?.x,15.5);
  h.c.poiWalkActive=false;assert.equal(h.draw(1800),null);
  h.enemy(1,0);h.c.poiWalkActive=true;assert.equal(h.draw(2000)?.x,11.5);
@@ -74,6 +74,6 @@ test('a dead target, a different floor and exit from play release prior engageme
 });
 test('initial target must be same-floor and unobstructed',()=>{
  const h=setup();h.c.wand=true;h.enemy(4,0);h.enemy(1,0,1);
- h.c.wall=x=>x===13;assert.equal(h.draw(),null);
+ h.c.wall=x=>x===13;assert(h.draw()?.x<12,'a wall-hidden foe is not used as the wand aim point');
  h.c.wall=null;assert.equal(h.draw(1200)?.x,14.5);
 });

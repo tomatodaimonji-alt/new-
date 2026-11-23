@@ -35,10 +35,12 @@ const kitKey='world-workshop-hotbar-v1',resumeKey='world-workshop-resume-v1';
 const editorKey='forest-world-editor-v1',personal='{"format":"forest-world-v1","version":1,"width":30,"height":30,"size":30,"world":[{"x":2,"y":0,"z":2,"type":"stonewall","rot":1}],"models":[],"prefabs":[],"terrainHeights":[],"checks":[]}';
 const knifeSurface={id:'north-watchpost-warrior',type:'equipBoneSword',x:124,z:43,y:0,durability:37};
 const far={id:'monsterSkelArcher',type:'equipWoodBow',x:124,z:50,y:0,durability:31};
-const wrongFloor={id:'monsterSkelWarrior',type:'equipBoneSword',x:124,z:42,y:-1,durability:31};
+// Scope fixtures must be different weapon types: matching enemy duplicates
+// are intentionally removed after obtaining a held copy, even across floors.
+const wrongFloor={id:'monsterSkelSpearman',type:'equipWoodSpear',x:124,z:42,y:-1,durability:31};
 const daggerMine={id:'monsterSkelWarrior',type:'equipBoneSword',x:116,z:61,y:-1,durability:31};
 const wrongRealm={id:'monsterSkelKnight',type:'equipIronSword',x:106,z:78,y:-1,durability:31};
-const aboveMine={...knifeSurface,x:116,z:61};
+const aboveMine={id:'monsterSkelMage',type:'equipPlainStaff',x:116,z:61,y:0,durability:31};
 const cases=[
  {id:'night-surface',x:124,z:34,y:0,item:knifeSurface,foreign:[wrongFloor],far,dir:'ArrowDown'},
  {id:'mine',x:116,z:60,y:-1,item:daggerMine,foreign:[wrongRealm,aboveMine],dir:'ArrowDown'}
@@ -141,7 +143,9 @@ async function trial(browser,c){
   const inventory=(await game(page)).inventory;
   assert([...inventory.hotbar,...inventory.bag].some(i=>i?.type===c.item.type&&i.durability===c.item.durability));
   const after=await stock(page);
-  for(const f of c.foreign)assert(JSON.parse(after).armedDrops?.some(a=>exact(a,f)),'pickup does not mutate other-floor/realm data');
+  const savedDrops=JSON.parse(after).armedDrops;
+  for(const f of [...c.foreign,c.far].filter(Boolean))
+   assert.deepEqual(savedDrops?.find(a=>a.id===f.id),f,'pickup preserves unrelated other-floor/realm and distant same-floor drops');
   assert.equal(page.url(),url);assert.deepEqual(await map(page),world);
   assert.equal(await page.evaluate(k=>localStorage.getItem(k),editorKey),personal);
   await page.reload();await page.waitForFunction(()=>window.__editorTest?.facility?.().active);
