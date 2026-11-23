@@ -86,7 +86,7 @@ try{
    assert.deepEqual(await gamePosition(page),{x:point.x,z:point.z,level:0});
    const menu=await openMenu(page);await hit(menu,false);
    assert.match(await page.locator(toggleSelector).innerText(),/メニュー/);
-   assert.equal(await menu.locator('button:visible').count(),3);
+   assert.equal(await menu.locator('button:visible').count(),4);
    assert.match(await menu.innerText(),currentVersionPattern,'expanded menu displays the current version');
    assert.equal(await version(page).count(),1,'menu is the only visible version label');
    const view=actionItem(page,'view'),audio=actionItem(page,'volume'),reset=actionItem(page,'reset');
@@ -94,6 +94,7 @@ try{
    assert.match(await view.innerText(),/視点/);
    assert.match(await audio.innerText(),/音量/);
    assert.match(await reset.innerText(),/初期化/);
+   await hit(actionItem(page,'note'));assert.equal(await actionItem(page,'note').innerText(),'画面にメモする');
    const beforeView=await page.locator('#poiThirdView').textContent();
    await view.tap();
    await page.waitForFunction(old=>document.querySelector('#poiThirdView').textContent!==old,beforeView);
