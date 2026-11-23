@@ -157,7 +157,7 @@ async function line(page,x,z){
 }
 async function waitMap(page,label){
  await page.waitForFunction(label=>window.__editorTest.facility().miniMap?.location===label,label);
- assert.equal((await state(page)).miniMap.stars,'★☆☆☆☆');
+ assert.equal((await state(page)).miniMap.stars,'★☆☆☆☆☆☆☆☆☆');
  const title=await page.locator('#poiLocationName').evaluate(el=>({text:el.textContent,client:el.clientWidth,scroll:el.scrollWidth}));
  assert.equal(title.text,label);assert(title.client>=title.scroll,'location name stays legible in portrait: '+JSON.stringify(title));
 }

@@ -100,7 +100,7 @@ async function trial(browser){
   const inside=await api(page);
   assert.equal(inside.sceneLayer,'cellar');
   assert.equal(inside.dungeonEntranceSerial,originalSerial+1);
-  assert.equal(inside.miniMap.stars,'★★★☆☆');
+  assert.equal(inside.miniMap.stars,'★★★☆☆☆☆☆☆☆');
   assert.equal(await stock(page),raw);
   if(out)await page.screenshot({path:out+'/v207-chapel-fork-arrival.png'});
   await page.waitForTimeout(211);await page.keyboard.press('ArrowDown');

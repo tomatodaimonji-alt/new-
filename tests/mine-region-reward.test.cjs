@@ -6,7 +6,7 @@ test('mine area is a floor-aware named region with danger rank without changing 
  vm.runInContext(span('const POI_SAFE_TOWN=','const poiMiniStatic='),c);
  const site={id:'base',townOffset:22,buildings:[],mine:{entrance:{x:116,z:64,y:0},stairs:{x:116,z:62,y:0},bounds:{x1:112,z1:52,x2:123,z2:63,y:-1}}};
  assert.equal(c.poiRegionAt(site,116,64,false,0).name,'廃坑入口');
- assert.equal(c.poiRegionAt(site,120,55,false,-1).stars,'★★★☆☆');
+ assert.equal(c.poiRegionAt(site,120,55,false,-1).stars,'★★★☆☆☆☆☆☆☆');
  assert.equal(c.poiRegionAt(site,120,55,false,0).name,'外');
  assert.equal(c.poiRegionAt(site,116,64).name,'外','existing outdoor music caller is intentionally unchanged');
  assert.equal(c.poiRegionAt(site,105,60,false,-1).name,'外');

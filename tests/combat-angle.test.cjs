@@ -106,13 +106,13 @@ test('decorative enemy attack recoil does not push an adjacent locomotion body o
   poiMonsterActorPoint:()=>({x:.85,z:.24,t:.5})};
  const targets=vm.runInNewContext(take('function poiMonsterPose','function poiMonsterFragmentTemplate')+
   take('// BEGIN ANGULAR COMBAT MATH','// END ANGULAR COMBAT MATH')+
-  take('function poiAimTargetList','function poiAimSelect')+
+  take('function poiAimTargetList','function poiCombatLockUpdate')+
   take('function poiAimTrace','function poiAimFlightBegin')+';({targets:poiAimTargetList,pose:poiMonsterPose,trace:poiAimTrace})',c);
  a.equal(targets.pose(id,enemy,0).x,1.61,'render retains sword wind-up recoil');
  const [body]=targets.targets({x:0,z:0,y:-1},1,0);
  a(Math.abs(body.x-1)<1e-9,'ordinary adjacent range follows the actual body, not the cosmetic sway');
  const swing={aim:{x:0,z:0,y:-1},dx:1,dz:0};
- a.equal(targets.trace(swing,1,0).monster[0],id,'exact one-tile sword still hits');
+ a.equal(targets.trace(swing,1,0).monster[0],id,'an exact one-tile narrow trace still hits');
  a.equal(targets.trace(swing,.99,0).monster,null,'no bonus reach');
  c.poiPlayerRayClear=()=>false;
  a.equal(targets.trace(swing,1,0).monster,null,'same-range body behind a blocking wall cannot be hit');

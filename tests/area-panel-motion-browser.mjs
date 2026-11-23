@@ -32,8 +32,8 @@ const map=page=>page.evaluate(()=>window.__editorTest.data());
 const stock=page=>page.evaluate(key=>localStorage.getItem(key),kitKey);
 const pos=(x,z,level=-1)=>({x,z,level});
 const active=page=>page.waitForFunction(()=>window.__editorTest?.facility?.().active);
-async function launch(browser,start,reduced=false){
- const ctx=await browser.newContext({viewport:{width:320,height:740},deviceScaleFactor:1,isMobile:true,hasTouch:true,reducedMotion:reduced?'reduce':'no-preference'});
+async function launch(browser,start,reduced=false,viewport={width:320,height:740}){
+ const ctx=await browser.newContext({viewport,deviceScaleFactor:1,isMobile:true,hasTouch:true,reducedMotion:reduced?'reduce':'no-preference'});
  await ctx.addInitScript(()=>{
   const run=Element.prototype.animate;window.__locationAnimations=[];
   Element.prototype.animate=function(){
@@ -64,36 +64,60 @@ async function waitPosition(page,x,z,level=-1){
 }
 const panel='#poiLocationPanel';
 const count=page=>page.evaluate(()=>window.__locationAnimations.length);
+async function assertTwoRows(page){
+ const r=await page.locator(panel).evaluate(el=>{
+  const name=el.querySelector('#poiLocationName'),stars=el.querySelector('#poiLocationStars'),ink=document.createRange();
+  ink.selectNodeContents(stars);
+  const rr=ink.getBoundingClientRect(),st=stars.getBoundingClientRect(),nd=name.getBoundingClientRect();
+  return {text:stars.textContent,aria:stars.getAttribute('aria-label'),rows:nd.bottom<=st.top+.25,
+   contained:rr.left>=st.left-.3&&rr.right<=st.right+.3,actualTextWidth:rr.width,available:st.width};
+ });
+ assert.equal(r.text,'★☆☆☆☆☆☆☆☆☆');
+ assert.equal(r.aria,'危険度 1／10');
+ assert(r.rows&&r.contained,'dedicated second row fits ten stars: '+JSON.stringify(r));
+}
+
 async function step(page,d,x,z){
  await page.keyboard.press(d);await waitPosition(page,x,z,0);await page.waitForTimeout(211);
 }
-async function trial(browser,reduced){
- const {ctx,page,errors}=await launch(browser,pos(112,9,0),reduced);
+async function trial(browser,reduced,viewport={width:320,height:740}){
+ const landscape=viewport.width>viewport.height;
+ const {ctx,page,errors}=await launch(browser,pos(112,9,0),reduced,viewport);
  try{
   const before=await stock(page),world=await map(page);
   assert.equal(await page.locator('#poiLocationName').innerText(),'北の林道');
   assert.equal(await count(page),0,'first resume shows settled panel');
   await page.waitForFunction(()=>!window.pineStartup.loading);
   assert.equal(await count(page),0,"hidden fallback spawn does not count as a displayed transition");
+  await assertTwoRows(page);
   await step(page,'ArrowRight',113,9);
   assert.equal(await page.locator('#poiLocationName').innerText(),'水辺の道');
   assert.equal(await count(page),reduced?0:1);
+  await assertTwoRows(page);
   if(!reduced){
    // Pause/scrub the actual Web Animation at its peak, avoiding dependence
    // on SwANGLE rendering/screenshot speed in CI.
    const sizes=await page.locator(panel).evaluate(el=>{
     const a=window.__locationAnimations[0];
-    a.pause();a.currentTime=240;
-    const b=el.getBoundingClientRect(),adj=document.querySelector('#poiClockHud').getBoundingClientRect();
-    const result={width:b.width,left:b.left,clock:adj.top,origin:getComputedStyle(el).transformOrigin, duration:a.effect.getTiming().duration};
-    a.currentTime=1050;
-    const settled=el.getBoundingClientRect(),clock0=document.querySelector('#poiClockHud').getBoundingClientRect();
-    result.original={width:settled.width,left:settled.left,clock:clock0.top};
-    a.currentTime=500; // keep real motion active so second boundary must cancel it
+    const duration=a.effect.getTiming().duration;
+    a.pause();a.currentTime=duration*.24;
+    const rect=node=>{const {left,right,top,width}=node.getBoundingClientRect();return {left,right,top,width}};
+    const clock=document.querySelector('#poiClockHud'),mini=document.querySelector('#poiMiniMap');
+    const result={...rect(el),clock:rect(clock),map:rect(mini),origin:getComputedStyle(el).transformOrigin,duration};
+    a.currentTime=1050;result.afterOldDuration=rect(el);
+    a.currentTime=duration;
+    result.original={...rect(el),clock:rect(clock),map:rect(mini)};
+    a.currentTime=duration*.5; // keep real motion active so second boundary must cancel it
     return result;
    });
-   assert(sizes.width>sizes.original.width*1.20&&sizes.left>sizes.original.left+4&&sizes.duration===1050);
-   assert.equal(sizes.clock,sizes.original.clock,'existing clock is never displaced by location transform');
+   if(landscape){
+    assert(sizes.width>=sizes.original.width*1.45&&sizes.width<=sizes.original.width*1.55);
+    assert(sizes.left>=sizes.map.right+8&&sizes.right<=viewport.width-10,'enlarged label clears map/clock and viewport edge');
+    assert.equal(sizes.duration,1750);
+    assert(sizes.afterOldDuration.left>sizes.original.left+12,'it is still easing home when the previous animation would have ended');
+   }else assert(sizes.width>sizes.original.width*1.20&&sizes.left>sizes.original.left+4&&sizes.duration===1050);
+   assert.deepEqual(sizes.clock,sizes.original.clock,'existing clock is never displaced by location transform');
+   assert.deepEqual(sizes.map,sizes.original.map,'minimap is never displaced by location transform');
    assert(sizes.origin.startsWith('0px'));
    if(out)await page.screenshot({path:out+'/v210-location-panel-motion.png'});
   }
@@ -121,5 +145,8 @@ try{
   ...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
   args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
  await trial(browser,false);await trial(browser,true);
- console.log('PASS native portrait location motion, same-label steps, and reduced-motion mode');
+ await trial(browser,false,{width:568,height:320});
+ await trial(browser,false,{width:1120,height:500});
+ await trial(browser,true,{width:844,height:390});
+ console.log('PASS unchanged portrait and enlarged landscape area excursion, slow return against physical backdrop, and reduced motion');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}

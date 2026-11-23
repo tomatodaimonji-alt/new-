@@ -128,7 +128,7 @@ async function region(page){
  await page.waitForFunction(()=>window.__editorTest.facility().musicZone==='otherworld',null,{timeout:8500});
  const m=(await state(page)).miniMap;
  assert.equal(m.location,'星蝕の回廊');
- assert.equal(m.stars,'★★★★☆');
+ assert.equal(m.stars,'★★★★☆☆☆☆☆☆');
 }
 async function guardedVault(page){
  assert.equal(await canStep(page,100,76,100,77),false,'old dragon gate still blocks native walking');

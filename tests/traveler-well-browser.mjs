@@ -108,13 +108,13 @@ async function trial(browser){
   for(const [i,[x,z]] of route.entries()){
    await singleStep(page,x,z,i===0);await calm(page);
    if(x!==122||z!==44)continue;
-   await expectHud(page,'丘の街道','★☆☆☆☆');
+   await expectHud(page,'丘の街道','★☆☆☆☆☆☆☆☆☆');
 
    // One genuine touch turn off the main road.
    await singleStep(page,121,44,true);await calm(page);
    assert.notEqual(await page.locator('#poiWalkAction').getAttribute('aria-label'),'井戸を調べる','well action requires cardinal adjacency');
    await singleStep(page,120,44);await calm(page);
-   await expectHud(page,'外','★☆☆☆☆');
+   await expectHud(page,'外','★☆☆☆☆☆☆☆☆☆');
    assert.equal((await state(page)).combat.threats.length,0,'optional well rest area is not a combat encounter');
    const action=page.locator('#poiWalkAction');
    await action.filter({hasText:'調べる'}).waitFor({state:'visible'});
