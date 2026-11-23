@@ -44,7 +44,9 @@ async function verifyControls(page,width){
  const bag=await fits(page.locator('#poiBagToggle'),'#viewWrap');
  const bar=await fits(page.locator('#poiHotbar'),'#viewWrap',false);
  assert(pad.x<width*.1&&action.right>width*.86&&bag.right<action.x,'left thumb / right action / adjacent bag');
- assert(mini.x<width*.15&&mini.y<pad.y&&bar.right<bag.x&&bar.x>pad.x,'upper-left map and centered nonoverlapping shortcuts');
+ const clear=(a,b)=>a.right<=b.x||b.right<=a.x||a.bottom<=b.y||b.bottom<=a.y;
+ assert(mini.x<width*.15&&mini.y<pad.y&&clear(bar,bag)&&clear(bar,action)&&clear(bar,pad)&&bar.x>pad.x,
+  'upper-left map and centered nonoverlapping shortcuts');
  for(const tool of await page.locator('#poiGameTools > button:visible').all())await fits(tool,'#viewWrap');
  for(const tool of await page.locator('#quickTools > button:visible').all())await fits(tool,'#viewWrap');
  for(const item of await page.locator('#poiHotbar > button').all()){

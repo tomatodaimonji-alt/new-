@@ -79,7 +79,8 @@ try{
    assert(pad.x<32&&pad.y>mini.y+mini.h,'pad remains below the minimap near lower-left');
    assert(action.w>62&&action.h>56&&action.x>width*.72&&width-action.right>=12&&height-action.bottom>=7,'large action button has a deliberate inward margin');
    assert(bag.right<action.x&&action.x-bag.right<=20&&Math.abs(bag.bottom-action.bottom)<=12,'bag is adjacent to action');
-   assert(bar.right<=bag.x+1&&bar.x>=pad.x+pad.w-1,'bar does not overlap either thumb target');
+   const clear=(a,b)=>a.right<=b.x+1||b.right<=a.x+1||a.bottom<=b.y+1||b.bottom<=a.y+1;
+   assert(clear(bar,bag)&&clear(bar,action)&&clear(bar,pad),'bar does not overlap any thumb target');
    assert(toggle.x>width*.72&&toggle.y<40&&toggle.w>=40&&toggle.h>=40,'upper-right menu has a thumb-sized touch target');
    const baseline=await snapshot(page);
    assert.deepEqual(baseline,saved,'fixture exists on startup without save writes');

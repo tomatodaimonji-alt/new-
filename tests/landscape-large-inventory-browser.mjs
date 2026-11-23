@@ -55,7 +55,8 @@ try{
    const [pad,frame,bagKey,action]=await Promise.all([
     box(page.locator('#poiAnalogPad')),box(bar,false),box(page.locator('#poiBagToggle')),box(page.locator('#poiWalkAction'))
    ]);
-   assert(pad.right+4<=frame.x&&frame.right+4<=bagKey.x&&bagKey.right<action.x,'safe gaps from both thumb corners');
+   const clear=(a,b)=>a.right+3<=b.x||b.right+3<=a.x||a.bottom+3<=b.y||b.bottom+3<=a.y;
+   assert(clear(frame,pad)&&clear(frame,bagKey)&&clear(frame,action)&&bagKey.right<action.x,'safe gaps from both thumb corners');
    assert.equal(await slots.count(),9);
    assert.deepEqual(await slots.evaluateAll(nodes=>nodes.map(x=>+x.dataset.hotbarSlot)),Array.from({length:9},(_,i)=>i));
    const cells=await Promise.all((await slots.all()).map(slot=>box(slot)));
@@ -78,8 +79,8 @@ try{
    const dialogue=page.locator('#poiMessagePanel'),choices=page.locator('#poiNpcMenu');
    await dialogue.waitFor({state:'visible'});
    const speech=await box(dialogue,false),menu=await box(choices,false);
-   const width=Math.min(518,m.width*.714);
-   assert(Math.abs(speech.w-width)<1&&Math.abs(speech.h-80)<1,'dialogue has the enlarged sized box '+JSON.stringify({m,speech}));
+   assert(Math.abs(speech.x-frame.x)<1&&Math.abs(speech.right-frame.right)<1&&Math.abs(speech.h-80)<1,
+    'dialogue aligns both edges with the actual shortcut footprint '+JSON.stringify({m,speech,frame}));
    assert(speech.x>=pad.right+4&&speech.bottom+3<=frame.y&&menu.bottom<speech.y,'speech and options stay above shortcuts while keeping left touch lane clear');
    assert.match(await dialogue.locator('#poiMessageHeading').textContent(),/イネス/);
    const allChoices=await choices.locator('button[data-npc-action]').all();
@@ -119,7 +120,8 @@ try{
   assert.equal(await announcement.locator('#poiMessageHeading').textContent(),'アナウンス');
   assert.match(await announcement.locator('#poiMessageLog').textContent(),/インベントリ|移した/);
   const panel=await box(announcement,false),bar=await box(page.locator('#poiHotbar'),false);
-  assert(Math.abs(panel.w-568*.714)<1&&Math.abs(panel.h-80)<1&&panel.bottom<bar.y,'real chest announcement uses same readable panel');
+  assert(Math.abs(panel.x-bar.x)<1&&Math.abs(panel.right-bar.right)<1&&Math.abs(panel.h-80)<1&&panel.bottom<bar.y,
+   'real chest announcement matches shortcut width and stays above it');
   assert.deepEqual(chest.errors,[]);
  }finally{await chest.context.close()}
  console.log('PASS larger inventory, shortcut, speech and announcement targets with reachable choices and unchanged portrait');

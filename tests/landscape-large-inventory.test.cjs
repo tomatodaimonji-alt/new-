@@ -26,7 +26,7 @@ test('roomy layout targets 1.5x square cells; compact 5+4 shortcut grid and pane
 });
 test('announcements and speech get an 80px box and only choice layout compacts at short heights',()=>{
  const css=block();
- assert.match(css,/--poi-land-message-width:min\(518px,71\.4vw,/);
+ assert.match(css,/#poiMessageStack\{\s*width:var\(--poi-inventory-width\);height:80px;\s*left:var\(--poi-land-control-center\)/);
  assert.match(css,/#poiMessageStack\{[^}]*height:80px/);
  assert.match(css,/#poiNpcMenu:not\(\[data-quest-list\]\)\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)\}/);
  assert.match(css,/#poiNpcMenu\{max-height:min\(40dvh,175px,var\(--poi-npc-menu-room,215px\)\)\}/);
