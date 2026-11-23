@@ -26,7 +26,10 @@ test('door opening keeps voiced hinge friction, closing gives a short body strik
  assert.notDeepEqual(c.poiSurfaceFoleyPcm('door-close-wood',rate),c.poiSurfaceFoleyPcm('door-close-iron',rate));
 });
 test('door playback uses the existing cached effects and mute gates',()=>{
- assert.match(html,/if\(kind==='door-open'\|\|kind==='door-close'\)\{\s*if\(poiAudioLevels\.master<=0\|\|poiAudioLevels\.se<=0\)return;[\s\S]{0,230}poiPlayImpactBuffer\(poiSurfaceFoley\(/);
+ const playback=between("}else if(kind==='door-open'||kind==='door-close'){","}else if(facilitySite?.id==='base'&&kind==='step'){");
+ assert.match(playback,/if\(poiAudioLevels\.master<=0\|\|poiAudioLevels\.se<=0\)return;/);
+ assert.match(playback,/poiTryRecordedFoley\(closing\?'doorClose':'doorOpen',at,gain\)/);
+ assert.match(playback,/poiPlayImpactBuffer\(poiSurfaceFoley\(kind\+'-'\+material\),at,gain\)/);
 });
 function walkFixture(world,configure={}){
  const result=[];

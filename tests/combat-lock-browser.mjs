@@ -63,8 +63,8 @@ fixture=replaceOnce(fixture,'function poiAimRenderMarker(now,vp,layer){',`functi
 function __qaRealMarker(now,vp,layer){`);
 fixture=replaceOnce(fixture,'function poiWorldToScreen(vp,x,y,z){',
  'function poiWorldToScreen(vp,x,y,z){if(window.__qaCombatProjecting)window.__qaCombatProjection={x,y,z};');
-fixture=replaceOnce(fixture,'function poiBuildPlayerMesh(weapon,pose,gear,stride=0,r=0,x=0,y=0,z=0,heading=null){',
- 'function poiBuildPlayerMesh(weapon,pose,gear,stride=0,r=0,x=0,y=0,z=0,heading=null){window.__qaCombatHeading=heading??r*Math.PI/2;');
+fixture=replaceOnce(fixture,'function poiBuildPlayerMesh(weapon,pose,gear,stride=0,r=0,x=0,y=0,z=0,heading=null,worldSpear=false){',
+ 'function poiBuildPlayerMesh(weapon,pose,gear,stride=0,r=0,x=0,y=0,z=0,heading=null,worldSpear=false){window.__qaCombatHeading=heading??r*Math.PI/2;');
 fixture=replaceOnce(fixture,' const p=poiWildPick(rng);',' const p=null;');
 // Wild hoards already use the ambient fixture above. Regional creatures
 // have their own scheduler and can be reborn after the test clears the map.

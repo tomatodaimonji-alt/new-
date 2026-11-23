@@ -31,6 +31,7 @@ test('ground pickup starts after movement; chest has the same softer item cue wi
  for(const cue of [coin,herb])assert.ok(cue[0][1]>=2.055&&cue[0][1]<=2.08,'let the footstep start first');
  assert.equal(chest[0][1],2);assert.deepEqual(chest.map(e=>[e[0],e[2]]),herb.map(e=>[e[0],e[2]]));
  assert.ok(coin.filter(e=>e[0]==='tone').length>=2);
- assert.ok(herb.some(e=>e[0]==='tone'&&e[1]>herb[0][1]),'quiet tactile acknowledgement has a pitched tail');
+ assert.ok(herb.every(e=>e[0]==='brush'),'fallback pickup is tactile noise with no pitched tail');
  c.poiAudioLevels.se=0;assert.deepEqual(play('chest-pickup','healingHerb'),[]);
 });
+
