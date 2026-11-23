@@ -142,8 +142,9 @@ test('only a successful step onto a closed door tile plays the opening cue, usin
  const a=html.indexOf('function poiWalkStep('),b=html.indexOf('function poiWalkAction(',a),step=html.slice(a,b);
  assert.match(step,/stairCell\.find\(\(\{type\}\)=>poiWalkPassableDoor\(type\)/);
  assert.match(step,/material:door\.type==='ironwallDoor'\?'iron':facilityHasDiningStoneLeaf\(door\)\?'stone':'wood'/);
- assert.match(step,/if\(after\)poiSound\('door-open',after\.material\)/);
+ assert.match(step,/if\(after\)\{poiSound\('door-open',after\.material\)/);
  assert.match(step,/poiSound\('door-close',before\.material\)/);
+ assert.match(step,/if\(!poiWalkDoorFoley\(door,fromLevel,onDoorCue\)&&!continuous\)poiWalkFootstep\(wet\)/);
  assert.match(step,/else poiSound\('step',poiDungeonThemeAt\(facilitySite,poiWalkX,poiWalkZ,poiWalkLevel\)==='mine'\?'mine-step':\s*facilitySite\?\.id==='base'&&\(poiWalkLevel<0\|\|poiWalkIndoor\(\)\)\?'indoor':'outdoor'\)/);
 });
 
@@ -162,3 +163,4 @@ test('chapel footsteps retain the wet cues but take the edge off the splash',()=
  assert.deepEqual(a.fx('chapel-water-step',null,true),[['filter',1120,.073,11,0],['filter',560,.055,14,32]]);
  assert.deepEqual(a.fx('skater-splash',null,true),[['filter',1760,.112,8,0],['filter',860,.07,14,26]]);
 });
+

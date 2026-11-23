@@ -26,7 +26,8 @@ test('live Workshop uses the same walk transaction and captures independent touc
  assert.match(html,/id="poiAnalogPad"[^>]*hidden/);
  assert.match(html,/function poiWalkStepWithFallback\(dx,dz,alternate=null\)/);
  assert.match(html,/return poiWalkEnterCell\(dx,dz,now\)/);
- assert.match(html,/poiWalkEnterCell\(x-fromX,z-fromZ,now,true\)/);
+ assert.match(html,/poiWalkEnterCell\(x-fromX,z-fromZ,now,true,onDoorCue\)/);
  assert.match(html,/poiAnalogPad\.setPointerCapture\(e\.pointerId\)/);
  assert.match(html,/\['pointerup','pointercancel','lostpointercapture'\]/);
 });
+

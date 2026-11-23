@@ -44,6 +44,7 @@ async function launch(browser,width,height){
  },{saved,point,resumeKey});
  await page.goto(root+'/?resume=1&test=1');
  await page.waitForFunction(()=>window.__editorTest?.facility?.().active);
+ await page.locator('#pineStartupCover').waitFor({state:'hidden'});
  return {ctx,page,errors};
 }
 const menuSelector='#poiLandscapeMenu',toggleSelector='#poiLandscapeMenuToggle';
@@ -76,9 +77,10 @@ try{
    const toggle=await hit(page.locator(toggleSelector));
    assert.equal(await version(page).count(),0,'ordinary gameplay does not label the version');
    assert(mini.x<32&&mini.y<24,'minimap sits immediately at upper-left');
-   assert(pad.x<32&&pad.y>mini.y+mini.h,'pad remains below the minimap near lower-left');
+   assert(pad.x<32&&pad.y>mini.y+mini.h,'pad remains below the complete minimap, location and clock: '+JSON.stringify({width,height,mini,pad}));
    assert(action.w>62&&action.h>56&&action.x>width*.72&&width-action.right>=12&&height-action.bottom>=7,'large action button has a deliberate inward margin');
-   assert(bag.right<action.x&&action.x-bag.right<=20&&Math.abs(bag.bottom-action.bottom)<=12,'bag is adjacent to action');
+   assert(bag.right+6<=action.x&&action.x-bag.right<=20&&Math.abs((bag.y+bag.h/2)-(action.y+action.h/2))<=2,
+    'bag is adjacent to the centerline of the intentionally larger action button: '+JSON.stringify({width,height,bag,action}));
    const clear=(a,b)=>a.right<=b.x+1||b.right<=a.x+1||a.bottom<=b.y+1||b.bottom<=a.y+1;
    assert(clear(bar,bag)&&clear(bar,action)&&clear(bar,pad),'bar does not overlap any thumb target');
    assert(toggle.x>width*.72&&toggle.y<40&&toggle.w>=40&&toggle.h>=40,'upper-right menu has a thumb-sized touch target');
@@ -138,3 +140,4 @@ try{
  }
  console.log('PASS fullscreen landscape touch HUD at 568x320 and 844x390, menu actions, cancel and unchanged portrait/save');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
+

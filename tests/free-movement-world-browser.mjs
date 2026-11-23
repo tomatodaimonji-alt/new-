@@ -34,6 +34,7 @@ async function open(browser,point,options={}){
  },{point,third,resumeKey,kitKey,kit});
  await page.goto(origin+'/?resume=1&test=1');
  await page.waitForFunction(()=>window.__editorTest?.facility?.()?.active);
+ await page.locator('#pineStartupCover').waitFor({state:'hidden'});
  assert.deepEqual(await pos(page),{...point,level:0});
  const cdp=await context.newCDPSession(page);
  const send=(type,touchPoints)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints});
@@ -89,6 +90,7 @@ async function market(browser){
    assert.equal(type,z===111?'plasterwallWindow':'plasterwallDoor','the two neighboring real wall/door cells are unchanged');
    await push(send,pad,-50,0);
    if(z===111){
+    await page.waitForFunction(()=>window.__editorTest.freeMovementPose().x<102.99);
     await page.waitForTimeout(480);
     assert.deepEqual(await pos(page),{x:103,z,level:0});
     const a=await pose(page);
@@ -109,3 +111,4 @@ try{
  await portal(browser);
  console.log('PASS actual continuous input through an authored doorway and portal exactly once, blocked by its adjacent wall, preserving existing save');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
+

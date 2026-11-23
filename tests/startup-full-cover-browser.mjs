@@ -9,8 +9,13 @@ const html=readFileSync(process.argv[2]||'world-editor.html','utf8');
 const hook='progress.value=step;message.textContent=label;';
 assert.equal(html.split(hook).length,2,'unique startup checkpoint');
 const gated=html.replace(hook,hook+`
-  if((step===2||step===4)&&window.__holdBoot)
+  if((step===2||step===4)&&window.__holdBoot){
+   // The production watchdog still covers all real startup work. Test-only
+   // waits for Playwright screenshots must not consume that watchdog.
+   stop();
    await new Promise(resolve=>{window.__resumeBoot=resolve});
+   arm();
+  }
 `);
 const server=createServer((req,res)=>{
  res.setHeader('Content-Type','text/html; charset=utf-8');
@@ -29,8 +34,9 @@ try{
   ['landscape',{width:844,height:390},'?facility=base&test=1'],
  ]){
   const ctx=await browser.newContext({viewport,deviceScaleFactor:1,isMobile:true,hasTouch:true});
-  const page=await ctx.newPage(),errors=[];
+  const page=await ctx.newPage(),errors=[],consoleErrors=[];
   page.on('pageerror',e=>errors.push(e.message));
+  page.on('console',msg=>{if(msg.type()==='error')consoleErrors.push(msg.text())});
   await page.addInitScript(()=>{window.__holdBoot=true});
   await page.goto(root+'/'+route);
   const screenshot=async stage=>{
@@ -43,8 +49,18 @@ try{
      .map(([x,y])=>[...ctx.getImageData(x,y,1,1).data]);
    },png.toString('base64'));
   };
+  const waitForStartup=async stage=>{
+   const state=await (await page.waitForFunction(n=>{
+    const cover=document.getElementById('pineStartupCover');
+    if(cover?.dataset.state==='failed')return 'failed';
+    if(n===0)return cover?.hidden&&cover.dataset.state==='ready'?'ready':false;
+    return document.getElementById('pineStartupProgress')?.value===n&&typeof window.__resumeBoot==='function'?'held':false;
+   },stage)).jsonValue();
+   assert.equal(state,stage?'held':'ready',
+    name+' startup failed at '+stage+': '+JSON.stringify({pageErrors:errors,consoleErrors}));
+  };
   for(const stage of [2,4]){
-   await page.waitForFunction(n=>document.querySelector('#pineStartupProgress')?.value===n&&typeof window.__resumeBoot==='function',stage);
+   await waitForStartup(stage);
    const css=await page.evaluate(()=>({opacity:getComputedStyle(document.getElementById('app')).opacity,
     size:[document.getElementById('view').clientWidth,document.getElementById('view').clientHeight],
     state:document.getElementById('pineStartupCover').dataset.state}));
@@ -55,7 +71,7 @@ try{
     assert.deepEqual(pixel,[8,20,26,255],'edge contains only the opaque cover, no game pixels');
    await page.evaluate(()=>{const fn=window.__resumeBoot;window.__resumeBoot=null;fn()});
   }
-  await page.waitForFunction(()=>document.getElementById('pineStartupCover').hidden);
+  await waitForStartup(0);
   const ready=await screenshot('ready');
   assert(ready.some(pixel=>pixel.some((v,i)=>v!==[8,20,26,255][i])),
    'visible game is different from the cover');
