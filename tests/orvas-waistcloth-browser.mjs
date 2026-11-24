@@ -2,8 +2,13 @@ import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {createRequire} from 'node:module';
 import {readFileSync} from 'node:fs';
-import {Script} from 'node:vm';
+import {Script,runInNewContext} from 'node:vm';
 let h=readFileSync(process.argv[2]??'world-editor.html','utf8');
+const start=h.indexOf('const FACILITY_SITES=Object.freeze('),mapEnd=h.indexOf('function workshopResumeDecode(',start);
+assert(start>=0&&mapEnd>start);
+const authored=runInNewContext(h.slice(start,mapEnd)+';buildFacilitySite("base")'),boss=authored.davidTemple.boss;
+const shiftX=boss.x-24,shiftZ=boss.z-104,depth=authored.map.height>128?1:0;
+
 const inject=(a,b)=>{assert.equal(h.split(a).length,2,a);h=h.replace(a,b)};
 const api="if(facilityParams.get('test')==='1')window.__editorTest={";
 inject(api,api+`
@@ -49,7 +54,7 @@ inject(player,`
  }
 `+player);
 const dress="case 'armorOrvasWaistcloth':poiOrvasWaistclothGeometry(m,x,y-.14,z);break;";
-inject(dress,"case 'armorOrvasWaistcloth':{const old=m.p.length;poiOrvasWaistclothGeometry(m,x,y-.14,z); if(x===25.5&&z===105.5)window.__waistGround=m.p.length-old;break;}");
+inject(dress,"case 'armorOrvasWaistcloth':{const old=m.p.length;poiOrvasWaistclothGeometry(m,x,y-.14,z); const b=facilitySite.davidTemple?.boss;if(b&&x===b.x+1.5&&z===b.z+1.5)window.__waistGround=m.p.length-old;break;}");
 for(const [,js] of h.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(js);
 if(process.env.ORVAS_WAIST_SYNTAX_ONLY){console.log('Native reward atom and ground mesh injection parse');process.exit(0)}
 const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
@@ -81,15 +86,15 @@ try{
   });
   await p.clock.install({time:new Date('2026-04-01T10:00:00Z')});
   await p.goto(url+'/seed');
-  await p.evaluate(({mode,z})=>{
+  await p.evaluate(({mode,z,x,worldHeight,depth})=>{
    const slots=Array(27).fill(null);slots[0]={type:'equipWoodSword',count:1,durability:150};
    if(mode==='ally')slots[1]={type:'slimeSoul',count:1,durability:29};
    else for(let i=1;i<18;i++)slots[i]={type:'cannedFood',count:1};
    localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weaponDurabilityVersion:2,weapon:mode==='ally'?null:'equipWoodSword',potions:0,slots,worn:{head:'starterCap',torso:'starterTunic',legs:'starterTrousers',feet:'starterBoots'},
     companionSoul:{version:1,active:mode==='ally'?'slimeSoul':null,pending:mode==='ally'?null:'slimeSoul'}}));
-   localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,position:{x:24,z,y:0,facing:0},
-    townLayout:5,townMapHeight:128,view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:Math.PI,orbitPitch:.19,orbitDistance:5.7}}));
-  },{mode,z});
+   localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,position:{x,z,y:0,facing:0},
+    townLayout:5,townMapHeight:worldHeight,...(depth?{templeDepth:1}:{}),view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:Math.PI,orbitPitch:.19,orbitDistance:5.7}}));
+  },{mode,x:24+shiftX,z:z+shiftZ,worldHeight:authored.map.height,depth});
   async function open(realBoot=false){
    await p.goto(url+'/?resume=1&test=1',{waitUntil:'domcontentloaded',timeout:45000});
    try{
@@ -109,9 +114,9 @@ try{
   const see=async()=>last=await p.evaluate(()=>window.__editorTest.orvasAwardQA.inspect());
   const tick=async(ms=36)=>{await p.clock.fastForward(ms);await p.evaluate(()=>window.__editorTest.orvasAwardQA.frame());return see()};
   const until=async(fn,n=180)=>{for(let i=0;i<n;i++){const s=await tick();if(fn(s))return s;}throw Error(JSON.stringify(last));};
-  const step=async(x,z)=>{
-   const s=last,i=s.dir.findIndex(d=>d[0]===x-s.x&&d[1]===z-s.z);assert(i>=0);
-   await p.keyboard.press(['ArrowUp','ArrowDown','ArrowRight','ArrowLeft'][i]);const n=await tick(230);
+  const step=async(x,z,frameMs=230)=>{
+   x+=shiftX;z+=shiftZ;const s=last,i=s.dir.findIndex(d=>d[0]===x-s.x&&d[1]===z-s.z);assert(i>=0);
+   await p.keyboard.press(['ArrowUp','ArrowDown','ArrowRight','ArrowLeft'][i]);const n=await tick(frameMs);
    assert.deepEqual([n.x,n.z,n.y],[x,z,0]);return n;
   };
   async function cold(){
@@ -127,7 +132,7 @@ try{
  function checkGrant(s,source){
   assert.equal(s.hits.length,1);assert.equal(s.hits[0].companion,source);
   assert.deepEqual(s.ground.map(d=>d.id).sort(),['orvas-greatsword','orvas-head','orvas-soul','orvas-twin-greatswords','orvas-waistcloth']);
-  assert.deepEqual(s.ground.find(d=>d.id==='orvas-soul'),{id:'orvas-soul',type:'orvasSoul',x:24,z:105,y:0,durability:1050});
+  assert.deepEqual(s.ground.find(d=>d.id==='orvas-soul'),{id:'orvas-soul',type:'orvasSoul',x:boss.x,z:boss.z+1,y:0,durability:1050});
   assert.equal(s.saved.orvasRewards,31);assert.equal(typeof s.saved.dungeonPopulation.dead['davidTemple.david'],'number');
   assert.deepEqual(s.atomic[0],{flag:31,dead:true,soul:1});
   assert(s.atomic.every(w=>w.soul<=1));
@@ -140,23 +145,23 @@ try{
  assert(await p.evaluate(()=>window.__editorTest.orvasAwardQA.pin()));
  s=await q.until(v=>v.ground.some(d=>d.id==='orvas-waistcloth')&&v.waistGround>350);
  checkGrant(s,true);
- assert.deepEqual(s.ground.find(d=>d.id==='orvas-waistcloth'),{id:'orvas-waistcloth',type:'armorOrvasWaistcloth',x:25,z:105,y:0,durability:96});
+ assert.deepEqual(s.ground.find(d=>d.id==='orvas-waistcloth'),{id:'orvas-waistcloth',type:'armorOrvasWaistcloth',x:boss.x+1,z:boss.z+1,y:0,durability:96});
  assert.equal(s.worn.legs,'starterTrousers');
  phase='physical walk pickup and genuine bag item equip';
  for(const [x,z] of [[25,102],[26,102],[26,103],[26,104],[26,105],[25,105]])s=await q.step(x,z);
  assert.equal(s.ground.length,4);assert.equal(s.worn.legs,'starterTrousers');
- const index=s.slots.findIndex(c=>c?.type==='armorOrvasWaistcloth');assert(index>=9);
+ const index=s.slots.findIndex(c=>c?.type==='armorOrvasWaistcloth');assert(index>=9);assert.equal(s.slots[index].durability,96);
  const bag=p.locator('#poiBagToggle');
  await bag.tap();await p.locator('#poiBagPanel').waitFor({state:'visible'});await p.locator('[data-bag-slot="'+(index-9)+'"]').tap();await q.tick(360);await p.locator('#poiItemDetail').waitFor({state:'visible'});
  assert.equal(await p.locator('#poiItemDetailName').innerText(),'オルヴァスの腰布');
  assert(await p.locator('#poiItemDetailIcon canvas[data-item-model="armorOrvasWaistcloth"]').count());
- assert.match(await p.locator('#poiItemDetailDescription').innerText(),/96/);
+ assert.match(await p.locator('#poiItemDetailDescription').innerText(),/防御力：0\.75.*耐久：100%/);
  await p.locator('#poiItemDetail [data-item-detail-action="equip"]').tap();
  s=await q.tick();assert.equal(s.worn.legs,'armorOrvasWaistcloth');assert.equal(s.defense,baseline);
  assert(s.saved.slots.some(c=>c?.type==='starterTrousers'));assert(s.wear.some(v=>v.vertices>350));
  await p.locator('#poiBagClose').tap();
  phase='live player motion and strike use carved worn geometry without replacing combat controls';
- await q.step(26,105);
+ await q.step(26,105,80);
  await q.tick(390);
  await p.locator('#poiWalkAction').tap();
  s=await q.until(v=>v.wear.some(x=>x.attacking&&x.vertices>350));
