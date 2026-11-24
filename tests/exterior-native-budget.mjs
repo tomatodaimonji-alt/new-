@@ -25,7 +25,7 @@ h=h.replace(needle,needle+`
    let f=g.next();while(!f.done)f=g.next();
    const m=f.value,n=m.p.length/3,obs=(spec.batches.get(p.i+','+p.j)||[]).filter(o=>o.y>=0);
    rows.push({...p,nearKept:keep.has(p.key),floorVerts:m.propsFirst,verts:n,bytes:n*36,bakeMs:poiWallNow()-begin,
-    roofGroups:spec.roofGroups.get(p.i+','+p.j)?.length??0,
+    roofGroups:spec.roofGroups.get(p.i+','+p.j)?.length??0,roofTiles:obs.filter(facilityIsRoofPiece).length,
     gates:obs.filter(o=>o.type==='poiFortGate').length,trees:obs.filter(o=>/^tree/.test(o.type)).length});
    await new Promise(r=>setTimeout(r,0));
   }
@@ -41,7 +41,7 @@ const {chromium}=createRequire(import.meta.url)('playwright');
 const s=createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(req.url==='/seed'?'<title>seed</title>':h)});
 await new Promise(r=>s.listen(0,'127.0.0.1',r));const url='http://127.0.0.1:'+s.address().port;
 const choice=process.env.EXTERIOR_SITE??'gate';
-const [worldId,x,z,yaw]={gate:['base',41,55,0],forest:['base',54,119,.29],snow:['snowpass',2,19,-Math.PI/2],seam:['base',60,138,0]}[choice];
+const [worldId,x,z,yaw]={gate:['base',41,55,0],center:['base',41,43,0],port:['base',84,115,-.8],forest:['base',54,119,.29],snow:['snowpass',2,19,-Math.PI/2],seam:['base',60,138,0]}[choice];
 let b;
 try{
  b=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
@@ -56,6 +56,7 @@ try{
  assert.equal(data.worldId,worldId);assert.deepEqual(data.g,worldId==='snowpass'?[x+48,z+139]:[x,z]);assert.equal(data.glError,0);
  assert(data.all.n>18&&data.rows.some(r=>!r.nearKept&&r.nearCells>0));
  assert(data.rows.every(q=>q.floorVerts>0&&q.verts>=q.floorVerts&&q.bytes===q.verts*36));
- if(choice==='gate')assert(data.rows.some(r=>r.gates>0)&&data.rows.filter(r=>r.roofGroups).length>=4);
- assert.deepEqual(errors,[]);console.log(JSON.stringify({choice,...data}));
+ console.log(JSON.stringify({choice,...data}));
+ if(choice==='gate')assert(data.rows.some(r=>r.gates>0)&&data.rows.reduce((n,q)=>n+q.roofTiles,0)>20);
+ assert.deepEqual(errors,[]);
 }finally{await b?.close();await new Promise(r=>s.close(r))}
