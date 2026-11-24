@@ -1577,6 +1577,10 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 #poiMiniOpen{width:var(--poi-area-width)}
 #poiMiniMap{width:100%;height:var(--poi-mini-size);aspect-ratio:auto}
 /* END WIDE HUD MAP */
+/* CLOCK THEN AREA: give both map cards the same visual lane. */
+#poiClockHud{box-sizing:border-box;width:var(--poi-area-width)}
+#poiLocationPanel{transform-origin:top left}
+
 
 
 #poiWalkPad:has(:is(#poiNpcInventory,#poiBagPanel,#poiNpcTradePanel):not([hidden])) #poiCompanionHud{visibility:hidden}
@@ -1707,7 +1711,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v318）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v319）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -1726,8 +1730,8 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  <div id="pineAILegend">W 壁 / D 扉 / N 窓 / C カウンター / F 家具 / G 床 / O その他　矢印＝向き　ドラッグ＝移動</div>
 </div><aside id="poiMiniHud" hidden aria-label="現在地">
  <button id="poiMiniOpen" type="button" aria-label="周辺地図を拡大" aria-haspopup="dialog" aria-controls="poiLocalMapDialog"><canvas id="poiMiniMap" width="144" height="144" aria-label="周辺ミニマップ"></canvas></button>
- <div id="poiLocationPanel"><strong id="poiLocationName"></strong><span id="poiLocationStars"></span></div>
  <div id="poiClockHud" hidden><span id="poiClockDay">1日目</span><strong id="poiClockValue">08:00</strong></div>
+ <div id="poiLocationPanel"><strong id="poiLocationName"></strong><span id="poiLocationStars"></span></div>
 </aside><dialog id="poiLocalMapDialog" aria-labelledby="poiLocalMapTitle"><div id="poiLocalMapCard">
  <div id="poiLocalMapHeader"><strong id="poiLocalMapTitle">周辺地図</strong><button id="poiLocalMapClose" type="button" aria-label="地図を閉じる" autofocus>閉じる</button></div>
  <canvas id="poiLocalMapLarge" width="492" height="492" aria-label="拡大した周辺地図"></canvas>
@@ -5914,6 +5918,14 @@ function poiDavidWakeRig(age,rest,held){
 }
 // END DAVID AWAKENING RIG
 
+function poiDavidLeapCrouch(pose){
+ if(pose?.kind!=='leap')return 0;
+ const t=Math.max(0,Math.min(1,pose.progress||0)),phase=pose.phase;
+ const ease=v=>{v=Math.max(0,Math.min(1,v));return v*v*(3-2*v)};
+ if(phase==='windup')return .43*ease(t);
+ if(phase==='airborne')return .43*(1-ease(t/.25))+.14*Math.sin(t*Math.PI)**1.2;
+ return .65*(phase==='impact'?ease(t):phase==='recover'?1-ease((t-.52)/.48):0);
+}
 function poiDavidRig(pose){
  const p=pose||{},phase=p.phase||'dormant',kind=p.kind,t=Math.max(0,Math.min(1,p.progress||0)),contact=p.contact||0;
  const ease=v=>{v=Math.max(0,Math.min(1,v));return v*v*(3-2*v)},q=ease(t),mix=(a,b,k)=>a.map((v,i)=>v+(b[i]-v)*k);
@@ -5994,7 +6006,7 @@ function poiDavidRig(pose){
   const ground=phase==='windup'?load*.71:phase==='airborne'?.71*(1-ease(t/.22)):
    phase==='impact'?settle:phase==='recover'?settle:0;
   const lift=phase==='airborne'?tuck:0;
-  leapCrouch=phase==='windup'?.43*load:phase==='airborne'?.43*(1-ease(t/.25))+.14*lift:.65*settle;
+  leapCrouch=poiDavidLeapCrouch(p);
   for(let i=0;i<2;i++){
    const side=i?1:-1,foot=feet[i],knee=knees[i];
    feet[i]=[foot[0]+side*(ground*.105+lift*.09),lift*(i?.42:.67),
@@ -6095,6 +6107,7 @@ function poiDavidMakePrism(T,Q){
  };
  return prism;
 }
+const POI_DAVID_CROWN_RIM=[5.095,.235,.113,.206];
 function poiDavidFaceMesh(T,Q,pose,r){
  const stone=[.58,.552,.495],pale=[.714,.682,.611],chalk=[.797,.765,.694],shadow=[.342,.313,.258],fold=[.477,.444,.375];
  const shade=(c,v)=>c.map(n=>n*v);
@@ -6116,7 +6129,7 @@ function poiDavidFaceMesh(T,Q,pose,r){
   [-w*.58,h,f], [w*.58,h,f], [w,h,f*.41], [w*.86,h,-b*.62],
   [w*.48,h,-b], [-w*.48,h,-b],[-w*.86,h,-b*.62],[-w,h,f*.41]]);
  const layers=ring([[4.23,.31,.16,.26],[4.42,.365,.236,.30],[4.61,.416,.274,.34],
-  [4.83,.40,.224,.345],[4.99,.353,.192,.30],[5.095,.235,.113,.206]]);
+  [4.83,.40,.224,.345],[4.99,.353,.192,.30],POI_DAVID_CROWN_RIM]);
  for(let i=1;i<layers.length;i++)for(let j=0;j<8;j++){
   const k=(j+1)%8,c=j===0?pale:i>=4?fold:shade(stone,j===1||j===7?1.04:.89);
   hq(layers[i-1][j],layers[i-1][k],layers[i][k],layers[i][j],c);
@@ -6246,6 +6259,7 @@ function poiDavidGeometry(m,x,y,z,pose){
 }
 // END STONE DAVID VISUAL
 
+const POI_MINOTAUR_HORN_TIP=[.738,2.653,.302];
 function poiNorthMinotaurGeometry(m,x,y,z,pose=null){
  const {head,grip,end}=pose||poiNorthMinotaurArtPose(null,0);
  const hide=[.48,.245,.174],warm=[.57,.314,.215],tan=[.64,.394,.276],shade=[.31,.159,.127];
@@ -6315,7 +6329,7 @@ function poiNorthMinotaurGeometry(m,x,y,z,pose=null){
   HT([s*.325,2.109,.133],[s*.465,2.135,.132],[s*.371,2.189,.164],warm);
   const profile=[
    [[s*.252,2.094,.084],.147],[[s*.416,2.173,.083],.141],[[s*.58,2.248,.105],.114],
-   [[s*.699,2.375,.162],.077],[[s*.764,2.545,.226],.044],[[s*.738,2.653,.302],.004]
+   [[s*.699,2.375,.162],.077],[[s*.764,2.545,.226],.044],[[s*POI_MINOTAUR_HORN_TIP[0],POI_MINOTAUR_HORN_TIP[1],POI_MINOTAUR_HORN_TIP[2]],.004]
   ],rings=[];
   for(let j=0;j<profile.length;j++){
    const [point,r]=profile[j],p=profile[Math.max(0,j-1)][0],q=profile[Math.min(j+1,profile.length-1)][0];
@@ -20216,7 +20230,7 @@ function poiDrawCompanionHealth(now,vp,layer){
  const hp=poiCompanionWorldBarCell?.durability;
  if(!spec||kit.companionSoul?.active!==a.id||!(hp>0)){hide();return}
  const display=poiCompanionDrawPose;
- const bounds=display.orvas?{top:5.2*display.scale,radius:1.5*display.scale}:poiEnemyHealthEnvelope('monsterSlime');
+ const bounds=display.orvas?{crown:'orvas'}:poiEnemyHealthEnvelope('monsterSlime');
  const p=poiEnemyHealthAnchor(vp,display,bounds);
  if(!p||p.x<0||p.x>canvas.clientWidth||p.y<0||p.y>canvas.clientHeight){hide();return}
  if(!bar){
@@ -20228,7 +20242,7 @@ function poiDrawCompanionHealth(now,vp,layer){
  if(bar.id!==a.id){bar.id=a.id;bar.el.setAttribute('aria-label','仲間の'+spec.name+'のHP');}
  if(bar.max!==spec.hp){bar.max=spec.hp;bar.el.max=spec.hp}
  if(bar.hp!==hp){bar.hp=hp;bar.el.value=hp}
- const x=Math.round(p.x),y=Math.round(p.y)-POI_ENEMY_BAR_GAP;
+ const x=Math.round(p.x),y=Math.round(p.y)-(bounds.crown?8:POI_ENEMY_BAR_GAP);
  if(bar.x!==x||bar.y!==y){
   bar.x=x;bar.y=y;bar.el.style.transform='translate3d('+x+'px, '+y+'px, 0) translate(-50%, -100%)';
  }
@@ -24163,7 +24177,39 @@ function poiEnemyHealthEnvelope(type){
  poiEnemyHealthModels.set(type,bounds);
  return bounds;
 }
+function poiEnemyCrownAnchor(vp,pose,bounds){
+ const isOrvas=bounds.crown==='orvas',a=pose.attack;
+ const bearing=Number.isFinite(bounds.heading)?bounds.heading:pose.heading;
+ const c=Math.cos(bearing??0),s=Math.sin(bearing??0);
+ const rotate=Number.isFinite(bearing)?(x,z)=>[x*c-z*s,x*s+z*c]:(x,z)=>rot2(x,z,a?.facing??bounds.facing??0);
+ const scale=pose.scale??1,rig=pose.rig??pose.david;
+ let points;
+ if(isOrvas){
+  const [h,w,f,b]=POI_DAVID_CROWN_RIM;
+  // These are actual vertices on the cap, not the corners of the body bounds.
+  const ring=[[-w*.58,h,f],[w*.58,h,f],[w,h,f*.41],[w*.86,h,-b*.62],[w*.48,h,-b],[-w*.48,h,-b],[-w*.86,h,-b*.62],[-w,h,f*.41]];
+  const crouch=poiDavidLeapCrouch(rig);
+  points=ring.map(p=>{const [x,y,z]=poiDavidHeadPoint(p,rig);return [x,poiDavidLeapBodyY(y,crouch),z]});
+ }else{
+  const [x,y,z]=POI_MINOTAUR_HORN_TIP,head=bounds.head??0;
+  const pitch=a?.pitch??0,twist=a?.twist??0,cp=Math.cos(pitch),sp=Math.sin(pitch),ct=Math.cos(twist),st=Math.sin(twist);
+  points=[-x,x].map(x=>{
+   const hy=y-.35*head+z*.10*head,hz=z+.52*head;
+   const u=x*ct-hz*st,v=hz*ct+x*st;
+   return [u,(hy-.59)*cp-v*sp+.59,(hy-.59)*sp+v*cp];
+  });
+ }
+ let y=Infinity,cx=0,n=0;
+ for(const [x,h,z] of points){
+  const [rx,rz]=rotate(x,z),w=isOrvas?1:a?.width??1,v=isOrvas?1:a?.squash??1;
+  const screen=poiWorldToScreen(vp,pose.x+rx*scale*w,pose.y+h*scale*v,pose.z+rz*scale*w);
+  if(!screen)continue;
+  y=Math.min(y,screen.y);cx+=screen.x;n++;
+ }
+ return n?{x:cx/n,y}:null;
+}
 function poiEnemyHealthAnchor(vp,pose,bounds){
+ if(bounds.crown)return poiEnemyCrownAnchor(vp,pose,bounds);
  const attack=pose.attack,pitch=attack?.pitch||0,tilt=Math.abs(Math.sin(pitch));
  const top=Math.max(bounds.top,.59+(bounds.top-.59)*Math.cos(pitch)+bounds.radius*tilt);
  const radius=(bounds.radius+Math.max(.59,bounds.top-.59)*tilt)*(attack?.width??1);
@@ -24193,7 +24239,12 @@ function poiRenderEnemyHealth(now,vp){
     (typeof poiDungeonVisualVisible==='function'&&!poiDungeonVisualVisible(obj.x,obj.z,obj.y))||
     Math.max(Math.abs(state.x-poiWalkX),Math.abs(state.z-poiWalkZ))>10)continue;
   const pose=poiMonsterPose(obj,state,now);
-  const point=poiEnemyHealthAnchor(vp,pose,poiEnemyHealthEnvelope(poiMonsterRenderType(obj)));
+  const swing=pose.attack&&state.playerAttack?.angular?state.playerAttack:null;
+  const bounds=obj.type==='monsterStoneDavid'?{crown:'orvas',facing:state.facing}:
+   obj.type==='monsterNorthMinotaur'?{crown:'minotaur',head:poiNorthMinotaurArtPose(pose.attack?state.playerAttack:null,now).head,
+    heading:swing?Math.atan2(-swing.dx,swing.dz):undefined,facing:state.facing}:
+   poiEnemyHealthEnvelope(poiMonsterRenderType(obj));
+  const point=poiEnemyHealthAnchor(vp,pose,bounds);
   if(!point||point.x<0||point.x>canvas.clientWidth||point.y<0||point.y>canvas.clientHeight)continue;
   let bar=poiEnemyBars.get(obj);
   if(!bar){
@@ -24205,7 +24256,7 @@ function poiRenderEnemyHealth(now,vp){
   if(obj.type==='monsterStoneDavid'&&state.david?.wakeDone&&typeof POI_ORVAS_NAME==='string')bar.el.setAttribute('aria-label',POI_ORVAS_NAME+'のHP');
   bar.seen=frame;
   if(bar.hp!==state.hp){bar.hp=state.hp;bar.el.value=state.hp}
-  const x=Math.round(point.x),y=Math.round(point.y)-POI_ENEMY_BAR_GAP;
+  const x=Math.round(point.x),y=Math.round(point.y)-(bounds.crown?8:POI_ENEMY_BAR_GAP);
   if(bar.x!==x||bar.y!==y){
    bar.x=x;bar.y=y;bar.el.style.transform='translate3d('+x+'px, '+y+'px, 0) translate(-50%, -100%)';
   }
@@ -28236,7 +28287,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v318',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v319',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -28351,7 +28402,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v318';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v319';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -28566,7 +28617,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v318',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v319',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -29739,6 +29790,27 @@ function poiOrvasTwinFrame(a,now){
  if(landed&&!a.orvasPaid){a.orvasPaid=true;a.orvasWeaponAfterWear=poiEquippedWeapon()}
  if(i===1||(!a.orvasPaid&&before!==poiEquippedWeapon()))poiPlayerWeaponPending=null;
 }
+function poiOrvasPortableBeamVisual(a,sockets){
+ const m=mesh(),pass=poiAimWall({y:a.level});
+ for(let i=0;i<2;i++){
+  const r=a.rays[i],p=sockets[i];
+  const end=r.visualEnd??Math.min(a.centerEnd??Infinity,r.visualLimit??r.end);
+  if(!p||end<=.015)continue;
+  // Preserve the committed impact; only reconnect the rendered filament
+  // to its moving socket. A newly intervening solid can shorten it.
+  const x=p[0]-.5,z=p[2]-.5,dx=r.x+a.d.x*end-x,dz=r.z+a.d.z*end-z;
+  const length=Math.hypot(dx,dz);
+  if(length<=.015)continue;
+  const d={x:dx/length,z:dz/length},dy=((r.visualHeight??r.h)-p[1])/length;
+  let clear=poiAimWallLimit({x,z,y:a.level},d,length,pass);
+  if(typeof poiOrvasWallContact==='function'){
+   const face=poiOrvasWallContact(x,p[1],z,d,clear,dy);
+   if(face&&face.at<=clear)clear=Math.max(0,face.at-.008);
+  }
+  if(clear>.015)poiOrvasDualTube(m,p[0],p[2],d,0,clear,p[1],p[1]+dy*clear,0,false,false,true);
+ }
+ return m;
+}
 function poiDrawOrvasPlayerBeam(now,vp){
  const a=poiOrvasPlayerBeam,age=a?now-a.start:Infinity;
  if(!a)return;
@@ -29750,20 +29822,15 @@ function poiDrawOrvasPlayerBeam(now,vp){
   if(poiOrvasBeamGpu){gl.deleteBuffer(poiOrvasBeamGpu.buf);poiOrvasBeamGpu=null}
   poiOrvasPlayerBeam=null;return; // scheduled AudioContext envelope owns natural end
  }
- if(!poiOrvasBeamGpu){
-  const m=mesh(),d=a.d,first=a.rays[0],second=a.rays[1];
-  const mask=(first.visualLimit>.015?1:0)|(second.visualLimit>.015?2:0),front=typeof POI_DAVID_EYE_FRONT==='number'?POI_DAVID_EYE_FRONT:.29;
-  if(mask&&typeof poiDavidThermalBeam==='function'){
-   const x=(first.x+second.x)/2,z=(first.z+second.z)/2,
-    clear=Math.min(a.centerEnd??Infinity,...a.rays.filter(r=>r.visualLimit>.015).map(r=>r.visualEnd??r.visualLimit));
-   const q={sx:x-d.x*front,sz:z-d.z*front,y:a.level,
-    beamBase:first.h,beamEye:0,beamFloor:0,beamMask:mask,opticalRays:a.rays,opticalCenter:a.centerEnd};
-   const g=poiDavidThermalBeam(q,d,clear+front,0,true,1);
-   m.p.push(...g.p);m.n.push(...g.n);m.c.push(...g.c);
-  }
-  if(m.p.length)poiOrvasBeamGpu=upload(m);
+ const sockets=poiWalkMesh?.orvasEyeSockets;
+ if(!sockets)return;
+ if(!a.visibleSockets||sockets.some((p,i)=>p.some((v,k)=>v!==a.visibleSockets[i][k]))){
+  const m=poiOrvasPortableBeamVisual(a,sockets);
+  a.visibleSockets=sockets;
+  if(m.p.length)poiOrvasBeamGpu=upload(m,poiOrvasBeamGpu?.buf??null,gl.DYNAMIC_DRAW);
+  else if(poiOrvasBeamGpu)poiOrvasBeamGpu.count=0;
  }
- if(!poiOrvasBeamGpu)return;
+ if(!poiOrvasBeamGpu?.count)return;
  const alpha=poiOrvasBeamAlpha(age);
  gl.enable(gl.BLEND);gl.blendFunc(gl.CONSTANT_ALPHA,gl.ONE_MINUS_CONSTANT_ALPHA);
  gl.blendColor(0,0,0,alpha);gl.depthMask(false);
@@ -30723,7 +30790,15 @@ function poiBuildPlayerMesh(weapon,pose,gear,stride=0,r=0,x=0,y=0,z=0,heading=nu
    poiOrvasAppendRigid(m,local,rotate,x,y,z);return m;
   }
   if(weapon==='equipOrvasHead'){
-   const head=mesh();poiOrvasHeadGeometry(head,...poiOrvasTrophyBase([gx,gy,gz]),pose?.orvasHeadArt);
+   const head=mesh(),base=poiOrvasTrophyBase([gx,gy,gz]),art=pose?.orvasHeadArt;
+   poiOrvasHeadGeometry(head,...base,art);
+   // The diamond-shaped red lens protrudes slightly from the socket.
+   // Place the emitter just on that surface, in the exact same transform.
+   m.orvasEyeSockets=POI_ORVAS_EYES.map(e=>{
+    const p=poiDavidHeadPoint([e[0],e[1]+POI_ORVAS_HEAD_BASE,e[2]+.013],art);
+    const [u,v]=rotate(base[0]+p[0],base[2]+p[2]);
+    return [x+u,y+base[1]+p[1]-POI_ORVAS_HEAD_BASE,z+v];
+   });
    poiOrvasAppendRigid(m,head,rotate,x,y,z);return m;
   }
   const prop=mesh();deco(prop,weapon,0,0,0,0);
@@ -30818,14 +30893,15 @@ function poiWalkAvatar(now=performance.now()){
   poiAimTrack({track:aim.track},now);
  }
  if(typeof poiCombatLockRenderedHeading!=='undefined')poiCombatLockRenderedHeading=poiCombatLockHeading;
+ const put=m=>{const g=upload(m);g.orvasEyeSockets=m.orvasEyeSockets;return g};
  if(aim){
-  poiWalkMesh=upload(poiBuildPlayerMesh(weapon,pose,gear,stride,[2,3,0,1][poiWalkFacing],x,y,z,aim.heading,true));
+  poiWalkMesh=put(poiBuildPlayerMesh(weapon,pose,gear,stride,[2,3,0,1][poiWalkFacing],x,y,z,aim.heading,true));
  }else if(typeof poiCombatLockHeading!=='undefined'&&Number.isFinite(poiCombatLockHeading)&&poiAimLocked?.id.y===poiWalkLevel){
-  poiWalkMesh=upload(poiBuildPlayerMesh(weapon,pose,gear,stride,[2,3,0,1][poiWalkFacing],x,y,z,poiCombatLockHeading,true));
+  poiWalkMesh=put(poiBuildPlayerMesh(weapon,pose,gear,stride,[2,3,0,1][poiWalkFacing],x,y,z,poiCombatLockHeading,true));
  }else if(free&&!poiWalkAttackPosePending){
-  poiWalkMesh=upload(poiBuildPlayerMesh(weapon,pose,gear,stride,[2,3,0,1][poiWalkFacing],x,y,z,free.angle,true));
+  poiWalkMesh=put(poiBuildPlayerMesh(weapon,pose,gear,stride,[2,3,0,1][poiWalkFacing],x,y,z,free.angle,true));
  }else{
-  poiWalkMesh=upload(poiBuildPlayerMesh(weapon,pose,gear,stride,[2,3,0,1][poiWalkFacing],x,y,z,null,true));
+  poiWalkMesh=put(poiBuildPlayerMesh(weapon,pose,gear,stride,[2,3,0,1][poiWalkFacing],x,y,z,null,true));
  }
 }
 const POI_MONSTER_BREAK_MS=5655,POI_MONSTER_BREAK_LIMIT=5;
@@ -31514,6 +31590,18 @@ function poiRegionAt(site,x,z,legacy=false,floor=null){
  return {name,difficulty,stars:'★'.repeat(difficulty)+'☆'.repeat(10-difficulty)};
 }
 // BEGIN LOCATION PANEL MOTION
+// Favor growing down. On especially short phones, borrow only the
+// existing few pixels above, leaving both real touch/clock gaps intact.
+function poiLocationGrowth(card,stage,controls,ceiling=null){
+ if(!card||!stage||!(card.height>0))return {scale:1.27,up:0};
+ let bottom=stage.bottom;
+ for(const c of controls)if(c.width>0&&c.height>0&&c.bottom>card.bottom&&c.left<card.right&&c.right>card.left)
+  bottom=Math.min(bottom,c.top);
+ const max=card.height*.27,down=Math.min(max,Math.max(0,bottom-card.bottom-1.5));
+ const safeUp=Number.isFinite(ceiling)?Math.max(0,card.top-ceiling-1.5):0;
+ const up=Math.min(safeUp,Math.max(0,card.height*.13-down));
+ return {scale:1+(down+up)/card.height,up};
+}
 let poiLocationLastArea=null,poiLocationAnimation=null;
 function poiLocationMotion(panel,area){
  if(!area||!panel){
@@ -31522,28 +31610,27 @@ function poiLocationMotion(panel,area){
  const prior=poiLocationLastArea;
  if(prior?.name===area.name&&prior.stars===area.stars)return;
  poiLocationLastArea={name:area.name,stars:area.stars};
- // The boot session places at the default spawn before applying Resume.
- // Neither update is visible behind the startup cover, so baseline silently.
+ // The first visible state and a hidden Resume placement do not animate.
  if(!prior||window.pineStartup?.loading)return;
  poiLocationAnimation?.cancel();poiLocationAnimation=null;
  if(typeof panel.animate!=='function'||(typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches))return;
- const view=panel.closest?.('#viewWrap');
- if(view?.hasAttribute('data-analog-play')){
-  // Flash the card's inner edge without ever crossing the fixed party lane.
-  const rest='0 1px 4px #07191045',pulse=rest+', inset 0 0 0 1px rgba(255,221,145,.72)';
-  const clear=rest+', inset 0 0 0 1px rgba(255,221,145,0)';
-  poiLocationAnimation=panel.animate([
-   {boxShadow:clear,offset:0,easing:'ease-out'},
-   {boxShadow:pulse,offset:.19},
-   {boxShadow:pulse,offset:.37,easing:'ease-in-out'},
-   {boxShadow:clear,offset:1}
-  ],{duration:1750,fill:'none'});
- }else poiLocationAnimation=panel.animate([
-  {transform:'translateX(5px) scale(1.12)',offset:0,easing:'ease-out'},
-  {transform:'translateX(7px) scale(1.24)',offset:.12},
-  {transform:'translateX(7px) scale(1.24)',offset:.26,easing:'cubic-bezier(.22,.75,.39,1)'},
-  {transform:'translateX(0) scale(1)',offset:1}
- ],{duration:1050,fill:'none'});
+ const view=panel.closest?.('#viewWrap'),wide=!!view?.hasAttribute('data-analog-play');
+ const blockers=wide?'#poiAnalogPad,#poiHotbar,#poiBagPanel,#poiChestPanel,#poiNpcInventory,#poiNpcTradePanel':
+  '#poiWalkPad,#poiBagPanel,#poiChestPanel,#poiNpcInventory,#poiNpcTradePanel';
+ const controls=Array.from(view?.querySelectorAll?.(blockers)??[]).filter(el=>!el.hidden).map(el=>el.getBoundingClientRect());
+ let above=panel.previousElementSibling;
+ while(above?.hidden)above=above.previousElementSibling;
+ const card=panel.getBoundingClientRect?.(),stage=view?.getBoundingClientRect?.();
+ const grow=poiLocationGrowth(card,stage,controls,above?.getBoundingClientRect?.().bottom);
+ const peak=(grow.up>0?'translateY('+(-grow.up)+'px) ':'')+'scaleY('+grow.scale+')';
+ const rest='0 1px 4px #07191045',pulse=rest+', inset 0 0 0 1px rgba(255,221,145,.56)';
+ const clear=rest+', inset 0 0 0 1px rgba(255,221,145,0)';
+ poiLocationAnimation=panel.animate([
+  {transform:'scaleY(1)',boxShadow:clear,offset:0,easing:'ease-out'},
+  {transform:peak,boxShadow:pulse,offset:.19},
+  {transform:peak,boxShadow:pulse,offset:.36,easing:'cubic-bezier(.25,.62,.33,1)'},
+  {transform:'scaleY(1)',boxShadow:clear,offset:1}
+ ],{duration:wide?1750:1050,fill:'none'});
  const current=poiLocationAnimation;
  current.onfinish=()=>{if(poiLocationAnimation===current)poiLocationAnimation=null};
 }
@@ -31981,7 +32068,6 @@ function poiMiniUpdate(){
  panel?.toggleAttribute('data-otherworld',!!realm);
  panel?.toggleAttribute('data-south-town',typeof poiSouthTownContains==='function'&&poiSouthTownContains(facilitySite,poiWalkX,poiWalkZ,floor));
  panel?.toggleAttribute('data-north-trail',!!poiNorthTrailRegion(facilitySite,poiWalkX,poiWalkZ,floor));
- poiLocationMotion(panel,area);
  const last=poiMiniLast;
  if(last?.questKey===questKey&&last.x===poiWalkX&&last.z===poiWalkZ&&last.level===floor&&last.facing===poiWalkFacing&&last.location===area.name&&last.stars===area.stars)return;
  if(last?.location!==area.name){const label=$('poiLocationName');label.textContent=area.name;label.title=area.name}
@@ -31989,6 +32075,7 @@ function poiMiniUpdate(){
   const stars=$('poiLocationStars');stars.textContent=area.stars;
   stars.setAttribute('aria-label','危険度 '+area.difficulty+'／10');
  }
+ poiLocationMotion(panel,area);
  poiLocalFrame=poiLocalCapture(poiWalkX,poiWalkZ,floor,facilitySite,dungeon,realm,concealed,quests);
  poiLocalPaintHud(cv,poiLocalFrame);
  // Preserve the public location/badge reporting seam; quest pins only draw
@@ -35976,9 +36063,9 @@ function render(){
   if(typeof poiDrawCompanion==='function')poiDrawCompanion(now,p.vp);
   poiMonsterRender(now,p.vp,sacredPeek);
   if(typeof poiCompanionRecallDraw==='function')poiCompanionRecallDraw(now,p.vp);
-  if(typeof poiDrawOrvasPlayerBeam==='function')poiDrawOrvasPlayerBeam(now,p.vp);
   if(typeof poiSoulFloorDraw==='function')poiSoulFloorDraw(now,p.vp);
   if(!poiPlayerDeath||poiPlayerDeath.relocated)poiDrawWalkAvatar(p.vp,now);
+  if(typeof poiDrawOrvasPlayerBeam==='function')poiDrawOrvasPlayerBeam(now,p.vp);
   poiPlayerWeaponDraw(now,p.vp);
  }
  if(davidBeam)poiDrawDavidBeam(now,p.vp,davidBeam);

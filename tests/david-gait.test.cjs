@@ -29,7 +29,6 @@ test('stride plants over more than a full cell; the other leg has lifted and rec
 });
 test('front slit is open on the right while stone drape reaches the covered shin',()=>{
  const c=sandbox();
- vm.runInContext(cut('function poiDavidSkirt(','function poiDavidGeometry('),c);
  assert.equal(typeof c.poiDavidSkirt,'function','dedicated drape emits world mesh instead of a short closed hip cone');
  const tris=[],quads=[];
  c.poiDavidSkirt(c.poiDavidRig({phase:'ready',walkDistance:.95,walkAmount:1}),(...v)=>tris.push(v.slice(0,3)),(...v)=>quads.push(v.slice(0,4)),[.45,.4,.3]);
@@ -49,7 +48,7 @@ test('only the right blade sweeps; the left holds one constant guard and the ove
  assert.ok(high.hands.every(h=>h[1]>4.4));
 });
 test('moving skirt clears the high knee under the covered front lapel during a stomp',()=>{
- const c=sandbox();vm.runInContext(cut('function poiDavidSkirt(','function poiDavidGeometry('),c);
+ const c=sandbox();
  const r=c.poiDavidRig({kind:'stomp',phase:'windup',elapsed:805,hitTimes:[930]});
  const [x,y,z]=r.knees[0],faces=[];
  c.poiDavidSkirt(r,()=>{},(a,b,c,d)=>faces.push([a,b,c],[a,c,d]),[.45,.4,.3]);

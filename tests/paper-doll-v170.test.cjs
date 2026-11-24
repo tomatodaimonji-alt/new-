@@ -28,6 +28,8 @@ test('real standing mesh depicts all gear, and idle held blade points slightly f
  const old=x.poiBuildPlayerMesh('equipWoodSword',{edgeTilt:.18},null),ready=x.poiBuildPlayerMesh('equipWoodSword',null,null);
  const front=m=>Math.max(...m.p.slice(naked.p.length).filter((_,i)=>i%3===2));
  assert(front(ready)>front(old)+.045);
- assert.match(html,/poiWalkMesh=upload\(poiBuildPlayerMesh\(/);
+ const avatar=grab('function poiWalkAvatar(', 'function poiMonsterPose(');
+ assert.match(avatar,/const put=m=>\{const g=upload\(m\);[^}]*return g\}/);
+ assert.match(avatar,/poiWalkMesh=put\(poiBuildPlayerMesh\(/);
  assert.match(html,/poiDrawPaperDoll\(view,poiBuildPlayerMesh\(/);
 });

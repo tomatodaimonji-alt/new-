@@ -1,0 +1,50 @@
+name: Verify same v319 runtime using original articulated geometry and active-giant save
+on:
+  push:
+    branches: [dot/workshop-player-base-verify]
+jobs:
+  mobile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      FACILITY_SCREENSHOTS: screenshots
+      SNOW_PHASE_REPORT: '1'
+      SNOW_PALETTE_REPORT: '1'
+      SOUL_BEHAVIOR_NATIVE: '1'
+      SOUTH_MERCHANT_NIGHT: '1'
+      SOUTH_ROAD_PROFILE: '1'
+    strategy:
+      fail-fast: false
+      matrix:
+        script: [giant-hp-anchor-browser]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save playwright@1.58.2
+      - run: npx playwright install chromium
+      - run: node tests/${{ matrix.script }}.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ matrix.script }}
+          path: screenshots
+          if-no-files-found: ignore
+  unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          if node --test tests/*.cjs > "$RUNNER_TEMP/unit.out" 2>&1; then
+            tail -8 "$RUNNER_TEMP/unit.out"
+          else
+            grep -E '^not ok |^  location:|^  error:|^# (tests|pass|fail|duration)' "$RUNNER_TEMP/unit.out" | cut -c1-350 | tail -300
+            exit 1
+          fi
