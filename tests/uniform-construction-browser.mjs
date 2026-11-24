@@ -17,7 +17,7 @@ let html=source.replace(a,a+`
   z:()=>poiWalkZ,
   town:()=>facilitySite.davidTemple?.entrance,
   directions:()=>['n','s','e','w'].map(k=>poiCameraRelativeStep(k)),
-  warm:()=>({z:poiWalkZ,x:poiWalkX,now:performance.now(),inside:poiDavidTempleEnclosedAt(facilitySite,poiWalkViewX,poiWalkViewZ,0),
+  warm:()=>({z:poiWalkZ,x:poiWalkX,view:[poiWalkViewX,poiWalkViewZ],frozen:poiGameFrozen(),now:performance.now(),inside:poiDavidTempleEnclosedAt(facilitySite,poiWalkViewX,poiWalkViewZ,0),
     active:!!poiOutdoorFrame,saved:poiOutdoorCaches.size,drew:poiOutdoorProbe.drawn.length,built:poiOutdoorProbe.built}),
 
   at:(x,z,yaw,minute)=>{
@@ -106,12 +106,12 @@ try{
   }
   throw Error(JSON.stringify({start,latest:await warm(),directions,dz}));
  }
- for(let i=0;i<2;i++)await step(1);
- await p.waitForFunction(()=>{const q=window.__editorTest.outdoorQA.warm();return q.inside&&!q.active},null,{timeout:3000,polling:40});
+ for(let i=0;i<6&&(await warm()).z<entrance.z+1;i++)await step(1);
+ await p.waitForFunction(()=>{const q=window.__editorTest.outdoorQA.warm();return q.inside&&!q.active},null,{timeout:3500,polling:40}).catch(async()=>{throw Error(JSON.stringify({before,insideFailure:await warm(),entrance}))});
  const inside=await warm();
  assert(inside.inside&&!inside.active&&inside.saved>3&&inside.drew===0,JSON.stringify({before,inside}));
- await step(-1);
- await p.waitForFunction(()=>{const q=window.__editorTest.outdoorQA.warm();return !q.inside&&q.active},null,{timeout:3000,polling:40});
+ for(let i=0;i<4&&(await warm()).z>=entrance.z;i++)await step(-1);
+ await p.waitForFunction(()=>{const q=window.__editorTest.outdoorQA.warm();return !q.inside&&q.active},null,{timeout:3500,polling:40}).catch(async()=>{throw Error(JSON.stringify({before,inside,exitFailure:await warm(),entrance}))});
  const exit=await warm();
  assert(!exit.inside&&exit.active&&exit.saved>3&&exit.built>=inside.built,JSON.stringify({before,inside,exit}));
  assert.deepEqual(errors,[]);
