@@ -20,7 +20,7 @@ test('successive real beam renders reuse and release a real upload handle, not a
  };
  const upload=h.split('\n').find(line=>line.startsWith('function upload(m,reuse=null,usage=gl.STATIC_DRAW)'));
  a(upload,'use actual application uploader');
- const paint=vm.runInNewContext(upload+'\n'+cut('const POI_DAVID_SWEEP_FORWARD=','function poiDavidLine(')+cut('const POI_DAVID_BEAM_GROW=','function poiDavidBeamAdvance(')+cut('// BEGIN DAVID TEMPLE CUES','// END DAVID TEMPLE CUES')+'\npoiDrawDavidCue',c);
+ const paint=vm.runInNewContext(upload+'\n'+cut('const POI_DAVID_SWEEP_FORWARD=','function poiDavidLine(')+cut('const POI_DAVID_BEAM_GROW=','function poiDavidBeamAdvance(')+cut('// BEGIN DAVID TEMPLE CUES','// END DAVID TEMPLE CUES')+'\n((now,vp)=>poiDrawDavidBeam(now,vp,poiDrawDavidCue(now,vp)))',c);
  paint(930,[]);
  q.cursor=1;q.lastContactAt=1000;q.sweep={side:1,tell:1000,start:null,end:null,angle:0,done:false};
  paint(1250,[]);

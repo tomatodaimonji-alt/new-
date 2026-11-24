@@ -1612,7 +1612,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v282）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v283）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -5663,10 +5663,21 @@ function poiDavidRig(pose){
   hands=[mix(rest[0],guard[0],guardWeight),swing(rest[1],0)];
   axes=[mix(axes[0],guard[1],guardWeight),swing(axes[1],1)];
  }
+ let doubleBladeRoll=null,doubleBladeHeading=null;
  if(kind==='double'){
   const raise=[[-.68,4.59,.27],[.68,4.59,.27]],fall=[[-.68,2.35,1.15],[.68,2.35,1.15]];
   const elapsed=Number.isFinite(p.elapsed)?p.elapsed:null;
   const hits=p.hitTimes||[720,1040];
+  // Roll each wrist into the Y/Z descent before its own strike. Keep
+  // the first cutting edge down until both weapons begin recovery.
+  doubleBladeRoll=hits.map((hit,i)=>{
+   if(elapsed===null)return phase==='windup'?0:contact>i?(phase==='recover'?1-q:1):0;
+   return ease((elapsed-hit+112)/100)*(1-ease((elapsed-hits[1]-105)/510));
+  });
+  doubleBladeHeading=raise.map((hand,i)=>{
+   const high=i?up2:up,low=[0,-.703,.712];
+   return hand.map((v,j)=>fall[i][j]-v+POI_DAVID_BLADE*(low[j]-high[j])/Math.hypot(...low));
+  });
   [hands,axes]=[rest,axes].map((from,j)=>from.map((v,i)=>{
    const high=j?(i?up2:up):raise[i],low=j?[0,-.703,.712]:fall[i],hit=hits[i];
    if(elapsed!==null){
@@ -5733,7 +5744,7 @@ function poiDavidRig(pose){
  });
  const elbows=hands.map((h,i)=>[(i?1:-1)*(1.25+Math.max(0,Math.abs(h[0])-1.1)*.42),
   h[1]>3.55?3.99:(3.67+h[1])*.50,kind==='sweep'&&i===1?-.04+.48*(h[2]-rest[i][2]):-.04]);
- return {feet,knees,shoulders,hands,elbows,swordTips,eyes:sights,glow,wakeGlow,leapCrouch};
+ return {doubleBladeRoll,doubleBladeHeading,feet,knees,shoulders,hands,elbows,swordTips,eyes:sights,glow,wakeGlow,leapCrouch};
 }
 function poiDavidSkirt(r,T,Q,fold){
  // Sculpted diagonal split between the two unequal front lapels. The
@@ -5892,7 +5903,14 @@ function poiDavidGeometry(m,x,y,z,pose){
  for(let i=0;i<2;i++){
   const a=r.shoulders[i],e=r.elbows[i],g=r.hands[i],tip=r.swordTips[i];
   prism(a,e,.332,.31,.245,.23,stone,6,false);prism(e,g,.247,.23,.177,.176,pale,6);
-  const axis=unit(sub(tip,g)),blade=unit(cross(Math.abs(axis[1])>.96?[0,0,1]:[0,1,0],axis)),thick=cross(axis,blade);
+  const axis=unit(sub(tip,g)),usualBlade=unit(cross(Math.abs(axis[1])>.96?[0,0,1]:[0,1,0],axis));
+  const roll=r.doubleBladeRoll?.[i]??0;
+  // The blade-wide axis reaches the sharp bevels, not the broad sides.
+  // Rotation about the unchanged rigid shaft brings that edge into
+  // the downstroke plane. Width, taper and guard remain unscaled.
+  const tangent=r.doubleBladeHeading?.[i];
+  const cuttingBlade=roll&&tangent?unit(cross(axis,cross(tangent,axis))):usualBlade;
+  const blade=roll?unit(add(usualBlade.map(v=>v*(1-roll)),cuttingBlade,roll)):usualBlade,thick=cross(axis,blade);
   const point=(along,wide=0,deep=0)=>add(add(add(g,axis,along),blade,wide),thick,deep);
   prism(point(-.25),point(.205),.16,.146,.16,.146,fold,6);
   prism(point(-.37),point(-.25),.19,.155,.2,.151,stone,6);
@@ -17544,6 +17562,12 @@ function poiCompanionHurt(damage,now){
  if(!poiEconomyWrite(next))return false;
  if(!hp){
   poiCompanionActor=null;poiCompanionTarget=null;
+  // A durable death only: reuse the wild fragment path and its exact lifetime,
+  // but never pass through a hostile kill, reward or soul-capture handler.
+  if(typeof poiCompanionWorldPose==='function'&&typeof poiMonsterBreak==='function'){
+   const type=poiCompanionType(a.id).enemy,pose=poiCompanionWorldPose(a,now),{x,z,y}=a;
+   poiMonsterBreak({type,x,z,y},{x,z,facing:pose.facing},now,Math.random,{pose});
+  }
   if(typeof toast==='function')toast('仲間の'+poiCompanionType(a.id).name+'が消えた。');
  }else a.hurtAt=now;
  poiEconomyRefresh();return true;
@@ -25018,7 +25042,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v282',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v283',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -25133,7 +25157,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v282';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v283';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -25348,7 +25372,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v282',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v283',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -29603,6 +29627,137 @@ function facilityDavidCameraEye(target,desired){
 }
 // END DAVID CAMERA WALL CLIP
 
+// BEGIN SHARED THIRD PERSON WALL ARM
+const POI_WALL_CAMERA_EXTRA=new Set(['towerWall','towerWindow','towerBattlement','crackedWall','ruinWallJagged','ruinWallLow',
+ 'ruinWindowEmpty','ruinWindowShattered','ruinDoorBroken','ruinDoorHanging','poiDavidWallRound','poiDavidWallWing','poiDavidGatePier',
+ 'poiFortWall','poiFortCorner','poiFortBoundary','poiFortGate','poiFortArch','archStone','northFortGate','ironGate','door','pineSuperDoor']);
+const poiWallCameraWorldCache=new WeakMap(),poiWallCameraTemplates=new Map();
+const poiWallCameraOpening=/^(?:wall|woodwall|stonewall|brickwall|plasterwall|mosswall|ironwall)(?:Door|Window|Counter)(?:Open)?$/;
+const poiWallCameraBucket=(x,z)=>Math.floor(x/4)+','+Math.floor(z/4);
+function poiWallCameraIndex(objects){
+ const prior=poiWallCameraWorldCache.get(objects);if(prior)return prior;
+ const index=new Map();
+ for(const o of objects){
+  if(!isWallId(o.type)&&!POI_WALL_CAMERA_EXTRA.has(o.type)&&!poiWallCameraOpening.test(o.type))continue;
+  const key=poiWallCameraBucket(o.x,o.z);
+  let rows=index.get(key);if(!rows){rows=[];index.set(key,rows)}
+  rows.push(o);
+ }
+ poiWallCameraWorldCache.set(objects,index);return index;
+}
+function poiWallCameraGateType(o){
+ if(o.type!=='ironGate')return o.type;
+ const same=p=>p&&p.x===o.x&&p.z===o.z&&(p.y??o.y)===o.y;
+ if(o.y===-1&&(same(facilitySite?.mine?.vault?.gate)&&typeof poiMineVaultGateOpen==='function'&&poiMineVaultGateOpen()||
+  same(facilitySite?.otherworld?.gate)&&typeof poiOtherworldGateOpen==='function'&&poiOtherworldGateOpen()||
+  same(facilitySite?.chapel?.gate)&&typeof poiChapelGateOpen==='function'&&poiChapelGateOpen()||
+  same(facilitySite?.northFort?.gate)&&typeof poiNorthFortGateOpen==='function'&&poiNorthFortGateOpen()))return 'mineVaultGateOpenVisual';
+ return o.type;
+}
+function poiWallCameraTemplate(o,open){
+ const type=poiWallCameraGateType(o),rot=o.rot||0,key=type+':'+rot+':'+open;
+ if(poiWallCameraTemplates.has(key))return poiWallCameraTemplates.get(key);
+ let shape;
+ if(isWallId(type))shape={min:[-.501,0,-.501],max:[.501,1.4,.501],tris:null};
+ else{
+  const m=mesh(),door=/Door$/.test(type)&&poiWallCameraOpening.test(type);
+  if(open&&door){
+   // Same solid posts/lintel as the rotating wall material opening, no leaf
+   // across the aperture while the real walk door is active.
+   for(const c of [[-.431,0,0,.14,1.4,1.002],[.431,0,0,.14,1.4,1.002],[0,1.28,0,1.002,.12,1.002]])
+    cube(m,c[0],c[1],c[2],c[3],c[4],c[5],[.5,.5,.5]);
+   if(rot%2)for(let i=0;i<m.p.length;i+=3){const x=m.p[i];m.p[i]=-m.p[i+2];m.p[i+2]=x}
+  }else if(!(open&&(type==='door'||type==='pineSuperDoor')))deco(m,type,0,0,0,rot);
+  if(m.p.length){
+   const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];
+   for(let i=0;i<m.p.length;i++){const j=i%3;min[j]=Math.min(min[j],m.p[i]);max[j]=Math.max(max[j],m.p[i]);}
+   shape={min,max,tris:new Float32Array(m.p)};
+  }else shape=null;
+ }
+ poiWallCameraTemplates.set(key,shape);return shape;
+}
+function poiWallCameraSlab(s,origin,ray,max){
+ let lo=0,hi=max;
+ for(let i=0;i<3;i++){
+  const u=ray[i],p=origin[i],a=s.min[i]-p,b=s.max[i]-p;
+  if(Math.abs(u)<1e-8){if(a>0||b<0)return Infinity;continue}
+  lo=Math.max(lo,Math.min(a/u,b/u));hi=Math.min(hi,Math.max(a/u,b/u));
+  if(lo>hi)return Infinity;
+ }
+ return lo;
+}
+function poiWallCameraTriangles(tris,o,d,max){
+ const [ox,oy,oz]=o,[dx,dy,dz]=d;
+ let best=max,hit=Infinity;
+ for(let i=0;i<tris.length;i+=9){
+  const x=tris[i],y=tris[i+1],z=tris[i+2],ux=tris[i+3]-x,uy=tris[i+4]-y,uz=tris[i+5]-z;
+  const vx=tris[i+6]-x,vy=tris[i+7]-y,vz=tris[i+8]-z;
+  const px=dy*vz-dz*vy,py=dz*vx-dx*vz,pz=dx*vy-dy*vx,det=ux*px+uy*py+uz*pz;
+  if(Math.abs(det)<1e-9)continue;
+  const tx=ox-x,ty=oy-y,tz=oz-z,inv=1/det,a=(tx*px+ty*py+tz*pz)*inv;
+  if(a<0||a>1)continue;
+  const qx=ty*uz-tz*uy,qy=tz*ux-tx*uz,qz=tx*uy-ty*ux,b=(dx*qx+dy*qy+dz*qz)*inv;
+  if(b<0||a+b>1)continue;
+  const t=(vx*qx+vy*qy+vz*qz)*inv;
+  if(t>1e-5&&t<best){hit=best=t}
+ }
+ return hit;
+}
+function poiWallCameraCandidates(target,desired){
+ const index=poiWallCameraIndex(world),rows=[],pad=1.62,loY=Math.min(target[1],desired[1])-.18,hiY=Math.max(target[1],desired[1])+.18;
+ const a=Math.floor((Math.min(target[0],desired[0])-pad)/4),b=Math.floor((Math.max(target[0],desired[0])+pad)/4);
+ const c=Math.floor((Math.min(target[2],desired[2])-pad)/4),d=Math.floor((Math.max(target[2],desired[2])+pad)/4);
+ const door=typeof poiWalkDoorOpen==='undefined'?null:poiWalkDoorOpen;
+ for(let ix=a;ix<=b;ix++)for(let iz=c;iz<=d;iz++)for(const o of index.get(ix+','+iz)||[]){
+  if(o.y<0&&o.y!==poiWalkLevel||poiWalkLevel<0&&o.y!==poiWalkLevel)continue;
+  if(Math.min(target[0],desired[0])-pad>o.x+1||Math.max(target[0],desired[0])+pad<o.x||
+     Math.min(target[2],desired[2])-pad>o.z+1||Math.max(target[2],desired[2])+pad<o.z)continue;
+  const base=o.y*1.4+terrainY(o.x,o.z);
+  if(base>hiY+.15||base+3.0<loY)continue;
+  const open=door&&door.x===o.x&&door.z===o.z&&door.y===o.y;
+  const s=poiWallCameraTemplate(o,!!open);
+  if(s)rows.push({s,x:o.x+.5,y:base,z:o.z+.5});
+ }
+ return rows;
+}
+function facilitySharedWallCameraEye(target,desired){
+ if(!poiWalkActive||!poiThirdPerson||cameraTopDown||pineAIActive)return desired;
+ const ray=desired.map((v,i)=>v-target[i]),distance=Math.hypot(...ray),h=Math.hypot(ray[0],ray[2]);
+ if(distance<1e-5)return desired;
+ const rows=poiWallCameraCandidates(target,desired);if(!rows.length)return desired;
+ const side=h>1e-6?[ray[2]/h*.09,0,-ray[0]/h*.09]:[.09,0,0];
+ const offsets=[[0,0,0],side,[-side[0],0,-side[2]],[0,.07,0],[0,-.07,0]];
+ const march=(d,max)=>{
+  let closest=max;
+  for(const {s,x,y,z} of rows){
+   const local=[target[0]-x,target[1]-y,target[2]-z];
+   for(let j=0;j<offsets.length;j++){
+    const q=offsets[j],o=[local[0]+q[0],local[1]+q[1],local[2]+q[2]],near=poiWallCameraSlab(s,o,d,closest);
+    if(!Number.isFinite(near))continue;
+    if(near<1e-6&&j)continue; // ignore padding rays starting inside a visible surface
+    closest=Math.min(closest,s.tris?poiWallCameraTriangles(s.tris,o,d,closest):near);
+   }
+  }
+  return closest;
+ };
+ const arm=(t,requested)=>t>=requested?requested:t>.08?Math.max(t*.48,t-.18):Math.max(.006,t*.55);
+ let direction=ray.map(v=>v/distance),n=arm(march(direction,distance),distance);
+ if(n>=distance)return desired;
+ if(n<1.8&&h>1e-6&&ray[1]>=0){
+  // Keep the player's requested bearing. An alternate short arm may tuck
+  // under a real lintel or steepen on the same side of a solid wall.
+  const radius=Math.min(distance,1.805),pitch=Math.atan2(ray[1],h);
+  const maxPitch=Math.asin(Math.min(.9999995,ray[1]/radius));
+  for(const a of [maxPitch,pitch+(maxPitch-pitch)*.7,pitch*.45,.035]){
+   const k=Math.cos(a),u=[ray[0]/h*k,Math.sin(a),ray[2]/h*k],v=arm(march(u,radius),radius);
+   if(v>n){n=v;direction=u}
+   if(n>=1.8)break;
+  }
+ }
+ return target.map((v,i)=>v+direction[i]*n);
+}
+// END SHARED THIRD PERSON WALL ARM
+
 function facilityWatchtowerCloseFov(distance){
  // A short safe arm would otherwise fill the screen with the character.
  // A wider lens, only when clipped, keeps the doorway and avatar readable.
@@ -29671,11 +29826,7 @@ function parameters(){
    if(desired[1]<floor)desired[1]=floor;
   }
   const target=[x,ground+1.1,z];
-  const mineCamera=facilitySite?.id==='base'&&poiWalkLevel===-1&&
-   poiDungeonPointIn(facilitySite.mine?.bounds,Math.floor(x),Math.floor(z),poiWalkLevel)&&
-   !poiDungeonTravelKey(facilitySite,Math.floor(x),Math.floor(z),poiWalkLevel);
-  const templeEye=typeof facilityDavidCameraEye==='function'?facilityDavidCameraEye(target,desired):desired;
-  const eye=templeEye!==desired?templeEye:mineCamera?facilityMineCameraEye(target,desired,facilityMineCameraWalls(sceneMesh)):facilityWatchtowerCameraEye(target,desired);
+  const eye=typeof facilitySharedWallCameraEye==='function'?facilitySharedWallCameraEye(target,desired):desired;
   const arm=eye===desired?poiCameraDistance:Math.hypot(...eye.map((v,i)=>v-target[i]));
   const near=eye!==desired&&arm<1.81?.08:.45;
   const fov=eye===desired?Math.PI/3:facilityWatchtowerCloseFov(arm);
@@ -30408,7 +30559,7 @@ const POI_DAVID_HEAVY_PROFILE=Object.freeze({
  foot:[.024,205,.39],sweep:[.036,220,0],double:[.044,235,0],beam:[.028,220,0]
 });
 let poiDavidHeavyBump=null;
-function poiDavidClearHeavyFeedback(){poiDavidHeavyBump=null;poiDavidImpact=null}
+function poiDavidClearHeavyFeedback(){poiDavidHeavyBump=null;poiDavidImpact=null;if(typeof poiDrawDavidFissure==='function')poiDavidFissure=null}
 function poiDavidFootFeedback(o,s,b,now){
  const d=s.david,gait=d?.gaitDistance;
  if(!d||gait===undefined||typeof POI_DAVID_GAIT_STRIDE==='undefined')return;
@@ -30442,10 +30593,11 @@ function poiDavidImpactStomp(q,now){
  const x=q.sx+.5+foot[0]*q.dz+foot[2]*q.dx,z=q.sz+.5-foot[0]*q.dx+foot[2]*q.dz;
  if(![x,z].every(Number.isFinite))return false;
  poiDavidImpact={leap:!!q.davidLeapImpact,start:now,x,z,y:q.y,sx:q.sx,sz:q.sz,owner:facilitySite,lastBucket:-1,viewAt:-Infinity,view:false};
+ if(typeof poiDrawDavidFissure==='function'&&!q.davidLeapImpact)poiDavidFissure=poiDavidImpact;
  return true;
 }
-function poiDavidImpactVisible(e,now){
- if(!e||now<e.start||now-e.start>=POI_DAVID_DUST_MS||!poiWalkActive||facilitySite!==e.owner||
+function poiDavidImpactVisible(e,now,limit=POI_DAVID_DUST_MS){
+ if(!e||now<e.start||now-e.start>=limit||!poiWalkActive||facilitySite!==e.owner||
     poiWalkLevel!==e.y||document.hidden||
     (typeof pineAIActive!=='undefined'&&pineAIActive)||(typeof pineCheckMode!=='undefined'&&pineCheckMode)||
     (typeof poiScreenNotePhase!=='undefined'&&poiScreenNotePhase)||
@@ -30521,6 +30673,83 @@ function poiDrawDavidImpact(now,vp){
  finally{gl.depthMask(true);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.blendColor(0,0,0,0);gl.disable(gl.BLEND)}
 }
 // END DAVID STOMP IMPACT
+// BEGIN DAVID GROUND FISSURE
+const POI_DAVID_FISSURE_MS=780;
+let poiDavidFissure=null,poiDavidFissureMesh=null;
+function poiDavidFissureGeometry(e,b){
+ const m=mesh(),segments=[],ox=e.x-.5,oz=e.z-.5,source={sx:e.sx,sz:e.sz},pass=poiAimWall({y:e.y}),a=poiDavidArena(b);
+ const n=(x,z)=>Math.hypot(x-source.sx,z-source.sz);
+ const clear=(x,z)=>{
+  const r=n(x,z);
+  return r<=6&&poiDavidIn(b,{x,z,y:e.y})&&(r<.0001||
+   poiDavidRoomRay(source,b,{x:(x-source.sx)/r,z:(z-source.sz)/r},r,pass,a)+1e-6>=r);
+ };
+ const ground=(x,z,h)=>[x+.5,terrainY(Math.floor(x+.5),Math.floor(z+.5))+1.4*e.y+h,z+.5];
+ const wave=i=>Math.sin(i*7.928+.87);
+ const add=(x,z,nx,nz,w0,w1,depth)=>{
+  const length=Math.hypot(nx-x,nz-z);if(length<.01)return;
+  const ax=(nz-z)/length,az=-(nx-x)/length;
+  // All corners and midpoint must be legal. No dark ribbon takes a
+  // shortcut around a wall, through the doorway or outside the circle.
+  if(![[x+ax*w0*1.22,z+az*w0*1.22],[x-ax*w0,z-az*w0],[nx+ax*w1*1.22,nz+az*w1*1.22],[nx-ax*w1,nz-az*w1],
+   [(x+nx)/2,(z+nz)/2]].every(([px,pz])=>clear(px,pz)))return;
+  segments.push({x,z,nx,nz,w0,w1,depth,ax,az});
+ };
+ const base=Math.atan2(oz-source.sz,ox-source.sx);
+ for(let k=0;k<7;k++){
+  const t=base+k*2*Math.PI/7+wave(k)*.14,dx=Math.cos(t),dz=Math.sin(t),far=4.1+(k%4)*.46;
+  let x=ox,z=oz;
+  for(let j=1;j<=9;j++){
+   const r=j*far/9,bend=(j===9?.15:.20)*wave(j+k*6);
+   const nx=ox+dx*r-dz*bend,nz=oz+dz*r+dx*bend,w0=.051*(1-(j-1)/10),w1=.051*(1-j/10);
+   add(x,z,nx,nz,w0,w1,r);
+   if(j===3||j===6){
+    const turn=t+(j===3?1:-1)*(.50+.11*(k%3)),sx=Math.cos(turn),sz=Math.sin(turn);
+    let bx=nx,bz=nz;
+    for(let l=1;l<=3;l++){
+     const fx=nx+sx*l*.36-sz*.09*wave(k+j+l),fz=nz+sz*l*.36+sx*.09*wave(k+j+l);
+     add(bx,bz,fx,fz,w1*(4-l)/4,w1*(3.5-l)/4,r+l*.26);
+     bx=fx;bz=fz;
+    }
+   }
+   x=nx;z=nz;
+  }
+ }
+ segments.sort((x,z)=>x.depth-z.depth);
+ for(const {x,z,nx,nz,w0,w1,ax,az} of segments){
+  const P=(x,z,w,h)=>ground(x+ax*w,z+az*w,h);
+  quad(m,P(x,z,-w0,.021),P(nx,nz,-w1,.021),P(nx,nz,w1,.021),P(x,z,w0,.021),[.065,.044,.038]);
+  quad(m,P(x,z,w0,.022),P(nx,nz,w1,.022),P(nx,nz,w1*1.22,.022),P(x,z,w0*1.22,.022),[.25,.189,.137]);
+ }
+ return m;
+}
+function poiDrawDavidFissure(now,vp){
+ const e=poiDavidFissure;if(!e&&!poiDavidFissureMesh)return;
+ const age=e?now-e.start:Infinity;
+ if(!e||e.owner!==facilitySite||age>=POI_DAVID_FISSURE_MS){
+  poiDavidFissure=null;
+  if(poiDavidFissureMesh)gl.deleteBuffer(poiDavidFissureMesh.gpu.buf);
+  poiDavidFissureMesh=null;return;
+ }
+ if(!poiDavidImpactVisible(e,now,POI_DAVID_FISSURE_MS))return;
+ if(poiDavidFissureMesh?.e!==e){
+  const geom=poiDavidFissureGeometry(e,facilitySite.davidTemple.boss);
+  const old=poiDavidFissureMesh?.gpu;
+  if(!geom.p.length){
+   if(old)gl.deleteBuffer(old.buf);
+   poiDavidFissureMesh=null;poiDavidFissure=null;return;
+  }
+  poiDavidFissureMesh={e,gpu:upload(geom,old?.buf??null,gl.DYNAMIC_DRAW)};
+ }
+ const g=poiDavidFissureMesh.gpu,reduced=poiEnemyCueReduced?.matches;
+ const grow=reduced?1:Math.max(.06,Math.min(1,age/220));
+ const fade=Math.max(0,1-Math.max(0,age-310)/(POI_DAVID_FISSURE_MS-310)),alpha=(reduced?.42:.88)*fade;
+ const count=Math.max(12,Math.floor(g.count/12*grow)*12);
+ gl.enable(gl.BLEND);gl.blendFunc(gl.CONSTANT_ALPHA,gl.ONE_MINUS_CONSTANT_ALPHA);gl.depthMask(false);
+ try{gl.blendColor(0,0,0,alpha);draw(g,vp,0,Math.min(g.count,count))}
+ finally{gl.depthMask(true);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.blendColor(0,0,0,0);gl.disable(gl.BLEND)}
+}
+// END DAVID GROUND FISSURE
 
 function poiDrawDavidCue(now,vp){
  const s=poiDavidActive?.s,q=s?.david?.attack,o=poiDavidActive?.o,b=poiDavidMatch(o);
@@ -30548,9 +30777,12 @@ function poiDrawDavidCue(now,vp){
    }
    if(poiDavidCue.fan){gl.blendColor(0,0,0,reduced?.23:.20+.06*Math.sin(now*.024));draw(poiDavidCue.fan,vp)}
   }else if(!emission?.turning&&poiDavidCue.lane){gl.blendColor(0,0,0,alpha);draw(poiDavidCue.lane,vp)}
-  if(emission){
-   // One upload handle follows the same ray from the muzzle, through the
-   // simultaneous next tell, then into the turn; never clear at phase edges.
+ }finally{
+  gl.depthMask(true);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.blendColor(0,0,0,0);gl.disable(gl.BLEND);
+ }
+ if(emission){
+  // One upload handle follows the same ray from the muzzle, through the
+  // simultaneous next tell, then into the turn; never clear at phase edges.
    if(emission.turning||emission.fraction<1||now-poiDavidCue.beamAt>=32||poiDavidCue.beamFraction!==1){
     let m;
     if(emission.turning){m=poiDavidSweepBeamMesh(q,b,now);}
@@ -30562,8 +30794,17 @@ function poiDrawDavidCue(now,vp){
     if(m.p.length)poiDavidCue.beam=poiDavidBeamUpload(m,poiDavidCue.beam);
     poiDavidCue.beamVisible=!!m.p.length;poiDavidCue.beamAt=now;poiDavidCue.beamFraction=emission.fraction;
    }
+  if(poiDavidCue.beamVisible)return {cue:poiDavidCue,emission,reduced};
+ }
+}
+function poiDrawDavidBeam(now,vp,frame){
+ if(!frame)return;
+ const {cue:poiDavidCue,emission,reduced}=frame;
+ // The solid world and actors own the existing depth buffer. This is
+ // a depth-tested transparent submission, never an always-on overlay.
+ gl.enable(gl.BLEND);gl.blendFunc(gl.CONSTANT_ALPHA,gl.ONE_MINUS_CONSTANT_ALPHA);gl.depthMask(false);
+ try{
    if(poiDavidCue.beamVisible)poiDavidDrawThermalBeam(poiDavidCue.beam,vp,reduced?emission.alpha*.76:emission.alpha);
-  }
  }finally{
   gl.depthMask(true);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.blendColor(0,0,0,0);gl.disable(gl.BLEND);
  }
@@ -30679,7 +30920,8 @@ function render(){
  poiDrawEditorGhostRoof(p.vp);
  drawSignOverlays(p.vp,daylight);pineDrawEditCursor(p.vp);
  poiDrawNorthAxeCue(now,p.vp);
- if(typeof poiDrawDavidCue==='function')poiDrawDavidCue(now,p.vp);
+ const davidBeam=typeof poiDrawDavidCue==='function'?poiDrawDavidCue(now,p.vp):null;
+ if(typeof poiDrawDavidFissure==='function')poiDrawDavidFissure(now,p.vp);
  if(typeof poiDrawDavidImpact==='function')poiDrawDavidImpact(now,p.vp);
  if(poiWalkActive){
   poiEconomyDraw(p.vp,now);poiInventoryDraw(p.vp,now);
@@ -30690,6 +30932,7 @@ function render(){
   if(!poiPlayerDeath||poiPlayerDeath.relocated)poiDrawWalkAvatar(p.vp,now);
   poiPlayerWeaponDraw(now,p.vp);
  }
+ if(davidBeam)poiDrawDavidBeam(now,p.vp,davidBeam);
  poiRenderEnemyHealth(now,p.vp);poiRenderDamageLabels(now,p.vp);if(typeof poiHealingCastDraw==="function")poiHealingCastDraw(now,p.vp);poiMineUnlockDraw(p.vp);poiTownDialogueDraw(now,p.vp);pineDrawChecks(p.vp);
  facilityDrawEntranceGuides(p);
  poiScreenNoteCaptureFrame();
@@ -36756,6 +36999,7 @@ function facilityInvalidateScenes(){
  facilityWatchtowerCameraWalls=null;
  facilityEntranceGuides=null;
  if(typeof facilityDavidCameraWallCache!=='undefined')facilityDavidCameraWallCache.delete(world);
+ if(typeof poiWallCameraWorldCache!=='undefined')poiWallCameraWorldCache.delete(world);
  facilityGradeInvalidate();
  const removed=new Set();
  for(const {mesh,signs} of facilityScenes.values()){
