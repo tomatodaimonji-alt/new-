@@ -6245,11 +6245,38 @@ function poiDavidSacredRoofGeometry(m,x,z){
   const a=tau*i/segments,t=j/bands,r=18.22*Math.cos(t*Math.PI*.5);
   return [x+Math.cos(a)*r,eaves+(apex-eaves)*Math.sin(t*Math.PI*.5),z+Math.sin(a)*r];
  };
+ const lo=7.62;
+ const inside=(i,t,depth=0)=>{
+  const phase=tau*i/segments,arc=t*Math.PI*.5,r=18.22*Math.cos(arc);
+  return [x+Math.cos(phase)*r,lo+(apex-lo-.87)*Math.sin(arc)-depth,z+Math.sin(phase)*r];
+ };
+ const innerStone=(i,j)=>{
+  const d=(i%5===0?.010:0)+((i*7+j*11)%6-2.5)*.0041+(j%2===0?.012:0);
+  return [.392+d,.344+d,.300+d];
+ };
  for(let i=0;i<segments;i++){
-  const a=v(i,0),b=v(i+1,0),lo=7.62,t=[.225,.205,.252],c=[.184,.164,.193];
-  // Solid bottom closes the sightline above the inward-bent façade.
-  tri(m,[x,lo,z],[a[0],lo,a[2]],[b[0],lo,b[2]],c);
+  const a=v(i,0),b=v(i+1,0),t=[.225,.205,.252];
   quad(m,a,b,[b[0],lo,b[2]],[a[0],lo,a[2]],t);
+  // Opaque inverse winding on the inner shell. It meets every eave and
+  // closes at the crown; no cutaway, transparency or secondary renderer.
+  for(let j=0;j<bands;j++){
+   const t=j/bands,u=(j+1)/bands,color=innerStone(i,j);
+   const a=inside(i,t),b=inside(i+1,t),c=inside(i+1,u),d=inside(i,u);
+   tri(m,a,b,c,color);if(j<bands-1)tri(m,a,c,d,color);
+  }
+  // Fine course joints read as stone, not glowing stripes.
+  for(const r of [.21,.44,.67]){
+   const lo=r-.008,hi=r+.008;
+   quad(m,inside(i,lo,.025),inside(i+1,lo,.025),inside(i+1,hi,.025),inside(i,hi,.025),[.314,.266,.239]);
+  }
+  // Eight low-profile vault ribs: underside and two stone relief edges.
+  if(i%5===0)for(let j=0;j<bands-1;j++){
+   const p=j/bands,q=(j+1)/bands,w=.18,foot=.19,cap=.14;
+   const l=inside(i-w,p,foot),r=inside(i+w,p,foot),rr=inside(i+w,q,cap),ll=inside(i-w,q,cap);
+   quad(m,l,r,rr,ll,[.466,.407,.352]);
+   quad(m,inside(i-w,p),l,ll,inside(i-w,q),[.343,.297,.263]);
+   quad(m,r,inside(i+w,p),inside(i+w,q),rr,[.373,.325,.286]);
+  }
   for(let j=0;j<bands;j++){
    const a=v(i,j),b=v(i+1,j),c=v(i+1,j+1),d=v(i,j+1);
    const color=i%5===0?[.333,.314,.365]:j%2?[.243,.241,.290]:[.262,.251,.310];

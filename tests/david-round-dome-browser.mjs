@@ -12,7 +12,7 @@ inject(qa,qa+`
    frame:()=>render(),
    eye:()=>{
     const pitch=poiCameraPitch,radius=poiCameraDistance;
-    try{poiCameraPitch=1.15;poiCameraDistance=12;parameters();return window.__seal.eye;}
+    try{poiCameraPitch=1.15;poiCameraDistance=15;parameters();return window.__seal.eye;}
     finally{poiCameraPitch=pitch;poiCameraDistance=radius;}
    },
    state:()=>{
@@ -85,7 +85,10 @@ try{
  roof(arena,vestibule);assert(arena.indoors&&!arena.tunnel&&!arena.sky&&arena.contacted&&arena.arena&&arena.los&&arena.distance===2,JSON.stringify(arena));
  assert.deepEqual(arena.light,[.77,.70,.62]);
  const highEye=await p.evaluate(()=>window.__editorTest.templeSealQA.eye());
- assert(highEye.eye[1]>1.1&&highEye.eye[1]<7.62&&highEye.desired[1]>7.62,JSON.stringify(highEye));
+ const roofRing=Number(h.match(/const ring=\{x:24,z:(\d+),radius:18\}/)?.[1]);
+ const radiusAt=Math.hypot(highEye.eye[0]-24.5,highEye.eye[2]-roofRing-.5);
+ const limit=7.62+5.81*Math.sqrt(Math.max(0,1-(radiusAt/18.22)**2));
+ assert(highEye.eye[1]>1.1&&highEye.eye[1]<limit&&highEye.desired[1]>limit,JSON.stringify(highEye));
  assert.equal(arena.key,before.key);assert.equal(arena.screen,before.screen);assert(arena.ready);
  if(screenshots)await p.screenshot({path:screenshots+'/temple-03-close-david-reveal.png'});
  await p.clock.resume();await resume(24,96,true);const migrated=await frame();

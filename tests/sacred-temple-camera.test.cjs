@@ -26,11 +26,15 @@ test('real tunnel masonry blocks both level side rays and actual low ceiling lea
 test('whole roof broad phase includes the physical chamber away from center and keeps an old angled mode visibly inside',()=>{
  const near=[13.5,1.1,157.5],over=[13.65,13,157.65];
  c.poiThirdPerson=true; c.cameraTopDown=false;
+ const bound=([x,,z])=>{
+  const r=Math.hypot(x-site.davidTemple.ring.x-.5,z-site.davidTemple.ring.z-.5);
+  return 7.62+5.81*Math.sqrt(Math.max(0,1-(r/18.22)**2));
+ };
  const eye=f(near,over);
- a(eye[1]>4&&eye[1]<7.62,JSON.stringify(eye));
+ a(eye[1]>4&&eye[1]<bound(eye)&&eye[1]<over[1]-.08,JSON.stringify(eye));
  c.poiThirdPerson=false; c.cameraTopDown=true;
  const inside=f(near,over);
- a(inside[1]>4&&inside[1]<7.62,JSON.stringify(inside));
+ a(inside[1]>4&&inside[1]<bound(inside)&&inside[1]<over[1]-.08,JSON.stringify(inside));
  const scene=cut('function parameters(){','function cursorAt(');
  a.match(scene,/poiThirdPerson\|\|sacredView/);
  a.match(scene,/facilitySharedWallCameraEye\(target,desired\)/);

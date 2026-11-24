@@ -71,7 +71,14 @@ try{
    await p.goto(url+'/?resume=1&test=1',{waitUntil:'domcontentloaded'});await p.locator('#pineStartupCover').waitFor({state:'hidden'});
    await p.waitForFunction(()=>window.__editorTest?.facility?.().active);
    assert.equal(await p.evaluate(()=>window.__editorTest.setTownTime(120)),true);
-   await p.evaluate(()=>window.__editorTest.higherViewQA.pause());await p.clock.pauseAt((await p.evaluate(()=>Date.now()))+3200);
+   await p.evaluate(()=>window.__editorTest.higherViewQA.pause());
+   // Deep stock boot may occupy the software renderer for several wall
+   // seconds after a round trip. Pause relative to the live page time,
+   // after disabling automatic frames, with ample host headroom.
+   for(const cushion of [12_000,32_000]){
+    try{await p.clock.pauseAt((await p.evaluate(()=>Date.now()))+cushion);break;}
+    catch(e){if(cushion===32_000||!String(e?.message).includes('Cannot fast-forward to the past'))throw e;}
+   }
    const step=async(skip=false)=>{
     await p.clock.fastForward(53);
     return p.evaluate(skip=>({frame:window.__editorTest.higherViewQA.frame(skip),v:window.__editorTest.higherViewQA.state()}),skip);
@@ -111,6 +118,10 @@ try{
     assert.deepEqual(full.v.eye,noRoof.v.eye);assert.deepEqual(full.v.focus,noRoof.v.focus);
     const ceiling=full.frame.pix.filter((a,i)=>a[3]===255&&noRoof.frame.pix[i][3]<4).length;
     assert(ceiling>=13,'real opaque inner roof fills substantial raised viewport: '+ceiling);
+    if(html.includes('Eight low-profile vault ribs')){
+     const shades=new Set(full.frame.pix.filter((a,i)=>a[3]===255&&noRoof.frame.pix[i][3]<4).map(a=>a.slice(0,3).join(',')));
+     assert(shades.size>=5,'actual full-up rendered stone vault has visible material and shape variation: '+shades.size);
+    }
     if(shots){await step();const pic=await cdp.send('Page.captureScreenshot',{format:'png',fromSurface:true});await writeFile(shots+'/orvas-physical-ceiling.png',Buffer.from(pic.data,'base64'));}
     console.log('actual roof samples',ceiling,'/',full.frame.pix.length);
    }
