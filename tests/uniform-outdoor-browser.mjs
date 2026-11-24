@@ -1,0 +1,97 @@
+import assert from 'node:assert/strict';
+import {createServer} from 'node:http';
+import {createRequire} from 'node:module';
+import {mkdirSync,readFileSync} from 'node:fs';
+import {Script} from 'node:vm';
+const source=readFileSync(process.argv[2]??'world-editor.html','utf8');
+const a="if(facilityParams.get('test')==='1')window.__editorTest={";
+let html=source.replace(a,a+`
+ outdoorQA:{
+  z:()=>poiWalkZ,
+  at:(x,z,yaw,minute)=>{
+   const ok=workshopResumeRestorePosition({x,z,y:0,facing:2});
+   poiCameraYaw=yaw;poiCameraPitch=.13;poiCameraDistance=6;poiTownClockGameMs=minute*POI_TOWN_MINUTE_MS;
+   return ok;
+  },
+  paint:()=>render(),
+  frame:()=>{
+   const start=window.performance.now();render();const renderMs=window.performance.now()-start;
+   const p=parameters(),w=canvas.width,h=canvas.height,data=new Uint8Array(w*h*4);
+   gl.readPixels(0,0,w,h,gl.RGBA,gl.UNSIGNED_BYTE,data);
+   let snow=0,green=0,opaque=0;
+   for(let y=h*.40|0;y<h*.63;y++)for(let x=w*.35|0;x<w*.65;x++){
+    const i=(y*w+x)*4,r=data[i],g=data[i+1],b=data[i+2];
+    if(data[i+3]<230)continue;opaque++;
+    if(r>135&&g>147&&b>155&&b>=r&&g>r)snow++;
+    if(g>r*1.12&&g>b*1.07)green++;
+   }
+   const ref=poiOverlandInspect(),lo=typeof poiOutdoorProbe==='undefined'?null:poiOutdoorProbe;
+   return {x:poiWalkX,z:poiWalkZ,site:facilitySite.id,pose:[poiWalkViewX,poiWalkViewZ],w,h,snow,green,opaque,
+    weights:poiUniformOutdoorWeights(poiWalkViewX,poiWalkViewZ,85,150),held:!!poiAnalogContact,renderMs,enabled:!!poiOutdoorFrame,query:POI_OUTDOOR_LOD,low:lo?.drawn??[],farBytes:poiOutdoorFarBytes,
+    resident:poiOutdoorCaches.size,maxBakeMs:lo?.maxBakeMs,nearBytes:ref.bytes,err:gl.getError()};
+  }
+ },`);
+const r=' requestAnimationFrame(render);';
+assert.equal(html.split(r).length,2);html=html.replace(r,' if(!window.__outdoorManual)requestAnimationFrame(render);');
+for(const [,js] of html.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(js);
+if(process.env.OUTDOOR_PARSE_ONLY)process.exit(0);
+const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
+const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(req.url==='/seed'?'<title>seed</title>':html)});
+await new Promise(r=>server.listen(0,'127.0.0.1',r));const url='http://127.0.0.1:'+server.address().port;
+let browser,phase='startup',last;
+try{
+ browser=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+ const c=await browser.newContext({viewport:{width:844,height:390},deviceScaleFactor:.75,isMobile:true,hasTouch:true});
+ const p=await c.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));
+ p.on('console',m=>{if(m.type()==='error')console.log('PAGE',m.text().slice(0,350));});
+ const enabled=process.env.OUTDOOR_STOCK!=='1';
+ await p.goto(url+'/seed');
+ await p.evaluate(()=>{
+  localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
+   position:{x:84,z:115,y:0,facing:2},townLayout:5,townMapHeight:182,templeDepth:1,
+   view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:-.78,orbitPitch:.13,orbitDistance:6}}));
+ });
+ await p.goto(url+'/?resume=1&test=1'+(enabled?'&uniform-outdoor=1':''),{waitUntil:'domcontentloaded'});
+ await p.locator('#pineStartupCover').waitFor({state:'hidden',timeout:40000});
+ await p.waitForFunction(()=>window.__editorTest?.outdoorQA&&window.__editorTest?.facility()?.active,null,{timeout:12000,polling:35})
+  .catch(async e=>{console.error('BOOT',await p.evaluate(()=>({url:location.href,keys:Object.keys(window.__editorTest??{}),startup:window.pineStartup?.failed,query:location.search})),errors);throw e});
+
+ await p.evaluate(()=>{window.__outdoorManual=true});
+ const shot=async key=>{if(!process.env.FACILITY_SCREENSHOTS)return;
+  mkdirSync(process.env.FACILITY_SCREENSHOTS,{recursive:true});
+  await p.screenshot({path:process.env.FACILITY_SCREENSHOTS+'/'+key+'.png'});
+ };
+ const sample=()=>p.evaluate(()=>window.__editorTest.outdoorQA.frame());
+ const set=(...a)=>p.evaluate(a=>window.__editorTest.outdoorQA.at(...a),a);
+ const out=[];
+ for(const [name,x,z,yaw] of [['base-gate',41,43,0],['port-field',85,126,0],['open-field',148,145,0],['seam',60,134,0]]){
+  phase=name;assert(await set(x,z,yaw,690));
+  await p.evaluate(count=>{for(let i=0;i<count;i++)window.__editorTest.outdoorQA.paint()},64);
+  last=await sample();
+  assert.deepEqual([last.x,last.z],[x,z]);assert.equal(last.err,0);assert(last.farBytes+last.nearBytes<=4*2**20);
+  if(enabled&&name!=='base-gate')assert(last.low.some(s=>s.backing&&s.ground>0&&s.props===0),JSON.stringify(last));
+  if(!enabled)assert(last.low.every(s=>!s.backing),JSON.stringify(last));
+  if(name==='port-field'||name==='open-field')assert(last.opaque>0&&last.green>0,JSON.stringify(last));
+  out.push({...last,low:last.low.length});await shot(name);
+ }
+ phase='fixed foot, rotation, and held thumb';
+ const baseYaw=.3;assert(await set(85,126,baseYaw,690));
+ await p.evaluate(()=>{for(let i=0;i<56;i++)window.__editorTest.outdoorQA.paint()});
+ const before=await sample();assert.deepEqual(before.pose,[85,126]);
+ assert(await set(85,126,baseYaw+.85,690));
+ await p.evaluate(()=>{for(let i=0;i<16;i++)window.__editorTest.outdoorQA.paint()});
+ const turn=await sample();assert.deepEqual(turn.weights,before.weights);
+ await shot('port-turn');
+ assert(await set(85,126,0,690));await p.evaluate(()=>{window.__outdoorManual=false;window.__editorTest.outdoorQA.paint()});
+ const cdp=await c.newCDPSession(p),box=await p.locator('#poiAnalogPad').boundingBox();assert(box);
+ const x=box.x+box.width*.45,y=box.y+box.height*.5,id=71;
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y,id}]});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:y+42,id}]});
+ try{await p.waitForFunction(()=>window.__editorTest.outdoorQA.z()>=129,null,{timeout:10000,polling:80})}
+ finally{await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]})}
+ last=await sample();assert(last.z>=129);assert.equal(last.err,0);
+ await shot('south-true-walk');
+ assert.deepEqual(errors,[]);
+ console.log(JSON.stringify({enabled,shots:out,walk:{x:last.x,z:last.z}},null,1));
+}catch(e){console.error('PHASE',phase,JSON.stringify(last));throw e}
+finally{if(browser)await browser.close();await new Promise(r=>server.close(r));}

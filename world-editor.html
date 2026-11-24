@@ -40947,11 +40947,23 @@ function poiOverlandAreas(){
 function poiOverlandClear(keep=new Set()){
  for(const [k,m] of poiOverlandMeshes)if(!keep.has(k)){gl.deleteBuffer(m.buf);poiOverlandMeshes.delete(k)}
 }
+// BEGIN UNIFORM OUTDOOR POLICY
+const POI_UNIFORM_OUTDOOR=typeof facilityParams!=='undefined'&&facilityParams.get('uniform-outdoor')==='1';
+function poiUniformOutdoorWeights(px,pz,x,z){
+ const d=Math.hypot(x-px,z-pz);
+ const s=(a,b)=>{const t=Math.max(0,Math.min(1,(d-a)/(b-a)));return t*t*(3-2*t)};
+ const fade=s(18,24),landmark=s(30,42);
+ return [1-fade,fade*(1-landmark),landmark*(1-s(45,48))];
+}
+function poiUniformOutdoorMissing(active,area,stream,covered,key,x,z){
+ return !covered.has(key)&&(active!==area||stream||area==='base'&&poiSquareFieldAt(x,z));
+}
+// END UNIFORM OUTDOOR POLICY
 // BEGIN OUTDOOR GEOGRAPHY LOD
 const POI_OUTDOOR_FAR_OUT=48;
 const POI_OUTDOOR_FAR_PEAK=768*1024,POI_OUTDOOR_FAR_SLOTS=160;
 let poiOutdoorFrame=null,poiOutdoorSpecs=new WeakMap(),poiOutdoorCaches=new Map(),poiOutdoorFarBytes=0;
-let poiOutdoorPlan=null;
+let poiOutdoorPlan=null,poiUniformWarmUntil=0;
 let poiOutdoorProbe={built:0,drawn:[],maxBakeMs:0};
 function poiOutdoorLandmark(spec,o){
  if(o.y!==0||!spec.owns(o.x,o.z)||typeof poiSacredTempleVisualMember==='function'&&poiSacredTempleVisualMember(spec.layout,o))return false;
@@ -40963,12 +40975,12 @@ function poiOutdoorLocalCanopy(spec,o){
  const same=p=>p.x===o.x&&p.z===o.z&&p.type===o.type;
  return !!(spec.layout.southForest?.props?.some(same)||spec.layout.southPort?.props?.some(same));
 }
-function poiOutdoorGroundRuns(q,spec){
+function poiOutdoorGroundRuns(q,spec,extraOnly=false){
  const out=[],floors=spec.index.floors,ground=spec.id==='snowpass'?'poiSnowGround':'grass';
  for(let z=q.z0;z<q.z1;z++){
   let last=null;
   for(let x=q.x0;x<q.x1;x++){
-   if(!spec.owns(x,z)){last=null;continue}
+   if(!spec.owns(x,z)||extraOnly&&!poiSquareFieldAt(x,z)){last=null;continue}
    const key=x+','+z,h=spec.terrain.get(key)??0;
    const raw=floors.get(key)||ground,t=poiSacredInteriorGrade(spec.layout,x,z,raw,true);
    const kind=/^(road)/i.test(t)&&t!=='roadRoyalFull'&&spec.id!=='snowpass'?'road':
@@ -40990,7 +41002,8 @@ function poiOutdoorSpec(id,layout,world){
  const r=POI_SNOW_FRONTAGE.find(r=>r.id===id);
  if(!r||!layout?.map||!Array.isArray(world))return null;
  let p=poiOutdoorSpecs.get(world);if(p)return p;
- const {width,height}=layout.map;
+ let {width,height}=layout.map;
+ if(POI_UNIFORM_OUTDOOR&&id==='base'&&poiSquareFieldSite(layout))width=height=POI_SQUARE_FIELD_SIDE;
  const owns=typeof poiOverlandSquareLocalOwn==='function'?(x,z)=>poiOverlandSquareLocalOwn(id,x,z):r.owns;
  p={id,layout,world,owns,width,height,terrain:new Map(),index:{floors:new Map()},props:new Map()};
  for(const {x,z,h} of layout.map.terrainHeights??[])p.terrain.set(x+','+z,h);
@@ -41056,7 +41069,7 @@ function poiOutdoorCrown(m,spec,o,h){
  }
 }
 function poiOutdoorMesh(q){
- const m=mesh(),a=q.a,runs=poiOutdoorGroundRuns(q,a);
+ const m=mesh(),a=q.a,runs=poiOutdoorGroundRuns(q,a,q.uniformExtra);
  let hi=0;
  for(const [x,x1,z,raw,kind] of runs){
   const h=raw*TERRAIN_STEP,y=h-.006,c=poiOutdoorGroundTone(a.id,x,z,kind);
@@ -41066,7 +41079,7 @@ function poiOutdoorMesh(q){
  // Top and side use the same genuine indices; no raised geometry on
  // unowned padding. Current Base/Snow maps are flat, so this emits none.
  if(a.terrain.size)for(let z=q.z0;z<q.z1;z++)for(let x=q.x0;x<q.x1;x++){
-  if(!a.owns(x,z))continue;
+  if(!a.owns(x,z)||q.uniformExtra&&!poiSquareFieldAt(x,z))continue;
   const h=a.terrain.get(x+','+z)||0;
   if(h)for(const [dx,dz,side] of [[-1,0,3],[1,0,1],[0,-1,0],[0,1,2]]){
    if(!a.owns(x+dx,z+dz))continue;
@@ -41074,7 +41087,7 @@ function poiOutdoorMesh(q){
    if(below<h)terrainSide(m,x,z,h,below,side);
   }
  }
- const ground=m.p.length/3,objects=a.props.get(q.i+','+q.j)||[];
+ const ground=m.p.length/3,objects=q.uniformGroundOnly?[]:a.props.get(q.i+','+q.j)||[];
  const drawLandmark=o=>{
   const h=(a.terrain.get(o.x+','+o.z)||0)*TERRAIN_STEP;
   if(/^tree/.test(o.type))poiOutdoorCrown(m,a,o,h);
@@ -41112,11 +41125,15 @@ function poiOutdoorLodMayRun(){
 }
 function poiOutdoorLodBegin(){
  if(!poiOutdoorLodMayRun()){
+  const keep=POI_UNIFORM_OUTDOOR&&POI_OUTDOOR_LOD&&poiWalkActive&&poiWalkLevel===0&&!pineAIActive&&!cameraTopDown&&
+   facilitySite?.id==='base'&&performance.now()<poiUniformWarmUntil&&
+   poiDavidTempleEnclosedAt(facilitySite,poiWalkViewX,poiWalkViewZ,0);
+  if(keep){poiOutdoorFrame=null;poiOutdoorProbe.drawn=[];return}
   for(const k of poiOutdoorCaches.keys())poiOutdoorDrop(k);
   poiOutdoorProbe.drawn=[];poiOutdoorFrame=null;poiOutdoorPlan=null;return;
  }
  const id=facilitySite.id,g=poiOverlandGlobal(id,poiWalkViewX,poiWalkViewZ);
- poiOutdoorFrame={id,g};
+ poiOutdoorFrame={id,g};if(POI_UNIFORM_OUTDOOR)poiUniformWarmUntil=performance.now()+8000;
 }
 function poiOutdoorLate(vp,stream){
  const frame=poiOutdoorFrame;if(!frame)return;
@@ -41129,10 +41146,19 @@ function poiOutdoorLate(vp,stream){
  const {keep,rejected}=poiOutdoorPlan;
  // Only fill unrepresented remote regional terrain; never replace an authored
  // surface, canopy, sign, roof or actor already handled by the original renderer.
- const list=poiOutdoorPlan.list.filter(q=>q.a.id!==id);
- for(const [k,e] of poiOutdoorCaches){if(keep.get(k)?.a.world!==e.source||keep.get(k).a.id===id)poiOutdoorDrop(k)}
  const near=new Set(stream?poiOverlandGroundDrawn.keys():[]);
  for(const m of poiSnowTempleNeighbor){if(m.outdoorKey)near.add(m.outdoorKey)}
+ const list=poiOutdoorPlan.list.flatMap(q=>{
+  if(q.a.id!==id)return [q];
+  if(!POI_UNIFORM_OUTDOOR||!stream&&(!poiSquareFieldSite(q.a.layout)||
+      !poiSquareFieldAt(q.x0,q.z1-1)&&!poiSquareFieldAt(q.x1-1,q.z1-1)))return [];
+  return [{...q,uniformGroundOnly:true,uniformExtra:!stream}];
+ });
+ for(const [k,e] of poiOutdoorCaches){
+  const a=keep.get(k)?.a;
+  if(a?.world!==e.source||!POI_UNIFORM_OUTDOOR&&a?.id===id||
+      e.extra!==(POI_UNIFORM_OUTDOOR&&a?.id===id&&!stream))poiOutdoorDrop(k);
+ }
  const matrices=new Map(areas.map(q=>[q.id,poiOverlandNeighborVP(vp,id,q.id)]));
  const cam=q=>matrices.get(q.a.id);
  const view=(q,b)=>poiOverlandBoxVisible(cam(q),b);
@@ -41141,14 +41167,16 @@ function poiOutdoorLate(vp,stream){
  // Prioritize projected missing terrain once when cold without building an
  // entire world. Subsequent frames also prewarm off-axis slots.
  const remaining=budget-poiOutdoorFarBytes;
- const order=list.filter(q=>!poiOutdoorCaches.has(q.key)&&(rejected.get(q.key)??0)<=remaining);
+ const order=list.filter(q=>!poiOutdoorCaches.has(q.key)&&
+  (!q.uniformGroundOnly||poiUniformOutdoorMissing(id,q.a.id,stream,near,q.key,q.x1-1,q.z1-1))&&
+  (rejected.get(q.key+';'+!!q.uniformExtra)??0)<=remaining);
  if(cold)order.sort((q,n)=>Number(view(n,[n.x0,0,n.z0,n.x1,12,n.z1]))-Number(view(q,[q.x0,0,q.z0,q.x1,12,q.z1]))||q.d-n.d);
  for(let i=0,started=0;i<order.length&&started<3&&(started===0||wall()-start<2.0);i++){
   const q=order[i],{m,ground,canopy,bounds}=poiOutdoorMesh(q),bytes=m.p.length*12;
   started++;
-  if(poiOutdoorFarBytes+bytes>budget){rejected.set(q.key,bytes);continue}
+  if(poiOutdoorFarBytes+bytes>budget){rejected.set(q.key+';'+!!q.uniformExtra,bytes);continue}
   const gpu=bytes?upload(m):null;
-  poiOutdoorCaches.set(q.key,{gpu,ground,canopy,bounds,bytes,source:q.a.world});
+  poiOutdoorCaches.set(q.key,{gpu,ground,canopy,bounds,bytes,source:q.a.world,extra:!!q.uniformExtra});
   poiOutdoorFarBytes+=bytes;poiOutdoorProbe.built++;
  }
  poiOutdoorProbe.maxBakeMs=Math.max(poiOutdoorProbe.maxBakeMs,wall()-start);poiOutdoorProbe.drawn=[];
@@ -41156,9 +41184,10 @@ function poiOutdoorLate(vp,stream){
   for(const q of list){
    const e=poiOutdoorCaches.get(q.key);
    if(!e?.gpu||!view(q,e.bounds))continue;
-   const [x,z]=poiOverlandLocal(q.a.id,...g),n=near.has(q.key),groundBuilt=(!stream&&q.a.id===id)||n;
+   const [x,z]=poiOverlandLocal(q.a.id,...g),n=near.has(q.key),groundBuilt=q.uniformGroundOnly?
+    !poiUniformOutdoorMissing(id,q.a.id,stream,near,q.key,q.x1-1,q.z1-1):(!stream&&q.a.id===id)||n;
    if(e.ground&&!groundBuilt){
-    poiOutdoorSet(x+.5,z+.5,3);
+    poiOutdoorSet(x+.5,z+.5,POI_UNIFORM_OUTDOOR?0:3);
     draw(e.gpu,cam(q),0,e.ground);
    }
    const propEnd=n?e.ground:e.gpu.count;
@@ -41166,7 +41195,7 @@ function poiOutdoorLate(vp,stream){
     poiOutdoorSet(x+.5,z+.5,3);
     draw(e.gpu,cam(q),e.ground,propEnd-e.ground);
    }
-   if(!groundBuilt||propEnd>e.ground)poiOutdoorProbe.drawn.push({key:q.key,ground:groundBuilt?0:e.ground,props:propEnd-e.ground});
+   if(!groundBuilt||propEnd>e.ground)poiOutdoorProbe.drawn.push({key:q.key,ground:groundBuilt?0:e.ground,props:propEnd-e.ground,backing:!!q.uniformGroundOnly});
   }
  }finally{poiOutdoorSet(0,0,0)}
 }
@@ -41861,7 +41890,7 @@ function workshopResumePermitted(params){
  if(params.get('reset-camera')==='1'&&facilityPlayOnOpen(params,'base')&&
     [...params.keys()].every(k=>['facility','facility-play','reset-camera','test'].includes(k)))return true;
  if(params.has('facility')||params.has('facility-return')||params.has('editor'))return false;
- if(params.get('resume')==='1')return [...params.keys()].every(k=>k==='resume'||k==='test'||k==='outdoor-lod'&&params.get(k)==='0');
+ if(params.get('resume')==='1')return [...params.keys()].every(k=>k==='resume'||k==='test'||k==='outdoor-lod'&&params.get(k)==='0'||k==='uniform-outdoor'&&params.get(k)==='1');
  if(![...params.keys()].length)return true;
  return [...params.keys()].every(k=>k==='revision')&&/^\d{1,20}$/.test(params.get('revision')||'');
 }
