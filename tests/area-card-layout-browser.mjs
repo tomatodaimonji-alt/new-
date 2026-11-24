@@ -69,8 +69,8 @@ try{
   assert(Math.abs(s.mini.height-Math.min(100,Math.max(67,h*.24)))<1.2,JSON.stringify(s));
   assert(Math.abs(s.mini.width-s.area.width)<1.2);
   assert(Math.abs(s.area.left-s.mini.left)<.2&&Math.abs(s.mini.left-left)<.4);
-  assert(Math.abs(s.clock.left-s.mini.left)<.2&&Math.abs(s.clock.width-s.mini.height)<1.2);
-  assert(s.area.bottom<s.clock.top&&s.clock.bottom<=s.analog.top+.6,'the HUD stops above the touch pad');
+  assert(Math.abs(s.clock.left-s.mini.left)<.2&&Math.abs(s.clock.width-s.mini.width)<1.2);
+  assert(s.mini.bottom<s.clock.top&&s.clock.bottom<s.area.top&&s.area.bottom<=s.analog.top+.6,'map, same-width clock, area; even enlarged area stops before the touch pad');
   assert(s.area.right+gap<=s.party.left&&s.party.right<=w-5,'two separate safe-area columns');
   assert(s.area.height>=37);
   assert(s.lanes.length===(all?4:2));
@@ -79,11 +79,18 @@ try{
   assert(s.title.length>=(wrap?2:1),JSON.stringify(s));
   if(!wrap){assert.equal(s.stars.length,1);assert(s.font>=(w>600?11:9));}
  }
+ await p.evaluate(()=>{const a=window.__areaPulses.at(-1);a.pause();a.currentTime=0});
  const before=await measure();verify(before,844,390,false);assert(before.frames>0);
  // Scrub the actual area animation to peak and verify both fixed bounds
  // and the visible inset pulse. No real simulated ally is cloned here.
  await p.evaluate(()=>{const a=window.__areaPulses.at(-1);a.pause();a.currentTime=a.effect.getTiming().duration*.27;});
- const peak=await measure();verify(peak,844,390,false);assert.deepEqual(peak.area,before.area);
+ const peak=await measure();verify(peak,844,390,false);
+ const growth=(rest,big,min=1.08)=>{
+  assert(big.area.height>=rest.area.height*min,JSON.stringify({area:rest.area,big:big.area}));
+  assert.equal(big.area.top,rest.area.top);assert.equal(big.area.left,rest.area.left);assert.equal(big.area.right,rest.area.right);
+  for(const key of ['mini','mapOpen','clock','party','analog'])assert.deepEqual(big[key],rest[key],key+' is stationary');
+ };
+ growth(before,peak);
  assert.match(await p.locator('#poiLocationPanel').evaluate(el=>getComputedStyle(el).boxShadow),/inset/);
  if(out)await p.screenshot({path:out+'/area-card-common.png',timeout:10000});
  phase='four-card capacity with simulated phone safe areas; no party gameplay mocked';
@@ -95,9 +102,23 @@ try{
   }
  });
  verify(await measure(),844,390);
+ await p.evaluate(()=>window.__areaPulses.at(-1).finish());
+ const returned=await measure();assert.deepEqual(returned.area,before.area,'normal size returns after the peak');
  await p.setViewportSize({width:568,height:320});
  await p.evaluate(()=>{const s=document.querySelector('#viewWrap').style;s.setProperty('--poi-land-left','46px');s.setProperty('--poi-land-right','44px');});
  const narrow=await measure();verify(narrow,568,320,true,false,7,46);
+ // Cross the actual temple boundary again at the short phone size.
+ for(const [dir,z] of [['ArrowDown',128],['ArrowDown',127],['ArrowUp',128]]){
+  for(let i=0;i<4&&(await pos()).z!==z;i++){await p.keyboard.press(dir);await p.waitForTimeout(290)}
+  assert.deepEqual(await pos(),{x:24,z,level:0});
+ }
+ await p.evaluate(()=>{const a=window.__areaPulses.at(-1);a.pause();a.currentTime=0});
+ const narrowRest=await measure();
+ await p.evaluate(()=>{const a=window.__areaPulses.at(-1);a.currentTime=a.effect.getTiming().duration*.27});
+ const narrowPeak=await measure();verify(narrowPeak,568,320,true,false,7,46);growth(narrowRest,narrowPeak);
+ await p.evaluate(()=>window.__areaPulses.at(-1).finish());
+ assert.deepEqual((await measure()).area,narrowRest.area);
+
  if(out)await p.screenshot({path:out+'/area-card-narrow-safe.png',timeout:10000});
  await p.evaluate(()=>{
   document.querySelector('#viewWrap').style.setProperty('--poi-area-width','77px');

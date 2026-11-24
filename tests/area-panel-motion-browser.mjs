@@ -101,7 +101,7 @@ async function trial(browser,reduced,viewport={width:320,height:740}){
     const a=window.__locationAnimations[0];
     const duration=a.effect.getTiming().duration;
     a.pause();a.currentTime=duration*.24;
-    const rect=node=>{const {left,right,top,width}=node.getBoundingClientRect();return {left,right,top,width}};
+    const rect=node=>{const {left,right,top,width,height}=node.getBoundingClientRect();return {left,right,top,width,height}};
     const clock=document.querySelector('#poiClockHud'),mini=document.querySelector('#poiMiniMap');
     const result={...rect(el),clock:rect(clock),map:rect(mini),origin:getComputedStyle(el).transformOrigin,duration};
     result.peakShadow=getComputedStyle(el).boxShadow;
@@ -111,13 +111,11 @@ async function trial(browser,reduced,viewport={width:320,height:740}){
     a.currentTime=duration*.5; // keep real motion active so second boundary must cancel it
     return result;
    });
-   if(landscape){
-    assert(Math.abs(sizes.width-sizes.original.width)<.2);
-    assert(Math.abs(sizes.left-sizes.original.left)<.2&&sizes.right<=viewport.width-10,'fixed area stays in its own lane');
-    assert.equal(sizes.duration,1750);
-    assert.equal(sizes.afterOldDuration.left,sizes.original.left,'late animation also stays put');
-    assert.match(sizes.peakShadow,/inset/);
-   }else assert(sizes.width>sizes.original.width*1.20&&sizes.left>sizes.original.left+4&&sizes.duration===1050);
+   assert(Math.abs(sizes.width-sizes.original.width)<.2&&Math.abs(sizes.left-sizes.original.left)<.2);
+   assert(Math.abs(sizes.top-sizes.original.top)<.2&&sizes.height>sizes.original.height*1.08,'real card enlarges downward');
+   assert.equal(sizes.duration,landscape?1750:1050);
+   assert.equal(sizes.afterOldDuration.left,sizes.original.left,'late animation keeps the fixed left edge');
+   assert.match(sizes.peakShadow,/inset/);
    assert.deepEqual(sizes.clock,sizes.original.clock,'existing clock is never displaced by location transform');
    assert.deepEqual(sizes.map,sizes.original.map,'minimap is never displaced by location transform');
    assert(sizes.origin.startsWith('0px'));
@@ -150,6 +148,6 @@ try{
  await trial(browser,false,{width:568,height:320});
  await trial(browser,false,{width:1120,height:500});
  await trial(browser,true,{width:844,height:390});
- console.log('PASS unchanged portrait and fixed landscape cue and safe surrounding layout, and reduced motion');
+ console.log('PASS portrait and landscape real safe downward area growth, and reduced motion');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
 

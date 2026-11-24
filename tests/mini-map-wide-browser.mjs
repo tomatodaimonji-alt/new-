@@ -54,7 +54,7 @@ try{
   assert(Math.abs(s.bounds.width-s.area.width)<.5&&Math.abs(s.bounds.right-s.area.right)<.5);
   assert(Math.abs(s.bounds.height-Math.min(100,Math.max(67,.24*h)))<1.1);
   assert(s.bounds.width>s.bounds.height&&s.bounds.right+7.5<=s.party.left&&s.party.right<=w-5);
-  assert(Math.abs(s.clock.width-s.bounds.height)<1.1);
+  assert(Math.abs(s.clock.width-s.bounds.width)<1.1);
   assert.equal(s.g.scale,144/41);assert(s.g.wing>=4&&s.g.width>s.g.height);
   assert(Math.abs((s.bounds.width-2)/(s.bounds.height-2)-s.g.width/s.g.height)<.025,'same horizontal/vertical display scale');
   assert(s.tile>0);assert.notDeepEqual(s.known,black);assert(!s.hasUnknown);assert.deepEqual(s.unknown,black);
