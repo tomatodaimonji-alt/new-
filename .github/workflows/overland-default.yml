@@ -42,7 +42,7 @@ jobs:
           sub(" if(facilitySite&&poiWalkActive){\n  if(facilitySite.id!=='snowpass'&&!facilityRoofMeshes.length)facilityBuildRoofs();",
               " const stream=typeof poiOverlandPreviewTick==='function'?poiOverlandPreviewTick():null;\n if(stream){sceneMesh=stream;signOverlays=[];dirty=false}\n else if(facilitySite&&poiWalkActive){\n  if(facilitySite.id!=='snowpass'&&!facilityRoofMeshes.length)facilityBuildRoofs();")
           sub(" const nearActors=poiTownNpcActors.filter(a=>!a.recessed&&!a.death&&poiTownNpcMotionNear(a));",
-              " const actors=typeof poiOverlandActorVisible==='function'?poiTownNpcActors.filter(a=>poiOverlandActorVisible(a.x,a.z)):poiTownNpcActors;\n const nearActors=actors.filter(a=>!a.recessed&&!a.death&&poiTownNpcMotionNear(a));")
+              " const actors=typeof poiOverlandActorVisible==='function'?poiTownNpcActors.filter(a=>poiOverlandActorVisible(vp,a.x,a.z,a.y)):poiTownNpcActors;\n const nearActors=actors.filter(a=>!a.recessed&&!a.death&&poiTownNpcMotionNear(a));")
           sub(" const outfits=poiTownNpcActors.filter(a=>!a.recessed&&!a.death&&a.y===poiWalkLevel)",
               " const outfits=actors.filter(a=>!a.recessed&&!a.death&&a.y===poiWalkLevel)")
           sub("  for(const a of poiTownNpcActors){\n   if(a.recessed||a.death||a.y!==poiWalkLevel)continue;\n   const sleeping=",
@@ -51,7 +51,7 @@ jobs:
           monster_end=s.index('\nfunction ',monster_start+1)
           monster=s[monster_start:monster_end]
           assert monster.count('const onSlice=(o)=>')==1
-          monster=monster.replace("const onSlice=(o)=>!(facilitySite&&o.y!==poiWalkLevel)&&","const onSlice=(o,state)=>!(facilitySite&&o.y!==poiWalkLevel)&&\n  (typeof poiOverlandActorVisible!=='function'||poiOverlandActorVisible(state?.x??o.x,state?.z??o.z))&&")
+          monster=monster.replace("const onSlice=(o)=>!(facilitySite&&o.y!==poiWalkLevel)&&","const onSlice=(o,state)=>!(facilitySite&&o.y!==poiWalkLevel)&&\n  (typeof poiOverlandActorVisible!=='function'||poiOverlandActorVisible(vp,state?.x??o.x,state?.z??o.z,o.y))&&")
           monster=monster.replace('onSlice(o)', 'onSlice(o,s)').replace('onSlice(obj)', 'onSlice(obj,s)')
           monster="let poiOverlandMonsterSlice=null;\n"+monster.replace(" const animate=poiMonsterBreaks.some", """ const clip=typeof poiOverlandDrawing!=='undefined'&&poiOverlandDrawing;
            const slice=clip?[...poiMonsterStates].map(([o,s])=>s.hp>0&&onSlice(o,s)?'1':'0').join(''):null;
@@ -68,6 +68,8 @@ jobs:
               " const incoming=onBase?(POI_OVERLAND_SPIKE?(poiOverlandSnow??=poiSnowPassMap()):poiSnowPassMap()):base.site,map=onBase?incoming.map:null;")
           sub(" width:MAP_W,height:MAP_H,terrainHeights,models,prefabs,checks:pineCheckMarks,maxLevel:worldMaxLevel,hasCellar:facilityHasCellar}:poiSnowPassBase;",
               " width:MAP_W,height:MAP_H,terrainHeights,models,prefabs,checks:pineCheckMarks,maxLevel:worldMaxLevel,hasCellar:facilityHasCellar,\n  ...(POI_OVERLAND_SPIKE?{overlandStatic:{floors:facilityFloorMasks,stairs:facilityStairOpenings,doors:facilityDoorTiles,creek:facilityCreekIndex,nav:poiTownNpcNav,mini:new Map(poiMiniStatic)}}:{})}:poiSnowPassBase;")
+          sub(" const incoming=onBase?(POI_OVERLAND_SPIKE?",
+              " if(onBase&&cold&&base.overlandStatic&&!base.overlandStatic.mini.has(0)){\n  const canvas=$('poiMiniMap'),topology=canvas&&poiMiniDrawTopology(canvas.width,canvas.height,0,facilitySite);\n  if(topology)base.overlandStatic.mini.set(0,topology);\n }\n const incoming=onBase?(POI_OVERLAND_SPIKE?")
           sub(" facilityPrepareFloorMasks();facilitySurfaceEdited=onBase?false:base.edited;",
               " const staticBase=!onBase?base.overlandStatic:null;\n if(staticBase){facilityFloorMasks=staticBase.floors;facilityStairOpenings=staticBase.stairs;facilityDoorTiles=staticBase.doors;facilityCreekIndex=staticBase.creek;poiTownNpcNav=staticBase.nav}\n else facilityPrepareFloorMasks();\n facilitySurfaceEdited=onBase?false:base.edited;\n poiMiniInvalidate();if(staticBase)for(const [key,value] of staticBase.mini)poiMiniStatic.set(key,value);")
           sub("if(!POI_OVERLAND_SPIKE||!poiOverlandScope(dest.region,dest.x,dest.z))facilityBuildRoofs();poiMiniInvalidate();",
@@ -315,8 +317,11 @@ jobs:
           }
           // The streamed perspective only draws nearby terrain. Leave simulation and
           // collision untouched; don't rebuild models whose positions cannot be in it.
-          function poiOverlandActorVisible(x,z){
-           return !poiOverlandDrawing||Math.abs(x-poiWalkViewX)<=34&&Math.abs(z-poiWalkViewZ)<=34;
+          function poiOverlandActorVisible(vp,x,z,level){
+           if(!poiOverlandDrawing||!vp||Math.abs(x-poiWalkViewX)<=34&&Math.abs(z-poiWalkViewZ)<=34)return true;
+           const y=terrainY(x,z)+1.4*level;
+           // Pad for interpolated movement, model size and movement across grades.
+           return poiOverlandBoxVisible(vp,[x-1.2,y-1.4,z-1.2,x+2.2,y+4.3,z+2.2]);
           }
           function poiOverlandNeighborVP(vp,active,other){
            if(active===other)return vp;
@@ -1163,7 +1168,7 @@ jobs:
           SOURCE
           python .spike/build.py world-editor.html .spike/stream.html --default
           python .spike/horizon-safe.py .spike/stream.html .spike/world-editor.html
-          test "$(git hash-object .spike/world-editor.html)" = 53d92d4d3fd66681acd01821e46ca7396c4d3bd4
+          test "$(git hash-object .spike/world-editor.html)" = 4c4db37e03d535a348bdb12b5903517aad24f3b1
           cd .spike && node --test tests/*.cjs
       - if: matrix.probe != 'regressions'
         run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
