@@ -14,7 +14,7 @@ let fixture=insert(source,anchor,`
    read:()=>({score:typeof poiOrchestraSnapshot==='function'?poiOrchestraSnapshot():null,
     geo:poiAudioMusicZone(),indoors:poiWalkIndoor(),
     region:poiRegionAt(facilitySite,poiWalkX,poiWalkZ,false,poiWalkLevel),
-    coords:[poiWalkX,poiWalkZ,poiWalkLevel],hud:$('poiLocationName').textContent,
+    coords:[poiWalkX,poiWalkZ,poiWalkLevel],stepReady:performance.now()>=poiWalkNextReady,hud:$('poiLocationName').textContent,
     ctx:poiAudioContext?.state??null,time:poiAudioContext?.currentTime??0,enabled:poiAudioAllowed(),timer:poiAudioInterval!==null,
     boss:[...poiMonsterStates].find(([o])=>o.type==='monsterNorthMinotaur'&&o.x===64&&o.z===13&&o.y===-1)?.[1]?.hp??null,
     graph:window.__scoreSpy.read([poiAudioMaster,poiAudioMusic,poiAudioAmbience,poiAudioEffects],
@@ -24,7 +24,7 @@ let fixture=insert(source,anchor,`
     // Test fixture position injection only. Browser plays through the exact
     // production timer and map geometry/spatial classifier on each move.
     const market=facilitySite.southRoad.town.market;
-    const points={town:[45,41,0],outside:[87,2,0],indoor:[41,30,0],southSettlement:[market.public.x,market.public.z,0],
+    const points={town:[45,41,0],outside:[87,2,0],innDoorstep:[41,34,0],southSettlement:[market.public.x,market.public.z,0],
      mine:[115,59,-1],chapel:[76,80,-1],otherworld:[102,79,-1],northFort:[64,14,-1]};
     const p=Array.isArray(scene)?scene:points[scene];if(!p)throw Error(scene);
     [poiWalkX,poiWalkZ,poiWalkLevel]=p;poiWalkFromX=poiWalkViewX=poiWalkX;poiWalkFromZ=poiWalkViewZ=poiWalkZ;
@@ -155,6 +155,21 @@ try{
  const stoppedTown=waves(observed.graph).map(e=>e.id);
  const masterId=observed.graph.buses[0].id;
  assert(stoppedTown.length&&waves(observed.graph).every(e=>e.links.includes(masterId)&&!e.links.includes(observed.graph.buses[3].id)));
+ checkpoint='physical town doorstep, passage inside and back on one live score';
+ await locate('innDoorstep');
+ assert(await page.evaluate(()=>window.__editorTest.data().world.some(o=>o.x===41&&o.z===33&&o.y===0&&o.type.endsWith('Door'))));
+ let gate=await qa();assert(!gate.indoors);
+ const townDeck=gate.graph.decks.town;
+ for(const [key,z,inside] of [['ArrowUp',33,true],['ArrowUp',32,true],['ArrowDown',33,true],['ArrowDown',34,false]]){
+  await page.keyboard.press(key);
+  await wait(({z,t})=>{const r=window.__editorTest.orchestraNative.read();
+   return r.coords[0]===41&&r.coords[1]===z&&r.time>=t+.24&&r.stepReady;},{z,t:gate.time});
+  gate=await qa();
+  assert.equal(gate.indoors,inside);
+  assert.equal(gate.score.active,'town');
+  assert.equal(gate.graph.decks.town.id,townDeck.id);
+  assert.deepEqual(gate.graph.decks.town.actions,townDeck.actions,'real door never restarts the town envelope');
+ }
  checkpoint='named outdoor location and rapid mixing across room boundary';
  await locate('outside');
  await wait(()=>window.__editorTest.orchestraNative.read().score?.active==='outside');
@@ -173,7 +188,7 @@ try{
  observed=await qa();const field=observed.graph.played.filter(e=>e.links.includes(outsideBus));
  assert.equal(field.length,1,'outside uses only the decoded recording, never a synthesized cue during decoding');
  assert(field[0].links.includes(masterId),'field recording shares the original master mixer');
- observed=await scene('indoor');assert(observed.indoors);assert(observed.score.decks.length<=2);
+
  observed=await scene('town');assert(observed.score.decks.length<=2);
  await wait(()=>window.__editorTest.orchestraNative.read().score?.decks.length===1);
  checkpoint='seam/port/main approach share one calm live WebAudio bus';
@@ -229,6 +244,27 @@ try{
  await wait(()=>{const s=window.__editorTest.orchestraNative.read();return s.enabled&&s.timer&&s.ctx==='running'&&s.score?.active==='town'});
  observed=await qa();checkMixer(observed.graph);assert.equal(observed.saved,volumeRaw);
  assert(waves(observed.graph).every(e=>e.when<e.at+.65),'actual scheduler never queues a long backlog into Web Audio');
+ checkpoint='cold resume fully inside normal town inn';
+ // Save by genuine movement; directly editing localStorage here would
+ // race the old page's live pagehide/periodic resume save on reload.
+ await locate('innDoorstep');
+ for(const z of [33,32]){
+  await page.keyboard.press('ArrowUp');
+  await wait(z=>{const r=window.__editorTest.orchestraNative.read();
+   return r.coords[0]===41&&r.coords[1]===z&&r.stepReady;},z);
+ }
+ assert((await qa()).indoors);
+ await wait(()=>{
+  const r=JSON.parse(localStorage.getItem('world-workshop-resume-v1')||'null');
+  return r?.position?.x===41&&r.position.z===32&&r.position.y===0;
+ });
+ await page.reload({waitUntil:'domcontentloaded',timeout:25000});
+ await page.locator('#pineStartupCover').waitFor({state:'hidden'});
+ await wait(()=>window.__editorTest?.orchestraNative?.read().indoors);
+ assert.deepEqual((await qa()).coords,[41,32,0]);
+ await action.tap();
+ await wait(()=>{const r=window.__editorTest.orchestraNative.read();return r.ctx==='running'&&r.score?.active==='town'&&r.score.voices>0});
+ observed=await qa();checkMixer(observed.graph);assert.deepEqual(observed.score.decks,['town']);
  assert.equal(errors.length,0,errors.join('\n'));
  console.log('PASS native touch, distinct score scene scheduling, bounded fades, real hit battle, recorded SFX bus and foreground lifecycle');
 }catch(e){const last=page?await qa().catch(()=>null):null;if(last)last.graph.played=last.graph.played.slice(-12);console.error(checkpoint,JSON.stringify(last),errors);throw e}

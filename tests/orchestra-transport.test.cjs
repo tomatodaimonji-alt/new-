@@ -22,7 +22,7 @@ test('all maps emit native timbre nodes, with a short crossfade and only two liv
  a.equal(api.snapshot().active,'town');a(recorded.length>1);
  a(recorded.every(e=>e.t>=0&&e.t<.5));a(recorded.some(e=>!!e.n.wave));
  c.indoors=true;ctx.currentTime=.3;api.tick(.3);
- a.equal(api.snapshot().active,'indoor');a.equal(api.snapshot().decks.length,2);
+ a.equal(api.snapshot().active,'town');a.equal(api.snapshot().decks.length,1);
  c.zone='mine';ctx.currentTime=.5;api.tick(.5);
  a.equal(api.snapshot().active,'mine');a.equal(api.snapshot().decks.length,2);
  ctx.currentTime=1.6;api.tick(1.6);a.equal(api.snapshot().decks.length,1);

@@ -150,7 +150,7 @@ try{
   assert.equal(s.probe.loop.length,1);assert.equal(s.probe.loop[0].at,track.at);assert.equal(s.probe.loop[0].stop,null);
   await p.evaluate(()=>window.__editorTest.fieldAudioQA.finishCombat());
   const n=await fieldCount(p);
-  for(const [scene,pin] of [['town',[55,42,0]],['indoor',[56,30,0]],['mine',[116,61,-1]],['southSettlement',[105,111,0]]]){
+  for(const [scene,pin] of [['town',[55,42,0]],['town',[56,30,0]],['mine',[116,61,-1]],['southSettlement',[105,111,0]]]){
    checkpoint=scene+' stays on existing instruments';
    await position(p,pin);await instrumental(p,scene);assert.equal(await fieldCount(p),n);
    assert.equal((await get(p)).synth.battle??0,0,'no hostile outdoor hold leaks into the next region');
