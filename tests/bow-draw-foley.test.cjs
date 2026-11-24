@@ -2,7 +2,7 @@ const test=require('node:test'),a=require('node:assert/strict'),fs=require('node
 const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 function cut(x,y){const i=h.indexOf(x),j=h.indexOf(y,i+1);a.ok(i>=0&&j>i,x);return h.slice(i,j)}
 test('start cue precedes unchanged release and never replays in held/rendered frames or on cancellation',()=>{
- const calls=[],bow={range:5,hit:325,ready:1030,pose:525},knife={range:1,hit:80,ready:225,pose:190};
+ const calls=[],bow={range:8,hit:325,ready:1030,pose:525},knife={range:1,hit:80,ready:225,pose:190};
  const c={poiPlayerWeaponPending:null,poiWalkX:1,poiWalkZ:1,poiWalkLevel:0,poiWalkFacing:0,
   poiWalkActive:true,document:{hidden:false},poiPlayerWeaponProfile:k=>k==='equipWoodBow'?bow:k==='kitchenKnife'?knife:null,
   poiEquippedWeapon:()=>c.weapon,weapon:'equipWoodBow',poiWalkAvatar(){},
@@ -21,6 +21,9 @@ test('start cue precedes unchanged release and never replays in held/rendered fr
  a.deepEqual(calls,[['bow-draw'],['flight'],['travel']]);
  calls.length=0;c.poiPlayerStartProfile('equipWoodBow',1800);
  c.poiWalkX=2;c.poiPlayerWeaponFrame(1808);
+ a.deepEqual(calls,[['bow-draw']]);a.equal(c.poiPlayerWeaponPending.type,'equipWoodBow');
+ c.poiPlayerWeaponFrame(1800+bow.hit);a.deepEqual(calls,[['bow-draw'],['flight']]);
+ calls.length=0;c.poiPlayerStartProfile('equipWoodBow',2400);c.weapon='kitchenKnife';c.poiPlayerWeaponFrame(2410);
  a.deepEqual(calls,[['bow-draw']]);a.equal(c.poiPlayerWeaponPending,null);
  calls.length=0;c.poiPlayerStartProfile('kitchenKnife',3000);
  a.deepEqual(calls,[['attack','kitchenKnife']]);
@@ -51,3 +54,4 @@ test('shipping draw sample is short distinct 24kHz mono PCM through the existing
  a.notEqual(f.POI_RECORDED_FOLEY.bowDraw,f.POI_RECORDED_FOLEY.steelSwing);
  a(b.getChannelData(0).some(v=>Math.abs(v)>.05));
 });
+

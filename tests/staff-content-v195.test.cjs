@@ -14,7 +14,7 @@ test('two secluded staff skeletons append without changing any old cell',()=>{
 });
 test('both staff models are real wooden assets, the long staff visibly extends beyond plain',()=>{
  const calls=[],span={},c={cube:(_m,x,y,z,w,h,d)=>calls.push([y,y+h]),naturalBranch:(_m,x,y,z,u,v,w)=>calls.push([y,v]),
-  tri:(_m,a,b,c)=>calls.push([a[1],b[1],c[1]])};
+  tri:(_m,a,b,c)=>calls.push([a[1],b[1],c[1]]),quad:(_m,...points)=>calls.push(points.slice(0,4).map(p=>p[1]))};
  vm.runInNewContext(cut('// BEGIN LONG HARDWOOD STAFF ART','// END LONG HARDWOOD STAFF ART')+
   cut('function poiFantasyEquipmentGeometry(','function decoBase('),c);
  for(const id of ['equipPlainStaff','equipLongStaff']){
@@ -26,3 +26,4 @@ test('both staff models are real wooden assets, the long staff visibly extends b
  assert.equal(c.poiArmedMonsterArt('monsterSkelLongStaff').weapon,'equipLongStaff');
  assert.match(html,/"number":"357","id":"monsterSkelLongStaff"/);
 });
+

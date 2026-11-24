@@ -23,14 +23,21 @@ test('wand charges on a miss, respects cooldown, and does not wear equipped weap
  const c=runtime();assert.equal(c.poiPlayerCastFireWand(2).ok,true);assert.equal(c.debits,1);assert.equal(c.poiPlayerCastFireWand(2).ok,false);
  c.poiPlayerWeaponFrame(500);assert.equal(c.wear,0);assert.equal(c.debits,1);
 });
-test('bow hits only first target within eight cells and physical windup cancels if moving',()=>{
+test('bow hits only the first target within eight cells of its actual release position',()=>{
  const c=runtime();c.held='equipWoodBow';
  const first={x:18,z:10,hp:50},beyond={x:19,z:10,hp:50};
  c.mobs.set('18,10',[{},first]);c.mobs.set('19,10',[{},beyond]);
  c.poiPlayerStartProfile(c.held,100);c.poiPlayerWeaponFrame(425);c.poiPlayerWeaponFrame(945);
  assert.equal(first.hp,28);assert.equal(beyond.hp,50);assert.equal(c.wear,1);
- c.poiPlayerStartProfile(c.held,1200);c.poiWalkX--;c.poiPlayerWeaponFrame(1525);
- assert.equal(c.wear,1);assert.equal(first.hp,28);
+ c.poiPlayerStartProfile(c.held,1200);c.poiWalkX++;c.poiWalkZ++;
+ const fresh={x:19,z:11,hp:50},far={x:20,z:11,hp:50};
+ c.mobs.set('19,11',[{},fresh]);c.mobs.set('20,11',[{},far]);
+ c.poiPlayerWeaponFrame(1524);assert.equal(c.wear,1);
+ c.poiPlayerWeaponFrame(1525);
+ const flight=vm.runInContext('poiPlayerWeaponVisual',c);
+ assert.deepEqual([flight.x,flight.z,flight.toX,flight.toZ],[11,11,19,11]);
+ c.poiPlayerWeaponFrame(2045);
+ assert.equal(c.wear,2);assert.equal(first.hp,28);assert.equal(fresh.hp,28);assert.equal(far.hp,50);
 });
 test('wand cannot pass initial obstacle or continue after lifecycle cancellation',()=>{
  const c=runtime();const mob={x:14,z:10,hp:50};c.mobs.set('14,10',[{},mob]);
@@ -101,3 +108,4 @@ test('released arrows debit carried bow after switch, not an equipped sword or s
  assert.equal(c.poiEquipmentSpendWeapon('equipWoodBow',true),true);assert.equal(c.kit.slots[10],null);
  assert.equal(c.poiEquipmentSpendWeapon('equipWoodBow',true),false);assert.equal(c.kit.drops[0].durability,42);assert.equal(c.kit.weapon,'equipIronSword');
 });
+

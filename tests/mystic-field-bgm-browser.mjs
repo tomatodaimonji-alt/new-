@@ -13,16 +13,22 @@ let fixture=inject(html,hook,hook+`
    place:(x,z,y)=>workshopResumeRestorePosition({x,z,y,facing:0}),
    combat:()=>{
     // One real enemy wind-up exercises the production battle scene decision.
-    const obj={type:'monsterSlime',x:poiWalkX+1,z:poiWalkZ,y:poiWalkLevel,rot:0};
-    const s=poiCombatActorMake(obj);poiMonsterStates.set(obj,s);window.__fieldQAEnemy={obj,s};
+    const obj={type:'monsterSlime',x:poiWalkX,z:poiWalkZ-1,y:poiWalkLevel,rot:0};
+    const s=poiCombatActorMake(obj);s.wildSpawn=true;poiMonsterStates.set(obj,s);window.__fieldQAEnemy={obj,s};
     return poiEnemyBeginPlayer(obj,s,performance.now());
    },
    finishCombat:()=>{
     const e=window.__fieldQAEnemy;if(e){poiEnemyPending.delete(e.s);poiMonsterStates.delete(e.obj);}
    },
    snapshot:()=>({scene:poiOrchestraScene(poiAudioContext?.currentTime??0),zone:poiAudioMusicZone(),ctx:poiAudioContext?.state,
+    audioTime:poiAudioContext?.currentTime,hp:poiPlayerHP,enemyHp:window.__fieldQAEnemy?.s.hp,
     levels:{...poiAudioLevels},deck:poiOrchestraSnapshot(),probe:window.__fieldQA?.summary(poiAudioMusic)}),
   },`);
+const voice='function poiOrchestraVoice(deck,e,when){';
+fixture=inject(fixture,voice,voice+`
+ const entry=[...poiOrchestraDecks].find(([,candidate])=>candidate===deck);
+ if(entry)window.__fieldQA?.voice(entry[0]);
+`);
 fixture=inject(fixture,' const p=poiWildPick(rng);',' const p=null;');
 fixture=inject(fixture,'function poiWildRegionalFrame(now,rng){','function poiWildRegionalFrame(now,rng){return;');
 
@@ -35,7 +41,8 @@ async function launch(rejectDecode){
  const page=await context.newPage(),errors=[],offOrigin=[];page.on('pageerror',e=>errors.push(e.message));
  page.on('request',r=>{if(/^https?:/.test(r.url())&&!r.url().startsWith(origin+'/'))offOrigin.push(r.url())});
  await context.addInitScript(({rejectDecode})=>{
-  const trace={decoded:[],decodeAttempts:0,loop:[]};
+  const trace={decoded:[],decodeAttempts:0,loop:[],voice:{},waiting:false};
+  let deliver=null;
   const destinations=new WeakMap(),byParam=new WeakMap(),targets=new WeakMap();
   const connect=AudioNode.prototype.connect;
   AudioNode.prototype.connect=function(node,...tail){
@@ -58,8 +65,10 @@ async function launch(rejectDecode){
   BaseAudioContext.prototype.decodeAudioData=function(data,good,bad){
    trace.decodeAttempts++;
    if(rejectDecode){const failure=new DOMException('Injected unsupported encoded score','EncodingError');bad?.(failure);return Promise.reject(failure)}
-   const okay=b=>{if(!trace.decoded.includes(b))trace.decoded.push(b);good?.(b)};
-   return decode.call(this,data,okay,bad).then(b=>{okay(b);return b});
+   return decode.call(this,data).then(b=>{
+    trace.decoded.push(b);trace.waiting=true;
+    return new Promise(resolve=>{deliver=()=>{trace.waiting=false;good?.(b);resolve(b)}});
+   },error=>{bad?.(error);throw error});
   };
   const start=AudioBufferSourceNode.prototype.start,stop=AudioBufferSourceNode.prototype.stop;
   AudioBufferSourceNode.prototype.start=function(...a){
@@ -76,10 +85,10 @@ async function launch(rejectDecode){
    const s=trace.loop.find(s=>s.node===this);if(s)s.stop=a[0]??this.context.currentTime;
    return result;
   };
-  window.__fieldQA={summary:music=>{
+  window.__fieldQA={release(){const f=deliver;deliver=null;f?.();return !!f},voice(scene){trace.voice[scene]=(trace.voice[scene]||0)+1},summary:music=>{
    const stages=(n,max=4)=>{if(!n||max<1)return [];return [{v:n.gain?.value,targets:targets.get(n)||[]}].concat(stages(destinations.get(n)?.[0],max-1))};
    return {decodeAttempts:trace.decodeAttempts,decoded:trace.decoded.map(b=>b.duration),musicTargets:targets.get(music)||[],
-    loop:trace.loop.map(({node,...s})=>({...s,stages:stages(destinations.get(node)?.[0])}))};
+    synth:{...trace.voice},waiting:trace.waiting,loop:trace.loop.map(({node,...s})=>({...s,stages:stages(destinations.get(node)?.[0])}))};
   }};
  },{rejectDecode});
  try{
@@ -88,7 +97,7 @@ async function launch(rejectDecode){
    localStorage.setItem('world-workshop-audio-v2','{"master":78,"bgm":64,"se":72,"enabled":true}');
    localStorage.setItem('world-workshop-hotbar-v1','{"version":1,"weapon":"equipWoodSword","potions":0}');
    localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
-    position:{x:66,z:4,y:0,facing:0},townLayout:5,townMapHeight:128,
+    position:{x:102,z:93,y:0,facing:0},townLayout:5,townMapHeight:128,
     view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.24,orbitDistance:5.5}}));
   });
   await page.goto(origin+'/?resume=1&test=1');
@@ -106,7 +115,7 @@ const fieldCount=async p=>(await get(p)).loop.length;
 async function instrumental(p,scene){
  await wait(p,scene=>{
   const {deck,probe}=window.__editorTest.fieldAudioQA.snapshot();
-  return deck.active===scene&&deck.voices>0&&probe.loop.every(a=>a.ended);
+  return deck.active===scene&&deck.voices>0&&probe.synth[scene]>0&&probe.loop.every(a=>a.ended);
  },scene);
 }
 async function position(p,pin){assert.equal(await p.evaluate(pin=>window.__editorTest.fieldAudioQA.place(...pin),pin),true,'actual resume landing is safe: '+pin)}
@@ -115,26 +124,42 @@ try{
   args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
  checkpoint='authentic outdoors decode';const a=await launch(false),p=a.page;
  try{
+  await wait(p,()=>{const s=window.__editorTest.fieldAudioQA.snapshot();return s.probe.waiting&&s.deck.active==='outside'});
+  const pending=(await snapshot(p)).audioTime;
+  await wait(p,v=>window.__editorTest.fieldAudioQA.snapshot().audioTime>=v+1.2,pending);
+  let s=await snapshot(p);
+  assert.equal(s.probe.loop.length,0,'no recorded source before actual decode delivery');
+  assert.equal(s.probe.synth.outside??0,0,'pending decode never schedules old outdoor instruments');
+  assert.equal(await p.evaluate(()=>window.__fieldQA.release()),true);
   await wait(p,()=>window.__editorTest.fieldAudioQA.snapshot().probe.loop.length===1);
-  let s=await snapshot(p),track=s.probe.loop[0];
+  s=await snapshot(p);const track=s.probe.loop[0];
   assert.equal(s.scene,'outside');assert(track.decoded&&track.duration>5&&track.rate>=22050&&track.channels>=1);
   assert(track.loopStart>=0&&(!track.loopEnd||track.loopEnd>track.loopStart&&track.loopEnd<=track.duration+.001));
   assert.equal(track.ended,false);
-  checkpoint='battle preempts field loop';
+  checkpoint='real outdoor enemy and player hits keep the exact same source';
+  const hp=s.hp;
   assert.equal(await p.evaluate(()=>window.__editorTest.fieldAudioQA.combat()),true);
-  await instrumental(p,'battle');
+  await wait(p,hp=>window.__editorTest.fieldAudioQA.snapshot().hp<hp,hp);
+  const enemyHp=(await snapshot(p)).enemyHp;
+  await p.locator('#poiWalkAction').tap();
+  await wait(p,hp=>window.__editorTest.fieldAudioQA.snapshot().enemyHp<hp,enemyHp);
   s=await snapshot(p);
-  assert(s.probe.loop[0].stages.some(g=>g.targets.some(t=>t.level===0&&t.decay>=.05)),'real gain smoothly retires on combat entry');
+  assert.equal(s.scene,'outside');assert.equal(s.deck.active,'outside');
+  assert.equal(s.probe.synth.battle??0,0,'outdoor incoming and outgoing real damage never schedules score tempo change');
+  assert.equal(s.probe.synth.outside??0,0,'field remains solely mystical recording');
+  assert.equal(s.probe.loop.length,1);assert.equal(s.probe.loop[0].at,track.at);assert.equal(s.probe.loop[0].stop,null);
   await p.evaluate(()=>window.__editorTest.fieldAudioQA.finishCombat());
-  checkpoint='field resumes after genuine battle hold';
-  await wait(p,()=>{const q=window.__editorTest.fieldAudioQA.snapshot();return q.scene==='outside'&&q.probe.loop.some(a=>!a.ended)});
-  const n=await fieldCount(p);assert.equal(n,2,'one restarted field loop; no duplicate transport');
+  const n=await fieldCount(p);
   for(const [scene,pin] of [['town',[55,42,0]],['indoor',[56,30,0]],['mine',[116,61,-1]],['market',[105,111,0]]]){
    checkpoint=scene+' stays on existing instruments';
    await position(p,pin);await instrumental(p,scene);assert.equal(await fieldCount(p),n);
+   assert.equal((await get(p)).synth.battle??0,0,'no hostile outdoor hold leaks into the next region');
   }
+  assert((await get(p)).loop[0].stages.some(g=>g.targets.some(t=>t.level===0&&t.decay>=.05)),'real gain fades on geographical exit');
+  checkpoint='actual North Fort attack retains existing battle instruments';
+  await position(p,[64,17,-1]);await instrumental(p,'battle');assert.equal(await fieldCount(p),n);
   checkpoint='native mute, background, and foreground controls';
-  await position(p,[66,4,0]);await wait(p,()=>window.__editorTest.fieldAudioQA.snapshot().probe.loop.some(a=>!a.ended));
+  await position(p,[102,93,0]);await wait(p,()=>window.__editorTest.fieldAudioQA.snapshot().probe.loop.some(a=>!a.ended));
   const saved=s.levels;
   await p.locator('#poiVolumeBgm').evaluate(e=>{e.value='0';e.dispatchEvent(new Event('input',{bubbles:true}))});
   await wait(p,()=>{const q=window.__editorTest.fieldAudioQA.snapshot();
@@ -149,14 +174,17 @@ try{
   assert.deepEqual(a.offOrigin,[]);assert.deepEqual(a.errors,[]);
  }catch(e){console.error(checkpoint,JSON.stringify(await snapshot(p).catch(()=>null)),a.errors);throw e}
  finally{await a.context.close()}
- checkpoint='unsupported embedded decode falls back to original outdoors instruments';
+ checkpoint='unsupported embedded decode stays quiet without old field or battle score';
  const b=await launch(true);
  try{
-  await instrumental(b.page,'outside');
-  await wait(b.page,()=>window.__editorTest.fieldAudioQA.snapshot().probe.decodeAttempts>0);
+  await wait(b.page,()=>{const s=window.__editorTest.fieldAudioQA.snapshot();return s.probe.decodeAttempts>0&&s.deck.active==='outside'});
+  const now=(await snapshot(b.page)).audioTime;
+  await wait(b.page,t=>window.__editorTest.fieldAudioQA.snapshot().audioTime>=t+1.2,now);
+  const rejected=await snapshot(b.page);
+  assert.equal(rejected.probe.synth.outside??0,0);assert.equal(rejected.probe.synth.battle??0,0);
   assert.equal(await fieldCount(b.page),0);
   assert.deepEqual(b.offOrigin,[]);assert.deepEqual(b.errors,[]);
  }catch(e){console.error(checkpoint,JSON.stringify(await snapshot(b.page).catch(()=>null)),b.errors);throw e}
  finally{await b.context.close()}
- console.log('PASS native decoded outdoor loop, zone/battle crossfade, mixer and Activity lifecycle, offline unsupported-decode fallback');
+ console.log('PASS native field-only loop through real hits, silent undecoded outdoors, unchanged indoor/dungeon battle, mixer and Activity lifecycle');
 }finally{await browser?.close();await new Promise(r=>server.close(r))}

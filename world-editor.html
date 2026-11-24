@@ -1585,7 +1585,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v262）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v263）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -3696,11 +3696,39 @@ function poiFantasyEquipmentGeometry(m,id,x,y,z){
   for(const [xx,yy] of [[-.10,.70],[.10,.92],[-.08,1.13]])diamond(m,x+xx,y+yy,z+.038,.072,bone);
   tri(m,[x-.102,y+1.15,z],[x+.100,y+1.15,z],[x-.028,y+1.42,z+.018],cream);
  }else if(id==='equipPlainStaff'){
-  // Ordinary pale hardwood with a weathered join; no gem or enchantment.
-  rod([-.012,.025,0],[0,.49,0],.052,timber);
-  rod([0,.49,0],[-.046,1.03,.028],.047,grain);
-  for(const yy of [.31,.38,.45])b(.013,yy,0,.107,.038,.102,lash);
-  b(-.045,.96,.044,.054,.065,.038,dark);
+  // A short, solid piece of hardwood, not a thin wand. Keep the carried
+  // grip centered at .39 for the player and the skeleton mage.
+  const body=[
+   [-.011,.025,-.008,.069],[-.010,.075,-.009,.088],[-.017,.207,-.008,.090],
+   [-.004,.300,-.004,.077],[0,.344,0,.065],[0,.39,0,.065],[0,.436,0,.068],
+   [.012,.548,-.007,.086],[.029,.689,-.008,.097],[.012,.817,.012,.089],
+   [-.018,.964,.025,.083],[-.037,1.031,.027,.067]
+  ];
+  const variation=[1,.93,1.03,.95,1,.97,1.04,.94],sides=variation.length;
+  const ring=([u,h,v,r])=>variation.map((scale,i)=>{
+   const t=i*Math.PI*2/sides;
+   return [x+u+Math.cos(t)*r*scale,y+h,z+v+Math.sin(t)*r*scale];
+  });
+  const connect=(p,q,col)=>{
+   for(let i=0;i<sides;i++){
+    const j=(i+1)%sides,k=.86+(i%3)*.065;
+    quad(m,p[i],q[i],q[j],p[j],col.map(v=>v*k));
+   }
+  };
+  const rings=body.map(ring);
+  for(let i=0;i<rings.length-1;i++)connect(rings[i],rings[i+1],i%3===1?[.54,.371,.215]:timber);
+  for(const idx of [0,body.length-1]){
+   const [u,h,v]=body[idx],p=[x+u,y+h,z+v],q=rings[idx];
+   for(let i=0;i<sides;i++){
+    const j=(i+1)%sides;
+    if(idx)tri(m,p,q[j],q[i],grain);
+    else tri(m,p,q[i],q[j],dark);
+   }
+  }
+  for(const h of [.337,.373,.413]){
+   const near=ring([0,h,0,.073]),far=ring([0,h+.015,0,.072]);
+   connect(near,far,lash);
+  }
  }else if(id==='equipLongStaff'){
   poiLongWoodStaffGeometry(m,x,y,z);
  }else if(id==='fireWand'){
@@ -7492,16 +7520,19 @@ const POI_ORCHESTRA_INSTRUMENTS={
  harp:{harm:[1,.40,.22,.09,.074,.035,.019],gain:.31,attack:.008,tail:.30,cutoff:4400,plucked:true},
  timpani:{drum:true,gain:.27},snare:{drum:true,gain:.15}
 };
-const POI_ORCHESTRA_LOOKAHEAD=.43,POI_ORCHESTRA_FADE=.93;
+const POI_ORCHESTRA_LOOKAHEAD=.43,POI_ORCHESTRA_FADE=.93,POI_ORCHESTRA_ENTRY_DECAY=.38;
 const poiOrchestraDecks=new Map(),poiOrchestraScoreCache=new Map();
 let poiOrchestraActive=null,poiOrchestraBattleUntil=-Infinity,poiOrchestraRoom=null,poiOrchestraTimbre=null;
 function poiOrchestraCombat(now=poiAudioContext?.currentTime){
- if(!Number.isFinite(now))return;
+ // An outdoor hit must not carry a battle cue into the next area.
+ if(!Number.isFinite(now)||(facilitySite?.id==='base'&&poiAudioMusicZone()==='outside'))return;
  poiOrchestraBattleUntil=Math.max(poiOrchestraBattleUntil,now+5.1);
 }
 function poiAudioSurfaceMusicZone(region){return region?.name==='外'||region?.difficulty>0?'outside':'town'}
 function poiOrchestraScene(now){
  const zone=facilitySite?.id==='base'?poiAudioMusicZone():'indoor';
+ // Field combat uses the same recording as field exploration.
+ if(zone==='outside')return zone;
  // Prefer the musical exploration cue until an attack is truly committed,
  // rather than using an idle lock reticle to turn every wildlife sighting
  // into a battle. Being hit and landing a hit also refresh the combat hold.
@@ -7614,10 +7645,10 @@ function poiMysticFieldTry(deck,now){
  const loop=poiOrchestraSource(deck,source,[gain],when,null);
  if(!loop){deck.fieldFailed=true;return false}
  deck.fieldLoop=loop;
- gain.gain.setTargetAtTime(POI_MYSTIC_FIELD_GAIN,when,.13);
- // Only the field synth handover uses this extra sub-bus. The ordinary
- // scene bus still performs the existing zone crossfades and mute/master mix.
- deck.fieldSynth?.gain.setTargetAtTime(0,when,.11);
+ // A late decode can miss the scene's fade. In that case give the recording
+ // its own soft entry; a promptly decoded recording still enters through the scene bus.
+ const late=deck.entryDecay===POI_ORCHESTRA_ENTRY_DECAY&&now-deck.entryAt>=deck.entryDecay;
+ gain.gain.setTargetAtTime(POI_MYSTIC_FIELD_GAIN,when,late?deck.entryDecay:.13);
  return true;
 }
 // END MYSTIC OUTDOOR RECORDING
@@ -7640,7 +7671,7 @@ function poiOrchestraVoice(deck,e,when){
  if(k.drum){
   const src=ctx.createBufferSource(),clip=poiOrchestraDrum(ctx,e.instrument);
   src.buffer=clip;gain.gain.value=peak;
-  src.connect(gain).connect(deck.fieldSynth||deck.bus);
+  src.connect(gain).connect(deck.bus);
   poiOrchestraSource(deck,src,[gain],when,when+clip.duration+.015);
   return;
  }
@@ -7662,7 +7693,7 @@ function poiOrchestraVoice(deck,e,when){
  if(k.plucked)gain.gain.exponentialRampToValueAtTime(Math.max(.0001,peak*.19),off);
  else gain.gain.linearRampToValueAtTime(peak*.78,off);
  gain.gain.exponentialRampToValueAtTime(.0001,off+k.tail);
- osc.connect(filter).connect(gain).connect(deck.fieldSynth||deck.bus);
+ osc.connect(filter).connect(gain).connect(deck.bus);
  poiOrchestraSource(deck,osc,[filter,gain],when,off+k.tail+.025);
 }
 function poiOrchestraDrop(key,deck,now){
@@ -7670,7 +7701,6 @@ function poiOrchestraDrop(key,deck,now){
   try{event.source.stop(now)}catch(e){}
   event.cleanup();
  }
- try{deck.fieldSynth?.disconnect()}catch(e){}
  try{deck.bus.disconnect()}catch(e){}
  poiOrchestraDecks.delete(key);
 }
@@ -7697,20 +7727,23 @@ function poiOrchestraActivate(scene,now){
   const bus=ctx.createGain();bus.gain.value=0;bus.connect(poiAudioMusic);
   const room=poiOrchestraRoomStart(ctx);if(room)bus.connect(room);
   current={score:poiOrchestraScore(scene),start:now+.065,index:0,cycle:0,bus,retire:null,sources:new Set()};
-  if(scene==='outside'){
-   current.fieldSynth=ctx.createGain();current.fieldSynth.gain.value=1;
-   current.fieldSynth.connect(bus);
-  }
   poiOrchestraDecks.set(scene,current);
  }
- current.retire=null;current.bus.gain.setTargetAtTime(1,now,prior===null?.10:.22);
+ current.retire=null;
+ current.entryAt=now;current.entryDecay=prior===null?.10:POI_ORCHESTRA_ENTRY_DECAY;
+ current.bus.gain.setTargetAtTime(1,now,current.entryDecay);
  poiOrchestraActive=scene;return current;
 }
 function poiOrchestraTick(now){
  if(!poiAudioContext||poiAudioContext.state!=='running'||!poiWalkActive||!poiAudioEnabled||!poiAudioAllowed())return;
  for(const [key,deck] of poiOrchestraDecks)if(deck.retire!==null&&deck.retire<=now)poiOrchestraDrop(key,deck,now);
  const scene=poiOrchestraScene(now),deck=poiOrchestraActivate(scene,now);
- if(scene==='outside'&&poiMysticFieldTry(deck,now))return;
+ if(scene==='outside'){
+  // Decode can take a moment on Android. Keep the field quiet rather than
+  // blend in an unrelated tune (also when this WebView cannot decode Ogg).
+  poiMysticFieldTry(deck,now);
+  return;
+ }
  const {events,duration}=deck.score;
  if(!events.length||!(duration>0))return;
  const cycle=Math.max(0,Math.floor((now-deck.start)/duration));
@@ -16436,7 +16469,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v262',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v263',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -16551,7 +16584,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v262';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v263';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -16766,7 +16799,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v262',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v263',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -17708,7 +17741,7 @@ const POI_PLAYER_WEAPON_PROFILES=Object.freeze({
  equipIronSword:{...POI_SWORD_PROFILE,range:2,damage:30},
  equipNorthMinotaurAxe:{range:2.55,damage:34,hit:300,ready:800,pose:670,sweep:true,frontArc:true,speed:2,reach:3},
  equipPlainStaff:{range:1,damage:23,hit:140,ready:350,pose:300,speed:3,reach:1},
- equipLongStaff:{range:2,damage:20,hit:210,ready:510,pose:400,speed:2,reach:2},
+ equipLongStaff:{range:2,damage:20,hit:210,ready:510,pose:400,commitAim:true,speed:2,reach:2},
  equipFryingPan:{range:1,damage:26,hit:150,ready:425,pose:320,speed:3,reach:1},
  equipLadle:{range:1,damage:17,hit:95,ready:265,pose:230,speed:4,reach:1},
  equipBallpointPen:{range:1,damage:12,hit:70,ready:195,pose:180,speed:5,reach:1},
@@ -17952,13 +17985,20 @@ function poiPlayerWeaponFrame(now){
   else poiPlayerWeaponResolve(a,now);
   return;
  }
- // Only windup is committed in place. Once launched, an arrow keeps
- // its original cardinal direction even after movement or equip changes.
+ // The bow stays raised while walking. Keep its committed bearing but
+ // release from the live grip's position, not where the draw started.
+ if(a.type==='equipWoodBow'){
+  if(poiEquippedWeapon()!==a.type){poiPlayerWeaponCancel(true);return}
+  if(now<a.started+a.profile.hit)return;
+  const released={...a,x:poiWalkX,z:poiWalkZ};
+  if(a.aim)released.aim=poiAimOrigin(now);
+  poiPlayerWeaponFlightBegin(released,now);return;
+ }
+ // The remaining windups are still committed in place.
  const moved=a.aim?poiAimWindupMoved(a,now):poiWalkX!==a.x||poiWalkZ!==a.z||poiWalkFacing!==a.facing;
  if(moved||
       poiEquippedWeapon()!==a.type){poiPlayerWeaponCancel(true);return}
  if(now<a.started+a.profile.hit)return;
- if(a.type==='equipWoodBow'){poiPlayerWeaponFlightBegin(a,now);return}
  poiPlayerWeaponPending=null;
  poiPlayerWeaponResolve(a,now);
 }
@@ -18165,7 +18205,10 @@ function poiWorldMeleeRig(plan,g,lead,grip){
  const lx=lead[0]-grip[0],ly=lead[1]-grip[1],lz=lead[2]-grip[2];
  if(ly<=1e-6)return null;
  const length=Math.hypot(px,py,pz),yx=px/length,yy=py/length,yz=pz/length;
- const flat=Math.hypot(px,pz)||1,cx=flat===1&&px===0&&pz===0?1:pz/flat,cz=-px/flat;
+ // The reward axe cuts from right to left. Roll about the existing
+ // grip-to-apex axis so its sharpened +X edge leads that motion.
+ const roll=plan.arc==='north-player-axe'?-1:1;
+ const flat=Math.hypot(px,pz)||1,cx=roll*(flat===1&&px===0&&pz===0?1:pz/flat),cz=-roll*px/flat;
  const zx=-cz*yy,zy=cz*yx-cx*yz,zz=cx*yy;
  const width=.58,depth=.53,stretch=length/ly;
  const sX=lx/ly,sZ=lz/ly;

@@ -32,11 +32,11 @@ test('moving across cells and rotating the thumb does not cancel mace pose or co
  a(api.pose('equipStoneMace',1400-c.poiWalkActionStarted),'normal recovery pose also remains');
  api.frame(1450);a.equal(s.hp,68);a.equal(calls.length,1);
 });
-test('bow windup still cancels on movement, and mace still cancels when changing gear or floor',()=>{
+test('bow and mace still cancel when changing gear or floor',()=>{
  for(const type of ['equipWoodBow','equipStoneMace']){
   const h=play(type);
   a(h.api.begin(type,1000));h.move();
-  if(type==='equipStoneMace')h.weapon.held='equipWoodSword';
+  h.weapon.held='equipWoodSword';
   h.api.frame(1100);
   a.equal(h.api.pending(),null);
   a.equal(h.api.visual(),null);
@@ -45,3 +45,4 @@ test('bow windup still cancels on movement, and mace still cancels when changing
  const h=play('equipStoneMace');h.api.begin('equipStoneMace',1000);h.c.poiWalkLevel=1;h.api.frame(1100);
  a.equal(h.api.pending(),null);a.equal(h.s.hp,100);
 });
+

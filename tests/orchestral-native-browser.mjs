@@ -48,7 +48,14 @@ function install(){
  window.__qaHoldNaturalMonsterTurns=true;
  // Preserve native AudioContext (no virtual clock, replacement oscillator,
  // default mixer change, or synthetic supply of a trusted touch).
- const proto=AudioContext.prototype,ids=new WeakMap(),parents=new WeakMap(),ops=new WeakMap();
+ const proto=AudioContext.prototype,ids=new WeakMap(),parents=new WeakMap(),ops=new WeakMap(),decoded=new WeakSet();
+ const decode=proto.decodeAudioData;
+ proto.decodeAudioData=function(data,success,failure){
+  const done=b=>{decoded.add(b);return b};
+  const result=decode.call(this,data,success?b=>success(done(b)):undefined,failure);
+  result?.then(done,()=>{});
+  return result;
+ };
  let serial=1,played=[];
  const id=n=>{if(!n)return null;if(!ids.has(n))ids.set(n,serial++);return ids.get(n)};
  const observe=n=>{
@@ -76,7 +83,8 @@ function install(){
      const links=[];let sink=parents.get(n);
      for(let j=0;sink&&j<15;j++){links.push(id(sink));sink=parents.get(sink)}
      event={id:id(n),method,wave,when:when??0,at:this.context.currentTime,
-      len:n.buffer?.length??null,rate:n.buffer?.sampleRate??null,links,scheduledStop:null,ended:false};
+      len:n.buffer?.length??null,rate:n.buffer?.sampleRate??null,loop:n.loop===true,
+      duration:n.buffer?.duration??null,decoded:!!n.buffer&&decoded.has(n.buffer),links,scheduledStop:null,ended:false};
      played.push(event);if(played.length>1400)played.shift();
      n.addEventListener('ended',()=>{event.ended=true},{once:true});
      return start.apply(this,when===undefined?[]:[when,...other]);
@@ -143,16 +151,28 @@ try{
  });
  let observed=await qa();checkMixer(observed.graph);
  assert.equal(observed.saved,volumeRaw);
+ assert.equal(observed.graph.decks.town.actions.find(e=>e[0]==='setTargetAtTime'&&e[1]===1)?.[3],.10,'first app music onset did not get slower');
  const stoppedTown=waves(observed.graph).map(e=>e.id);
  const masterId=observed.graph.buses[0].id;
  assert(stoppedTown.length&&waves(observed.graph).every(e=>e.links.includes(masterId)&&!e.links.includes(observed.graph.buses[3].id)));
  checkpoint='named outdoor location and rapid mixing across room boundary';
- observed=await scene('outside');assert.equal(observed.geo,'outside');assert.deepEqual(observed.coords,[87,2,0]);assert.equal(observed.region.name,'北の林道');assert.equal(observed.region.difficulty,1);assert(!observed.indoors);
+ await locate('outside');
+ await wait(()=>window.__editorTest.orchestraNative.read().score?.active==='outside');
+ observed=await qa();assert.equal(observed.geo,'outside');assert.deepEqual(observed.coords,[87,2,0]);assert.equal(observed.region.name,'北の林道');assert.equal(observed.region.difficulty,1);assert(!observed.indoors);
  assert(observed.score.decks.length===2,'native returning scene starts as a two-deck fade, not immediate replacement');
  const target=(key)=>observed.graph.decks[key].actions.filter(v=>v[0]==='setTargetAtTime').at(-1);
- assert(target('outside')[1]===1&&target('outside')[3]>.05,'new deck genuinely fades in');
- assert(target('town')[1]===0&&target('town')[3]>.05,'old deck genuinely fades out');
+ assert(target('outside')[1]===1&&target('outside')[3]===.38,'new deck fades in softly without delaying playback');
+ assert(target('town')[1]===0&&target('town')[3]===.19,'old deck keeps its existing fade out');
  assert(Math.abs(target('outside')[2]-target('town')[2])<.01,'fade operations share the actual context time');
+ const outsideBus=observed.graph.decks.outside.id;
+ await wait(({out})=>{
+  const r=window.__editorTest.orchestraNative.read(),music=r.graph.buses[1].id,fx=r.graph.buses[3].id;
+  return r.score?.active==='outside'&&r.graph.played.some(e=>e.method==='createBufferSource'&&e.decoded&&e.loop
+   &&e.duration>30&&e.duration<60&&e.links.includes(out)&&e.links.includes(music)&&!e.links.includes(fx));
+ },{out:outsideBus});
+ observed=await qa();const field=observed.graph.played.filter(e=>e.links.includes(outsideBus));
+ assert.equal(field.length,1,'outside uses only the decoded recording, never a synthesized cue during decoding');
+ assert(field[0].links.includes(masterId),'field recording shares the original master mixer');
  observed=await scene('indoor');assert(observed.indoors);assert(observed.score.decks.length<=2);
  observed=await scene('town');assert(observed.score.decks.length<=2);
  await wait(()=>window.__editorTest.orchestraNative.read().score?.decks.length===1);
