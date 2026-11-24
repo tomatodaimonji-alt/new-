@@ -227,15 +227,15 @@ try{
   await ctx.route('**/*',r=>r.request().url().startsWith(origin)?r.continue():(remote.push(r.request().url()),r.abort()));
   await page.addInitScript(startProbe);
   await page.goto(origin+'/seed');
-  await page.evaluate(({coldSnow,initialKit,profile,muted})=>{
+  await page.evaluate(({coldSnow,initialKit,profile,muted,rimOnly})=>{
    if(muted)localStorage.setItem('world-workshop-audio-v2',JSON.stringify({master:0,bgm:0,se:0}));
    localStorage.setItem('world-workshop-hotbar-v1',initialKit);
-   localStorage.setItem('world-workshop-town-clock-v1','{"version":1,"gameMs":2094500}');
+   localStorage.setItem('world-workshop-town-clock-v1','{"version":1,"gameMs":1374500}');
    localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
     ...(coldSnow?{region:'snowpass',regionHp:78}:{}),
-    position:coldSnow?{x:3,z:14,y:0,facing:3}:profile==='away'?{x:54,z:112,y:0,facing:2}:{x:46,z:153,y:0,facing:1},townLayout:5,townMapHeight:182,templeDepth:1,
+    position:coldSnow?{x:3,z:15,y:0,facing:3}:profile==='away'?{x:54,z:112,y:0,facing:2}:{x:46,z:rimOnly?153:154,y:0,facing:1},townLayout:5,townMapHeight:182,templeDepth:1,
     view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:0,orbitPitch:.24,orbitDistance:5.5}}));
-  },{coldSnow,initialKit,profile,muted:process.env.SNOW_PROFILE_MUTED==='1'});
+  },{coldSnow,initialKit,profile,rimOnly:process.env.WEST_RIM_ONLY==='1',muted:process.env.SNOW_PROFILE_MUTED==='1'});
   await page.goto(origin+'/?resume=1&test=1'+(process.env.SNOW_SEAM_QUERY??''));
   await page.locator('#pineStartupCover').waitFor({state:'hidden',timeout:20000});
   const get=()=>page.evaluate(()=>window.__editorTest?.seamlessSnowQA());
