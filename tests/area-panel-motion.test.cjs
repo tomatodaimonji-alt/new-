@@ -41,24 +41,16 @@ test('startup-inert spawn then actual saved position both settle silently; first
  x.call(b);assert.equal(x.animations.length,0);
  x.call(a);assert.equal(x.animations.length,1,'first player-driven boundary still animates');
 });
-test('landscape area transition sits to the right of the HUD, grows moderately, and eases home slowly',()=>{
- for(const [screen,left,card] of [[568,5,77],[844,24,94],[1120,58,100]]){
+test('landscape cue brightens only the fixed area card; motion never overlaps the party',()=>{
+ for(const [screen,left,card] of [[568,5,77],[844,24,94],[1120,58,100],[520,350,90]]){
   const x=setup(false,false,{screen,left,card});x.call(a);x.call(b);
   const {frames,timing}=x.animations[0],peak=frames[1];
-  const m=/^translateX\(([0-9.]+)px\) scale\(([0-9.]+)\)$/.exec(peak.transform);
-  assert.ok(m);const dx=+m[1],grow=+m[2];
-  assert(dx>=card+8&&dx<=148.5);
-  assert(grow>=1.45&&grow<=1.55);
-  assert(left+dx+grow*card<=screen-10);
+  assert(frames.every(v=>!v.transform));
+  assert(peak.boxShadow.includes('inset')&&peak.boxShadow.includes(',.72'));
   assert(timing.duration>=1650&&timing.duration<=1850);
-  assert((1-frames.at(-2).offset)*timing.duration>1000,'return alone is longer than before');
-  assert.equal(frames.at(-1).transform,'translateX(0) scale(1)');
+  assert((1-frames.at(-2).offset)*timing.duration>1000,'the cue maintains its long ease-out');
+  assert.equal(frames.at(-1).boxShadow,frames[0].boxShadow);
  }
-});
-test('landscape excursion fits if extreme left safe area leaves less horizontal room; reduced motion still skips it',()=>{
- const cramped=setup(false,false,{screen:520,left:350,card:90});
- cramped.call(a);cramped.call(b);
- assert.match(cramped.animations[0].frames[1].transform,/translateX\(23px\)/);
  const reduced=setup(true,false,{screen:844,left:24,card:94});
  reduced.call(a);reduced.call(b);assert.equal(reduced.animations.length,0);
 });
@@ -75,3 +67,4 @@ test('every area has ten stars without changing existing game difficulty',()=>{
  assert.match(h,/#poiLocationPanel\{min-width:0;display:grid;grid-template-columns:minmax\(0,1fr\)/);
  assert.match(h,/危険度 '\+area.difficulty\+'／10/);
 });
+

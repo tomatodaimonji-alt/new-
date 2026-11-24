@@ -12,7 +12,7 @@ html=html.replace(anchor,anchor+`
   return {scene,pose,global,tile:[poiWalkX,poiWalkZ],facing:poiWalkFacing,
    pointer:poiAnalogContact?.id??null,switches:poiSnowPassSwitches,veil:!$('poiSnowTransitionVeil').hidden,
    light:[...gl.getUniform(program,loc.daylight)],sky:$('viewWrap').hasAttribute('data-poi-sky'),
-   theater:poiSnowTempleNeighbor.length,stream:poiOverlandDrawing,
+   concealed:scene!=='base'||poiSacredTempleViewAmount()===0,stream:poiOverlandDrawing,
    neighbor:poiOverlandDrawn.some(q=>q.id!==scene),kind:poiOrchestraScene(performance.now()),error:gl.getError()};
  },
 `);
@@ -43,8 +43,8 @@ try{
    const read=()=>p.evaluate(()=>window.__editorTest?.snowFrontQA());let start=await read();
    a.deepEqual(start.tile,v.start);a.equal(start.scene,v.id);
    if(v.id==='base'&&v.axis===0){
-    await p.waitForFunction(()=>window.__editorTest.snowFrontQA().theater>0,null,{polling:30,timeout:10000});
-    start=await read();a.equal(start.stream,false,'stock temple and additive genuine Snow remain separate owners');
+    await p.waitForFunction(()=>{const s=window.__editorTest.snowFrontQA();return s.stream&&s.neighbor},null,{polling:30,timeout:10000});
+    start=await read();a(start.concealed,'real adjacent ground is visible under steady streamed ownership without disclosing the temple');
    }
    const cdp=await ctx.newCDPSession(p);
    const box=await p.locator('#poiAnalogPad').boundingBox(),q={x:Math.round(box.x+box.width/2),y:Math.round(box.y+box.height/2),id:7};

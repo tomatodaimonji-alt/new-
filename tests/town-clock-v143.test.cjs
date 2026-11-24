@@ -4,7 +4,7 @@ function fixture(saved){
  const a=h.indexOf('const POI_TOWN_CLOCK_KEY='),b=h.indexOf('function poiShopIsOpen(',a);
  assert(a>=0&&b>a,'town clock source');
  const panel={hidden:true},value={textContent:''},day={textContent:''},writes=new Map();if(saved)writes.set('world-workshop-town-clock-v1',saved);
- const c={facilitySite:{id:'base'},poiWalkActive:true,pineAIActive:false,document:{hidden:false},
+ const c={facilitySite:{id:'base'},poiWalkViewX:41,poiWalkViewZ:62,poiWalkActive:true,pineAIActive:false,document:{hidden:false},
   $:id=>({poiClockHud:panel,poiClockValue:value,poiClockDay:day}[id]),localStorage:{getItem:k=>writes.get(k)||null,setItem:(k,v)=>writes.set(k,v)}};
  vm.createContext(c);vm.runInContext(h.slice(a,b),c);
  return {c,panel,value,day,writes};
