@@ -12,8 +12,9 @@ test('forest is a dry continuously walkable append without trading city or snow 
   if(i){const q=f.route[i-1];a.equal(Math.abs(q.x-p.x)+Math.abs(q.z-p.z),1)}
   const tiles=site.map.world.filter(o=>key(o)===key(p));a(tiles.length===1&&/^(road|earth|grass)/.test(tiles[0].type),key(p));
  }
- const prev=site.map.world.slice(0,f.authored.index),newTiles=site.map.world.slice(f.authored.index),oldSlots=new Set(prev.map(key));
- a.equal(prev.length,8832);a(newTiles.length<=190&&newTiles.every(o=>!oldSlots.has(key(o))&&o.y===0));
+ const prev=site.map.world.slice(0,f.authored.index),newTiles=site.map.world.slice(f.authored.index,f.authored.index+f.authored.count),oldSlots=new Set(prev.map(key));
+ a.equal(prev.length,8832);a.equal(newTiles.length,f.authored.count);
+ if(site.davidTemple)a.equal(f.authored.index+f.authored.count,site.davidTemple.authored.index);a(newTiles.length<=190&&newTiles.every(o=>!oldSlots.has(key(o))&&o.y===0));
  a(f.props.filter(o=>/^tree/.test(o.type)).length>=15);a(f.props.some(o=>o.type==='benchWood'));a(f.props.some(o=>o.type==='lantern'));
  a(!newTiles.some(o=>/snow|portal|monster/i.test(o.type)));
  const digest=crypto.createHash('sha256').update(JSON.stringify(prev)).digest('hex');

@@ -12,8 +12,23 @@ function beforeMineDepths(world){
   [5799,121,50,'stonewall'],[5828,115,57,'mosswall']])restored.splice(i,0,{x,z,y:-1,type,rot:0});
  return restored;
 }
+// The temple owns only the verified final v270 map suffix and one building.
+function beforeDavidTemple(site){
+ if(!site.davidTemple)return site;
+ const {davidTemple,...historic}=site,{index,count}=davidTemple.authored;
+ assert.equal(index,8984,'temple begins after all v270 records');
+ assert(Number.isInteger(count)&&count>0&&index+count===site.map.world.length,'remove only the exact declared temple suffix');
+ assert.equal(site.buildings.at(-1)?.id,'davidTemple');
+ assert.equal(site.buildings.at(-1)?.name,davidTemple.name);
+ const world=site.map.world.slice(0,index),prior={...historic,buildings:site.buildings.slice(0,-1),map:{...site.map,world}};
+ const digest=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
+ assert.equal(digest(world),'15535689893b8a631827467885930d45d786e0d3b559b74d6a2544267d03439a','all ordered v270 object records stay exact');
+ assert.equal(digest(prior),'b5f7eafccb90cb882df71e05f1c036e08966a4b06d57ced7430c20f2bb57386e','all v270 site metadata stays exact');
+ return prior;
+}
 // Project only the new final forest parcel out of older historical checks.
 function beforeSouthForest(site){
+ site=beforeDavidTemple(site);
  if(!site.southForest)return site;
  const {southForest,...historical}=site,{index,count}=southForest.authored;
  assert.equal(southForest.name,'潮風の森');
@@ -230,4 +245,4 @@ function beforeAbandonedMine(site){
  assert.equal(digest,exactMine,'only the exact v167 mine records are exempt; untouched v166 mine records are pinned separately');
  return {...other,map:{...map,world:world.slice(0,oldLength)}};
 }
-module.exports={beforeSouthForest,beforeSouthPort,beforeNorthFort,beforeSouthTown,beforeSouthCreek,beforeMineLongApproach,beforeSouthRoad,beforeArtisanPlant,beforeChapelApproach,beforeMinePrep,beforeChapelWest,beforeAbandonedMine,beforeMineDepths,beforeOtherworld,beforeMineEntry,beforeChapel,beforeArmedEncounters,beforeNorthTrail,beforeForestWatchPost,beforePondMarsh,beforeWayfarer,beforeOtherworldDepths};
+module.exports={beforeDavidTemple,beforeSouthForest,beforeSouthPort,beforeNorthFort,beforeSouthTown,beforeSouthCreek,beforeMineLongApproach,beforeSouthRoad,beforeArtisanPlant,beforeChapelApproach,beforeMinePrep,beforeChapelWest,beforeAbandonedMine,beforeMineDepths,beforeOtherworld,beforeMineEntry,beforeChapel,beforeArmedEncounters,beforeNorthTrail,beforeForestWatchPost,beforePondMarsh,beforeWayfarer,beforeOtherworldDepths};
