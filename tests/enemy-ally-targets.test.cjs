@@ -24,3 +24,22 @@ test('allied red warning submission is absent; genuine beam, hostile cue and gro
  a.match(h,/if\(emission\)\{[\s\S]{0,850}poiDavidThermalBeam\(q/);
  a.match(h,/if\(visual.kind==='stomp'\)poiDavidImpactStomp\(visual,now\)/);
 });
+test('the real ordinary resolver does not hit hero when a committed ally walks away, is replaced or loses live line',()=>{
+ const begin=h.indexOf('// BEGIN SLIME ATTACK'),end=h.indexOf('// END SLIME ATTACK');
+ const choose=h.indexOf('// BEGIN HOSTILE ALLY TARGET CHOICE'),chooseEnd=h.indexOf('// END HOSTILE ALLY TARGET CHOICE');
+ const sk={type:'monsterSkeleton',y:0},s={x:4,z:5,hp:45,nextAttack:0},hits=[],buddies=[];
+ const ally={id:'slimeSoul',x:5,z:5,y:0},world={},same={x:5,z:5};
+ const v=vm.createContext({poiWalkActive:true,poiWalkLevel:0,poiWalkX:5,poiWalkZ:5,pineAIActive:false,
+  facilitySite:{id:'base'},poiMonsterStates:new Map([[sk,s]]),poiPlayerDying:()=>false,poiAudioAllowed:()=>true,
+  poiMonsterMeshDirty:false,poiMobHitPlayer:()=>{hits.push('hero');return false},poiCompanionActor:ally,poiCompanionAllowed:()=>true,
+  poiCompanionSame:()=>true,poiCompanionPlace:()=>world,poiCompanionPose:a=>a,
+  poiCompanionSeenContacts:new WeakSet(),poiCompanionEncounterAllows:()=>true,
+  poiCompanionAttackClear:()=>v.wall!==true,poiMonsterStatsAt:()=>({attack:9}),poiCompanionHurt:n=>{buddies.push(n);return true}});
+ vm.runInContext(h.slice(choose,chooseEnd)+h.slice(begin,end),v);
+ function next(now){s.nextAttack=0;a(v.poiEnemyBeginPlayer(sk,s,now,{...same,actor:ally}));return s.playerAttack.hit}
+ let at=next(100);v.poiEnemyResolvePlayer(at);a.deepEqual(buddies,[9]);a.deepEqual(hits,[]);
+ at=next(1200);ally.z=6;v.poiEnemyResolvePlayer(at);a.deepEqual(buddies,[9]);a.deepEqual(hits,[]);
+ ally.z=5;at=next(2300);v.poiCompanionActor={...ally};v.poiEnemyResolvePlayer(at);a.deepEqual(buddies,[9]);a.deepEqual(hits,[]);
+ v.poiCompanionActor=ally;at=next(3400);v.wall=true;v.poiEnemyResolvePlayer(at);a.deepEqual(buddies,[9]);a.deepEqual(hits,[]);
+ v.wall=false;s.nextAttack=0;a(v.poiEnemyBeginPlayer(sk,s,4500));v.poiEnemyResolvePlayer(s.playerAttack.hit);a.deepEqual(hits,['hero']);
+});
