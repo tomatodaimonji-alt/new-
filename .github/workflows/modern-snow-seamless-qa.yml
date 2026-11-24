@@ -1,4 +1,4 @@
-name: Isolated modern seamless snow QA
+name: Isolated cold-return palette attribution
 on:
   push:
     branches: ['dot/workshop-modern-snow-seamless-qa']
@@ -11,60 +11,43 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [audible-a, audible-b, strict, scenery-saves, audio, temple-npc]
+        suite: [ab-a, ab-b, strict, editor-save]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: {node-version: '22'}
-      - name: Assemble exact live v289 and streaming candidate
+      - name: Assemble exact v289, held candidate and one scoped trial
         run: |
           test "$(git hash-object world-editor.html)" = 7db83b92dbc97a49f1d31d040b8a92c0d671f195
-          cp world-editor.html stock-v289.html
-          python .snowqa/build.py stock-v289.html .snowqa/stream.html --default
+          python .snowqa/build.py world-editor.html .snowqa/stream.html --default
           python .snowqa/horizon-safe.py .snowqa/stream.html .snowqa/quiet.html
           python .snowqa/path-ast-trial.py .snowqa/quiet.html .snowqa/world-editor.html
           test "$(git hash-object .snowqa/world-editor.html)" = 5c702aadcb93b4e4fed0c9a79a54a8725c1a70ca
-          cd .snowqa && node --test tests/*.cjs
+          python .snowqa/cold-palette-reuse.py .snowqa/world-editor.html .snowqa/palette-trial.html
+          test "$(git hash-object .snowqa/palette-trial.html)" = e169ad1c599f901880b5cbab93aaffe935e47d7c
+          cd .snowqa && PALETTE_HTML=palette-trial.html node --test tests/*.cjs
       - if: matrix.suite != 'strict'
         run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
-      - if: startsWith(matrix.suite, 'audible')
-        name: Unchanged full-drag audible gate and same-host stock/candidate matching
+      - if: startsWith(matrix.suite, 'ab-')
+        name: Counterbalanced same-host exact audible A/B, original unchanged gate
         shell: bash
         run: |
+          first=world-editor.html; second=palette-trial.html
+          if [ "${{ matrix.suite }}" = ab-b ]; then first=palette-trial.html; second=world-editor.html; fi
           code=0
-          for iteration in 1 2; do
-            echo "Original audible gate, run $iteration"
-            SNOW_PHASE_REPORT=1 node .snowqa/tests/snow-continuous-seam-browser.mjs .snowqa/world-editor.html || code=1
+          for html in "$first" "$second" "$first" "$second"; do
+            echo "Verified audible whole-drag input: $html"
+            SNOW_PHASE_REPORT=1 SNOW_PALETTE_REPORT=1 node .snowqa/tests/snow-continuous-seam-browser.mjs ".snowqa/$html" || code=1
           done
-          echo "Stock v289, same host and seed (audible, matched instrumentation)"
-          SNOW_MATCHED_STOCK_ONLY=1 node .snowqa/tests/snow-matched-gpu-browser.mjs stock-v289.html || code=1
-          echo "Candidate v289, same host and seed (audible, matched instrumentation)"
-          node .snowqa/tests/snow-matched-gpu-browser.mjs .snowqa/world-editor.html || code=1
           exit "$code"
       - if: matrix.suite == 'strict'
         run: |
-          cp .snowqa/world-editor.html world-editor.html
+          cp .snowqa/palette-trial.html world-editor.html
           c=0
           node --test --test-reporter=tap tests/*.cjs >strict.log 2>&1 || c=$?
           grep -E '^(not ok|# tests|# pass|# fail)' strict.log || true
           exit "$c"
-      - if: matrix.suite == 'scenery-saves'
+      - if: matrix.suite == 'editor-save'
         run: |
-          n=.snowqa/world-editor.html
-          node .snowqa/tests/snow-neighbor-alignment-browser.mjs "$n"
-          node .snowqa/tests/snow-visible-from-forest-browser.mjs "$n"
-          node .snowqa/tests/snow-pass-browser.mjs "$n"
-          USE_STREAM_DEFAULT=1 USE_STREAM_SIGN_PROOF=1 node .snowqa/tests/overland-outlet-browser.mjs "$n"
-          node .snowqa/tests/south-forest-road-browser.mjs "$n"
-      - if: matrix.suite == 'audio'
-        run: |
-          n=.snowqa/world-editor.html
-          node tests/mystic-field-bgm-browser.mjs "$n"
-          node tests/snow-audio-browser.mjs "$n"
-          node tests/orchestral-native-browser.mjs "$n"
-      - if: matrix.suite == 'temple-npc'
-        run: |
-          n=.snowqa/world-editor.html
-          node .snowqa/tests/snow-authored-npc-path-parity-browser.mjs "$n"
-          node tests/david-temple-browser.mjs "$n"
-          node tests/monster-companion-combat-browser.mjs "$n"
+          node .snowqa/tests/snow-pass-browser.mjs .snowqa/palette-trial.html
+          USE_STREAM_DEFAULT=1 USE_STREAM_SIGN_PROOF=1 node .snowqa/tests/overland-outlet-browser.mjs .snowqa/palette-trial.html

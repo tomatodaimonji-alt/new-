@@ -93,6 +93,18 @@ if(process.env.SNOW_PHASE_REPORT){
  }
 
 }
+if(process.env.SNOW_PALETTE_REPORT==='1'){
+ const a=html.indexOf('function refreshPalette(){'),b=html.indexOf('function numeric(',a);
+ assert(a>=0&&b>a);
+ const body=html.slice(a,b),end=body.lastIndexOf('}');
+ const probed=body.replace('function refreshPalette(){','function refreshPalette(){const p0=performance.now();');
+ const mark=probed.lastIndexOf('}');
+ html=html.slice(0,a)+probed.slice(0,mark)+`if(window.__snowSeamProbe?.active)(window.__snowSeamProbe.palette??=[]).push({at:performance.now(),elapsed:performance.now()-p0,region:facilitySite?.id,kind:'paint'});`+probed.slice(mark)+html.slice(b);
+ const start=html.indexOf('function poiSnowPassRestoreBaseMap('),stop=html.indexOf('function poiSnowPassDrawMeasured(',start);
+ assert(start>=0&&stop>start);
+ const map=html.slice(start,stop),border=map.lastIndexOf('}');
+ html=html.slice(0,start)+map.slice(0,border)+`if(window.__snowSeamProbe?.active)(window.__snowSeamProbe.palette??=[]).push({at:performance.now(),kind:'restored'});`+map.slice(border)+html.slice(stop);
+}
 if(process.env.SNOW_SEAM_SYNTAX_ONLY==='1'){
  for(const [,,body] of [...html.matchAll(/<script(?:\s+([^>]*))?>([\s\S]*?)<\/script>/gi)].filter(([,a])=>!a||!/\b(?:src|type)\s*=/.test(a)))new Script(body);
  console.log('PASS exact seamless snow browser fixture anchors and script parse');process.exit(0);
@@ -234,7 +246,7 @@ try{
    const bind=id=>({x:Math.round(pad.x+pad.width/2),y:Math.round(pad.y+pad.height/2),id,radiusX:4,radiusY:4,force:.7});
    async function cross(sign,label,id){
     const from=await get(),input=bind(id),dst=sign>0?'snowpass':'base';
-    const start=await page.evaluate(()=>{const s=window.__snowSeamProbe;s.active=true;s.frames=[];s.phases=[];s.switchPhases=[];s.audio=[];s.longTasks=[];s.animation=[];s.npc=[];s.remote=[];s.paths=[];s.veils=[];s.samples=[];s.uploads=[];s.thumb=[];s.sceneCounts=[];s.masked=0;s.high=s.live;
+    const start=await page.evaluate(()=>{const s=window.__snowSeamProbe;s.active=true;s.frames=[];s.phases=[];s.switchPhases=[];s.palette=[];s.audio=[];s.longTasks=[];s.animation=[];s.npc=[];s.remote=[];s.paths=[];s.veils=[];s.samples=[];s.uploads=[];s.thumb=[];s.sceneCounts=[];s.masked=0;s.high=s.live;
      return {at:performance.now(),live:s.live};});
     await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[input]});
     await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...input,y:input.y+sign*36}]});
@@ -271,7 +283,7 @@ try{
      const top=(q.phases||[]).toSorted((a,b)=>b.total-a.total).slice(0,5);
      const around=(q.phases||[]).filter((x,i,a)=>i&&x.region!==a[i-1].region).map((x,i)=>x);
      const slow=Object.assign([],q.frames.slice(1).map((t,i)=>({t,start:q.frames[i],gap:t-q.frames[i]}))).toSorted((a,b)=>b.gap-a.gap).slice(0,3);
-     console.log('Seam CPU phases',JSON.stringify({label,top,around,slow,audio:q.audio,frameAttribution:(q.animation||[]).toSorted((a,b)=>b.duration-a.duration).slice(0,4),npc:(q.npc||[]).toSorted((a,b)=>b.init+b.port+b.routine-a.init-a.port-a.routine).slice(0,4),switches:q.switchPhases,paths:(q.paths||[]).toSorted((a,b)=>b.elapsed-a.elapsed).slice(0,8)}));
+     console.log('Seam CPU phases',JSON.stringify({label,top,around,slow,audio:q.audio,frameAttribution:(q.animation||[]).toSorted((a,b)=>b.duration-a.duration).slice(0,4),npc:(q.npc||[]).toSorted((a,b)=>b.init+b.port+b.routine-a.init-a.port-a.routine).slice(0,4),switches:q.switchPhases,palette:q.palette??[],paths:(q.paths||[]).toSorted((a,b)=>b.elapsed-a.elapsed).slice(0,8)}));
     }
     assert(sign*(position(end)-position(from))>.6,'global walking crosses the registered world edge');
     if(continued){
