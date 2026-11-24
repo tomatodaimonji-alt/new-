@@ -1,0 +1,36 @@
+name: Disposable Heal Multitouch QA
+on:
+  push:
+    branches: [dot/workshop-heal-multitouch-qa]
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        test: [red, movement-heal-multitouch-browser, healing-cast-browser, movement-weapon-switch-browser]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save playwright@1.56.1
+      - run: npx playwright install chromium
+      - if: matrix.test == 'red'
+        shell: bash
+        run: |
+          git show 3b7b0d0c80fadc3281388665634f3aad6f93e6cb:world-editor.html > "$RUNNER_TEMP/baseline.html"
+          git hash-object "$RUNNER_TEMP/baseline.html" | grep '^08287b87dc36c9f433692987807e4fb05f888e80$'
+          if node tests/movement-heal-multitouch-browser.mjs "$RUNNER_TEMP/baseline.html" > "$RUNNER_TEMP/red.out" 2>&1; then
+            cat "$RUNNER_TEMP/red.out"
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/red.out"
+          grep -F 'secondary herb tap begins timed cast while left thumb is physically down' "$RUNNER_TEMP/red.out"
+      - if: matrix.test != 'red'
+        run: node tests/${{ matrix.test }}.mjs

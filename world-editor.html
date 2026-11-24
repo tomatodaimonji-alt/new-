@@ -15824,18 +15824,18 @@ function poiWireMovingWeaponShortcuts(bar,bag,find){
  const clicks=[];
  const allowed=()=>bag.hidden&&!poiBagKeySource&&$('viewWrap').hasAttribute('data-analog-play')&&
   poiAnalogAllowed()&&poiInventoryAllowed();
- const weaponSlot=button=>{
+ const movingSlot=button=>{
   const raw=button?.dataset.hotbarSlot,slot=Number(raw);
   if(raw===undefined||button.disabled||!Number.isInteger(slot)||slot<0||slot>=POI_HOTBAR_SIZE)return null;
   const type=poiInventorySlot(poiHotbarRead(),slot);
-  return type===POI_FIRE_WAND||!!poiHotbarWeaponForType(type)?slot:null;
+  return type===POI_FIRE_WAND||!!poiHotbarWeaponForType(type)||type==='healingHerb'||type==='cannedFood'?{slot,type}:null;
  };
  const clear=()=>{right=null;clicks.length=0};
  bar.addEventListener('pointerdown',e=>{
   if(right||e.pointerType!=='touch'||e.isPrimary||e.button!==0||!poiAnalogContact||!allowed())return;
-  const button=find(e.target),slot=weaponSlot(button);
-  if(slot===null)return;
-  right={button,slot,id:e.pointerId,x:e.clientX,y:e.clientY,moved:false};
+  const button=find(e.target),item=movingSlot(button);
+  if(!item)return;
+  right={button,...item,id:e.pointerId,x:e.clientX,y:e.clientY,moved:false};
   try{button.setPointerCapture(e.pointerId)}catch(_e){}
  });
  bar.addEventListener('pointermove',e=>{
@@ -15843,12 +15843,13 @@ function poiWireMovingWeaponShortcuts(bar,bag,find){
  });
  bar.addEventListener('pointerup',e=>{
   if(right?.id!==e.pointerId)return;
-  const {button,slot,id,x,y,moved}=right;
+  const {button,slot,type,id,x,y,moved}=right;
   right=null;
   const now=performance.now();
   while(clicks.length&&(clicks[0].until<now||clicks.length>=6))clicks.shift();
   clicks.push({button,id,x:e.clientX,y:e.clientY,until:now+650});
-  if(moved||Math.hypot(e.clientX-x,e.clientY-y)>=10||!allowed()||weaponSlot(button)!==slot||
+  const item=movingSlot(button);
+  if(moved||Math.hypot(e.clientX-x,e.clientY-y)>=10||!allowed()||item?.slot!==slot||item.type!==type||
      find(document.elementFromPoint(e.clientX,e.clientY))!==button)return;
   e.preventDefault();poiStorageTapGate?.cancel();poiHotbarUse(slot);
  });
