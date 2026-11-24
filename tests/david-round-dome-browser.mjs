@@ -2,89 +2,92 @@ import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {createRequire} from 'node:module';
 import {readFileSync} from 'node:fs';
+import {mkdir} from 'node:fs/promises';
 import {Script} from 'node:vm';
-let fixture=readFileSync(process.argv[2]??'world-editor.html','utf8');
-function inject(a,b){assert.equal(fixture.split(a).length,2,a);fixture=fixture.replace(a,b)}
+let h=readFileSync(process.argv[2]??'world-editor.html','utf8');
+function inject(a,b){assert.equal(h.split(a).length,2,a);h=h.replace(a,b)}
 const qa="if(facilityParams.get('test')==='1')window.__editorTest={";
 inject(qa,qa+`
-  rooflessQA:{
+  templeSealQA:{
    frame:()=>render(),
-   state:()=>{
-    const d=facilitySite.davidTemple,roofOwner=facilitySite.buildings.findIndex(b=>b.id==='davidTemple'),q=parameters();
-    return {x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,room:facilityHiddenRoof(),visible:facilityVisibleRoofs(),third:poiThirdPerson,
-     sky:poiSkyCanLookUp(),cssSky:$('viewWrap').hasAttribute('data-poi-sky'),horizon:q.skyHorizon,
-     count:facilityRoofMeshes[roofOwner]?.count??0,roofOwner,entry:d.entrance,retreat:d.retreat,
-     flap:world.some(o=>o.y>0&&d.ring&&Math.hypot(o.x-d.ring.x,o.z-d.ring.z)<16),
-     raster:window.__templeSkyPixels??null,error:gl.getError()};
+   eye:()=>{
+    const pitch=poiCameraPitch,radius=poiCameraDistance;
+    try{poiCameraPitch=1.15;poiCameraDistance=12;parameters();return window.__seal.eye;}
+    finally{poiCameraPitch=pitch;poiCameraDistance=radius;}
    },
-   stepVector:key=>poiCameraRelativeStep(key),
-   view:(pitch,distance)=>{poiCameraPitch=poiOrbitPitchClamp(pitch);poiCameraDistance=distance;poiWalkCamera();}
+   state:()=>{
+    const s=facilitySite,d=s.davidTemple,roof=s.buildings.findIndex(b=>b.id==='davidTemple'),p=poiAimOrigin(performance.now());
+    return {pos:[poiWalkX,poiWalkZ,poiWalkLevel],room:facilityHiddenRoof(),visible:facilityVisibleRoofs(),roof,
+     covers:window.__seal.draws,corners:window.__seal.vertices,
+     indoors:poiWalkIndoor(),tunnel:poiDavidTempleTunnelAt(s,p.x,p.z,p.y),
+     light:poiTownSceneLight(),retreat:d.retreat,ready:$('pineStartupCover').hidden,sky:poiSkyCanLookUp(),
+     arena:poiDavidIn(d.boss,p),los:poiDavidLine(d.boss,p,d.boss),distance:Math.hypot(p.x-d.boss.x,p.z-d.boss.z),
+     contacted:!!poiDavidActive?.s?.david?.awake,
+     key:poiDungeonEntranceSerial,error:gl.getError(),screen:location.href};
+   },
   },
 `);
-const frame=' requestAnimationFrame(render);';
-inject(frame,' if(!window.__rooflessManual)requestAnimationFrame(render);');
-const draw=' facilityDrawRoofs(p.vp);poiDrawGameRoofs(p.vp);';
-inject(draw,draw+`
- if(window.__captureTempleSky){
-  window.__captureTempleSky=false;
-  const w=gl.drawingBufferWidth,h=gl.drawingBufferHeight,x=Math.floor(w*.30),width=Math.max(1,Math.floor(w*.40));
-  const pix=new Uint8Array(width*4*Math.max(1,Math.floor(h*.13)));
-  gl.readPixels(x,Math.floor(h*.85),width,pix.length/(width*4),gl.RGBA,gl.UNSIGNED_BYTE,pix);
-  let sky=0;for(let i=3;i<pix.length;i+=4)if(pix[i]<16)sky++;
-  window.__templeSkyPixels={total:pix.length/4,sky};
- }
-`);
-for(const [,js] of fixture.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(js);
-if(process.env.DAVID_DOME_SYNTAX_ONLY||process.env.DAVID_ROOFLESS_SYNTAX_ONLY){console.log('instrumented roofless fixture scripts parse');process.exit(0)}
+inject(' requestAnimationFrame(render);',' if(!window.__seal.manual)requestAnimationFrame(render);');
+const camera="  const eye=typeof facilitySharedWallCameraEye==='function'?facilitySharedWallCameraEye(target,desired):desired;";
+inject(camera,camera+'\n  window.__seal.eye={eye,desired,target};');
+inject('  else draw(facilityRoofMeshes[i],vp);',
+ '  else {if(facilitySite.buildings[i]?.id==="davidTemple"){window.__seal.draws++;window.__seal.vertices=facilityRoofMeshes[i].count}draw(facilityRoofMeshes[i],vp)}');
+for(const [,js] of h.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(js);
+if(process.env.DAVID_SACRED_SYNTAX_ONLY){console.log('permanent dome native fixture exact anchors and inline syntax');process.exit(0)}
 const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
-const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(req.url==='/seed'?'<title>Roofless QA</title>':fixture)});
-await new Promise((ok,no)=>server.listen(0,'127.0.0.1',ok).once('error',no));
-const base='http://127.0.0.1:'+server.address().port;let browser,phase='launch',last;
+const s=createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(req.url==='/seed'?'<title>Sacred Temple QA</title>':h)});
+await new Promise((r,j)=>s.listen(0,'127.0.0.1',r).once('error',j));
+const url='http://127.0.0.1:'+s.address().port,screenshots=process.env.FACILITY_SCREENSHOTS;
+let b;
 try{
- browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
+ if(screenshots)await mkdir(screenshots,{recursive:true});
+ b=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
   args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
- const p=await(await browser.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.75})).newPage(),errors=[];
- p.on('pageerror',e=>errors.push(e.message));p.setDefaultTimeout(30000);
+ const ctx=await b.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.7});
+ await ctx.addInitScript(()=>{window.__seal={manual:false,draws:0,vertices:0}});
+ const p=await ctx.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));p.setDefaultTimeout(26000);
  await p.clock.install({time:new Date('2026-04-01T10:00:00Z')});
- async function seed(x,z,pitch=-.12,distance=5.5){
-  await p.goto(base+'/seed',{waitUntil:'domcontentloaded',timeout:45000});
-  await p.evaluate(({x,z,pitch,distance})=>{
+ const resume=async(x,z)=>{
+  await p.goto(url+'/seed',{waitUntil:'domcontentloaded'});
+  await p.evaluate(({x,z})=>{
    localStorage.setItem('world-workshop-town-clock-v1','{"version":1,"gameMs":360000}');
    localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,position:{x,z,y:0,facing:2},
-    townLayout:5,townMapHeight:128,view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:-.15,orbitPitch:pitch,orbitDistance:distance}}));
-  },{x,z,pitch,distance});
-  await p.goto(base+'/?resume=1&test=1',{waitUntil:'domcontentloaded',timeout:45000});
-  await p.locator('#pineStartupCover').waitFor({state:'hidden',timeout:35000});
-  await p.waitForFunction(()=>window.__editorTest?.facility()?.active,null,{polling:50,timeout:30000});
-  await p.clock.pauseAt((await p.evaluate(()=>Date.now()))+1500);
-  await p.evaluate(()=>{window.__rooflessManual=true});
- }
- const inspect=async()=>last=await p.evaluate(()=>window.__editorTest.rooflessQA.state());
- async function advance(ms){await p.clock.fastForward(ms);await p.evaluate(()=>window.__editorTest.rooflessQA.frame());return inspect()}
- function openAir(s){
-  assert.equal(s.room,null);assert.equal(s.count,0);assert.equal(s.flap,false);
-  assert(!s.visible.includes(s.roofOwner));assert.equal(s.sky,true);assert.equal(s.cssSky,true);assert(Number.isFinite(s.horizon));assert.equal(s.error,0);
- }
- async function walk(x,z,key){
-  await p.keyboard.press(key);const s=await advance(225);
-  assert.deepEqual([s.x,s.z,s.y],[x,z,0],key+' landed on the actual prescribed old path');
- }
- phase='historic outdoor save and walk through actual matching aperture';
- await seed(29,88,.12,7);
- let s=await advance(38);assert.deepEqual([s.x,s.z,s.y],[29,88,0]);openAir(s);
- assert.deepEqual(s.entry,{x:24,z:94,y:0});assert.deepEqual(s.retreat,{x:24,z:91,y:0});
- assert.deepEqual(await p.evaluate(()=>['n','e'].map(k=>window.__editorTest.rooflessQA.stepVector(k))),[[0,1],[-1,0]]);
- for(const z of [89,90,91])await walk(29,z,'ArrowUp');
- await walk(29,91,'ArrowUp'); // Real right-hand wing blocks the old off-axis hole.
- for(const x of [28,27,26,25,24])await walk(x,91,'ArrowRight');
- for(const z of [92,93,94,95,96])await walk(24,z,'ArrowUp');
- s=await inspect();openAir(s);
- phase='same stored in-arena position loads exactly and shows real sky pixels at low angle';
- await p.clock.resume();await seed(24,100,-.13,5.5);
- await p.evaluate(()=>{window.__editorTest.rooflessQA.view(-.14,5.5);window.__captureTempleSky=true});
- s=await advance(38);assert.deepEqual([s.x,s.z,s.y],[24,100,0]);openAir(s);
- assert(s.raster&&s.raster.sky>s.raster.total*.09,JSON.stringify(s.raster));
+    townLayout:5,townMapHeight:128,view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:0,orbitPitch:.12,orbitDistance:6.5}}));
+  },{x,z});
+  await p.goto(url+'/?resume=1&test=1',{waitUntil:'domcontentloaded'});
+  await p.locator('#pineStartupCover').waitFor({state:'hidden'});
+  await p.evaluate(()=>window.__seal.manual=true);
+  await p.clock.pauseAt((await p.evaluate(()=>Date.now()))+3000);
+ };
+ const read=()=>p.evaluate(()=>window.__editorTest.templeSealQA.state());
+ const frame=async(ms=220)=>{await p.clock.fastForward(ms);await p.evaluate(()=>window.__editorTest.templeSealQA.frame());return read()};
+ const step=async(key,x,z)=>{await p.keyboard.press(key);const q=await frame();assert.deepEqual(q.pos,[x,z,0],JSON.stringify(q));return q};
+ const roof=(q,prev)=>{assert(q.visible.includes(q.roof),JSON.stringify(q));assert(q.covers>prev.covers&&q.corners>1500);assert(q.error===0)};
+ await resume(24,91);const before=await frame();assert(!before.indoors&&before.sky&&!before.contacted);
+ if(screenshots)await p.screenshot({path:screenshots+'/temple-01-opaque-entry.png'});
+ for(const z of [92,93,94,95])await step('ArrowUp',24,z);
+ const vestibule=await step('ArrowUp',24,95);roof(vestibule,before); // centered baffle cannot be walked through
+ assert(vestibule.indoors&&vestibule.tunnel&&!vestibule.sky&&!vestibule.contacted);
+ assert.deepEqual(vestibule.light,[.76,.65,.54]);
+ const lowEye=await p.evaluate(()=>window.__editorTest.templeSealQA.eye());
+ assert(lowEye.eye[1]>1.1&&lowEye.eye[1]<3.19&&lowEye.desired[1]>3.19,JSON.stringify(lowEye));
+ if(screenshots)await p.screenshot({path:screenshots+'/temple-02-warm-narrow-turn.png'});
+ const track=[['ArrowLeft',25,95],['ArrowUp',25,96],['ArrowUp',25,97],['ArrowRight',24,97],['ArrowRight',23,97],
+  ['ArrowUp',23,98],['ArrowUp',23,99],['ArrowLeft',24,99],['ArrowUp',24,100]];
+ for(const [k,x,z] of track){const q=await step(k,x,z);assert(q.indoors&&q.tunnel&&!q.arena&&!q.contacted,JSON.stringify(q))}
+ const lip=await step('ArrowUp',24,101);
+ assert(lip.arena&&lip.los&&lip.distance===3&&!lip.contacted,JSON.stringify(lip));
+ let arena=await step('ArrowUp',24,102);
+ for(let i=0;i<10&&!arena.contacted;i++)arena=await frame(80);
+ roof(arena,vestibule);assert(arena.indoors&&!arena.tunnel&&!arena.sky&&arena.contacted&&arena.arena&&arena.los&&arena.distance===2,JSON.stringify(arena));
+ assert.deepEqual(arena.light,[.77,.70,.62]);
+ const highEye=await p.evaluate(()=>window.__editorTest.templeSealQA.eye());
+ assert(highEye.eye[1]>1.1&&highEye.eye[1]<7.62&&highEye.desired[1]>7.62,JSON.stringify(highEye));
+ assert.equal(arena.key,before.key);assert.equal(arena.screen,before.screen);assert(arena.ready);
+ if(screenshots)await p.screenshot({path:screenshots+'/temple-03-close-david-reveal.png'});
+ await p.clock.resume();await resume(24,96);const migrated=await frame();
+ assert.deepEqual(migrated.pos,[24,95,0],'old saved tile now behind masonry migrates by one tile, not town');
+ assert(migrated.indoors&&migrated.tunnel&&!migrated.contacted&&migrated.visible.includes(migrated.roof));
  assert.deepEqual(errors,[]);
- console.log('Native roofless ring: old trail, blocked shoulder, centered real gate crossing, exact old interior save, actual canvas leaves open sky.');
-}catch(e){console.error('Roofless QA failed at',phase,last);throw e}
-finally{await browser?.close();await new Promise(ok=>server.close(ok))}
+ console.log('Native closed temple: live opaque roof draws outside and inside, genuine dogleg, no wake before short open reveal, same scene, old save locally recovered.');
+}finally{await b?.close();await new Promise(r=>s.close(r))}

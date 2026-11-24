@@ -54,3 +54,4 @@ test('old saves on newly solid forest props resume on the nearest unoccupied dry
  a.equal(c.poiWalkLevel,-1);
  a.match(h,/function workshopResumeRestorePosition\(p\)\{[^]*?p=poiSouthForestRecoverPosition\(p\);/);
 });
+

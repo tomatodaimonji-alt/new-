@@ -55,9 +55,18 @@ try{
   await wait(k=>{const t=window.__editorTest?.templeScoreQA?.();return t?.audio.active===k&&t.events.some(e=>e.key===k)},key);
   return state();
  };
- async function step(z,key){
+ async function step(z,key,x=24){
   await p.keyboard.press(key);
-  await wait(z=>{const s=window.__editorTest.templeScoreQA();return s.pos[0]===24&&s.pos[1]===z&&s.now>=s.pending},z);
+  await wait(([x,z])=>{const s=window.__editorTest.templeScoreQA();return s.pos[0]===x&&s.pos[1]===z&&s.now>=s.pending},[x,z]);
+ }
+ const path=[[24,91],[24,92],[24,93],[24,94],[24,95],[25,95],[25,96],[25,97],[24,97],[23,97],[23,98],[23,99],[24,99],[24,100],[24,101],[24,102]];
+ async function walkTrace(points){
+  for(const [x,z] of points){
+   const [cx,cz]= (await state()).pos;
+   if(x===cx&&z===cz)continue;
+   assert(Math.abs(x-cx)+Math.abs(z-cz)===1);
+   await step(z,x>cx?'ArrowRight':x<cx?'ArrowLeft':z>cz?'ArrowDown':'ArrowUp',x);
+  }
  }
  trace='existing field';let s=await audio('outside');assert.deepEqual(s.pos,[24,87,0]);assert(!s.battle);
  trace='physical forecourt before gate';await step(88,'ArrowDown');
@@ -66,7 +75,7 @@ try{
  s=await state();assert.equal(s.audio.active,'davidStill');assert(!s.battle);
  assert.equal(s.events.filter(e=>e.key==='davidStill').length,1);
  trace='brief boundary retrace then actual wake';
- await step(95,'ArrowDown');await step(96,'ArrowDown');await step(97,'ArrowDown');await step(98,'ArrowDown');
+ await walkTrace(path.slice(4));
  s=await audio('davidAwake');assert(s.battle);
  const calm=s.events.find(e=>e.key==='davidStill'),dark=s.events.find(e=>e.key==='davidAwake');
  assert(calm.loop&&dark.loop&&calm.ready&&dark.ready&&calm.energy>10&&dark.energy>10);
@@ -74,7 +83,7 @@ try{
  assert(calm.offset<.015&&dark.offset>.10&&dark.offset<48);
  assert(s.audio.decks.length<=2);
  trace='real retreat beyond entrance';
- for(const z of [97,96,95,94,93,92,91])await step(z,'ArrowUp');
+ await walkTrace(path.slice().reverse());
  await wait(()=>{const r=window.__editorTest.templeScoreQA();return r.audio.active==='davidStill'&&r.events.filter(e=>e.key==='davidStill').length===2});
  for(const z of [90,89,88,87])await step(z,'ArrowUp');
  s=await audio('outside');

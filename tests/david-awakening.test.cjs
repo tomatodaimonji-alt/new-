@@ -6,7 +6,7 @@ function game(){
  const b={...o,room:{minX:13,maxX:35,minZ:93,maxZ:115}},
   s={x:24,z:104,fromX:24,fromZ:104,moveStarted:-10000,hp:1050};
  const pulls=[],stops=[],contacts=[],c={facilitySite:{id:'base',davidTemple:{boss:b}},poiWalkActive:true,poiWalkLevel:0,document:{hidden:false,addEventListener(){}},
-  poiEnemyThreatEnabled:()=>c.threat,threat:true,poiAimOrigin:()=>c.p,p:{x:24,z:98,y:0},poiMonsterStates:new Map([[o,s]]),poiMonsterMeshDirty:false,
+  poiEnemyThreatEnabled:()=>c.threat,threat:true,poiAimOrigin:()=>c.p,p:{x:24,z:102,y:0},poiMonsterStates:new Map([[o,s]]),poiMonsterMeshDirty:false,
   poiAimWall:()=>()=>true,poiMonsterCanMove:()=>true,POI_AIM_EPS:1e-7,poiMobHitPlayer:(_o,now,n)=>{contacts.push([now,n]);return false},
   poiDavidExtractionFoley:(o,s,b,i,at)=>pulls.push([i,at]),poiDavidStopAttackFoley:()=>stops.push(1),poiDavidAttackFoley(){},poiDavidImpactStomp(){}};
  const api=vm.runInNewContext(cut('// BEGIN DAVID TEMPLE COMBAT','// END DAVID TEMPLE COMBAT')+

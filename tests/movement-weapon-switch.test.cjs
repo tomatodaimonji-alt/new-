@@ -17,7 +17,7 @@ function setup(){
  const c={document,window:node(),landscape:true,hit:button,poiAnalogContact:{id:4},poiAnalogAllowed:()=>c.allowed,allowed:true,poiInventoryAllowed:()=>true,poiStorageTapGate:null,poiBagKeySource:null,$:id=>ids[id],
   performance:{now:()=>c.now},now:100,setTimeout:()=>1,clearTimeout(){},poiChestCloseFromUi(){},poiItemDetailOpen(){},
   poiCreateStorageTapGate:()=>({cancel(){},select(){}}),poiBagSlotRef:()=>({zone:'hotbar',index:2}),
-  poiInventoryCell:()=>({type:c.type}),poiInventorySlot:()=>c.type,poiHotbarRead:()=>({}),poiHotbarWeaponForType:t=>t==='equipIronSword'?t:null,
+  poiInventoryCell:()=>({type:c.type}),poiGoldHotbarSlot:()=>c.wallet??null,poiInventorySlot:()=>c.type,poiHotbarRead:()=>({}),poiHotbarWeaponForType:t=>t==='equipIronSword'?t:null,
   POI_HOTBAR_SIZE:9,POI_FIRE_WAND:'fireWand',poiHotbarUse:i=>switches.push(i),type:'equipIronSword'};
  vm.runInNewContext(html.slice(begin>=0?begin:wire,end)+'\npoiBagWire();',c);
  const pointer=(event,extra={})=>ids.poiHotbar.emit(event,{target:button,pointerType:'touch',button:0,pointerId:9,isPrimary:false,clientX:130,clientY:250,...extra});
@@ -31,8 +31,8 @@ test('right touch selects once independently of synthetic click while left pad s
  h.pointer('click',{pointerType:'mouse',pointerId:1,detail:1});assert.deepEqual(h.switches,[2,2],'real mouse click still works');
 });
 test('drag excursion, canceled pointer, modal, bag, gold, and other items cannot select on secondary pulse',()=>{
- for(const mode of ['move','outside','cancel','modal','bag','portrait','gold','soul','other-item','no-stick']){
-  const h=setup();if(mode==='bag')h.ids.poiBagPanel.hidden=false;if(mode==='portrait')h.c.landscape=false;if(mode==='gold')h.c.type='gold';if(mode==='soul')h.c.type='slimeSoul';if(mode==='other-item')h.c.type='silverKey';
+ for(const mode of ['move','outside','cancel','modal','bag','portrait','gold','wallet','soul','other-item','no-stick']){
+  const h=setup();if(mode==='bag')h.ids.poiBagPanel.hidden=false;if(mode==='portrait')h.c.landscape=false;if(mode==='gold')h.c.type='gold';if(mode==='wallet'){h.c.type=null;h.c.wallet=2}if(mode==='soul')h.c.type='slimeSoul';if(mode==='other-item')h.c.type='silverKey';
   if(mode==='no-stick')h.c.poiAnalogContact=null;
   h.pointer('pointerdown');
   if(mode==='move')h.pointer('pointermove',{clientX:149});

@@ -53,7 +53,7 @@ try{
  await p.goto(url+'/seed');
  await p.evaluate(()=>{
   localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
-   position:{x:24,z:109,y:0,facing:0},townLayout:5,townMapHeight:128,
+   position:{x:24,z:106,y:0,facing:0},townLayout:5,townMapHeight:128,
    view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.35,orbitDistance:5.5}}));
   localStorage.setItem('world-workshop-hotbar-v1','{"version":1,"weapon":"equipWoodSword","potions":0,"gold":0}');
  });
@@ -61,16 +61,20 @@ try{
  await p.locator('#pineStartupCover').waitFor({state:'hidden',timeout:23000});
  await p.waitForFunction(()=>window.__editorTest?.arenaQA&&window.__editorTest.facility().active,null,{timeout:12000});
  const initial=await log();
- assert.deepEqual(initial.player,[24,109,0]);assert.deepEqual(initial.boss,[24,104]);assert.equal(initial.hp,100);
+ assert.deepEqual(initial.player,[24,106,0]);assert.deepEqual(initial.boss,[24,104]);assert.equal(initial.hp,100);
  await p.evaluate(()=>window.__editorTest.arenaQA.manual());
- const wall=await p.evaluate(()=>Date.now());await p.clock.pauseAt(wall+1500);
+ const wall=await p.evaluate(()=>Date.now());await p.clock.pauseAt(wall+3000);
  const samples=[];
  const advance=async(ms=48)=>{await p.clock.fastForward(ms);await p.evaluate(()=>window.__editorTest.arenaQA.draw());samples.push((await log()).gait);};
  const until=async(pred,n)=>{let s=await log();for(let i=0;i<n&&!pred(s);i++){await advance();s=await log()}assert(pred(s),JSON.stringify(s));return s};
  const aligned=await log(),debt=Math.ceil(aligned.nextMob-aligned.now);
  if(debt>0)await p.clock.fastForward(debt+16);
- where='wait for real awakening completion without altering the boss clock';
- await until(s=>s.awake&&s.gait&&!['dormant','wake'].includes(s.gait.phase),106);
+ where='physically engage at two tiles and retreat during actual awakening';
+ await until(s=>s.awake,20);
+ for(let z=107;z<=109;z++){
+  await p.keyboard.press('ArrowDown');
+  await until(s=>s.player[1]===z&&s.now>=s.nextStep,16);
+ }
  where='real scheduler and warning at 5.0 tiles';
  const pending=await until(s=>s.q?.kind==='sweep'&&s.q.cursor===0&&s.cue.some(a=>a.start===s.q.start&&a.vertices>30),53);
  assert.deepEqual([pending.q.sx,pending.q.sz,pending.q.dx,pending.q.dz],[24,104,0,1]);
@@ -84,11 +88,10 @@ try{
   const s=await until(s=>s.player[1]===z&&s.now>=s.nextStep,10);
   assert.deepEqual(s.player,[24,z,0]);assert(s.awake&&!s.returning,'no old rectangular disengage: '+z);
  }
- const activeStride=g=>g?.kind==null&&g?.phase==='ready'&&g.amount>.999&&g.vertices>400&&g.mesh>400&&Math.abs(g.heading)<.07;
- const still=await until(s=>s.boss?.[1]>=112&&samples.filter(activeStride).length>=8,78);
+ const still=await until(s=>s.boss?.[1]>=112,50);
  assert(still.hp>0);assert.deepEqual(still.player,[24,119,0]);assert(still.awake&&!still.returning);
  where='real frame-by-frame stone stride across authored chase cells';
- const straight=samples.filter(activeStride);
+ const straight=samples.filter(g=>g?.kind==null&&g?.phase==='ready'&&g.amount>.999&&g.vertices>400&&g.mesh>400&&Math.abs(g.heading)<.07);
  assert(straight.length>=8,JSON.stringify(straight));
  for(const g of straight){
   assert.equal(g.bladeEdges.length,2);

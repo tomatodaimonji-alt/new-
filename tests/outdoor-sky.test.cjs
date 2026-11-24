@@ -13,7 +13,7 @@ function make(vars={}){
   poiTownClockGameMs:720*500, POI_TOWN_MINUTE_MS:500, MAX_LEVEL:5, MAX_MAP:128,
   mult:(_a,b)=>b, ortho:()=>[], look:(eye,target)=>({eye,target}),perspective:()=>[]
  },...vars});
- vm.runInContext(slice('// BEGIN OUTDOOR SKY','// END OUTDOOR SKY')+slice('function parameters(){','function cursorAt(')+
+ vm.runInContext(slice('// BEGIN OUTDOOR SKY','// END OUTDOOR SKY')+slice(h.includes('// BEGIN SACRED THRESHOLD PORTRAIT')?'// BEGIN SACRED THRESHOLD PORTRAIT':'function parameters(){','function cursorAt(')+
  slice('function workshopResumeDecode(','function workshopResume')+'\n;this.camera=()=>parameters();',c);
  return {c,style,attrs};
 }

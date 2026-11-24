@@ -5,7 +5,8 @@ import {readFileSync} from 'node:fs';
 const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
 const html=readFileSync(process.argv[2]??'world-editor.html','utf8');
 function inject(s,a,b){assert.equal(s.split(a).length,2,a);return s.replace(a,b)}
-const eyeAnchor="  const arm=eye===desired?poiCameraDistance:Math.hypot(...eye.map((v,i)=>v-target[i]));";
+const eyeAnchor=html.match(/  const arm=eye===desired\?(?:radius|poiCameraDistance):Math\.hypot\(\.\.\.eye\.map\(\(v,i\)=>v-target\[i\]\)\);/)?.[0];
+assert(eyeAnchor,'actual perspective arm');
 let fixture=inject(html,eyeAnchor,eyeAnchor+`
   if(window.__qaSkyCamera)window.__qaSkyEye={eye,target,pitch:Math.atan2(eye[1]-target[1],Math.hypot(eye[0]-target[0],eye[2]-target[2]))};`);
 const api='  freeMovementPose:()=>({x:poiWalkViewX,z:poiWalkViewZ,level:poiWalkLevel}),';
