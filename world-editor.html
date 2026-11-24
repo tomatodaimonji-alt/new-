@@ -1612,7 +1612,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v280）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v281）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -12306,7 +12306,60 @@ function poiCompanionPlayerContact(o,s,now){
  if(!poiCompanionActor||!poiCompanionNormal(o,s)||s.hp<=0||poiCompanionMode()==='flee')return;
  poiCompanionTarget={o,s,until:now+2100};
 }
+// BEGIN COMPANION FRACTIONAL FOLLOW
+const POI_COMPANION_FREE_SPEED=.0054,POI_COMPANION_FREE_RADIUS=.20;
+function poiCompanionPosition(a){
+ return {x:Number.isFinite(a.px)?a.px:a.x,z:Number.isFinite(a.pz)?a.pz:a.z,y:a.y};
+}
+function poiCompanionPlayerPoint(now){
+ const p=typeof poiAimOrigin==='function'?poiAimOrigin(now):null;
+ return p&&p.y===poiWalkLevel?{x:p.x,z:p.z,y:p.y}:{x:poiWalkX,z:poiWalkZ,y:poiWalkLevel};
+}
+function poiCompanionAdvance(a,to,now,stop){
+ const p=poiCompanionPosition(a),previous=a.freeAt;
+ a.px=p.x;a.pz=p.z;a.freeAt=now;a.freeMoving=false;
+ if(!to||typeof poiFreeAdvance!=='function')return false;
+ const dt=Math.max(0,Math.min(64,now-(previous??now)));
+ const dx=to.x-p.x,dz=to.z-p.z,len=Math.hypot(dx,dz);
+ const step=Math.min(Math.max(0,len-stop),dt*POI_COMPANION_FREE_SPEED);
+ if(step<.001||!len)return false;
+ const cells=new Map(),edge=(x,z,fx,fz)=>{
+  const key=[x,z,fx,fz].join(',');
+  if(!cells.has(key))cells.set(key,poiCompanionCell(x,z,a.y,fx,fz));
+  return cells.get(key);
+ };
+ const solve=(x,z)=>poiFreeAdvance(p.x,p.z,x,z,POI_COMPANION_FREE_RADIUS,edge,edge);
+ const clip=result=>typeof poiTownNpcPlayerBodyBlocks==='function'&&
+   poiTownNpcPlayerBodyBlocks(p.x,p.z,result.x,result.z,a.y,now);
+ let next=solve(dx*step/len,dz*step/len);
+ if(clip(next)){
+  const slides=[solve(dx*step/len,0),solve(0,dz*step/len)].filter(p=>p.distance>.001&&!clip(p));
+  if(!slides.length)return false;
+  next=slides.sort((a,b)=>b.distance-a.distance)[0];
+ }
+ if(next.distance<step*.19&&typeof poiCompanionPlan==='function'){
+  const route=a.freeRoute??(a.freeRoute=poiCompanionPlan(a,{x:Math.round(to.x),z:Math.round(to.z)},now));
+  if(route){
+   const rx=route.x-p.x,rz=route.z-p.z,d=Math.hypot(rx,rz);
+   if(d<.19)a.freeRoute=null;
+   else{
+    const detour=solve(rx*Math.min(1,step/d),rz*Math.min(1,step/d));
+    if(detour.distance>next.distance&&!clip(detour))next=detour;
+   }
+  }
+ }else a.freeRoute=null;
+ if(next.distance<.001)return false;
+ a.freeDx=next.x-p.x;a.freeDz=next.z-p.z;
+ a.px=next.x;a.pz=next.z;a.freeMoving=true;a.freeMileage=(a.freeMileage||0)+next.distance;
+ a.fx=a.x;a.fz=a.z;a.x=poiFreeCell(next.x);a.z=poiFreeCell(next.z);a.stepAt=now;a.stepMs=140;
+ return true;
+}
+// END COMPANION FRACTIONAL FOLLOW
 function poiCompanionPose(a,now){
+ if(a&&Number.isFinite(a.px)&&Number.isFinite(a.pz)){
+  const t=a.freeMoving?(a.freeMileage||0)%1:1;
+  return {x:a.px,z:a.pz,y:a.y,t,hop:a.freeMoving?Math.abs(Math.sin(t*Math.PI))*.13:0};
+ }
  if(!a)return null;
  const t=Math.max(0,Math.min(1,(now-a.stepAt)/a.stepMs)),e=t*t*(3-2*t);
  return {x:a.fx+(a.x-a.fx)*e,z:a.fz+(a.z-a.fz)*e,y:a.y,t,hop:Math.sin(t*Math.PI)*.19};
@@ -12361,8 +12414,10 @@ function poiCompanionEngage(a,now){
   if(now>=(a.scanAt||0)){a.scanAt=now+240;t=poiCompanionTarget=poiCompanionFindTarget(a,now)}
  }
  if(!t)return null;
- if(Math.hypot(t.s.x-a.x,t.s.z-a.z)<=1.44){
-  if(poiCompanionAttackClear(a,t.s,a.y)){poiCompanionCommit(a,t,now);return a}
+ if(t.o.type==='monsterStoneDavid')a.davidFocus=t.s;
+ const origin=poiCompanionPosition(a);
+ if(Math.hypot(t.s.x-origin.x,t.s.z-origin.z)<=1.44){
+  if(poiCompanionAttackClear(origin,t.s,a.y)){poiCompanionCommit(a,t,now);return a}
   poiCompanionTarget=null;return null;
  }
  return t.s;
@@ -12386,28 +12441,32 @@ function poiCompanionTick(now){
  const a=poiCompanionActor,mode=poiCompanionMode(kit);
  const blocked=typeof document!=='undefined'&&
     document.querySelector('dialog[open],.modal.open,:is(#poiBagPanel,#poiLandscapeMenu,#poiNpcMenu,#poiScreenNoteLayer):not([hidden])');
- if(blocked){if(a.attackMotion?.pending)a.attackMotion.pending=false;return}
- if(poiCompanionResolve(a,now,mode)||now<a.next)return;
- a.next=now+155;
- const player={x:poiWalkX,z:poiWalkZ},distance=Math.hypot(a.x-player.x,a.z-player.z);
- if(distance>18){a.next=now+320;return}
- // A legacy overlap (e.g. a resumed or just spawned enemy) must not
- // strand a companion even if the player is near enough to idle.
- if(typeof poiMonsterAt==='function'&&poiMonsterAt(a.x,a.z,true)){
-  const n=poiCompanionDirection(a,player).map(([dx,dz])=>({x:a.x+dx,z:a.z+dz}))
-   .find(p=>poiCompanionCell(p.x,p.z,a.y,a.x,a.z));
-  if(n){a.fx=a.x;a.fz=a.z;a.x=n.x;a.z=n.z;a.stepAt=now;a.stepMs=146;return}
+ if(blocked){if(a.attackMotion?.pending)a.attackMotion.pending=false;poiCompanionAdvance(a,null,now,0);return}
+ if(poiCompanionResolve(a,now,mode)){poiCompanionAdvance(a,null,now,0);return}
+ const player=poiCompanionPlayerPoint(now),origin=poiCompanionPosition(a);
+ const distance=Math.hypot(origin.x-player.x,origin.z-player.z);
+ if(distance>18){poiCompanionAdvance(a,null,now,0);return}
+ const david=mode!=='flee'?poiCompanionDavidFocus(a):null;
+ if(!david)a.davidFocus=null;
+ const held=!!david&&Math.hypot(origin.x-david.s.x,origin.z-david.s.z)<=1.62&&now<(a.slimeRecoverUntil||0);
+ if(held){poiCompanionAdvance(a,null,now,0);return}
+ if(now>=a.next){
+  a.next=now+100;
+  // Genuine encounters may have been spawned on saved overlap cells.
+  if(typeof poiMonsterAt==='function'&&poiMonsterAt(a.x,a.z,true)){
+   const n=poiCompanionDirection(a,player).map(([dx,dz])=>({x:a.x+dx,z:a.z+dz}))
+    .find(p=>poiCompanionCell(p.x,p.z,a.y,a.x,a.z));
+   if(n){a.freeGoal=n;a.freeFollows=false}
+  }else{
+   const to=mode!=='flee'&&(distance<=POI_COMPANION_TETHER||david)&&now>=(a.slimeRecoverUntil||0)?poiCompanionEngage(a,now):null;
+   if(!to&&(mode==='flee'||distance>POI_COMPANION_TETHER&&!david))poiCompanionTarget=null;
+   const followDistance=a.freeFollows&&a.freeGoal?1.48:1.84;
+   a.freeGoal=to===a?null:to||distance>followDistance?to||player:null;
+   a.freeFollows=!to;
+  }
  }
- let to=mode!=='flee'&&distance<=POI_COMPANION_TETHER&&now>=(a.slimeRecoverUntil||0)?poiCompanionEngage(a,now):null;
- if(!to&&(mode==='flee'||distance>POI_COMPANION_TETHER))poiCompanionTarget=null;
- if(!to&&distance<1.8||to===a)return;
- to=to||player;
- // When far away, cheaply keep walking toward the player rather than
- // simulate open-ended pathfinding or teleport into the current room.
- const p=distance<=10?poiCompanionPlan(a,to,now):poiCompanionDirection(a,to).map(([dx,dz])=>({x:a.x+dx,z:a.z+dz}))
-  .find(p=>poiCompanionCell(p.x,p.z,a.y,a.x,a.z)&&Math.hypot(p.x-to.x,p.z-to.z)<distance);
- if(!p)return;
- a.fx=a.x;a.fz=a.z;a.x=p.x;a.z=p.z;a.stepAt=now;a.stepMs=146;
+ const goal=a.freeFollows&&a.freeGoal?player:a.freeGoal;
+ poiCompanionAdvance(a,goal,now,a.freeFollows?1.45:1.16);
 }
 function poiCompanionAttackClear(src,dst,y){
  const dx=dst.x-src.x,dz=dst.z-src.z,d=Math.hypot(dx,dz);
@@ -12473,11 +12532,14 @@ function poiAppendWildSlimeVisual(m,raw,pose,facing=0,origin=[0,0,0]){
  }
 }
 function poiCompanionWorldPose(a,now){
- const x=a.x-a.fx,z=a.z-a.fz,facing=x>0?3:x<0?1:z<0?2:0;
+ const x=a.freeDx??a.x-a.fx,z=a.freeDz??a.z-a.fz,facing=Math.abs(x)>Math.abs(z)?(x>0?3:1):(z<0?2:0);
  const actor={type:'monsterSlime',x:a.x,z:a.z,y:a.y};
- const state={x:a.x,z:a.z,fromX:a.fx,fromZ:a.fz,moveStarted:a.stepAt,guardMoveMs:a.stepMs,facing,
+ const physical=poiCompanionPosition(a);
+ const state={x:physical.x,z:physical.z,fromX:physical.x,fromZ:physical.z,moveStarted:a.stepAt,guardMoveMs:a.stepMs,facing,
   playerAttack:a.attackMotion??null,slimeRecoverUntil:a.slimeRecoverUntil};
- return {...poiMonsterPose(actor,state,now),facing};
+ const art=poiMonsterPose(actor,state,now);
+ art.y+=terrainY(a.x,a.z)-terrainY(physical.x,physical.z)+poiCompanionPose(a,now).hop;
+ return {...art,facing};
 }
 function poiCompanionWorldVisible(a){
  return !!a&&poiCompanionSame(a,poiCompanionPlace())&&poiCompanionAllowed()&&
@@ -12488,7 +12550,7 @@ let poiCompanionWorldActor=null,poiCompanionDrawPose=null,poiCompanionWorldBar=n
 function poiDrawCompanion(now,vp){
  const a=poiCompanionActor;
  if(!poiCompanionWorldVisible(a)){poiCompanionWorldActor=null;return}
- const pose=poiCompanionWorldPose(a,now),fast=!!pose.attack||now-a.stepAt<a.stepMs;
+ const pose=poiCompanionWorldPose(a,now),fast=!!pose.attack||a.freeMoving;
  const key=a.id+':'+a.x+':'+a.z+':'+a.y+':'+(fast?'fast:':'idle:')+Math.floor(now/(fast?32:68));
  if(!poiCompanionMesh||key!==poiCompanionMeshKey||poiCompanionWorldActor!==a){
   const m=mesh();
@@ -12548,7 +12610,7 @@ function poiCompanionCommand(mode,now=performance.now()){
  poiCompanionTarget=null;
  if(poiCompanionActor){
   const a=poiCompanionActor;
-  a.scanAt=now;a.next=Math.min(a.next,now);
+  a.scanAt=now;a.next=Math.min(a.next,now);a.freeGoal=null;a.freeRoute=null;
   if(mode==='flee'&&a.attackMotion?.pending)a.attackMotion.pending=false;
   if(mode==='fight'&&typeof poiAimLocked!=='undefined'&&poiAimLocked){
    const {id:o,state:s}=poiAimLocked;
@@ -12559,9 +12621,11 @@ function poiCompanionCommand(mode,now=performance.now()){
  return {ok:true,reason:null};
 }
 function poiCompanionTethered(a){
- return a.y===poiWalkLevel&&Math.hypot(a.x-poiWalkX,a.z-poiWalkZ)<=POI_COMPANION_TETHER;
+ const p={x:a.px??a.x,z:a.pz??a.z};
+ return a.y===poiWalkLevel&&Math.hypot(p.x-poiWalkX,p.z-poiWalkZ)<=POI_COMPANION_TETHER;
 }
 function poiCompanionTargetLegal(a,o,s,clear=false){
+ if(o?.type==='monsterStoneDavid')return poiCompanionDavidTarget(a,o,s,clear);
  return !!(o&&s&&o.y===a.y&&s.hp>0&&poiMonsterStates.get(o)===s&&poiCompanionNormal(o,s)&&
   !(s.wildSpawn&&typeof poiWildPlayerOutside==='function'&&!poiWildPlayerOutside()))&&poiCompanionTargetRange(a,o,s,clear);
 }
@@ -12572,11 +12636,15 @@ function poiCompanionEncounterAllows(o,x,z){
 }
 function poiCompanionTargetRange(a,o,s,clear){
  return poiCompanionTethered(a)&&poiCompanionEncounterAllows(o,poiWalkX,poiWalkZ)&&poiCompanionEncounterAllows(o,a.x,a.z)&&Math.hypot(s.x-poiWalkX,s.z-poiWalkZ)<=POI_COMPANION_TETHER&&
-  Math.hypot(s.x-a.x,s.z-a.z)<=POI_COMPANION_NOTICE&&
+  Math.hypot(s.x-(a.px??a.x),s.z-(a.pz??a.z))<=POI_COMPANION_NOTICE&&
   (typeof poiDungeonVisualVisible!=='function'||poiDungeonVisualVisible(o.x??s.x,o.z??s.z,o.y))&&
-  (!clear||poiCompanionAttackClear(a,s,a.y));
+  (!clear||poiCompanionAttackClear({x:a.px??a.x,z:a.pz??a.z},s,a.y));
 }
 function poiCompanionFindTarget(a,now){
+ const david=poiCompanionDavidFocus(a);
+ if(david&&poiCompanionDavidTarget(a,david.o,david.s,true)){
+  a.davidFocus=david.s;return {...david,until:now+1100};
+ }
  if(!poiCompanionTethered(a))return null;
  const near=[];
  for(const [o,s] of poiMonsterStates)if(poiCompanionTargetLegal(a,o,s)){
@@ -12585,11 +12653,11 @@ function poiCompanionFindTarget(a,now){
   near.push({o,s,d,until:now+950});near.sort((p,q)=>p.d-q.d);
   if(near.length>8)near.pop();
  }
- return near.find(t=>poiCompanionAttackClear(a,t.s,a.y))??null;
+ return near.find(t=>poiCompanionAttackClear({x:a.px??a.x,z:a.pz??a.z},t.s,a.y))??null;
 }
 function poiCompanionCommit(a,t,now){
  if(!t||a.attackMotion?.pending||now<(a.nextHit||0)||!poiCompanionTargetLegal(a,t.o,t.s,true))return false;
- const dx=t.s.x-a.x,dz=t.s.z-a.z,d=Math.hypot(dx,dz);
+ const origin={x:a.px??a.x,z:a.pz??a.z},dx=t.s.x-origin.x,dz=t.s.z-origin.z,d=Math.hypot(dx,dz);
  if(d<.01||d>1.44)return false;
  const delay=typeof POI_SLIME_CONTACT_MS==='number'?POI_SLIME_CONTACT_MS:132;
  a.attackMotion={start:now,hit:now+delay,dx:dx/d,dz:dz/d,tx:t.s.x,tz:t.s.z,target:t,pending:true};
@@ -12598,7 +12666,10 @@ function poiCompanionCommit(a,t,now){
 function poiCompanionResolve(a,now,mode){
  const q=a.attackMotion;
  if(!q?.pending)return false;
- if(mode==='flee'||!poiCompanionTethered(a)){q.pending=false;return false}
+ const boss=q.target?.o?.type==='monsterStoneDavid';
+ if(mode==='flee'||!(boss?poiCompanionDavidTarget(a,q.target.o,q.target.s):poiCompanionTethered(a))){
+  q.pending=false;return false;
+ }
  if(now<q.hit)return true;
  q.pending=false;q.visualHitAt=now;a.swingAt=now;
  a.slimeRecoverUntil=now+(typeof POI_SLIME_RECOVERY_MS==='number'?POI_SLIME_RECOVERY_MS:1500);
@@ -12608,7 +12679,7 @@ function poiCompanionResolve(a,now,mode){
  const p=model?{x:model.x-.5,z:model.z-.5}:t.s;
  // Never home the lunge onto a target that left the committed footprint.
  if(now-q.hit<=100&&poiCompanionTargetLegal(a,t.o,t.s,true)&&t.s.x===q.tx&&t.s.z===q.tz&&
-    Math.hypot(p.x-a.x,p.z-a.z)<=1.44&&poiCompanionAttackClear(a,p,a.y)&&typeof poiPlayerDamageTarget==='function')
+    Math.hypot(p.x-(a.px??a.x),p.z-(a.pz??a.z))<=1.44&&poiCompanionAttackClear({x:a.px??a.x,z:a.pz??a.z},p,a.y)&&typeof poiPlayerDamageTarget==='function')
   poiPlayerDamageTarget([t.o,t.s],t.s.x,t.s.z,poiCompanionType(a.id).attack,null,now,true,true,{companion:true});
  return true;
 }
@@ -12653,6 +12724,70 @@ function poiCompanionHostileChase(o,s,now,patrol){
  }
  return false;
 }
+// BEGIN COMPANION DAVID
+const POI_COMPANION_DAVID_NOTICE=5.6,POI_COMPANION_DAVID_ENGAGE=7.5,POI_COMPANION_DAVID_RELEASE=9.2;
+const poiCompanionDavidHits=new WeakMap();
+function poiCompanionDavidMatch(a,o,s,now){
+ if(!a||o?.type!=='monsterStoneDavid'||a.y!==poiWalkLevel||o.y!==a.y||
+    !s?.david?.awake||s.david.returning||s.hp<=0||poiMonsterStates.get(o)!==s||
+    typeof poiDavidMatch!=='function'||typeof poiDavidIn!=='function')return null;
+ if(typeof poiDavidBattleActive==='function'&&!poiDavidBattleActive(now??(typeof performance!=='undefined'?performance.now():0)))return null;
+ return poiDavidMatch(o);
+}
+function poiCompanionDavidTarget(a,o,s,clear=false){
+ const b=poiCompanionDavidMatch(a,o,s);
+ if(!b)return false;
+ const p={x:poiWalkX,z:poiWalkZ,y:poiWalkLevel};
+ const tether=a.davidFocus===s?POI_COMPANION_DAVID_RELEASE:POI_COMPANION_DAVID_ENGAGE;
+ const sx=typeof a.px==='number'?a.px:a.x,sz=typeof a.pz==='number'?a.pz:a.z;
+ return poiDavidIn(b,p)&&poiDavidIn(b,{x:sx,z:sz,y:a.y})&&poiDavidIn(b,{x:s.x,z:s.z,y:o.y})&&
+  Math.hypot(sx-p.x,sz-p.z)<=tether&&Math.hypot(s.x-p.x,s.z-p.z)<=tether&&
+  Math.hypot(s.x-sx,s.z-sz)<=POI_COMPANION_DAVID_NOTICE&&
+  (!clear||poiDavidLine({x:sx,z:sz},{x:s.x,z:s.z,y:a.y},b));
+}
+function poiCompanionDavidFocus(a){
+ const d=typeof poiDavidActive!=='undefined'?poiDavidActive:null;
+ if(!d||!poiCompanionDavidTarget(a,d.o,d.s))return null;
+ return d;
+}
+function poiCompanionDavidVictim(o,s,b,q,now){
+ const a=poiCompanionActor;
+ if(!a||!poiCompanionAllowed()||!poiCompanionSame(a,poiCompanionPlace())||
+    poiCompanionDavidMatch(a,o,s,now)!==b||a.y!==q.y||
+    (s.david.attack&&s.david.attack!==q))return null;
+ const p=poiCompanionPose(a,now);
+ return poiDavidIn(b,p)?p:null;
+}
+function poiCompanionDavidApply(q,key,amount,now){
+ if(!(amount>0))return false;
+ let done=poiCompanionDavidHits.get(q);
+ if(!done){done=new Set();poiCompanionDavidHits.set(q,done)}
+ if(done.has(key))return false;
+ done.add(key);return poiCompanionHurt(amount,now);
+}
+function poiCompanionDavidImpact(o,s,b,q,i,now){
+ const p=poiCompanionDavidVictim(o,s,b,q,now);
+ if(!p)return false;
+ const src={x:q.sx,z:q.sz},x=p.x-src.x,z=p.z-src.z,len=Math.hypot(x,z);
+ if(q.kind==='leap'){
+  if(typeof POI_DAVID_LEAP_RADIUS!=='number'||typeof POI_DAVID_LEAP_DAMAGE!=='number'||len>POI_DAVID_LEAP_RADIUS||
+     len>1e-6&&(typeof poiDavidRoomRay!=='function'||poiDavidRoomRay(q,b,{x:x/len,z:z/len},len,poiAimWall({y:q.y}))+1e-6<len))return false;
+  return poiCompanionDavidApply(q,i,POI_DAVID_LEAP_DAMAGE,now);
+ }
+ if(!poiDavidArea(q,p)||!poiDavidLine(src,p,b))return false;
+ return poiCompanionDavidApply(q,i,POI_DAVID_PATTERNS[q.kind]?.damage[i],now);
+}
+function poiCompanionDavidBeam(o,s,b,q,lo,hi,now){
+ const p=poiCompanionDavidVictim(o,s,b,q,now);
+ if(!p)return false;
+ const x=p.x-q.sx,z=p.z-q.sz,angle=Math.atan2(z*q.dx-x*q.dz,x*q.dx+z*q.dz);
+ const ray=poiDavidBeamRay(q,Math.max(lo,Math.min(hi,angle)));
+ const f=x*ray.x+z*ray.z,l=x*ray.z-z*ray.x;
+ if(f<.28||f>14||Math.abs(l)>POI_DAVID_BEAM_WIDTH||!poiDavidLine({x:q.sx,z:q.sz},p,b)||
+    f>poiDavidBeamReach(q,b,ray)+1e-6)return false;
+ return poiCompanionDavidApply(q,'beam-sweep',36,now);
+}
+// END COMPANION DAVID
 // END COMPANION V2 AI
 // END MONSTER COMPANION CORE
 
@@ -16524,6 +16659,7 @@ function poiDavidBeamAdvance(o,s,d,q,p,b,now){
   playerAngle=Math.atan2(z*q.dx-x*q.dz,x*q.dx+z*q.dz);
  sw.angle=angle;
  if(latest===sw.end){sw.done=true;sw.endedAt=now;q.until=now+POI_DAVID_BEAM_REST;d.next=q.until;poiDavidBeamAudioEnd(q)}
+ if(typeof poiCompanionDavidBeam==='function')poiCompanionDavidBeam(o,s,b,q,lo,hi,now);
  // Sweep the whole angular interval traversed since last visible draw. A
  // slow frame cannot jump over a target; live room and LOS still govern.
  if(!sw.hit){
@@ -16616,6 +16752,7 @@ function poiDavidLeapTick(o,s,b,p,q,now){
  poiMonsterMeshDirty=true;
  if(typeof poiDavidImpactStomp==='function')poiDavidImpactStomp({...q,kind:'stomp',davidLeapImpact:true},now);
  if(typeof poiDavidAttackFoley==='function')poiDavidAttackFoley({...q,kind:'stomp'},p,b,0,'impact');
+ if(typeof poiCompanionDavidImpact==='function')poiCompanionDavidImpact(o,s,b,q,0,now);
  const length=Math.hypot(p.x-l.x,p.z-l.z),line=length<1e-6||poiDavidRoomRay(q,b,{x:(p.x-l.x)/length,z:(p.z-l.z)/length},
   length,poiAimWall({y:b.y}))+1e-6>=length;
  if(length<=POI_DAVID_LEAP_RADIUS+1e-6&&line){
@@ -16776,6 +16913,7 @@ function poiDavidCombatFrame(now){
     }
    }
    poiDavidAttackFoley(q,p,b,i,'impact');
+   if(typeof poiCompanionDavidImpact==='function')poiCompanionDavidImpact(o,s,b,q,i,now);
    if(poiDavidArea(q,p)&&poiDavidLine({x:q.sx,z:q.sz},p,b)){
     q.landed++;
     if(poiMobHitPlayer(o,now,POI_DAVID_PATTERNS[q.kind].damage[i])){poiDavidCease(o,s,b,now);return true}
@@ -19788,7 +19926,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v280',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v281',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -19903,7 +20041,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v280';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v281';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -20118,7 +20256,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v280',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v281',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
