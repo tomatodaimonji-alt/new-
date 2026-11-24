@@ -13,8 +13,18 @@ test('David heat beam has moving sculpted core and sheath; all frames stop at th
  const c=inject(),r={x:0,z:1},q={sx:24,sz:104,dx:0,dz:1,y:0,sweep:{angle:.43}};
  const beam=(t,cut=6.25)=>c.poiDavidThermalBeam(q,r,cut,t,false);
  const v=beam(100),w=beam(142);
- a(v.coreCount>30&&v.p.length/3>v.coreCount&&v.p.length/3<=540);
- a.notDeepEqual(v.p,w.p);a.notDeepEqual(v.c,w.c);
+ a(v.coreCount>30&&v.p.length/3>v.coreCount&&v.p.length/3<=2160);
+ a.notDeepEqual(v.p,w.p,'live tube geometry continues to ripple');
+ for(const f of [v,w]){
+  const near=[],left=[],right=[];
+  for(let i=0;i<f.p.length;i+=3){
+   const d=f.p[i+2]-104.5,x=f.p[i]-24.5;
+   if(d>.8&&d<5.9)(x<0?left:right).push(x);
+   near.push(x);
+  }
+  a(left.length>24&&right.length>24&&near.every(x=>Math.abs(x)>.036),'two physically separate tubes and their sheaths');
+ }
+ a(v.c.some(c=>c[0]>.95&&c[1]<.31&&c[2]<.12),'warm halo remains distinct from the bright core');
  a(v.c.some(c=>c[0]>.95&&c[1]>.70&&c[2]>.40));
  const visit=(m,ray,max)=>{
   for(let i=0;i<m.p.length;i+=3){

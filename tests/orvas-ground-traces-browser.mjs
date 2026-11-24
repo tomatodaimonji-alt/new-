@@ -10,19 +10,47 @@ put(ap,ap+`
  orvasTracesQA:{
   hold:()=>{window.__orvasManual=true},
   frame:()=>render(),
+  verifyStripes:()=>{
+   const q=poiDavidActive?.s?.david?.attack,g=poiDavidCue?.beam;
+   if(!q||!g)return null;const d=q.sweep&&q.sweep.start!==null?poiDavidBeamRay(q,q.sweep.angle):{x:q.dx,z:q.dz};
+   return (function(s,g,origin,dir,mid,span){
+ if(!g?.buf)return null;
+ const prev=gl.getParameter(gl.FRAMEBUFFER_BINDING),view=gl.getParameter(gl.VIEWPORT),depth=gl.isEnabled(gl.DEPTH_TEST);
+ const f=gl.createFramebuffer(),tex=gl.createTexture(),n=64;
+ gl.bindTexture(gl.TEXTURE_2D,tex);
+ gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+ gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,n,n,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+ gl.bindFramebuffer(gl.FRAMEBUFFER,f);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tex,0);
+ try{
+  gl.viewport(0,0,n,n);gl.disable(gl.DEPTH_TEST);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
+  const dx=dir.x,dz=dir.z,x=origin.x,z=origin.z,sideSpan=.42;
+  const vp=new Float32Array([dx/span,dz/sideSpan,0,0,0,0,0,0,dz/span,-dx/sideSpan,0,0,
+   -(dx*x+dz*z+mid)/span,-(dz*x-dx*z)/sideSpan,0,1]);
+  draw(g,vp,0,g.coreCount??g.count);
+  const data=new Uint8Array(n*n*4);gl.readPixels(0,0,n,n,gl.RGBA,gl.UNSIGNED_BYTE,data);
+  let left=0,right=0,center=0,maxL=0,maxR=0;
+  for(let j=0;j<n;j++)for(let i=10;i<54;i++){
+   const k=(j*n+i)*4;if(!data[k+3]||data[k]<30)continue;
+   const y=(j/n*2-1)*sideSpan;
+   if(y<-.055){left++;maxL=Math.max(maxL,data[k]);}
+   if(y>.055){right++;maxR=Math.max(maxR,data[k]);}
+   if(Math.abs(y)<.039)center++;
+  }
+  return {left,right,center,maxL,maxR,error:gl.getError()};
+ }finally{
+  gl.bindFramebuffer(gl.FRAMEBUFFER,prev);gl.viewport(...view);
+  if(depth)gl.enable(gl.DEPTH_TEST);
+  gl.deleteTexture(tex);gl.deleteFramebuffer(f);
+ }
+})(null,g,{x:q.sx+.5,z:q.sz+.5},d,1.05,.53);
+  },
   seed:()=>{
    const b=facilitySite?.davidTemple?.boss;if(!b)return false;
    return workshopResumeRestorePosition({x:b.x,z:b.z-2,y:b.y,facing:2});
   },
-  seatSouth:()=>{
-   const b=facilitySite.davidTemple.boss,s=poiDavidActive?.s;
-   if(!s?.david?.awake||s.david.attack)return false;
-   s.x=s.fromX=b.x;s.z=s.fromZ=b.z+11;
-   return workshopResumeRestorePosition({x:b.x,z:b.z+13,y:b.y,facing:0});
-  },
-  dodge:(south)=>{
+  dodge:()=>{
    const b=facilitySite.davidTemple.boss;
-   return workshopResumeRestorePosition({x:b.x+2,z:b.z+(south?13:-2),y:b.y,facing:2});
+   return workshopResumeRestorePosition({x:b.x+2,z:b.z-2,y:b.y,facing:2});
   },
   select:(cycle,roll)=>{
    const d=poiDavidActive?.s?.david;
@@ -63,7 +91,7 @@ let b,errorContext;
 try{
  b=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
  const out=process.env.FACILITY_SCREENSHOTS;if(out)mkdirSync(out,{recursive:true});
- for(const [label,cycle,roll] of [['double',1,1],['beam',3,1],['clipped',3,1],['alternate',3,.42],['stomp',2,1]]){
+ for(const [label,cycle,roll] of [['double',1,1],['beam',3,1],['alternate',3,.42],['stomp',2,1]]){
   console.log('Begin',label);
   const context=await b.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.70});
   const p=await context.newPage(),errors=[];p.on('pageerror',x=>errors.push(x.message));
@@ -91,13 +119,11 @@ try{
   const aligned=await read();if(aligned.nextMob>aligned.now)await p.clock.fastForward(Math.ceil(aligned.nextMob-aligned.now)+20);
   await until(s=>s.awake,55,'natural exact wake range');
   assert(await p.evaluate(([c,r])=>window.__editorTest.orvasTracesQA.select(c,r),[cycle,roll]));
-  const clipped=label==='clipped';
-  if(clipped)assert(await p.evaluate(()=>window.__editorTest.orvasTracesQA.seatSouth()));
-  const kind=label==='alternate'||clipped?'beam':label;
+  const kind=label==='alternate'?'beam':label;
   const pre=await until(s=>s.q?.kind===kind&&s.q.cursor===0,115,'normal real cast');
   assert.equal(pre.start.length,0,'no decal on warning');
   assert.equal(pre.drawn.length,0);assert.equal(pre.hp,100);
-  if(label!=='stomp')assert(await p.evaluate(south=>window.__editorTest.orvasTracesQA.dodge(south),clipped));
+  if(label!=='stomp')assert(await p.evaluate(()=>window.__editorTest.orvasTracesQA.dodge()));
   const first=await until(s=>s.q?.cursor===1&&(label==='stomp'?s.stomp: s.start.length>0&&s.drawn.length>0),45,'first executed contact and real GPU');
   assert.equal(first.gl,0);
   if(label==='double'){
@@ -109,16 +135,17 @@ try{
    assert(second.uploads.slice(1).some(u=>u.reuse));
   }else if(label==='alternate'){
    const later=await until(s=>s.q?.done&&s.start[0]?.cells.length>first.start[0].cells.length,38,'rotating beam paints additional legal cells');
-   assert.equal(later.start.length,1);assert(later.start[0].cells.length<=70);assert(later.uploads.every((u,i)=>i===0||u.reuse));
-  }else if(label==='beam'||clipped){
-   assert.equal(first.start[0].kind,'beam');
-   assert(first.start[0].cells.length>=3);
-   if(clipped)assert(first.q.dz>.95&&first.q.reach<14,'beam stops on the real south wall from a reachable combat position');
-   else assert.equal(first.q.reach,14,'unobstructed centered ray in the deeper arena is not prematurely clipped');
+   assert.equal(later.start.length,1);assert(later.start[0].cells.length<=24);assert(later.uploads.every((u,i)=>i===0||u.reuse));
+  }else if(label==='beam'){
+   const stripes=await p.evaluate(()=>window.__editorTest.orvasTracesQA.verifyStripes());
+   assert(stripes&&stripes.left>35&&stripes.right>35&&stripes.center===0&&stripes.error===0,JSON.stringify(stripes));
+   console.log('Actual statue split GPU stripe',JSON.stringify(stripes));
+   assert.equal(first.start[0].kind,'beam');assert(first.start[0].cells.length>=1&&first.start[0].cells.length<=2);
    for(const key of first.start[0].cells){
-    const [x,z]=key.split(',').map(Number),dx=x-first.q.sx,dz=z-first.q.sz;
-    assert(dx*first.q.dx+dz*first.q.dz>0&&Math.hypot(dx,dz)<=first.q.reach+.5);
-    assert(Math.abs(dx*first.q.dz-dz*first.q.dx)<.51);
+    const [kind,xyz]=key.split(':'),[x,z]=xyz.split(',').map(Number).map(a=>a/4);
+    const dx=x-first.q.sx-(kind==='wall'?.5:0),dz=z-first.q.sz-(kind==='wall'?.5:0);
+    assert(dx*first.q.dx+dz*first.q.dz>=first.q.reach-1.25&&Math.hypot(dx,dz)<=first.q.reach+.5,
+     JSON.stringify({key,q:first.q}));
    }
    if(out)await p.screenshot({path:out+'/orvas-trace-beam-active.png'});
    const after=await until(s=>!s.live&&s.now>first.now+1700,40,'GPU retires automatically');

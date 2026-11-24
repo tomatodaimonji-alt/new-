@@ -9,10 +9,11 @@ const mark="if(facilityParams.get('test')==='1')window.__editorTest={";
 
 
 install(mark,`
+ const orvasQAStagePoint=()=>{const b=facilitySite.davidTemple.boss;return {x:b.x,z:b.z+4,y:b.y,facing:1}};
  window.__orvas={
   frame:()=>render(),
   drop:i=>{
-   if(!workshopResumeRestorePosition({x:24,z:162,y:0,facing:1}))return null;
+   if(!workshopResumeRestorePosition(orvasQAStagePoint()))return null;
    const type=poiInventorySlots(poiHotbarRead())[i]?.type;
    if(!type||!poiInventoryDrop(i).ok)return null;
    return poiHotbarRead().drops.find(d=>d.type===type);
@@ -29,13 +30,14 @@ install(mark,`
     poiDavidAttackFoley({kind,sx:b.x,sz:b.z,y:b.y},p,b,i,phase);
   },
   stage:index=>{
-   if(!workshopResumeRestorePosition({x:24,z:162,y:0,facing:1}))return false;
+   if(!workshopResumeRestorePosition(orvasQAStagePoint()))return false;
    poiMonsterStates.clear();poiCombatLockReset();
    return poiEquipHotbarItem(index)?.ok;
   },
   addTargets:targets=>{
-   const list=targets.map(([x,z,y])=>{
-    const o={x,z,y,type:'monsterSlime',rot:0},s=poiCombatActorMake(o);s.hp=100;s.townOwned=true;
+   const stage=orvasQAStagePoint();
+   const list=targets.map(([dx,dz,dy])=>{
+    const o={x:stage.x+dx,z:stage.z+dz,y:stage.y+dy,type:'monsterSlime',rot:0},s=poiCombatActorMake(o);s.hp=100;s.townOwned=true;
     poiMonsterStates.set(o,s);return s;
    });
    window.__orvas.targets=list;poiMonsterMeshDirty=true;
@@ -54,7 +56,7 @@ install(' poiAudioTransient.add(source);source.start(when);source.stop(when+(cap
   poiAudioTransient.add(source);source.start(when);source.stop(when+(cap??(buffer.duration+.012)));
   if(window.__orvasManual){
    const id=buffer===poiDavidAlienCache?'boss-alien-beam':[...poiRecordedFoleyCache].find(([id,b])=>buffer===b&&/^david(?:BladeSweep|Sword)/.test(id))?.[0];
-   if(id)(window.__orvasFoley??=[]).push({id,running:source.context.state,loop:source.loop,when,cap,len:buffer.length});
+   if(id)(window.__orvasFoley??=[]).push({id,running:source.context.state,loop:source.loop,when,cap,len:buffer.length,duration:buffer.duration});
   }
 `);
 install('const b=poiOrvasTwinBladeBasis(arms,pose,i);poiOrvasSwordGeometry(local,b.grip,b.axis,b.blade)',`
@@ -79,6 +81,7 @@ install("    }else if(typeof poiOrvasGroundGeometry==='function'&&poiOrvasGround
 install("    effect.source=source;effect.gain=node;effect.ctx=ctx;",`
     effect.source=source;effect.gain=node;effect.ctx=ctx;
     source.__orvasTail=true;
+    node.gain.__orvasTail=true;
 `);
 install(' requestAnimationFrame(render);',' if(!window.__orvasManual)requestAnimationFrame(render);');
 for(const [,js] of h.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(js);
@@ -93,6 +96,11 @@ try{
  const ctx=await browser.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.65});
  const p=await ctx.newPage(),errors=[];
  await p.addInitScript(()=>{
+  const ramp=AudioParam.prototype.linearRampToValueAtTime;
+  AudioParam.prototype.linearRampToValueAtTime=function(value,when){
+   if(this.__orvasTail)(window.__orvasTailRamps??=[]).push({value,when});
+   return ramp.apply(this,arguments);
+  };
   const stop=AudioBufferSourceNode.prototype.stop;
   AudioBufferSourceNode.prototype.stop=function(t){
    if(this.__orvasTail)(window.__orvasTailStops??=[]).push({when:t,time:this.context.currentTime});
@@ -135,7 +143,7 @@ p.on('pageerror',e=>errors.push(e.message));p.setDefaultTimeout(18000);
   assert.deepEqual(picked,{slot:i,ok:true});assert.equal((await read()).weapon,d.type);
  }
 
- let {q,held}=await start(2,[[32,162,0],[34,162,0]]);
+ let {q,held}=await start(2,[[8,0,0],[10,0,0]]);
  let landed=await until(v=>!v.pending&&v.beam?.draw);
  assert(landed.clock-held.start>=420);
  assert.deepEqual(landed.hp,[52,100]);assert.equal(landed.used,q.used-1);
@@ -146,16 +154,25 @@ p.on('pageerror',e=>errors.push(e.message));p.setDefaultTimeout(18000);
 
 
  const beamStart=landed.beam.start;
- assert.equal(landed.audio[0].cap,.510);
+ const signal=landed.audio[0];
+ assert.equal(signal.cap,.765);assert(signal.duration>=signal.cap);
+ const ramps=await p.evaluate(()=>window.__orvasTailRamps);
+ assert(Math.abs(ramps[0].when-signal.when-.025)<.001&&ramps[0].value>0);
+ assert.equal(ramps.at(-1).value,0);
+ assert(Math.abs(ramps.at(-1).when-signal.when-.750)<.001);
+ assert(ramps.at(-2).value>0&&ramps.at(-2).value<ramps[0].value);
  await frame(315);
  let after=await read();
- assert(after.beam?.draw&&after.beam.alpha>.1&&after.beam.alpha<.4);
+ assert(after.beam?.draw&&after.beam.alpha>.30&&after.beam.alpha<.55);
  assert.deepEqual(after.hp,[52,100]);assert.equal(after.used,q.used-1);
- await frame(150);after=await read();assert(after.beam?.draw&&after.beam.alpha>0&&after.beam.alpha<.05);
- await frame(90);after=await read();assert.equal(after.beam,null);
- assert(after.clock-beamStart>=510);assert.deepEqual(after.hp,[52,100]);assert.equal(after.used,q.used-1);
+ await frame(610-(after.clock-beamStart));after=await read();
+ assert(after.clock-beamStart>510&&after.beam?.draw&&after.beam.alpha>.03&&after.beam.alpha<.09);
+ await frame(710-(after.clock-beamStart));after=await read();
+ assert(after.beam?.draw&&after.beam.alpha>0&&after.beam.alpha<.02);
+ await frame(785-(after.clock-beamStart));after=await read();assert.equal(after.beam,null);
+ assert(after.clock-beamStart>=765);assert.deepEqual(after.hp,[52,100]);assert.equal(after.used,q.used-1);
  assert.equal(after.audio.length,1);assert.equal(after.stops.length,1);
- ({q,held}=await start(2,[[32,162,0]]));landed=await until(v=>!v.pending&&v.beam?.draw);
+ ({q,held}=await start(2,[[8,0,0]]));landed=await until(v=>!v.pending&&v.beam?.draw);
  const swapBefore=landed.stops.length;
  assert(await p.evaluate(()=>window.__orvas.stage(3)));await frame(7);
  let interrupted=await read();assert.equal(interrupted.beam,null);
@@ -163,21 +180,21 @@ p.on('pageerror',e=>errors.push(e.message));p.setDefaultTimeout(18000);
  // resumed source is allowed. The pressed weapon can still wear only once.
  assert(interrupted.stops.length===swapBefore||interrupted.stops.length===swapBefore+1);
  if(interrupted.stops.length>swapBefore)assert(interrupted.stops.at(-1).when-interrupted.stops.at(-1).time<.05);
- ({q,held}=await start(2,[[32,162,0]]));landed=await until(v=>!v.pending&&v.beam?.draw);
+ ({q,held}=await start(2,[[8,0,0]]));landed=await until(v=>!v.pending&&v.beam?.draw);
  await p.evaluate(()=>window.__workshopAudioForeground(false));await frame(7);
  interrupted=await read();assert.equal(interrupted.beam,null);assert.deepEqual(interrupted.hp,[52]);assert.equal(interrupted.used,q.used-1);
- const plays=interrupted.audio.length;await p.evaluate(()=>window.__workshopAudioForeground(true));await frame(550);
+ const plays=interrupted.audio.length;await p.evaluate(()=>window.__workshopAudioForeground(true));await frame(805);
  interrupted=await read();assert(!interrupted.beam&&interrupted.audio.length===plays);
  assert(interrupted.stops.some(e=>e.when===undefined||e.when-e.time<.05));
- ({q,held}=await start(3,[[28,162,0],[26,165,0],[23,162,0]]));
+ ({q,held}=await start(3,[[4,0,0],[2,3,0],[-1,0,0]]));
  landed=await until(v=>!v.pending);
  assert(landed.clock-held.start>=560);
  assert.deepEqual(landed.hp,[54,54,100]);assert.equal(landed.used,q.used-1);
- ({q,held}=await start(4,[[27,162,0],[26,165,0],[23,162,0]]));
+ ({q,held}=await start(4,[[3,0,0],[2,3,0],[-1,0,0]]));
  const first=await until(v=>v.cursor===1);
- assert(first.clock-held.start>=720);assert.deepEqual(first.hp,[72,100,100]);
+ assert(first.clock-held.start>=720);assert.deepEqual(first.hp,[54,100,100]);
  landed=await until(v=>!v.pending);
- assert(landed.clock-held.start>=1040);assert.deepEqual(landed.hp,[37,100,100]);assert.equal(landed.used,q.used-1);
+ assert(landed.clock-held.start>=1040);assert.deepEqual(landed.hp,[8,100,100]);assert.equal(landed.used,q.used-1);
  for(const i of [0,1]){
   const edge=landed.edge.find(b=>b.i===i&&b.p>=1.479&&Math.abs(b.tip[1]-.028)<.004);
   assert(edge&&edge.blade[1]<-.9&&Math.abs(Math.hypot(...edge.tip.map((n,k)=>n-edge.grip[k]))-3.10)<.0001);

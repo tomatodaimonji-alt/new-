@@ -89,11 +89,11 @@ try{
  assert(Math.abs(moved.actual.heading-first.actual.heading)>.20,JSON.stringify({first,moved}));
  assert.equal(moved.marker,'pinned');assert.equal(moved.target,'pinned');
  const one=await until(s=>s.cursor===1,35);
- assert.equal(one.side,72);assert.equal(one.alternate,100);
+ assert.equal(one.side,54);assert.equal(one.alternate,100);
  // Move the exact same authored instance to a new bearing between the
  // downstrokes. The deliberately closer alternate remains behind.
  await p.evaluate(()=>window.__trackedTest.moveTarget(26.3,107.8));
- const two=await until(s=>!s.pending&&s.side===37,30);
+ const two=await until(s=>!s.pending&&s.side===8,30);
  assert.equal(two.alternate,100);assert.equal(two.target,'pinned');
  assert(Math.abs(two.actual.heading-one.actual.heading)>.02);
  await begin(2,26,108);

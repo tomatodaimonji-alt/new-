@@ -81,9 +81,9 @@ try{
  assert.deepEqual(landed.hp,[54,54,100]);assert.equal(landed.used,q.used-1);
  ({q,held}=await start(4,[[27,108,0],[26,111,0],[23,108,0]]));
  const first=await until(v=>v.cursor===1);
- assert(first.clock-held.start>=720);assert.deepEqual(first.hp,[72,100,100]);
+ assert(first.clock-held.start>=720);assert.deepEqual(first.hp,[54,100,100]);
  landed=await until(v=>!v.pending);
- assert(landed.clock-held.start>=1040);assert.deepEqual(landed.hp,[37,100,100]);assert.equal(landed.used,q.used-1);
+ assert(landed.clock-held.start>=1040);assert.deepEqual(landed.hp,[8,100,100]);assert.equal(landed.used,q.used-1);
  console.log('Physical reset, then all three actual right-button attacks, matched timing, scope and wear',JSON.stringify({first:first.hp,landed:landed.hp}));
  assert.deepEqual(errors,[]);
  await ctx.close();

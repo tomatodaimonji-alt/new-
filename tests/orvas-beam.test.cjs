@@ -33,11 +33,11 @@ test('exact boss shape geometry: wide flank is single sweep only; paired right/l
  run("poiOrvasCutResolve({type:'equipOrvasGreatsword',profile:{damage:46},dx:1,dz:0,aim:poiAimOrigin()},100,'sweep')");
  assert(spans.some(x=>x[0]===1&&x[1]===46));assert(!spans.some(x=>x[0]===2));
  spans.length=0;c.weapon='equipOrvasTwinGreatswords';
- run("poiPlayerWeaponPending={type:'equipOrvasTwinGreatswords',started:100,dx:1,dz:0};");
+ run("poiPlayerWeaponPending={type:'equipOrvasTwinGreatswords',profile:{damage:46},started:100,dx:1,dz:0};");
  run('poiOrvasTwinFrame(poiPlayerWeaponPending,819)');assert.deepEqual(spans,[]);
- run('poiOrvasTwinFrame(poiPlayerWeaponPending,820)');assert.deepEqual(spans,['wear',[0,28]]);
+ run('poiOrvasTwinFrame(poiPlayerWeaponPending,820)');assert.deepEqual(spans,['wear',[0,46]]);
  run('poiOrvasTwinFrame(poiPlayerWeaponPending,1139)');assert.equal(spans.length,2);
- run('poiOrvasTwinFrame(poiPlayerWeaponPending,1140)');assert.deepEqual(spans,['wear',[0,28],[0,35]]);
+ run('poiOrvasTwinFrame(poiPlayerWeaponPending,1140)');assert.deepEqual(spans,['wear',[0,46],[0,46]]);
  assert.equal(c.poiPlayerWeaponPending,null);
 });
 

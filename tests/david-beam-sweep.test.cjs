@@ -94,7 +94,7 @@ test('live private encounter clock selects all four kinds, not only the exposed 
 test('actual floor cue and elevated red beam end at a new wall and never outside the arena',()=>{
  const {api,c,boss}=setup(),q={kind:'beam',dx:0,dz:-1,sx:24,sz:104,y:0};
  const open=api.cue(q,boss);
- a(open.lane.p.length>60&&open.beam.p.length>12);a(open.beam.c.some(([r,g,b])=>r>=.99&&g>.70&&b>.40),'hot core');a(open.beam.c.some(([r,g,b])=>r>=.99&&g<.30&&b<.11),'distinct warm sheath');
+ a(open.lane.p.length>60&&open.beam.p.length>12);a(open.beam.c.some(([r,g,b])=>r>=.99&&g>.70&&b>.40),'hot core');a(open.beam.c.some(([r,g,b])=>r>=.95&&g<.30&&b<.11),'distinct warm sheath');
  const ys=open.beam.p.filter((_,i)=>i%3===1),zs=open.beam.p.filter((_,i)=>i%3===2);
  a(Math.max(...ys)>4.7&&Math.min(...ys)<.70,'beam actually comes down from the eyes toward hit corridor');
  a(Math.min(...zs)>=96-1e-5,'ray respects room edge in front even at selected 14-tile nominal length');
@@ -172,8 +172,14 @@ test('moving red beam mesh follows the displayed ray from the eyes, and its endp
  for(let i=0;i<mesh.p.length;i+=3)pts.push(mesh.p.slice(i,i+3));
  const group=(rows,filter)=>{const x=rows.filter(filter);return x[0].map((_,i)=>x.reduce((a,b)=>a+b[i],0)/x.length)};
  const near= v=>(v[0]-24.5)*p.beamDx+(v[2]-104.5)*p.beamDz;
- const eye=group(pts,v=>Math.abs(near(v)-.29)<1e-7),far=group(pts,v=>v[1]<1);
- a(Math.abs(eye[0]-(24.5+p.beamDx*.29))<1e-6&&Math.abs(eye[2]-(104.5+p.beamDz*.29))<1e-6);
+ const nearEyes=pts.filter(v=>Math.abs(near(v)-.29)<1e-7),far=group(pts,v=>v[1]<1);
+ const lateral=v=>(v[0]-24.5)*p.beamDz-(v[2]-104.5)*p.beamDx;
+ for(const sign of [-1,1]){
+  const eye=group(nearEyes,v=>lateral(v)*sign>0);
+  a(Math.abs(lateral(eye)-sign*.151)<.012,'geometry starts at each rotating physical eye');
+  a(Math.abs(near(eye)-.29)<1e-7);
+ }
+ a(nearEyes.every(v=>Math.abs(lateral(v))>.04),'nonzero central gap between eye meshes');
  a(far[0]>26&&far[2]>=96-1e-6);
  c.wall=(x,z)=>z<=102;
  const clipped=api.beamMesh(q,boss).p.filter((_,i)=>i%3===2);

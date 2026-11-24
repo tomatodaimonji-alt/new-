@@ -12,7 +12,7 @@ install(mark,`
  window.__orvas={
   frame:()=>render(),
   drop:i=>{
-   if(!workshopResumeRestorePosition({x:24,z:162,y:0,facing:1}))return null;
+   if(!workshopResumeRestorePosition({x:24,z:108,y:0,facing:1}))return null;
    const type=poiInventorySlots(poiHotbarRead())[i]?.type;
    if(!type||!poiInventoryDrop(i).ok)return null;
    return poiHotbarRead().drops.find(d=>d.type===type);
@@ -29,7 +29,7 @@ install(mark,`
     poiDavidAttackFoley({kind,sx:b.x,sz:b.z,y:b.y},p,b,i,phase);
   },
   stage:index=>{
-   if(!workshopResumeRestorePosition({x:24,z:162,y:0,facing:1}))return false;
+   if(!workshopResumeRestorePosition({x:24,z:108,y:0,facing:1}))return false;
    poiMonsterStates.clear();poiCombatLockReset();
    return poiEquipHotbarItem(index)?.ok;
   },
@@ -40,6 +40,7 @@ install(mark,`
    });
    window.__orvas.targets=list;poiMonsterMeshDirty=true;
   },
+  moveFirst:(x,z)=>{const s=window.__orvas.targets[0];s.x=s.fromX=x;s.z=s.fromZ=z},
   state:()=>{
    const k=poiHotbarRead(),slots=poiInventorySlots(k),weapon=poiEquippedWeapon(),a=poiPlayerWeaponPending;
    const beam=poiOrvasPlayerBeam;
@@ -123,7 +124,7 @@ try{
   assert.deepEqual(picked,{slot:i,ok:true});assert.equal((await read()).weapon,d.type);
  }
 
- let {q,held}=await start(2,[[32,162,0],[34,162,0]]);
+ let {q,held}=await start(2,[[32,108,0],[34,108,0]]);
  let landed=await until(v=>!v.pending&&v.beam?.draw);
  assert(landed.clock-held.start>=420);
  assert.deepEqual(landed.hp,[52,100]);assert.equal(landed.used,q.used-1);
@@ -132,15 +133,15 @@ try{
  assert(Math.abs(Math.abs(landed.beam.rays[0].z-landed.beam.rays[1].z)-.302)<.002);
  assert.deepEqual(landed.audio.map(x=>x.id),['boss-alien-beam']);
 
- ({q,held}=await start(3,[[28,162,0],[26,165,0],[23,162,0]]));
+ ({q,held}=await start(3,[[28,108,0],[26,111,0],[23,108,0]]));
  landed=await until(v=>!v.pending);
  assert(landed.clock-held.start>=560);
  assert.deepEqual(landed.hp,[54,54,100]);assert.equal(landed.used,q.used-1);
- ({q,held}=await start(4,[[27,162,0],[26,165,0],[23,162,0]]));
+ ({q,held}=await start(4,[[27,108,0],[26,111,0],[23,108,0]]));
  const first=await until(v=>v.cursor===1);
- assert(first.clock-held.start>=720);assert.deepEqual(first.hp,[72,100,100]);
+ assert(first.clock-held.start>=720);assert.deepEqual(first.hp,[54,100,100]);
  landed=await until(v=>!v.pending);
- assert(landed.clock-held.start>=1040);assert.deepEqual(landed.hp,[37,100,100]);assert.equal(landed.used,q.used-1);
+ assert(landed.clock-held.start>=1040);assert.deepEqual(landed.hp,[8,100,100]);assert.equal(landed.used,q.used-1);
  for(const i of [0,1]){
   const edge=landed.edge.find(b=>b.i===i&&b.p>=1.479&&Math.abs(b.tip[1]-.028)<.004);
   assert(edge&&edge.blade[1]<-.9&&Math.abs(Math.hypot(...edge.tip.map((n,k)=>n-edge.grip[k]))-3.10)<.0001);
@@ -151,6 +152,12 @@ try{
  const all=(await read()).audio;assert.deepEqual(all.map(x=>x.id),[...expected,...expected]);
  assert.deepEqual(all.slice(4).map(x=>x.len),all.slice(0,4).map(x=>x.len));
 
+ ({q,held}=await start(4,[[29,108,0]]));
+ const miss=await until(v=>v.cursor===1);
+ assert.deepEqual(miss.hp,[100]);assert.equal(miss.used,q.used);
+ await p.evaluate(()=>window.__orvas.moveFirst(27,108));
+ const partial=await until(v=>!v.pending);
+ assert.deepEqual(partial.hp,[54]);assert.equal(partial.used,q.used-1);
  console.log('Physical reset, then all three actual right-button attacks, matched timing, scope and wear',JSON.stringify({first:first.hp,landed:landed.hp}));
  assert.deepEqual(errors,[]);
  await ctx.close();

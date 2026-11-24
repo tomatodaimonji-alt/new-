@@ -31,9 +31,16 @@ test('actual beam draw grows out of the eyes and maintains one buffer and postur
  a(!beam(before),'there is only a warning before the muzzle reveal');
  a(beam(early)&&beam(mid),'a visible ray grows during the original windup');
  a(length(beam(early))<length(beam(mid)),'successive rays extend from the eye');
- const muzzle=beam(early).p.filter((v,i,coords)=>i%3===0&&Math.abs(coords[i+2]-104.21)<.002&&Math.abs(coords[i+1]-4.75)<.03);
- a(muzzle.some(x=>Math.abs(x-24.349)<.025)&&muzzle.some(x=>Math.abs(x-24.651)<.025),'both real eye positions seed the beam, not the forehead center');
- a(beam(early).n<=375&&beam(mid).n<=375);
+ const coords=beam(early).p,muzzle=[];
+ for(let i=0;i<coords.length;i+=3)if(Math.abs(coords[i+2]-104.21)<.002)muzzle.push(coords.slice(i,i+3));
+ for(const x0 of [24.349,24.651]){
+  const ring=muzzle.filter(p=>(p[0]<24.5)===(x0<24.5));
+  a(ring.length>12,'a genuine tube ring begins at each eye');
+  const mid=j=>(Math.min(...ring.map(p=>p[j]))+Math.max(...ring.map(p=>p[j])))/2;
+  a(Math.abs(mid(0)-x0)<.012&&Math.abs(mid(1)-4.75)<.012,'each ring is centered at the physical eye');
+ }
+ a(muzzle.every(p=>Math.abs(p[0]-24.5)>.035),'no center/forehead emitter');
+ a(beam(early).n<=2160&&beam(mid).n<=2160,'two narrow capped tubes share the same mesh limit');
 
  a.equal(g.hits.length,0);
  const contact=g.frame(hit),hold=g.frame(hit+180),last=g.frame(hit+410),sweepStart=g.frame(hit+450),sweep=g.frame(hit+750);

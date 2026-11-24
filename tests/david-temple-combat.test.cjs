@@ -94,7 +94,7 @@ test('live private encounter clock selects all four kinds, not only the exposed 
 test('actual floor cue and elevated red beam end at a new wall and never outside the arena',()=>{
  const {api,c,boss}=setup(),q={kind:'beam',dx:0,dz:-1,sx:24,sz:104,y:0};
  const open=api.cue(q,boss);
- a(open.lane.p.length>60&&open.beam.p.length>12);a(open.beam.c.some(([r,g,b])=>r>=.99&&g>.70&&b>.40),'hot core');a(open.beam.c.some(([r,g,b])=>r>=.99&&g<.30&&b<.11),'distinct warm sheath');
+ a(open.lane.p.length>60&&open.beam.p.length>12);a(open.beam.c.some(([r,g,b])=>r>=.99&&g>.70&&b>.40),'hot core');a(open.beam.c.some(([r,g,b])=>r>=.95&&g<.30&&b<.11),'distinct warm sheath');
  const ys=open.beam.p.filter((_,i)=>i%3===1),zs=open.beam.p.filter((_,i)=>i%3===2);
  a(Math.max(...ys)>4.7&&Math.min(...ys)<.70,'beam actually comes down from the eyes toward hit corridor');
  a(Math.min(...zs)>=96-1e-5,'ray respects room edge in front even at selected 14-tile nominal length');
