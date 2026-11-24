@@ -5761,7 +5761,7 @@ function poiFortGeometry(m,id,x,y,z,rot=0,lod=0){
   if(corner)B(0,h+.12,0,.66,.27,.66,warm);
   else for(const sx of [-.33,.24])B(sx,h+.12,0,.28,.25,d-.02,stone);
   // Pared-down slabs: surface stripes, not a cube for every stone.
-  for(const side of [-1,1])for(const yy of [.48,.84,1.21,1.59]){
+  for(const side of [-1,1])for(const yy of lod===0?[.48,.84,1.21,1.59]:lod===1?[.48,1.21]:[]){
    const q=side*(d*.5+.002);
    if(side>0)Q([-.50,yy,q],[.50,yy,q],[.50,yy+.012,q],[-.50,yy+.012,q],grout);
    else Q([.50,yy,q],[-.50,yy,q],[-.50,yy+.012,q],[.50,yy+.012,q],grout);
@@ -33374,6 +33374,7 @@ function makeScene(){
  const sacredParts=poiWalkActive&&facilitySite?.davidTemple?.depth===1?[]:null;
  const outdoorBuild=POI_UNIFORM_OUTDOOR&&poiWalkActive&&poiWalkLevel===0?[]:null;
  const hybridGate=POI_HYBRID_GATE&&poiWalkActive&&poiWalkLevel===0&&facilitySite?.id==='base'?[]:null;
+ const hybridWall=POI_HYBRID_WALL&&hybridGate?[]:null;
  const localGradeSources=[],m=mesh(),visible=(localBatch||world).filter(o=>{
   if(!localBatch&&poiWalkActive&&((typeof poiFacilityLocalMember==='function'&&poiFacilityLocalMember(o))||
     (typeof poiSouthForestMember==='function'&&poiSouthForestMember(o))||
@@ -33628,6 +33629,7 @@ function makeScene(){
   else if(!pineDrawBaseTree(m,o)&&!pineDrawEastNature(m,o))deco(m,o.type,o.x+.5,o.y*1.4+terrainY(o.x,o.z),o.z+.5,o.rot||0);
   if(isWallId(o.type)||/^poiDavidWall/.test(o.type))pineBakeWallWarmth(m,start,o,pineShadows,pineWarmLamps);
   if(hybridGate&&o.y===0&&o.type==='poiFortGate')hybridGate.push([start,m.p.length/3,poiHybridGateKey(facilitySite.id,o)]);
+  if(hybridWall&&poiHybridWallOrdinary(facilitySite,o))poiUniformBuildRange(hybridWall,start,m.p.length/3);
   if(outdoorBuild&&poiUniformBuildMember(facilitySite,o))poiUniformBuildRange(outdoorBuild,start,m.p.length/3);
   if(sides.length)poiAngledWallRecord(wallFade,m,o,sides,start);
   poiAngledStoreyRecord(storeyFade,m,o,start);
@@ -33651,12 +33653,13 @@ function makeScene(){
  if(sacredParts?.length)uploaded.sacredParts=poiAngledRangeMerge(sacredParts);
  if(outdoorBuild?.length)uploaded.outdoorBuild=outdoorBuild;
  if(hybridGate?.length)uploaded.hybridGate=hybridGate;
+ if(hybridWall?.length)uploaded.hybridWall=hybridWall;
  if(lodgingTintPatches?.length){uploaded.lodgingTintPatches=lodgingTintPatches;uploaded.lodgingTintActive=false}
  return uploaded;
 }
 function upload(m,reuse=null,usage=gl.STATIC_DRAW){const n=m.p.length/3,data=new Float32Array(n*9);for(let i=0;i<n;i++){const a=i*9,b=i*3;for(let j=0;j<3;j++){data[a+j]=m.p[b+j];data[a+3+j]=m.n[b+j];data[a+6+j]=m.c[b+j]}}const vbo=reuse||gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vbo);gl.bufferData(gl.ARRAY_BUFFER,data,usage);return{buf:vbo,count:n}}
 const POI_OCCLUSION_OPACITY=.16;
-const VERT='precision highp float;attribute vec3 aPos;attribute vec3 aNorm;attribute vec3 aCol;uniform mat4 uMVP;varying vec3 vCol;varying mediump float vWorldHeight;varying mediump vec2 vLootXZ;void main(){gl_Position=uMVP*vec4(aPos,1.0);vWorldHeight=aPos.y;vLootXZ=aPos.xz;float l=.60+.40*max(dot(normalize(aNorm),normalize(vec3(-.4,1.0,.35))),0.0);vCol=aCol*l;}';
+const VERT='precision highp float;attribute vec3 aPos;attribute vec3 aNorm;attribute vec3 aCol;attribute vec3 aHybridWallShift;attribute vec2 aHybridWallBand;uniform mat4 uMVP;varying vec3 vCol;varying mediump vec2 vHybridWallBand;varying mediump float vWorldHeight;varying mediump vec2 vLootXZ;void main(){gl_Position=uMVP*vec4(aPos+aHybridWallShift,1.0);vWorldHeight=aPos.y+aHybridWallShift.y;vLootXZ=aPos.xz+aHybridWallShift.xz;vHybridWallBand=aHybridWallBand;float l=.60+.40*max(dot(normalize(aNorm),normalize(vec3(-.4,1.0,.35))),0.0);vCol=aCol*l;}';
 const FRAG=`precision mediump float;
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 #define OCCP highp
@@ -33675,6 +33678,7 @@ uniform vec3 uStreamPropReveal;
 uniform vec4 uOutdoorSight;
 uniform vec4 uSharedCanopy;
 uniform vec2 uHybridGateBand;
+varying mediump vec2 vHybridWallBand;
 uniform vec3 uSacredColor;
 uniform vec4 uLootHighlight;
 uniform OCCP vec4 uOcclusionShape;
@@ -33687,10 +33691,11 @@ void main(){
   float bit=(4.0*workshopDither2(mod(cell,2.0))+workshopDither2(floor(cell*.5))+.5)/16.0;
   if(bit>=1.0-smoothstep(43.0,48.0,distanceToPlayer))discard;
  }
- if(uHybridGateBand.y>0.0&&(uHybridGateBand.x>0.0||uHybridGateBand.y<1.0)){
+ vec2 band=vHybridWallBand.y>0.0?vHybridWallBand:uHybridGateBand;
+ if(band.y>0.0&&(band.x>0.0||band.y<1.0)){
   vec2 cell=mod(floor(gl_FragCoord.xy),4.0);
   float pick=(4.0*workshopDither2(mod(cell,2.0))+workshopDither2(floor(cell*.5))+.5)/16.0;
-  if(pick<uHybridGateBand.x||pick>=uHybridGateBand.y)discard;
+  if(pick<band.x||pick>=band.y)discard;
  }
  if(uStreamPropReveal.z>0.0){
   float hide=uStreamPropReveal.z*smoothstep(8.0,12.0,length(vLootXZ-uStreamPropReveal.xy));
@@ -33762,7 +33767,7 @@ void main(){
 function sh(t,src){const s=gl.createShader(t);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s}
 let program;try{program=gl.createProgram();gl.attachShader(program,sh(gl.VERTEX_SHADER,VERT));gl.attachShader(program,sh(gl.FRAGMENT_SHADER,FRAG));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program))}catch(e){window.pineStartup.fail(e);return}
 gl.useProgram(program);gl.enable(gl.DEPTH_TEST);gl.depthMask(true);gl.depthFunc(gl.LESS);gl.clearColor(0,0,0,0);const loc={p:gl.getAttribLocation(program,'aPos'),n:gl.getAttribLocation(program,'aNorm'),c:gl.getAttribLocation(program,'aCol'),mvp:gl.getUniformLocation(program,'uMVP'),
- daylight:gl.getUniformLocation(program,'uTownDaylight'),lootHighlight:gl.getUniformLocation(program,'uLootHighlight'),occlusionShape:gl.getUniformLocation(program,'uOcclusionShape'),occlusionInfo:gl.getUniformLocation(program,'uOcclusionInfo'),hitFlash:gl.getUniformLocation(program,'uHitFlash'),sacredFog:gl.getUniformLocation(program,'uSacredFog'),sacredEdge:gl.getUniformLocation(program,'uSacredEdge'),streamPropReveal:gl.getUniformLocation(program,'uStreamPropReveal'),outdoorSight:gl.getUniformLocation(program,'uOutdoorSight'),sharedCanopy:gl.getUniformLocation(program,'uSharedCanopy'),hybridGateBand:gl.getUniformLocation(program,'uHybridGateBand'),sacredTempleHide:gl.getUniformLocation(program,'uSacredTempleHide'),sacredColor:gl.getUniformLocation(program,'uSacredColor')};
+ daylight:gl.getUniformLocation(program,'uTownDaylight'),lootHighlight:gl.getUniformLocation(program,'uLootHighlight'),occlusionShape:gl.getUniformLocation(program,'uOcclusionShape'),occlusionInfo:gl.getUniformLocation(program,'uOcclusionInfo'),hitFlash:gl.getUniformLocation(program,'uHitFlash'),sacredFog:gl.getUniformLocation(program,'uSacredFog'),sacredEdge:gl.getUniformLocation(program,'uSacredEdge'),streamPropReveal:gl.getUniformLocation(program,'uStreamPropReveal'),outdoorSight:gl.getUniformLocation(program,'uOutdoorSight'),sharedCanopy:gl.getUniformLocation(program,'uSharedCanopy'),hybridGateBand:gl.getUniformLocation(program,'uHybridGateBand'),hybridWallShift:gl.getAttribLocation(program,'aHybridWallShift'),hybridWallBand:gl.getAttribLocation(program,'aHybridWallBand'),sacredTempleHide:gl.getUniformLocation(program,'uSacredTempleHide'),sacredColor:gl.getUniformLocation(program,'uSacredColor')};
 try{initSignProgram()}catch(e){console.warn('2D sign textures unavailable',e)}
 function mult(a,b){const c=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++)for(let k=0;k<4;k++)c[j*4+i]+=a[k*4+i]*b[j*4+k];return c}
 function ortho(l,r,b,t,n,f){return new Float32Array([2/(r-l),0,0,0,0,2/(t-b),0,0,0,0,-2/(f-n),0,-(r+l)/(r-l),-(t+b)/(t-b),-(f+n)/(f-n),1])}
@@ -34598,7 +34603,8 @@ function poiDrawSceneOcclusion(m,vp,spans=null){
  const temple=sacred?.length&&typeof poiSacredTempleViewAmount==='function'?poiSacredTempleViewAmount():1;
  const outdoorBuild=POI_UNIFORM_OUTDOOR&&poiOutdoorFrame?m?.outdoorBuild:null;
  const gate=poiOutdoorFrame&&POI_HYBRID_GATE?m?.hybridGate:null;
- if(!spans?.length&&!hidden.length&&temple>=1&&!outdoorBuild?.length&&!gate?.length){draw(m,vp);return}
+const wall=poiHybridWallActive&&poiOutdoorFrame?m?.hybridWall:null;
+ if(!spans?.length&&!hidden.length&&temple>=1&&!outdoorBuild?.length&&!gate?.length&&!wall?.length){draw(m,vp);return}
  if(!m?.count)return;
  gl.bindBuffer(gl.ARRAY_BUFFER,m.buf);
  for(const [a,offset] of [[loc.p,0],[loc.n,12],[loc.c,24]]){
@@ -34615,8 +34621,12 @@ function poiDrawSceneOcclusion(m,vp,spans=null){
   if(!hidden.length){if(end>start)gl.drawArrays(gl.TRIANGLES,start,end-start);return}
   for(const [a,b] of poiVisibleMeshRanges(start,end,hidden))gl.drawArrays(gl.TRIANGLES,a,b-a);
  };
+ const cutWall=(a,b)=>{
+  for(const [s,e] of wall||[]){if(e<=a)continue;if(s>=b)break;if(s>a)rawSend(a,s);a=Math.max(a,e)}
+  if(a<b)rawSend(a,b);
+ };
  const send=(a,b)=>poiHybridGateClip(gate,a,b,poiHybridGateReady,(x,z)=>
-  poiUniformBuildSend(outdoorBuild,x,z,poiWalkViewX+.5,poiWalkViewZ+.5,'stock',rawSend));
+  poiUniformBuildSend(outdoorBuild,x,z,poiWalkViewX+.5,poiWalkViewZ+.5,'stock',cutWall));
  const submit=(start,end)=>{
   if(temple>=1){send(start,end);return}
   for(const [a,b] of sacred){
@@ -36069,6 +36079,9 @@ function render(){
   poiSacredTunnelPresentation(facilitySite,poiWalkViewX,poiWalkViewZ,poiWalkLevel);
  if(typeof poiDavidImpactVp==='function')p.vp=poiDavidImpactVp(p,now);
  const walking=poiWalkActive&&!pineGameActive&&!facilitySite,key=level+':'+(hideUpper?1:0);
+ poiHybridWallActive=poiWalkActive&&poiWalkLevel===0&&!cameraTopDown&&!pineAIActive&&
+  (facilitySite?.id==='base'||facilitySite?.id==='snowpass')&&facilityVisibilityOwner()===null&&
+  !(facilitySite?.id==='base'&&poiDavidTempleEnclosedAt(facilitySite,poiWalkViewX,poiWalkViewZ,0))&&poiHybridWallWarm();
  const stream=typeof poiOverlandPreviewTick==='function'?poiOverlandPreviewTick():null;
  if(stream){sceneMesh=stream;signOverlays=poiOverlandSignOverlay();dirty=false}
  else if(facilitySite&&poiWalkActive){
@@ -36106,6 +36119,7 @@ function render(){
  if(!stream&&typeof poiSacredDrawScene==='function')poiSacredDrawScene(p.vp);
  if(typeof poiSacredContactWallDraw==='function')poiSacredContactWallDraw(p.vp);
  if(typeof poiSacredInteriorDraw==='function')poiSacredInteriorDraw(p.vp,sacredPeek);
+ poiHybridWallDraw(p.vp);
  poiHybridGateDraw(p.vp);
  poiOcclusionEnd();
  if(typeof poiOutdoorLate==='function')poiOutdoorLate(p.vp,stream);
@@ -41613,9 +41627,9 @@ function poiHybridGatePrepare(){
    const h=(spec.terrain.get(o.x+','+o.z)||0)*TERRAIN_STEP;
    const m=[0,1,2].map(lod=>{const v=mesh();poiFortGeometry(v,o.type,o.x+.5,h,o.z+.5,o.rot||0,lod);return v});
    const bytes=m.reduce((sum,m)=>sum+m.p.length*12,0);baked=true;
-   if(bytes+poiHybridGateBytes<=POI_HYBRID_GATE_LIMIT&&bytes+poiHybridGateBytes+near<=POI_OVERLAND_GPU_LIMIT){
+   if(bytes+poiHybridGateBytes<=POI_HYBRID_GATE_LIMIT&&bytes+poiHybridGateBytes+near+poiHybridWallBytes<=POI_OVERLAND_GPU_LIMIT){
     if(poiOutdoorFarBytes)poiOutdoorTrimForDetailed(bytes,near+poiHybridGateBytes,true);
-    if(bytes+poiHybridGateBytes+near+poiOutdoorFarBytes<=POI_OVERLAND_GPU_LIMIT){
+    if(bytes+poiHybridGateBytes+near+poiOutdoorFarBytes+poiHybridWallBytes<=POI_OVERLAND_GPU_LIMIT){
      e={source:spec.world,gpus:m.map(x=>upload(x)),bytes};poiHybridGateBytes+=bytes;poiHybridGateCache.set(key,e);
     }
    }
@@ -41644,6 +41658,92 @@ function poiHybridGateDraw(vp){
    }
   }finally{gl.uniform2f(loc.hybridGateBand,0,0);if(spec.id!==id)poiSacredFrontierFogRegion(id)}
  }
+}
+// BEGIN HYBRID FORT WALL POLICY
+function poiHybridWallOrdinary(site,o){
+ return !!(site?.id==='base'&&o?.y===0&&o.type==='poiFortWall'&&
+  !site.canal?.culverts?.some(p=>p.x===o.x&&p.z===o.z));
+}
+function poiHybridWallBands(weights){
+ const result=[];let lo=0;
+ for(let i=0;i<weights.length;i++)if(weights[i]>0){
+  const hi=Math.min(1,lo+weights[i]);if(hi>lo)result.push([i,lo,hi]);lo=hi;
+ }
+ return result;
+}
+// END HYBRID FORT WALL POLICY
+const POI_HYBRID_WALL=POI_HYBRID_GATE&&facilityParams.get('hybrid-wall')==='1';
+const POI_HYBRID_WALL_MAX=512,POI_HYBRID_WALL_LIMIT=128*1024;
+let poiHybridWallPack=null,poiHybridWallBytes=0,poiHybridWallActive=false;
+const poiHybridWallWorld=new WeakMap();
+let poiHybridWallDebug={calls:0,instances:0,bytes:0,impl:'none'};
+function poiHybridWallWarm(){
+ if(!POI_HYBRID_WALL)return false;
+ if(poiHybridWallPack)return true;
+ const ext=typeof gl.drawArraysInstanced==='function'?{
+  vertexAttribDivisorANGLE:(...args)=>gl.vertexAttribDivisor(...args),
+  drawArraysInstancedANGLE:(...args)=>gl.drawArraysInstanced(...args),
+ }:gl.getExtension('ANGLE_instanced_arrays');
+ if(!ext)return false; // keep exact installed stock / stream geometry when hardware lacks it
+ const variants=[];
+ for(let rot=0;rot<4;rot++)for(let tier=0;tier<3;tier++){
+  const m=mesh();poiFortGeometry(m,'poiFortWall',0,0,0,rot,tier);variants.push(m);
+ }
+ const dynBytes=POI_HYBRID_WALL_MAX*5*4,bytes=variants.reduce((n,m)=>n+m.p.length*12,dynBytes);
+ const near=[...poiOverlandMeshes.values()].reduce((n,m)=>n+m.bytes,0);
+ if(bytes>POI_HYBRID_WALL_LIMIT||bytes+near+poiHybridGateBytes>POI_OVERLAND_GPU_LIMIT)return false;
+ poiOutdoorTrimForDetailed(bytes,near);
+ if(bytes+near+poiHybridGateBytes+poiOutdoorFarBytes>POI_OVERLAND_GPU_LIMIT)return false;
+ const instances=gl.createBuffer();
+ gl.bindBuffer(gl.ARRAY_BUFFER,instances);gl.bufferData(gl.ARRAY_BUFFER,dynBytes,gl.DYNAMIC_DRAW);
+ poiHybridWallPack={ext,instances,variants:variants.map(m=>upload(m))};
+ poiHybridWallBytes=bytes;
+ return true;
+}
+function poiHybridWallDraw(vp){
+ poiHybridWallDebug={calls:0,instances:0,bytes:poiHybridWallBytes,impl:poiHybridWallPack?'instanced':'stock'};
+ if(!poiHybridWallActive||!poiOutdoorFrame)return;
+ const {id,g}=poiOutdoorFrame,{instances,variants,ext}=poiHybridWallPack;
+ let uploaded=0;
+ for(const spec of poiOutdoorAreas(id)){
+  if(spec.id!=='base')continue;
+  let walls=poiHybridWallWorld.get(spec.world);
+  if(!walls){
+   walls=spec.world.filter(o=>poiHybridWallOrdinary(spec.layout,o)&&spec.owns(o.x,o.z));poiHybridWallWorld.set(spec.world,walls);
+  }
+  const view=poiOverlandNeighborVP(vp,id,spec.id),[x,z]=poiOverlandLocal(spec.id,...g),sets=new Map();
+  for(const o of walls){
+   const range=(o.x-x)**2+(o.z-z)**2;if(range>=48*48)continue;
+   const h=(spec.terrain.get(o.x+','+o.z)||0)*TERRAIN_STEP;
+   if(!poiOverlandBoxVisible(view,[o.x-.3,h,o.z-.3,o.x+1.3,h+2.6,o.z+1.3]))continue;
+   for(const [tier,lo,hi] of poiHybridWallBands(poiHybridGateWeights(x,z,o.x,o.z))){
+    const key=((o.rot||0)&3)*3+tier,r=sets.get(key)||[];
+    r.push(o.x+.5,h,o.z+.5,lo,hi);sets.set(key,r);
+   }
+  }
+  if(spec.id!==id)poiSacredFrontierFogRegion(spec.id);
+  try{
+   for(const [key,coords] of sets){
+    const g=variants[key],count=coords.length/5;
+    if(count>POI_HYBRID_WALL_MAX)continue; // beyond canonical family count; never overrun GPU slice
+    const props=[[loc.p,0],[loc.n,12],[loc.c,24]];
+    gl.bindBuffer(gl.ARRAY_BUFFER,g.buf);
+    for(const [a,o] of props){gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,3,gl.FLOAT,false,36,o)}
+    gl.bindBuffer(gl.ARRAY_BUFFER,instances);
+    gl.bufferSubData(gl.ARRAY_BUFFER,0,Float32Array.from(coords));uploaded+=coords.length*4;
+    for(const [a,n,o] of [[loc.hybridWallShift,3,0],[loc.hybridWallBand,2,12]]){
+     gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,n,gl.FLOAT,false,20,o);ext.vertexAttribDivisorANGLE(a,1);
+    }
+    gl.uniformMatrix4fv(loc.mvp,false,view);
+    poiUniformBuildDraw(x+.5,z+.5,'hybrid-wall',()=>ext.drawArraysInstancedANGLE(gl.TRIANGLES,0,g.count,count));
+    poiHybridWallDebug.calls++;poiHybridWallDebug.instances+=count;
+   }
+  }finally{
+   if(spec.id!==id)poiSacredFrontierFogRegion(id);
+   for(const a of [loc.hybridWallShift,loc.hybridWallBand]){ext.vertexAttribDivisorANGLE(a,0);gl.disableVertexAttribArray(a);gl.vertexAttrib4f(a,0,0,0,1)}
+  }
+ }
+ poiHybridWallDebug.uploaded=uploaded;
 }
 // BEGIN OUTDOOR GEOGRAPHY LOD
 const POI_OUTDOOR_FAR_OUT=48;
@@ -41810,6 +41910,7 @@ function poiOutdoorDrop(key){
  poiOutdoorFarBytes-=e.bytes;poiOutdoorCaches.delete(key);
 }
 function poiOutdoorTrimForDetailed(bytes,held,countsGate=false){
+ held+=poiHybridWallBytes;
  if(!countsGate)held+=poiHybridGateBytes;
  if(!POI_OUTDOOR_LOD)return;
  // Detailed seam ownership always wins over optional geography.
@@ -41862,7 +41963,7 @@ function poiSplitOutdoorLate(vp,stream){
  }
  const coverage=new Set(stream?poiOverlandGroundDrawn.keys():[]);
  for(const m of poiSnowTempleNeighbor)if(m.outdoorKey)coverage.add(m.outdoorKey);
- const held=[...poiOverlandMeshes.values()].reduce((n,m)=>n+m.bytes,0),budget=Math.max(0,Math.min(POI_OUTDOOR_FAR_PEAK,POI_OVERLAND_GPU_LIMIT-held-poiHybridGateBytes));
+ const held=[...poiOverlandMeshes.values()].reduce((n,m)=>n+m.bytes,0),budget=Math.max(0,Math.min(POI_OUTDOOR_FAR_PEAK,POI_OVERLAND_GPU_LIMIT-held-poiHybridGateBytes-poiHybridWallBytes));
  const wall=typeof poiWallNow==='function'?poiWallNow:()=>performance.now(),start=wall();
  let baked=0;
  // Choose deterministic world positions for warming, not the current bearing.
@@ -42026,6 +42127,7 @@ function* poiOverlandChunkRows(q,region){
  }
  m.propsFirst=m.p.length/3;m.groundRows=groundRows;const outdoorBuild=POI_UNIFORM_OUTDOOR?[]:null,hybridGate=POI_HYBRID_GATE?[]:null;
  for(const o of region.batches.get(id)||[]){
+  if(poiHybridWallActive&&poiHybridWallOrdinary(region.layout,o))continue;
   // This outdoor renderer never owns the authored temple's close reveal.
   // A looking-back snow player must not expose its normally hidden facade.
   const shell=POI_UNIFORM_SHELL&&poiUniformShellMember(region.layout,o);
@@ -42067,7 +42169,7 @@ function* poiOverlandChunkRows(q,region){
 }
 function poiOverlandUpload(q,m){
  const bytes=m.p.length*12,held=[...poiOverlandMeshes.values()].reduce((n,m)=>n+m.bytes,0);
- if(!bytes||held+bytes+poiHybridGateBytes>POI_OVERLAND_GPU_LIMIT)return false;
+ if(!bytes||held+bytes+poiHybridGateBytes+poiHybridWallBytes>POI_OVERLAND_GPU_LIMIT)return false;
  if(typeof poiOutdoorTrimForDetailed==='function')poiOutdoorTrimForDetailed(bytes,held);
  const r=upload(m);r.bytes=bytes;r.propsFirst=m.propsFirst;r.groundRows=m.groundRows;r.canopyFirst=m.canopyFirst;r.outdoorBuild=m.outdoorBuild;r.hybridGate=m.hybridGate;
  r.revealBorn=poiOverlandEngaged?performance.now():-Infinity;
@@ -42688,7 +42790,7 @@ function workshopResumePermitted(params){
  if(params.get('reset-camera')==='1'&&facilityPlayOnOpen(params,'base')&&
     [...params.keys()].every(k=>['facility','facility-play','reset-camera','test'].includes(k)))return true;
  if(params.has('facility')||params.has('facility-return')||params.has('editor'))return false;
- if(params.get('resume')==='1')return [...params.keys()].every(k=>k==='resume'||k==='test'||k==='outdoor-lod'&&params.get(k)==='0'||(k==='uniform-outdoor'||k==='uniform-shell'||k==='uniform-split'||k==='hybrid-gate')&&params.get(k)==='1');
+ if(params.get('resume')==='1')return [...params.keys()].every(k=>k==='resume'||k==='test'||k==='outdoor-lod'&&params.get(k)==='0'||(k==='uniform-outdoor'||k==='uniform-shell'||k==='uniform-split'||k==='hybrid-gate'||k==='hybrid-wall')&&params.get(k)==='1');
  if(![...params.keys()].length)return true;
  return [...params.keys()].every(k=>k==='revision')&&/^\d{1,20}$/.test(params.get('revision')||'');
 }
