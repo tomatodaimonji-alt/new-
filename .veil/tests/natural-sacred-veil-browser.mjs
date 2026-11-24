@@ -1,7 +1,7 @@
 import a from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {createRequire} from 'node:module';
-import {readFileSync,mkdirSync} from 'node:fs';
+import {readFileSync,mkdirSync,writeFileSync} from 'node:fs';
 import {Script} from 'node:vm';
 function instrument(f){
  let h=readFileSync(f,'utf8');
@@ -47,6 +47,12 @@ function instrument(f){
   }
   window.__naturalData={roof,wall,w,h,err:gl.getError(),x:poiWalkViewX,z:poiWalkViewZ,eye:p.eye,stream:poiOverlandDrawing,
    sameGeometry:poiNaturalQA.mesh.count,orchard:site.sacredForest.concealment?.trees.length||0};
+  if(window.__naturalFrames){
+   const c=document.createElement('canvas');c.width=w;c.height=h;
+   const ctx=c.getContext('2d'),img=ctx.createImageData(w,h);
+   for(let y=0;y<h;y++)img.data.set(buf.subarray((h-1-y)*w*4,(h-y)*w*4),y*w*4);
+   ctx.putImageData(img,0,0);window.__naturalData.tagged=c.toDataURL('image/png');
+  }
  }
  function render(){`);
  const target=" if(typeof poiOutdoorLate==='function')poiOutdoorLate(p.vp,stream);";
@@ -70,7 +76,7 @@ await new Promise((r,j)=>server.listen(0,'127.0.0.1',r).once('error',j));const o
 let b;
 try{
  b=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
- for(const t of cases){
+ for(const t of cases.filter(t=>!process.env.NATURAL_VEIL_CASES||process.env.NATURAL_VEIL_CASES.split(',').includes(t.key))){
   const results={};
   for(const mode of ['stock','preview']){
    const ctx=await b.newContext({viewport:{width:844,height:390},hasTouch:true,isMobile:true,deviceScaleFactor:.65});
@@ -84,11 +90,13 @@ try{
     },t);
     await p.goto(origin+'/'+mode+'?resume=1&test=1');await p.locator('#pineStartupCover').waitFor({state:'hidden',timeout:25000});
     await p.waitForTimeout(1250);
-    const frame=await p.evaluate(()=>window.__editorTest.naturalVeilQA());
+    const {tagged,...frame}=await p.evaluate(c=>{window.__naturalFrames=c;return window.__editorTest.naturalVeilQA()},!!process.env.FACILITY_SCREENSHOTS);
     a(frame.sameGeometry>1000&&frame.err===0&&Math.abs(frame.x-t.x)<.1&&Math.abs(frame.z-t.z)<.1,JSON.stringify(frame));
     results[mode]=frame;
     if(process.env.FACILITY_SCREENSHOTS){
-     mkdirSync(process.env.FACILITY_SCREENSHOTS,{recursive:true});await p.screenshot({path:process.env.FACILITY_SCREENSHOTS+'/'+mode+'-'+t.key+'.png'});
+     mkdirSync(process.env.FACILITY_SCREENSHOTS,{recursive:true});
+     if(tagged)writeFileSync(process.env.FACILITY_SCREENSHOTS+'/'+mode+'-'+t.key+'-physical.png',Buffer.from(tagged.split(',')[1],'base64'));
+     await p.screenshot({path:process.env.FACILITY_SCREENSHOTS+'/'+mode+'-'+t.key+'.png'});
     }
     a.deepEqual(errors,[]);
    }finally{await ctx.close()}
@@ -96,6 +104,7 @@ try{
   const {stock,preview}=results;
   const reduction=(x,y)=>x?Math.round(100*(x-y)/x):null;
   a.equal(stock.sameGeometry,preview.sameGeometry);
+  a(Math.max(...stock.eye.map((x,i)=>Math.abs(x-preview.eye[i])))<.005,'same real camera pose, not a new obstruction pushing the camera');
   a(preview.orchard>20&&stock.orchard===0);
   console.log('Authored temple physical coverage (no visibility gates)',JSON.stringify({case:t.key,...results,roofDrop:reduction(stock.roof,preview.roof),wallDrop:reduction(stock.wall,preview.wall)}));
  }
