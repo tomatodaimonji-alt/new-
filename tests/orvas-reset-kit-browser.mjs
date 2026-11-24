@@ -66,8 +66,12 @@ try{
  where='dropping one experimental weapon then retaining reset-camera URL must not grant it again';
  assert(await p.evaluate(()=>window.__editorTest.orvasResetDropQA().ok),'the real inventory drop is persisted');
  s=await snapshot();assert.equal(s.kit.slots[2],null);assert.equal(s.kit.drops,1);
- assert(new URL(p.url()).searchParams.get('reset-camera')==='1');
- await p.reload({waitUntil:'domcontentloaded'});await ready();s=await snapshot();
+ // Web startup canonically removes reset-camera after consuming its view
+ // hint. A native wrapper can retain the originally requested URL anyway.
+ const keptURL=url+'/?facility=base&facility-play=1&reset-camera=1&test=1';
+ const response=await p.goto(keptURL,{waitUntil:'domcontentloaded'});
+ assert.equal(new URL(response.url()).searchParams.get('reset-camera'),'1');
+ await ready();s=await snapshot();
  assert.equal(s.kit.slots[2],null);assert.equal(s.kit.drops,1);
  assert.deepEqual(s.kit.slots.filter(c=>keys.includes(c?.type)).map(c=>c.type),keys.slice(1));
  assert.equal(s.first,first);
