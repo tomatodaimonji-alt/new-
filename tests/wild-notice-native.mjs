@@ -9,7 +9,7 @@ h=h.replace(api,api+`
   wildNotice:{
    birth:()=>{
     const now=performance.now();
-    const draws=[0,0,0,0,.25,.5];let i=0;
+    const draws=[0,0,0,.25,.5];let i=0;
     const rng=()=>draws[Math.min(i++,draws.length-1)];
     let candidates=0;
     for(let z=60;z<=120;z++)for(let x=65;x<=130;x++){
