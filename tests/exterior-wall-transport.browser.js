@@ -1,8 +1,8 @@
 // Injected only into a QA copy. Capture the exact final stock wall spans after
 // its face-cull and warm-light bake; no product geometry policy is replaced.
 function poiTestTransportRemember(m,start,o){
- if(!window.__transportSpans||o.y!==0||!['stonewall','woodwall'].includes(o.type)||m.p.length/3<=start)return;
- if(Math.hypot(o.x-poiWalkX,o.z-poiWalkZ)>16)return;
+ if(!window.__transportSpans||o.y!==0||!['stonewall','woodwall','poiFortWall'].includes(o.type)||m.p.length/3<=start)return;
+ if(Math.hypot(o.x-poiWalkX,o.z-poiWalkZ)>30)return;
  const a=start*3,count=m.p.length/3-start,anchor=[o.x+.5,terrainY(o.x,o.z),o.z+.5];
  const world=new Float32Array(count*9),local=new Float32Array(count*9);
  let h=2166136261,g=7776281;
@@ -24,7 +24,7 @@ function poiTestTransportGroup(){
   if(!poiOverlandBoxVisible(p.vp,[x-.57,y,z-.57,x+.57,y+1.45,z+.57]))continue;
   const group=variants.get(s.key)??[];group.push(s);variants.set(s.key,group);
  }
- const set=[...variants.values()].filter(a=>a.length>=3&&a[0].count*a.length<28000).sort((a,b)=>b.length*b[0].count-a.length*a[0].count)[0];
+ const set=[...variants.values()].filter(a=>a.length>=3).map(a=>a.slice(0,Math.min(10,Math.floor(27000/a[0].count)))).sort((a,b)=>b.length*b[0].count-a.length*a[0].count)[0];
  if(!set)return {error:'no visible repeated module',candidates:[...variants].map(([k,a])=>[k,a.length]),seen:sites.length};
  // Audit grouping by full data independently of its compact hash.
  const checks=set.filter(s=>s.local.every((v,i)=>Math.abs(v-set[0].local[i])<=2e-7));
