@@ -1,0 +1,36 @@
+name: Isolated snow-map seam attribution on v299
+on:
+  push:
+    branches: ['dot/workshop-v299-snow-map-attribution']
+permissions:
+  contents: read
+jobs:
+  measure:
+    strategy:
+      fail-fast: false
+      matrix:
+        order: [stock-first, trial-first, scope]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: |
+          test "$(git hash-object world-editor.html)" = f1b56301dea2b3a46fc919e7c7df94ba451532ce
+          cp world-editor.html stock.html
+          python .snow-map/local-minimap-prewarm.py stock.html world-editor.html
+          test "$(git hash-object world-editor.html)" = 861a995621964016917af13deb4a7640b5586bc1
+          cp .snow-map/tests/* tests/
+          STOCK=stock.html HTML=world-editor.html node --test tests/snow-local-map-prewarm.test.cjs tests/local-minimap.test.cjs tests/mini-map-runtime.test.cjs
+      - run: npm install --no-save playwright@1.58.2 && npx playwright install chromium
+      - if: matrix.order == 'stock-first'
+        run: |
+          SNOW_MINI_CASE=stock node tests/snow-local-map-compare-browser.mjs stock.html
+          SNOW_MINI_CASE=trial node tests/snow-local-map-compare-browser.mjs world-editor.html
+      - if: matrix.order == 'trial-first'
+        run: |
+          SNOW_MINI_CASE=trial node tests/snow-local-map-compare-browser.mjs world-editor.html
+          SNOW_MINI_CASE=stock node tests/snow-local-map-compare-browser.mjs stock.html
+      - if: matrix.order == 'scope'
+        run: node tests/local-minimap-browser.mjs && node tests/sacred-discovery-browser.mjs
