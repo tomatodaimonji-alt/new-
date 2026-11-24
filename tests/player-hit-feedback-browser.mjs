@@ -58,7 +58,7 @@ try{
    });
    await p.clock.install({time:new Date('2026-04-01T12:00:00Z')});
    await p.goto(url+'/seed');await p.evaluate(()=>{
-    const slots=Array.from({length:30},()=>null);slots[0]={type:'equipWoodSword',count:1};slots[3]={type:'healingHerb',count:1};
+    const slots=Array.from({length:27},()=>null);slots[0]={type:'equipWoodSword',count:1};slots[3]={type:'healingHerb',count:1};
     localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weapon:'equipWoodSword',potions:1,gold:0,slots}));
     localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
      position:{x:24,z:102,y:0,facing:2},townLayout:5,townMapHeight:128,
@@ -101,7 +101,10 @@ try{
    checkpoint='trusted real healing shortcut cannot create hit cue';
    assert(await p.evaluate(()=>window.__editorTest.hitEdgeQA.pose(41,43)));
    await advance(220);
-   await p.locator('[data-hotbar-slot="3"]').tap();
+   const herb=p.locator('#poiHotbar [data-hotbar-slot="3"]');
+   assert.match(await herb.getAttribute('aria-label'),/薬草/);
+   await herb.tap();
+
    const healing=await read();assert(healing.healed,JSON.stringify(healing));
    const health=await until(q=>q.hp>got.hp&&!q.healed,75);
    assert.equal(health.packets.length,1);assert.equal(health.opacity,0);assert(health.deathHidden);
