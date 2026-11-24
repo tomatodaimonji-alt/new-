@@ -381,9 +381,23 @@ try{
  const fatal=await start(browser),fp=fatal.p;
  try{
   checkpoint='true vulnerable David encounter, death and sound-canceled walking return';
-  await fp.touchscreen.tap(690,200);
-  await wait(fp,()=>window.__editorTest.davidQA.sound().running);
-  for(const z of [92,93,94,95,96,97,98])await step(fp,'ArrowDown',24,z);
+  // On this new context a random canvas-area tap is not an audio action.
+  // A native foreground key event enters the same next dry tile and runs
+  // the production footstep SE while Chromium has a trusted user gesture.
+  await fp.bringToFront();
+  await wait(fp,()=>!document.hidden&&document.hasFocus(),null,9000);
+  const route=[92,93,94,95,96,97,98];
+  const running=()=>window.__editorTest.davidQA.sound().running;
+  await step(fp,'ArrowDown',24,route.shift());
+  try{await wait(fp,running,null,2400)}catch(e){
+   if(e.name!=='TimeoutError')throw e;
+   // Touch the actual primary action, not guessed pixels. If audio hasn't
+   // resumed yet, the second normal outside footstep gets a fresh gesture.
+   await fp.locator('#poiWalkAction').tap({timeout:5000});
+   await step(fp,'ArrowDown',24,route.shift());
+   await wait(fp,running,null,9000);
+  }
+  for(const z of route)await step(fp,'ArrowDown',24,z);
   await wait(fp,()=>{const s=window.__editorTest.davidQA.state().statue;return s?.d?.awake&&(s.x!==24||s.z!==104)});
   await wait(fp,()=>window.__editorTest.davidQA.state().contacts.some(h=>h.hp===0),null,35000);
   await wait(fp,()=>{const s=window.__editorTest.davidQA.state().statue;return !s?.d?.awake&&s?.x===24&&s?.z===104},null,12000);

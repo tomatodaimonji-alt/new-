@@ -70,7 +70,7 @@ try{
  assert(pending.q.leap.z>=110&&pending.q.leap.z<112,'the real scheduler fixes a valid tile short of player');
  assert.deepEqual(pending.boss,[24,104]);assert.equal(pending.hp,100);assert.equal(pending.damage.length,0);
  where='airborne real published mesh moves and rises before hurting';
- const airborne=await until(s=>s.renderPose?.david?.phase==='airborne'&&s.renderPose.david.leapHeight>.8,18);
+ const airborne=await until(s=>s.renderPose?.david?.phase==='airborne'&&s.renderPose.david.leapHeight>.8&&s.renderPose.z>106,18);
  assert.deepEqual(airborne.boss,[24,104]);
  assert(airborne.renderPose.z>106&&airborne.renderPose.y>pending.renderPose.y+.8);
  assert.equal(airborne.hp,100);assert.equal(airborne.q.leap.z,pending.q.leap.z);
