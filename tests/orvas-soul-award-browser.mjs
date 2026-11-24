@@ -136,6 +136,11 @@ try{
   assert.deepEqual(s.atomic[0],{flag:31,dead:true,soul:1});
   assert(s.atomic.every(w=>w.soul<=1));
  }
+ function assertGearConserved(s){
+  const items=['armorOrvasWaistcloth','equipOrvasGreatsword','equipOrvasHead','equipOrvasTwinGreatswords'];
+  const types=[...s.ground.map(d=>d.type),...s.slots.filter(Boolean).map(c=>c.type)].filter(t=>items.includes(t)).sort();
+  assert.deepEqual(types,items.sort());
+ }
  const scenario=process.env.ORVAS_AWARD_CASE;let q,p,s;
  if(scenario!=='pending'){
  phase='real canonical awakening and actual slime-companion final blow';
@@ -161,11 +166,11 @@ try{
  await p.locator('#poiWalkAction').tap();s=await q.until(v=>v.slots.some(c=>c?.type==='orvasSoul'));
  assert.equal(s.slots.filter(c=>c?.type==='orvasSoul').length,1);
  assert.equal(s.slots.find(c=>c?.type==='orvasSoul').durability,1050);
- assert.equal(s.ground.length,4);assert(s.ground.every(d=>d.type!=='orvasSoul'));
+ assertGearConserved(s);assert(s.ground.every(d=>d.type!=='orvasSoul'));
  s=await q.tick(300);
  assert.equal(s.slots.filter(c=>c?.type==='orvasSoul').length,1);assert.equal(s.saved.orvasRewards,31);
  p=await q.cold();s=await q.until(v=>v.slots.some(c=>c?.type==='orvasSoul'));
- assert.equal(s.ground.length,4);assert.equal(s.saved.orvasRewards,31);
+ assertGearConserved(s);assert.equal(s.saved.orvasRewards,31);
  assert(s.slots.some(c=>c?.type==='slimeSoul'&&c.durability===29));
  phase='real confirmed reset seeds weapons and one inactive usable soul; no ground or fight award';
  await p.locator('#poiLandscapeMenuToggle').tap();

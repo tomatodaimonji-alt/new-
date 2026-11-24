@@ -66,7 +66,7 @@ try{
  const until=async(f,n=85)=>{let s=await read();for(let i=0;i<n&&!f(s);i++)s=await tick();assert(f(s),JSON.stringify(s));return s;};
  const take=()=>p.locator('#poiWalkAction').tap();
  const move=async(x,z)=>{
-  const s=await read(),i=s.dirs.findIndex(([dx,dz])=>dx===x-s.x&&dz===z-s.z);
+  const s=await tick(240),i=s.dirs.findIndex(([dx,dz])=>dx===x-s.x&&dz===z-s.z);
   assert(i>=0&&s.edge[i],JSON.stringify({x,z,s}));await p.keyboard.press(letters[i]);
   return until(q=>q.x===x&&q.z===z,10);
  };
@@ -99,7 +99,9 @@ try{
  if(process.env.FACILITY_SCREENSHOTS){
   // Separate the player/miniature silhouettes in the real camera.
   const side=stayed.dirs.findIndex(([dx],i)=>dx!==0&&stayed.edge[i]);assert(side>=0);
-  await move(stayed.x+stayed.dirs[side][0],stayed.z);await tick(240);
+  const offset=stayed.dirs[side][0];let aside=await move(stayed.x+offset,stayed.z);
+  if(aside.edge[side])aside=await move(aside.x+offset,aside.z);
+  await tick(240);
   mkdirSync(process.env.FACILITY_SCREENSHOTS,{recursive:true});
   await p.screenshot({path:process.env.FACILITY_SCREENSHOTS+'/orvas-317-lateral-ground.png'});
  }
