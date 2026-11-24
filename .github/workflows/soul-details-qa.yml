@@ -1,0 +1,40 @@
+name: Isolated Soul Detail QA
+on:
+  push:
+    branches: [dot/workshop-soul-details-qa]
+permissions:
+  contents: read
+jobs:
+  unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: |
+          test "$(git hash-object world-editor.html)" = "bfa7d9aed030b117c1a4b9660ceeb4b872a4d287"
+          python .qa-soul-details/build.py world-editor.html checked.html
+          test "$(git hash-object checked.html)" = "bb43ede3431166ff3f98ae6658dfbdd1914a5f36"
+          mv checked.html world-editor.html
+          if ! node --test tests/*.test.cjs > "$RUNNER_TEMP/strict.out" 2>&1; then
+            grep -E '^not ok |^  location:|^  error:|^# (tests|pass|fail|duration)' "$RUNNER_TEMP/strict.out" | tail -250
+            exit 1
+          fi
+          grep -E '^# (tests|pass|fail|duration)' "$RUNNER_TEMP/strict.out"
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save playwright@1.56.1
+      - run: npx playwright install chromium
+      - run: |
+          test "$(git hash-object world-editor.html)" = "bfa7d9aed030b117c1a4b9660ceeb4b872a4d287"
+          python .qa-soul-details/build.py world-editor.html checked.html
+          test "$(git hash-object checked.html)" = "bb43ede3431166ff3f98ae6658dfbdd1914a5f36"
+          node tests/soul-details-browser.mjs checked.html
