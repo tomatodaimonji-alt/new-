@@ -19684,6 +19684,7 @@ let poiCompanionWorldActor=null,poiCompanionDrawPose=null,poiCompanionWorldBar=n
 function poiDrawCompanion(now,vp){
  const a=poiCompanionActor;
  if(!poiCompanionWorldVisible(a)){poiCompanionWorldActor=null;return}
+ if(poiOverlandDrawing&&!poiOverlandActorVisible(vp,a.x,a.z,a.y)){poiCompanionWorldActor=null;return}
  const pose=poiCompanionWorldPose(a,now),fast=!!pose.attack||a.freeMoving;
  const key=pose.orvas&&!fast?[a.id,pose.x,pose.z,pose.y,pose.scale,pose.heading].join(':'):
 a.id+':'+a.x+':'+a.z+':'+a.y+':'+(fast?'fast:':'idle:')+Math.floor(now/(fast?32:68));
@@ -23473,7 +23474,7 @@ function poiRenderEnemyHealth(now,vp){
  const frame=++poiEnemyBarFrame;
  if(poiWalkActive&&!pineAIActive)for(const [obj,state] of poiMonsterStates){
   if(obj.type==='monsterStoneDavid'&&(!state.david?.awake||state.david.returning))continue;
-  if(state.hp<=0||(facilitySite&&obj.y!==poiWalkLevel)||
+  if(state.hp<=0||!poiSacredInteriorHostileVisible(obj)||(facilitySite&&obj.y!==poiWalkLevel)||
     (typeof poiDungeonVisualVisible==='function'&&!poiDungeonVisualVisible(obj.x,obj.z,obj.y))||
     Math.max(Math.abs(state.x-poiWalkX),Math.abs(state.z-poiWalkZ))>10)continue;
   const pose=poiMonsterPose(obj,state,now);
@@ -27379,7 +27380,7 @@ function poiTownResidentsDraw(now,vp){
  }
  // Include the sample interval so start/settle cannot reuse a stale bucket.
  const outfits=actors.filter(a=>!a.recessed&&!a.death&&a.y===poiWalkLevel)
-  .map(poiTownNpcGearVisualKey).join('|');
+  .map(a=>a.role.id+'='+poiTownNpcGearVisualKey(a)).join('|');
  const key=[poiTownNpcVersion,poiWalkLevel,poiWalkX,poiWalkZ,cadence,outfits,
   cadence?Math.floor(now/cadence):'idle'].join(':');
  if(key!==poiTownNpcMeshKey){
@@ -28819,7 +28820,7 @@ function poiAimRenderMarker(now,vp,layer){
     !document.hidden&&$('poiBagPanel')?.hidden!==false&&!poiTownDialogue&&
     $('poiLandscapeMenu')?.hidden!==false&&$('poiScreenNoteLayer')?.hidden!==false&&
     !document.querySelector('dialog[open],.modal.open')){
-  if(lock&&poiCombatLockVisible(o,lock,now)){
+  if(lock&&poiSacredInteriorHostileVisible(lock.id)&&poiCombatLockVisible(o,lock,now)){
    const p=poiMonsterPose(lock.id,lock.state,now);
    const h=POI_COMBAT_TORSO_HEIGHT[lock.id.type]??(POI_ENEMY_HEAD_HEIGHT[lock.id.type]||1.2)*.54;
    point=poiWorldToScreen(vp,p.x,p.y+h,p.z);
@@ -30314,13 +30315,15 @@ function poiCompanionFxSnapshot(){
 }
 
 let poiSlimeMeshAnimating=false;
-let poiOverlandMonsterSlice=null;
+let poiOverlandMonsterSlice=null,poiSacredBossSlice=false;
 function poiMonsterRender(now,vp){
  if(!poiWalkActive)return;
+ const sacred=poiSacredInteriorPlayer();
+ if(sacred!==poiSacredBossSlice){poiSacredBossSlice=sacred;poiMonsterMeshDirty=true}
  for(let i=poiMonsterBreaks.length-1;i>=0;i--)if(now-poiMonsterBreaks[i].start>=poiMonsterBreakTTL(poiMonsterBreaks[i])){
   poiMonsterBreaks.splice(i,1);poiMonsterMeshDirty=true;
  }
- const onSlice=(o,state)=>!(facilitySite&&o.y!==poiWalkLevel)&&
+ const onSlice=(o,state)=>poiSacredInteriorHostileVisible(o)&&!(facilitySite&&o.y!==poiWalkLevel)&&
   (typeof poiOverlandActorVisible!=='function'||poiOverlandActorVisible(vp,state?.x??o.x,state?.z??o.z,o.y))&&
   (typeof poiDungeonVisualVisible!=='function'||poiDungeonVisualVisible(o.x,o.z,o.y));
  const clip=typeof poiOverlandDrawing!=='undefined'&&poiOverlandDrawing;
@@ -32339,6 +32342,7 @@ function makeScene(){
    if(poiWalkLevel>=0&&o.y===0&&o.type==='lantern')localGradeSources.push(o);
    return false;
   }
+  if(poiWalkActive&&poiSacredInteriorSconce(facilitySite,o))return false;
   if(facilitySite&&!facilityObjectVisible(o,cut))return false;
   if(poiWalkActive&&poiIsMonster(o.type))return false;
   // The guild facade nameplate hides with the roof when the player enters.
@@ -32399,9 +32403,9 @@ function makeScene(){
    for(const dz of [.045,.955])cube(grade,x+.5,h-.67,z+dz,.8,1.34,.09,edge);
    continue;
   }
-  const kind=floors.get(x+','+z)||'grass';
+  const original=floors.get(x+','+z)||'grass',kind=poiSacredInteriorGrade(facilitySite,x,z,original,poiWalkActive);
   const tmp=mesh();
-  const ambientTint=floors.has(x+','+z)?null:groundCorner;
+  const ambientTint=floors.has(x+','+z)&&kind===original?null:groundCorner;
   const eastBlend=groundCorner&&x-baseOffset>=72&&Object.prototype.hasOwnProperty.call(PINE_EAST_NATURE_TONES,kind)?groundCorner:null;
   if(woodlandRiver(x,z))facilityWoodlandWater(tmp,x,z,floors,creekWater,creekShoals,canalWater.has(x+','+z),x-baseOffset);
   else{
@@ -32616,12 +32620,21 @@ uniform float uHitFlash;
 uniform vec3 uSacredFog;
 uniform vec4 uSacredEdge;
 uniform float uSacredTempleHide;
+uniform vec3 uStreamPropReveal;
 uniform vec3 uSacredColor;
 uniform vec4 uLootHighlight;
 uniform OCCP vec4 uOcclusionShape;
 uniform OCCP vec4 uOcclusionInfo;
 float workshopDither2(vec2 p){return 2.0*p.x+3.0*p.y-4.0*p.x*p.y;}
 void main(){
+ if(uStreamPropReveal.z>0.0){
+  float hide=uStreamPropReveal.z*smoothstep(8.0,12.0,length(vLootXZ-uStreamPropReveal.xy));
+  if(hide>0.0){
+   vec2 cell=mod(floor(gl_FragCoord.xy),4.0);
+   float bit=(4.0*workshopDither2(mod(cell,2.0))+workshopDither2(floor(cell*.5))+.5)/16.0;
+   if(bit<hide)discard;
+  }
+ }
  if(uSacredTempleHide>0.0){
   vec2 cell=mod(floor(gl_FragCoord.xy),4.0);
   float bit=(4.0*workshopDither2(mod(cell,2.0))+workshopDither2(floor(cell*.5))+.5)/16.0;
@@ -32678,7 +32691,7 @@ void main(){
 function sh(t,src){const s=gl.createShader(t);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s}
 let program;try{program=gl.createProgram();gl.attachShader(program,sh(gl.VERTEX_SHADER,VERT));gl.attachShader(program,sh(gl.FRAGMENT_SHADER,FRAG));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program))}catch(e){window.pineStartup.fail(e);return}
 gl.useProgram(program);gl.enable(gl.DEPTH_TEST);gl.depthMask(true);gl.depthFunc(gl.LESS);gl.clearColor(0,0,0,0);const loc={p:gl.getAttribLocation(program,'aPos'),n:gl.getAttribLocation(program,'aNorm'),c:gl.getAttribLocation(program,'aCol'),mvp:gl.getUniformLocation(program,'uMVP'),
- daylight:gl.getUniformLocation(program,'uTownDaylight'),lootHighlight:gl.getUniformLocation(program,'uLootHighlight'),occlusionShape:gl.getUniformLocation(program,'uOcclusionShape'),occlusionInfo:gl.getUniformLocation(program,'uOcclusionInfo'),hitFlash:gl.getUniformLocation(program,'uHitFlash'),sacredFog:gl.getUniformLocation(program,'uSacredFog'),sacredEdge:gl.getUniformLocation(program,'uSacredEdge'),sacredTempleHide:gl.getUniformLocation(program,'uSacredTempleHide'),sacredColor:gl.getUniformLocation(program,'uSacredColor')};
+ daylight:gl.getUniformLocation(program,'uTownDaylight'),lootHighlight:gl.getUniformLocation(program,'uLootHighlight'),occlusionShape:gl.getUniformLocation(program,'uOcclusionShape'),occlusionInfo:gl.getUniformLocation(program,'uOcclusionInfo'),hitFlash:gl.getUniformLocation(program,'uHitFlash'),sacredFog:gl.getUniformLocation(program,'uSacredFog'),sacredEdge:gl.getUniformLocation(program,'uSacredEdge'),streamPropReveal:gl.getUniformLocation(program,'uStreamPropReveal'),sacredTempleHide:gl.getUniformLocation(program,'uSacredTempleHide'),sacredColor:gl.getUniformLocation(program,'uSacredColor')};
 try{initSignProgram()}catch(e){console.warn('2D sign textures unavailable',e)}
 function mult(a,b){const c=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++)for(let k=0;k<4;k++)c[j*4+i]+=a[k*4+i]*b[j*4+k];return c}
 function ortho(l,r,b,t,n,f){return new Float32Array([2/(r-l),0,0,0,0,2/(t-b),0,0,0,0,-2/(f-n),0,-(r+l)/(r-l),-(t+b)/(t-b),-(f+n)/(f-n),1])}
@@ -34961,6 +34974,7 @@ function render(){
  if(typeof facilityDrawForestScene==='function')facilityDrawForestScene(p.vp);
  facilityDrawRoofs(p.vp);poiDrawGameRoofs(p.vp);}
  if(typeof poiSacredDrawScene==='function')poiSacredDrawScene(p.vp);
+ if(typeof poiSacredInteriorDraw==='function')poiSacredInteriorDraw(p.vp);
  poiOcclusionEnd();
  if(typeof facilityDrawSnowHorizon==='function')
   facilityDrawSnowHorizon(p);
@@ -38309,6 +38323,7 @@ function extendTownWorldDavidTemple(site){
  site.buildings.push({id:'davidTemple',name,...bounds,footprint,floorFootprints:{0:enclosure},permanentRoof:true});
  return {depth:1,name,difficulty:10,bounds,ring,approach,entrance:P(24,entry),
   threshold:{minX:23,maxX:25,z:entry,y},retreat:P(24,125),boss,interior,enclosure:cells,
+  interiorFloors:new Set([...floor.values()].filter(o=>o.z>=entry).map(o=>o.x+','+o.z)),
   musicArrival:{minX:22,maxX:26,minZ:124,maxZ:exit-1,y},
   resumeSolid:props.filter(o=>o.y===0&&/^poiDavid/.test(o.type)),authored:{index,count:world.length-index}};
 }
@@ -40251,7 +40266,7 @@ function poiOverlandSpecFor(id,layout,mapWorld,width,height){
   const owns=id==='base'&&width===128&&height===182?(x,z)=>z<128||x<48||poiSnowSleeveOwn(x,z):null;
   p={id,width,height,owns,layout,terrain,townCells,signs,index:poiOverlandIndex(mapWorld,isFloor),batches,roofGroups,
    roofLookup:new Map(roofList.map(o=>[key(o),o])),bridges:new Map(statics.filter(o=>BRIDGE_IDS.has(o.type)).map(o=>[o.x+','+o.z,o])),
-   walls:wallExteriorLookup(statics),lights:pineFloorLightingSources(statics)};
+   walls:wallExteriorLookup(statics),lights:pineFloorLightingSources(statics.filter(o=>!poiSacredInteriorSconce(layout,o)))};
   poiOverlandIndexCache.set(mapWorld,p);
  }
  return p;
@@ -40282,16 +40297,34 @@ function poiOverlandAreas(){
 function poiOverlandClear(keep=new Set()){
  for(const [k,m] of poiOverlandMeshes)if(!keep.has(k)){gl.deleteBuffer(m.buf);poiOverlandMeshes.delete(k)}
 }
+// BEGIN STREAM PROP REVEAL
+const POI_STREAM_PROP_REVEAL_MS=550;
+function poiStreamPropOpacity(now,born){
+ const t=Math.max(0,Math.min(1,(now-born)/POI_STREAM_PROP_REVEAL_MS));
+ return t*t*(3-2*t);
+}
+function poiStreamPropDraw(m,vp,x,z,now){
+ const opacity=poiStreamPropOpacity(now,m.revealBorn??-Infinity),first=m.propsFirst??0;
+ if(!(opacity<1)||first>=m.count){draw(m,vp);return}
+ if(first)draw(m,vp,0,first);
+ gl.uniform3f(loc.streamPropReveal,x,z,1-opacity);
+ try{draw(m,vp,first,m.count-first)}
+ finally{gl.uniform3f(loc.streamPropReveal,0,0,0)}
+}
+// END STREAM PROP REVEAL
 function* poiOverlandChunkRows(q,region){
  const m=mesh(),{floors}=region.index,id=q.i+','+q.j;
+ const groundRows=new Uint8Array(8);
  const height=(x,z)=>region.terrain.get(x+','+z)||0;
  const local=facilitySite?.id===region.id,offset=region.id==='base'?(local?facilitySite.townOffset:22)||0:0;
  const ambient=region.id==='base'?(x,z)=>pineEastGroundColor(x,z,floors,offset):null;
  for(let z=q.z0;z<q.z1;z++){
   for(let x=q.x0;x<q.x1;x++){
    if(region.owns&&!region.owns(x,z))continue;
-   const key=x+','+z,tile=floors.get(key)|| (region.id==='snowpass'?'poiSnowGround':'grass'),t=mesh();
-   const tint=ambient&&(!floors.has(key)||x-offset>=72&&Object.hasOwn(PINE_EAST_NATURE_TONES,tile))?ambient:null;
+   groundRows[z-q.z0]|=1<<(x-q.x0);
+   const key=x+','+z,original=floors.get(key)|| (region.id==='snowpass'?'poiSnowGround':'grass'),
+    tile=poiSacredInteriorGrade(region.layout,x,z,original,true),t=mesh();
+   const tint=ambient&&(tile!==original||!floors.has(key)||x-offset>=72&&Object.hasOwn(PINE_EAST_NATURE_TONES,tile))?ambient:null;
    const area=region.id==='base'&&region.height===182&&z<128?region.width*128:region.width*region.height;
    addFloorTile(t,x,z,tile,area,
     ROAD_DIAGONALS.has(tile)?roadDiagonalConnections(floors,x,z,tile):ROAD_IDS.has(tile)&&!tile.endsWith('Full')?roadConnections(floors,x,z,tile):0,tint,true);
@@ -40304,6 +40337,7 @@ function* poiOverlandChunkRows(q,region){
    yield;
   }
  }
+ m.propsFirst=m.p.length/3;m.groundRows=groundRows;
  for(const o of region.batches.get(id)||[]){
   // This outdoor renderer never owns the authored temple's close reveal.
   // A looking-back snow player must not expose its normally hidden facade.
@@ -40331,7 +40365,8 @@ function* poiOverlandChunkRows(q,region){
 function poiOverlandUpload(q,m){
  const bytes=m.p.length*12,held=[...poiOverlandMeshes.values()].reduce((n,m)=>n+m.bytes,0);
  if(!bytes||held+bytes>POI_OVERLAND_GPU_LIMIT)return false;
- const r=upload(m);r.bytes=bytes;
+ const r=upload(m);r.bytes=bytes;r.propsFirst=m.propsFirst;r.groundRows=m.groundRows;
+ r.revealBorn=poiOverlandEngaged?performance.now():-Infinity;
  let x0=Infinity,y0=Infinity,z0=Infinity,x1=-Infinity,y1=-Infinity,z1=-Infinity;
  for(let i=0;i<m.p.length;i+=3){
   const x=m.p[i],y=m.p[i+1],z=m.p[i+2];
@@ -40444,8 +40479,14 @@ function poiOverlandSignOverlay(){
 }
 // The streamed perspective only draws nearby terrain. Leave simulation and
 // collision untouched; don't rebuild models whose positions cannot be in it.
+const poiOverlandGroundDrawn=new Map();
 function poiOverlandActorVisible(vp,x,z,level){
- if(!poiOverlandDrawing||!vp||Math.abs(x-poiWalkViewX)<=34&&Math.abs(z-poiWalkViewZ)<=34)return true;
+ if(!poiOverlandDrawing||!vp||level!==0)return true;
+ const tx=Math.floor(x+.5),tz=Math.floor(z+.5),
+  i=Math.floor(tx/POI_OVERLAND_CHUNK),j=Math.floor(tz/POI_OVERLAND_CHUNK);
+ const chunk=poiOverlandGroundDrawn.get(facilitySite.id+':'+i+','+j);
+ if(!(chunk?.[tz-j*POI_OVERLAND_CHUNK]&(1<<(tx-i*POI_OVERLAND_CHUNK))))return false;
+ if(Math.abs(x-poiWalkViewX)<=34&&Math.abs(z-poiWalkViewZ)<=34)return true;
  const y=terrainY(x,z)+1.4*level;
  // Pad for interpolated movement, model size and movement across grades.
  return poiOverlandBoxVisible(vp,[x-1.2,y-1.4,z-1.2,x+2.2,y+4.3,z+2.2]);
@@ -40467,9 +40508,16 @@ function poiOverlandPresent(vp){
  const all=poiOverlandCommands,active=facilitySite.id,matrices=new Map([[active,vp]]);
  for(const o of all)if(!matrices.has(o.id))matrices.set(o.id,poiOverlandNeighborVP(vp,active,o.id));
  poiOverlandCommands=all.filter(o=>poiOverlandBoxVisible(matrices.get(o.id),o.m.bounds));
- poiOverlandDrawn=poiOverlandCommands;
+ poiOverlandDrawn=poiOverlandCommands;poiOverlandGroundDrawn.clear();
+ const now=performance.now();
  try{
- for(const o of poiOverlandCommands)draw(o.m,poiOverlandNeighborVP(vp,facilitySite.id,o.id));
+ for(const o of poiOverlandCommands){
+  // Actor support is tied to physical floor submissions, not a guessed radius
+  // or active simulation territory. Missing tiles across a shared chunk do not qualify.
+  poiOverlandGroundDrawn.set(o.key,o.m.groundRows);
+  const player=poiOverlandLocal(o.id,...poiOverlandGlobal(active,poiWalkViewX,poiWalkViewZ));
+  poiStreamPropDraw(o.m,matrices.get(o.id),player[0]+.5,player[1]+.5,now);
+ }
  }finally{poiOverlandCommands=all}
 }
 function poiOverlandInspect(){
@@ -41435,12 +41483,17 @@ function facilityDrawLocalScene(vp){
   if(!objects.length)return;
   poiFacilityLocalBuild=objects;
   try{
-   poiFacilityLocalScene={id:'southPort',mesh:makeScene(),world,site:facilitySite};
+   const mesh=makeScene();mesh.revealBorn=inspect?-Infinity:performance.now();
+   poiFacilityLocalScene={id:'southPort',mesh,world,site:facilitySite};
    poiFacilityLocalBuilds++;
   }finally{poiFacilityLocalBuild=null}
  }
  const m=poiFacilityLocalScene?.mesh;
- if(m?.count){draw(m,vp);poiFacilityLocalDraws++}
+ if(m?.count){
+  if(inspect)draw(m,vp);
+  else poiStreamPropDraw(m,vp,poiWalkViewX+.5,poiWalkViewZ+.5,performance.now());
+  poiFacilityLocalDraws++;
+ }
 }
 // END FACILITY LOCAL SCENE
 
@@ -41492,15 +41545,94 @@ function facilityDrawForestScene(vp){
   const objects=world.filter(poiSouthForestMember);
   if(!objects.length)return;
   poiFacilityLocalBuild=objects;
-  try{poiSouthForestScene={mesh:makeScene(),world,site:facilitySite};poiSouthForestBuilds++}
+  try{
+   const mesh=makeScene();mesh.revealBorn=inspect?-Infinity:performance.now();
+   poiSouthForestScene={mesh,world,site:facilitySite};poiSouthForestBuilds++;
+ }
   finally{poiFacilityLocalBuild=null}
  }
  const mesh=poiSouthForestScene?.mesh;
- if(mesh?.count){draw(mesh,vp);poiSouthForestDraws++}
+ if(mesh?.count){
+  if(inspect)draw(mesh,vp);
+  else poiStreamPropDraw(mesh,vp,poiWalkViewX+.5,poiWalkViewZ+.5,performance.now());
+  poiSouthForestDraws++;
+ }
 }
 // END SOUTH FOREST LOCAL
 
 // BEGIN SACRED TEMPLE SIGHTLINE
+// BEGIN SACRED INTERIOR PRESENTATION
+function poiSacredInteriorGrade(site,x,z,type,play){
+ return play&&site?.id==='base'&&site.davidTemple?.interiorFloors?.has(x+','+z)?'grass':type;
+}
+function poiSacredInteriorSconce(site,o){
+ const t=site?.id==='base'?site.davidTemple:null,b=t?.bounds;
+ return !!b&&t.depth===1&&o.type==='poiDavidCandleSconce'&&o.x>=b.x1&&o.x<=b.x2&&o.z>=b.z1&&o.z<=b.z2;
+}
+function poiSacredInteriorPlayer(){
+ return !!(poiWalkActive&&facilitySite?.id==='base'&&
+  poiDavidTempleEnclosedAt(facilitySite,poiWalkViewX,poiWalkViewZ,poiWalkLevel));
+}
+function poiSacredInteriorHostileVisible(o){
+ const b=facilitySite?.id==='base'?facilitySite.davidTemple?.boss:null;
+ if(!b||!poiWalkActive||o.type!==b.type||o.x!==b.x||o.z!==b.z||o.y!==b.y)return true;
+ return poiSacredInteriorPlayer();
+}
+let poiSacredInteriorVbo=null;
+function poiSacredInteriorClear(){
+ if(!poiSacredInteriorVbo)return;
+ for(const q of poiSacredInteriorVbo.draws)gl.deleteBuffer(q.buf);
+ poiSacredInteriorVbo=null;
+}
+function* poiSacredInteriorMeshes(t){
+ // Only the exact temple authoring tail participates. Keep the same floor
+ // recipe/material/light positions and leave terrain/collision/save alone.
+ const authored=facilitySite.map.world.slice(t.authored.index,t.authored.index+t.authored.count);
+ const groups=new Map(),floors=new Map(),inside=(o)=>o.y===0&&isFloor(o.type)&&t.interiorFloors.has(o.x+','+o.z);
+ for(const o of authored){
+  if(inside(o))floors.set(o.x+','+o.z,o.type);
+  else if(!poiSacredInteriorSconce(facilitySite,o))continue;
+  const i=o.x>>3,j=o.z>>3,k=i+','+j;let q=groups.get(k);
+  if(!q){q={x:i*8+3.5,z:j*8+3.5,list:[]};groups.set(k,q)}
+  q.list.push(o);
+ }
+ const {blockers,lamps}=pineFloorLightingSources(authored);
+ const x=poiWalkViewX,z=poiWalkViewZ;
+ for(const q of [...groups.values()].sort((a,b)=>Math.hypot(x-a.x,z-a.z)-Math.hypot(x-b.x,z-b.z))){
+  const m=mesh();
+  for(const o of q.list){
+   const {type,x,z,y}=o;
+   if(inside(o)){
+    const f=mesh();
+    addFloorTile(f,x,z,type,poiSacredPaintArea(facilitySite,z,MAP_W,MAP_H),
+     ROAD_DIAGONALS.has(type)?roadDiagonalConnections(floors,x,z,type):ROAD_IDS.has(type)&&!type.endsWith('Full')?roadConnections(floors,x,z,type):0,
+     null,pinePlayJoinedNaturalGrade(type,facilitySite,true));
+    pineBakeFloorLighting(f,x,z,0,blockers,lamps);
+    shiftMesh(m,f,terrainY(x,z)+.007);
+   }else deco(m,type,x+.5,y*1.4+terrainY(x,z),z+.5,o.rot||0);
+   yield null;
+  }
+  if(m.p.length)yield m;
+ }
+}
+function poiSacredInteriorDraw(vp){
+ const t=facilitySite?.id==='base'?facilitySite.davidTemple:null,inside=poiSacredInteriorPlayer();
+ const near=t?.interiorFloors&&poiWalkActive&&poiWalkLevel===0&&
+  Math.hypot(poiWalkViewX-t.entrance.x,poiWalkViewZ-t.entrance.z)<6.5;
+ if(poiSacredInteriorVbo&&(!t||poiSacredInteriorVbo.world!==world||!inside&&!near))poiSacredInteriorClear();
+ if(!inside&&!near||!t?.interiorFloors)return;
+ const q=poiSacredInteriorVbo??={world,draws:[],build:poiSacredInteriorMeshes(t)};
+ if(q.build){
+  const start=performance.now();
+  for(let i=0;i<64&&(i===0||performance.now()-start<2.2);i++){
+   const a=q.build.next();
+   if(a.done){q.build=null;break}
+   if(a.value){q.draws.push(upload(a.value));break}
+  }
+ }
+ if(inside)for(const m of q.draws)draw(m,vp);
+}
+// END SACRED INTERIOR PRESENTATION
 function poiSacredTempleVisualMember(site,o){
  const t=site?.id==='base'?site.davidTemple:null,b=t?.bounds;
  return !!b&&t.depth===1&&o.x>=b.x1&&o.x<=b.x2&&o.z>=b.z1&&o.z<=b.z2&&
@@ -41819,6 +41951,7 @@ function facilityDrawRoofs(vp){
  }
 }
 function facilityInvalidateScenes(){
+ if(typeof poiSacredInteriorClear==='function')poiSacredInteriorClear();
  if(typeof facilityClearLocalScene==='function')facilityClearLocalScene();
  if(typeof facilityClearForestScene==='function')facilityClearForestScene();
  facilityWatchtowerCameraWalls=null;
