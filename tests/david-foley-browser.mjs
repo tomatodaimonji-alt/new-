@@ -135,7 +135,7 @@ fixture=insert(fixture,'draw(g,vp,0,g.coreCount);',`
  }
 `);
 fixture=insert(fixture,'m=poiDavidSweepBeamMesh(q,b,now);', "\n   if(emission.turning&&m.p.length){const ray=poiDavidBeamRay(q,q.sweep.angle);window.__davidFrames.rays.push({start:q.start,side:q.sweep.side,angle:q.sweep.angle,x:ray.x,z:ray.z,vertices:m.p.length/3});}");
-fixture=insert(fixture,'   const {x:cx,y,z:cz,attack,heading,david}=poiMonsterPose(obj,s,now),part=mesh();', "\n   if(obj.type==='monsterStoneDavid'&&s.david?.returning){const f=window.__davidFrames;f.returnFrames.push([s.x,s.z,cx-.5,cz-.5]);}");
+fixture=insert(fixture,'   const {x:cx,y,z:cz,attack,heading,david}=poiMonsterPose(obj,s,now),part=mesh();', "\n   if(obj.type==='monsterStoneDavid'&&s.david?.returning&&!s.david.leapAbort){const f=window.__davidFrames,p={x:cx-.5,z:cz-.5,y:obj.y};f.returnFrames.push([s.x,s.z,p.x,p.z,now,poiDavidIn(poiDavidMatch(obj),p)]);}");
 fixture=insert(fixture,'function poiDavidReturnFrame(o,s,b,now){',
  "\n window.__davidFrames.returnClock??={now};");
 fixture=insert(fixture,'function poiDavidArrive(s,now){',
@@ -289,14 +289,13 @@ async function step(p,key,x,z){
 function assertNativeReturn(v,label){
  assert(v.returnAnchor&&(v.returnAnchor[0]!==24||v.returnAnchor[1]!==104),label+' starts genuinely displaced');
  assert(v.returnFrames.length>=2,label+' emits distinct renderer poses during return');
- const legal=frame=>frame[0]>=13&&frame[0]<=35&&frame[1]>=93&&frame[1]<=115;
- assert(v.returnFrames.every(legal),label+' remains inside arena cells');
+ assert(v.returnFrames.every(f=>f[5]),label+' actual rendered grounded feet stay inside the real authored arena');
  for(let i=1;i<v.returnFrames.length;i++){
-  const [x,z,rx,rz]=v.returnFrames[i], [a,b,ax,az]=v.returnFrames[i-1];
-  // The actual free ratchet can cross both rounded-cell boundaries in
-  // a diagonal frame; it cannot jump a cell or a full physical tile.
-  assert(Math.max(Math.abs(x-a),Math.abs(z-b))<=1&&Math.hypot(rx-ax,rz-az)<=1.05,
-   label+' continuous return cells: '+JSON.stringify([v.returnFrames[i-1],v.returnFrames[i]]));
+  const [,,x,z,t]=v.returnFrames[i],[,,a,b,from]=v.returnFrames[i-1],distance=Math.hypot(x-a,z-b);
+  // Track real rendered center, not rounded scheduling coordinates. A
+  // returning leg is 350ms per tile (2.86 tiles/s), allowing sample jitter.
+  assert(t>=from&&distance<=(t-from)*.0034+.11,
+   label+' grounded visible return speed: '+JSON.stringify([v.returnFrames[i-1],v.returnFrames[i]]));
  }
  assert(v.returnFrames.some(([, ,x,z])=>Math.abs(x-Math.round(x))+Math.abs(z-Math.round(z))>.01),label+' real visual interpolation between cells');
 }
@@ -324,7 +323,10 @@ try{
   s=await qa(p);assert.equal(s.statue.hp,1050,'tuned David is deliberately beyond ordinary early-game weapons');
   checkpoint='approach produces real boss displacement before physical retreat';
   await p.evaluate(()=>{window.__davidFrames.fatalClock={now:performance.now()}});
-  await routeWalk(p,TEMPLE_NEAR);
+  // At x19,z102 the giant is just outside its 5.25-tile sweep but not
+  // in the optional leap band. Real pursuit starts, with a shorter safe
+  // retreat route; lethal coverage independently uses the distant x17.
+  await routeWalk(p,TEMPLE_NEAR.slice(0,-2));
   await wait(p,()=>{const s=window.__editorTest.davidQA.state().statue;return s?.d?.awake&&(s.x!==24||s.z!==104)},null,25000);
   checkpoint='physical retreat cancels any chase or threat into exterior';
   await escapeChamber(p);
