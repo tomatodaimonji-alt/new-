@@ -18,7 +18,7 @@ replace(testApi,testApi+`
     return [...minictx.getImageData(px,pz,1,1).data];
    };
    const mini=map?{concealed:map.concealed,temple:[pixel(22,158),pixel(28,158),pixel(24,164)],
-    gate:pixel(24,128),localTrail:pixel(poiWalkX,poiWalkZ-1),builds:poiMiniBuilds,
+    gate:pixel(24,128),gateFlank:pixel(25,128),gateCell:map.cells[(128-map.crop.z1)*41+24-map.crop.x1],localTrail:pixel(poiWalkX,poiWalkZ-1),builds:poiMiniBuilds,
     saved:JSON.parse(localStorage.getItem(POI_HOTBAR_KEY)||'{}').sacredTempleSeen===true}:null;
    return {x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,name:poiRegionAt(facilitySite,poiWalkX,poiWalkZ,false,poiWalkLevel).name,
     path:f.route,reveal:f.reveal,tree:f.trees[10],fog:[...gl.getUniform(program,loc.sacredFog)],raster:window.__sacredRaster||null,
@@ -109,11 +109,12 @@ try{
  if(process.env.FACILITY_SCREENSHOTS)await p.screenshot({path:process.env.FACILITY_SCREENSHOTS+'/sacred-forest-reveal.png'});
  phase='continue through same historic gate into the actual temple';
  for(const z of [126,127])await step({x:24,z});
- assert(last.mini.concealed&&!last.mini.saved);assert.deepEqual(last.mini.gate,black);
+ assert(last.mini.concealed&&!last.mini.saved);assert.equal(last.mini.gateCell,0);assert.deepEqual(last.mini.gateFlank,black);
  const beforeBuild=last.mini.builds;
  await step({x:24,z:128});
  assert(!last.mini.concealed&&last.mini.saved);
  assert(last.mini.temple.every(c=>c===null),'discovery still does not reveal outside local radius');
+ assert(last.mini.gateCell>0,'real terrain is drawn below the marker only after reaching the gate');
  assert.notDeepEqual(last.mini.gate,black,'actual map draws the reached gate after discovery');
  assert.equal(last.mini.builds,beforeBuild+1,'same surface cache is rebuilt exactly once at discovery');
  await step({x:24,z:129});
