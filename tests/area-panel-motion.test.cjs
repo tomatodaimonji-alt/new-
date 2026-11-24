@@ -23,8 +23,8 @@ test('only changed visible label or stars animate; topology/floor/position and f
  x.call({...b,stars:'★★☆☆☆'});assert.equal(x.animations.length,2);
  assert(x.animations[0].canceled);
  const {frames,timing}=x.animations[1];
- assert.equal(frames.at(-1).transform,'translateX(0) scale(1)');
- assert(frames.some(v=>v.transform.includes('scale(1.24)')));
+ assert.equal(frames.at(-1).transform,'scaleY(1)');
+ assert(frames.some(v=>v.transform==='scaleY(1.27)'));
  assert(timing.duration>=900&&timing.duration<=1100);
 });
 test('hidden/reset route cancels without retrigger on opening; reduced motion stays still',()=>{
@@ -41,12 +41,13 @@ test('startup-inert spawn then actual saved position both settle silently; first
  x.call(b);assert.equal(x.animations.length,0);
  x.call(a);assert.equal(x.animations.length,1,'first player-driven boundary still animates');
 });
-test('landscape cue brightens only the fixed area card; motion never overlaps the party',()=>{
+test('landscape card grows downward and returns without crossing the fixed party lane',()=>{
  for(const [screen,left,card] of [[568,5,77],[844,24,94],[1120,58,100],[520,350,90]]){
   const x=setup(false,false,{screen,left,card});x.call(a);x.call(b);
   const {frames,timing}=x.animations[0],peak=frames[1];
-  assert(frames.every(v=>!v.transform));
-  assert(peak.boxShadow.includes('inset')&&peak.boxShadow.includes(',.72'));
+  assert(frames.every(v=>/^scaleY\([0-9.]+\)$/.test(v.transform)));
+  assert.equal(peak.transform,'scaleY(1.27)');
+  assert(peak.boxShadow.includes('inset')&&peak.boxShadow.includes(',.56'));
   assert(timing.duration>=1650&&timing.duration<=1850);
   assert((1-frames.at(-2).offset)*timing.duration>1000,'the cue maintains its long ease-out');
   assert.equal(frames.at(-1).boxShadow,frames[0].boxShadow);
