@@ -1,267 +1,319 @@
-name: Orvas real footplant hairline proof
+name: Item picon genuine inventory acquisition
 on:
   push:
     branches: ['dot/workshop-david-discovery-qa']
 permissions:
   contents: read
 jobs:
-  feet:
+  pickup:
     runs-on: ubuntu-24.04
     timeout-minutes: 9
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 332b694d1310c17845a7aeef92deac8356f4e5c7
+          ref: 66d930df1e8f9260abba51181cb103a9de2a707e
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Build exact deeper arena candidate
+      - name: Build exact standalone sound
         run: |
           set -eu
-          test "$(git hash-object world-editor.html)" = 9854592ed243431332f40b55e829dfd85e63376c
-          mkdir -p .qa/tests
+          test "$(git hash-object world-editor.html)" = 73a2280d35874eb2415438c3b7816c4ba15737ff
+          mkdir -p .qa/tests .qa/rendered
           cat >.qa/build.py <<'SOURCE'
           from pathlib import Path
-          import sys
-          src,out=map(Path,sys.argv[1:]);s=src.read_bytes()
-          def r(a,b):
-           global s
-           if isinstance(a,str):a=a.encode()
-           if isinstance(b,str):b=b.encode()
-           assert s.count(a)==1,(a,s.count(a))
-           s=s.replace(a,b,1)
-          assert b'function poiOrvasTraceGround(' in s
-          t=b'function poiDavidFootFeedback(o,s,b,now){'
-          r(t,Path(__file__).with_name('walk.js').read_bytes()+t)
-          t="poiDavidHeavyContact('foot',{sx:x,sz:z,y:b.y},now,b);"
-          r(t,t+chr(10)+" if(typeof poiOrvasFootPlant==='function')poiOrvasFootPlant(o,s,b,count,now);")
-          t="if(typeof poiDrawDavidFissure==='function')poiDrawDavidFissure(now,p.vp);"
-          r(t,t+chr(10)+" if(typeof poiDrawOrvasWalkFissures==='function')poiDrawOrvasWalkFissures(now,p.vp);")
-          out.parent.mkdir(parents=True,exist_ok=True);out.write_bytes(s)
+          import base64,re,sys
+          src,dst=map(Path,sys.argv[1:]);s=src.read_bytes()
+          pcm=(Path(__file__).parent/'rendered/itemPickup.pcm').read_bytes()
+          assert len(pcm)==7440
+          b64=base64.b64encode(pcm)
+          lines=b' +\n'.join(b"  '"+b64[i:i+120]+b"'" for i in range(0,len(b64),120))
+          pattern=rb"\n itemPickup:\s*(?:'[A-Za-z0-9+/=]+'\s*(?:\+\s*)?)+(?=,)"
+          s,n=re.subn(pattern,b'\n itemPickup:\n'+lines,s);assert n==1
+          dst.parent.mkdir(parents=True,exist_ok=True);dst.write_bytes(s)
           SOURCE
-          cat >.qa/walk.js <<'SOURCE'
-          // BEGIN ORVAS WALK FISSURES
-          const POI_ORVAS_FOOT_MARK_MS=680,POI_ORVAS_FOOT_MARK_LIMIT=3;
-          const poiOrvasFootMarks=[];
-          function poiOrvasFootDrop(mark){
-           if(mark?.gpu&&typeof gl!=='undefined')gl.deleteBuffer(mark.gpu.buf);
+          cat >.qa/tests/recorded-interaction-foley.test.cjs <<'SOURCE'
+          const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+          const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
+          function harness(available=true){
+           const calls=[];const env={calls,poiAudioLevels:{master:80,se:90},poiWalkActive:true,poiAudioEnabled:true,facilitySite:{id:'base'},
+           poiAudioContext:{state:'running',currentTime:10},poiAudioEffects:{},poiAudioStart(){},poiAudioAllowed:()=>true,
+           poiTryRecordedFoley:(...a)=>{calls.push(['recorded',...a]);return available},
+           poiSurfaceFoley:k=>k,poiRecordedFoley:k=>k,poiKitchenKnifeBuffer:k=>'oldKnife:'+k,
+           poiPlayImpactBuffer:(...a)=>calls.push(['buffer',...a]),poiAudioNoiseBurst:(...a)=>calls.push(['brush',...a]),
+           poiAudioThud:(...a)=>calls.push(['thud',...a]),poiAudioTone:(...a)=>calls.push(['tone',...a])};
+           const extract=(from,to)=>html.slice(html.indexOf(from),html.indexOf(to,html.indexOf(from)));
+           vm.createContext(env);
+           vm.runInContext(extract('const POI_WEAPON_SE=','function poiHealSound(')+extract('// BEGIN ITEM FOLEY','// END ITEM FOLEY')+
+            extract('function poiSound(','function poiAudioSyncLifecycle('),env);
+           const play=(...args)=>{calls.length=0;env.poiSound(...args);return calls.slice()};
+           return {env,play};
           }
-          function poiOrvasFootPlant(o,s,b,count,now){
-           const d=s?.david;
-           if(!d?.wakeDone||d.returning||d.attack||d.leapAbort||!b||b.y!==poiWalkLevel||
-              !poiEnemyThreatEnabled()||poiDavidHidden()||!poiDavidMatch(o)||
-              typeof poiOrvasTraceGround!=='function'||typeof poiDavidRig!=='function')return false;
-           const p=poiAimOrigin(now),pose=poiMonsterPose(o,s,now),v=pose.david;
-           if(!v||!poiDavidIn(b,p)||Math.hypot(p.x-(pose.x-.5),p.z-(pose.z-.5))>11)return false;
-           // At each distance boundary the swing foot just reached the ground:
-           // count 1 is the first (left) foot, count 2 the other, then alternate.
-           const side=(count-1)&1,foot=poiDavidRig(v).feet[side],heading=pose.heading;
-           if(!foot||!Number.isFinite(heading))return false;
-           const c=Math.cos(heading),sine=Math.sin(heading);
-           const x=pose.x-.5+c*foot[0]-sine*foot[2],z=pose.z-.5+sine*foot[0]+c*foot[2];
-           if(!poiDavidIn(b,{x,z,y:b.y}))return false;
-           const e={x,z,sx:x,sz:z,y:b.y,start:now,radius:.56,owner:facilitySite,map:world,side,count};
-           const q={},ground=poiOrvasTraceGround(q,e,b),m=mesh();
-           if(!ground(x,z))return false;
-           const tile=q.orvasGroundFloors?.get(Math.floor(x+.5)+','+Math.floor(z+.5));
-           const material=ground.material?.(x,z)??(/grass|moss/i.test(tile)?'grass':/earth|soil|sand/i.test(tile)?'soil':'stone');
-           const ink=material==='grass'?[.16,.124,.073]:material==='soil'?[.155,.102,.064]:[.116,.098,.079];
-           const seam=material==='stone'?[.188,.162,.138]:ink;
-           // Two short irregular ground lines with only one small secondary
-           // fork. These are marks, not raised blocks or attack warning meshes.
-           const base=heading+(side?.41:-.32)+.19*Math.sin(count*2.36);
-           const point=(a,l)=>[x+Math.cos(base+a)*l,z+Math.sin(base+a)*l];
-           const limb=(a,b,width,color)=>poiOrvasHairline(m,ground,...a,...b,width,color);
-           const mid=point(.12,.213),tip=point(-.075,.486),other=point(2.47,.336);
-           limb([x,z],mid,.016,ink);limb(mid,tip,.010,ink);limb([x,z],other,.011,seam);
-           limb(mid,[mid[0]+.092*Math.cos(base+1.02),mid[1]+.092*Math.sin(base+1.02)],.007,seam);
-           if(!m.p.length)return false;
-           if(poiOrvasFootMarks.length>=POI_ORVAS_FOOT_MARK_LIMIT)poiOrvasFootDrop(poiOrvasFootMarks.shift());
-           poiOrvasFootMarks.push({...e,m,gpu:null});
-           return true;
-          }
-          function poiDrawOrvasWalkFissures(now,vp){
-           if(!poiOrvasFootMarks.length)return;
-           for(let i=poiOrvasFootMarks.length-1;i>=0;i--){
-            const e=poiOrvasFootMarks[i];
-            if(!poiWalkActive||e.owner!==facilitySite||e.map!==world||e.y!==poiWalkLevel||now-e.start>=POI_ORVAS_FOOT_MARK_MS){
-             poiOrvasFootDrop(e);poiOrvasFootMarks.splice(i,1);
-            }
+          test('wooden door entry and departure play separate recordings; stone and iron retain separate surface audio',()=>{
+           const {play}=harness();
+           assert.deepEqual(play('door-open','wood').map(x=>x.slice(0,2)),[['recorded','doorOpen']]);
+           assert.deepEqual(play('door-close','wood').map(x=>x.slice(0,2)),[['recorded','doorClose']]);
+           assert.deepEqual(play('door-open','stone').map(x=>x.slice(0,2)),[['buffer','door-open-stone']]);
+           assert.deepEqual(play('door-close','iron').map(x=>x.slice(0,2)),[['buffer','door-close-iron']]);
+          });
+          test('only real metallic melee uses recorded attack air; bladed contact uses separate organic Foley; one actual contact can also cue defeat',()=>{
+           const {play}=harness();
+           for(const type of ['equipIronSword','kitchenKnife']){
+            assert.deepEqual(play('attack',type).map(x=>x.slice(0,2)),[['recorded','playerSteelSwing']]);
+            const hit=play('hit',type,true,true);
+            assert.equal(hit[0][1],'playerSteelCut');assert.equal(hit[0][2],10);
+            assert.deepEqual(hit[1].slice(0,2),['buffer','defeat']);
            }
-           if(!poiOrvasFootMarks.length)return;
-           gl.enable(gl.BLEND);gl.blendFunc(gl.CONSTANT_ALPHA,gl.ONE_MINUS_CONSTANT_ALPHA);gl.depthMask(false);
-           try{
-            for(const e of poiOrvasFootMarks){
-             if(!e.gpu)e.gpu=upload(e.m);
-             const alpha=.64*Math.min(1,(now-e.start+16)/54)*Math.max(0,1-(now-e.start)/POI_ORVAS_FOOT_MARK_MS)**1.25;
-             gl.blendColor(0,0,0,alpha);draw(e.gpu,vp);
-            }
-           }finally{gl.depthMask(true);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.blendColor(0,0,0,0);gl.disable(gl.BLEND)}
-          }
-          // END ORVAS WALK FISSURES
-          SOURCE
-          cat >.qa/tests/orvas-walk-fissures.test.cjs <<'SOURCE'
-          const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),test=require('node:test');
-          const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
-          const get=(a,b)=>{const i=h.indexOf(a),j=h.indexOf(b,i+1);return i>=0&&j>i?h.slice(i,j):''};
-          function setup(){
-           const c={foley:[],poiDavidHeavyContact:(kind,loc)=>c.foley.push([kind,loc.sx,loc.sz]),POI_DAVID_GAIT_STRIDE:1.78,
-            poiWalkLevel:0,facilitySite:{id:'base'},world:[],poiEnemyThreatEnabled:()=>true,poiDavidHidden:()=>false,
-            poiDavidMatch:o=>o.correct?c.b:null,poiDavidIn:(_b,p)=>p.x<=20.8,poiAimOrigin:()=>({x:20,z:20,y:0}),
-            b:{y:0},obj:{correct:true,x:20,z:20,y:0},gl:{deleteBuffer(){}},poiMonsterActorPoint:()=>({x:20,z:20,t:0}),
-            poiMonsterPose:()=>({x:20.5,z:20.5,heading:0,david:{walkDistance:2}}),poiDavidRig:()=>({feet:[[-.55,0,.27],[.48,0,-.19]]}),
-            poiOrvasTraceGround:()=> (x,z)=>x<=20.8?[x+.5,.142,z+.5]:null,
-            mesh:()=>({p:[],n:[],c:[]}),poiOrvasHairline:(m,g,x,z,nx,nz,width)=>{const a=g(x,z),b=g(nx,nz);if(a&&b)m.p.push(...a,...b,width)},
-            step:{david:{wakeDone:true,gaitDistance:0},actorFree:{},moveStarted:90,guardMoveMs:310,x:20,z:20}};
-           vm.createContext(c);vm.runInContext(get('// BEGIN ORVAS WALK FISSURES','// END ORVAS WALK FISSURES')+
-            get('function poiDavidFootFeedback(', 'function poiDavidHeavyContact('),c);
-           const f=(t,d)=>{c.step.david.gaitDistance=d;c.t=t;vm.runInContext('poiDavidFootFeedback(obj,step,b,t)',c)};
-           const marks=()=>vm.runInContext('typeof poiOrvasFootMarks!=="undefined"?poiOrvasFootMarks:[]',c);
-           return {f,marks,c};
-          }
-          test('one tiny mark follows each alternating real gait plant and does not change prior audible foot cue',()=>{
-           const q=setup();
-           q.f(100,0);q.f(145,1.0);assert.equal(q.marks().length,0);
-           q.f(180,1.8);assert.equal(q.marks().length,1);assert.equal(q.marks()[0].x,19.45);
-           q.f(205,1.85);assert.equal(q.marks().length,1);
-           q.f(280,3.6);assert.equal(q.marks().length,2);assert.equal(q.marks()[1].x,20.48);
-           assert.equal(q.c.foley.length,2);
+           for(const type of ['equipStoneSword','equipBoneSword']){
+            assert.ok(!play('attack',type).some(c=>c[0]==='recorded'),type);
+            assert.deepEqual(play('hit',type,false,true),[['recorded','playerSteelCut',10,.57]],type);
+           }
+           for(const type of ['equipWoodSword','equipWoodSpear','equipStoneMace','equipClub'])
+            assert.ok(![...play('attack',type),...play('hit',type)].some(c=>c[0]==='recorded'),type);
           });
-          test('awakening, stationary pose, attack, and retreat cannot emit; queue never grows above three',()=>{
-           const q=setup();q.f(100,0);q.c.step.david.wakeDone=false;q.f(145,1.8);assert.equal(q.marks().length,0);
-           q.c.step.david.wakeDone=true;q.c.step.david.returning=true;q.f(180,3.6);assert.equal(q.marks().length,0);
-           q.c.step.david.returning=false;q.c.step.david.attack={};q.f(205,5.5);assert.equal(q.marks().length,0);
-           q.c.step.david.attack=null;for(let i=4;i<13;i++)q.f(210+i*10,i*1.78+.02);
-           assert.equal(q.marks().length,3);
-           assert(q.marks().every(m=>m.m.p.length>0));
+          test('successful pickup and chest route to the shared picon without stealing the separate gold cue or mixer mute',()=>{
+           const {env,play}=harness();
+           assert.equal(play('item-pickup','ironOre')[0][2],10.068);
+           assert.deepEqual(play('chest-pickup')[0].slice(0,3),['recorded','itemPickup',10]);
+           assert.ok(play('item-pickup','coin').every(a=>a[0]!=='recorded'));
+           assert.ok(play('item-pickup','gold').every(a=>a[0]!=='recorded'));
+           assert.ok(play('enemy-loot','coin').some(a=>a[0]==='tone'));
+           env.poiAudioLevels.se=0;for(const args of [['item-pickup'],['door-open'],['hit','equipIronSword']])assert.deepEqual(play(...args),[]);
           });
-          test('GPU buffers retire on expiry or exact map swap, never drawing across scenes',()=>{
-           const q=setup(),deleted=[];q.c.poiWalkActive=true;q.c.gl.deleteBuffer=b=>deleted.push(b);
-           q.f(100,0);q.f(180,1.8);q.marks()[0].gpu={buf:'expired'};
-           vm.runInContext('poiDrawOrvasWalkFissures(860,null)',q.c);
-           assert.equal(q.marks().length,0);assert.deepEqual(deleted,['expired']);
-           q.f(280,3.6);q.marks()[0].gpu={buf:'moved'};q.c.world=[];
-           vm.runInContext('poiDrawOrvasWalkFissures(285,null)',q.c);
-           assert.equal(q.marks().length,0);assert.deepEqual(deleted,['expired','moved']);
+          test('absent optional recordings preserve door and weapon fallback while noncoin pickup has no oscillator',()=>{
+           const {play}=harness(false);
+           assert.deepEqual(play('door-open','wood').at(-1).slice(0,2),['buffer','door-open-wood']);
+           assert.deepEqual(play('attack','kitchenKnife').at(-1).slice(0,2),['buffer','oldKnife:attack']);
+           const item=play('item-pickup','healingHerb');
+           assert.ok(item.filter(a=>a[0]==='brush').length>=2);
+           assert.ok(!item.some(a=>a[0]==='tone'||a[0]==='thud'));
+          });
+          test('bundled recordings decode as 24kHz signed mono PCM on the existing cached buffer and effects path',()=>{
+           const calls=[];
+           const context={atob:s=>Buffer.from(s,'base64').toString('latin1'),poiAudioContext:{
+            createBuffer:(channels,count,rate)=>{const data=new Float32Array(count);return {channels,count,rate,getChannelData:()=>data}}}, poiPlayImpactBuffer:(...args)=>calls.push(args)};
+           const i=html.indexOf('const POI_RECORDED_FOLEY='),j=html.indexOf('function poiKitchenKnifePcm(',i);
+           const meta=vm.runInNewContext(html.slice(i,j)+';({poiTryRecordedFoley,POI_RECORDED_FOLEY});',context);
+           const foley=['doorOpen','doorClose','steelSwing','steelImpact','playerSteelSwing','playerSteelCut','itemPickup'];
+           const found=foley.filter(id=>Object.hasOwn(meta.POI_RECORDED_FOLEY,id));
+           if(process.env.REQUIRE_RECORDED_INTERACTION_FOLEY==='1')assert.deepEqual(found,foley,'shipping artifact must contain every verified recording');
+           for(const id of [...found,'wood','defeat']){
+            assert.equal(meta.poiTryRecordedFoley(id,2,.61),true);
+            assert.equal(meta.poiTryRecordedFoley(id,3,.61),true);
+            const [a,b]=calls.slice(-2),pcm=Buffer.from(meta.POI_RECORDED_FOLEY[id],'base64'),buf=a[0];
+            assert.equal(a[0],b[0]);assert.equal(a[1],2);assert.equal(b[1],3);assert.equal(a[2],.61);
+            assert.equal(buf.channels,1);assert.equal(buf.rate,24000);assert.equal(buf.count,pcm.length/2);
+            const floats=buf.getChannelData(0);
+            for(let k=0;k<floats.length;k++)assert.equal(floats[k],pcm.readInt16LE(k*2)/32768);
+           }
+           assert.equal(meta.poiTryRecordedFoley('noSuchRecording',0,.5),false);
           });
           SOURCE
-          cat >.qa/tests/orvas-walk-fissures-browser.mjs <<'SOURCE'
+          cat >.qa/tests/pickup-picon-browser.mjs <<'SOURCE'
           import assert from 'node:assert/strict';
           import {createServer} from 'node:http';
           import {createRequire} from 'node:module';
           import {readFileSync} from 'node:fs';
-          import vm from 'node:vm';
-          const html=readFileSync(process.argv[2]??'world-editor.html','utf8');
-          const key='  freeMovementPose:()=>({x:poiWalkViewX,z:poiWalkViewZ,level:poiWalkLevel}),';
-          function inject(s,a,b){assert.equal(s.split(a).length,2,a);return s.replace(a,b)}
-          let fixture=inject(html,key,key+`
-            arenaQA:{
-             manual:()=>{window.__arenaManual=true},
-             draw:()=>render(),
-             get:()=>{
-              const m=[...poiMonsterStates].find(([o])=>o.type==='monsterStoneDavid'),s=m?.[1],d=s?.david,q=d?.attack;
-              const renderPose=m?poiMonsterPose(m[0],s,performance.now()):null;
-              const rig=renderPose?.david?poiDavidRig(renderPose.david):null;
-              return {now:performance.now(),nextMob:poiNextMobTick,nextStep:poiWalkNextReady,arena:facilitySite.davidTemple.boss.room.arena,
-                player:[poiWalkX,poiWalkZ,poiWalkLevel],pose:[poiWalkViewX,poiWalkViewZ],free:!!poiFreePose,hp:poiPlayerHP,boss:s?[s.x,s.z]:null,awake:!!d?.awake,wakeDone:!!d?.wakeDone,marks:poiOrvasFootMarks.map(m=>({x:m.x,z:m.z,y:m.y,start:m.start,side:m.side,count:m.count,n:m.gpu?.count??0,first:m.m.p.slice(0,18)})),rendered:window.__footProof??[],
-                returning:!!d?.returning,renderPose:renderPose?{x:renderPose.x,y:renderPose.y,z:renderPose.z,david:renderPose.david}:null,
-                rig:rig?{crouch:rig.leapCrouch??0,feet:rig.feet.map(p=>p[1])}:null,q:q?{kind:q.kind,start:q.start,cursor:q.cursor,dx:q.dx,dz:q.dz,sx:q.sx,sz:q.sz,leap:q.leap,hits:q.hits}:null,
-                cue:window.__arenaCue??[],steps:window.__davidStepSources??[],shakes:window.__davidProjected??[],damage:window.__arenaDamage??[]};
+          import {Script} from 'node:vm';
+          let h=readFileSync(process.argv[2]??'world-editor.html','utf8');
+          const put=(a,b)=>{assert.equal(h.split(a).length,2,a);h=h.replace(a,b)};
+          const key="if(facilityParams.get('test')==='1')window.__editorTest={";
+          put(key,`
+           window.__pickupPicon={
+            ground:(type,x,z,fromX,fromZ,full=false)=>{
+             if(!workshopResumeRestorePosition({x:fromX,z:fromZ,y:0,facing:2}))return false;
+             poiMonsterStates.clear();poiDavidActive=null;poiCombatLockReset();
+             let kit=poiHotbarRead(), slots=poiInventorySlots(kit).slice();
+             if(full){
+              for(let i=0;i<POI_HOTBAR_SIZE+POI_BAG_UNLOCKED;i++)if(!slots[i])slots[i]={type:'cannedFood',count:poiInventoryStack('cannedFood')};
+              kit=poiInventoryEdited(kit,slots);
              }
-            },`);
-          fixture=inject(fixture,' requestAnimationFrame(render);',' if(!window.__arenaManual)requestAnimationFrame(render);');
-          fixture=inject(fixture,'function poiDavidMobFrame(o,s,now){','function poiDavidMobFrame(o,s,now){if(!window.__arenaManual)return false;');
-          fixture=inject(fixture,'function poiWildRegionalFrame(now,rng){','function poiWildRegionalFrame(now,rng){return;');
-          fixture=inject(fixture,'function poiWildPick(rng){','function poiWildPick(rng){return null;');
-          fixture=inject(fixture,'draw(poiDavidCue.lane,vp)','draw(poiDavidCue.lane,vp);if(q.kind==="leap"){const a=window.__arenaCue??=[];if(a.length<70)a.push({start:q.start,vertices:poiDavidCue.lane.count,now})}');
-          fixture=inject(fixture,' const priorHP=poiPlayerHP;',' const priorHP=poiPlayerHP;if(obj.type==="monsterStoneDavid")(window.__arenaDamage??=[]).push({start:poiDavidActive?.s?.david?.attack?.start,raw,amount,now});');
-          fixture=inject(fixture,"  if(ctx?.state==='running')try{poiTryRecordedFoley('davidFootPlant',ctx.currentTime,gain,poiDavidTrackAttackFoley)}catch{}",`  if(ctx?.state==='running')try{
-              poiTryRecordedFoley('davidFootPlant',ctx.currentTime,gain,(source,node)=>{
-               poiDavidTrackAttackFoley(source,node);
-               (window.__davidStepSources??=[]).push({now,gain,buffer:source.buffer.length,distance});
-              });
-             }catch{}`);
-          fixture=inject(fixture," if(typeof poiDavidImpactVp==='function')p.vp=poiDavidImpactVp(p,now);",
-           ` if(typeof poiDavidImpactVp==='function'){
-            const old=p.vp;p.vp=poiDavidImpactVp(p,now);
-            if(old!==p.vp){const e=poiDavidHeavyBump;(window.__davidProjected??=[]).push({now,start:e?.start,cap:e?.cap,dy:Math.abs(p.vp[13]-old[13])});}
+             if(type==='cannedFood'||type==='healingHerb')kit={...kit,drops:[...(kit.drops||[]),{type,count:1,x,z,y:0}]};
+             else {
+              const reward=Object.values(POI_ORVAS_REWARDS).find(r=>r.type===type);
+              if(!reward||reward.x!==x||reward.z!==z)return false;
+              const {bit,...d}=reward;kit={...kit,armedDrops:[...(kit.armedDrops||[]),{...d,durability:poiEquipmentDurabilityMax(type)}]};
+             }
+             const written=poiEconomyWrite(kit);if(written)poiEconomyRefresh();return written;
+            },
+            state:()=>{
+             const k=poiHotbarRead();
+             return {at:[poiWalkX,poiWalkZ],events:window.__pickupSamples??[],held:k.weapon,
+              items:poiInventorySlots(k).filter(Boolean).map(c=>c.type),
+              drops:k.drops??[],armed:k.armedDrops??[],se:poiAudioLevels.se,
+              live:(window.__pickupNodes??[]).filter(n=>poiAudioTransient.has(n)).length};
+            }
+           };`+key);
+          const dispatch=' poiAudioTransient.add(source);source.start(when);source.stop(when+(cap??(buffer.duration+.012)));';
+          put(dispatch,dispatch+`
+           if(buffer===poiRecordedFoleyCache.get('itemPickup')){
+            (window.__pickupSamples??=[]).push({n:buffer.length,rate:buffer.sampleRate,loop:source.loop,volume,when});
+            (window.__pickupNodes??=[]).push(source);
            }`);
-          fixture=inject(fixture,'gl.blendColor(0,0,0,alpha);draw(e.gpu,vp);','gl.blendColor(0,0,0,alpha);draw(e.gpu,vp);if(e.m&&Number.isInteger(e.side)&&(!window.__footProof?.some(p=>p.start===e.start)))(window.__footProof??=[]).push({start:e.start,x:e.x,z:e.z,n:e.gpu.count});');
-          for(const [,js] of fixture.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new vm.Script(js);
-          if(process.env.DAVID_LAYOUT_ONLY==='1'){console.log('PASS exact browser fixture anchors and inline syntax');process.exit(0)}
+          for(const [,js] of h.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(js);
+          if(process.env.PICON_PARSE_ONLY){console.log('Exact item pickup cue fixture parses');process.exit(0)}
           const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
-          const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(req.url==='/seed'?'<!doctype html><title>Temple arena QA</title>':fixture)});
-          await new Promise(r=>server.listen(0,'127.0.0.1',r));const url='http://127.0.0.1:'+server.address().port;
-          let browser,where='launch',p;
-          const log=()=>p.evaluate(()=>window.__editorTest.arenaQA.get());
-          const errors=[];
+          const srv=createServer((q,r)=>{r.setHeader('Content-Type','text/html; charset=utf-8');r.end(q.url==='/seed'?'<title>Setup</title>':h)});
+          await new Promise(r=>srv.listen(0,'127.0.0.1',r));const root='http://127.0.0.1:'+srv.address().port;
+          let browser;
           try{
-           browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
-            args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
-           p=await browser.newPage({viewport:{width:844,height:390},deviceScaleFactor:.7,isMobile:true,hasTouch:true});
-           p.on('pageerror',e=>errors.push(e.message));
-           await p.clock.install({time:new Date('2026-11-24T12:00:00Z')});
-           where='cold authored save, distance six to wake';
-           await p.goto(url+'/seed');
-           await p.evaluate(()=>{
-            localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
-             position:{x:24,z:156,y:0,facing:0},townLayout:5,townMapHeight:182,templeDepth:1,
-             view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.35,orbitDistance:5.5}}));
-            localStorage.setItem('world-workshop-hotbar-v1','{"version":1,"weapon":"equipWoodSword","potions":0,"gold":0}');
+           browser=await chromium.launch({headless:true,args:['--autoplay-policy=no-user-gesture-required','--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+           const ctx=await browser.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.7});
+           const p=await ctx.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));p.setDefaultTimeout(16000);
+           await p.goto(root+'/seed');await p.evaluate(()=>{
+            localStorage.setItem('world-workshop-audio-v2','{"master":85,"bgm":0,"se":82,"enabled":true}');
+            localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,position:{x:24,z:151,y:0,facing:2},
+             townLayout:5,townMapHeight:182,templeDepth:1,view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.24,orbitDistance:5.5}}));
            });
-           await p.goto(url+'/?resume=1&test=1',{waitUntil:'domcontentloaded',timeout:25000});
-           await p.locator('#pineStartupCover').waitFor({state:'hidden',timeout:23000});
-           await p.waitForFunction(()=>window.__editorTest?.arenaQA&&window.__editorTest.facility().active,null,{timeout:12000});
-           const initial=await log();
-           assert.deepEqual(initial.player,[24,156,0]);assert.deepEqual(initial.boss,[24,158]);assert.equal(initial.hp,100);assert.deepEqual(initial.marks,[]);
-           await p.evaluate(()=>window.__editorTest.arenaQA.manual());
-           const wall=await p.evaluate(()=>Date.now());await p.clock.pauseAt(wall+1500);
-           const advance=async(ms=48)=>{await p.clock.fastForward(ms);await p.evaluate(()=>window.__editorTest.arenaQA.draw());};
-           const until=async(pred,n)=>{let s=await log();for(let i=0;i<n&&!pred(s);i++){await advance();s=await log()}assert(pred(s),JSON.stringify(s));return s};
-           const aligned=await log(),debt=Math.ceil(aligned.nextMob-aligned.now);
-           if(debt>0)await p.clock.fastForward(debt+16);
-           where='trusted mobile gesture audio unlocks';
-           await p.touchscreen.tap(450,185);
-           where='awake normally and enter real distance-six chase band';
-           let s=await until(s=>s.awake,45);assert.deepEqual(s.marks,[]);
-           const retreat=async z=>{
-            await p.keyboard.press('ArrowUp');
-            let m=await until(q=>q.player[1]===z&&q.now>=q.nextStep,14);
-            assert.deepEqual(m.player,[24,z,0]);return m;
-           };
-           // Keep the actual player at distance just over the settled sweep reach
-           // but under the leap trigger, without forcing a trajectory or attack kind.
-           for(let z=155;z>=152;z--){s=await retreat(z);assert.deepEqual(s.marks,[])}
-           await until(s=>s.wakeDone,70);
-           where='actual trusted retreat maintains distance band as boss physically chases';
-           for(const [nextZ,bossZ] of [[151,157.36],[150,156.36]]){
-            await until(s=>s.renderPose.z-.5<=bossZ,36);
-            await retreat(nextZ);
-           }
-           const planted=await until(s=>s.rendered.length&&s.steps.length,42);
-           const m=planted.marks.find(v=>v.start===planted.rendered[0].start);
-           assert(m&&m.n>0&&m.n<=24&&m.y===0);
-           assert(planted.steps.some(v=>v.now===m.start&&v.buffer===7440));
-           assert(m.first.filter((_,i)=>i%3===1).every(h=>h>=0&&h<=.24));
-           assert(Math.abs(m.x-24)>.18&&Math.abs(m.x-24)<.88,'mark follows foot, not centered plant sound');
-           assert.equal(planted.hp,100);assert.equal(planted.damage.length,0);
-           where='existing sweep occurs, then stationary animation leaves no phantom marks';
-           const swung=await until(s=>s.q?.kind==='sweep',50);assert(swung.rendered.length>=1);
-           const total=swung.rendered.length;
-           await advance(420);const stable=await log();assert.equal(stable.rendered.length,total);
-           await advance(340);assert(!(await log()).marks.some(v=>v.start===m.start));
-           console.log('Actual Orvas gait drew one low planted-shoe fissure with matching original foot sound + bounded expiry',JSON.stringify({m,player:planted.player,sound:planted.steps[0]}));
-           assert.deepEqual(errors,[]);
-           console.log('PASS live David planted source + projected step/sweep contact; no phantom stationary sounds');
-          }catch(e){console.error(where,await (p?log().catch(()=>null):null),errors);throw e}
-          finally{await browser?.close();await new Promise(r=>server.close(r))}
+           await p.goto(root+'/?resume=1&test=1',{waitUntil:'domcontentloaded'});
+           await p.locator('#pineStartupCover').waitFor({state:'hidden'});
+           const q=()=>p.evaluate(()=>window.__pickupPicon.state());
+           const go=async(k,x,z)=>{await p.keyboard.press(k);await p.waitForFunction(([x,z])=>{
+            const q=window.__pickupPicon.state();return q.at[0]===x&&q.at[1]===z
+           },[x,z]);};
+           const ground=async(...args)=>assert(await p.evaluate(a=>window.__pickupPicon.ground(...a),args));
+           const count=async n=>{await p.waitForFunction(n=>window.__pickupPicon.state().events.length>=n,n);assert.equal((await q()).events.length,n);};
+           await ground('cannedFood',24,152,24,151);
+           await go('ArrowDown',24,152);await count(1);assert((await q()).items.includes('cannedFood'));
+           await ground('equipOrvasHead',24,157,24,156);
+           await go('ArrowDown',24,157);await count(2);assert((await q()).items.includes('equipOrvasHead'));
+           await ground('orvasSoul',24,159,24,158);
+           await go('ArrowDown',24,159);await count(3);assert((await q()).items.includes('orvasSoul'));
+
+           await p.locator('#poiBagToggle').tap();
+           await p.locator('#poiHotbar [data-hotbar-slot="0"]').tap();
+           const dialog=p.locator('#poiItemDetail');await dialog.waitFor({state:'visible'});
+           await dialog.locator('[data-item-detail-action="back"]').tap();
+           await dialog.waitFor({state:'hidden'});assert.equal((await q()).events.length,3);
+           await p.locator('#poiHotbar [data-hotbar-slot="0"]').tap();
+           await dialog.waitFor({state:'visible'});
+           await dialog.locator('[data-item-detail-action="drop"]').tap();
+           await dialog.waitFor({state:'hidden'});assert.equal((await q()).events.length,3);
+           await p.locator('#poiBagClose').tap();
+           assert((await q()).drops.some(d=>d.type==='equipWoodSword'));
+           await go('ArrowUp',24,158);await p.waitForTimeout(195);
+           await go('ArrowDown',24,159);await count(4);assert((await q()).items.includes('equipWoodSword'));
+
+           await p.evaluate(()=>{const el=document.getElementById('poiVolumeSe');el.value='0';el.dispatchEvent(new Event('input',{bubbles:true}));});
+           assert.equal((await q()).se,0);
+           await ground('healingHerb',24,154,24,153);
+           await go('ArrowDown',24,154);await p.waitForTimeout(230);
+           assert((await q()).items.includes('healingHerb'));assert.equal((await q()).events.length,4);
+           await p.evaluate(()=>{const el=document.getElementById('poiVolumeSe');el.value='82';el.dispatchEvent(new Event('input',{bubbles:true}));});
+           assert.equal((await q()).se,82);
+           await ground('equipOrvasGreatsword',25,158,25,157,true);
+           await go('ArrowDown',25,158);await p.waitForTimeout(230);
+           assert((await q()).armed.some(d=>d.type==='equipOrvasGreatsword'),'real ground item remains if every slot full');
+           let s=await q();assert.equal(s.events.length,4);assert.equal(s.live,0);
+           assert(s.events.every(e=>e.n===3720&&e.rate===24000&&!e.loop&&e.volume===.60));assert.deepEqual(errors,[]);
+           console.log('Actual item, Orvas gear and soul pickups; cancel, drop, muted successful and full failed paths; four clean one-shot buffers',JSON.stringify(s.events));
+           await ctx.close();
+          }finally{await browser?.close();await new Promise(r=>srv.close(r))}
           SOURCE
+          cat >.qa/tests/pickup-picon.test.cjs <<'SOURCE'
+          const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),test=require('node:test');
+          const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
+          function asset(name){
+           const m=h.match(new RegExp('\\n '+name+':\\s*((?:\'[A-Za-z0-9+/=]+\'\\s*(?:\\+\\s*)?)+)'));assert(m,name);
+           return Buffer.from([...m[1].matchAll(/'([^']+)'/g)].map(x=>x[1]).join(''),'base64');
+          }
+          test('pickup is a soft crisp ascending two-note one-shot, not coin pitches or rustle',()=>{
+           const pcm=asset('itemPickup');assert.equal(pcm.length,7440);
+           const x=Array.from({length:3720},(_,i)=>pcm.readInt16LE(i*2)/32768);
+           assert.equal(x[0],0);assert.equal(x.at(-1),0);assert(Math.max(...x.map(Math.abs))<=.48);
+           const freq=(from,to,f)=>{
+            let a=0,b=0;for(let i=from;i<to;i++){a+=x[i]*Math.sin(i*f*Math.PI/12000);b+=x[i]*Math.cos(i*f*Math.PI/12000)}
+            return Math.hypot(a,b);
+           };
+           assert(freq(160,970,587.33)>7*freq(160,970,783.99));
+           assert(freq(1520,2470,783.99)>7*freq(1520,2470,587.33));
+           continuity: for(const sample of x.slice(-96))assert(Math.abs(sample)<.001);
+          });
+          test('item, chest and soul share one voiced sample; coin and mute keep original routing',()=>{
+           const calls=[],c={poiAudioLevels:{master:85,se:85},poiAudioNoiseBurst:(...p)=>calls.push(['air',...p]),
+            poiAudioTone:(...p)=>calls.push(['tone',...p]),poiAudioEffects:{},
+            poiTryRecordedFoley:(...p)=>(calls.push(['asset',...p]),true)};
+           const a=h.indexOf('function poiItemSound('),b=h.indexOf('// END ITEM FOLEY',a);
+           vm.createContext(c);vm.runInContext(h.slice(a,b),c);
+           const cue=(k,t)=>{calls.length=0;c.poiItemSound(k,t,2);return calls.slice();};
+           for(const id of ['healingHerb','equipOrvasGreatsword','orvasSoul','slimeSoul'])assert.deepEqual(cue('item-pickup',id),[['asset','itemPickup',2.068,.60]]);
+           assert.deepEqual(cue('chest-pickup','healingHerb'),[['asset','itemPickup',2,.60]]);
+           assert.deepEqual(cue('item-pickup','coin').filter(x=>x[0]==='tone').map(x=>x[1]),[1480,1976]);
+           c.poiAudioLevels.se=0;assert.deepEqual(cue('item-pickup','orvasSoul'),[]);
+          });
+          SOURCE
+          base64 -d >.qa/rendered/itemPickup.pcm <<'PCM'
+          AAAAAAMACQAUACUAOwBVAHIAkQCwAM0A5gD5AAQBBgH7AOEAtwB7ACwAyv9W/9H+Pv6f/ff8SPyW++X6Pfql+Sf50fiv+M/4PfkC+iL7mfxf/mMAkQLOBAEHEgnqCnsMuQ2fDi4PaA9PD+gONA4yDeILRApYCCAG
+          pQPxABD+EvsH+P70BPIl723s6emp58DlSuRk4zLj1ONn5f3nmusu8Jr1qfsaAqMI+Q7WFP8ZSh6fIfUjUyXKJW0lVCSPIi0gNR2vGaEVExEUDLoGHQFd+5r18O976lHlg+Ak3ETY+9Ro0q/Q/c9+0F7SudWa2vXg
+          oehZ8cT6dgQADvYW+h7GJSsrFy+QMa0ykDJhMUQvWCy0KGgkgh8OGh4UyA0qB2UAn/n+8qDsoeYV4Q3cltfB06LQV84EzdLM6s1w0HrUCNoE4TnpW/IJ/NYFUg8VGMsfNCYtK6wuvjCAMRgxri9oLWIqsyZqIpQd
+          Phh4ElgM+QV8/wX5tPKo7Pnmu+H93MzYONVW0kLQIc8az1TQ8dIB14TcX+Nd6zL0f/3aBtsPHhhWH0kl2SkALc0uXS/WLl0tFSsZKH4kUiCgG3YW4hD8Ct4EqP57+HjyuuxY52Ti7N392abW/tMf0i3RTtGo0lfV
+          bNnh3pnlYO3p9db+xAdNEBYY1h5aJIgoXSvrLE4tqiwlK90o7CVlIlUexxnHFGUPtwnYA+b9AfhI8tXsvOcP49reKdsN2JvV7tMo02/T5dSl17vbIOG150TvgfcRAJQIqhD+F0weZyM5J8MpFitQK5QqBCm+Jtoj
+          ZyBzHAcYMRMADogI5gI2/Zf3JfL57Cbou+PF31DcbNkt167VE9V81QzX2tnw3UPjtOkK8fz4MQFNCfQQ2Be5HXEi7iUxKE8pZCmTKPsmuCTgIYIeqhpgFrMRsAxuBwcCl/w69wzyJO2U6Gnkr+By3cLas9hi1+3W
+          d9ce2fjbC+BL5ZbrtPJb+jgC7wksEaUXIB16IackqSaWJ4onpiYIJcoi/x+2HPgY0RRLEHYLaAY6AQf86vb+8VftBukX5Zbhj94Q3C/aB9m32F/ZG9v+3Q3iOOdc7UL0ofsmA30KVBFmF4AcgyBkIysl6yXCJc0k
+          KyPyIDUeABteF1cT+A5QCnQFfQCF+6b2+fGQ7XrpxeV64qXfVt2h26Dacto12wTd79/34wzpCe+39c78/gP3CmwRHRfbG4wfJyK2I04kCiQII2IhMB+BHGEZ2RXzEbkNPQmSBND/Eftu9vzxzu3y6XPmXOO34JTe
+          B90s3B3c+tzZ3srhyuXI6p3wEvfj/cEEXwt2EcoWMhuVHvAgTCK+ImMiVSGuH4Md4hrXF2kUohCODDwIwQMy/6r6P/YH8hHubOoh5znkwuHJ32Teq9263a7enOCQ44bna+wZ8lf44v5wBbcLdBFwFoUaoB2+H+sg
+          PCHMILQfDR7qG1gZYRYNE2UPdQtMB/8Cov5P+hr2GPJZ7ufqzecU5cfi9uC23x3fSd9S4EziQuUt6fntfvOE+cz/DAb/C2URDhbWGa0ckx6VH8cfRB8lHn8cZBrhF/4UwxE6Dm0KbAZLAh/+//n+9THypO5j63jo
+          6+XH4xzi/eCE4Mng5eHr4+Dmv+px7830nfqiAJcGOAxNEaUVJRm9G28dSR5gHswdphwDG/EYfBauE4wQIA12CZwFpgGo/bj56vVP8vPu4esi6b7mweQ54zvi3+E84mnjeOVs6D3s0/AH9qH7ZQERB2UMKhE4FXIY
+          zxpRHAYdBR1jHDkbmBmPFyoVbxJmDxcMjgjaBA4BPf18+d71cvJE71/syumN57TlT+Rw4y7joePe5PTm5emo7SLyLfeS/BcCfAeFDP8QxRS/F+QZOhvOG7YbCRvaGT0YPxboE0ERTw4dC7UHJgSCANz8SPnY9Zry
+          mO/d7G/qWOii5lzlmuRy5PnkReZg6E3rAO9e80D4cf24AtgHmQzMEE8UDBf+GCoaoBp0GrwZjBjzFv4UtxIjEEkNMgrqBn4DAQCF/B352fXG8u7vW+0T6x/piudi5rvlq+VF5p3nvOmk7EbwiPRB+T/+SQMnCKQM
+          kxDVE1kWGxghGXwZPhl9GEsXuBXOE5URFA9RDFUJLAbjAoz/OPz6+OD19vJI8NvtuOvm6XHoZ+fb5uHmjufx6BTr9O2E8af1Nfr9/skDYwiYDEIQRBOOFSAXABg/GPAXJxf1FWcUiRJiEPcNTwtzCG4FTQIj//77
+          8fgI9k/zz/CQ7pfs7Oqb6bHoQehe6Brpg+qh7HDv4PLV9in7rP8qBHEIVAyuD2cSdBTSFY0WshZWFogVWxTbEhARAg+3DDQKgQerBL4Byv7f+wv5XPbc85Lxhe+67TrsEOtI6vPpI+rp6lDsX+4Q8VP0DfgX/EUA
+          aARRCNcL2w5HERMTPxTVFOQUfRSxE48SIhFyD4QNYAsKCYoG6wM6AYX+2/tI+dn2l/SH8rDwGO/F7cLsGuzf6x/s6exI7j7wx/LR9UL59vzFAIIEBAgoC9EN7w96EXUS6RLlEngSshGgEEsPuw31C/4J2weVBTQD
+          xQBW/vH7pfl693j1pvMI8qLwfe+h7hnu9O1A7gnvV/At8oT0TPdq+sD9JwF4BI8HTgqbDGsOtw+DENoQxhBYEJwPng5nDfsLYQqcCLEGqQSLAmMAPP4h/B36OPh59uT0f/NN8lTxnfAz8CHwdPA28W/yHfQ79rn4
+          fvtv/moBTQT4BlEJRQvJDNoNfA64DpoOLg6ADZoMggs/CtMIQweUBcwD9AEUADf+Zvyr+gz5j/c39gn1CfQ786fyV/JV8qvyYvN+9AD24PcP+nj8Av+PAQQERAY8CNoJFwvyC24MlQxvDAkMbAugCqsJkQhWB/0F
+          igQEA3EB2f9F/r78Sfvu+bH4lPeb9sn1I/Wv9Hb0f/TU9Hz1efbK92j5R/tT/Xb/mQGjA34FGAdnCGQJDgpqCn8KVgr5CW8JvgjtB/0G8gXQBJkDUwIDAbL/ZP4j/fL71/rV+e/4J/iB9//2p/aB9pL24/Z391L4
+          cPnN+lv8DP7N/4oBLwOrBPEF+Aa7BzsIfAiECFsICAiTB/4GUAaKBa8EwQPDArsBrACc/5H+kP2e/L/79PpA+qT5JPnC+IL4a/iB+Mr4SfkA+uz6CPxK/aT+CQBnAbAC1wPRBJgFKQaFBrAGsAaJBkMG4gVpBd0E
+          PwSQA9QCDAI8AWkAlf/H/gH+SP2d/AP8e/sH+6j6Yfo2+ir6QfqA+un6fPs4/Bf9Ef4c/zAAQgFIAjgDCASyBDMFiAWxBbEFiAU2Bb4EHwRdA3oCegFiADj/A/7P/Kf7nvrJ+T/5Fvle+Rz6SPvM/Ir+WwAcArID
+          CgUcBucGbgexB6sHUgecBoEFAQQkAvr/mf0Z+5D4E/a886rxCPAN7/Xu+O868r71X/rO/5wFTQtrEJgUnBdlGf4ZiBkiGOgV6xI0D88K0AVcAKT64fRK7wvqSuUi4bbdONvv2THaVtyg4CHnqO+8+acEjw+bGRci
+          iCi8LL4uxC4VLfIpiyX/H2QZ2BGICbgAuPfd7nHmsN7I1+TRO80eyvTIMco5zj3VJN9z61n5yAeeFdQhpyutMtQ2UTh/N8A0ZTCoKq8jnBueEvcI/P4P9YnrtOLI2u7TUc4uytrHv8dHyr3PLdhK42zwnf6/DLsZ
+          qyT5LG4yJDVpNaYzOTBqK2klVB5NFoQNPwTT+pnx4ejo4NvZ39Mjz+rLj8p8yxDPftWy3kDqZfcjBWMSJR6oJ38ulDIXNGMz2zDTLIonJiHGGZIRwgih/4X2w+2h5VLe/NfC0tbOgMwfzBbOs9IO2vXj3u/z/DIK
+          kRYuIWwpAy/9MZoyNzEyLtQpTyTDHU8WIA5zBZX82vOP6/LjLt1l177Scs/QzTnOB9F31oXe4ejm9LEBQQ6hGQ0jDCp5LnUwSzBYLvEqUSaiIAIakBJ9CgwCivlI8YrphOJb3DHXMNOY0LvP+dCg1NbafOMl7hj6
+          awYmEmwcmyRfKq8tvy7hLW0rrCfRIvwcShbfDvAGwv6i9tvuqOc24aTbFte609bRwdHS00nYNN9X6C3z7f6sCoIVrR6rJUsqnCzfLGgriCh+JHEffhnDEmYLowPA+wj0vewT5i/gL9s414DUUNP/09zWFdyc4xzt
+          +/dlA3YOVxhlIEAm0ilAK9Iq2iihJVkhJBwcFmAPHAiPAAD5s/Hl6sLkaN/22pXXf9UE1XXWFNr83wXowfGF/HsHxxGqGqAhZyYEKakpoyg/JrsiQR7tGNcSIwwCBbX9f/ai71HpsOPc3vXaKdi31u7WG9ly3fTj
+          Y+w69sMAKAueFH8cZSItJu0n4yddJp8j3R85G80Vsg8PCRsCFPs+9NLt/Ofb4oneK9vy2CPYDNnv2+7g9Oeq8Hz6qwRpDv0W3h3BIp0lmib6JQck/SAIHUQYxxKvDCcGZ/+v+DzyQezj5j3ia96U2+/Zw9lZ2+je
+          f+Tw69D0fv43CDwR5xjNHr4ixiQWJfYjqCFgHkEaYxXdD9AJagPn/IP2dfDr6gLm1eGA3i7cHduT29LdAeIb6N3vyvg2AmMLoRNjGlcfaCKxI20j4CFFH8kbiBeYEhANFgfcAJz6kPTp7s3pV+We4cTe+dx73JDd
+          cOAy5brrsvON/J0FLA6aFXUbhR/JIWoipiG+H+QcPhniFOUPYwqEBH3+hvjV8pTt5ejd5JbhNt/x3Qbet98v43PoUu9l9xMAsAiRECsXJxxiH+0g/CDLH5YdiBq/Fk4STA3XBxsCTfyk9k/xdOwu6JHku+HU3xXf
+          vN8D4gfmuuvZ8uv6VANqC5MSWhh/HPce3x9uH+IdbRs0GE4Uzw/OCm4F3P9N+vX0/u+G66XncuQL4p3gY+Ca4W/k8ugB70b2Pv5KBsoNNRQtGYkcTx6mHsod8RtHGeoV7xFnDW4IKQPI/X34ePPd7sbqSed85IPi
+          j+Ha4Zvj9ubo6zzyj/lVAfEI0A97FawZTRxzHU4dFRz8GSYXrROhDxcLLAYKAd/73PYr8uvtM+oV567kI+Oo4nbjveWS6eHuZfWu/CwESAt9EWoW3RnUG20c3BtWGggYDhV9EWYN4AgLBBH/Ifpp9QzxJe3I6Qnn
+          BeXo4+bjNeX65zzs1fFz+Jv/vQZMDdQSCBfKGScbRRtYGpIYFxYAE10PQQvEBgsCP/2P+CP0GfCJ7ITpIeeB5dLkSOUT50zq7O699F77UAIGCf8O2hNcF3wZTxoCGskYzBYtFP0QTg0yCcUELQCV+yf3B/NP7xPs
+          ZOld5yDm3+XL5gzpr+yd8ZD3IP7IBAULYxCTFG4X+RhUGawYMRcIFUoSCA9RCzsH4wJy/hH66PUU8qzuwetn6brn4eYN52zoHOsc70b0SPqxAAEHugx6EQUVRhdLGD0YSBeWFUgTchAhDWgJXAUgAdv8tfjQ9Efx
+          Le6R64vpOOjD51voKOo97Y3x4fbe/A8D9wgmDkoSOBXqFnkXEBfaFfwTjxGlDksLkweYA33/aPt+99/zn/DQ7YLrzunV6MPoxen662vv+/Nn+Uz/NAWpCksP1hIxFWIWixbUFWcUYxLdD+QMhQnUBfAB+v0Y+mz2
+          EfMZ8JPtkesv6pDp4elJ6+DtoPFf9tH7jAEeBxkMLBAlE/gUthWFFY0U8xLQEDYOMQvRBy0EYwCW/Ov4fvVm8rPvdO29663qaOoa6+Ts0+/V87T4Gv6cA8sISA3OEDwTkxTtFG4UQBN/EUMPmAyNCTEGngLz/lP7
+          3/ex9Nvxa+9y7QbsR+tc623sk+7Q8Qb28/o8AHcFOwo3DjURIhMKFAsUSxPvEQ8Qvg0HC/gHpQQnAaD9MPr19gT0bvFA74vtaez762rs1e1Q8NDzK/gX/TUCHAdwC+sOZhHdEmITFxMgEp0QpA5CDIIJdQYuA8v/
+          a/ws+Sr2dfMd8S/vvu3m7Mrsj+1S7xny0PVB+hv//wOKCGkMZg9oEXMSoRIVEvEQTg8/DdAKDAgDBc4Bif5S+0f4fPUD8+fwN+8J7nvtsO3K7t7w6PPI90D8+wCZBcAJKw2vD0AR6xHOEQoRvw8CDuILaQmkBqUD
+          hQBh/Vb6fvfr9KvyyvBY723uKe6u7hnwdvK49bT5Jf6yAgEHwQq4DckP8hBJEesQ+Q+ODrsMjQoOCEsFWgJT/1P8dvnS9nX0bPLE8I/v6O7t7sDvePEX9IX3kPvr/z8EOAiOCxQOug+GEJIQ/Q/lDl8NewtCCcAG
+          BAQjATn+YPux+D/2F/RF8tXw3e9478fv5vDk8rv1SvlV/Y4BoAU9CSkMRA6HDwAQzA8JD9ANNAxBCgEIfwXNAgIAN/2H+gf4xvXS8zPy+/BA8B7wtfAb8ln0X/cC+wH/DQPUBhIKlgxLDjUPZQ/6DhAOvAwOCxAJ
+          zAZOBKkB9v5N/Mb5dPdl9aLzN/I28bjw2fC18V/z1fX++Kn8kABkBNoHuArYDDAOyA66DiAOFQ2rC+8J6AeiBSsDmAD//Xr7Hvn69hn1hvNP8oXxQ/Gm8cXyrPRS95T6O/7+AZIFtAgzC/MM9Q1GDgEOQQ0bDJ4K
+          1gjKBoYEGQKZ/x/9v/qN+JX24vR/83ny5/Hh8YTy4/MB9s34Hfy0/0oDmAZjCYQL7AygDbMNQA1eDCILlgnFB7YFdgMXAa/+U/wa+hH4Rfa/9IrztvJa8pHyc/MM9Vr3QvqU/REBcQR1B+kJsQvHDDUNEg14DHsL
+          LAqUCLwGrQR1AicA2P2e+4r5qvcJ9q70pvMF8+DyUvNv9D72s/it+/f+UAJ0BSoISAq8C4cMuQxoDKwLmQo6CZkHvQWwA4MBSP8V/fz6D/lX99/1rvTU82TzdvMi9Hb1dPcJ+gv9QgBvA1EGuAiECqoLMgwuDLYL
+          3gq4CU0IpAbHBMACoAB7/mX8b/qn+Bb3xvW/9BL01PMc9P/0h/at+Ff7WP5zAWwECgcjCZ8KfgvKC5gL/woRCtsIZge4BdsD3QHN/8D9yPv1+VL45/a99d/0YPRT9ND06PWe9+X5nPyQ/4gCSQWfB2sJngo7C1ML
+          +gpFCkQJAQiEBtQE+wIHAQr/Fv09+435DfjH9sP1D/W89OH0kvXb9rn4GPvS/bMAgAMDBhIIlQmDCuYK0QpXCosJeggtB6oF+QMmAj8AV/5+/MX6NvnZ97f22PVN9Sf1ffVf9tT31PlE/Pj+vQFZBJ0GZgiiCVIK
+          ggpGCrAJ0AizB10G1wQoA10Bhv+0/ff7Xfrv+LT3tfb89Zn1ofUm9jb30/jt+mX9DACtAhQFFwebCJcJDwoSCrQJBwkYCO8GlAUMBGECoQDb/iH9gPsF+rf4nffA9iz28/Un9tr2FfjT+QH8eP4KAYEDsAVzB7YI
+          dgm7CZgJHwleCGIHMQbRBEkDpQHx/z/+nfwZ+735jviU99n2avZZ9rn2l/f5+NT6Df18//EBOwQvBrMHuAhCCVwJGAmHCLYHrwZ3BRUEkALzAE//sv0p/ML6gvly+Jf3/va09sz2Vvdd+OH50PsN/m0AwALYBJIG
+          2QemCP4I8giSCO4HEAcABsMEYAPfAU4Auv4y/cT7ePpV+WL4p/cv9wr3Svf99yr5yfrI/AH/SwF2A1sF2wboB4AIrgiBCAoIVQdsBlUFFQSzAjkBtP8y/sH8bfs8+jX5X/jC92v3bPfT96z4+vmx+7b95v8TAhQE
+          wwULB+EHSwhTCAsIfwe9BssFrwRtAw4CnAAm/7f9Xvwi+wz6IPlm+Oj3s/fY92X4YvnM+pT8mv65AMYCmAQSBiQHyQcJCPEHkAf1BicGLgUOBMwCcgELAKT+Sf0H/OX66PkX+Xn4GfgG+E74//gd+p/7cf1y/3oB
+          YQMEBUsGKQehB7wHiAcUB2sGlAWVBHIDMgLfAIT/Lf7o/L37s/rQ+Rj5lvhU+GL4zvih+dv6b/xF/joAJwLmA1kFbQYcB2sHZgcbB5YG4gUDBQAE3QKgAVUACP/E/ZT8gPuO+sP5Jfm/+Jz4y/hZ+Uv6nPs8/RD/
+          8gC+AlEEkwV2BvkGIwcCB6MGEQZTBXAEawNKAhQB1v+Z/mr9UfxW+376zPlJ+f/4/PhL+ff5Avtk/Af+zv+VATgDnASrBV4GuAbDBosGHAaABb4E2QPWArsBkQBj/zv+I/0k/EP7hPrt+YX5WPly+d/5pfrC+yv9
+          x/54ABwCkwPEBKIFKQZfBk8GBQaLBekEJQRCA0UCNQEaAAD/7/3x/A38Rvuh+iT61/nG+fv5gvpc+4T86/14/wwBhwLNA80EfAXbBfIFzAV0BfMEUASNA7ACvQG6ALL/rv63/dT8Cvxd+9L6b/o8+kX6k/ou+xb8
+          Qf2f/hQAhAHSAugDuAQ8BXkFdgVABd8EWgS4A/oCJQI/AU4AW/9v/pL9yvwb/Ij7FvvL+rH60fo0+977zPzz/T//lwDfAf8C5QOIBOcEBgXwBK4ERwTDAyQDbgKlAc4A8f8V/0P+gP3T/D38w/tp+zX7Mftl+9n7
+          jPx7/Zb+yv//ABwCDgPIA0MEgQSJBGQEGwSzAzEDmQLtATIBbQCl/+H+Kf6B/e38b/wM/Mj7qvu5+/77ffw0/Rv+Jf88AEsBPgIEA5QD7AMQBAYE1wOKAyQDqAIYAnkBzgAcAGr/v/4g/pL9Fv2v/GH8Mfwm/EX8
+          lvwb/dD9q/6d/5QAfAFFAuICTgOKA5gDggNNA/8CnQIoAqQBEwF5ANz/Qf+u/ij+sP1L/fn8vvyg/KT80fwq/a/9XP4m//7/0wCVATYCrwL8AiADHwMAA8kCfQIhArYBPgG8ADQArP8o/6z+PP7b/Yn9Sv0h/RL9
+          I/1Y/bX9Nv7X/ov/RgD5AJYBFAJtAqECswKnAoQCTQIGArEBUQHmAHQA//+M/x3/t/5c/g7+z/2g/YX9g/2e/dj9NP6t/j3/2v94AAoBhQHkASMCQwJHAjUCEALcAZsBTwH6AJ0APADZ/3n/H//N/oX+SP4Y/vj9
+          6f3w/RH+Tf6k/hL/kP8UAJUACAFmAaoB1AHlAeABygGmAXcBPQH7ALIAYwASAMH/c/8r/+v+s/6G/mP+Tv5J/lf+e/61/gT/ZP/O/zoAnwD3ADwBawGEAYsBgQFqAUkBHgHtALUAdwA3APX/tP94/0D/D//l/sT+
+          rf6h/qL+tP7Y/g7/U/+k//r/TgCcANwACwEqATgBNwErARUB+ADUAKoAfABLABcA4/+y/4T/Wv82/xj/Af/y/u3+9P4H/yn/V/+R/9L/FQBVAI0AuQDZAOsA8QDsAOAAzACzAJYAdQBQACoAAgDb/7f/lf93/17/
+          Sf87/zL/Mv87/07/a/+S/7//8f8jAFAAdwCUAKcAsQCyAKwAoACQAHwAZQBLADAAEwD3/9v/wf+q/5X/hP93/2//a/9t/3f/iP+f/73/3/8DACYARABdAG8AeQB9AHwAdQBsAF8AUABAAC0AGgAGAPL/3//O/7//
+          sv+o/6D/nP+b/5//p/+1/8f/3P/z/wsAIQA0AEIATABRAFIAUABKAEMAOgAwACUAGAALAP//8v/n/93/1P/M/8f/w//B/8L/xf/M/9b/4v/v//7/DAAZACMAKgAvADEAMAAuACoAJQAgABkAEgALAAQA/P/2//D/
+          6v/m/+L/3//e/97/3//i/+b/7P/z//r/AgAJAA8AFAAXABgAGAAYABYAFAARAA4ACwAHAAQAAAD9//r/+P/1//T/8v/y//H/8v/y//T/9v/5//z///8CAAQABgAIAAkACQAJAAgABwAGAAUABAADAAIAAQAAAP//
+          /v/9//3//f/8//z//f/9//3//v/+//////8AAAAAAQABAAEAAQABAAEAAQABAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          PCM
           python .qa/build.py world-editor.html .qa/world-editor.html
-          test "$(git hash-object .qa/world-editor.html)" = 06d972d3d5dfabe10d88f9059e6f39814c6c8ec0
-      - name: One ground event per genuine plant with existing feedback unchanged
+          test "$(git hash-object .qa/world-editor.html)" = 6ab60adad128a6da70a26e9d0fc9e9dfb9fafb91
+      - name: New distinct pitches and unchanged inventory/coin dispatch
         working-directory: .qa
-        run: node --test tests/*.cjs
+        env:
+          HTML: world-editor.html
+        run: node --test tests/*.cjs ../tests/item-audio.test.cjs ../tests/pickup-foley-v209.test.cjs
       - run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
-      - name: Trusted chase actual scene GPU footprint and existing foot sound
+      - name: Trustworthy acquire, drop, cancel, mute and full bag
         working-directory: .qa
-        run: node tests/orvas-walk-fissures-browser.mjs
+        run: node tests/pickup-picon-browser.mjs
