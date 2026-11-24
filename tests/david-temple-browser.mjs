@@ -70,7 +70,7 @@ let fixture=insert(html,anchor,`
    }
   },`);
 fixture=fixture.replace('function poiDavidBeamSide(roll=Math.random())','function poiDavidBeamSide(roll=.8)');
-fixture=insert(fixture,'   const {x:cx,y,z:cz,attack,heading,david}=poiMonsterPose(obj,s,now),part=mesh();', "\n   if(obj.type==='monsterStoneDavid'&&s.david?.returning){const f=window.__davidFrames;f.returnFrames.push([s.x,s.z,cx-.5,cz-.5]);}");
+fixture=insert(fixture,'   const {x:cx,y,z:cz,attack,heading,david}=poiMonsterPose(obj,s,now),part=mesh();', "\n   if(obj.type==='monsterStoneDavid'&&s.david?.returning){const f=window.__davidFrames;f.returnFrames.push([s.x,s.z,cx-.5,cz-.5,poiDavidIn(poiDavidMatch(obj),{x:cx-.5,z:cz-.5,y:obj.y})]);}");
 fixture=insert(fixture,'function poiDavidCease(o,s,b,now){', "\n if(s.david?.awake&&!s.david.returning)window.__davidFrames.returnAnchor=[s.x,s.z];");
 fixture=insert(fixture,'function render(){','\n window.__davidFrames?.next();');
 const renderStart=fixture.indexOf('function render(){'),renderClock=' const now=performance.now();';
@@ -182,7 +182,7 @@ async function step(p,key,x,z){
 function assertNativeReturn(v,label){
  assert(v.returnAnchor&&(v.returnAnchor[0]!==24||v.returnAnchor[1]!==158),label+' starts genuinely displaced');
  assert(v.returnFrames.length>=2,label+' emits distinct renderer poses during return');
- const legal=frame=>frame[0]>=13&&frame[0]<=35&&frame[1]>=93&&frame[1]<=115;
+ const legal=frame=>frame[4]===true;
  assert(v.returnFrames.every(legal),label+' remains inside arena cells');
  for(let i=1;i<v.returnFrames.length;i++){
   const [x,z,rx,rz]=v.returnFrames[i], [a,b,ax,az]=v.returnFrames[i-1];

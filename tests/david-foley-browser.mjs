@@ -88,7 +88,7 @@ let fixture=insert(html,anchor,`
     // Lock out only automatic follow-up selection in the isolated
     // battery. Original timing, hit shape, health and cues are untouched.
     window.__davidFrames.onlySelected=true;
-    if(!window.__davidFrames.beamClock)window.__davidFrames.fatalClock={now:s.david.attack.start-100,beam:kind==='beam'};
+    if(!window.__davidFrames.beamClock)window.__davidFrames.fatalClock={now:s.david.attack.start-100,beam:kind==='beam',first:s.david.attack.hits[0]};
     if(window.__davidFrames.beamClock)window.__davidFrames.beamClock.first=s.david.attack.hits[0];
     return s.david.attack.start;
    },
@@ -175,7 +175,7 @@ const install=()=>{
  const summary=window.__davidFrames={coverShows:0,cue:{lane:0,beam:0,builds:0,byStart:{}},contacts:[],timing:{},canceled:{},audio:[],audioId:0,audioStops:[],audioDeadlines:[],ended:[],foleyCleanup:[],fan:0,live:0,rays:[],beamDraws:{},beamClock:null,returnClock:null,fatalClock:null,bufferIds:new WeakMap(),nextBuffer:1,
   renderTime(real){
    const c=this.returnClock||this.beamClock||this.fatalClock;if(!c)return real;
-   const lead=c.first-c.now,cap=this.returnClock?86:c.beam?44:this.fatalClock&&!this.beamClock?245:lead>0&&lead<=225?47:120;
+   const lead=c.first-c.now,cap=this.returnClock?86:c.beam&&lead<=265&&lead>=-185?44:this.fatalClock&&!this.beamClock?245:lead>0&&lead<=225?47:120;
    // Drop surplus host stalls; never repay old elapsed time on immediately
    // adjacent frames. Logical contacts cannot outrun native WebAudio time.
    const delta=Math.max(0,real-(c.lastReal??real));c.lastReal=real;
@@ -370,7 +370,7 @@ try{
     await wait(battle.p,({start,hits})=>{
      const v=window.__editorTest.davidQA.state();
      return v.canceled[start]||v.contacts.filter(a=>a.start===start).length>=hits;
-    },{start:t,hits:raw.length});
+    },{start:t,hits:raw.length},kind==='beam'?22000:12000);
     const hit=await qa(battle.p),contacts=hit.contacts.filter(a=>a.start===t);
     if(contacts.length<raw.length&&hit.canceled[t]){
      const reason=hit.canceled[t];

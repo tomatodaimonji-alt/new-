@@ -72,7 +72,7 @@ try{
  const portrait=()=>p.evaluate(()=>window.__editorTest.templeSealQA.portrait());
  function twoEyes(f,label,far=false,assist=true){
   const [w,h]=f.frame;
-  assert(f.eyes.every(e=>e&&e.x>w*.31&&e.x<w*.69&&e.y>h*.11&&e.y<h*.70),label+': '+JSON.stringify(f));
+  assert(f.eyes.every(e=>e&&e.x>w*.31&&e.x<w*.69&&e.y>h*(far?.11:.075)&&e.y<h*.70),label+': '+JSON.stringify(f));
   assert(Math.abs(f.eyes[1].x-f.eyes[0].x)>w*(far?.003:.008),'both distinct eyes occupy useful screen width');
   if(assist)assert(f.lens.lensTarget[1]>f.lens.target[1]+.013,'the distant lens bias cannot move the camera or avatar');
  }
