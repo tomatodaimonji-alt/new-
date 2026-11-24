@@ -13,7 +13,7 @@ let fixture=inject(html,key,key+`
    get:()=>{
     const m=[...poiMonsterStates].find(([o])=>o.type==='monsterStoneDavid'),s=m?.[1],d=s?.david,q=d?.attack;
     return {now:performance.now(),nextMob:poiNextMobTick,nextStep:poiWalkNextReady,arena:facilitySite.davidTemple.boss.room.arena,
-      player:[poiWalkX,poiWalkZ,poiWalkLevel],pose:[poiWalkViewX,poiWalkViewZ],free:!!poiFreePose,hp:poiPlayerHP,boss:s?[s.x,s.z]:null,awake:!!d?.awake,returning:!!d?.returning,
+      player:[poiWalkX,poiWalkZ,poiWalkLevel],pose:[poiWalkViewX,poiWalkViewZ],free:!!poiFreePose,hp:poiPlayerHP,boss:s?[s.x,s.z]:null,awake:!!d?.awake,wakeDone:!!d?.wakeDone,returning:!!d?.returning,
       q:q?{kind:q.kind,start:q.start,cursor:q.cursor,dx:q.dx,dz:q.dz,sx:q.sx,sz:q.sz}:null,
       cue:window.__arenaCue??[],damage:window.__arenaDamage??[]};
    }
@@ -61,6 +61,10 @@ try{
  const aligned=await log(),debt=Math.ceil(aligned.nextMob-aligned.now);
  if(debt>0)await p.clock.fastForward(debt+16);
  where='real scheduler and warning at 5.0 tiles';
+ // Wake starts before David can legally commit an attack. Sample the
+ // real cinematic, then retain the prior independent sweep-time bound.
+ const ready=await until(s=>s.awake&&s.wakeDone&&!s.returning,120);
+ assert.equal(ready.hp,initial.hp,'awakening itself is not damage');
  const pending=await until(s=>s.q?.kind==='sweep'&&s.q.cursor===0&&s.cue.some(a=>a.start===s.q.start&&a.vertices>30),53);
  assert.deepEqual([pending.q.sx,pending.q.sz,pending.q.dx,pending.q.dz],[24,104,0,1]);
  assert.equal(pending.hp,100);assert.equal(pending.damage.length,0);
