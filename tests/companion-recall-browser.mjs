@@ -13,7 +13,7 @@ inject(api,api+`
    const now=performance.now(),a=poiCompanionActor,k=poiHotbarRead(),e=poiCompanionRecallEvent,fx=e&&poiCompanionRecallFrame(e,now);
    const pose=poiCompanionDrawPose,bar=poiCompanionWorldBar?.el;
    const summon=poiCompanionSummonEvent;
-   return {now,xy:[poiWalkX,poiWalkZ,poiWalkLevel],hp:poiPlayerHP,death:poiPlayerDeathSnapshot(),
+   return {now,xy:[poiWalkX,poiWalkZ,poiWalkLevel],free:[poiWalkViewX,poiWalkViewZ],pointer:poiAnalogContact?.id??null,walking:!!poiFreePose?.walking,hp:poiPlayerHP,death:poiPlayerDeathSnapshot(),
     active:k.companionSoul?.active??null,mode:poiCompanionMode(k),token:poiInventorySlots(k)[5]?.durability??null,
     ally:a?{id:a.id,x:a.x,z:a.z,aliveHit:!!a?.attackMotion?.pending}:null,pose:pose?[pose.x,pose.y,pose.z]:null,
     fx:e?{id:e.id,reason:e.reason,origin:[e.x,e.y,e.z],vertices:e.vertices,frame:fx,sound:!!e.played}:null,
@@ -76,12 +76,21 @@ try{
  const shot=async n=>{if(process.env.FACILITY_SCREENSHOTS){mkdirSync(process.env.FACILITY_SCREENSHOTS,{recursive:true});await p.screenshot({path:process.env.FACILITY_SCREENSHOTS+'/'+n+'.png'});}};
  const live=await until(q=>q.ally?.id==='orvasSoul'&&q.pose&&q.show);assert.equal(live.hpLabel,'317/1050');assert(!live.summon);
  phase='real manual recall retires actor and HP marker immediately but preserves fixed fading geometry';
- await slot.tap();await btn('dismiss').tap();
- const start=await read();assert.equal(start.active,null);assert.equal(start.ally,null);assert.equal(start.fx?.reason,'manual');
+ const cdp=await ctx.newCDPSession(p);
+ const touch=(type,touchPoints)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints});
+ const point=async(control,id)=>{const r=await control.boundingBox();assert(r);return {x:r.x+r.width/2,y:r.y+r.height/2,id};};
+ const stick=await point(p.locator('#poiAnalogPad'),1),moving={...stick,y:stick.y-35};
+ await touch('touchStart',[stick]);await touch('touchMove',[moving]);
+ const held=await until(q=>q.pointer!==null&&q.walking);
+ const secondary=async control=>{const pt=await point(control,7);await touch('touchStart',[pt]);await touch('touchEnd',[pt]);};
+ await secondary(slot);await secondary(btn('dismiss'));
+ const start=await read();assert.equal(start.pointer,held.pointer);assert.equal(start.active,null);assert.equal(start.ally,null);assert.equal(start.fx?.reason,'manual');
  assert.equal(start.token,317);assert(!start.show);assert(start.fx.vertices>1000);
- assert(Math.hypot(start.fx.origin[0]-live.pose[0],start.fx.origin[2]-live.pose[2])<.001);
+ assert(Math.hypot(start.fx.origin[0]-held.pose[0],start.fx.origin[2]-held.pose[2])<.001);
  const middle=await step(250);assert(!middle.ally&&!middle.navBlock&&!middle.bar);assert.deepEqual(middle.fx.origin,start.fx.origin);
  assert(middle.fx.frame.opacity>0&&middle.fx.frame.opacity<1&&middle.fx.frame.spark>0);
+ assert.equal(middle.pointer,held.pointer);assert(Math.hypot(middle.free[0]-held.free[0],middle.free[1]-held.free[1])>.08);
+ await touch('touchEnd',[]);await cdp.detach();
  await shot('manual-recall-mid');
  const released=await step(400);assert.equal(released.fx,null);assert.equal(released.token,317);
  phase='separate true named summon and live card';

@@ -32,3 +32,13 @@ test('death detaches the exact active actor, preserves durable roster, and repla
  a.equal(c.poiCompanionRecallRejoin(a0,1980),true);a.equal(c.poiCompanionRecallRejoin(a0,1990),false);
  a.deepEqual(calls,[['orvasSoul',1980]]);
 });
+test('visual or storage failures cannot leave an attacker/target attached after a committed detachment',()=>{
+ const actor={id:'orvasSoul',fightLatch:{},allyTarget:{},attackMotion:{pending:true},freeMoving:true,freeGoal:{}};
+ const shutdown=[],c=vm.createContext({poiCompanionActor:actor,poiCompanionTarget:{},
+  poiCompanionRecallMake(){throw Error('GPU unavailable');},poiOrvasAllyStop:(...a)=>shutdown.push(a),poiCompanionSummonCancel(){}});
+ vm.runInContext(cut('function poiCompanionRecallDetach(','let poiCompanionRejoinTicket='),c);
+ a(c.poiCompanionRecallDetach(actor,600,'manual',{}));
+ a.equal(c.poiCompanionActor,null);a.equal(c.poiCompanionTarget,null);a.equal(actor.attackMotion.pending,false);
+ a.equal(actor.freeMoving,false);a.equal(actor.fightLatch,null);a.equal(actor.allyTarget,null);a.deepEqual(shutdown,[[actor,600,true]]);
+ a.equal(c.poiCompanionRecallDetach(actor,604,'player-death',{}),false);
+});
