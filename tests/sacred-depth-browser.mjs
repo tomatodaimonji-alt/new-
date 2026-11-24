@@ -14,7 +14,7 @@ replace(testApi,testApi+`
   admission:(x,z)=>({passable:poiWalkCanStep(x,z,poiWalkX,poiWalkZ),next:poiWalkNextReady,now:performance.now(),hp:poiPlayerHP}),
   inspect:()=>{
    const f=facilitySite.sacredForest,at=poiAimOrigin(performance.now());
-   return {x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,name:poiRegionAt(facilitySite,poiWalkX,poiWalkZ,false,poiWalkLevel).name,locationName:$('poiLocationName').textContent,locationTitle:$('poiLocationName').title,
+   return {x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,name:poiRegionAt(facilitySite,poiWalkX,poiWalkZ,false,poiWalkLevel).name,locationName:$('poiLocationName').textContent,locationTitle:$('poiLocationName').title,stars:$('poiLocationStars').textContent,starLabel:$('poiLocationStars').getAttribute('aria-label'),
     path:f.route,mapH:MAP_H,roofDraws:window.__depthRoofDraws??0,isConcealed:poiMiniStatic.get(0)?.concealed,seen:poiHotbarRead().sacredTempleSeen===true,reveal:f.reveal,tree:f.trees[10],fog:[...gl.getUniform(program,loc.sacredFog)],raster:window.__sacredRaster||null,
     scene:poiSacredForestStatus(),err:gl.getError(),directions:['n','s','e','w'].map(k=>poiCameraRelativeStep(k)),
     nearTemple:poiDavidTempleContains(facilitySite,at.x,at.z,at.y)};
@@ -121,7 +121,7 @@ try{
  phase='actual north forecourt and straight covered same-world crossing';
  for(let z=126;z<=127;z++){await step({x:24,z});assert.equal(last.isConcealed,true);assert.equal(last.seen,false);}
  for(let z=128;z<=132;z++){await step({x:24,z});assert.equal(last.isConcealed,false);assert.equal(last.seen,true);}
- assert.equal(last.fog[2],0);assert.equal(last.name,'オルヴァスの大神殿');assert.equal(last.locationName,last.name);assert.equal(last.locationTitle,last.name);
+ assert.equal(last.fog[2],0);assert.equal(last.name,'オルヴァスの大神殿');assert.equal(last.locationName,last.name);assert.equal(last.locationTitle,last.name);assert.equal(last.stars,'★'.repeat(10));assert.equal(last.starLabel,'危険度 10／10');
  for(let z=133;z<=143;z++)await step({x:24,z});
  assert.equal(last.isConcealed,false);assert.equal(last.seen,true);
  phase='old temple check-in migrates safe, new deep check-in resumes exactly';
