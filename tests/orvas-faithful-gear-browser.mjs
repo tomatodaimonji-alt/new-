@@ -11,6 +11,18 @@ const mark="if(facilityParams.get('test')==='1')window.__editorTest={";
 install(mark,`
  window.__orvas={
   frame:()=>render(),
+  drop:i=>{
+   if(!workshopResumeRestorePosition({x:24,z:108,y:0,facing:1}))return null;
+   const type=poiInventorySlots(poiHotbarRead())[i]?.type;
+   if(!type||!poiInventoryDrop(i).ok)return null;
+   return poiHotbarRead().drops.find(d=>d.type===type);
+  },
+  take:d=>{
+   if(!workshopResumeRestorePosition({x:d.x,z:d.z,y:d.y,facing:1}))return null;
+   if(poiHotbarRead().drops?.some(item=>item.type===d.type)&&!poiInventoryPickup(d.x,d.z))return null;
+   const slot=poiInventorySlots(poiHotbarRead()).findIndex(c=>c?.type===d.type);
+   return {slot,ok:poiEquipHotbarItem(slot)?.ok};
+  },
   bossCues:()=>{
    const b=facilitySite.davidTemple.boss,p={x:b.x,z:b.z,y:b.y};
    for(const [kind,i,phase] of [['beam',0,'beamOnset'],['sweep',0,'impact'],['double',0,'impact'],['double',1,'impact']])
@@ -34,7 +46,7 @@ install(mark,`
    return {weapon,ready:poiAttackReady,clock:performance.now(),pending:!!a,cursor:a?.orvasCursor,
     used:slots.find(c=>c?.type===weapon)?.durability,hp:window.__orvas.targets?.map(s=>s.hp),
     beam:beam?{rays:beam.rays,draw:!!poiOrvasBeamGpu}:null,start:poiWalkActionStarted,
-    audio:window.__orvasFoley??[],edge:window.__orvasEdges??[],thermal:window.__orvasThermal??[],
+    ground:window.__orvasGround??[],audio:window.__orvasFoley??[],edge:window.__orvasEdges??[],thermal:window.__orvasThermal??[],
     name:POI_ORVAS_NAME,items:slots.slice(2,5).map(c=>c?.type)};
   }
  };`+mark);
@@ -53,6 +65,16 @@ install('const b=poiOrvasTwinBladeBasis(arms,pose,i);poiOrvasSwordGeometry(local
 install('   const g=poiDavidThermalBeam(q,d,clear+front,0,true,1);',`
    const g=poiDavidThermalBeam(q,d,clear+front,0,true,1);
    if(window.__orvasManual)(window.__orvasThermal??=[]).push({width:POI_DAVID_BEAM_WIDTH,rng:clear,mask,n:g.p.length/3,core:g.coreCount});
+`);
+install("    }else if(typeof poiOrvasGroundGeometry==='function'&&poiOrvasGroundGeometry(m,d.type,x,y,z)){",`
+    }else if(typeof poiOrvasGroundGeometry==='function'&&poiOrvasGroundGeometry(m,d.type,x,y,z)){
+     if(window.__orvasManual){
+      const exact=mesh();poiOrvasGroundGeometry(exact,d.type,x,y,z);
+      const n=exact.p.length,slice=m.p.slice(-n);
+      const far=Math.max(...slice.filter((_,i)=>i%3===2))-Math.min(...slice.filter((_,i)=>i%3===2));
+      (window.__orvasGround??=[]).push({type:d.type,n,far,
+       same:slice.every((v,i)=>v===exact.p[i])});
+     }
 `);
 install(' requestAnimationFrame(render);',' if(!window.__orvasManual)requestAnimationFrame(render);');
 for(const [,js] of h.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(js);
@@ -92,6 +114,15 @@ try{
  };
  assert.deepEqual((await read()).items,keys);
  assert.equal((await read()).name,'オルヴァス');
+ for(let i=2;i<=4;i++){
+  const d=await p.evaluate(i=>window.__orvas.drop(i),i);assert(d&&d.type===keys[i-2]);
+  await frame();
+  const ground=(await read()).ground.find(x=>x.type===d.type);
+  assert(ground&&ground.same&&ground.n>300&&ground.far>(i===2?.65:3.35));
+  const picked=await p.evaluate(d=>window.__orvas.take(d),d);
+  assert.deepEqual(picked,{slot:i,ok:true});assert.equal((await read()).weapon,d.type);
+ }
+
  let {q,held}=await start(2,[[32,108,0],[34,108,0]]);
  let landed=await until(v=>!v.pending&&v.beam?.draw);
  assert(landed.clock-held.start>=420);

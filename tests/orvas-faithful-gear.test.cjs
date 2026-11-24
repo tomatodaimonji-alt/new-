@@ -8,7 +8,7 @@ function engine(){
  const js=cut('function characterArmRotation(', 'function roundStack(')+cut('const POI_DAVID_EYE_Y=', 'const POI_DAVID_GAIT_STRIDE=')+
   cut('function poiDavidMakePrism(', 'function poiDavidGeometry(')+cut('// BEGIN ORVAS TROPHY ART','// END ORVAS TROPHY ART')+
   `globalThis.api={face:poiDavidFaceMesh,head:poiOrvasHeadGeometry,sword:poiOrvasGreatswordGeometry,swordShared:poiDavidSwordMesh,
-     prism:poiDavidMakePrism,twin:poiOrvasTwinBladeBasis};`;
+     prism:poiDavidMakePrism,twin:poiOrvasTwinBladeBasis,ground:poiOrvasGroundGeometry,pair:poiOrvasTwinGeometry};`;
  vm.runInNewContext(js,c);return {c,m,...c.api};
 }
 const near=(a0,b,e=1e-9)=>a(Math.abs(a0-b)<e,`${a0} vs ${b}`);
@@ -31,5 +31,17 @@ test('both rigid swords reuse exact boss blade at original scale; each real lead
   near(b.axis.reduce((s,v,k)=>s+v*b.blade[k],0),0);
   const sweep=b.tip.map((v,k)=>v-early.tip[k]),cos=sweep.reduce((s,v,k)=>s+v*b.blade[k],0)/Math.hypot(...sweep);
   a(cos>.98&&b.blade[1]<-.8);
+ }
+});
+
+test('ground and held posture are rigid orientations of the exact full-size assets, not miniatures',()=>{
+ const x=engine();
+ for(const [type,make] of [['equipOrvasHead',x.head],['equipOrvasGreatsword',x.sword],['equipOrvasTwinGreatswords',x.pair]]){
+  const tile=x.m(),upright=x.m();make(upright,0,0,0);a(x.ground(tile,type,0,0,0));a.deepEqual(tile.c,upright.c);
+  a.equal(tile.p.length,upright.p.length);
+  for(let j=3;j<tile.p.length;j+=3){
+   const len=p=>Math.hypot(p[j]-p[0],p[j+1]-p[1],p[j+2]-p[2]);
+   near(len(tile.p),len(upright.p));
+  }
  }
 });
