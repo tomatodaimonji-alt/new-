@@ -139,7 +139,7 @@ async function simultaneousAction(browser){
   await page.waitForFunction(()=>window.__editorTest.townResidents().actors.some(a=>
    a.id==='towncook'&&a.activity==='work'&&a.x===26&&a.z===42));
   const action=page.locator('#poiWalkAction');
-  await page.waitForFunction(()=>document.querySelector('#poiWalkAction')?.getAttribute('aria-label')==='住人と話す');
+  await page.waitForFunction(()=>document.querySelector('#poiWalkAction')?.getAttribute('aria-label')==='イネス（食堂の料理人）と話す');
   const left=await center(pad),box=await action.boundingBox();
   assert.ok(box&&box.x>left.x,'one thumb can reach the original Action once it is moved to the right');
   const right=touch(box.x+box.width/2,box.y+box.height/2,2);
@@ -178,3 +178,4 @@ try{
  await simultaneousAction(browser);
  console.log('PASS native floating thumb center, deadzone, diagonal/bridge legal walk, two-thumb orbit, release/cancel and portrait rotation');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
+

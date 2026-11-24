@@ -20,7 +20,7 @@ function make(vars={}){
 test('normal orbit and overhead unchanged; outdoor elevated aim reveals a sky gradient and the far orbit cannot bury the lens',()=>{
  const {c,style,attrs}=make();
  const normal=make({poiCameraPitch:.35}).c.camera();
- assert.equal(normal.skyHorizon,undefined);
+ assert(normal.skyHorizon>15&&normal.skyHorizon<22);
  assert(Math.abs(normal.vp.eye[1]-(1.1+5.5*Math.sin(.35)))<1e-9);
  assert.equal(c.poiOrbitPitchClamp(-2),-.16);
  const looked=c.camera();assert(looked.vp.eye[1]<looked.vp.target[1]);
@@ -44,4 +44,26 @@ test('negative sky pitch survives valid saves but remains unavailable indoors, u
  assert.equal(clipped.camera().skyHorizon,undefined);
  assert(h.includes('poiOrbitPitchClamp(poiCameraPitch+(now.y-multiGesture.y)*.004)'));
  assert(h.includes('poiOrbitPitchClamp(poiCameraPitch+(e.clientY-t.lastY)*.006)'));
+});
+test('fixed-time sky uses opaque fixed-world colors at straight, upward, and deep downward angles',()=>{
+ const {c,attrs,style}=make({poiTownClockGameMs:90*500,poiCameraDistance:5.5});
+ const steps=[];
+ for(const p of [.12,-.16,.14,.15,.35,.75]){
+  c.poiCameraPitch=p;
+  const packet=c.camera();c.poiSkyBackdrop(packet);
+  assert(attrs.has('data-poi-sky'));assert.equal(packet.skyOpacity,undefined);
+  const actual=Math.atan2(packet.vp.eye[1]-packet.vp.target[1],Math.hypot(packet.vp.eye[0]-packet.vp.target[0],packet.vp.eye[2]-packet.vp.target[2]));
+  for(const [name,angle] of [['horizon',0],['mid-y',Math.PI/12],['top-y',Math.PI/6]]){
+   const stop=parseFloat(style.get('--poi-sky-'+name));
+   const expected=50-50*Math.tan(Math.min(Math.PI/3,actual+angle))/Math.tan(Math.PI/6);
+   assert(Math.abs(stop-expected)<=.25+1e-10,name+' at pitch '+p+': '+stop+' expected '+expected);
+  }
+  steps.push(['top','mid','edge','base'].map(s=>style.get('--poi-sky-'+s)));
+ }
+ for(const set of steps)assert.deepEqual(set,steps[0]);
+ for(const color of steps[0])assert.match(color,/^rgb\(\d+ \d+ \d+\)$/,'night should not blend into a teal default');
+ assert.notEqual(steps[0][0],steps[0][2]);assert.notEqual(steps[0][2],steps[0][3]);
+ assert(parseFloat(style.get('--poi-sky-horizon'))<-19,'ordinary sky gradient completely off screen in deep down view');
+ assert.doesNotMatch(slice('#viewWrap[data-poi-sky]{','/* Play-only overlays'),/transparent|#709187/);
+ c.poiTownClockGameMs=720*500;c.poiSkyBackdrop(c.camera());assert.notEqual(style.get('--poi-sky-top'),steps[0][0]);
 });

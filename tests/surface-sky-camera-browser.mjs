@@ -87,7 +87,7 @@ try{
   const {p,q,when,loaded,dragUp}=surface;
   const normal=await q();
   assert(normal.third&&normal.level===0&&Math.abs(normal.pitch-.35)<.002,'normal third-person default remains unchanged');
-  assert.equal(normal.sky,false,'ordinary downward view does not force the sky backdrop');
+  assert(normal.sky&&parseFloat(normal.horizon)>15&&parseFloat(normal.horizon)<22,'normal orbit still shows the physical horizon on unobstructed surface');
   await dragUp();
   const raised=await q();
   assert(raised.pitch<.04,'real right-thumb orbit must rise past the old .12 clamp: '+JSON.stringify(raised));
