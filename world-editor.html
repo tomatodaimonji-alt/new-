@@ -18808,7 +18808,7 @@ let poiCompanionMesh=null,poiCompanionMeshKey='',poiCompanionTemplate=null;
 const poiCompanionSeenContacts=new WeakSet();
 function poiCompanionType(id){return Object.hasOwn(POI_COMPANION_SPEC,id)?POI_COMPANION_SPEC[id]:null}
 function poiCompanionNormalizeMode(mode){
- if(mode==='follow'||mode==='flee')return 'follow';
+ if(mode==='follow'||mode==='flee'||mode==='escape')return 'follow';
  if(mode==='fight'||mode==='auto')return 'fight';
  return null;
 }
@@ -18852,7 +18852,7 @@ function poiCompanionMonsterDefeated(o,s,now,debris,rng=Math.random){
  if(!id)return false;
  const kit=poiHotbarRead();
  if(kit.companionSoul?.pending||poiInventorySlots(kit).some(c=>c?.type===id))return false;
- if(!poiEconomyWrite({...kit,companionSoul:{version:1,pending:id,active:kit.companionSoul?.active??null}}))return false;
+ if(!poiEconomyWrite({...kit,companionSoul:{...kit.companionSoul,version:1,pending:id,active:kit.companionSoul?.active??null}}))return false;
  poiCompanionClaimAt=0;poiCompanionClaimNotified=false;
  if(debris){
   const start=debris.start??now;
@@ -18906,11 +18906,22 @@ function poiCompanionNormal(o,s){
   !(typeof poiChapelEliteMatch==='function'&&poiChapelEliteMatch(o)));
 }
 function poiCompanionPlayerContact(o,s,now){
- if(!poiCompanionActor||!poiCompanionNormal(o,s)||s.hp<=0||poiCompanionMode()==='follow')return;
+ if(!poiCompanionActor||!poiCompanionNormal(o,s)||s.hp<=0||poiCompanionMode()==='follow'||
+    poiCompanionFightLatch(poiCompanionActor))return;
  poiCompanionTarget={o,s,until:now+2100};
 }
 // BEGIN COMPANION FRACTIONAL FOLLOW
-const POI_COMPANION_FREE_SPEED=.0054,POI_COMPANION_FREE_RADIUS=.20;
+const POI_COMPANION_FREE_RADIUS=.20,POI_COMPANION_FOLLOW_BEGIN=4,POI_COMPANION_FOLLOW_STOP=2;
+function poiCompanionSpeed(a){
+ // Match the real hostile locomotion rates independently of player input,
+ // gear or sprint. Orvas's authored one-tile approach is 235ms.
+ return a.id==='orvasSoul'?1/235:1/(typeof POI_MONSTER_FREE_TICK==='number'?POI_MONSTER_FREE_TICK:380);
+}
+function poiCompanionFollowWanted(a,distance){
+ if(distance>=POI_COMPANION_FOLLOW_BEGIN)a.followLeader=true;
+ else if(distance<=POI_COMPANION_FOLLOW_STOP+.00001)a.followLeader=false;
+ return a.followLeader===true;
+}
 function poiCompanionPosition(a){
  return {x:Number.isFinite(a.px)?a.px:a.x,z:Number.isFinite(a.pz)?a.pz:a.z,y:a.y};
 }
@@ -18924,7 +18935,7 @@ function poiCompanionAdvance(a,to,now,stop){
  if(!to||typeof poiFreeAdvance!=='function')return false;
  const dt=Math.max(0,Math.min(64,now-(previous??now)));
  const dx=to.x-p.x,dz=to.z-p.z,len=Math.hypot(dx,dz);
- const step=Math.min(Math.max(0,len-stop),dt*POI_COMPANION_FREE_SPEED);
+ const step=Math.min(Math.max(0,len-stop),dt*poiCompanionSpeed(a));
  if(step<.001||!len)return false;
  const cells=new Map(),edge=(x,z,fx,fz)=>{
   const key=[x,z,fx,fz].join(',');
@@ -19010,18 +19021,28 @@ function poiCompanionSpawn(id,now){
  }
  return null;
 }
+function poiCompanionFightLatch(a){
+ const t=a.fightLatch;
+ if(t&&poiCompanionTargetLegal(a,t.o,t.s))return t;
+ if(t){a.fightLatch=null;if(poiCompanionTarget===t)poiCompanionTarget=null;}
+ return null;
+}
 function poiCompanionEngage(a,now){
- let t=poiCompanionTarget;
- if(!t||t.until<now||!poiCompanionTargetLegal(a,t.o,t.s)){
+ const latched=poiCompanionFightLatch(a);
+ let t=latched??poiCompanionTarget;
+ if(!t||(!latched&&t.until<now)||!poiCompanionTargetLegal(a,t.o,t.s)){
   t=null;poiCompanionTarget=null;
   if(now>=(a.scanAt||0)){a.scanAt=now+240;t=poiCompanionTarget=poiCompanionFindTarget(a,now)}
  }
  if(!t)return null;
+ a.fightLatch=t;poiCompanionTarget=t;
  if(t.o.type==='monsterStoneDavid')a.davidFocus=t.s;
  const origin=poiCompanionPosition(a);
  if(Math.hypot(t.s.x-origin.x,t.s.z-origin.z)<=(typeof poiCompanionMeleeReach==='function'?poiCompanionMeleeReach(a):1.44)){
+  // A wall may interrupt a swing but does not erase a legal fight; the
+  // ordinary physical route solver may find a way around it.
   if(poiCompanionAttackClear(origin,t.s,a.y)){poiCompanionCommit(a,t,now);return a}
-  poiCompanionTarget=null;return null;
+  return t.s;
  }
  return t.s;
 }
@@ -19055,9 +19076,8 @@ function poiCompanionTick(now){
  if(poiCompanionResolve(a,now,mode)){poiCompanionAdvance(a,null,now,0);return}
  const player=poiCompanionPlayerPoint(now),origin=poiCompanionPosition(a);
  const distance=Math.hypot(origin.x-player.x,origin.z-player.z);
- const liveOrvasBoss=a.id==='orvasSoul'&&typeof poiOrvasAllyBossLatch==='function'&&poiOrvasAllyBossLatch(a,now);
- if(distance>18&&!liveOrvasBoss){poiCompanionAdvance(a,null,now,0);return}
- const david=mode!=='follow'?poiCompanionDavidFocus(a):null;
+ const latch=mode==='fight'?poiCompanionFightLatch(a):null;
+ const david=mode!=='follow'&&(!latch||latch.o.type==='monsterStoneDavid')?poiCompanionDavidFocus(a):null;
  if(!david)a.davidFocus=null;
  const held=!!david&&Math.hypot(origin.x-david.s.x,origin.z-david.s.z)<=1.62&&now<(a.slimeRecoverUntil||0);
  if(held){poiCompanionAdvance(a,null,now,0);return}
@@ -19069,17 +19089,22 @@ function poiCompanionTick(now){
     .find(p=>poiCompanionCell(p.x,p.z,a.y,a.x,a.z));
    if(n){a.freeGoal=n;a.freeFollows=false}
   }else{
-   const to=(mode==='flee'||mode==='follow')?null:a.id==='orvasSoul'&&typeof poiOrvasAllyEngage==='function'?
-    (distance<=POI_ORVAS_ALLY_TETHER||liveOrvasBoss)?poiOrvasAllyEngage(a,now):null:
-    (distance<=POI_COMPANION_TETHER||david)&&now>=(a.slimeRecoverUntil||0)?poiCompanionEngage(a,now):null;
-   if(!to&&(mode==='follow'||distance>POI_COMPANION_TETHER&&!david))poiCompanionTarget=null;
-   const followDistance=a.freeFollows&&a.freeGoal?1.48:1.84;
-   a.freeGoal=to===a?null:to||distance>followDistance?to||player:null;
-   a.freeFollows=!to;
+   const to=a.id==='orvasSoul'&&typeof poiOrvasAllyEngage==='function'?
+    mode==='follow'?null:(distance<=POI_ORVAS_ALLY_TETHER||latch)?poiOrvasAllyEngage(a,now):null:
+    mode!=='follow'&&(distance<=POI_COMPANION_TETHER||david||latch)&&now>=(a.slimeRecoverUntil||0)?poiCompanionEngage(a,now):null;
+   if(!to&&(mode==='follow'||distance>POI_COMPANION_TETHER&&!david&&!latch))poiCompanionTarget=null;
+   if(!to&&latch){
+    a.freeGoal=null;a.freeFollows=false;
+   }else{
+    const follow=poiCompanionFollowWanted(a,distance);
+    a.freeGoal=to===a?null:to||(follow?player:null);
+    a.freeFollows=!to;
+   }
   }
  }
  const goal=a.freeFollows&&a.freeGoal?player:a.freeGoal;
- poiCompanionAdvance(a,goal,now,a.freeFollows?1.45:1.16);
+ poiCompanionAdvance(a,goal,now,a.freeFollows?POI_COMPANION_FOLLOW_STOP:1.16);
+ if(a.id==='orvasSoul'&&typeof poiOrvasAllyFoot==='function')poiOrvasAllyFoot(a,now);
 }
 // BEGIN ORVAS ALLY BOSS RUNTIME
 // Team-owned state. Do not register the summoned instance as a hostile monster.
@@ -19103,11 +19128,12 @@ function poiOrvasAllyTarget(a,o,s,now,notice=true){
  if(!o||!s||!(s.hp>0)||o.y!==a.y||poiMonsterStates.get(o)!==s||
     s.townOwned||s.townHunt||s.northReturnFoe||
     s.wildSpawn&&typeof poiWildPlayerOutside==='function'&&!poiWildPlayerOutside())return null;
+ const kept=a.fightLatch?.o===o&&a.fightLatch?.s===s;
  const boss=o.type==='monsterStoneDavid'&&poiOrvasAllyCanonicalBattle(a,o,s,now);
  if(o.type==='monsterStoneDavid'&&!boss)return null;
  const origin=poiCompanionPosition(a),m=poiMonsterPose(o,s,now,true),p={x:m.x-.5,z:m.z-.5,y:o.y};
  const d=Math.hypot(p.x-origin.x,p.z-origin.z);
- if((!boss&&((notice&&d>POI_ORVAS_ALLY_NOTICE)||Math.hypot(p.x-poiWalkX,p.z-poiWalkZ)>POI_ORVAS_ALLY_TETHER))||
+ if((!boss&&!kept&&((notice&&d>POI_ORVAS_ALLY_NOTICE)||Math.hypot(p.x-poiWalkX,p.z-poiWalkZ)>POI_ORVAS_ALLY_TETHER))||
     !poiCompanionEncounterAllows(o,Math.round(p.x),Math.round(p.z))||
     !poiCompanionEncounterAllows(o,a.x,a.z)||!poiCompanionEncounterAllows(o,poiWalkX,poiWalkZ)||
     typeof poiDungeonVisualVisible==='function'&&!poiDungeonVisualVisible(Math.round(p.x),Math.round(p.z),a.y))return null;
@@ -19115,6 +19141,9 @@ function poiOrvasAllyTarget(a,o,s,now,notice=true){
 }
 function poiOrvasAllyFind(a,now){
  const seen=[],src=poiCompanionPosition(a);
+ const latched=a.fightLatch&&poiOrvasAllyTarget(a,a.fightLatch.o,a.fightLatch.s,now);
+ if(latched)return latched;
+ if(a.fightLatch)a.fightLatch=null;
  if(a.allyTarget){const p=poiOrvasAllyTarget(a,a.allyTarget.o,a.allyTarget.s,now);if(p&&(poiOrvasAllyBossLatch(a,now)||poiCompanionAttackClear(src,p.p,a.y)))return p}
  for(const [o,s] of poiMonsterStates){if(Math.hypot((s.x??o.x)-src.x,(s.z??o.z)-src.z)>16)continue;const t=poiOrvasAllyTarget(a,o,s,now);if(t){seen.push(t);seen.sort((p,q)=>p.d-q.d);if(seen.length>8)seen.pop()}}
  return seen.find(t=>poiCompanionAttackClear(src,t.p,a.y))??null;
@@ -19150,7 +19179,7 @@ function poiOrvasAllyEngage(a,now){
  a.allyScanAt=now+180;
  let t=poiOrvasAllyFind(a,now);
  if(!t){a.allyTarget=null;return null}
- a.allyTarget=t;
+ a.allyTarget=t;a.fightLatch=t;
  const src=poiCompanionPosition(a),dx=(t.p.x-src.x)/Math.max(.001,t.d),dz=(t.p.z-src.z)/Math.max(.001,t.d);
  if(t.d<.01)return null;
  if(t.d>14||!poiCompanionAttackClear(src,t.p,a.y))return t.s;
@@ -19200,6 +19229,16 @@ function poiOrvasAllyStop(a,now,clearEffects=false){
  for(const [source,slot] of poiDavidFoleySources)if(slot.q?.ally)poiDavidFade(source,slot.gain);
  poiOrvasAllyEffects.actor=null;poiOrvasAllyEffects.impact=null;poiOrvasAllyEffects.fissure=null;poiOrvasAllyEffects.bump=null;
 }
+function poiOrvasAllyFoot(a,now){
+ if(!a.freeMoving||a.david?.attack||typeof POI_DAVID_GAIT_STRIDE!=='number')return;
+ const n=Math.floor((a.freeMileage||0)/POI_DAVID_GAIT_STRIDE),prev=a.allyFootPlant;
+ a.allyFootPlant=n;
+ if(prev===undefined||n<=prev||!poiEnemyThreatEnabled())return;
+ const p=poiCompanionPosition(a);
+ const b=poiOrvasAllyArena(p);
+ poiOrvasAllyEffects.actor=a;
+ poiDavidHeavyContact('foot',{sx:p.x,sz:p.z,y:p.y,ally:true,allyArena:b},now,b);
+}
 function poiOrvasAllyRouteFrame(now){
  const a=poiCompanionActor,e=poiOrvasAllyEffects;
  if(e.actor&&(!a||a!==e.actor||!poiCompanionAllowed()||!poiCompanionSame(a,poiCompanionPlace())))poiOrvasAllyStop(e.actor,now,true);
@@ -19207,7 +19246,7 @@ function poiOrvasAllyRouteFrame(now){
 function poiOrvasAllyResolve(a,now,mode){
  const d=a.david,q=d?.attack;if(!q)return false;
  if((mode==='flee'||mode==='follow')||!poiEnemyThreatEnabled()||now-q.lastFrameAt>750||poiDavidHidden()||
-    (!poiOrvasAllyBossLatch(a,now)&&Math.hypot(a.x-poiWalkX,a.z-poiWalkZ)>POI_ORVAS_ALLY_TETHER)||
+    (!poiOrvasAllyBossLatch(a,now)&&!(a.fightLatch&&poiOrvasAllyTarget(a,a.fightLatch.o,a.fightLatch.s,now))&&Math.hypot(a.x-poiWalkX,a.z-poiWalkZ)>POI_ORVAS_ALLY_TETHER)||
     (a.allyTarget?.o.type==='monsterStoneDavid'&&!poiOrvasAllyBossLatch(a,now))){
   poiOrvasAllyStop(a,now,true);return false;
  }
@@ -19393,7 +19432,8 @@ function poiCompanionWorldPose(a,now){
 }
 function poiCompanionWorldVisible(a){
  return !!a&&poiCompanionSame(a,poiCompanionPlace())&&poiCompanionAllowed()&&
-  Math.hypot(poiWalkX-a.x,poiWalkZ-a.z)<=15&&
+  (Math.hypot(poiWalkX-a.x,poiWalkZ-a.z)<=15||
+   (a.id==='orvasSoul'&&typeof poiOrvasAllyBossLatch==='function'&&poiOrvasAllyBossLatch(a,performance.now())))&&
   (typeof poiDungeonVisualVisible!=='function'||poiDungeonVisualVisible(a.x,a.z,a.y));
 }
 let poiCompanionWorldActor=null,poiCompanionDrawPose=null,poiCompanionWorldBar=null,poiCompanionWorldBarKit=null,poiCompanionWorldBarCell=null;
@@ -19481,10 +19521,11 @@ function poiCompanionCommand(mode,now=performance.now(),token=null){
   if((mode==='flee'||mode==='follow')&&a.id==='orvasSoul'&&typeof poiOrvasAllyStop==='function'){
    poiOrvasAllyStop(a,now,true);a.allyTarget=null;
   }
-  if(mode==='fight'&&typeof poiAimLocked!=='undefined'&&poiAimLocked){
+  if(mode==='follow'){a.fightLatch=null;a.followLeader=false;}
+  if(mode==='fight'&&!poiCompanionFightLatch(a)&&typeof poiAimLocked!=='undefined'&&poiAimLocked){
    const {id:o,state:s}=poiAimLocked;
    if(poiCompanionTargetLegal(a,o,s,true)){
-    if(a.id==='orvasSoul')a.allyTarget={o,s};
+    if(a.id==='orvasSoul'){a.allyTarget={o,s};a.fightLatch=a.allyTarget;}
     else poiCompanionTarget={o,s,until:now+1000};
    }
   }
@@ -19511,9 +19552,11 @@ function poiCompanionEncounterAllows(o,x,z){
   (typeof poiDungeonPatrolCanFight!=='function'||poiDungeonPatrolCanFight(o,x,z));
 }
 function poiCompanionTargetRange(a,o,s,clear){
- return poiCompanionTethered(a)&&poiCompanionEncounterAllows(o,poiWalkX,poiWalkZ)&&poiCompanionEncounterAllows(o,a.x,a.z)&&Math.hypot(s.x-poiWalkX,s.z-poiWalkZ)<=POI_COMPANION_TETHER&&
-  Math.hypot(s.x-(a.px??a.x),s.z-(a.pz??a.z))<=POI_COMPANION_NOTICE&&
-  (typeof poiDungeonVisualVisible!=='function'||poiDungeonVisualVisible(o.x??s.x,o.z??s.z,o.y))&&
+ const kept=a.fightLatch?.o===o&&a.fightLatch?.s===s;
+ return poiCompanionEncounterAllows(o,poiWalkX,poiWalkZ)&&poiCompanionEncounterAllows(o,a.x,a.z)&&
+  (kept||poiCompanionTethered(a)&&Math.hypot(s.x-poiWalkX,s.z-poiWalkZ)<=POI_COMPANION_TETHER&&
+   Math.hypot(s.x-(a.px??a.x),s.z-(a.pz??a.z))<=POI_COMPANION_NOTICE&&
+   (typeof poiDungeonVisualVisible!=='function'||poiDungeonVisualVisible(o.x??s.x,o.z??s.z,o.y)))&&
   (!clear||poiCompanionAttackClear({x:a.px??a.x,z:a.pz??a.z},s,a.y));
 }
 function poiCompanionFindTarget(a,now){
@@ -19543,8 +19586,7 @@ function poiCompanionCommit(a,t,now){
 function poiCompanionResolve(a,now,mode){
  const q=a.attackMotion;
  if(!q?.pending)return false;
- const boss=q.target?.o?.type==='monsterStoneDavid';
- if(mode==='follow'||!(boss?poiCompanionDavidTarget(a,q.target.o,q.target.s):poiCompanionTethered(a))){
+ if(mode==='follow'||mode==='flee'||!poiCompanionTargetLegal(a,q.target?.o,q.target?.s)){
   q.pending=false;return false;
  }
  if(now<q.hit)return true;
@@ -19618,9 +19660,10 @@ function poiCompanionDavidTarget(a,o,s,clear=false){
  const pos=typeof poiDavidGroundPoint==='function'?poiDavidGroundPoint(s,performance.now()):s;
  const tether=a.davidFocus===s?POI_COMPANION_DAVID_RELEASE:POI_COMPANION_DAVID_ENGAGE;
  const sx=typeof a.px==='number'?a.px:a.x,sz=typeof a.pz==='number'?a.pz:a.z;
+ const latched=a.fightLatch?.o===o&&a.fightLatch?.s===s;
  return poiDavidIn(b,p)&&poiDavidIn(b,{x:sx,z:sz,y:a.y})&&poiDavidIn(b,{x:pos.x,z:pos.z,y:o.y})&&
-  Math.hypot(sx-p.x,sz-p.z)<=tether&&Math.hypot(pos.x-p.x,pos.z-p.z)<=tether&&
-  Math.hypot(pos.x-sx,pos.z-sz)<=POI_COMPANION_DAVID_NOTICE&&
+  (latched||Math.hypot(sx-p.x,sz-p.z)<=tether&&Math.hypot(pos.x-p.x,pos.z-p.z)<=tether&&
+   Math.hypot(pos.x-sx,pos.z-sz)<=POI_COMPANION_DAVID_NOTICE)&&
   (!clear||poiDavidLine({x:sx,z:sz},{x:pos.x,z:pos.z,y:a.y},b));
 }
 function poiCompanionDavidFocus(a){
@@ -21060,7 +21103,7 @@ function poiCompanionHudSync(){
  const type=kit?.companionSoul?.active,cell=type&&poiInventorySlots(kit).find(c=>c?.type===type);
  const spec=type&&poiCompanionType(type),hp=cell?.durability;
  const visible=!!(spec&&Number.isFinite(hp)&&hp>0&&poiCompanionAllowed()&&!(typeof poiPlayerHP==='number'&&poiPlayerHP<=0));
- if(poiCompanionCommandType&&(!kit||!poiCompanionAllowed()||poiPlayerHP<=0||
+ if(poiCompanionCommandType&&(!kit||!poiCompanionAllowed()||typeof poiPlayerHP==='number'&&poiPlayerHP<=0||
    poiInventorySlots(kit)[poiCompanionCommandSlot]?.type!==poiCompanionCommandType))poiCompanionUiClose(false);
  root.hidden=!visible;if(!visible)return;
  const label=spec.name.replace(/の魂$/,'');
@@ -33475,7 +33518,7 @@ function poiDavidHeavyContact(kind,q,now,b){
  if(kind==='foot'&&poiAudioEnabled&&poiAudioAllowed()&&poiAudioLevels.master>0&&poiAudioLevels.se>0){
   const gain=spec[2]*Math.max(.18,1-distance/12)*(clear?1:.25);
   poiAudioStart();const ctx=poiAudioContext;
-  if(ctx?.state==='running')try{poiTryRecordedFoley('davidFootPlant',ctx.currentTime,gain,poiDavidTrackAttackFoley)}catch{}
+  if(ctx?.state==='running')try{poiTryRecordedFoley('davidFootPlant',ctx.currentTime,gain,q.ally?(source,node)=>poiDavidTrackAttackFoley(source,node,q):poiDavidTrackAttackFoley)}catch{}
  }
  return true;
 }
@@ -34006,11 +34049,14 @@ function poiDavidRaisedStoneGeometry(e,b){
  const shape=[[-1,-.53],[-.27,-1],[.72,-.80],[1,-.10],[.67,.83],[-.28,1],[-.90,.47]];
  // Preserve the authored paint seam on the displaced pieces by clipping
  // the actual road triangles, not painting a substitute cap over the slab.
+ const usable=k=>!!k&&(ROAD_IDS.has(k)&&k.endsWith('Full')||
+   e.arena&&/^(grass|earth|moss|stone|sand|soil|brickfloor|basicfloor|woodfloor|tatami|poiSnowGround)/i.test(k));
  const road=(x,z)=>{
   const key=x+','+z;
   if(!paint.has(key)){
    const id=floors.get(key),t=mesh();
    if(id&&ROAD_IDS.has(id)&&id.endsWith('Full'))roadTile(t,x,z,id,0,MAP_W*MAP_H);
+   else if(usable(id))addFloorTile(t,x,z,id,MAP_W*MAP_H);
    paint.set(key,t);
   }
   return paint.get(key);
@@ -34028,7 +34074,7 @@ function poiDavidRaisedStoneGeometry(e,b){
  };
  const piece=(x,z,span,depth,angle,height,slab,id)=>{
   const ix=Math.floor(x),iz=Math.floor(z),idAt=floors.get(ix+','+iz);
-  if(!idAt||!ROAD_IDS.has(idAt)||!idAt.endsWith('Full'))return;
+  if(!usable(idAt))return;
   const c=Math.cos(angle),s=Math.sin(angle),g=terrainY(ix,iz)+1.4*e.y;
   const poly=shape.map(([u,v])=>[x+c*u*span-s*v*depth,z+s*u*span+c*v*depth]);
   const witnesses=[[x,z]];
@@ -34037,11 +34083,11 @@ function poiDavidRaisedStoneGeometry(e,b){
   }
   if(!witnesses.every(([wx,wz])=>{
    const xx=Math.floor(wx),zz=Math.floor(wz),k=floors.get(xx+','+zz);
-   return k&&ROAD_IDS.has(k)&&k.endsWith('Full')&&Math.abs(terrainY(xx,zz)+1.4*e.y-g)<.065&&near(wx,wz);
+   return usable(k)&&Math.abs(terrainY(xx,zz)+1.4*e.y-g)<.065&&near(wx,wz);
   }))return;
   const xs=poly.map(p=>p[0]),zs=poly.map(p=>p[1]);
   const raise=(px,pz)=>g+height+(.35*(px-x)*c+.63*(pz-z)*s)*height/Math.max(.25,span);
-  const col=road(ix,iz).c.slice(18,21).map(v=>v*.73);
+  const colors=road(ix,iz).c,col=colors.slice(colors.length>=21?18:0,colors.length>=21?21:3).map(v=>v*.73);
   // A continuous raw rock skin beneath the lifted paving paint. No cap,
   // narrow stalk or detached floating paver; part of the wall stays buried.
   for(let f=0;f<poly.length;f++){
@@ -34122,7 +34168,7 @@ function poiDrawDavidRaisedStone(now,vp,bank=null){
 function poiDrawDavidCue(now,vp,ally=false){
  const s=ally?poiCompanionActor:poiDavidActive?.s,q=s?.david?.attack,o=poiDavidActive?.o,b=ally?q?.allyArena:poiDavidMatch(o);
  const finishing=!!s?.david?.deathFinish,active=q&&b&&(ally?s.id==='orvasSoul'&&poiCompanionSame(s,poiCompanionPlace()):s.hp>0)&&
-  (poiEnemyThreatEnabled()||finishing)&&poiWalkLevel===q.y&&poiDavidIn(b,poiAimOrigin(now));
+  (poiEnemyThreatEnabled()||finishing)&&poiWalkLevel===q.y&&(poiDavidIn(b,poiAimOrigin(now))||ally&&poiOrvasAllyBossLatch(s,now));
  let poiDavidCue=ally?poiOrvasAllyEffects.cue:poiDavidHostileCue;
  try{
  if(poiDavidCue&&(!active||poiDavidCue.q!==q||poiDavidCue.door!==poiWalkDoorOpen||poiDavidCue.map!==world)){
