@@ -16,7 +16,7 @@ put(api,api+`
   draw:phase=>{
    const found=[...poiMonsterStates].find(([o])=>o.type==='monsterStoneDavid');
    if(!found||!poiCompanionActor)return null;
-   const now=performance.now(),d=poiMonsterPose(...found,now),a=poiCompanionPose(poiCompanionActor,now);
+   const now=performance.now(),d=poiMonsterPose(...found,now),a=poiCompanionWorldPose(poiCompanionActor,now);
    if(!d.david||!a.orvas)return null;
    // Sample real visible meshes at controlled poses without changing AI,
    // clock, world, save, or actual pose positions and headings.
