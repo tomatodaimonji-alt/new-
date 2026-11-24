@@ -1,9 +1,10 @@
 const {test}=require('node:test'),a=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),crypto=require('node:crypto');
 const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
+const leapRadius=Number(h.match(/POI_DAVID_LEAP_RADIUS=([0-9.]+)/)?.[1]);
 const cut=(x,y)=>{const i=h.indexOf(x),j=h.indexOf(y,i+x.length);a(i>=0&&j>i,x);return h.slice(i,j)};
 function setup(){
  const b={y:0},s={david:{gaitDistance:0},x:1,z:0,fromX:0,fromZ:0,moveStarted:0,guardMoveMs:240},heard=[];
- const c={facilitySite:{id:'base',davidTemple:{boss:b}},poiWalkActive:true,document:{hidden:false,querySelector:()=>null},
+ const c={POI_DAVID_LEAP_RADIUS:leapRadius,facilitySite:{id:'base',davidTemple:{boss:b}},poiWalkActive:true,document:{hidden:false,querySelector:()=>null},
   poiAudioEnabled:true,poiAudioAllowed:()=>true,poiAudioLevels:{master:1,se:1},poiWalkLevel:0,poiEnemyCueReduced:{matches:false},
   poiEnemyThreatEnabled:()=>c.active,active:true,poiDavidHidden:()=>c.document.hidden,
   poiDavidIn:()=>true,poiDavidLine:()=>c.clear,clear:true,poiAimOrigin:()=>c.listener,listener:{x:3,z:0,y:0},

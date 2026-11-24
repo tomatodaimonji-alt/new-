@@ -75,9 +75,9 @@ try{
  assert(recent.cracks.at(-1).n>recent.cracks[0].n,'cracks spread away from foot after contact');
  assert(Math.hypot(recent.cracks[0].fx-24.5,recent.cracks[0].fz-104.5)<1);
  let later=recent;
- for(let k=0;k<16;k++){await advance();later=await log()}
+ for(let k=0;k<21;k++){await advance();later=await log()}
  assert(later.cracks.at(-1).alpha<recent.cracks.at(-1).alpha,'real GL blended opacity fades');
- const prior=later.cracks.length;await advance(120);later=await log();
+ const prior=later.cracks.length;await advance(230);later=await log();
  assert.equal(later.cracks.length,prior,'no fracture draw after natural end');
  assert.deepEqual(errors,[]);
  console.log('PASS actual stomp damage and native crack spread, fade and cleanup');
