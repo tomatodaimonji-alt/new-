@@ -50,7 +50,12 @@ jobs:
           s=s[:a]+area+s[b:]
           a=s.index('function poiDavidLeapBegin(');b=s.index('function poiDavidLeapAbort(',a)
           area=s[a:b].replace(' const d=s.david;',' const d=s.david,src=typeof poiDavidGroundPoint===\'function\'?poiDavidGroundPoint(s,now):s;\n if(src.t<1)return false;').replace('{x:s.x,z:s.z}','src').replace('p.x-s.x','p.x-src.x').replace('p.z-s.z','p.z-src.z').replace('x0:s.x,z0:s.z','x0:src.x,z0:src.z')
+          area=area.replace(' const dx=(p.x-src.x)/distance,dz=(p.z-src.z)/distance;', ''' const dx=(p.x-src.x)/distance,dz=(p.z-src.z)/distance;
+           const entry=s.actorFree&&Math.hypot(src.x-s.x,src.z-s.z)>1e-5?{x:s.x,z:s.z}:null;
+           if(entry&&typeof poiDavidFreePlan==='function'&&!poiDavidFreePlan(o,s,b,src,entry.x,entry.z))return false;''')
+          area=area.replace('x0:src.x,z0:src.z,launch,land,route}', 'x0:src.x,z0:src.z,launch,land,route,...(entry?{entry}:null)}')
           s=s[:a]+area+s[b:]
+          sub(' for(const r of l.route){', ' for(const r of l.entry?[l.entry,...l.route]:l.route){')
           sub(' s.x=s.fromX=l.x;s.z=s.fromZ=l.z;s.moveStarted=now-380;s.guardMoveMs=0;',
            ''' if(s.actorFree){
             s.actorFree=null;poiMonsterActorActive.delete(o);
@@ -316,6 +321,8 @@ jobs:
            const launch=await read(),l=launch.attack.leap;
            assert(Math.hypot(l.x0-strike.x,l.z0-strike.z)<.002,'takeoff shares actual fractional ground endpoint');
            assert(Number.isInteger(l.x)&&Number.isInteger(l.z));
+           assert.deepEqual(l.entry,{x:Math.floor(l.x0+.5),z:Math.floor(l.z0+.5)},'proved grounded return waypoint reconnects fractional launch to original cardinal route');
+           assert.equal(Math.abs(l.entry.x-l.route[0].x)+Math.abs(l.entry.z-l.route[0].z),1);
            assert(Math.hypot(launch.rendered[0]-l.x0,launch.rendered[1]-l.z0)>.2,'actual rendered leap advances through the air');
            await p.waitForFunction(({x,z})=>{const d=window.__freeDavidQA.state();return d.x===x&&d.z===z&&!d.leg;},l,{timeout:4000});
            const landed=await read();assert.equal(landed.occupied[0],l.x);assert.equal(landed.occupied[1],l.z);
@@ -490,31 +497,34 @@ jobs:
            const {p,ctx,errors}=await start(browser,true);
            try{
             let s;
+            await p.clock.pauseAt(await p.evaluate(()=>Date.now()+140));
+            await p.evaluate(()=>{window.__davidManualReturn=true});
+            const frame=async()=>{await p.clock.fastForward(60);await p.evaluate(()=>window.__editorTest.davidQA.render());};
+            const until=async(fn,limit=65)=>{for(let i=0;i<limit;i++){const q=await qa(p);if(fn(q))return q;await frame()}throw Error('no expected production state during bounded manual frames')};
+            const actualKey=async(z,key)=>{
+             await until(q=>q.now>=q.step,15);
+             await p.keyboard.press(key);for(let i=0;i<4;i++)await frame();
+             assert.deepEqual((await qa(p)).pos,[24,z,0],'trusted keyboard reaches prior canonical tile');
+            };
             checkpoint='real old v270 save outside doorway';
             const far=await qa(p);assert.deepEqual(far.pos,[24,91,0]);
             assert.equal(far.status,'ready');
-            await wait(p,t=>window.__editorTest.davidQA.state().now>=t+1150,far.now);
+            await until(q=>q.now>=far.now+1150);
             const rested=await qa(p);assert(!rested.statue?.d?.awake);assert(!rested.statue?.d?.attack);
             assert.deepEqual(rested.cue,{lane:0,beam:0,builds:0,byStart:{}},'dormant room uploads no attack mesh');
             if(far.statue&&rested.statue)assert.deepEqual([rested.statue.x,rested.statue.z,rested.statue.hp,rested.statue.pose],[far.statue.x,far.statue.z,far.statue.hp,far.statue.pose],'distant boss/pose does not move or advance combat');
             checkpoint='physical crossing and awakening without any warp/cover';
             for(const z of [92,93,94,95,96,97,98]){
-             await step(p,'ArrowDown',24,z);s=await qa(p);
+             await actualKey(z,'ArrowDown');s=await qa(p);
              assert.equal(s.travel,far.travel);assert.equal(s.opens,far.opens);assert.equal(s.url,far.url);assert.equal(s.status,'ready');assert.equal(s.scene,'surface');
             }
-            await wait(p,()=>window.__editorTest.davidQA.state().statue?.d?.awake);
+            await until(q=>q.statue?.d?.awake);
             s=await qa(p);assert.equal(s.statue.hp,1050,'tuned David is deliberately beyond ordinary early-game weapons');
             if(screenshots)await p.screenshot({path:screenshots+'/david-temple-wake.png'});
             checkpoint='approach produces real boss displacement before physical retreat';
-            await wait(p,()=>{const s=window.__editorTest.davidQA.state().statue;return s?.d?.awake&&(s.x!==24||s.z!==104)});
+            await until(q=>q.statue?.d?.awake&&(q.statue.x!==24||q.statue.z!==104));
             checkpoint='physical retreat cancels any chase or threat into exterior';
-            await p.clock.pauseAt(await p.evaluate(()=>Date.now()+220));
-            await p.evaluate(()=>{window.__davidManualReturn=true});
-            const frame=async()=>{await p.clock.fastForward(60);await p.evaluate(()=>window.__editorTest.davidQA.render());};
-            for(const z of [97,96,95,94,93,92,91]){
-             await p.keyboard.press('ArrowUp');for(let i=0;i<4;i++)await frame();
-             assert.deepEqual((await qa(p)).pos,[24,z,0],'physical input reaches prior canonical tile');
-            }
+            for(const z of [97,96,95,94,93,92,91])await actualKey(z,'ArrowUp');
             const back=await qa(p);
             assert(!back.statue?.d?.attack);
             assert(!back.statue?.d?.awake||back.statue.d.returning,'crossing exterior cancels any future strike immediately');
@@ -581,7 +591,7 @@ jobs:
           }finally{await browser?.close();await new Promise(r=>server.close(r))}
           EXACT_SOURCE
           python .david/build.py world-editor.html .david/world-editor.html
-          test "$(git hash-object .david/world-editor.html)" = c35b10b01b363549918d2ae10d77aeb1cc8f494a
+          test "$(git hash-object .david/world-editor.html)" = 6d418d6ed4365d46465ea6f4b051c1a51f603365
           node --test .david/tests/david-free.test.cjs
       - if: matrix.suite != 'unit'
         run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
