@@ -1,0 +1,63 @@
+name: Verify persistent miniature floor souls and actual contact
+on:
+  push:
+    branches: [dot/workshop-floor-soul-v303-qa]
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      FACILITY_SCREENSHOTS: screenshots
+    strategy:
+      fail-fast: false
+      matrix:
+        script: [soul-floor-browser, soul-floor-snow-browser, snow-active-soul-browser, orvas-soul-award-browser]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save playwright@1.56.1
+      - run: npx playwright install chromium
+      - run: node tests/${{ matrix.script }}.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ matrix.script }}
+          path: screenshots
+          if-no-files-found: ignore
+  strict:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          if node --test tests/{soul-floor,companion-effect,monster-companion,orvas-soul,orvas-ally,soul-command-menu,soul-follow-priority,soul-summon-effect}.test.cjs > "$RUNNER_TEMP/unit.out" 2>&1; then
+            tail -8 "$RUNNER_TEMP/unit.out"
+          else
+            grep -E '^not ok |^  location:|^  error:|^# (tests|pass|fail|duration)' "$RUNNER_TEMP/unit.out" | cut -c1-350 | tail -200
+            exit 1
+          fi
+  differential:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          git fetch --depth=1 origin 09b27fad26c71974a657e718b154d67fd82270ba
+          git worktree add --detach "${RUNNER_TEMP}/baseline" FETCH_HEAD
+          (cd "${RUNNER_TEMP}/baseline" && node --test tests/*.cjs) > "${RUNNER_TEMP}/baseline.out" 2>&1 || true
+          node --test tests/*.cjs > "${RUNNER_TEMP}/candidate.out" 2>&1 || true
+          for lane in baseline candidate; do
+            echo "$lane:"
+            grep -E '^# (tests|pass|fail)' "${RUNNER_TEMP}/$lane.out"
+            sed -En 's/^not ok [0-9]+ - //p' "${RUNNER_TEMP}/$lane.out" | sort > "${RUNNER_TEMP}/$lane.names"
+          done
+          comm -13 "${RUNNER_TEMP}/baseline.names" "${RUNNER_TEMP}/candidate.names" | tee "${RUNNER_TEMP}/new-fails"
+          test ! -s "${RUNNER_TEMP}/new-fails"
