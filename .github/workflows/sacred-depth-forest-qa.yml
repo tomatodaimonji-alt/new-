@@ -1,0 +1,29 @@
+name: Isolated sacred forest depth and sightline QA
+on:
+  push:
+    branches: ['dot/workshop-sacred-depth-forest-qa']
+permissions:
+  contents: read
+jobs:
+  sightline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: |
+          test "$(git hash-object world-editor.html)" = aa855e8ed66395458f8f431d03c24d53168a304e
+          python .sacred-depth/forest/build.py world-editor.html .sacred-depth/forest.html
+          python .sacred-depth/temple/build.py .sacred-depth/forest.html .sacred-depth/world-editor.html
+          test "$(git hash-object .sacred-depth/world-editor.html)" = 53d2d71e2dd1835c5f0cc5594dfe54bf5e15b66c
+          HTML=.sacred-depth/world-editor.html node --test .sacred-depth/forest/tests/*.cjs .sacred-depth/temple/tests/*.cjs
+      - run: npm install --no-save playwright@1.58.2 && npx playwright install chromium
+      - run: FACILITY_SCREENSHOTS=.sacred-depth/output node .sacred-depth/forest/tests/sacred-depth-browser.mjs .sacred-depth/world-editor.html
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sacred-depth-exact-sightlines
+          path: .sacred-depth/output
+          include-hidden-files: true
+          if-no-files-found: ignore
