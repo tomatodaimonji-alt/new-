@@ -22903,7 +22903,10 @@ function poiDavidLeapTick(o,s,b,p,q,now){
   length,poiAimWall({y:b.y}))+1e-6>=length;
  if(length<=POI_DAVID_LEAP_RADIUS+1e-6&&line){
   q.landed=1;
-  if(poiMobHitPlayer(o,now,POI_DAVID_LEAP_DAMAGE)){poiDavidCease(o,s,b,now);return true}
+  if(poiMobHitPlayer(o,now,POI_DAVID_LEAP_DAMAGE)){
+   if(typeof poiDavidPinFatalFracture==='function')poiDavidPinFatalFracture(now);
+   poiDavidCease(o,s,b,now);return true;
+  }
  }
  return false;
 }
@@ -31854,7 +31857,11 @@ const POI_DAVID_HEAVY_PROFILE=Object.freeze({
  foot:[.024,205,.39],sweep:[.036,220,0],double:[.044,235,0],beam:[.028,220,0]
 });
 let poiDavidHeavyBump=null;
-function poiDavidClearHeavyFeedback(){poiDavidHeavyBump=null;poiDavidImpact=null;if(typeof poiDrawDavidFissure==='function')poiDavidFissure=null}
+function poiDavidClearHeavyFeedback(){
+ poiDavidHeavyBump=null;poiDavidImpact=null;
+ if(typeof poiDrawDavidFissure==='function'&&
+    (typeof poiDavidKeepFatalFracture!=='function'||!poiDavidKeepFatalFracture(poiDavidFissure)))poiDavidFissure=null;
+}
 function poiDavidFootFeedback(o,s,b,now){
  const d=s.david,gait=d?.gaitDistance;
  if(!d||gait===undefined||typeof POI_DAVID_GAIT_STRIDE==='undefined')return;
@@ -31896,12 +31903,20 @@ function poiDavidImpactStomp(q,now){
  if(typeof poiDrawDavidFissure==='function')poiDavidFissure=poiDavidImpact;
  return true;
 }
-function poiDavidImpactVisible(e,now,limit=e?.dustMs??POI_DAVID_DUST_MS){
+function poiDavidPinFatalFracture(now){
+ const e=poiDavidFissure,d=typeof poiPlayerDeath==='undefined'?null:poiPlayerDeath;
+ if(e?.leap&&e.start===now&&d?.start===now&&!d.relocated)e.fatalDeath=d;
+}
+function poiDavidKeepFatalFracture(e){
+ const d=e?.fatalDeath;
+ return !!d&&typeof poiPlayerDeath!=='undefined'&&d===poiPlayerDeath&&!d.relocated&&(d.phase==='pause'||d.phase==='out');
+}
+function poiDavidImpactVisible(e,now,limit=e?.dustMs??POI_DAVID_DUST_MS,keepDeathGround=false){
  if(!e||now<e.start||now-e.start>=limit||!poiWalkActive||facilitySite!==e.owner||
     poiWalkLevel!==e.y||document.hidden||
     (typeof pineAIActive!=='undefined'&&pineAIActive)||(typeof pineCheckMode!=='undefined'&&pineCheckMode)||
     (typeof poiScreenNotePhase!=='undefined'&&poiScreenNotePhase)||
-    (typeof poiPlayerDying==='function'&&poiPlayerDying())||
+    (!keepDeathGround&&typeof poiPlayerDying==='function'&&poiPlayerDying())||
     document.querySelector('dialog[open],.modal.open,:is(#poiLandscapeMenu,#poiBagPanel,#poiNpcMenu,#poiSoundPanel):not([hidden])'))return false;
  // Cached briefly so a wake camera pass and dust pass share the same ray test.
  const p=poiAimOrigin(now),b=facilitySite.davidTemple?.boss;
@@ -31988,7 +32003,12 @@ function poiDavidFissureGeometry(e,b){
   return r<=(e.radius??6)&&poiDavidIn(b,{x,z,y:e.y})&&(r<.0001||
    poiDavidRoomRay(source,b,{x:(x-source.sx)/r,z:(z-source.sz)/r},r,pass,a)+1e-6>=r);
  };
- const ground=(x,z,h)=>[x+.5,terrainY(Math.floor(x+.5),Math.floor(z+.5))+1.4*e.y+h,z+.5];
+ const floors=typeof poiDavidFractureFloors==='function'?poiDavidFractureFloors(e):null;
+ const ground=(x,z,h)=>{
+  const wx=x+.5,wz=z+.5,tx=Math.floor(wx),tz=Math.floor(wz);
+  const road=floors?poiDavidFractureRoadHeight(floors.get(tx+','+tz),tx,tz,wx,wz):0;
+  return [wx,terrainY(tx,tz)+1.4*e.y+h+road,wz];
+ };
  const wave=i=>Math.sin(i*7.928+.87);
  const add=(x,z,nx,nz,w0,w1,depth)=>{
   const length=Math.hypot(nx-x,nz-z);if(length<.01)return;
@@ -32029,13 +32049,14 @@ function poiDavidFissureGeometry(e,b){
 }
 function poiDrawDavidFissure(now,vp){
  const e=poiDavidFissure;if(!e&&!poiDavidFissureMesh)return;
+ const keep=typeof poiDavidKeepFatalFracture==='function'&&poiDavidKeepFatalFracture(e);
  const age=e?now-e.start:Infinity,span=e?.fissureMs??POI_DAVID_FISSURE_MS;
- if(!e||e.owner!==facilitySite||age>=span){
+ if(!e||e.owner!==facilitySite||(e.fatalDeath&&!keep)||(!keep&&age>=span)){
   poiDavidFissure=null;
   if(poiDavidFissureMesh)gl.deleteBuffer(poiDavidFissureMesh.gpu.buf);
   poiDavidFissureMesh=null;return;
  }
- if(!poiDavidImpactVisible(e,now,span))return;
+ if(!poiDavidImpactVisible(e,now,keep?Infinity:span,keep))return;
  if(poiDavidFissureMesh?.e!==e){
   const geom=poiDavidFissureGeometry(e,facilitySite.davidTemple.boss);
   const old=poiDavidFissureMesh?.gpu;
@@ -32048,7 +32069,7 @@ function poiDrawDavidFissure(now,vp){
  const g=poiDavidFissureMesh.gpu,reduced=poiEnemyCueReduced?.matches;
  const grow=reduced?1:Math.max(.06,Math.min(1,age/(e.leap?375:290)));
  const hold=e.leap?530:415;
- const fade=Math.max(0,1-Math.max(0,age-hold)/(span-hold)),alpha=(reduced?.42:.88)*fade;
+ const fade=Math.max(0,1-Math.max(0,(keep?Math.min(age,hold):age)-hold)/(span-hold)),alpha=(reduced?.42:.88)*fade;
  const count=Math.max(12,Math.floor(g.count/12*grow)*12);
  gl.enable(gl.BLEND);gl.blendFunc(gl.CONSTANT_ALPHA,gl.ONE_MINUS_CONSTANT_ALPHA);gl.depthMask(false);
  try{gl.blendColor(0,0,0,alpha);draw(g,vp,0,Math.min(g.count,count))}
@@ -32057,57 +32078,117 @@ function poiDrawDavidFissure(now,vp){
 // END DAVID GROUND FISSURE
 // BEGIN DAVID RAISED STONE
 let poiDavidRaisedStoneMesh=null;
+const poiDavidStoneVp=new Float32Array(16),poiDavidStoneEase=t=>t*t*(3-2*t);
+function poiDavidFractureFloors(e){
+ if(e.fractureFloors)return e.fractureFloors;
+ const floors=e.fractureFloors=new Map(),radius=(e.radius??6)+1;
+ for(const o of world)if(o.y===e.y&&Math.abs(o.x-e.sx)<=radius&&Math.abs(o.z-e.sz)<=radius&&isFloor(o.type))
+  floors.set(o.x+','+o.z,o.type);
+ return floors;
+}
+function poiDavidFractureRoadHeight(kind,x,z,wx,wz){
+ if(!kind||!ROAD_IDS.has(kind)||!kind.endsWith('Full'))return 0;
+ const u=wx-x,v=wz-z;
+ if(u<.036||u>.964||v<.036||v>.964)return 0;
+ return u<.046||u>.954||v<.046||v>.954?.035:(MAP_W*MAP_H<=4096?.15:.13);
+}
 function poiDavidRaisedStoneGeometry(e,b){
  const m=mesh(),pass=poiAimWall({y:e.y}),arena=poiDavidArena(b),q={sx:e.sx,sz:e.sz};
+ const floors=poiDavidFractureFloors(e),paint=new Map(),stats=m.broken={slabs:0,chips:0,width:0,height:0};
  const near=(wx,wz)=>{
   const x=wx-.5,z=wz-.5,dx=x-q.sx,dz=z-q.sz,r=Math.hypot(dx,dz);
   return r<=e.radius&&poiDavidIn(b,{x,z,y:e.y})&&(r<1e-5||
    poiDavidRoomRay(q,b,{x:dx/r,z:dz/r},r,pass,arena)+1e-6>=r);
  };
- const seed=(n)=>.5+.5*Math.sin(n*77.17+2.43);
- const rings=e.leap?[[1.38,8],[2.82,11],[4.40,12]]:[[1.18,6],[2.28,7],[3.50,5]];
- const phase=Math.atan2(e.z-.5-e.sz,e.x-.5-e.sx);
- for(let j=0,id=0;j<rings.length;j++){
-  const [ring,count]=rings[j];
-  for(let i=0;i<count;i++,id++){
-   const angle=phase+i*Math.PI*2/count+.34*j+(seed(id)-.5)*.42;
-   const dx=Math.cos(angle),dz=Math.sin(angle),reach=ring+(seed(id+19)-.5)*.64;
-   const x=e.x+dx*reach,z=e.z+dz*reach;
-   const weight=(.58+.42*seed(id+44))*(1-j*.22);
-   const w=(e.leap?.281:.199)*weight+.055,h=(e.leap?.74:.41)*weight+.05;
-   const tilt=.32*w,rot=angle+seed(id+23)*1.55,foot=[],crown=[];
-   const ground=terrainY(Math.floor(x),Math.floor(z))+1.4*e.y;
-   if(!near(x,z))continue;
-   for(let f=0;f<5;f++){
-    const theta=rot+f*Math.PI*2/5,px=Math.cos(theta),pz=Math.sin(theta);
-    const rr=w*(.86+.26*seed(id+f*7)),tt=.50+.18*seed(id+f*9+11);
-    foot.push([x+px*rr,ground-.065,z+pz*rr]);
-    crown.push([x+px*rr*tt+dx*tilt,ground+h*(.65+.27*seed(id+f*4+47)),z+pz*rr*tt+dz*tilt]);
-   }
-   const tip=[x+dx*tilt,ground+h,z+dz*tilt];
-   const footprint=[...foot,...crown,tip];
-   for(let f=0;f<5;f++){
-    const p=foot[f],n=foot[(f+1)%5];
-    footprint.push([(p[0]+n[0])*.5,ground,(p[2]+n[2])*.5]);
-   }
-   if(!footprint.every(p=>near(p[0],p[2])&&Math.abs(terrainY(Math.floor(p[0]),Math.floor(p[2]))+1.4*e.y-ground)<.065))continue;
-   const tint=.83+.20*seed(id+59),stone=[.48,.423,.355].map(v=>v*tint),top=[.62,.555,.465].map(v=>v*tint);
-   for(let f=0;f<5;f++){
-    const next=(f+1)%5,dark=f%2?.90:1.03;
-    quad(m,foot[f],crown[f],crown[next],foot[next],stone.map(v=>v*dark));
-    tri(m,tip,crown[next],crown[f],top);
+ const seed=n=>.5+.5*Math.sin(n*77.17+2.43),angle0=Math.atan2(e.z-.5-e.sz,e.x-.5-e.sx);
+ const shape=[[-1,-.53],[-.27,-1],[.72,-.80],[1,-.10],[.67,.83],[-.28,1],[-.90,.47]];
+ // Preserve the authored paint seam on the displaced pieces by clipping
+ // the actual road triangles, not painting a substitute cap over the slab.
+ const road=(x,z)=>{
+  const key=x+','+z;
+  if(!paint.has(key)){
+   const id=floors.get(key),t=mesh();
+   if(id&&ROAD_IDS.has(id)&&id.endsWith('Full'))roadTile(t,x,z,id,0,MAP_W*MAP_H);
+   paint.set(key,t);
+  }
+  return paint.get(key);
+ };
+ const clip=(poly,a,b)=>{
+  const d=p=>(b[0]-a[0])*(p[2]-a[1])-(b[1]-a[1])*(p[0]-a[0]),out=[];
+  for(let i=0;i<poly.length;i++){
+   const p=poly[i],q=poly[(i+1)%poly.length],u=d(p),v=d(q);
+   if(u>=-1e-8)out.push(p);
+   if((u< -1e-8)!==(v< -1e-8)){
+    const t=u/(u-v);out.push(p.map((coord,k)=>coord+(q[k]-coord)*t));
    }
   }
+  return out;
+ };
+ const piece=(x,z,span,depth,angle,height,slab,id)=>{
+  const ix=Math.floor(x),iz=Math.floor(z),idAt=floors.get(ix+','+iz);
+  if(!idAt||!ROAD_IDS.has(idAt)||!idAt.endsWith('Full'))return;
+  const c=Math.cos(angle),s=Math.sin(angle),g=terrainY(ix,iz)+1.4*e.y;
+  const poly=shape.map(([u,v])=>[x+c*u*span-s*v*depth,z+s*u*span+c*v*depth]);
+  const witnesses=[[x,z]];
+  for(let i=0;i<poly.length;i++){
+   const p=poly[i],q=poly[(i+1)%poly.length];witnesses.push(p,[(p[0]+q[0])/2,(p[1]+q[1])/2]);
+  }
+  if(!witnesses.every(([wx,wz])=>{
+   const xx=Math.floor(wx),zz=Math.floor(wz),k=floors.get(xx+','+zz);
+   return k&&ROAD_IDS.has(k)&&k.endsWith('Full')&&Math.abs(terrainY(xx,zz)+1.4*e.y-g)<.065&&near(wx,wz);
+  }))return;
+  const xs=poly.map(p=>p[0]),zs=poly.map(p=>p[1]);
+  const raise=(px,pz)=>g+height+(.35*(px-x)*c+.63*(pz-z)*s)*height/Math.max(.25,span);
+  const col=road(ix,iz).c.slice(18,21).map(v=>v*.73);
+  // A continuous raw rock skin beneath the lifted paving paint. No cap,
+  // narrow stalk or detached floating paver; part of the wall stays buried.
+  for(let f=0;f<poly.length;f++){
+   const a=poly[f],b=poly[(f+1)%poly.length],lo=g-.13-.04*seed(id+f);
+   const at=[a[0],raise(...a)+.12,a[1]],bt=[b[0],raise(...b)+.12,b[1]];
+   const av=[a[0],lo,a[1]],bv=[b[0],lo,b[1]],tone=col.map(v=>v*(f%2?.69:.96));
+   const seam=[(a[0]+b[0])*.5,(at[1]+bt[1]+2*lo)*.25,(a[1]+b[1])*.5];
+   tri(m,av,at,seam,tone);tri(m,at,bt,seam,tone.map(v=>v*1.09));
+   tri(m,bt,bv,seam,tone);tri(m,bv,av,seam,tone.map(v=>v*.81));
+  }
+  for(let tz=Math.floor(Math.min(...zs));tz<=Math.floor(Math.max(...zs));tz++)for(let tx=Math.floor(Math.min(...xs));tx<=Math.floor(Math.max(...xs));tx++){
+   const p=road(tx,tz);
+   for(let i=0;i<p.p.length;i+=9){
+    // Terrain-only grass underlay is retained under the real paint, making
+    // any tile-edge gap match exactly, rather than inventing a painted seam.
+    let raw=[p.p.slice(i,i+3),p.p.slice(i+3,i+6),p.p.slice(i+6,i+9)];
+    for(let j=0;j<poly.length&&raw.length>=3;j++)raw=clip(raw,poly[j],poly[(j+1)%poly.length]);
+    if(raw.length<3)continue;
+    const face=raw.map(([px,py,pz])=>[px,py+raise(px,pz),pz]),color=p.c.slice(i,i+3);
+    for(let j=1;j<face.length-1;j++)tri(m,face[0],face[j],face[j+1],color);
+   }
+  }
+  if(slab){stats.slabs++;stats.width=Math.max(stats.width,span*2);stats.height=Math.max(stats.height,height)}
+  else stats.chips++;
+ };
+ // Large fragments hug the central break. Uneven scattered chips on
+ // either side interrupt the radial lines without a ring of equal shapes.
+ const slabCount=e.leap?7:4,chipCount=e.leap?28:17;
+ for(let i=0;i<slabCount;i++){
+  const a=angle0+i*2*Math.PI/slabCount+(seed(i+37)-.5)*.38;
+  const r=(e.leap?1.76:1.48)+(seed(i+87)-.3)*1.64,span=(e.leap?.54:.42)+seed(i+5)*(e.leap?.58:.34);
+  piece(e.x+Math.cos(a)*r,e.z+Math.sin(a)*r,span,span*(.49+.34*seed(i+8)),
+   a+.8+(seed(i+9)-.5)*1.18,(e.leap?.27:.20)+seed(i+13)*(e.leap?.38:.24),true,i);
+ }
+ for(let i=0;i<chipCount;i++){
+  const a=angle0+i*2.399963+(seed(i+39)-.5)*.52,r=1.2+seed(i+177)*(e.leap?4.6:3.65);
+  const span=.071+seed(i+51)*(i%4===0?.30:.138);
+  const x=e.x+Math.cos(a)*r,z=e.z+Math.sin(a)*r;
+  piece(x,z,span,span*(.49+.48*seed(i+53)),a+seed(i+31)*2,.035+span*.48,false,i+100);
  }
  return m;
 }
 function poiDrawDavidRaisedStone(now,vp){
- const e=poiDavidFissure,age=e?now-e.start:Infinity,span=e?(e.fissureMs??POI_DAVID_FISSURE_MS):0;
- if(!e||e.owner!==facilitySite||age>=span){
+ const e=poiDavidFissure,keep=typeof poiDavidKeepFatalFracture==='function'&&poiDavidKeepFatalFracture(e),age=e?now-e.start:Infinity,span=e?(e.fissureMs??POI_DAVID_FISSURE_MS):0;
+ if(!e||e.owner!==facilitySite||(e.fatalDeath&&!keep)||(!keep&&age>=span)){
   if(poiDavidRaisedStoneMesh?.gpu)gl.deleteBuffer(poiDavidRaisedStoneMesh.gpu.buf);
   poiDavidRaisedStoneMesh=null;return;
  }
- if(age<0||!poiDavidImpactVisible(e,now,span))return;
+ if(age<0||!poiDavidImpactVisible(e,now,keep?Infinity:span,keep))return;
  if(poiDavidRaisedStoneMesh?.e!==e){
   const geometry=poiDavidRaisedStoneGeometry(e,e.owner.davidTemple.boss),prior=poiDavidRaisedStoneMesh?.gpu;
   if(!geometry.p.length){
@@ -32117,12 +32198,11 @@ function poiDrawDavidRaisedStone(now,vp){
   poiDavidRaisedStoneMesh={e,gpu:upload(geometry,prior?.buf??null,gl.STATIC_DRAW)};
  }
  if(!poiDavidRaisedStoneMesh.gpu)return;
- const bury=e.leap?.82:.49,rise=e.leap?290:232,hold=e.leap?620:480;
- const smooth=t=>t*t*(3-2*t);
- const offset=-bury*(1-smooth(Math.min(1,age/rise))+smooth(Math.max(0,(age-hold)/(span-hold))));
+ const bury=e.leap?.91:.63,rise=e.leap?290:232,hold=e.leap?620:480;
+ const offset=-bury*(1-poiDavidStoneEase(Math.min(1,age/rise))+poiDavidStoneEase(Math.max(0,((keep?Math.min(age,hold):age)-hold)/(span-hold))));
  // Translate just this mesh vertically in world space. Terrain depth clips
  // the buried rock; the physical map, camera and attack never move.
- const lifted=new Float32Array(vp);
+ const lifted=poiDavidStoneVp;lifted.set(vp);
  for(let i=0;i<4;i++)lifted[12+i]+=offset*vp[4+i];
  draw(poiDavidRaisedStoneMesh.gpu,lifted);
 }

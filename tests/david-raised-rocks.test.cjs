@@ -11,7 +11,13 @@ function engine(){
   upload:(m,buf)=>{calls.push(['upload',m.p.length]);return {buf:buf??{},count:m.p.length/3}},
   draw:(g,v)=>calls.push(['draw',g.count,v[13]]),gl:{STATIC_DRAW:1,deleteBuffer:()=>calls.push(['delete'])},
   vp:Float32Array.from([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1])};
- const m=vm.runInNewContext(h.slice(i,j)+';({geometry:poiDavidRaisedStoneGeometry,draw:poiDrawDavidRaisedStone})',c);
+ Object.assign(c,{MAP_W:128,MAP_H:128,isFloor:()=>true,surfaceNoise:()=>.51,world:[]});
+ for(let x=-8;x<=8;x++)for(let z=-8;z<=8;z++)c.world.push({x,z,y:0,type:'roadAncientFull'});
+ const art=h.slice(h.indexOf('const ROAD_BASES='),h.indexOf('function pineBaseNatureTint('));
+ const raw=c.mesh;c.mesh=()=>({...raw(),c:[]});
+ const tri=c.tri;c.tri=(m,a,b,d,color)=>{tri(m,a,b,d);m.c.push(...color,...color,...color)};
+ c.quad=(m,a,b,d,e,col)=>{c.tri(m,a,b,d,col);c.tri(m,a,d,e,col)};
+ const m=vm.runInNewContext(art+h.slice(i,j)+';({geometry:poiDavidRaisedStoneGeometry,draw:poiDrawDavidRaisedStone})',c);
  const impact=(leap)=>({x:.63,z:.85,sx:0,sz:0,y:0,start:10,owner,leap,radius:leap?7:6,fissureMs:leap?1510:1200});
  return {m,c,calls,impact};
 }
@@ -19,7 +25,7 @@ test('both impacts have real three dimensional stone, with a bigger leap packet;
  const {m,c,impact}=engine();
  const normal=m.geometry(impact(false),{}).p,leap=m.geometry(impact(true),{}).p;
  const maxHeight=p=>Math.max(...p.filter((_,i)=>i%3===1));
- a(normal.length>500);a(leap.length>normal.length*1.45);a(maxHeight(normal)>.25);a(maxHeight(leap)>maxHeight(normal)*1.5);
+ a(normal.length>500);a(leap.length>normal.length*1.45);a(maxHeight(normal)>.25);a(maxHeight(leap)>maxHeight(normal)+.12);
  c.blocked=true;const clipped=m.geometry(impact(true),{}).p;
  a(clipped.length>0&&clipped.length<leap.length);
  for(let i=0;i<clipped.length;i+=3){
