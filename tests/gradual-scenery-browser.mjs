@@ -90,7 +90,14 @@ try{
   assert(!start.inside&&!start.peek&&!start.actualBoss&&start.bossDraws===0&&start.interiorDraws===0);
   assert(start.actors.some(a=>a.legacy&&!a.support),JSON.stringify(start));
   assert(start.actors.filter(a=>!a.support).every(a=>!a.visible&&!start.actualActors.includes(a.id)),JSON.stringify(start));
-  const got=await p.evaluate(()=>window.__editorTest.sceneryQA.pixelProbe());
+  // Floors can be the first resident buffers after the cover clears. Wait at
+  // the same real camera for at least one visible prop before probing its fade.
+  let got;
+  for(let i=0;i<18;i++){
+   got=await p.evaluate(()=>window.__editorTest.sceneryQA.pixelProbe());
+   if(got?.error||got?.clearLost||got?.added>=12)break;
+   await p.waitForTimeout(100);
+  }
   assert(got&&got.total>=12&&got.partial>=4&&got.partial<got.total&&got.added>=got.total&&got.clearLost===0&&got.error===0,JSON.stringify(got));
   assert(start.allocated<=4*1024*1024);
   assert.deepEqual(errors,[]);console.log('Real streamed floor kept opaque, progressively revealed static pixels and no unsupported actors',JSON.stringify({got,warm:start.warm,allocated:start.allocated,removed:start.actors.filter(a=>a.legacy&&!a.support).length}));
