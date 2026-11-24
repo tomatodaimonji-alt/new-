@@ -8,6 +8,11 @@ function put(a,b){assert.equal(html.split(a).length,2,a);html=html.replace(a,b)}
 const api="if(facilityParams.get('test')==='1')window.__editorTest={";
 put(api,api+`
  orvasEdgeQA:{
+  status:()=>({active:poiWalkActive,x:poiWalkX,z:poiWalkZ,level:poiWalkLevel,
+   authored:facilitySite?.davidTemple?.boss?.z,
+   boss:[...poiMonsterStates].some(([o])=>o.type==='monsterStoneDavid'),
+   companion:poiCompanionActor?.id??null,slot:poiInventorySlots(poiHotbarRead())[1]?.type??null,
+   companionState:poiHotbarRead().companionSoul??null,hasKit:poiHotbarHasKit()}),
   draw:phase=>{
    const found=[...poiMonsterStates].find(([o])=>o.type==='monsterStoneDavid');
    if(!found||!poiCompanionActor)return null;
@@ -46,13 +51,20 @@ try{
  p.on('pageerror',e=>errors.push(e.message));
  await p.goto(base+'/seed');
  await p.evaluate(()=>{
-  const slots=Array(27).fill(null);slots[9]={type:'orvasSoul',count:1,durability:1050};
+  const slots=Array(27).fill(null);slots[0]={type:'equipWoodSword',count:1,durability:150};slots[1]={type:'orvasSoul',count:1,durability:1050};
   localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weapon:null,weaponDurabilityVersion:2,potions:0,slots,companionSoul:{version:1,active:'orvasSoul',pending:null}}));
-  localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,position:{x:24,z:152,y:0,facing:0},townLayout:5,
+  localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,position:{x:24,z:160,y:0,facing:0},townLayout:5,
    townMapHeight:182,templeDepth:1,view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:0,orbitPitch:.24,orbitDistance:5.5}}));
  });
  await p.goto(base+'/?resume=1&test=1',{waitUntil:'domcontentloaded',timeout:45000});
  await p.locator('#pineStartupCover').waitFor({state:'hidden',timeout:35000});
+ let status;
+ for(let i=0;i<15;i++){
+  status=await p.evaluate(()=>window.__editorTest.orvasEdgeQA.status());
+  if(status.boss&&status.companion==='orvasSoul')break;
+  await p.waitForTimeout(150);
+ }
+ assert(status?.boss&&status?.companion==='orvasSoul',JSON.stringify({status,errors}));
  const roll=await p.evaluate(()=>{
   const qa=window.__editorTest.orvasEdgeQA;
   return Object.fromEntries(['idle','walk','sweep','wake'].map(phase=>[phase,qa.draw(phase)]));
