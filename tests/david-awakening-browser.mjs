@@ -46,6 +46,14 @@ const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html; c
 await new Promise((r,j)=>server.listen(0,'127.0.0.1',r).once('error',j));
 const url='http://127.0.0.1:'+server.address().port,screenshots=process.env.FACILITY_SCREENSHOTS;
 let browser;
+// Artifacts are optional; a software browser screenshot can stall even
+// after native WebGL submitted the frame. Assertions below read that
+// rendered geometry directly and must never depend on artifact capture.
+async function capture(page,name){
+ if(!screenshots)return;
+ try {await page.screenshot({path:screenshots+'/'+name,timeout:6200});}
+ catch(e){if(e.name!=='TimeoutError')throw e;console.log('Optional screenshot timed out:',name);}
+}
 try{
  if(screenshots)await mkdir(screenshots,{recursive:true});
  browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
@@ -66,7 +74,7 @@ try{
  await p.waitForFunction(()=>{const q=window.__editorTest?.wakeQA.data();return q?.frames.some(f=>f.phase==='dormant')});
  const old=await val();
  assert.deepEqual(old.player,[24,100,0]);assert.equal(old.started,false);
- if(screenshots)await p.screenshot({path:screenshots+'/david-awakening-01-dormant.png'});
+ if(screenshots)await capture(p,'david-awakening-01-dormant.png');
  // Pause only the test clock, not the production actor or motion. Each
  // small time step still calls the original world draw and gameplay loop.
  await p.evaluate(()=>window.__editorTest.wakeQA.manual());
@@ -88,7 +96,7 @@ try{
  for(let i=0;i<64&&!(live.started&&(live.d?.attack||live.frames.some(f=>f.z!==104)));i++){
   live=await advance();
   if(screenshots&&!pullShot&&live.pulls.length===1){
-   pullShot=true;await p.screenshot({path:screenshots+'/david-awakening-02-first-pull.png'});
+   pullShot=true;await capture(p,'david-awakening-02-first-pull.png');
   }
  }
  const q=await val(),frames=q.frames,dormant=frames.find(f=>f.phase==='dormant');
@@ -104,7 +112,7 @@ try{
  assert(frames.some(f=>f.phase==='wake'&&f.tipY.every(y=>y>.15)),'both blades actually clear before combat');
  assert(frames.filter(f=>f.phase==='wake').every(f=>!f.battle&&f.x===24&&f.z===104),'physical boss is still until fully staged');
  assert(q.started);
- if(screenshots)await p.screenshot({path:screenshots+'/david-awakening-03-combat.png'});
+ if(screenshots)await capture(p,'david-awakening-03-combat.png');
  console.log('PASS native distance, genuine planted blade vertices, eye brightening, individual authored pulls, and strict stance-to-real-combat gate',q.pulls);
  await ctx.close();
 }finally{await browser?.close();server.close()}

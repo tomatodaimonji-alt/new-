@@ -159,10 +159,10 @@ await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',resolve).once('e
 const url='http://127.0.0.1:'+server.address().port;
 const install=()=>{
  let frame=0,draws=0,vertices=0;
- const summary=window.__davidFrames={coverShows:0,cue:{lane:0,beam:0,builds:0,byStart:{}},contacts:[],timing:{},canceled:{},audio:[],audioStops:[],fan:0,live:0,rays:[],beamDraws:{},beamClock:null,returnClock:null,bufferIds:new WeakMap(),nextBuffer:1,
+ const summary=window.__davidFrames={coverShows:0,cue:{lane:0,beam:0,builds:0,byStart:{}},contacts:[],timing:{},canceled:{},audio:[],audioStops:[],fan:0,live:0,rays:[],beamDraws:{},beamClock:null,returnClock:null,fatalClock:null,bufferIds:new WeakMap(),nextBuffer:1,
   renderTime(real){
-   const c=this.returnClock||this.beamClock;if(!c)return real;
-   const lead=c.first-c.now,cap=this.returnClock?86:lead>0&&lead<=225?47:120;
+   const c=this.returnClock||this.beamClock||this.fatalClock;if(!c)return real;
+   const lead=c.first-c.now,cap=this.returnClock?86:this.fatalClock&&!this.beamClock?245:lead>0&&lead<=225?47:120;
    c.now=Math.max(c.now,Math.min(real,c.now+cap));return c.now;
   },
   glCounters(){return [draws,vertices]},
@@ -442,9 +442,14 @@ try{
    await routeWalk(fp,[route.shift()]);
    await wait(fp,running,null,9000);
   }
+  // A 1,008ms software WebGL stall correctly aborts an active leap,
+  // leaving this independently seeded player alive. Bound just the shared
+  // encounter render clock to native playable increments. No attack,
+  // damage, route, frames, death or audio source is injected.
+  await fp.evaluate(()=>{window.__davidFrames.fatalClock={now:performance.now()}});
   await routeWalk(fp,route);await routeWalk(fp,TEMPLE_NEAR);
   await wait(fp,()=>{const s=window.__editorTest.davidQA.state().statue;return s?.d?.awake&&(s.x!==24||s.z!==104)});
-  await wait(fp,()=>window.__editorTest.davidQA.state().contacts.some(h=>h.hp===0),null,35000);
+  await wait(fp,()=>window.__editorTest.davidQA.state().contacts.some(h=>h.hp===0),null,60000);
   await wait(fp,()=>{const s=window.__editorTest.davidQA.state().statue;return !s?.d?.awake&&s?.x===24&&s?.z===104},null,12000);
   const summary=await qa(fp),audio=await fp.evaluate(()=>window.__editorTest.davidQA.sound());
   assertNativeReturn(summary,'real fatal contact');
