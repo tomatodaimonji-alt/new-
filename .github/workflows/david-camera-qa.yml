@@ -1,0 +1,225 @@
+name: David camera wall clipping (isolated proof)
+on:
+  push:
+    branches: ['dot/workshop-david-camera-qa']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [camera, original, unit]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 3364a71b9177260b11eeb60b22619cbb6d316fe5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build exact isolated candidate
+        shell: bash
+        run: |
+          set -eu
+          test "$(git hash-object world-editor.html)" = dbba3eae5d88bcc6b557157831bbf36a6ca4a7a7
+          mkdir -p .camera/tests
+          cat >.camera/build.py <<'EXACT_SOURCE'
+          from pathlib import Path
+          import sys
+          base,dest=map(Path,sys.argv[1:3]);s=base.read_text()
+          def sub(a,b):
+           global s
+           assert s.count(a)==1,(a,s.count(a))
+           s=s.replace(a,b,1)
+          a='// END MINE CAMERA WALL CLIP'
+          sub(a,a+'''
+          // BEGIN DAVID CAMERA WALL CLIP
+          const facilityDavidCameraWallCache=new WeakMap();
+          function facilityDavidCameraEligible(active,site,floor,ai,top,point){
+           if(!active?.s?.david?.awake||active.s.hp<=0||site?.id!=='base'||floor!==0||ai||top)return false;
+           const boss=poiDavidMatch(active.o);
+           return !!boss&&poiDavidIn(boss,point);
+          }
+          function facilityDavidCameraWalls(site,objects){
+           if(facilityDavidCameraWallCache.has(objects))return facilityDavidCameraWallCache.get(objects);
+           const d=site.davidTemple,types=new Set(['poiDavidWallRound','poiDavidWallWing','poiDavidGatePier']);
+           const key=o=>[o.x,o.z,o.y,o.type,o.rot||0].join(',');
+           const owned=new Set(d.resumeSolid.filter(o=>o.y===0&&types.has(o.type)).map(key));
+           const candidates=objects.filter(o=>o.y===0&&types.has(o.type)&&owned.has(key(o)));
+           const walls=[];
+           for(const o of candidates){
+            const m=mesh();
+            deco(m,o.type,o.x+.5,terrainY(o.x,o.z),o.z+.5,o.rot||0);
+            if(!m.p.length)continue;
+            const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];
+            for(let i=0;i<m.p.length;i++){
+             const a=i%3,v=m.p[i];
+             min[a]=Math.min(min[a],v);max[a]=Math.max(max[a],v);
+            }
+            walls.push({x:o.x,z:o.z,type:o.type,min,max});
+           }
+           facilityDavidCameraWallCache.set(objects,walls);
+           return walls;
+          }
+          function facilityDavidCameraEye(target,desired){
+           const active=typeof poiDavidActive==='undefined'?null:poiDavidActive;
+           const point={x:target[0]-.5,z:target[2]-.5,y:poiWalkLevel};
+           if(!facilityDavidCameraEligible(active,facilitySite,poiWalkLevel,pineAIActive,cameraTopDown,point))return desired;
+           return facilityMineCameraEye(target,desired,facilityDavidCameraWalls(facilitySite,world));
+          }
+          // END DAVID CAMERA WALL CLIP
+          ''')
+          a='  const eye=mineCamera?facilityMineCameraEye(target,desired,facilityMineCameraWalls(sceneMesh)):facilityWatchtowerCameraEye(target,desired);'
+          sub(a,'''  const templeEye=typeof facilityDavidCameraEye==='function'?facilityDavidCameraEye(target,desired):desired;
+            const eye=templeEye!==desired?templeEye:mineCamera?facilityMineCameraEye(target,desired,facilityMineCameraWalls(sceneMesh)):facilityWatchtowerCameraEye(target,desired);''')
+          sub("function facilityInvalidateScenes(){", "function facilityInvalidateScenes(){\n if(typeof facilityDavidCameraWallCache!=='undefined')facilityDavidCameraWallCache.delete(world);")
+          dest.parent.mkdir(parents=True,exist_ok=True);dest.write_text(s)
+          EXACT_SOURCE
+          cat >.camera/tests/david-camera.test.cjs <<'EXACT_SOURCE'
+          const {test}=require('node:test'),a=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+          const s=fs.readFileSync(process.env.DAVID_CAMERA_HTML||require('node:path').join(__dirname,'../world-editor.html'),'utf8');
+          const get=(x,y)=>{const i=s.indexOf(x),j=s.indexOf(y,i+1);a.ok(j>i&&i>=0);return s.slice(i,j)};
+          const box={x:24,z:121,type:'poiDavidWallRound',y:0,rot:0},site={id:'base',davidTemple:{resumeSolid:[box]}};
+          const make=(ctx={})=>vm.runInNewContext(get('function facilityMineCameraArm(','// END MINE CAMERA WALL CLIP')+
+           get('// BEGIN DAVID CAMERA WALL CLIP','// END DAVID CAMERA WALL CLIP')+
+           ';({eligible:facilityDavidCameraEligible,walls:facilityDavidCameraWalls,clip:facilityMineCameraEye})',ctx);
+          test('only active authored surface arena in normal play is camera-clipped',()=>{
+           const api=make({poiDavidMatch:o=>o==='authored'?{id:1}:null,poiDavidIn:(b,p)=>p.x<30&&p.z>90});
+           const live={o:'authored',s:{hp:1050,david:{awake:true}}},here={x:24,z:118,y:0};
+           a.equal(api.eligible(live,site,0,false,false,here),true);
+           for(const [active,s,floor,ai,top,point] of [[null,site,0,false,false,here],[live,site,-1,false,false,here],[live,site,0,true,false,here],[live,site,0,false,true,here],[live,site,0,false,false,{x:24,z:89}], [{...live,o:'generic'},site,0,false,false,here]])a.equal(api.eligible(active,s,floor,ai,top,point),false);
+          });
+          test('exact stock walls only, cached; camera clears real near wall, stays exactly unchanged through open route',()=>{
+           let generated=0;
+           const api=make({mesh:()=>({p:[]}),terrainY:()=>0,deco:(m,t,x,y,z)=>{generated++;m.p.push(x-.5,y,z-.3,x+.5,y+7.8,z+.3)}});
+           const objects=[box,{...box,x:25},{...box,x:22,type:'treePine'}],walls=api.walls(site,objects);
+           a.equal(walls.length,1);a.equal(api.walls(site,objects),walls);a.equal(generated,1);
+           const target=[24.5,1.1,118.5],behind=[24.5,1.5,123.7],clear=[24.5,1.6,114];
+           const eye=api.clip(target,behind,walls);
+           a.ok(eye[2]>target[2]&&eye[2]<121.2);a.equal(api.clip(target,clear,walls),clear);
+          });
+          EXACT_SOURCE
+          cat >.camera/tests/david-camera-browser.mjs <<'EXACT_SOURCE'
+          import assert from 'node:assert/strict';
+          import {createServer} from 'node:http';
+          import {createRequire} from 'node:module';
+          import {readFileSync} from 'node:fs';
+          import {Script} from 'node:vm';
+          const src=readFileSync(process.argv[2]??'world-editor.html','utf8');let html=src;
+          const inject=(a,b)=>{assert.equal(html.split(a).length,2,a);html=html.replace(a,b)};
+          const hook="if(facilityParams.get('test')==='1')window.__editorTest={";
+          inject(hook,`
+           window.__davidCameraTest={
+            live:()=>({at:[poiWalkX,poiWalkZ,poiWalkLevel],yaw:poiCameraYaw,pitch:poiCameraPitch,awake:!!poiDavidActive?.s?.david?.awake,
+              third:poiThirdPerson,ready:performance.now()>=poiWalkNextReady,distance:poiCameraDistance,gpu:gl.getError()}),
+            setup:(x,z)=>workshopResumeRestorePosition({x,z,y:0,facing:2}),
+            frame:()=>render(),
+            capture:control=>{
+             window.__davidCameraDisable=control;window.__davidCameraCapture=null;
+             render();
+             return window.__davidCameraCapture;
+            },
+            limits:()=>{
+             const b=facilitySite.davidTemple.boss,positions=facilitySite.davidTemple.resumeSolid.filter(o=>o.type==='poiDavidWallRound'&&o.x===24&&o.z>poiWalkZ);
+             const stop=positions[0];if(!stop)return null;
+             return {wall:stop.z,walk:poiWalkCanStep(stop.x,stop.z,stop.x,stop.z-1),
+              beam:poiDavidLine({x:stop.x,z:stop.z-1,y:0},{x:stop.x,z:stop.z+1,y:0},b)};
+            }
+           };`+hook);
+          const arm="  const templeEye=typeof facilityDavidCameraEye==='function'?facilityDavidCameraEye(target,desired):desired;";
+          inject(arm,"  const templeEye=window.__davidCameraDisable?desired:facilityDavidCameraEye(target,desired);\n window.__davidClipWitness={arm:Math.hypot(...templeEye.map((v,i)=>v-target[i])),raw:Math.hypot(...desired.map((v,i)=>v-target[i])),clipped:templeEye!==desired};");
+          const frame=' requestAnimationFrame(render);';
+          inject(frame,' if(!window.__davidCameraManual)requestAnimationFrame(render);');
+          // Read actual GPU color/depth results after the production render, not a mock geometry pass.
+          const tail=" if(typeof poiHitstopMarkDrawn==='function')poiHitstopMarkDrawn(performance.now());";
+          inject(tail,tail+`
+           if(window.__davidCameraManual){
+            const w=gl.drawingBufferWidth,h=gl.drawingBufferHeight,x=Math.floor(w*.16),y=Math.floor(h*.17),cw=Math.floor(w*.68),ch=Math.floor(h*.65),pixels=new Uint8Array(cw*ch*4);
+            gl.readPixels(x,y,cw,ch,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+            const bins=new Set();for(let i=0;i<pixels.length;i+=4)bins.add((pixels[i]>>5)+8*(pixels[i+1]>>5)+64*(pixels[i+2]>>5));
+            window.__davidCameraCapture={...window.__davidClipWitness,bins:bins.size,pixels:Array.from(pixels)};
+           }
+          `);
+          for(const [,body] of html.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(body);
+          if(process.env.DAVID_CAMERA_PARSE_ONLY){console.log('exact instrumented camera candidate parses');process.exit(0)}
+          const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
+          const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(req.url==='/seed'?'<title>Local seed</title>':html)});
+          await new Promise(r=>server.listen(0,'127.0.0.1',r));
+          const origin='http://127.0.0.1:'+server.address().port;
+          let browser,phase='boot';
+          try{
+           browser=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
+           const ctx=await browser.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.67});
+           const p=await ctx.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));p.setDefaultTimeout(15000);
+           await p.clock.install({time:new Date('2026-04-01T10:00:00Z')});
+           await p.goto(origin+'/seed');await p.evaluate(()=>{
+            localStorage.setItem('world-workshop-town-clock-v1','{"version":1,"gameMs":360000}');
+            localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,position:{x:24,z:91,y:0,facing:2},
+             townLayout:5,townMapHeight:128,view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:0,orbitPitch:.14,orbitDistance:5.5}}));
+           });
+           await p.goto(origin+'/?resume=1&test=1',{waitUntil:'domcontentloaded'});
+           await p.locator('#pineStartupCover').waitFor({state:'hidden'});
+           await p.waitForFunction(()=>window.__davidCameraTest?.live().third);
+           await p.clock.pauseAt(await p.evaluate(()=>Date.now()+1200));
+           await p.evaluate(()=>{window.__davidCameraManual=true});
+           const get=()=>p.evaluate(()=>window.__davidCameraTest.live());
+           const cap=disable=>p.evaluate(disable=>window.__davidCameraTest.capture(disable),disable);
+           const walk=async(z)=>{
+            await p.keyboard.press('ArrowUp');
+            await p.clock.fastForward(230);await p.evaluate(()=>window.__davidCameraTest.frame());
+            assert.deepEqual((await get()).at,[24,z,0]);
+           };
+           phase='old outdoor save and real centered aperture';
+           const far=await cap(false);assert(!far.clipped,'normal exterior camera remains unchanged');
+           for(const z of [92,93,94,95,96,97,98])await walk(z);
+           assert((await get()).awake,'real center gate crossing awakens existing boss');
+           phase='actual near-side movement then original camera-facing input';
+           assert(await p.evaluate(()=>window.__davidCameraTest.setup(24,116)));
+           await walk(117);await walk(118);
+           const inwardArm=await cap(false);
+           assert(!inwardArm.clipped,'view from the inner side of the ring keeps original distance');
+           const cdp=await ctx.newCDPSession(p);
+           const from={x:640,y:132,id:7},dest={...from,x:247};
+           await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[from]});
+           await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[dest]});
+           await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+           const real=await get();
+           assert(Math.abs(real.yaw-Math.PI)<.08&&real.awake&&real.third,'real right-side camera drag points behind the wall');
+           phase='same-frame blocked and corrected GPU color plus unchanged solid wall';
+           const limitsBefore=await p.evaluate(()=>window.__davidCameraTest.limits());
+           const blocked=await cap(true),safe=await cap(false);
+           const limitsAfter=await p.evaluate(()=>window.__davidCameraTest.limits());
+           assert.deepEqual(limitsAfter,limitsBefore);
+           assert(limitsAfter&&!limitsAfter.walk&&!limitsAfter.beam,'physical stone and beam blocking still on');
+           assert(blocked&&!blocked.clipped&&safe?.clipped&&safe.arm<blocked.arm-.5);
+           assert(safe.pixels.length===blocked.pixels.length&&safe.pixels.length>10000);
+           let different=0;
+           for(let i=0;i<safe.pixels.length;i+=4)
+            if(Math.abs(safe.pixels[i]-blocked.pixels[i])+Math.abs(safe.pixels[i+1]-blocked.pixels[i+1])+Math.abs(safe.pixels[i+2]-blocked.pixels[i+2])>36)different++;
+           const ratio=different/(safe.pixels.length/4);
+           assert(ratio>.30&&safe.bins>blocked.bins,'large actual scene region recovers more than the legacy small dither hole');
+           assert.deepEqual(errors,[]);assert.equal((await get()).gpu,0);
+           console.log('Real temple wall camera framebuffer',JSON.stringify({blocked:{arm:blocked.arm,bins:blocked.bins},safe:{arm:safe.arm,bins:safe.bins},ratio,limitsAfter}));
+          } catch(e){console.error('David camera native:',phase);throw e}
+          finally{await browser?.close();await new Promise(r=>server.close(r))}
+          EXACT_SOURCE
+          python .camera/build.py world-editor.html .camera/world-editor.html
+          test "$(git hash-object .camera/world-editor.html)" = d9d9134807eca758d8fee1d2a3a15d879b6f4c06
+          node --test .camera/tests/david-camera.test.cjs
+      - if: matrix.suite != 'unit'
+        run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
+      - if: matrix.suite == 'camera'
+        run: node .camera/tests/david-camera-browser.mjs .camera/world-editor.html
+      - if: matrix.suite == 'original'
+        run: |
+          node tests/david-arena-chase-browser.mjs .camera/world-editor.html
+          node tests/david-temple-browser.mjs .camera/world-editor.html
+      - if: matrix.suite == 'unit'
+        run: |
+          cp .camera/world-editor.html world-editor.html
+          code=0
+          node --test --test-reporter=tap tests/*.cjs >.camera/unit.log 2>&1 || code=$?
+          grep -E '^(not ok|# tests|# pass|# fail)' .camera/unit.log | cut -c1-260 || true
+          exit "$code"
