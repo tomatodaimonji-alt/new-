@@ -1,0 +1,273 @@
+name: David discovery and leap-radius isolated
+on:
+  push:
+    branches: ['dot/workshop-david-discovery-qa']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [discovery, radius-only]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 78cccb916a32944cbfe518a2c47bd59b8038f2d9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build exact independent candidates
+        run: |
+          set -eu
+          test "$(git hash-object world-editor.html)" = 2122c81f7221afb9c92942083218d44f0abbe60c
+          mkdir -p .qa/tests .qa/radius/tests
+          cat >.qa/build.py <<'SOURCE'
+          from pathlib import Path
+          import sys
+          src,dst=map(Path,sys.argv[1:3]);s=src.read_text()
+          def sub(a,b):
+           global s
+           assert s.count(a)==1,(a,s.count(a))
+           s=s.replace(a,b,1)
+          if '--radius-only' not in sys.argv[3:]:sub('POI_DAVID_WAKE_RANGE=7,','POI_DAVID_WAKE_RANGE=2,')
+          sub('POI_DAVID_LEAP_RADIUS=8,','POI_DAVID_LEAP_RADIUS=7,')
+          # Gameplay, companion and existing preview use the same configured radius.
+          # Match previous player numerical tolerance at the exact edge on both kinds of victim.
+          sub('||len>POI_DAVID_LEAP_RADIUS||','||len>POI_DAVID_LEAP_RADIUS+1e-6||')
+          dst.parent.mkdir(parents=True,exist_ok=True)
+          dst.write_text(s)
+          SOURCE
+          cat >.qa/tests/david-discovery.test.cjs <<'SOURCE'
+          const {test}=require('node:test'),a=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+          const html=fs.readFileSync(require('node:path').join(__dirname,'../world-editor.html'),'utf8');
+          const take=(start,end)=>{const i=html.indexOf(start),j=html.indexOf(end,i+1);a.ok(i>=0&&j>i,start);return html.slice(i,j)};
+          const evalAPI=ctx=>vm.runInNewContext(take('const POI_DAVID_AWAKENING=','const POI_DAVID_PATTERNS=') .split('\n').slice(0,2).join('\n')+'\n'+
+           take('const POI_DAVID_LEAP_LOAD=','const poiDavidLeapClamp=')+
+           take('function poiDavidMobFrame(','function poiDavidBegin(')+
+           take('function poiDavidLeapTick(','function poiDavidLeapPose(')+
+           take('function poiDavidCuePairs(','function poiDavidCueGeometry(')+
+           ';({wake:poiDavidMobFrame,land:poiDavidLeapTick,cue:poiDavidCuePairs,wakeMs:POI_DAVID_WAKE_MS,radius:POI_DAVID_LEAP_RADIUS})',ctx);
+          test('true authored two-tile distance, arena and sight gate; awakening duration unchanged',()=>{
+           const b={x:24,z:104,y:0},o={type:'monsterStoneDavid'},s=()=>({x:b.x,z:b.z,hp:1050});
+           const c={poiDavidActive:null,poiMonsterMeshDirty:false,poiDavidMatch:()=>b,poiDavidIn:(b,p)=>p.y===0,
+            poiDavidLine:()=>c.clear!==false,poiDavidHidden:()=>false,poiEnemyThreatEnabled:()=>true,poiAimOrigin:()=>c.p};
+           const api=evalAPI(c);
+           c.p={x:25.5,z:105.5,y:0};a.equal(api.wake(o,s(),100),false);
+           c.p={x:24,z:106.0001,y:0};a.equal(api.wake(o,s(),100),false);
+           c.p={x:24,z:106,y:1};a.equal(api.wake(o,s(),100),false);
+           c.p={x:24,z:106,y:0};c.clear=false;a.equal(api.wake(o,s(),100),false);
+           c.clear=true;const state=s();a.equal(api.wake(o,state,100),true);
+           a.equal(api.wakeMs,2440);a.equal(state.david.next,2540);a.equal(state.david.wakeDone,false);
+          });
+          test('actual leap contact and warning use 7-tile disk; ordinary stomp warning is still 6, and walls block',()=>{
+           let damaged=0,line=true;
+           const c={poiMonsterMeshDirty:false,poiDavidIn:()=>true,poiDavidLine:()=>true,poiMonsterCanMove:()=>true,
+           poiAimWall:()=>()=>true,poiDavidArena:()=>null,poiDavidRoomRay:(q,b,v,len)=>line?len:Math.min(len,3),
+           poiMobHitPlayer:(o,t,damage)=>{damaged+=damage;return false},poiDavidCease:()=>{throw Error('static test landing legal')}};
+           const api=evalAPI(c),b={x:0,z:0,y:0,room:{minX:-10,maxX:10,minZ:-10,maxZ:10}};
+           const land=(x,z)=>{
+            const q={kind:'leap',cursor:0,leap:{x:0,z:0,x0:-3,z0:0,land:0,route:[{x:0,z:0}]}},
+             state={david:{trail:[]}};
+            api.land({},state,b,{x,z,y:0},q,50);
+            a.equal(q.executed,1);return q.landed;
+           };
+           a.equal(api.radius,7);
+           a.equal(Math.max(...api.cue({kind:'leap',dx:1,dz:0,sx:0,sz:0,y:0},b).map(v=>v.hi)),7);
+           a.equal(Math.max(...api.cue({kind:'stomp',dx:1,dz:0,sx:0,sz:0,y:0},b).map(v=>v.hi)),6);
+           a.equal(land(7,0),1);a.equal(land(7,1),undefined);a.equal(damaged,43);
+           line=false;a.equal(land(7,0),undefined);a.equal(damaged,43);
+          });
+          SOURCE
+          cat >.qa/tests/david-discovery-browser.mjs <<'SOURCE'
+          import assert from 'node:assert/strict';
+          import {createServer} from 'node:http';
+          import {createRequire} from 'node:module';
+          import {readFileSync} from 'node:fs';
+          import {Script} from 'node:vm';
+          let h=readFileSync(process.argv[2]??'world-editor.html','utf8');
+          const install=(a,b)=>{assert.equal(h.split(a).length,2,a);h=h.replace(a,b)};
+          const mark="if(facilityParams.get('test')==='1')window.__editorTest={";
+          install(mark,`
+           window.__discovery={
+            frame:()=>render(),
+            relocate:(x,z)=>workshopResumeRestorePosition({x,z,y:0,facing:2}),
+            state:()=>{
+             const [o,s]=[...poiMonsterStates].find(([o])=>o.type==='monsterStoneDavid')||[],d=s?.david,q=d?.attack,b=poiDavidMatch(o),p=poiAimOrigin(performance.now());
+             return {now:performance.now(),p:[p.x,p.z,p.y],pos:[poiWalkX,poiWalkZ,poiWalkLevel],hp:poiPlayerHP,next:poiWalkNextReady,
+              awake:!!d?.awake,ready:!!d?.wakeDone,wake:d?.wakeAt??null,boss:s?[s.x,s.z]:null,attack:q?{kind:q.kind,start:q.start,l:q.leap??null,executed:q.executed,landed:q.landed}:null,
+              cue:q&&q.kind==='leap'&&b?Math.max(...poiDavidCuePairs(q,b).map(q=>q.hi)):null,
+              drawn:!!q&&typeof poiDavidCue!=='undefined'&&poiDavidCue?.q===q&&!!poiDavidCue.lane?.count};
+            }
+           };`+mark);
+          install(' requestAnimationFrame(render);',' if(!window.__discoveryManual)requestAnimationFrame(render);');
+          for(const [,js] of h.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(js);
+          if(process.env.DAVID_DISCOVERY_PARSE_ONLY){console.log('Exact discovery instrumented scripts parse');process.exit(0)}
+          const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
+          const srv=createServer((q,r)=>{r.setHeader('Content-Type','text/html; charset=utf-8');r.end(q.url==='/seed'?'<title>Seed</title>':h)});
+          await new Promise(r=>srv.listen(0,'127.0.0.1',r));
+          const root='http://127.0.0.1:'+srv.address().port;let browser;
+          try{
+           browser=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
+           for(const outside of [false,true]){
+            const ctx=await browser.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.65});
+            const p=await ctx.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));p.setDefaultTimeout(20000);
+            await p.clock.install({time:new Date('2026-04-01T10:00:00Z')});
+            await p.goto(root+'/seed');await p.evaluate(()=>localStorage.setItem('world-workshop-resume-v1',JSON.stringify({
+             version:1,route:'facility',id:'base',play:true,position:{x:24,z:100,y:0,facing:2},townLayout:5,townMapHeight:128,
+             view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.24,orbitDistance:5.5}
+            })));
+            await p.goto(root+'/?resume=1&test=1',{waitUntil:'domcontentloaded'});await p.locator('#pineStartupCover').waitFor({state:'hidden'});
+            await p.clock.pauseAt(await p.evaluate(()=>Date.now()+150));
+            await p.evaluate(()=>{window.__discoveryManual=true});
+            const qa=()=>p.evaluate(()=>window.__discovery.state()),frame=async(ms=56)=>{await p.clock.fastForward(ms);await p.evaluate(()=>window.__discovery.frame());};
+            const until=async(check,limit=65)=>{let q=await qa();for(let i=0;i<limit&&!check(q);i++){await frame();q=await qa()}assert(check(q),JSON.stringify(q));return q};
+            const step=async(key,x,z)=>{
+             await until(q=>q.now>=q.next,15);await p.keyboard.press(key);
+             for(let i=0;i<8;i++)await frame();
+             const q=await qa();assert.deepEqual(q.pos,[x,z,0]);return q;
+            };
+            assert(!(await qa()).awake);
+            assert(!(await step('ArrowDown',24,101)).awake,'three tile axis remains dormant');
+            assert(!(await step('ArrowRight',25,101)).awake);
+            assert(!(await step('ArrowDown',25,102)).awake,'sqrt(5) diagonal slightly outside two remains dormant');
+            const wake=await step('ArrowLeft',24,102);
+            assert(wake.awake&&wake.wake<=wake.now&&wake.now-wake.wake<800&&!wake.ready&&!wake.attack&&wake.hp===100);
+            // Same live arena movement state: move away while cinematic is in
+            // progress so his first legal attack can naturally choose the long leap.
+            assert(await p.evaluate(()=>window.__discovery.relocate(33,104)));
+            const jump=await until(q=>q.attack?.kind==='leap'&&q.drawn,110),l=jump.attack.l;
+            assert(jump.attack.start-wake.wake>=2440,'unchanged staged cinematic before any combat action');
+            assert.equal(jump.cue,7,'actual committed rendered warning uses shared seven tile footprint');
+            assert(jump.now<l.land&&jump.hp===100);
+            const target=[l.x-7,l.z+(outside?1:0)];
+            assert(await p.evaluate(([x,z])=>window.__discovery.relocate(x,z),target));
+            const landed=await until(q=>q.attack?.kind==='leap'&&q.attack.executed===1,50);
+            assert.equal(landed.attack.landed,outside?0:1);
+            assert.equal(landed.hp===100,outside,'at exactly seven collides, beyond does not');
+            assert.deepEqual(landed.boss,[l.x,l.z]);assert.deepEqual(errors,[]);
+            console.log('Real two tile discovery and radius-seven leap',JSON.stringify({outside,wake:wake.p,delay:jump.attack.start-wake.wake,warning:jump.cue,landing:[l.x,l.z],position:target,hp:landed.hp}));
+            await ctx.close();
+           }
+          }finally{await browser?.close();await new Promise(r=>srv.close(r))}
+          SOURCE
+          cat >.qa/radius/tests/david-leap.test.cjs <<'SOURCE'
+          const {test}=require('node:test'),a=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+          const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
+          const cut=(x,y)=>{const i=h.indexOf(x),j=h.indexOf(y,i+x.length);a(i>=0&&j>i,x);return h.slice(i,j)};
+          const arena={x:24,z:104,radius:16.95,minZ:93.5};
+          const o={type:'monsterStoneDavid',x:24,z:104,y:0};
+          function setup(){
+           const boss={...o,room:{minX:16,maxX:31,minZ:96,maxZ:112}},s={x:24,z:104,hp:1050,facing:2},c={
+            facilitySite:{id:'base',davidTemple:{boss}},poiWalkActive:true,document:{hidden:false,addEventListener:(event,fn)=>{c.visibility=fn}},poiWalkLevel:0,poiWalkX:24,poiWalkZ:100,player:{x:24,z:101,y:0},
+            poiMonsterStates:new Map([[o,s]]),poiMonsterMeshDirty:false,valid:true,roll:.99,Math:Object.assign(Object.create(Math),{random:()=>c.roll}),wall:()=>false,stock:100,damage:[],sounds:[],stops:0,open:()=>true,
+            poiEnemyThreatEnabled:()=>c.valid,poiAimOrigin:()=>c.player,poiAimWall:()=>((x,z)=>!c.wall(x,z)),
+            poiMobHitPlayer:(obj,now,n)=>{c.damage.push({obj,now,n});c.stock-=n;return c.stock<=0},
+            poiMonsterCanMove:(x,z,state,fx,fz)=>c.open(x,z,fx,fz),poiDavidStopAttackFoley:()=>c.stops++,poiSound:id=>c.sounds.push(id),poiDavidAttackFoley:(q,_p,_b,i,phase)=>c.sounds.push({kind:q.kind,i,phase}),terrainY:()=>0,
+            mesh:()=>({p:[],c:[]}),poiEnemyCuePoint:(x,z,y)=>[x+.5,.153+y*1.4,z+.5],
+            quad:(m,...q)=>{m.c.push(q.pop());for(const p of q)m.p.push(...p)}
+           
+           };
+           const api=vm.runInNewContext(cut('// BEGIN DAVID TEMPLE COMBAT','// END DAVID TEMPLE COMBAT')+
+            cut('function poiAimWallLimit(','function poiAimChooseLock(')+cut('// BEGIN DAVID TEMPLE CUES','// END DAVID TEMPLE CUES')+
+            ';({realStep:poiDavidMobFrame,step:(o,s,t)=>{const ok=poiDavidMobFrame(o,s,t);if(ok){const b=poiDavidMatch(o);for(const u of [POI_DAVID_AWAKENING.first,POI_DAVID_AWAKENING.second,POI_DAVID_AWAKENING.ready])poiDavidAwakeningTick(o,s,b,t+u);if(!s.david?.wakeDone)throw Error("post-awakening fixture unavailable");s.david.next=t+620;}return ok},tick:poiDavidCombatFrame,pose:poiDavidPose,approach:poiDavidApproach,inRoom:poiDavidIn,area:poiDavidArea,begin:poiDavidBegin,match:poiDavidMatch,incoming:poiDavidIncoming,cue:poiDavidCueGeometry,beamMesh:typeof poiDavidSweepBeamMesh==="function"?poiDavidSweepBeamMesh:null})',Object.assign(c,{POI_AIM_EPS:1e-7}));
+           return {c,s,api,boss};
+          }
+
+
+          const arm=(api,c,s)=>{c.player.z=98;api.step(o,s,1000);c.player.z=94;api.tick(1620);return s.david.attack};
+          test('real distance selection commits a fixed landing, radius 7 and only a single true contact',()=>{
+           const {c,s,api,boss}=setup();boss.room.arena=arena;c.stock=1000;
+           const q=arm(api,c,s);a.equal(q?.kind,'leap');a(q.leap.z<=96&&q.leap.z>=95);
+           a.equal(api.pose(s,1800).phase,'windup');a.equal(c.damage.length,0);
+           for(let t=1700;t<=2500;t+=100)api.tick(t);
+           const air=api.pose(s,2500);a.equal(air.phase,'airborne');a(air.leapHeight>0&&air.leapZ<104);
+           a.equal(s.z,104,'air pose cannot change grounded occupancy early');
+           c.player={x:30.85,z:q.leap.z,y:0};
+           for(let t=2600;t<=3000;t+=100)api.tick(t);
+           a.equal(c.damage.length,1);a(c.damage[0].n>=40);a.equal(s.z,q.leap.z);
+           a.equal(api.pose(s,3000).phase,'recover');a.equal(api.incoming(o,s,28,3000),28);
+          });
+          test('real exit while airborne cancels contact and traces a visibly grounded reverse without snapping',()=>{
+           const {c,s,api,boss}=setup();boss.room.arena=arena;
+           const q=arm(api,c,s);a.equal(q?.kind,'leap');
+           for(let t=1700;t<=2400;t+=100)api.tick(t);
+           const before=api.pose(s,2400);a(before.leapHeight>1);
+           c.player.z=91;api.tick(2400);a(s.david.attack===null);
+           const start=api.pose(s,2400);a(Math.abs(start.leapZ-before.leapZ)<1e-8);
+           api.tick(2500);const rev=api.pose(s,2500);a(rev.leapZ>start.leapZ);
+           api.tick(3000);a.equal(api.pose(s,3000).phase,'dormant');a.deepEqual([s.x,s.z],[24,104]);a.equal(c.damage.length,0);
+          });
+          test('warning radius is seven actual ground tiles; moving beyond its edge, walls and extra floors cannot take the landing damage',()=>{
+           for(const mode of ['outside','wall','upper','late-wall']){
+            const {api,c,s,boss}=setup();boss.room.arena=arena;c.stock=1000;
+            c.player={x:24,z:110,y:0};api.step(o,s,1000);c.player.z=114;api.tick(1620);
+            const q=s.david.attack;a.equal(q.kind,'leap');
+            const g=api.cue(q,boss).lane.p;
+            a(Math.abs(Math.max(...g.filter((_,i)=>i%3===0))-(q.sx+.5+7))<.018,'cue reaches exactly 7 on clear east side');
+            for(let t=1700;t<=2500;t+=100)api.tick(t);
+            c.player={x:mode==='outside'?31.2:30.6,z:q.leap.z,y:mode==='upper'?1:0};
+            if(mode==='wall')c.wall=(x,z)=>x===27;
+            if(mode==='late-wall')c.wall=(x,z)=>z===109;
+            for(let t=2600;t<3090;t+=100)api.tick(t);
+            a.equal(c.damage.length,0,mode);
+            if(mode==='outside'||mode==='wall')a.equal(q.executed,1,'real landing still happens after a dodge');
+            else a.equal(q.executed,0,'bad floor or blocked flight cannot land an attack');
+           }
+          });
+          test('a nearby player still receives original scheduler; leaps cannot spam after successful landing',()=>{
+           const {api,c,s,boss}=setup();boss.room.arena=arena;c.stock=1000;
+           api.step(o,s,1000);api.tick(1620);a.equal(s.david.attack.kind,'sweep');
+           for(let t=1700;t<3200;t+=100)api.tick(t);
+           c.player={x:24,z:114,y:0};
+           for(let t=3200;t<5000&&!s.david.attack?.leap;t+=100)api.tick(t);
+           const q=s.david.attack;a.equal(q.kind,'leap');
+           c.player={x:24,z:97,y:0};
+           for(let t=q.start+80;t<q.start+4200;t+=80){
+            api.tick(t);
+            a(!(s.david.attack?.kind==='leap'&&s.david.attack!==q),'private cooldown excludes a second jump');
+           }
+          });
+          SOURCE
+          cat >.qa/radius/tests/david-leap-radius.test.cjs <<'SOURCE'
+          const {test}=require('node:test'),a=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+          const html=fs.readFileSync(require('node:path').join(__dirname,'../world-editor.html'),'utf8');
+          const take=(start,end)=>{const i=html.indexOf(start),j=html.indexOf(end,i+1);a.ok(i>=0&&j>i,start);return html.slice(i,j)};
+          const evalAPI=ctx=>vm.runInNewContext(take('const POI_DAVID_AWAKENING=','const POI_DAVID_PATTERNS=') .split('\n').slice(0,2).join('\n')+'\n'+
+           take('const POI_DAVID_LEAP_LOAD=','const poiDavidLeapClamp=')+
+           take('function poiDavidMobFrame(','function poiDavidBegin(')+
+           take('function poiDavidLeapTick(','function poiDavidLeapPose(')+
+           take('function poiDavidCuePairs(','function poiDavidCueGeometry(')+
+           ';({wake:poiDavidMobFrame,land:poiDavidLeapTick,cue:poiDavidCuePairs,wakeMs:POI_DAVID_WAKE_MS,radius:POI_DAVID_LEAP_RADIUS})',ctx);
+          test('actual leap contact and warning use 7-tile disk; ordinary stomp warning is still 6, and walls block',()=>{
+           let damaged=0,line=true;
+           const c={poiMonsterMeshDirty:false,poiDavidIn:()=>true,poiDavidLine:()=>true,poiMonsterCanMove:()=>true,
+           poiAimWall:()=>()=>true,poiDavidArena:()=>null,poiDavidRoomRay:(q,b,v,len)=>line?len:Math.min(len,3),
+           poiMobHitPlayer:(o,t,damage)=>{damaged+=damage;return false},poiDavidCease:()=>{throw Error('static test landing legal')}};
+           const api=evalAPI(c),b={x:0,z:0,y:0,room:{minX:-10,maxX:10,minZ:-10,maxZ:10}};
+           const land=(x,z)=>{
+            const q={kind:'leap',cursor:0,leap:{x:0,z:0,x0:-3,z0:0,land:0,route:[{x:0,z:0}]}},
+             state={david:{trail:[]}};
+            api.land({},state,b,{x,z,y:0},q,50);
+            a.equal(q.executed,1);return q.landed;
+           };
+           a.equal(api.radius,7);
+           a.equal(Math.max(...api.cue({kind:'leap',dx:1,dz:0,sx:0,sz:0,y:0},b).map(v=>v.hi)),7);
+           a.equal(Math.max(...api.cue({kind:'stomp',dx:1,dz:0,sx:0,sz:0,y:0},b).map(v=>v.hi)),6);
+           a.equal(land(7,0),1);a.equal(land(7,1),undefined);a.equal(damaged,43);
+           line=false;a.equal(land(7,0),undefined);a.equal(damaged,43);
+          });
+          SOURCE
+          python .qa/build.py world-editor.html .qa/world-editor.html
+          python .qa/build.py world-editor.html .qa/radius/world-editor.html --radius-only
+          test "$(git hash-object .qa/world-editor.html)" = 8b56dc19730d3b3a39c7d987478b66ef81246881
+          test "$(git hash-object .qa/radius/world-editor.html)" = 0758d3785a1d7d742cddd5151fb44ceb25834810
+          node --test .qa/tests/david-discovery.test.cjs
+          (cd .qa/radius && node --test tests/*.cjs)
+      - run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
+      - if: matrix.suite == 'discovery'
+        run: node .qa/tests/david-discovery-browser.mjs .qa/world-editor.html
+      - if: matrix.suite == 'radius-only'
+        run: node tests/david-leap-browser.mjs .qa/radius/world-editor.html
