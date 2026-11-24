@@ -40,3 +40,15 @@ test('physical ally reserves current and next core cells to avoid hostile stacki
  a.equal(c.poiCompanionBlocksHostileTile(12,10,0,100),false);
  a.equal(c.poiCompanionBlocksHostileTile(11,10,1,100),false);
 });
+test('mine landing and otherworld patrol rules apply to both actors, not just one endpoint',()=>{
+ const {c,soul,foe,state}=rig();
+ c.poiMineEarlyMayMove=(_o,x)=>x!==13;
+ a.equal(c.poiCompanionHostileIntent(foe,state,100),null);
+ a.equal(c.poiCompanionFindTarget(soul,100),null);
+ c.poiMineEarlyMayMove=(_o,x)=>x!==10;
+ a.equal(c.poiCompanionHostileIntent(foe,state,100),null);
+ c.poiMineEarlyMayMove=()=>true;
+ c.poiOtherworldEnemyMayFight=(_o,x)=>x!==10;
+ a.equal(c.poiCompanionHostileIntent(foe,state,100),null);
+ a.equal(c.poiCompanionFindTarget(soul,100),null);
+});

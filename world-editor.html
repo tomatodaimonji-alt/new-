@@ -12806,8 +12806,13 @@ function poiCompanionTargetLegal(a,o,s,clear=false){
  return !!(o&&s&&o.y===a.y&&s.hp>0&&poiMonsterStates.get(o)===s&&poiCompanionNormal(o,s)&&
   !(s.wildSpawn&&typeof poiWildPlayerOutside==='function'&&!poiWildPlayerOutside()))&&poiCompanionTargetRange(a,o,s,clear);
 }
+function poiCompanionEncounterAllows(o,x,z){
+ return (typeof poiMineEarlyMayMove!=='function'||poiMineEarlyMayMove(o,x,z))&&
+  (typeof poiOtherworldEnemyMayFight!=='function'||poiOtherworldEnemyMayFight(o,x,z))&&
+  (typeof poiDungeonPatrolCanFight!=='function'||poiDungeonPatrolCanFight(o,x,z));
+}
 function poiCompanionTargetRange(a,o,s,clear){
- return poiCompanionTethered(a)&&Math.hypot(s.x-poiWalkX,s.z-poiWalkZ)<=POI_COMPANION_TETHER&&
+ return poiCompanionTethered(a)&&poiCompanionEncounterAllows(o,poiWalkX,poiWalkZ)&&poiCompanionEncounterAllows(o,a.x,a.z)&&Math.hypot(s.x-poiWalkX,s.z-poiWalkZ)<=POI_COMPANION_TETHER&&
   Math.hypot(s.x-a.x,s.z-a.z)<=POI_COMPANION_NOTICE&&
   (typeof poiDungeonVisualVisible!=='function'||poiDungeonVisualVisible(o.x??s.x,o.z??s.z,o.y))&&
   (!clear||poiCompanionAttackClear(a,s,a.y));
@@ -12853,7 +12858,7 @@ function poiCompanionHostileIntent(o,s,now){
  if(!a||!poiCompanionAllowed()||a.y!==o.y||a.y!==poiWalkLevel||!poiCompanionSame(a,poiCompanionPlace())||!poiCompanionNormal(o,s))return null;
  const p=poiCompanionPose(a,now),x=Math.round(p.x),z=Math.round(p.z);
  const allyDistance=Math.hypot(x-s.x,z-s.z),playerDistance=Math.hypot(poiWalkX-s.x,poiWalkZ-s.z);
- if(!poiCompanionTethered(a)||allyDistance>4.25||allyDistance<.01||
+ if(!poiCompanionTethered(a)||!poiCompanionEncounterAllows(o,poiWalkX,poiWalkZ)||!poiCompanionEncounterAllows(o,x,z)||allyDistance>4.25||allyDistance<.01||
     !poiCompanionAttackClear(s,{x,z},o.y))return null;
  if(playerDistance<=allyDistance+.05&&poiCompanionAttackClear(s,{x:poiWalkX,z:poiWalkZ},o.y))return null;
  return {x,z,actor:a};
@@ -17235,8 +17240,8 @@ function poiEnemyBeginPlayer(obj,s,now){
  if(!windup||!poiEnemyThreatEnabled()||s.playerAttack?.pending||now<s.nextAttack||s.townOwned||
     poiMonsterStates.get(obj)!==s||s.hp<=0||(facilitySite&&obj.y!==poiWalkLevel)||
     (s.wildSpawn&&!poiWildPlayerOutside())||
-    (typeof poiMineEarlyMayMove==='function'&&!poiMineEarlyMayMove(obj,tx,tz)))return false;
- if(typeof poiDungeonPatrolCanFight==='function'&&!poiDungeonPatrolCanFight(obj,tx,tz))return false;
+    (typeof poiMineEarlyMayMove==='function'&&(!poiMineEarlyMayMove(obj,poiWalkX,poiWalkZ)||ally&&!poiMineEarlyMayMove(obj,tx,tz))))return false;
+ if(typeof poiDungeonPatrolCanFight==='function'&&(!poiDungeonPatrolCanFight(obj,poiWalkX,poiWalkZ)||ally&&!poiDungeonPatrolCanFight(obj,tx,tz)))return false;
  if(skater){
   const pond=poiPondSkaterGuard(obj);
   if((pond&&!poiPondSkaterIn(pond,poiWalkX,poiWalkZ))||now<(s.skaterRestUntil||0)||
