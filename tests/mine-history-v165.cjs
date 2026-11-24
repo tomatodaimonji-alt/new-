@@ -12,9 +12,27 @@ function beforeMineDepths(world){
   [5799,121,50,'stonewall'],[5828,115,57,'mosswall']])restored.splice(i,0,{x,z,y:-1,type,rot:0});
  return restored;
 }
+// Project only the new final forest parcel out of older historical checks.
+function beforeSouthForest(site){
+ if(!site.southForest)return site;
+ const {southForest,...historical}=site,{index,count}=southForest.authored;
+ assert.equal(southForest.name,'潮風の森');
+ assert.equal(index,8832,'forest starts after the entire v265 world');
+ assert(Number.isInteger(count)&&count>0&&index+count===site.map.world.length,
+  'only the declared forest records are removed, and they are the exact final suffix');
+ const world=site.map.world.slice(0,index),prior={...historical,map:{...site.map,world}};
+ const digest=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
+ assert.equal(digest(world),
+  'ea2d84b74e1014e92d3dd9bf218944f6f1dde29374f1dfc83f9edf43c4344813','v265 world order survives unchanged');
+ const historicName=prior.southPort.name==='セルネア'?{...prior,southPort:{...prior.southPort,name:'潮待ちの港'}}:prior;
+ assert.equal(digest(historicName),
+  '2a465c61949d8b27bb374e32e19d71e8e2dae181161f625013e36c72a73de4ac','v265 full site is unchanged except the appended forest');
+ return prior;
+}
 // Drop only the authored southern-port suffix; the whole live v261 input
 // before it (world order, map size, building and encounter metadata) is fixed.
 function beforeSouthPort(site){
+ site=beforeSouthForest(site);
  if(!site.southPort)return site;
  const {southPort,...historical}=site;
  const {index,count}=southPort.authored;
@@ -212,4 +230,4 @@ function beforeAbandonedMine(site){
  assert.equal(digest,exactMine,'only the exact v167 mine records are exempt; untouched v166 mine records are pinned separately');
  return {...other,map:{...map,world:world.slice(0,oldLength)}};
 }
-module.exports={beforeSouthPort,beforeNorthFort,beforeSouthTown,beforeSouthCreek,beforeMineLongApproach,beforeSouthRoad,beforeArtisanPlant,beforeChapelApproach,beforeMinePrep,beforeChapelWest,beforeAbandonedMine,beforeMineDepths,beforeOtherworld,beforeMineEntry,beforeChapel,beforeArmedEncounters,beforeNorthTrail,beforeForestWatchPost,beforePondMarsh,beforeWayfarer,beforeOtherworldDepths};
+module.exports={beforeSouthForest,beforeSouthPort,beforeNorthFort,beforeSouthTown,beforeSouthCreek,beforeMineLongApproach,beforeSouthRoad,beforeArtisanPlant,beforeChapelApproach,beforeMinePrep,beforeChapelWest,beforeAbandonedMine,beforeMineDepths,beforeOtherworld,beforeMineEntry,beforeChapel,beforeArmedEncounters,beforeNorthTrail,beforeForestWatchPost,beforePondMarsh,beforeWayfarer,beforeOtherworldDepths};

@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const h=fs.readFileSync(process.env.HTML||process.argv[2]||'world-editor.html','utf8');
 const cut=(a,b)=>{const i=h.indexOf(a),j=h.indexOf(b,i+1);assert(i>=0&&j>i,a);return h.slice(i,j)};
 const p=(x,z,facing=0)=>({x,z,y:0,facing});
-const port={name:'潮待ちの港',bounds:{x1:73,x2:92,z1:109,z2:127,y:0},entry:p(91,123),
+const port={name:'セルネア',bounds:{x1:73,x2:92,z1:109,z2:127,y:0},entry:p(91,123),
  market:{stall:p(84,116),work:p(84,117),public:p(84,115,2),prep:p(86,117,3),rest:p(86,120,3)},fisher:{berth:p(77,117,2),rest:p(81,121,3)}};
 function setup(){
  const town={role:{id:'southmerchant'},x:101,z:112,y:0,path:[1]},stats={moves:[],talk:[],stance:0,blocked:null};
@@ -52,7 +52,7 @@ test('cold activation cannot put a visible actor in the same cell as the player'
 test('ordinary Marek speech remains first, optional clue only exists for authored port and correctly turns west',()=>{
  const {c,town}=setup();
  const hint=c.poiPortMarekTopic(town);
- assert.match(hint,/南.*西.*潮待ちの港/);
+ assert.match(hint,/南.*西.*セルネア/);
  assert.equal(c.poiPortMarekTopic({role:{id:'toolkeeper'}}),null);
  c.facilitySite.southPort=null;assert.equal(c.poiPortMarekTopic(town),null);
  assert.match(h,/southmerchant:\['店の裏は荷ほどき場だ。/);

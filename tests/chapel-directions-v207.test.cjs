@@ -19,21 +19,21 @@ function talk(id,port){
  };
 }
 test('first explicit innkeeper Talk points from east gate through ruins and distinguishes slow wet and dry west',()=>{
- const next=talk('innkeeper',{name:'潮待ちの港',entrance:{x:91,z:123,y:0}});
+ const next=talk('innkeeper',{name:'セルネア',entrance:{x:91,z:123,y:0}});
  const first=next();
  assert.match(first,/東門.*川下.*崩れた石壁.*階段/);
  assert.match(first,/西.*濡れず.*まっすぐ.*浅瀬.*足/);
- assert(!next().includes('潮待ちの港'),'only Marek gives the optional clue');
- assert(!next().includes('潮待ちの港'));
+ assert(!next().includes('セルネア'),'only Marek gives the optional clue');
+ assert(!next().includes('セルネア'));
  assert.equal(next(),first,'same original innkeeper topic cycle');
 });
 test('only Marek receives one extra route topic, with his first two unaffected',()=>{
- const topics=talk('southmerchant',{name:'潮待ちの港',entrance:{x:91,z:123,y:0}}),
+ const topics=talk('southmerchant',{name:'セルネア',entrance:{x:91,z:123,y:0}}),
        original=talk('southmerchant',null);
  const first=original();assert.match(first,/店の裏は荷ほどき場/);assert.equal(topics(),first);
  const second=original();assert.match(second,/向かいの宿/);assert.equal(topics(),second);
  if(h.includes('function poiPortMarekTopic('))
-  assert.match(topics(),/南.*西.*潮待ちの港/);
+  assert.match(topics(),/南.*西.*セルネア/);
  assert.equal(topics(),first);assert.equal(original(),first);
 });
 test('waymark reads only exact live Surface stone from adjacent facing, never through a modal',()=>{
