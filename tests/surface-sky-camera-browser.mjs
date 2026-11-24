@@ -5,9 +5,9 @@ import {readFileSync} from 'node:fs';
 const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
 const html=readFileSync(process.argv[2]??'world-editor.html','utf8');
 function inject(s,a,b){assert.equal(s.split(a).length,2,a);return s.replace(a,b)}
-const eyeAnchor="  const arm=eye===desired?poiCameraDistance:Math.hypot(...eye.map((v,i)=>v-target[i]));";
+const eyeAnchor='  const viewTarget=poiOrbitHigherLens(eye,lensTarget,poiCameraPitch,higher);';
 let fixture=inject(html,eyeAnchor,eyeAnchor+`
-  if(window.__qaSkyCamera)window.__qaSkyEye={eye,target,pitch:Math.atan2(eye[1]-target[1],Math.hypot(eye[0]-target[0],eye[2]-target[2]))};`);
+  if(window.__qaSkyCamera)window.__qaSkyEye={eye,target:viewTarget,pitch:Math.atan2(eye[1]-viewTarget[1],Math.hypot(eye[0]-viewTarget[0],eye[2]-viewTarget[2]))};`);
 const api='  freeMovementPose:()=>({x:poiWalkViewX,z:poiWalkViewZ,level:poiWalkLevel}),';
 fixture=inject(fixture,api,api+`
   surfaceSkyQA:{
@@ -91,7 +91,7 @@ try{
   await dragUp();
   const raised=await q();
   assert(raised.pitch<.04,'real right-thumb orbit must rise past the old .12 clamp: '+JSON.stringify(raised));
-  assert(Math.abs(raised.pitch-(-.16))<.02,'raise stops at a shallow sensible limit');
+  assert(Math.abs(raised.pitch-(-.394))<.032,'one genuine short gesture can now pass the former shallow limit');
   await when(()=>window.__editorTest.surfaceSkyQA.read().sky);
   const sky=await q();
   assert(sky.view.pitch<.07,'the real scene camera tilts, not just its stored preference');

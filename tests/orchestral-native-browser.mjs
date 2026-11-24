@@ -99,7 +99,7 @@ function install(){
  }
  const detail=n=>({id:id(n),gain:n?.gain.value??null,actions:ops.get(n)??[]});
  window.__scoreSpy={read(buses,decks){
-  return {buses:buses.map(detail),decks:Object.fromEntries(decks.map(([key,x])=>[key,detail(x.bus)])),played};
+  return {buses:buses.map(detail),decks:Object.fromEntries(decks.map(([key,x])=>[key,{...detail(x.bus),actions:detail(x.output??x.bus).actions}])),played};
  }};
 }
 const volumeRaw=JSON.stringify({master:83,bgm:71,se:37,enabled:true});
@@ -172,13 +172,16 @@ try{
  }
  checkpoint='named outdoor location and rapid mixing across room boundary';
  await locate('outside');
+ await wait(()=>{const r=window.__editorTest.orchestraNative.read();
+  return r.graph.decks.town?.actions.some(e=>e[0]==='linearRampToValueAtTime'&&e[1]===0)});
+ const fading=await qa(),fadeEnd=fading.graph.decks.town.actions.findLast(e=>e[0]==='linearRampToValueAtTime'&&e[1]===0)[2];
+ assert.deepEqual(fading.score.decks,['town'],'there is no incoming deck before outgoing zero');
  await wait(()=>window.__editorTest.orchestraNative.read().score?.active==='outside');
  observed=await qa();assert.equal(observed.geo,'outside');assert.deepEqual(observed.coords,[87,2,0]);assert.equal(observed.region.name,'北の林道');assert.equal(observed.region.difficulty,1);assert(!observed.indoors);
- assert(observed.score.decks.length===2,'native returning scene starts as a two-deck fade, not immediate replacement');
- const target=(key)=>observed.graph.decks[key].actions.filter(v=>v[0]==='setTargetAtTime').at(-1);
- assert(target('outside')[1]===1&&target('outside')[3]===.38,'new deck fades in softly without delaying playback');
- assert(target('town')[1]===0&&target('town')[3]===.19,'old deck keeps its existing fade out');
- assert(Math.abs(target('outside')[2]-target('town')[2])<.01,'fade operations share the actual context time');
+ assert.deepEqual(observed.score.decks,['outside'],'exactly one new audio deck after retiring old');
+ const incoming=observed.graph.decks.outside.actions;
+ const from=incoming.find(e=>e[0]==='setValueAtTime'&&e[1]===0),up=incoming.find(e=>e[0]==='linearRampToValueAtTime'&&e[1]===1);
+ assert(from&&up&&from[2]>=fadeEnd&&Math.abs(up[2]-from[2]-1)<.004,'incoming gain starts at zero only after prior fade reaches zero');
  const outsideBus=observed.graph.decks.outside.id;
  await wait(({out})=>{
   const r=window.__editorTest.orchestraNative.read(),music=r.graph.buses[1].id,fx=r.graph.buses[3].id;
@@ -269,3 +272,4 @@ try{
  console.log('PASS native touch, distinct score scene scheduling, bounded fades, real hit battle, recorded SFX bus and foreground lifecycle');
 }catch(e){const last=page?await qa().catch(()=>null):null;if(last)last.graph.played=last.graph.played.slice(-12);console.error(checkpoint,JSON.stringify(last),errors);throw e}
 finally{await context?.close();await browser?.close();await new Promise(resolve=>server.close(resolve))}
+

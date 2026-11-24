@@ -4,7 +4,7 @@ const first=html.indexOf('const PINE_AUDIO_SETTINGS_KEY'),last=html.indexOf('con
 a(first>=0&&last>first);
 function orchestraFixture(id='base'){
  const voices=[],buses=[],calls=[],nowNode=()=>({to:[],connect(n){this.to.push(n);return n},disconnect(){},gain:makeParam(),Q:makeParam(),frequency:makeParam(),detune:makeParam()});
- function makeParam(){return {value:0,setValueAtTime(v,t){this.value=v;this.when=t},setTargetAtTime(v,t,d){calls.push([this,v,t,d]);this.value=v},linearRampToValueAtTime(){},exponentialRampToValueAtTime(){},cancelScheduledValues(){}}}
+ function makeParam(){return {value:0,setValueAtTime(v,t){this.value=v;this.when=t},setTargetAtTime(v,t,d){calls.push([this,v,t,d]);this.value=v},linearRampToValueAtTime(v,t){calls.push([this,v,t,"linear"]);this.value=v},exponentialRampToValueAtTime(){},cancelScheduledValues(){}}}
  const ctx={state:'running',currentTime:10,sampleRate:24000,createGain(){const n=nowNode();buses.push(n);return n},
   createBiquadFilter:nowNode,createPeriodicWave:()=>({}),createBuffer:(c,n,r)=>({duration:n/r,getChannelData:()=>new Float32Array(n)}),
   createBufferSource:source,createOscillator:source,suspend(){this.state='suspended';return Promise.resolve()}};
@@ -26,3 +26,4 @@ function orchestraFixture(id='base'){
  return {f,run,tick,deck,voices,buses,ctx,calls,mixer:f.mixer};
 }
 module.exports=orchestraFixture;
+

@@ -27,5 +27,5 @@ test('a retained reset URL never overwrites a new saved preference when a WebVie
  const run=start(true,{saved});
  assert.equal(run.c.poiThirdPerson,false);assert.equal(run.events[0],'restore');
  assert.equal(start(false,{saved:{...saved,view:{third:true}},play:false}).c.poiThirdPerson,true);
- assert.match(cut('function poiGameReset(){','function poiGameResetDialogOpen('),/searchParams\.set\('reset-camera','1'\)/);
+ assert.match(cut('function poiGameReset(','function poiGameResetDialogOpen('),/searchParams\.set\('reset-camera','1'\)/);
 });

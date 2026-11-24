@@ -24,8 +24,8 @@ inject(hook,`
     beam:poiDavidLine({x:stop.x,z:stop.z-1,y:0},{x:stop.x,z:stop.z+1,y:0},b)};
   }
  };`+hook);
-const arm="  const templeEye=typeof facilityDavidCameraEye==='function'?facilityDavidCameraEye(target,desired):desired;";
-inject(arm,"  const templeEye=window.__davidCameraDisable?desired:facilityDavidCameraEye(target,desired);\n window.__davidClipWitness={arm:Math.hypot(...templeEye.map((v,i)=>v-target[i])),raw:Math.hypot(...desired.map((v,i)=>v-target[i])),clipped:templeEye!==desired};");
+const arm="  const eye=typeof facilitySharedWallCameraEye==='function'?facilitySharedWallCameraEye(target,desired):desired;";
+inject(arm,"  const eye=window.__davidCameraDisable?desired:facilitySharedWallCameraEye(target,desired);\n window.__davidClipWitness={arm:Math.hypot(...eye.map((v,i)=>v-target[i])),raw:Math.hypot(...desired.map((v,i)=>v-target[i])),clipped:eye!==desired};");
 const frame=' requestAnimationFrame(render);';
 inject(frame,' if(!window.__davidCameraManual)requestAnimationFrame(render);');
 // Read actual GPU color/depth results after the production render, not a mock geometry pass.

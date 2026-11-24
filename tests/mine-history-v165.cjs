@@ -12,8 +12,26 @@ function beforeMineDepths(world){
   [5799,121,50,'stonewall'],[5828,115,57,'mosswall']])restored.splice(i,0,{x,z,y:-1,type,rot:0});
  return restored;
 }
+// Project the independently authored west woodland out of earlier snapshots.
+function beforeSacredForest(site){
+ if(!site.sacredForest)return site;
+ const {sacredForest,sacredDepth,...historical}=site,{index,count}=sacredForest.authored;
+ if(sacredDepth){
+  assert.deepEqual([sacredDepth.w,sacredDepth.oldH,sacredDepth.h,site.map.height],[48,128,182,182]);
+  assert(site.map.world.every(o=>o.z<128||o.x<48));
+ }
+ const d=site.davidTemple?.authored;
+ assert(d&&index===d.index+d.count&&count>0&&index+count===site.map.world.length,
+  'only the declared post-temple west forest suffix is removed');
+ const world=site.map.world.slice(0,index),record=o=>[o.x,o.z,o.y].join(','),old=new Set(world.map(record));
+ const append=site.map.world.slice(index);
+ assert.equal(new Set(append.map(record)).size,count);
+ assert(append.every(o=>!old.has(record(o))));
+ return {...historical,map:{...site.map,...(sacredDepth?{height:sacredDepth.oldH}:{}),world}};
+}
 // The temple owns only the verified final v270 map suffix and one building.
 function beforeDavidTemple(site){
+ site=beforeSacredForest(site);
  if(!site.davidTemple)return site;
  const {davidTemple,...historic}=site,{index,count}=davidTemple.authored;
  assert.equal(index,8984,'temple begins after all v270 records');

@@ -71,9 +71,9 @@ try{
   track={start:[first.player.x,first.player.z,first.actor],steps:seq.filter((_,i)=>i%5===0).map(s=>[s.player.x,s.player.z,s.actor,s.free])};
   assert.deepEqual(errors,[]);await c.close();
  }
- const {c,errors,tick,snap}=await load(24,99);
+ const {c,errors,tick,snap}=await load(24,102);
  let start=await snap(),s=start,saw=false,hit=false;
- for(let i=0;i<160;i++){
+ for(let i=0;i<220;i++){
   s=await tick();saw||=s.target&&s.allyIn&&s.boss?.hp<1050;hit||=s.hit.length>0;
   if(saw&&hit)break;
  }

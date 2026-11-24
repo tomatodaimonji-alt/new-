@@ -3,7 +3,7 @@ const html=fs.readFileSync(process.argv[2]||process.env.HTML||'world-editor.html
 assert(a>=0&&b>a);
 function engine(){
  let settle,reject,calls=0,writes=0;const starts=[],sources=[],gains=[];
- const param=()=>({value:0,events:[],setValueAtTime(...e){this.events.push(['value',...e])},setTargetAtTime(...e){this.events.push(['target',...e])},linearRampToValueAtTime(){},exponentialRampToValueAtTime(){}});
+ const param=()=>({value:0,events:[],setValueAtTime(...e){this.events.push(['value',...e])},setTargetAtTime(...e){this.events.push(['target',...e])},linearRampToValueAtTime(...e){this.events.push(['ramp',...e])},exponentialRampToValueAtTime(){}});
  const node=()=>({gain:param(),Q:param(),frequency:param(),detune:param(),connect(n){this.to=n;return n},disconnect(){this.disconnected=true;}});
  const source=()=>Object.assign(node(),{start(t,o){starts.push(this);this.when=t;this.offset=o},stop(t){this.stopAt=t},setPeriodicWave(){}});
  const ctx={state:'running',currentTime:10,sampleRate:24000,
@@ -22,30 +22,30 @@ function engine(){
 test('outdoor only: silent pending decode, one genuine loop, shared mixer',()=>{
  const x=engine();
  x.tick(10,'town');x.tick(10.2,'chapel');assert.equal(x.decode(),0);
- x.tick(10.4,'outside');assert.equal(x.decode(),1);assert.equal(x.loops().length,0);
+ x.tick(10.4,'outside');assert.equal(x.decode(),0);x.tick(10.94);assert.equal(x.decode(),1);assert.equal(x.loops().length,0);
  const deck=x.run("poiOrchestraDecks.get('outside')");assert.equal(deck.sources.size,0);
- x.success();x.tick(10.6);const [n]=x.loops();
+ x.success();x.tick(11.15);const [n]=x.loops();
  assert.equal(x.loops().length,1);assert.equal(n.buffer.duration,37);assert.equal(n.loopStart,0);assert.equal(n.loopEnd,37);
- assert.equal(n.to.to,deck.bus);assert.equal(deck.bus.to,x.context.mixer);
+ assert.equal(n.to.to,deck.bus);assert.equal(deck.bus.to,deck.output);assert.equal(deck.output.to,x.context.mixer);
  assert.equal(deck.sources.size,1);
- x.tick(11.1);assert.equal(x.loops().length,1);assert.equal(x.writes(),0);
+ x.tick(11.4);assert.equal(x.loops().length,1);assert.equal(x.writes(),0);
 });
 test('race on leave or suspend never starts field under another score; retire/reset cancels live source',()=>{
  const x=engine();
  x.tick(10,'outside');x.tick(10.2,'town');x.success();x.tick(10.4);
  assert.equal(x.loops().length,0);
- x.tick(11.4,'outside');const [first]=x.loops();assert(first);
- x.tick(11.6,'town');assert.equal(first.stopAt,undefined);
- x.tick(12.8);assert.equal(first.stopAt,12.8);assert(first.disconnected);
- x.tick(13,'outside');const [,next]=x.loops();assert(next);assert.equal(x.decode(),1);
- x.run('poiAudioStop(true);document.hidden=true');assert.equal(next.stopAt,13);assert(next.disconnected);
+ x.tick(11,'town');x.tick(11.4,'outside');x.tick(12.14);const [first]=x.loops();assert(first);
+ x.tick(12.3,'town');assert.equal(first.stopAt,undefined);
+ x.tick(13.06);assert.equal(first.stopAt,13.06);assert(first.disconnected);
+ x.tick(13.3,'outside');x.tick(14.04);const [,next]=x.loops();assert(next);assert.equal(x.decode(),1);
+ x.run('poiAudioStop(true);document.hidden=true');assert.equal(next.stopAt,14.04);assert(next.disconnected);
  x.tick(15,'outside');assert.equal(x.loops().length,2);
 });
 test('codec failure remains silent outside and never affects the town score',()=>{
  const x=engine();x.tick(10,'outside');x.fail();x.tick(10.2);x.tick(11);
  assert.equal(x.decode(),1);assert.equal(x.loops().length,0);
  assert.equal(x.run("poiOrchestraDecks.get('outside').sources.size"),0);
- assert(x.tick(11.2,'town').voices>0);x.tick(13,'outside');assert.equal(x.decode(),1);assert.equal(x.loops().length,0);
+ x.tick(11.2,'town');assert(x.tick(11.94).voices>0);x.tick(13,'outside');x.tick(13.74);assert.equal(x.decode(),1);assert.equal(x.loops().length,0);
 });
 test('decode finishing while backgrounded is inert; foreground uses cached audio without affecting other tracks',()=>{
  const x=engine();x.tick(10,'outside');assert.equal(x.decode(),1);
@@ -53,7 +53,7 @@ test('decode finishing while backgrounded is inert; foreground uses cached audio
  x.tick(16,'outside');assert.equal(x.loops().length,0);
  x.context.document.hidden=false;x.ctx.state='running';
  x.tick(18,'battle');assert.equal(x.loops().length,0);
- x.tick(19,'outside');assert.equal(x.loops().length,1);assert.equal(x.decode(),1);
+ x.tick(19,'outside');x.tick(19.74);assert.equal(x.loops().length,1);assert.equal(x.decode(),1);
  assert.equal(x.writes(),0);
 });
 test('recording node rejection is silent outdoors and does not disturb other scenes',()=>{
@@ -65,7 +65,7 @@ test('recording node rejection is silent outdoors and does not disturb other sce
  assert.equal(errors,1);assert.equal(x.loops().length,0);
  assert.equal(x.run("poiOrchestraDecks.get('outside').sources.size"),0);
  x.ctx.createBufferSource=real;
- assert.equal(x.tick(11,'town').active,'town');
+ x.tick(11,'town');assert.equal(x.tick(11.74).active,'town');
 });
 test('field windup and real damage-pulse entry preserve the same recording; mine combat is still distinct',()=>{
  const x=engine(),combat={playerAttack:{pending:true,y:0,sx:12,sz:12}};
@@ -76,10 +76,10 @@ test('field windup and real damage-pulse entry preserve the same recording; mine
  assert.equal(x.loops().length,1);assert.equal(recording.stopAt,undefined);
  x.context.poiEnemyPending.clear();
  x.run('poiOrchestraCombat()'); // Immediately crossing into a settlement must not carry an outdoor hit.
- assert.equal(x.tick(10.41,'town').active,'town');
- assert.equal(x.tick(11.6,'mine').active,'mine');
+ assert.equal(x.tick(10.41,'town').active,'outside');assert.equal(x.tick(11.16).active,'town');
+ x.tick(11.6,'mine');assert.equal(x.tick(12.34).active,'mine');
  x.context.poiEnemyPending.add(combat);x.run('poiOrchestraCombat()');
- assert.equal(x.tick(11.7).active,'battle');
+ assert.equal(x.tick(12.4).active,'mine');assert.equal(x.tick(13.14).active,'battle');
  assert.equal(x.loops().length,1);
 });
 test('actual built map marks physical field landmarks as outside while port and settlements keep their music',()=>{
@@ -102,25 +102,31 @@ test('actual built map marks physical field landmarks as outside while port and 
  assert.equal(zone(105,111,0),'market');
  assert.equal(zone(118,60,-1),'mine');
 });
-test('scene changes soften incoming gain independently of cold startup; late field decoding still fades without start delay',()=>{
- const x=engine();
- const target=bus=>bus.gain.events.filter(e=>e[0]==='target').at(-1);
+test('outgoing gain meets silence before the new scene rises; late decoding still starts without additional delay',()=>{
+ const x=engine(),close=(a,b)=>assert(Math.abs(a-b)<1e-9);
+ const event=(node,name,v)=>node.gain.events.find(e=>e[0]===name&&e[1]===v);
  x.tick(10,'town');const town=x.run("poiOrchestraDecks.get('town')");
- assert.deepEqual(target(town.bus),['target',1,10,.30]);
- x.tick(10.2,'outside');const outside=x.run("poiOrchestraDecks.get('outside')");
- assert.deepEqual(target(town.bus),['target',0,10.2,.19]);
- assert.deepEqual(target(outside.bus),['target',1,10.2,.38]);
- x.success();x.tick(10.8);
- const [loop]=x.loops();assert(loop&&loop.when>=10.8&&loop.when<10.82,'no deferred start beyond the existing scheduling lookahead');
- assert.deepEqual(target(loop.to),['target',1,loop.when,.38]);
- x.tick(11,'mine');const mine=x.run("poiOrchestraDecks.get('mine')");
- assert.deepEqual(target(mine.bus),['target',1,11,.38]);
- assert.deepEqual(target(outside.bus),['target',0,11,.19]);
+ assert.deepEqual(event(town.output,'target',1),['target',1,10,.30]);
+ x.tick(10.2,'outside');
+ assert.equal(x.run("poiOrchestraDecks.get('outside')"),undefined);
+ close(event(town.output,'ramp',0)[2],10.92);
+ x.tick(10.94);const outside=x.run("poiOrchestraDecks.get('outside')");
+ assert.deepEqual(event(outside.output,'value',0),['value',0,10.94]);
+ assert.deepEqual(event(outside.output,'ramp',1),['ramp',1,11.94]);
+ x.success();x.tick(11.55);
+ const [loop]=x.loops();assert(loop&&loop.when>=11.55&&loop.when<11.57,'no deferred start beyond the existing scheduling lookahead');
+ assert.deepEqual(event(loop.to,'target',1),['target',1,loop.when,.38]);
+ x.tick(11.7,'mine');close(event(outside.output,'ramp',0)[2],12.42);
+ assert.equal(x.run("poiOrchestraDecks.get('mine')"),undefined);
+ x.tick(12.44);const mine=x.run("poiOrchestraDecks.get('mine')");
+ assert.deepEqual(event(mine.output,'value',0),['value',0,12.44]);
+ assert.equal(loop.stopAt,12.44);
 });
 test('cold-start outdoor recording delayed beyond the main boot fade still enters gently only once',()=>{
  const x=engine();x.tick(10,'outside');const deck=x.run("poiOrchestraDecks.get('outside')");
- assert.deepEqual(deck.bus.gain.events.at(-1),['target',1,10,.30]);assert.equal(x.loops().length,0);
+ assert.deepEqual(deck.output.gain.events.at(-1),['target',1,10,.30]);assert.equal(x.loops().length,0);
  x.success();x.tick(10.5);
  const [sample]=x.loops();assert(sample);assert.deepEqual(sample.to.gain.events.at(-1),['target',1,sample.when,.30]);
  x.tick(10.64);assert.equal(x.loops().length,1);
 });
+

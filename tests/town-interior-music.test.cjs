@@ -17,7 +17,8 @@ function runtime(){
  run(geo+cut('const PINE_AUDIO_SETTINGS_KEY','const POI_PLAYER_MAX_HP')+';this.facilitySite={...buildFacilitySite("base"),id:"base"};poiAudioMusic=music;poiAudioContext=ctx;');
  function set(x,z,y=0){Object.assign(c,{poiWalkX:x,poiWalkZ:z,poiWalkLevel:y})}
  const tick=(x,z,y=0)=>{set(x,z,y);ctx.currentTime+=.19;return run('poiAudioMusicPhrase();poiOrchestraSnapshot()')};
- return {run,c,tick,params,starts};
+ const settled=(...p)=>{tick(...p);ctx.currentTime+=.56;return tick(...p)};
+ return {run,c,tick,settled,params,starts};
 }
 test('street, lodging, guild, shop and ordinary home keep the same actual town clock and mixer deck',()=>{
  const r=runtime(),steps=[[41,34,false],[41,33,true],[41,32,true],[41,30,true],[41,34,false],
@@ -38,7 +39,7 @@ test('cold start in a real town building picks the same town cue; the southern s
  a.equal(r.tick(41,30).active,'town');
  const room=r.run('poiOrchestraDecks.get("town")');
  a.equal(room.entryDecay,.30);
- r.c.poiWalkIndoor=()=>false;a.equal(r.tick(105,111).active,'southSettlement');
+ r.c.poiWalkIndoor=()=>false;a.equal(r.settled(105,111).active,'southSettlement');
  const s=r.run('poiOrchestraDecks.get("southSettlement")');
  r.c.poiWalkIndoor=()=>true;
  a.equal(r.tick(101,112).active,'southSettlement');
@@ -49,9 +50,10 @@ test('real detached fields, standalone facilities, and mapped mine below town fo
  const r=runtime();
  r.c.poiWalkIndoor=()=>true;
  a.equal(r.tick(83,108).active,'outside');
- a.equal(r.tick(118,60,-1).active,'mine');
+ a.equal(r.settled(118,60,-1).active,'mine');
  r.c.facilitySite={...r.c.facilitySite,id:'lodging'};
- a.equal(r.tick(41,30).active,'indoor');
+ a.equal(r.settled(41,30).active,'indoor');
  r.c.facilitySite={id:'snowpass'};
- a.equal(r.tick(41,30).active,'snow');
+ a.equal(r.settled(41,30).active,'snow');
 });
+

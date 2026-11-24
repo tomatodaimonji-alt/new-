@@ -9,7 +9,7 @@ function sample(){
  return code=>JSON.parse(JSON.stringify(vm.runInContext(code,c)));
 }
 test('play-only base rig covers all-unequipped body with modest cloth, leaving authored human props unchanged',()=>{
- assert.match(h,/characterHuman\(body,0,0,0,false,bowAim\|\|fist\?null:pose,gear,true\)/);
+ assert.match(h,/characterHuman\(body,0,0,0,false,null,gear,true\)/);
  const run=sample(),before=run("const make=(modest,gear=null)=>{const m=mesh();m.townParts={};characterHuman(m,0,0,0,false,null,gear,modest);return m};make(false)");
  const body=run("make(true,{head:null,torso:null,legs:null,feet:null})");
  assert(body.p.length>before.p.length);

@@ -2,6 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),vm=requir
 const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const snippet=(a,b)=>{const i=html.indexOf(a),j=html.indexOf(b,i+1);assert(i>=0&&j>i,'missing '+a);return html.slice(i,j)};
 const run=(scope={})=>{
+ Object.assign(scope,{btoa,atob,poiWalkDoorOpen:null,poiWalkIndoor:()=>false,setTimeout:()=>1,clearTimeout:()=>{}});
  vm.createContext(scope);
  vm.runInContext(snippet('const POI_SAFE_TOWN=','function poiWalkStatus('),scope);
  return scope;
@@ -35,28 +36,25 @@ test('mini map follows the active floor and hides for editor/AI while reusing st
  scope.poiWalkFacing=2;scope.poiMiniUpdate();assert.equal(scope.poiMiniSnapshot().topologyBuilds,builds);
  scope.pineAIActive=true;scope.poiMiniUpdate();assert(els.poiMiniHud.hidden);
  scope.pineAIActive=false;scope.poiWalkLevel=1;scope.poiMiniUpdate();
- assert(!els.poiMiniHud.hidden);assert.equal(scope.poiMiniSnapshot().topologyBuilds,builds+1);
+ assert(!els.poiMiniHud.hidden);assert.equal(scope.poiMiniSnapshot().topologyBuilds,builds);
  assert(labels.includes('2F'),'keep upper-floor information visible after replacing the old status');
- scope.poiWalkLevel=0;scope.poiMiniUpdate();assert.equal(scope.poiMiniSnapshot().topologyBuilds,builds+1);
- scope.poiMiniInvalidate();scope.poiMiniUpdate();assert.equal(scope.poiMiniSnapshot().topologyBuilds,builds+2);
+ scope.poiWalkLevel=0;scope.poiMiniUpdate();assert.equal(scope.poiMiniSnapshot().topologyBuilds,builds);
+ scope.poiMiniInvalidate();scope.poiMiniUpdate();assert.equal(scope.poiMiniSnapshot().topologyBuilds,builds+1);
  scope.poiWalkActive=false;scope.poiMiniUpdate();assert(els.poiMiniHud.hidden);
 });
-test('map raster leaves the shared glass visible behind terrain and at the edges',()=>{
- const ops=[];
- const g={fillStyle:'',strokeStyle:'',fillRect(...args){ops.push(['fill',this.fillStyle,...args]);},
-  strokeRect(...args){ops.push(['outline',this.strokeStyle,...args]);},fillText(){}};
- const scope=run({document:{createElement:()=>({getContext:()=>g})},MAP_W:20,MAP_H:20,
-  world:[{x:10,z:10,y:0,type:'stone'},{x:11,z:10,y:0,type:'earth'},{x:12,z:10,y:0,type:'water'},{x:13,z:10,y:0,type:'poiFortGate'}],isFloor:t=>t==='stone',isWallId:()=>false,
-  poiWalkPassableDoor:()=>false,BRIDGE_IDS:new Set(),ROAD_IDS:new Set()});
- const map=scope.poiMiniDrawTopology(144,144,0);
- const pixels=ops.filter(o=>o[0]==='fill');
- assert.equal(pixels.length,4,'no solid background fill over the shared panel');
- const alpha=pixels.map(o=>Number(o[1].match(/,([.\d]+)\)$/)?.[1]));
- assert(alpha[0]>=.29&&alpha[0]<=.38,'glass shows through ordinary terrain');
- assert(alpha[1]>alpha[0]&&alpha[2]>alpha[0]&&alpha[3]>alpha[1],'roads, water and entrances remain distinct');
- assert(pixels.every((p,i)=>p.slice(2).every(Number.isInteger)&&(!i||pixels[i-1][2]+pixels[i-1][4]===p[2])),'translucent adjacent cells must not overlap');
- assert(ops.some(o=>o[0]==='outline'&&o[2]===map.ox&&o[3]===map.oy),'north-up map retains a ground-level boundary');
-
+test('map raster fills unexplored pixels black and only paints distinct known terrain',()=>{
+ const pixels=[],g={fillStyle:'',fillRect(...args){pixels.push([this.fillStyle,...args])},
+  beginPath(){},arc(){},fill(){},stroke(){},fillText(){}};
+ const scope=run({});
+ vm.runInContext(`{
+  const cells=new Uint8Array(41*41);cells[840-5]=2;cells[840-4]=3;
+  cells[840-3]=4;cells[840-2]=6;
+  poiLocalPaint(cv,{cells,crop:poiLocalCrop(11,10),marks:[],x:11,z:10,y:0,facing:0});
+ }`,Object.assign(scope,{cv:{width:144,height:144,getContext:()=>g}}));
+ assert.deepEqual(pixels[0],['#000',0,0,144,144]);
+ assert.equal(pixels.length,5,'only the four charted tiles are colored');
+ assert.equal(new Set(pixels.slice(1).map(p=>p[0])).size,4,'ground, road, water and entrance remain distinct');
+ assert(pixels.slice(1).every((p,i)=>p.slice(1).every(Number.isInteger)&&(!i||pixels[i][1]+pixels[i][3]===p[1])));
 });
 
 test('minimap and attached location panel sit nearer the top-left but respect the display cutout',()=>{
@@ -71,10 +69,10 @@ test('all four upper-left surfaces blend directly with the scene without a blur 
  assert.match(css,/backdrop-filter:none/);
  assert.match(css,/box-shadow:0 1px 4px #07191045/);
 });
-test('accepting the mine quest repaints only the dynamic minimap at the authored destination',()=>{
+test('mine quest marker appears only once nearby surveyed, and only on the surface',()=>{
  const outlines=[],draws=[];
- const g={fillRect(){},strokeRect(){},beginPath(){},arc(){},fill(){},stroke(){},fillText(){},
-  clearRect(){draws.push(1)},drawImage(){},moveTo(x,z){outlines.push([x,z])},lineTo(){},closePath(){}};
+ const g={fillRect(x,y,w,h){if(x===0&&y===0&&w===144&&h===144)draws.push(1)},strokeRect(){},beginPath(){},arc(){},fill(){},stroke(){},fillText(){},
+  clearRect(){},drawImage(){},moveTo(x,z){outlines.push([x,z])},lineTo(){},closePath(){}};
  const mk=()=>({width:144,height:144,getContext:()=>g});
  let quests=[];
  const els={poiMiniHud:{},poiMiniMap:mk(),poiLocationName:{},poiLocationStars:{setAttribute(){}}};
@@ -84,10 +82,12 @@ test('accepting the mine quest repaints only the dynamic minimap at the authored
   isFloor:()=>false,isWallId:()=>false,poiWalkPassableDoor:()=>false,BRIDGE_IDS:new Set(),ROAD_IDS:new Set()});
  scope.poiMiniUpdate();assert.equal(outlines.length,0);
  quests=[{id:'mine-survey',x:116,z:64,y:0}];scope.poiMiniUpdate();
- const s=134/128;
- assert.deepEqual(outlines,[[5+116.5*s,(144-96*s)/2+3+64.5*s-5.5]]);
+ assert.equal(outlines.length,0,'accepted task does not leak a far-away map pin');
  assert.equal(scope.poiMiniSnapshot().topologyBuilds,1);assert.equal(draws.length,2);
  scope.poiMiniUpdate();assert.equal(draws.length,2);
+ scope.poiWalkX=115;scope.poiWalkZ=63;scope.poiMiniUpdate();
+ const scale=144/41;
+ assert.deepEqual(outlines,[[21.5*scale,21.5*scale-5.5]]);
  scope.poiWalkLevel=-1;scope.poiMiniUpdate();assert.equal(outlines.length,1,'no marker below ground');
  scope.poiWalkLevel=0;quests=[];scope.poiMiniUpdate();assert.equal(outlines.length,1);
 });

@@ -47,7 +47,7 @@ test('day label is beside the existing time and light is confined to 3D programs
  assert.match(h,/<div id="poiClockHud" hidden><span id="poiClockDay">1日目<\/span><strong id="poiClockValue">08:00/);
  assert.match(h,/vec3 paint=pow\(max\(vCol,[^\n]*/);
  assert.match(h,/vec3 color=paint\*uTownDaylight;/);
- assert.match(h,/if\(uLootHighlight.w>0.0\)\{[\s\S]*?\n \}\n gl_FragColor=vec4\(mix\(color,vec3\(1\.0,\.13,\.14\),uHitFlash\),1\.0\)/);
+ assert.match(h,/if\(uLootHighlight.w>0.0\)\{[\s\S]*?\n \}\n color=mix\(color,vec3\(1\.0,\.13,\.14\),uHitFlash\);\n if\(uSacredFog.z>0.0\)\{[^}]*color=mix\(color,uSacredColor,mist\);\s*\}\n(?: [^\n]*\n)*? if\(uSacredEdge\.w>0\.0\)\{[^}]*color=mix\(color,uSacredEdge\.xyz,veil\);\s*\}\n gl_FragColor=vec4\(color,1\.0\)/);
  assert.match(h,/gl\.uniform1f\(loc\.hitFlash,0\)/,'temporary actor-only tint is reset');
  assert.match(h,/gl_FragColor=vec4\(c.rgb\*uTownDaylight,c.a\)/);
  assert.match(h,/gl.uniform3f\(loc.daylight,\.\.\.daylight\)/);

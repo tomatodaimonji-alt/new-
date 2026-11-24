@@ -7,23 +7,25 @@ const fake=(m)=>tri(m,[0,.25,0],[.22,.25,.11],[-.07,1.48,.05],[.4,.4,.4]);
 const c=vm.createContext({mesh,tri,quad:tri,poiRoleToolGripStyle:()=>null,POI_SWORD_HALF_WIDTH:1.5,
  characterHuman(){},deco:(m,k)=>k==='equipLongStaff'?c.poiLongWoodStaffGeometry(m,0,0,0):
  k==='equipNorthMinotaurAxe'?c.poiNorthMinotaurAxeGeometry(m,0,0,0):fake(m)});
-vm.runInContext(cut('function poiLongWoodStaffGeometry(','\nfunction ')+cut('function poiNorthMinotaurAxeGeometry(','\nfunction ')+
+vm.runInContext(cut('function poiHumanGearType(','function poiRoleClothingGeometry(')+cut('function poiLongWoodStaffGeometry(','\nfunction ')+cut('function poiNorthMinotaurAxeGeometry(','\nfunction ')+
  cut('// BEGIN WORLD MELEE REACH','// END WORLD MELEE REACH')+
  cut('function poiLongStaffGripStyle(','function poiWalkAvatar(')+cut('function characterArmRotation(','function roundStack('),c);
 const axe='equipNorthMinotaurAxe',staff='equipLongStaff';
 const xyz=(m,i)=>m.p.slice(i,i+3);
 const distance=(m,i,j)=>Math.hypot(...xyz(m,i).map((v,k)=>v-m.p[j+k]));
+const held=(id,m)=>{const prop=mesh();c.deco(prop,id);return {...m,p:m.p.slice(-prop.p.length)}};
+
 test('world avatar mesh of every rigid melee weapon preserves size across wind-up, contact, moving wall hit and recovery',()=>{
  for(const [k,range,hit,pose,sweep] of [
   [staff,2,210,400],[axe,2.55,300,670],['equipWoodSword',1.3,108,296,true],['equipBoneSword',1.55,108,296,true],
   ['equipIronSword',2,108,296,true],['kitchenKnife',1,80,190],['equipStoneMace',1,380,620],
   ['equipPlainStaff',1,140,300],['equipStick',1,0,152],['equipClub',1,0,152],['equipStoneSword',1,0,152]]){
-  const idle=c.poiBuildPlayerMesh(k,null,null,0,0,0,0,0,.83,true);
+  const idle=held(k,c.poiBuildPlayerMesh(k,null,null,0,0,0,0,0,.83,true));
   const props=[{range,hit,pose,sweep,frontArc:k===axe},hit?hit*.72:0];
   const reach=ms=>hit?c.poiWorldMeleePlan(k,props[0],ms):{mix:.7,side:0,forward:1,height:.75};
   for(const [ms,mix,side,forward] of [[props[1]], [hit],[hit,.48,.11,.42], [hit+(pose-hit)*.55]]){
    const q=reach(ms);if(q&&mix!==undefined)Object.assign(q,{mix,side,forward});
-   const moving=c.poiBuildPlayerMesh(k,{strike:1.53,sweep:-.23,twist:.1,edgeTilt:1.40,meleeReach:q},null,.111,0,8,1,15,-.37,true);
+   const moving=held(k,c.poiBuildPlayerMesh(k,{strike:1.53,sweep:-.23,twist:.1,edgeTilt:1.40,meleeReach:q},null,.111,0,8,1,15,-.37,true));
    a.equal(moving.p.length,idle.p.length,k);
    const end=idle.p.length-3,step=Math.max(3,Math.floor(end/21)*3);
    for(let i=0;i<end;i+=step){
@@ -35,8 +37,8 @@ test('world avatar mesh of every rigid melee weapon preserves size across wind-u
 });
 test('the long wooden staff is substantially longer at idle than the old catalog wrist transform',()=>{
  const maxPair=m=>{let max=0;for(let i=0;i<m.p.length;i+=15)for(let j=0;j<m.p.length;j+=15)max=Math.max(max,distance(m,i,j));return max};
- const idle=c.poiBuildPlayerMesh(staff,null,null,0,0,0,0,0,0,true);
- const catalogue=c.poiBuildPlayerMesh(staff,null,null,0,0,0,0,0,0,false);
+ const idle=held(staff,c.poiBuildPlayerMesh(staff,null,null,0,0,0,0,0,0,true));
+ const catalogue=held(staff,c.poiBuildPlayerMesh(staff,null,null,0,0,0,0,0,0,false));
  a.ok(maxPair(idle)>=maxPair(catalogue)*1.35);
 });
 function apexIndex(type){
@@ -49,7 +51,7 @@ test('ordinary contact reaches the original boundary with the real branch and ax
  for(const [id, range,height,hit,pose,poseFor] of [[staff,2,.74,210,400,()=>({strike:-4.85,sweep:-.09,twist:.10,edgeTilt:Math.PI/2,edgeYaw:.14})],
   [axe,2.55,.83,300,670,()=>({strike:1.54,sweep:-.15,twist:.04,edgeTilt:1.57,edgeYaw:0})]]){
   const q=c.poiWorldMeleePlan(id,{range,hit,pose,frontArc:id===axe},hit);
-  const build=q=>c.poiBuildPlayerMesh(id,{...poseFor(),meleeReach:q},null,0,0,0,0,0,0,true);
+  const build=q=>held(id,c.poiBuildPlayerMesh(id,{...poseFor(),meleeReach:q},null,0,0,0,0,0,0,true));
   const full=build(q),tip=apexIndex(id),[x,y,z]=xyz(full,tip);
   a.ok(Math.hypot(x,y-height,z-range)<.015,`${id} usual stationary tip at actual range: ${[x,y,z]}`);
   const wall=build({...q,forward:.74,wall:true}),wt=xyz(wall,tip);

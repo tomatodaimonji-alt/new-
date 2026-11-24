@@ -56,7 +56,7 @@ try{
  await p.goto(url+'/seed');
  await p.evaluate(()=>{
   localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
-   position:{x:24,z:98,y:0,facing:0},townLayout:5,townMapHeight:128,
+   position:{x:24,z:156,y:0,facing:0},townLayout:5,townMapHeight:182,templeDepth:1,
    view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.35,orbitDistance:5.5}}));
   localStorage.setItem('world-workshop-hotbar-v1','{"version":1,"weapon":"equipWoodSword","potions":0,"gold":0}');
  });
@@ -64,7 +64,7 @@ try{
  await p.locator('#pineStartupCover').waitFor({state:'hidden',timeout:23000});
  await p.waitForFunction(()=>window.__editorTest?.arenaQA&&window.__editorTest.facility().active,null,{timeout:12000});
  const initial=await log();
- assert.deepEqual(initial.player,[24,98,0]);assert.deepEqual(initial.boss,[24,104]);assert.equal(initial.hp,100);
+ assert.deepEqual(initial.player,[24,156,0]);assert.deepEqual(initial.boss,[24,158]);assert.equal(initial.hp,100);
  await p.evaluate(()=>window.__editorTest.arenaQA.manual());
  const wall=await p.evaluate(()=>Date.now());await p.clock.pauseAt(wall+1500);
  const advance=async(ms=48)=>{await p.clock.fastForward(ms);await p.evaluate(()=>window.__editorTest.arenaQA.draw());};
@@ -82,7 +82,7 @@ try{
  }
  where='real gait step starts a decoded Web Audio source and projected contact';
  const planted=await until(s=>s.steps.some(e=>e.buffer===7440)&&s.shakes.some(e=>e.cap===.024&&e.dy>0),55);
- assert(planted.boss[1]<104);assert.equal(new Set(planted.steps.map(e=>e.now)).size,planted.steps.length);
+ assert(planted.boss[1]<158);assert.equal(new Set(planted.steps.map(e=>e.now)).size,planted.steps.length);
  assert(planted.steps.every(e=>e.gain>0&&e.gain<.39));
  const orig=planted.steps.length;
  where='real sword contact projects its own small camera bump while statue is planted';

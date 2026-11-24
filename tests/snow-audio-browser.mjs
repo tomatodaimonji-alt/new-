@@ -40,6 +40,11 @@ try{
   AudioNode.prototype.connect=function(dest,...rest){if(dest instanceof AudioNode)nodes.set(this,[...(nodes.get(this)||[]),dest]);return connect.call(this,dest,...rest)};
   const makeGain=BaseAudioContext.prototype.createGain;
   BaseAudioContext.prototype.createGain=function(...args){const n=makeGain.apply(this,args);params.set(n.gain,n);return n};
+  const linear=AudioParam.prototype.linearRampToValueAtTime;
+  AudioParam.prototype.linearRampToValueAtTime=function(level,at){
+   const n=params.get(this);if(n)targets.set(n,[...(targets.get(n)||[]),{level,at,linear:true}]);
+   return linear.apply(this,arguments);
+  };
   const target=AudioParam.prototype.setTargetAtTime;
   AudioParam.prototype.setTargetAtTime=function(level,at,decay){
    const n=params.get(this);if(n)targets.set(n,[...(targets.get(n)||[]),{level,at,decay}]);
@@ -70,7 +75,7 @@ try{
   window.__snowPlayback={capture(music,effects){
    return {music:automation(music),effects:automation(effects),sounds:sounds.map(({source,...s})=>{
     const chain=path(nodes.get(source)?.[0]);
-    return {...s,music:chain.includes(music),effects:chain.includes(effects),automation:chain.slice(0,2).map(automation)};
+    return {...s,music:chain.includes(music),effects:chain.includes(effects),automation:chain.slice(0,3).map(automation)};
    })};
   }};
  });
@@ -99,7 +104,7 @@ try{
  const intro=(await state()).native.sounds.find(s=>s.hash===hashes[1]);
  assert(intro.loop&&intro.music&&!intro.effects&&intro.channels===2);
  assert(Math.abs(intro.duration-48)<.06&&intro.loopStart===0&&Math.abs(intro.loopEnd-intro.duration)<.001);
- assert(intro.automation[1].some(x=>x.level===1&&x.decay>=.25&&x.decay<=.45),'native bus fades in');
+ assert(intro.automation.some(g=>g.some(x=>x.level===1&&x.linear&&x.at>=intro.started)),'native bus fades in');
  where='BGM mute still allows independent wind';
  await set('#poiVolumeBgm',0);await wait(2);
  let s=await state(),gust=s.native.sounds.find(x=>x.hash===hashes[2]);
@@ -121,3 +126,4 @@ try{
  console.log('real offline native Ogg, snow-only BGM fade and intermittent independent SE; original field loop returns');
 }catch(e){console.error('Snow audio failed at:',where);throw e}
 finally{await browser?.close();server.close()}
+

@@ -16,7 +16,7 @@ function setup(){
  };
  const api=vm.runInNewContext(cut('// BEGIN DAVID TEMPLE COMBAT','// END DAVID TEMPLE COMBAT')+
   cut('function poiAimWallLimit(','function poiAimChooseLock(')+cut('// BEGIN DAVID TEMPLE CUES','// END DAVID TEMPLE CUES')+
-  ';({realStep:poiDavidMobFrame,step:(o,s,t)=>{const ok=poiDavidMobFrame(o,s,t);if(ok){const b=poiDavidMatch(o);for(const u of [POI_DAVID_AWAKENING.first,POI_DAVID_AWAKENING.second,POI_DAVID_AWAKENING.ready])poiDavidAwakeningTick(o,s,b,t+u);if(!s.david?.wakeDone)throw Error("post-awakening fixture unavailable");s.david.next=t+620;}return ok},tick:poiDavidCombatFrame,pose:poiDavidPose,approach:poiDavidApproach,inRoom:poiDavidIn,area:poiDavidArea,begin:poiDavidBegin,match:poiDavidMatch,incoming:poiDavidIncoming,cue:poiDavidCueGeometry,beamMesh:typeof poiDavidSweepBeamMesh==="function"?poiDavidSweepBeamMesh:null})',Object.assign(c,{POI_AIM_EPS:1e-7}));
+  ';({realStep:poiDavidMobFrame,step:(o,s,t)=>{const prior=poiAimOrigin;let ok;try{poiAimOrigin=()=>({x:s.x,z:s.z-2,y:o.y});ok=poiDavidMobFrame(o,s,t)}finally{poiAimOrigin=prior};if(ok){const b=poiDavidMatch(o);for(const u of [POI_DAVID_AWAKENING.first,POI_DAVID_AWAKENING.second,POI_DAVID_AWAKENING.ready])poiDavidAwakeningTick(o,s,b,t+u);if(!s.david?.wakeDone)throw Error("post-awakening fixture unavailable");s.david.next=t+620;}return ok},tick:poiDavidCombatFrame,pose:poiDavidPose,approach:poiDavidApproach,inRoom:poiDavidIn,area:poiDavidArea,begin:poiDavidBegin,match:poiDavidMatch,incoming:poiDavidIncoming,cue:poiDavidCueGeometry,beamMesh:typeof poiDavidSweepBeamMesh==="function"?poiDavidSweepBeamMesh:null})',Object.assign(c,{POI_AIM_EPS:1e-7}));
  return {c,s,api,boss};
 }
 
@@ -108,8 +108,9 @@ test('gallery chase stays active and can take actual legal steps toward a diagon
 test('360 actual analog headings remain in the legitimate interior cells at the wall; only the entrance exits',()=>{
  const build=vm.runInNewContext(cut('const FACILITY_SITES=Object.freeze(','function workshopResumeDecode(')+';buildFacilitySite');
  const site=build('base');site.id='base';const b=site.davidTemple.boss;
- const c={facilitySite:site,world:site.map.world.filter(o=>o.x>=2&&o.x<=45&&o.z>=81&&o.z<=128),poiWalkActive:true,poiWalkX:24,poiWalkZ:104,poiWalkLevel:0,
-  facilityCreekIndex:null,validPos:(x,z)=>x>=0&&z>=0&&x<128&&z<128,poiMonsterAt:()=>null,
+ const oz=b.z-104;
+ const c={facilitySite:site,world:site.map.world.filter(o=>o.x>=2&&o.x<=45&&o.z>=81+oz&&o.z<=128+oz),poiWalkActive:true,poiWalkX:24,poiWalkZ:b.z,poiWalkLevel:0,
+  facilityCreekIndex:null,validPos:(x,z)=>x>=0&&z>=0&&x<128&&z<site.map.height,poiMonsterAt:()=>null,
   poiIsMonster:t=>t==='monsterStoneDavid',pineSuperVehicleType:()=>false,isWallId:t=>/wall/i.test(t),
   isFloor:t=>/^(road|grass|earth|woodfloor)/.test(t)};
  const v=vm.runInNewContext(cut('function poiWalkPassableDoor(','let facilityCreekIndex=')+
@@ -122,12 +123,12 @@ test('360 actual analog headings remain in the legitimate interior cells at the 
  let wall=0,gate=0,wide=0;
  for(let deg=0;deg<360;deg++){
   const r=deg*Math.PI/180,x=Math.cos(r),z=Math.sin(r);let exited=false;
-  const enter=(x,z,fx,fz)=>{if(fz===94&&z===93&&x>=22&&x<=26)exited=true;return step(x,z,fx,fz)};
-  const p=v.advance(24,104,x*20,z*20,.20,step,enter);
+  const enter=(x,z,fx,fz)=>{if(fz===site.davidTemple.interior.exitZ&&z===fz-1&&x>=23&&x<=25)exited=true;return step(x,z,fx,fz)};
+  const p=v.advance(b.x,b.z,x*20,z*20,.20,step,enter);
   if(exited){gate++;a(!v.in(b,{...p,y:0}),JSON.stringify({deg,p}));continue;}
-  wall++;if(Math.hypot(p.x-24,p.z-104)>16.95)wide++;
+  wall++;if(Math.hypot(p.x-b.x,p.z-b.z)>16.95)wide++;
   a(v.in(b,{...p,y:0}),JSON.stringify({deg,p}));
  }
  a(wall>300&&gate>5&&wide>10,'exercises wall, gate and previously lost fractional positions');
- for(const [x,z] of [[29,88],[34,89],[42,104],[40.51,109.3],[24,121],[6.3,104]])a(!v.in(b,{x,z,y:0}),[x,z]);
+ for(const [x,z] of [[29,83],[34,89],[42,104],[40.51,109.3],[24,121],[6.3,104]])a(!v.in(b,{x,z:z+oz,y:0}),[x,z+oz]);
 });

@@ -18,7 +18,7 @@ function game(){
  };
  const api=vm.runInNewContext(cut('// BEGIN DAVID TEMPLE COMBAT','// END DAVID TEMPLE COMBAT')+
   cut('function poiAimWallLimit(','function poiAimChooseLock(')+cut('// BEGIN DAVID TEMPLE CUES','// END DAVID TEMPLE CUES')+
-  ';({realStep:poiDavidMobFrame,step:(o,s,t)=>{const ok=poiDavidMobFrame(o,s,t);if(ok){const b=poiDavidMatch(o);for(const u of [POI_DAVID_AWAKENING.first,POI_DAVID_AWAKENING.second,POI_DAVID_AWAKENING.ready])poiDavidAwakeningTick(o,s,b,t+u);if(!s.david?.wakeDone)throw Error("post-awakening fixture unavailable");s.david.next=t+620;}return ok},tick:poiDavidCombatFrame,begin:poiDavidBegin,pose:poiDavidPose,draw:(now,vp)=>poiDrawDavidBeam(now,vp,poiDrawDavidCue(now,vp))})',c);
+  ';({realStep:poiDavidMobFrame,step:(o,s,t)=>{const prior=poiAimOrigin;let ok;try{poiAimOrigin=()=>({x:s.x,z:s.z-2,y:o.y});ok=poiDavidMobFrame(o,s,t)}finally{poiAimOrigin=prior};if(ok){const b=poiDavidMatch(o);for(const u of [POI_DAVID_AWAKENING.first,POI_DAVID_AWAKENING.second,POI_DAVID_AWAKENING.ready])poiDavidAwakeningTick(o,s,b,t+u);if(!s.david?.wakeDone)throw Error("post-awakening fixture unavailable");s.david.next=t+620;}return ok},tick:poiDavidCombatFrame,begin:poiDavidBegin,pose:poiDavidPose,draw:(now,vp)=>poiDrawDavidBeam(now,vp,poiDrawDavidCue(now,vp))})',c);
  const frame=time=>{current=time;api.tick(time);draws.length=0;api.draw(time,[]);return draws.slice()};
  const begin=()=>{c.p.z=98;a(api.step(o,s,1000));c.p.z=97;a(api.begin(o,s,1700,'beam'));return s.david.attack.hits[0]};
  return {api,c,s,b,live,frame,begin,sounds,finishes,hits};
@@ -31,9 +31,16 @@ test('actual beam draw grows out of the eyes and maintains one buffer and postur
  a(!beam(before),'there is only a warning before the muzzle reveal');
  a(beam(early)&&beam(mid),'a visible ray grows during the original windup');
  a(length(beam(early))<length(beam(mid)),'successive rays extend from the eye');
- const muzzle=beam(early).p.filter((v,i,coords)=>i%3===0&&Math.abs(coords[i+2]-104.21)<.002&&Math.abs(coords[i+1]-4.75)<.03);
- a(muzzle.some(x=>Math.abs(x-24.349)<.025)&&muzzle.some(x=>Math.abs(x-24.651)<.025),'both real eye positions seed the beam, not the forehead center');
- a(beam(early).n<=375&&beam(mid).n<=375);
+ const coords=beam(early).p,muzzle=[];
+ for(let i=0;i<coords.length;i+=3)if(Math.abs(coords[i+2]-104.21)<.002)muzzle.push(coords.slice(i,i+3));
+ for(const x0 of [24.349,24.651]){
+  const ring=muzzle.filter(p=>(p[0]<24.5)===(x0<24.5));
+  a(ring.length>12,'a genuine tube ring begins at each eye');
+  const mid=j=>(Math.min(...ring.map(p=>p[j]))+Math.max(...ring.map(p=>p[j])))/2;
+  a(Math.abs(mid(0)-x0)<.012&&Math.abs(mid(1)-4.75)<.012,'each ring is centered at the physical eye');
+ }
+ a(muzzle.every(p=>Math.abs(p[0]-24.5)>.035),'no center/forehead emitter');
+ a(beam(early).n<=2160&&beam(mid).n<=2160,'two narrow capped tubes share the same mesh limit');
 
  a.equal(g.hits.length,0);
  const contact=g.frame(hit),hold=g.frame(hit+180),last=g.frame(hit+410),sweepStart=g.frame(hit+450),sweep=g.frame(hit+750);
