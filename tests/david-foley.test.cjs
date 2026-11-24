@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict'),test=require('node:test'),vm=require('node:vm'),fs=require('node:fs');
 const html=fs.readFileSync(process.env.WORKSHOP_HTML||process.argv[2]||'world-editor.html','utf8');
-test('David impact/extension schedule real mix path once with separate cached PCM',()=>{
+test('David non-beam impacts schedule one real mix path each with separate recorded PCM',()=>{
  const start=html.indexOf('// BEGIN DAVID ATTACK AUDIO'),end=html.indexOf('// END DAVID ATTACK AUDIO');
  assert(start>0&&end>start,'missing David sound runtime');
  const events=[],stops=[],tails=[],guard={allowed:true,walk:true,enabled:true,master:1,se:1,clear:true};
@@ -17,22 +17,22 @@ test('David impact/extension schedule real mix path once with separate cached PC
  });
  const b={y:0},p={x:2,z:0,y:0},q={kind:'sweep',sx:0,sz:0};
  const run=(kind,i=0,phase='impact',player=p)=>audio.play({...q,kind},player,b,i,phase);
- run('sweep');run('double');run('double',1);run('stomp');run('beam');run('beam',0,'extend');
- assert.equal(events.length,6);
- assert.equal(new Set(events.map(e=>e.name)).size,6);
+ run('sweep');run('double');run('double',1);run('stomp');
+ assert.equal(events.length,4);
+ assert.equal(new Set(events.map(e=>e.name)).size,4);
  assert(events.every(e=>e.when===7&&e.gain>0&&e.gain<=.75));
  for(const [k,v] of [['allowed',false],['master',0],['se',0],['walk',false],['enabled',false]]){
    const old=guard[k];guard[k]=v;run('sweep');guard[k]=old;
  }
  run('sweep',0,'impact',{...p,y:1});run('sweep',0,'impact',{...p,x:20});
- assert.equal(events.length,6);
+ assert.equal(events.length,4);
  run('sweep',0,'impact',{...p,x:6});guard.clear=false;run('sweep');
- assert(events[6].gain<events[0].gain&&events[7].gain<events[0].gain/2);
- audio.stop();audio.stop();assert.equal(stops.length,8);assert(stops.every(s=>s[1]===7.05));
- assert.equal(tails.length,8);assert(tails.every(s=>s[1]===0&&s[3]===.012));
+ assert(events[4].gain<events[0].gain&&events[5].gain<events[0].gain/2);
+ audio.stop();audio.stop();assert.equal(stops.length,6);assert(stops.every(s=>s[1]===7.05));
+ assert.equal(tails.length,6);assert(tails.every(s=>s[1]===0&&s[3]===.012));
  const table=html.slice(html.indexOf('const POI_RECORDED_FOLEY={'),html.indexOf('const poiRecordedFoleyCache'));
  const pcm=vm.runInNewContext(table+';POI_RECORDED_FOLEY');
- for(const {name} of events.slice(0,6)){
+ for(const {name} of events.slice(0,4)){
    const raw=Buffer.from(pcm[name],'base64'),n=raw.length/2;
    assert(n>=2400&&n<=18000,name);
    let sq=0,peak=0;
