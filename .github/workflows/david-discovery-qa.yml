@@ -1,30 +1,26 @@
-name: David committed finish and torso geometry QA
+name: Contextual defeat checkpoint verification
 on:
   push:
     branches: ['dot/workshop-david-discovery-qa']
 permissions:
   contents: read
 jobs:
-  test:
+  contextual:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        suite: [david-death-finish, david-large-hurtbox]
+    timeout-minutes: 9
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ab24cd7fc7bb709a5a8496f7fc7ecf939323aaf8
+          ref: 42ef0e3833439e67b6baff56ce840824c7c2e833
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Build exact independent candidate
         run: |
           set -eu
-          test "$(git hash-object world-editor.html)" = 3355eac7bc93889420bc35b469ae7e1377f054e4
-          mkdir -p .qa/a .qa/b .qa/tests
-          cat >.qa/b/build.py <<'SOURCE'
+          test "$(git hash-object world-editor.html)" = 7db83b92dbc97a49f1d31d040b8a92c0d671f195
+          mkdir -p .qa/tests
+          cat >.qa/build.py <<'SOURCE'
           from pathlib import Path
           import sys
           src,dst=map(Path,sys.argv[1:]);s=src.read_text()
@@ -32,158 +28,142 @@ jobs:
            global s
            assert s.count(a)==1,(a,s.count(a))
            s=s.replace(a,b,1)
-          a='function poiDavidDeathFrame(now){';b='function poiDavidMobFrame(o,s,now){'
-          rep(s[s.index(a):s.index(b)],Path(__file__).with_name('death.js').read_text())
-          rep('function poiDavidCease(o,s,b,now){\n const d=s.david;\n if(!d?.awake||d.returning)return;',
-          '''function poiDavidCease(o,s,b,now){
-           const d=s.david;
-           if(!d?.awake||d.returning||d.deathFinish)return;''')
-          rep(' if(typeof poiDavidFootFeedback', ''' if(d.deathFinish){
-            // A menu or mode switch may clear the defeat sequence early.
-            if(typeof poiPlayerDying==='function'&&poiPlayerDying())return false;
-            d.deathFinish=null;poiDavidCease(o,s,b,now);return false;
-           }
-           if(typeof poiDavidFootFeedback''')
-          rep('if(!poiPlayerDeathBegin(now)){','if(!poiPlayerDeathBegin(now,obj)){')
-          rep('function poiPlayerDeathBegin(now){','function poiPlayerDeathBegin(now,killer){')
-          rep(" if(typeof poiDavidDeathFrame==='function')poiDavidDeathFrame(now);",
-              " if(typeof poiDavidDeathFrame==='function')poiDavidDeathFrame(now,killer);")
-          rep('const active=q&&b&&s.hp>0&&poiEnemyThreatEnabled()&&poiWalkLevel===q.y',
-              'const finishing=!!s?.david?.deathFinish,active=q&&b&&s.hp>0&&(poiEnemyThreatEnabled()||finishing)&&poiWalkLevel===q.y')
-          rep(' const sw=q.sweep,tell=sw&&sw.start===null&&age>=110,emission=poiDavidBeamEmission(q,now);',
-              ' const sw=q.sweep,tell=sw&&sw.start===null&&age>=110,emission=poiDavidBeamEmission(q,now);\n if(finishing&&!emission)return;')
-          rep('  const {lane}=poiDavidCueGeometry(q,b);','  const {lane}=finishing?{lane:{p:[]}}:poiDavidCueGeometry(q,b);')
-          rep('  if(tell){\n   if(poiDavidCue.fan===undefined)', '  if(finishing){ /* The residue is the existing depth-tested beam, not a warning. */ }\n  else if(tell){\n   if(poiDavidCue.fan===undefined)')
+          a='function poiPlayerDeathSpawn(){';b='function poiPlayerDeathFrame(now){'
+          rep(s[s.index(a):s.index(b)],Path(__file__).with_name('respawn.js').read_text())
+          rep("if(facilitySite?.id!=='base'||!poiWalkActive||poiPlayerHP!==0||poiPlayerDeath)return false;","if(!facilitySite?.id||!poiWalkActive||poiPlayerHP!==0||poiPlayerDeath)return false;")
+          rep("poiPlayerDeath={phase:'pause',start:now,blackAt:null,relocated:false,opacity:0};","poiPlayerDeath={phase:'pause',start:now,blackAt:null,relocated:false,opacity:0,checkpoint:poiDefeatContext()};")
+          rep("function poiPlayerDeathSnapshot(){return poiPlayerDeath?{...poiPlayerDeath}:null}","function poiPlayerDeathSnapshot(){\n if(!poiPlayerDeath)return null;\n const {checkpoint,...snapshot}=poiPlayerDeath;return snapshot;\n}")
+          rep("if(!poiWalkActive||facilitySite?.id!=='base'){poiPlayerDeathClear();return false}","if(!poiWalkActive||facilitySite!==d.checkpoint.site){poiPlayerDeathClear();return false}")
+          rep("const spawn=poiPlayerDeathSpawn();level=0;$('level').value='0';","const spawn=poiPlayerDeathSpawn(d.checkpoint);level=spawn.y;$('level').value=String(level);")
+          rep("poiWalkReset(spawn.x,spawn.z);poiCombatHud();workshopResumeWrite();","poiWalkReset(spawn.x,spawn.z,spawn.y,spawn.facing);poiCombatHud();workshopResumeWrite();")
+          rep("function poiWalkReset(x,z){","function poiWalkReset(x,z,spawnY=0,spawnFacing=poiWalkFacing){")
+          rep("if(facilitySite){$('app').classList.remove('facilityCellar');poiMonsterMeshDirty=true}\n poiWalkActionStarted","if(facilitySite){$('app').classList.toggle('facilityCellar',spawnY<0);poiMonsterMeshDirty=true}\n poiWalkActionStarted")
+          rep("poiWalkLevel=0;poiWalkX=x;poiWalkZ=z;poiWalkFromX=x;", "poiWalkLevel=spawnY;poiWalkFacing=spawnFacing;poiWalkX=x;poiWalkZ=z;poiWalkFromX=x;")
+          rep('dirty=true;cursorDirty=true;poiCreekAudioSync();poiWalkRoof();poiWalkAvatar();poiWalkCamera();poiWalkStatus();workshopResumeWrite();\n if(typeof poiDungeonArrive',"""dirty=true;cursorDirty=true;poiCreekAudioSync();poiWalkRoof();poiWalkAvatar();poiWalkCamera();poiWalkStatus();
+           if(typeof poiDefeatRememberEntry==='function')poiDefeatRememberEntry(to.x,to.z,to.y,poiWalkFacing);
+           workshopResumeWrite();
+           if(typeof poiDungeonArrive""")
+          rep('poiWalkLevel=next;level=next;'+chr(36)+"('level').value=String(level);dirty=true;cursorDirty=true;",'poiWalkLevel=next;level=next;'+chr(36)+"""('level').value=String(level);dirty=true;cursorDirty=true;
+             if(prior*next<=0&&typeof poiDefeatRememberEntry==='function')poiDefeatRememberEntry(poiWalkX,poiWalkZ,next,poiWalkFacing);""")
+          rep(' poiSnowPassSwitches++;',' if(!cold&&typeof poiDefeatRememberEntry===\'function\')poiDefeatRememberEntry(dest.x,dest.z,0,dest.facing);\n poiSnowPassSwitches++;')
+          rep("{x:poiSpawnX,z:poiSpawnZ,y:0,facing:poiWalkFacing}:{x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,facing:poiWalkFacing}):null,",
+              "poiPlayerDeathSpawn(poiPlayerDeath.checkpoint):{x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,facing:poiWalkFacing}):null,")
+          rep("{region:'snowpass',regionHp:poiPlayerHP}:{}),\n  ...(facilitySite?.id==='base'?",
+              "{region:'snowpass',regionHp:poiPlayerDeath?POI_PLAYER_MAX_HP:poiPlayerHP}:{}),\n  ...(facilitySite?.id==='base'?")
           dst.parent.mkdir(parents=True,exist_ok=True);dst.write_text(s)
           SOURCE
-          cat >.qa/b/death.js <<'SOURCE'
-          function poiDavidDeathFrame(now,killer){
-           const live=poiDavidActive,b=live&&poiDavidMatch(live.o);
-           if(!live||!b||live.s.hp<=0||poiMonsterStates.get(live.o)!==live.s)return;
-           const {o,s}=live,d=s.david,q=d?.attack;
-           // Called synchronously by the defeat initializer, before the lethal
-           // strike's enclosing branch returns. Only that actual source qualifies.
-           if(killer===o&&q?.cursor>0&&!d.returning){
-            d.deathFinish={until:Math.min(q.until,now+POI_DEATH_PAUSE)};
-            if(q.kind==='beam'&&q.sweep?.start===null){
-             // A follow-up turn that has not begun is a future attack, not a pose.
-             q.sweep=null;q.until=now+POI_DAVID_PATTERNS.beam.rest;
-             d.deathFinish.until=q.until;
-            }
-            if(typeof poiAimLocked!=='undefined'&&poiAimLocked?.id===o)poiCombatLockReset();
-           }
-           if(d?.deathFinish){
-            if(q&&now<d.deathFinish.until){
-             // Only the renderer's cursor advances. No hit, companion contact,
-             // ground effect, strike audio, regeneration, or AI choice occurs here.
-             while(q.cursor<q.hits.length&&now>=q.hits[q.cursor]){
-              q.lastContactAt=q.hits[q.cursor++];
+          cat >.qa/respawn.js <<'SOURCE'
+          // BEGIN DEFEAT CHECKPOINTS
+          let poiDefeatEntry=null;
+          function poiDefeatArea(site,x,z,y){
+           if(site?.id!=='base')return site?.id?'region:'+site.id:null;
+           const realm=typeof poiDungeonTravelKey==='function'?poiDungeonTravelKey(site,x,z,y):null;
+           if(realm)return realm;
+           if(y<0&&site.mine&&poiDungeonPointIn(site.mine.bounds,x,z,y))return 'mine';
+           if(y===0&&site.davidTemple?.retreat&&z>=(site.davidTemple.entrance?.z??site.davidTemple.retreat.z+1)&&typeof poiDavidTempleContains==='function'&&poiDavidTempleContains(site,x,z,y))return 'davidTemple';
+           return 'home';
+          }
+          function poiDefeatRememberEntry(x,z,y,facing){
+           const site=facilitySite,area=poiDefeatArea(site,x,z,y);
+           poiDefeatEntry=area&&area!=='home'?{site,area,x,z,y,facing}:null;
+          }
+          function poiDefeatContext(){
+           return {site:facilitySite,area:poiDefeatArea(facilitySite,poiWalkX,poiWalkZ,poiWalkLevel),facing:poiWalkFacing};
+          }
+          function poiDefeatCheckpoint(ctx){
+           const {site,area,facing}=ctx,d=site[area];let p,face=facing;
+           if(area?.startsWith('region:')){p=site.spawn;face=p?.facing??2}
+           else if(area==='mine'){const s=site.mine.stairs;p={x:s?.x,z:s?.z-1,y:site.mine.bounds.y};face=0}
+           else if(area==='davidTemple'){p=d.retreat;face=0}
+           else if(area!=='home'){p=d?.dungeonStand;face=((p?.facing??2)+2)%4}
+           else p=site.spawn??{x:poiSpawnX,z:poiSpawnZ};
+           return p?{x:p.x,z:p.z,y:p.y??0,facing:face}:null;
+          }
+          function poiDefeatFind(pin,accept,max){
+           if(!pin||!Number.isInteger(pin.x)||!Number.isInteger(pin.z)||!Number.isInteger(pin.y))return null;
+           const prior=poiWalkLevel;
+           try{
+            poiWalkLevel=pin.y;
+            for(let r=0;r<=max;r++)for(let dz=-r;dz<=r;dz++){
+             const dx=r-Math.abs(dz);
+             for(const x of dx?[pin.x-dx,pin.x+dx]:[pin.x]){
+              const z=pin.z+dz;
+              if(!validPos(x,z)||!accept(x,z,pin.y)||!poiWalkCanStep(x,z)||
+                 (typeof poiOtherworldPortalAt==='function'&&poiOtherworldPortalAt(facilitySite,x,z,pin.y))||
+                 world.some(o=>o.x===x&&o.z===z&&o.y===pin.y&&
+                  (o.type==='guildStairUp'||o.type==='guildStairDown'||
+                   (typeof poiWalkPassableDoor==='function'&&poiWalkPassableDoor(o.type)))))continue;
+              return {...pin,x,z};
              }
-             const sw=q.sweep;
-             if(sw?.start!=null&&!sw.done){
-              const at=Math.min(now,sw.end);
-              sw.angle=sw.side*POI_DAVID_BEAM_ARC*(at-sw.start)/POI_DAVID_BEAM_SWEEP;
-              if(at===sw.end){sw.done=true;sw.endedAt=now;poiDavidBeamAudioEnd(q)}
-             }
-             if(q.kind==='beam'&&!sw&&now-q.lastContactAt>=POI_DAVID_BEAM_SHORT)poiDavidBeamAudioEnd(q);
-             return;
             }
-            d.deathFinish=null;
+           }finally{poiWalkLevel=prior}
+           return null;
+          }
+          // END DEFEAT CHECKPOINTS
+          function poiPlayerDeathSpawn(ctx=poiDefeatContext()){
+           const {site,area}=ctx,pin=poiDefeatCheckpoint(ctx),arrived=poiDefeatEntry?.site===site&&poiDefeatEntry.area===area?poiDefeatEntry:null;
+           const home=(x,z,y)=>y===0&&(typeof poiWildZone!=='function'||poiWildZone(POI_SAFE_TOWN,x,z));
+           const same=(x,z,y)=>area==='davidTemple'?
+            y===0&&poiDefeatArea(site,x,z,y)==='home':
+            area==='home'?home(x,z,y):poiDefeatArea(site,x,z,y)===area;
+           // Never trust saved coordinates as an entrance. A genuine live ingress
+           // is preferred in this map; cold resumes use its authored safe stand.
+           const entry=arrived&&{x:arrived.x,z:arrived.z,y:arrived.y,facing:arrived.facing};
+           const local=poiDefeatFind(entry,same,0)||poiDefeatFind(pin,same,area==='home'?20:6);
+           if(local)return local;
+           if(site.id==='base'){
+            const base={...(site.spawn??{x:poiSpawnX,z:poiSpawnZ}),y:0,facing:ctx.facing};
+            const safe=poiDefeatFind(base,home,20);
+            if(safe)return safe;
+            const fallback=poiDefeatFind(base,(_x,_z,y)=>y===0,32);
+            if(fallback)return fallback;
            }
-           poiDavidCease(o,s,b,now);
-           if(s.david?.returning)poiDavidReturnFrame(o,s,b,now);
+           // Do not cross a region boundary if even its entry was edited away.
+           return poiDefeatFind(pin,()=>true,10)||
+            {x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,facing:ctx.facing};
           }
           SOURCE
-          cat >.qa/a/build.py <<'SOURCE'
-          from pathlib import Path
-          import sys
-          src,dst=map(Path,sys.argv[1:]);s=src.read_text()
-          def rep(a,b):
-           global s
-           assert s.count(a)==1,(a,s.count(a))
-           s=s.replace(a,b,1)
-          anchor='function poiAimTrace(shot,range,now){'
-          rep(anchor,Path(__file__).with_name('body.js').read_text()+anchor)
-          rep('let winner=null,best=Infinity;\n for(const c of poiAimTargetList(o,range,now)){\n  const t=',
-          '''let winner=null,best=Infinity,bodyPoint=null;
-           for(const c of poiAimTargetList(o,range,now)){
-            const body=typeof poiLargeMeleeBody==='function'?poiLargeMeleeBody(c,shot,now):null;
-            if(body){
-             for(const b of body){
-              const t=poiLargeMeleeRay(o,d,b,range);
-              if(t===null||t>=best||t>limit+POI_AIM_EPS)continue;
-              winner=c;best=t;bodyPoint={x:o.x+d.x*t+.5,z:o.z+d.z*t+.5,y:b.y};
-             }
-             continue;
-            }
-            const t=''')
-          rep('{winner=c;best=t}\n }\n return winner?', '{winner=c;best=t;bodyPoint=null}\n }\n return winner?')
-          rep('forward:(winner.x-o.x)*d.x+(winner.z-o.z)*d.z,monster:', 'forward:bodyPoint?best:(winner.x-o.x)*d.x+(winner.z-o.z)*d.z,monster:')
-          rep('{spearPoint:{x:winner.x+.5','{spearPoint:bodyPoint??{x:winner.x+.5')
-          rep('if(arc?!poiPlayerFrontArcContains(o,d,c,forward):!poiSwordSweepContains(o,d,c,forward))continue;',
-          '''const body=typeof poiLargeMeleeBody==='function'?poiLargeMeleeBody(c,shot,now):null;
-            if(body){if(body.some(b=>poiLargeMeleeSweep(o,d,b,forward,arc,pass)))hits.push(c);continue}
-            if(arc?!poiPlayerFrontArcContains(o,d,c,forward):!poiSwordSweepContains(o,d,c,forward))continue;''')
-          dst.parent.mkdir(parents=True,exist_ok=True);dst.write_text(s)
+          cat >.qa/tests/contextual-respawn.test.cjs <<'SOURCE'
+          const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),test=require('node:test');
+          const h=fs.readFileSync(process.env.PRODUCT||'world-editor.html','utf8');
+          function piece(a,b){const x=h.indexOf(a),y=h.indexOf(b,x+1);assert(x>=0&&y>x,a);return h.slice(x,y)}
+          const script=(h.includes('// BEGIN DEFEAT CHECKPOINTS')?piece('// BEGIN DEFEAT CHECKPOINTS','// END DEFEAT CHECKPOINTS'):'')+piece('function poiPlayerDeathSpawn(', 'function poiPlayerDeathFrame(');
+          const setup=(x,z,y,region='base')=>{
+           const site={id:region,spawn:{x:10,z:10},mine:{stairs:{x:20,z:20},bounds:{x1:16,x2:26,z1:15,z2:22,y:-1}},
+            chapel:{dungeonStand:{x:40,z:39,y:-1,facing:2},bounds:{x1:36,x2:44,z1:34,z2:40,y:-1}},
+            davidTemple:{boss:{},retreat:{x:28,z:30,y:0},bounds:{x1:24,x2:32,z1:32,z2:40,y:0}}};
+           if(region!=='base')site.spawn={x:12,z:0};
+           const c=vm.createContext({facilitySite:site,poiSpawnX:10,poiSpawnZ:10,poiWalkX:x,poiWalkZ:z,poiWalkLevel:y,poiWalkFacing:1,
+           world:[{x:20,z:20,y:-1,type:'guildStairUp'}],POI_SAFE_TOWN:[],poiWildZone:(r,x,z)=>x<13&&z<13,validPos:(x,z)=>x>=0&&z>=0,
+           poiWalkCanStep:(x,z)=>!c.block?.has(x+','+z),poiOtherworldPortalAt:(_s,x,z)=>x===40&&z===40,
+           poiDungeonTravelKey:(s,x,z,y)=>poiPoint(s.chapel.bounds,x,z,y)?'chapel':null,
+           poiDungeonPointIn:poiPoint,poiDavidTempleContains:(s,x,z,y)=>poiPoint(s.davidTemple.bounds,x,z,y)});
+           vm.runInContext(script,c);
+           return {c,spawn:()=>JSON.parse(vm.runInContext('JSON.stringify(poiPlayerDeathSpawn())',c))};
+          };
+          function poiPoint(b,x,z,y){return y===b.y&&x>=b.x1&&x<=b.x2&&z>=b.z1&&z<=b.z2}
+          test('surface starts at home, mine stays inside, genuine other dungeon uses its own landing',()=>{
+           assert.deepEqual(setup(82,60,0).spawn(),{x:10,z:10,y:0,facing:1});
+           assert.deepEqual(setup(24,17,-1).spawn(),{x:20,z:19,y:-1,facing:0});
+           assert.deepEqual(setup(40,35,-1).spawn(),{x:40,z:39,y:-1,facing:0});
+          });
+          test('snow cold restore resolves authored entry, David explicitly uses temple forecourt; HUD subregions remain ordinary outside',()=>{
+           assert.deepEqual(setup(12,12,0,'snowpass').spawn(),{x:12,z:0,y:0,facing:2});
+           assert.deepEqual(setup(28,36,0).spawn(),{x:28,z:30,y:0,facing:0});
+          });
+          test('occupied default looks nearby without using portal / wrong floor and does not mutate floor',()=>{
+           const {c,spawn}=setup(40,35,-1);c.block=new Set(['40,39','40,38','39,39']);
+           const p=spawn();assert.deepEqual(p,{x:41,z:39,y:-1,facing:0});assert.equal(c.poiWalkLevel,-1);
+          });
+          test('actual recorded entry supersedes authored fallback and stale different map entry is ignored',()=>{
+           const {c,spawn}=setup(40,35,-1);
+           vm.runInContext('poiDefeatRememberEntry(41,38,-1,3)',c);
+           assert.deepEqual(spawn(),{x:41,z:38,y:-1,facing:3});
+           c.facilitySite={...c.facilitySite};
+           assert.deepEqual(spawn(),{x:40,z:39,y:-1,facing:0});
+          });
           SOURCE
-          cat >.qa/a/body.js <<'SOURCE'
-          // BEGIN OVERSIZED MELEE BODY
-          function poiLargeMeleeBody(target,shot,now){
-           // Null retains legacy center targeting. An empty array means the
-           // authored body is above/below the actual held weapon contact plane.
-           const type=target.id.type,w=shot.type;
-           if(type!=='monsterStoneDavid'||w==='equipWoodBow'||w==='fireWand')return null;
-           if(typeof poiDavidRig!=='function'||typeof poiMonsterPose!=='function')return null;
-           const p=poiMonsterPose(target.id,target.state,now),r=poiDavidRig(p.david);
-           const height=w==='equipWoodSpear'?.868:(typeof POI_WORLD_MELEE_CONTACT_HEIGHT!=='undefined'?POI_WORLD_MELEE_CONTACT_HEIGHT[w]:0)??.76;
-           const y=terrainY(Math.floor(shot.aim.x+.5),Math.floor(shot.aim.z+.5))+shot.aim.y*1.4+(height||.76)-p.y;
-           // Mesh ankle and knee prism centerline/radii in poiDavidGeometry.
-           // Evaluate the visible low body at the contact height, never its held
-           // swords, arms, or the empty space between the two legs.
-           const body=[],angle=Number.isFinite(p.heading)?p.heading:null,c=Math.cos(angle??0),s=Math.sin(angle??0);
-           const point=(a,b,lo,hi)=>{
-            if(y<Math.min(a[1],b[1])||y>Math.max(a[1],b[1]))return;
-            const t=(y-a[1])/(b[1]-a[1]);
-            const u=a[0]+(b[0]-a[0])*t,v=a[2]+(b[2]-a[2])*t;
-            const [x,z]=angle===null?(typeof rot2==='function'?rot2(u,v,target.state.facing||0):[u,v]):[u*c-v*s,u*s+v*c];
-            // Inscribed ground disk rather than filling the corners of stone.
-            body.push({x:p.x-.5+x,z:p.z-.5+z,y:p.y+y,r:lo+(hi-lo)*t});
-           };
-           for(let i=0;i<2;i++){
-            const f=r.feet[i],k=r.knees[i],side=i?1:-1;
-            const ankle=[f[0],f[1]+.24,f[2]-.14],hip=[side*.406+.09,2.29+side*.045,-.018];
-            const bend=typeof poiDavidLeapBodyY==='function'?poiDavidLeapBodyY:(y=>y);
-            const fit=([x,y,z])=>[x,bend(y,r.leapCrouch),z];
-            point(fit([f[0],f[1]+.03,f[2]]),fit(ankle),.25,.23);
-            point(fit(ankle),fit(k),.205,.235);
-            point(fit(k),fit(hip),.235,.29);
-           }
-           return body;
-          }
-          function poiLargeMeleeRay(o,d,b,range){
-           const x=b.x-o.x,z=b.z-o.z,t=x*d.x+z*d.z,side=x*d.z-z*d.x;
-           const delta=b.r*b.r-side*side;
-           if(delta<-POI_AIM_EPS)return null;
-           const depth=Math.sqrt(Math.max(0,delta));
-           if(t+depth<POI_AIM_EPS)return null;
-           const hit=Math.max(0,t-depth);
-           return hit<=range+POI_AIM_EPS?hit:null;
-          }
-          function poiLargeMeleeSweep(o,d,b,range,arc,pass){
-           const x=b.x-o.x,z=b.z-o.z,u=x*d.x+z*d.z,v=x*d.z-z*d.x;
-           let a=Math.max(arc?0:POI_AIM_EPS,u),side=v;
-           if(arc){
-            if(u<0)side=Math.max(-range,Math.min(range,v));
-            else{const k=Math.min(1,range/(Math.hypot(a,side)||1));a*=k;side*=k}
-           }else{a=Math.min(a,range);side=Math.max(-POI_SWORD_HALF_WIDTH,Math.min(POI_SWORD_HALF_WIDTH,v))}
-           if((u-a)**2+(v-side)**2>b.r*b.r+POI_AIM_EPS)return false;
-           const px=a*d.x+side*d.z,pz=a*d.z-side*d.x,len=Math.hypot(px,pz),ray=poiAimUnit(px,pz);
-           // Check the actual overlapping part, not the actor's center behind it.
-           return len<=POI_AIM_EPS||poiAimWallLimit(o,ray,len,pass)+POI_AIM_EPS>=len;
-          }
-          // END OVERSIZED MELEE BODY
-          SOURCE
-          cat >.qa/tests/david-death-finish-browser.mjs <<'SOURCE'
+          cat >.qa/tests/contextual-respawn-browser.mjs <<'SOURCE'
           import assert from 'node:assert/strict';
           import {createServer} from 'node:http';
           import {createRequire} from 'node:module';
@@ -193,241 +173,85 @@ jobs:
           const install=(a,b)=>{assert.equal(h.split(a).length,2,a);h=h.replace(a,b)};
           const mark="if(facilityParams.get('test')==='1')window.__editorTest={";
 
-          install(' const r=poiDavidRig(pose),P=v=>',' const r=poiDavidRig(pose);if(window.__finish)window.__finish.draw={pose,right:r.hands[1],left:r.hands[0]};const P=v=>');
-          install(" let kind=POI_DAVID_ORDER[d.cycle%POI_DAVID_ORDER.length];"," if(window.__finishManual)return false;\n let kind=POI_DAVID_ORDER[d.cycle%POI_DAVID_ORDER.length];");
+
           install(mark,`
-           window.__finish={
+           window.__deathArea={
             frame:()=>render(),
-            prepare:hp=>{
-             const {o,s}=poiDavidActive??{};
-             if(!s?.david?.wakeDone||s.david.attack)return false;
-             poiPlayerHP=hp;
-             return poiDavidBegin(o,s,performance.now(),'double');
+            lethal:()=>{
+             poiPlayerHP=1;
+             return poiMobHitPlayer({type:'monsterSlime',y:poiWalkLevel},performance.now(),100);
             },
             state:()=>{
-             const live=poiDavidActive,s=live?.s,d=s?.david,q=d?.attack;
-             return {now:performance.now(),d:d&&{wake:d.wakeDone,next:d.next,returning:!!d.returning,finish:!!d.deathFinish},
-              q:q&&{cursor:q.cursor,landed:q.landed,executed:q.executed,hits:q.hits,until:q.until},
-              death:poiPlayerDeathSnapshot(),draw:window.__finish.draw,hp:poiPlayerHP,boss:s?[s.x,s.z]:null};
+             const save=JSON.parse(localStorage.getItem('world-workshop-resume-v1'));
+             return {now:performance.now(),p:[poiWalkX,poiWalkZ,poiWalkLevel,poiWalkFacing],id:facilitySite?.id,
+              home:facilitySite?.spawn,snowPending:poiSnowPassPending,hp:poiPlayerHP,
+              save,death:poiPlayerDeathSnapshot(),entered:poiDefeatEntry?.area??null};
             }
            }; `+mark);
           install(' requestAnimationFrame(render);',' if(!window.__finishManual)requestAnimationFrame(render);');
           for(const [,js] of h.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(js);
-          if(process.env.DAVID_DEATH_FINISH_PARSE_ONLY){console.log('Exact death-finish browser fixture parses');process.exit(0)}
+          if(process.env.DEFEAT_AREA_PARSE_ONLY){console.log('Exact defeat-area browser fixture parses');process.exit(0)}
           const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
           const srv=createServer((q,r)=>{r.setHeader('Content-Type','text/html; charset=utf-8');r.end(q.url==='/seed'?'<title>Seed</title>':h)});
           await new Promise(r=>srv.listen(0,'127.0.0.1',r));
           const root='http://127.0.0.1:'+srv.address().port;let browser;
           try{
            browser=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
-           for(const lethal of [false,true]){
+           for(const mode of ['home','mine','chapel','snow','snow-old','snow-corrupt']){
             const ctx=await browser.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.65});
             const p=await ctx.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));p.setDefaultTimeout(20000);
             await p.clock.install({time:new Date('2026-04-01T10:00:00Z')});
-            await p.goto(root+'/seed');await p.evaluate(()=>localStorage.setItem('world-workshop-resume-v1',JSON.stringify({
-             version:1,route:'facility',id:'base',play:true,position:{x:24,z:102,y:0,facing:2},townLayout:5,townMapHeight:128,
+            const seeds={home:{x:115,z:66,y:0},mine:{x:116,z:63,y:0},chapel:{x:124,z:82,y:0},snow:{x:49,z:127,y:0},
+             'snow-old':{x:12,z:5,y:0},'snow-corrupt':{x:88,z:77,y:0}};
+            await p.goto(root+'/seed');await p.evaluate(({mode,position})=>localStorage.setItem('world-workshop-resume-v1',JSON.stringify({
+             version:1,route:'facility',id:'base',play:true,position:{...position,facing:2},...(mode==='snow-old'||mode==='snow-corrupt'?{region:'snowpass',regionHp:100}:{}),townLayout:5,townMapHeight:128,
              view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.24,orbitDistance:5.5}
-            })));
-            await p.goto(root+'/?resume=1&test=1',{waitUntil:'domcontentloaded'});await p.locator('#pineStartupCover').waitFor({state:'hidden'});
-            await p.clock.pauseAt(await p.evaluate(()=>Date.now()+150));
-            await p.evaluate(()=>{window.__finishManual=true});
-
-            const qa=()=>p.evaluate(()=>window.__finish.state());
-            const frame=async(ms=40)=>{await p.clock.fastForward(ms);await p.evaluate(()=>window.__finish.frame());};
-            const until=async(check,limit=95)=>{let q=await qa();for(let i=0;i<limit&&!check(q);i++){await frame();q=await qa()}assert(check(q),JSON.stringify(q));return q};
-            await until(s=>s.d?.wake&&s.now>=s.d.next);
-            assert(await p.evaluate(hp=>window.__finish.prepare(hp),lethal?1:100),JSON.stringify(await qa()));
-            if(!lethal){
-             const live=await until(s=>s.q?.executed===2);
-             assert(live.hp>0&&live.hp<100&&!live.death&&!live.d.finish&&live.q.landed===2,JSON.stringify(live));
-             assert.deepEqual(errors,[]);await ctx.close();continue;
-            }
-            const dead=await until(s=>s.death?.phase==='pause');
-            assert.equal(dead.hp,0);assert(dead.q?.cursor===1&&dead.q.executed===1&&dead.d.finish&&!dead.d.returning,JSON.stringify(dead));
-            const after=await until(s=>s.q?.cursor===2&&s.draw?.pose?.contact===2);
-            assert.equal(after.hp,0);assert.equal(after.q.executed,1);assert.equal(after.q.landed,1);
-            assert.notDeepEqual(after.draw.right,dead.draw.right);
-            assert.equal(after.death.opacity,0);
-            await until(s=>!s.d?.finish&&(!s.q));
-            const respawn=await until(s=>s.death?.relocated);
-            assert(respawn.hp>0&&respawn.death.blackAt-dead.death.start>=1650);
-            const cleared=await until(s=>!s.death);assert.equal(cleared.hp,respawn.hp);assert(!cleared.q);
-            for(let i=0;i<12;i++)await frame();assert.equal((await qa()).hp,respawn.hp);assert(!(await qa()).q);
-            assert.deepEqual(errors,[]);
-            console.log('Actual lethal blade, rendered second blade without another hit, then original return and defeated-player respawn');
-            await ctx.close();
-           }
-          }finally{await browser?.close();await new Promise(r=>srv.close(r))}
-          SOURCE
-          cat >.qa/tests/david-death-finish.test.cjs <<'SOURCE'
-          const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),test=require('node:test');
-          const h=fs.readFileSync(process.env.PRODUCT||'world-editor.html','utf8');
-          function slice(a,b){const i=h.indexOf(a),j=h.indexOf(b,i+1);assert(i>=0&&j>i,a);return h.slice(i,j)}
-          const rules=slice('function poiDavidBeamEmission(', 'function poiDavidBeamAdvance(')+slice('function poiDavidCease(', 'function poiDavidArrive(')+slice('function poiDavidDeathFrame(', 'function poiDavidMobFrame(')+slice('function poiDavidPose(', 'function poiDavidIncoming(');
-          function setup(kind='double',killer=true,sw=null){
-           const q={kind,start:0,hits:kind==='double'?[720,1040]:[720],cursor:1,executed:1,landed:1,lastContactAt:720,until:1730,sweep:sw};
-           const d={awake:true,wakeDone:true,dx:1,dz:0,attack:q,trail:[{x:4,z:4}]};
-           const o={type:'monsterStoneDavid'},s={david:d,x:3,z:4,hp:100,moveStarted:0},b={x:4,z:4};
-           const ctx=vm.createContext({q,d,s,o,b,killer:killer?o:{type:'monsterSlime'},poiDavidActive:{o,s},poiDavidMatch:()=>b,poiMonsterStates:new Map([[o,s]]),poiMonsterMeshDirty:false,
-            POI_DEATH_PAUSE:1200,POI_DAVID_PATTERNS:{beam:{rest:760}},POI_DAVID_BEAM_SHORT:180,POI_DAVID_BEAM_SWEEP:680,POI_DAVID_BEAM_ARC:1,
-            poiDavidBeamRay:()=>({x:1,z:0}),poiDavidLeapPose:()=>null,poiDavidLeapAbort:()=>{},
-            poiDavidReturnFrame:()=>{ctx.returned=(ctx.returned||0)+1},poiDavidArrive:()=>{},poiDavidBeamAudioEnd:(q)=>{if(!q.beamClosed){q.beamClosed=true;ctx.ended=(ctx.ended||0)+1}},
-            poiPlayerDying:()=>true});
-           vm.runInContext(rules,ctx);return {ctx,q,s,d,at:js=>vm.runInContext(js,ctx)};
-          }
-          test('first fatal double contact retains real second blade pose and causes no more resolved contacts',()=>{
-           const {q,d,at,ctx}=setup();
-           at('poiDavidDeathFrame(720,killer);poiDavidCease(o,s,b,720)');
-           assert.equal(at('poiDavidPose(s,740).phase'),'impact');
-           assert(!d.returning);
-           at('poiDavidDeathFrame(900)');assert.equal(at('poiDavidPose(s,900).phase'),'windup');
-           at('poiDavidDeathFrame(1040)');assert.equal(at('poiDavidPose(s,1040).phase'),'impact');
-           assert.equal(q.cursor,2);assert.equal(q.executed,1);assert.equal(q.landed,1);
-           at('poiDavidDeathFrame(1350)');assert.equal(at('poiDavidPose(s,1350).phase'),'recover');assert(!ctx.returned);
-           at('poiDavidDeathFrame(1730)');assert.equal(d.attack,null);assert(d.returning);assert.equal(ctx.returned,1);
-          });
-          test('only David as actual lethal source may remain visually active',()=>{
-           const {d,at}=setup('stomp',false);at('poiDavidDeathFrame(720,killer)');
-           assert.equal(d.attack,null);assert(d.returning);
-          });
-          test('beam already sweeping finishes visually, tell for not-yet-started sweep is discarded',()=>{
-           const {q,at,ctx}=setup('beam',true,{side:1,tell:500,start:650,end:1330,angle:.1,done:false});
-           at('poiDavidDeathFrame(720,killer);poiDavidDeathFrame(1100)');
-           assert(q.sweep.angle>.5&&at('poiDavidBeamEmission(q,1100).turning'));
-           at('poiDavidDeathFrame(1330);poiDavidDeathFrame(1340)');assert.equal(ctx.ended,1);
-           assert.equal(at('poiDavidPose(s,1340).phase'),'recover');assert.equal(q.executed,1);
-           const p=setup('beam',true,{tell:720,start:null});
-           p.at('poiDavidDeathFrame(720,killer)');assert.equal(p.q.sweep,null);
-           assert.equal(p.at('poiDavidBeamEmission(q,800).turning'),false);
-          });
-          SOURCE
-          cat >.qa/tests/large-hurtbox.test.cjs <<'SOURCE'
-          const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),test=require('node:test');
-          const h=fs.readFileSync(process.env.PRODUCT||'world-editor.html','utf8');
-          function piece(a,b){const i=h.indexOf(a),j=h.indexOf(b,i+1);assert(i>=0&&j>i,a);return h.slice(i,j)}
-          const target=(type,x=1.48,z=.4,y=0)=>({id:{type,y},state:{x,z,hp:100},x,z,y,p:{x:x+.5,z:z+.5,y}});
-          function run(c,{ox=0,wall=false,air=0,heading=0,type='kitchenKnife',sweep=false,arc=false}={}){
-           c.p.y=air;c.p.heading=heading;
-           const functions=piece('const POI_AIM_EPS=', 'function poiAimChooseLock')+piece('function poiAimTrace(', 'function poiAimFlightBegin(')+piece('function poiSwordResolve(', 'function poiPlayerStartProfile(');
-           const rig=piece('function poiDavidRig(', 'function poiDavidSkirt(');
-           const helpers=h.includes('// BEGIN OVERSIZED MELEE BODY')?piece('// BEGIN OVERSIZED MELEE BODY','// END OVERSIZED MELEE BODY'):'';
-           const scope={c,shot:{type,dx:1,dz:0,profile:{range:1,frontArc:arc,damage:30},aim:{x:ox,z:.6,y:0}},poiAimTargetList:()=>c.id.y===0?[c]:[],
-            poiAimWall:()=> (x)=>!wall||x<=0,poiMonsterPose:()=>({...c.p,david:{phase:'idle'}}),
-            poiDavidHeadPoint:x=>x,POI_DAVID_EYE_Y:4.5,POI_DAVID_EYE_FRONT:.25,POI_DAVID_BLADE:2,
-            POI_WORLD_MELEE_CONTACT_HEIGHT:{kitchenKnife:.76,equipIronSword:.77},terrainY:()=>0,POI_SWORD_HALF_WIDTH:1.5,poiSound:()=>{},poiEquipmentSpendWeapon:()=>true,poiPlayerDamageTarget:()=>c.state.hp-=30};
-           return vm.runInNewContext(functions+rig+helpers+(sweep?'\npoiSwordResolve(shot,100);c.state.hp':'\npoiAimTrace(shot,1,100)'),scope);
-          }
-          test('real knife trace reaches the pose leg outside center reach, without extending the reach across masonry or air',()=>{
-           const david=()=>target('monsterStoneDavid');
-           assert(run(david()).monster,'old center at 1.49 is outside 1-tile reach; the visible left shin is inside');
-           assert(!run(david(),{wall:true}).monster);
-           assert(!run(david(),{ox:-.65}).monster);
-           assert(!run(david(),{air:1.15}).monster);
-           assert(!run(target('monsterStoneDavid',1.48,.4,1)).monster);
-          });
-          test('ordinary actors and projectiles retain old center rule',()=>{
-           assert(!run(target('monsterSlime')).monster);
-           assert(run(target('monsterSlime',.9,.6)).monster);
-           assert(!run(target('monsterStoneDavid'),{type:'equipWoodBow'}).monster);
-          });
-
-          test('actual sweep resolves one group entry per body, checks shared wall/range, and excludes rear-only bodies',()=>{
-           for(const arc of [true,false]){
-            const david=(x=1.48)=>target('monsterStoneDavid',x,.4);
-            assert.equal(run(david(),{sweep:true,arc,type:'equipIronSword'}),70);
-            assert.equal(run(david(),{sweep:true,arc,type:'equipIronSword',wall:true}),100);
-            assert.equal(run(david(-1.48),{sweep:true,arc,type:'equipIronSword'}),100);
-            assert.equal(run(david(),{sweep:true,arc,type:'equipIronSword',ox:-.65}),100);
-           }
-          });
-          test('body surface rotates with visible facing, not a broad circle',()=>{
-           const david=()=>target('monsterStoneDavid');
-           assert(run(david()).monster);
-           assert(!run(david(),{heading:Math.PI/2}).monster);
-          });
-          SOURCE
-          cat >.qa/tests/david-large-hurtbox-browser.mjs <<'SOURCE'
-          import assert from 'node:assert/strict';
-          import {createServer} from 'node:http';
-          import {createRequire} from 'node:module';
-          import {readFileSync} from 'node:fs';
-          import {Script} from 'node:vm';
-          let h=readFileSync(process.argv[2]??'world-editor.html','utf8');
-          const install=(a,b)=>{assert.equal(h.split(a).length,2,a);h=h.replace(a,b)};
-          const mark="if(facilityParams.get('test')==='1')window.__editorTest={";
-
-          install(" let kind=POI_DAVID_ORDER[d.cycle%POI_DAVID_ORDER.length];"," if(window.__finishManual)return false;\n let kind=POI_DAVID_ORDER[d.cycle%POI_DAVID_ORDER.length];");
-          install(mark,`
-           window.__finish={
-            frame:()=>render(),
-            place:()=>{
-             const {o,s}=poiDavidActive,now=performance.now(),p=poiMonsterPose(o,s,now,true);
-             const origin={x:p.x-.5+1.42,z:p.z-.5-.20,y:0};
-             if(!workshopResumeRestorePosition({x:Math.round(origin.x),z:Math.round(origin.z),y:0,facing:3}))return null;
-             poiFreePose={x:origin.x,z:origin.z,level:0,distance:0,walking:false,angle:Math.PI/2};
-             poiWalkFacing=3;poiCombatLockReset();
-             return origin;
-            },
-            state:()=>{
-             const {o,s}=poiDavidActive||{},p=o&&poiMonsterPose(o,s,performance.now(),true);
-             const a=poiAimOrigin(performance.now()),slot=poiInventorySlots(poiHotbarRead())[0];
-             return {now:performance.now(),ready:s?.david?.wakeDone,weapon:poiEquippedWeapon(),hp:s?.hp,
-              pending:!!poiPlayerWeaponPending,action:poiWalkActionStarted,durability:slot?.durability,
-              a,p:p&&{x:p.x-.5,z:p.z-.5,heading:p.heading}};
-            }
-           };`+mark);
-          install(' requestAnimationFrame(render);',' if(!window.__finishManual)requestAnimationFrame(render);');
-          for(const [,js] of h.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(js);
-          if(process.env.DAVID_HURTBOX_PARSE_ONLY){console.log('Exact giant-hurtbox browser fixture parses');process.exit(0)}
-          const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
-          const srv=createServer((q,r)=>{r.setHeader('Content-Type','text/html; charset=utf-8');r.end(q.url==='/seed'?'<title>Seed</title>':h)});
-          await new Promise(r=>srv.listen(0,'127.0.0.1',r));
-          const root='http://127.0.0.1:'+srv.address().port;let browser;
-          try{
-           browser=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
-           {
-            const ctx=await browser.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.65});
-            const p=await ctx.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));p.setDefaultTimeout(20000);
-            await p.clock.install({time:new Date('2026-04-01T10:00:00Z')});
-            await p.goto(root+'/seed');await p.evaluate(()=>{const slots=Array(27).fill(null);slots[0]={type:'kitchenKnife',count:1,durability:40};slots[1]={type:'equipWoodSword',count:1};
-             localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weaponDurabilityVersion:2,weapon:'kitchenKnife',potions:0,slots}));
-             localStorage.setItem('world-workshop-resume-v1',JSON.stringify({
-             version:1,route:'facility',id:'base',play:true,position:{x:24,z:102,y:0,facing:2},townLayout:5,townMapHeight:128,
-             view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.24,orbitDistance:5.5}
-            }));});
+            })),{mode,position:seeds[mode]});
             await p.goto(root+'/?resume=1&test=1',{waitUntil:'domcontentloaded'});await p.locator('#pineStartupCover').waitFor({state:'hidden'});
             await p.clock.pauseAt(await p.evaluate(()=>Date.now()+150));
             await p.evaluate(()=>{window.__finishManual=true});
 
 
-            const qa=()=>p.evaluate(()=>window.__finish.state());
-            const frame=async(ms=40)=>{await p.clock.fastForward(ms);await p.evaluate(()=>window.__finish.frame());};
-            const until=async(check,limit=95)=>{let q=await qa();for(let i=0;i<limit&&!check(q);i++){await frame();q=await qa()}assert(check(q),JSON.stringify(q));return q};
-            await until(s=>s.ready);
-            assert(await p.evaluate(()=>window.__finish.place()));
-            await frame(20);
-            const before=await qa();
-            assert.equal(before.weapon,'kitchenKnife');
-            assert(Math.hypot(before.a.x-before.p.x,before.a.z-before.p.z)>1.35,JSON.stringify(before));
-            const button=await p.locator('#poiWalkAction').boundingBox();assert(button);
-            await p.touchscreen.tap(button.x+button.width/2,button.y+button.height/2);
-            const after=await until(s=>s.action>before.action&&!s.pending,15);
-            assert(after.hp<before.hp,JSON.stringify({before,after}));
-            assert.equal(after.durability,before.durability-1);
+            const qa=()=>p.evaluate(()=>window.__deathArea.state()),frame=async(ms=120)=>{await p.clock.fastForward(ms);await p.evaluate(()=>window.__deathArea.frame());};
+            const until=async(check,limit=25)=>{let q=await qa();for(let i=0;i<limit&&!check(q);i++){await frame();q=await qa()}assert(check(q),JSON.stringify(q));return q};
+            const step=async key=>{await p.keyboard.press(key);for(let i=0;i<4;i++)await frame();return qa()};
+            if(mode==='mine'){
+             await step('ArrowUp');await until(q=>q.p[2]===-1);
+             await step('ArrowUp');await step('ArrowUp');
+            }
+            if(mode==='chapel'){
+             await step('ArrowUp');await until(q=>q.p[2]===-1);
+             await step('ArrowUp');
+            }
+            if(mode==='snow'){
+             await step('ArrowDown');await until(q=>q.id==='snowpass'&&!q.snowPending);await step('ArrowDown');await step('ArrowDown');
+            }
+            const before=await qa();assert.equal(before.id,mode==='snow'||mode==='snow-old'?'snowpass':'base',mode);
+            if(mode==='snow')assert.equal(before.entered,'region:snowpass');
+            if(mode==='mine'||mode==='chapel')assert.equal(before.entered,mode);
+            if(mode==='snow-old'||mode==='snow-corrupt')assert.equal(before.entered,null);
+            assert(await p.evaluate(()=>window.__deathArea.lethal()));
+            const dead=await qa();assert.equal(dead.hp,0);assert.equal(dead.death?.opacity,0);
+            const end=await until(s=>s.death?.relocated);
+            const want=mode==='mine'?[116,61,-1]:mode==='chapel'?[78,88,-1]:
+             mode==='snow'||mode==='snow-old'?[12,0,0]:[before.home.x,before.home.z,0];
+            assert.deepEqual(end.p.slice(0,3),want,JSON.stringify({mode,before,end}));
+            assert(end.hp>0&&end.death.blackAt-dead.death.start>=1650);
+            assert.deepEqual([end.save.position.x,end.save.position.z,end.save.position.y],want);
+            assert.equal(end.save.region,mode==='snow'||mode==='snow-old'?'snowpass':undefined);
+            const cleared=await until(q=>!q.death);assert.deepEqual(cleared.p,end.p);
             assert.deepEqual(errors,[]);
-            console.log('Physical 1-tile knife damaged actual David outside center range',JSON.stringify({before,after}));
+            console.log('Actual contextual death',mode,JSON.stringify({from:before.p,to:end.p,region:end.save.region??null,delay:end.death.blackAt-dead.death.start}));
             await ctx.close();
            }
           }finally{await browser?.close();await new Promise(r=>srv.close(r))}
           SOURCE
-          python .qa/a/build.py world-editor.html .qa/first.html
-          python .qa/b/build.py .qa/first.html .qa/world-editor.html
-          test "$(git hash-object .qa/world-editor.html)" = a31f19dd8bc932f0577e69b8cec05ec648d49d41
-      - name: Geometry and timeline units
+          python .qa/build.py world-editor.html .qa/world-editor.html
+          test "$(git hash-object .qa/world-editor.html)" = 986791495c5792553b237f4cbe624d25a58e028e
+      - name: Run scoped units
         working-directory: .qa
-        run: node --test tests/david-death-finish.test.cjs tests/large-hurtbox.test.cjs
-      - name: Install isolated Chromium
-        run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
-      - name: Run selected actual browser game
+        run: node --test tests/contextual-respawn.test.cjs
+      - run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
+      - name: Actual death and real entries
         working-directory: .qa
-        run: node tests/${{ matrix.suite }}-browser.mjs
+        run: node tests/contextual-respawn-browser.mjs
