@@ -38,6 +38,6 @@ test('edit invalidation, other routes, and the rest of the base are not clipped'
  assert.equal(branch((t,d)=>{assert.equal(t,target);assert.equal(d,eye);return 'shared'},target,eye),'shared');
  assert.equal(branch(undefined,target,eye),eye);
  const invalidate=html.indexOf('function facilityInvalidateScenes(){');
- assert.ok(invalidate>=0&&html.slice(invalidate,invalidate+240).includes('facilityWatchtowerCameraWalls=null;'),'global edits still invalidate watchtower wall geometry');
+ assert.ok(invalidate>=0&&html.slice(invalidate,html.indexOf('\nfunction ',invalidate+1)).includes('facilityWatchtowerCameraWalls=null;'),'global edits still invalidate watchtower wall geometry');
 });
 

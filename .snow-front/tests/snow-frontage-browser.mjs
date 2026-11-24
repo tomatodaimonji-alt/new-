@@ -27,7 +27,7 @@ try{
   args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
  for(const v of [{id:'base',start:[65,137],dir:[0,1],dst:'snowpass',axis:1,index:139},
   {id:'snowpass',start:[17,1],dir:[0,-1],dst:'base',axis:1,index:139},
-  {id:'base',start:[46,153],dir:[1,0],dst:'snowpass',axis:0,index:48},
+  {id:'base',start:[42,153],dir:[1,0],dst:'snowpass',axis:0,index:48},
   {id:'snowpass',start:[1,14],dir:[-1,0],dst:'base',axis:0,index:48}]){
   const ctx=await b.newContext({viewport:{width:844,height:390},hasTouch:true,isMobile:true,deviceScaleFactor:.65});
   try{

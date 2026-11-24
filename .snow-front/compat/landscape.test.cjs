@@ -63,7 +63,9 @@ test('continuous outdoor collision routes connect the town to wide meadow and fo
 test('ambient color is scoped to implicit grade-only base grass and leaves scatter unchanged',()=>{
  assert.match(html,/function pineBaseNatureTint\(/);
  assert.match(html,/const baseGrass=facilitySite\?\.id==='base'\?new Array\(\(MAP_W\+1\)\*\(MAP_H\+1\)\):null/);
- assert.match(html,/const ambientTint=floors\.has\(x\+','\+z\)\?null:groundCorner;/);
+ assert.match(html,/const ambientTint=floors\.has\(x\+','\+z\)&&kind===original\?null:groundCorner;/);
+ assert.match(html,/kind=poiSacredInteriorGrade\(facilitySite,x,z,original,poiWalkActive\)/);
+ assert.match(html,/return t\.interiorFloors\.has\(x\+','\+z\)\?'grass':type;/);
  assert.match(html,/const a=ambientTint\(x0,z0,c\),b=ambientTint\(x0,z1,c\),d=ambientTint\(x1,z0,c\),e=ambientTint\(x1,z1,c\)/);
  assert.match(html,/kind==='grass'\? \(n>\.72\?1:0\)/);
 });

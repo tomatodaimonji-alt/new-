@@ -8,8 +8,9 @@ def rep(a,b):
 rep('function poiSnowTempleNeighborTick(){',(root/'shell.js').read_text()+'\nfunction poiSnowTempleNeighborTick(){')
 rep(" const stream=typeof poiOverlandPreviewTick==='function'?poiOverlandPreviewTick():null;",
     " if(typeof poiSnowExteriorPrime==='function')poiSnowExteriorPrime();\n const stream=typeof poiOverlandPreviewTick==='function'?poiOverlandPreviewTick():null;")
-rep(" if(typeof poiSacredDrawScene==='function')poiSacredDrawScene(p.vp);",
-    " if(typeof poiSnowExteriorDraw==='function')poiSnowExteriorDraw(p.vp);\n if(typeof poiSacredDrawScene==='function')poiSacredDrawScene(p.vp);")
+draw_anchor=" if(!stream&&typeof poiSacredDrawScene==='function')poiSacredDrawScene(p.vp);"
+if draw_anchor not in s:draw_anchor=draw_anchor.replace('!stream&&','')
+rep(draw_anchor," if(typeof poiSnowExteriorDraw==='function')poiSnowExteriorDraw(p.vp);\n"+draw_anchor)
 rep(' return !!dest&&(!POI_OVERLAND_SPIKE||poiOverlandRealNeighbor(dest.region,dest.x,dest.z));',
     ' return !!dest&&(!POI_OVERLAND_SPIKE||poiOverlandRealNeighbor(dest.region,dest.x,dest.z)&&poiSnowExteriorReady(dest));')
 rep("function commit(){poiSnowEdgeFloorCache.delete(world);poiWildInvalidate();",

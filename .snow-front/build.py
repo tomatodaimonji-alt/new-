@@ -45,9 +45,11 @@ rep('const a=ambientTint(x0,z0),b=ambientTint(x0,z1),d=ambientTint(x1,z0),e=ambi
     'const a=ambientTint(x0,z0,c),b=ambientTint(x0,z1,c),d=ambientTint(x1,z0,c),e=ambientTint(x1,z1,c);')
 rep('ambientTint||eastBlend,pinePlayJoinedNaturalGrade(kind,facilitySite,poiWalkActive));',
     "(typeof poiSnowGroundEdgeTint==='function'?poiSnowGroundEdgeTint(facilitySite?.id,x,z,kind,ambientTint||eastBlend):ambientTint||eastBlend),pinePlayJoinedNaturalGrade(kind,facilitySite,poiWalkActive));")
-rep("   const tint=ambient&&(!floors.has(key)||x-offset>=72&&Object.hasOwn(PINE_EAST_NATURE_TONES,tile))?ambient:null;",
-'''   const oldTint=ambient&&(!floors.has(key)||x-offset>=72&&Object.hasOwn(PINE_EAST_NATURE_TONES,tile))?ambient:null;
-   const tint=poiSnowGroundEdgeTint(region.id,x,z,tile,oldTint);''')
+tint="   const tint=ambient&&(!floors.has(key)||x-offset>=72&&Object.hasOwn(PINE_EAST_NATURE_TONES,tile))?ambient:null;"
+modern=tint.replace("(!floors.has(key)","(tile!==original||!floors.has(key)")
+source=modern if modern in s else tint
+rep(source,source.replace("const tint=","const oldTint=")+
+    "\n   const tint=poiSnowGroundEdgeTint(region.id,x,z,tile,oldTint);")
 rep(" return id==='snowpass'&&(z<=17+pad||hasMilda&&z>=17-pad)||",
     " return id==='snowpass'&&(z<=17+pad||x<=12+pad||hasMilda&&z>=17-pad)||")
 rep("  id==='base'&&x>=45-pad&&x<=74+pad&&z>=119-pad;",
@@ -76,7 +78,11 @@ function poiSnowTempleNeighborTick(){
 function poiSnowTempleNeighborDraw(vp){
  if(!poiSnowTempleNeighbor.length)return;
  const view=poiOverlandNeighborVP(vp,'base','snowpass');
- for(const m of poiSnowTempleNeighbor)if(poiOverlandBoxVisible(view,m.bounds))draw(m,view);
+ const [x,z]=poiOverlandLocal('snowpass',poiWalkViewX,poiWalkViewZ),now=performance.now();
+ for(const m of poiSnowTempleNeighbor)if(poiOverlandBoxVisible(view,m.bounds)){
+  if(typeof poiStreamPropDraw==='function')poiStreamPropDraw(m,view,x+.5,z+.5,now);
+  else draw(m,view);
+ }
 }
 function poiOverlandPreviewTick(){''')
 rep(' poiOverlandCommands=[];poiOverlandDrawn=[];poiOverlandDrawing=false;',
