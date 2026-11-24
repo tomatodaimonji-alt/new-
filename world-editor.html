@@ -31208,7 +31208,13 @@ uniform OCCP vec4 uOcclusionShape;
 uniform OCCP vec4 uOcclusionInfo;
 float workshopDither2(vec2 p){return 2.0*p.x+3.0*p.y-4.0*p.x*p.y;}
 void main(){
- if(uOcclusionInfo.w< -1.5){
+ if(uOcclusionInfo.w< -2.5){
+  // Active only on the own avatar in a genuinely compressed residence arm.
+  // Keep normal avatar color and material/depth; never cut a nearby wall.
+  vec2 cell=mod(floor(gl_FragCoord.xy),4.0);
+  float bit=(4.0*workshopDither2(mod(cell,2.0))+workshopDither2(floor(cell*.5))+.5)/16.0;
+  if(bit>uOcclusionInfo.x)discard;
+ }else if(uOcclusionInfo.w< -1.5){
   // Only the avatar's reverse-depth pass uses this stipple. It does not
   // wash out a normally visible avatar or blend multiply over rear faces.
   vec2 cell=mod(floor(gl_FragCoord.xy),4.0);
@@ -31765,7 +31771,7 @@ function parameters(){
    sky={skyHorizon:stop(0),skyMiddle:stop(Math.PI/12),skyHigh:stop(Math.PI/6)};
   }
   const lensTarget=poiDavidRevealLook(eye,target,performance.now());
-  return{...q,halfH,halfW,centerX,centerZ,elev,targetY,...sky,vp:mult(perspective(fov,Math.max(.1,q.aspect),near,Math.max(90,sceneReach*1.6+18)),look(eye,lensTarget))};
+  return{...q,halfH,halfW,centerX,centerZ,elev,targetY,...sky,homeAvatarKeep:poiHomeCloseAvatarKeep(homeAngle,arm),vp:mult(perspective(fov,Math.max(.1,q.aspect),near,Math.max(90,sceneReach*1.6+18)),look(eye,lensTarget))};
  }
  const cameraDistance=Math.max(80,sceneReach*1.6+24);
  const eye=[centerX+cameraDistance*Math.sin(yaw)*Math.cos(elev),targetY+cameraDistance*Math.sin(elev),centerZ+cameraDistance*Math.cos(yaw)*Math.cos(elev)];
@@ -32093,9 +32099,14 @@ function poiDrawSceneOcclusion(m,vp,spans=null){
  }
  if(from<m.count)submit(from,m.count);
 }
-function poiDrawWalkAvatar(vp,now=performance.now()){
+function poiHomeCloseAvatarKeep(ordinary,arm){
+ if(!ordinary||!(arm<.94))return 1;
+ const f=Math.max(0,Math.min(1,(arm-.18)/.76)),u=f*f*(3-2*f);
+ return .12+.88*u;
+}
+function poiDrawWalkAvatar(vp,now=performance.now(),keep=1){
  if(!poiWalkMesh)return;
- if(!pineAIActive){
+ if(!pineAIActive&&keep>=1){
   // Write no depth: only scene/actor occluders matter, not the player's
   // own triangles. The opaque avatar pass wins normally in visible areas.
   gl.depthMask(false);gl.depthFunc(gl.GREATER);
@@ -32103,7 +32114,10 @@ function poiDrawWalkAvatar(vp,now=performance.now()){
   try{draw(poiWalkMesh,vp)}
   finally{gl.uniform4f(loc.occlusionInfo,0,0,0,0);gl.depthFunc(gl.LESS);gl.depthMask(true)}
  }
- poiDrawHitFlashSpan(poiWalkMesh,vp,0,poiWalkMesh.count,poiHitFlashAmount(poiPlayerHitFlashAt,now));
+ if(keep<1)gl.uniform4f(loc.occlusionInfo,keep,0,0,-3);
+ try{poiDrawHitFlashSpan(poiWalkMesh,vp,0,poiWalkMesh.count,poiHitFlashAmount(poiPlayerHitFlashAt,now))}
+ finally{if(keep<1)gl.uniform4f(loc.occlusionInfo,0,0,0,0)}
+
 }
 function poiAvatarOcclusion(p,now){
  if(!poiWalkActive||!poiThirdPerson||cameraTopDown||pineAIActive)return {active:false};
@@ -33021,7 +33035,7 @@ function render(){
   poiMonsterRender(now,p.vp);
   if(typeof poiDrawOrvasPlayerBeam==='function')poiDrawOrvasPlayerBeam(now,p.vp);
   if(typeof poiCompanionFxDraw==='function')poiCompanionFxDraw(now,p.vp);
-  if(!poiPlayerDeath||poiPlayerDeath.relocated)poiDrawWalkAvatar(p.vp,now);
+  if(!poiPlayerDeath||poiPlayerDeath.relocated)poiDrawWalkAvatar(p.vp,now,p.homeAvatarKeep);
   poiPlayerWeaponDraw(now,p.vp);
  }
  if(davidBeam)poiDrawDavidBeam(now,p.vp,davidBeam);
