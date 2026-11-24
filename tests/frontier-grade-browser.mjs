@@ -84,7 +84,13 @@ try{
    const i=dirs.findIndex(([x,z])=>x===0&&z===1);a(i>=0);
    for(let n=0;n<3;n++){
     await p.keyboard.press(['ArrowUp','ArrowDown','ArrowRight','ArrowLeft'][i]);await p.waitForTimeout(350);
-    const s=await snap();if(s.tile[1]===z)return s;a.equal(s.tile[1],z-1);
+    const s=await snap();if(s.tile[1]===z){
+     // Compare consecutive settled physical positions, not whichever render
+     // was sampled just after the integer move committed on a busy runner.
+     await p.waitForFunction(z=>{const q=window.__editorTest.testFrontierGrade.snap();return q.tile[1]===z&&Math.abs(q.z-z)<.05&&q.floor>0},z,{polling:35,timeout:8000});
+     return snap();
+    }
+    a.equal(s.tile[1],z-1);
    }
    a.fail('needed authentic tunnel step '+z);
   }
