@@ -1,0 +1,1108 @@
+name: Overland default release candidate (isolated)
+on:
+  push:
+    branches: ['dot/workshop-overland-default-qa']
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        probe: [seam, outlet, visuals, audio, persistence, regressions]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 42e6bb79d68fb020ebba61021464ab8b0e168b92
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Assemble no-query candidate (no prod changes)
+        shell: bash
+        run: |
+          set -eu
+          test "$(git hash-object world-editor.html)" = 25abdba4344330e6135c6c56202a283fceb65618
+          mkdir -p .spike/tests
+          cat >.spike/build.py <<'SOURCE'
+          from pathlib import Path
+          import sys
+          p=Path(__file__).parent;src,dst=map(Path,sys.argv[1:3]);default='--default' in sys.argv[3:];s=src.read_text()
+          def sub(a,b):
+           global s
+           assert s.count(a)==1,(s.count(a),a)
+           s=s.replace(a,b,1)
+          runtime=(p/'surface.js').read_text()
+          if default:
+           runtime=runtime.replace("const POI_OVERLAND_SPIKE=new URLSearchParams(location.search).get('overland-stream')==='1';","const POI_OVERLAND_SPIKE=true;")
+          sub('// BEGIN SNOW PASS PROTOTYPE',(p/'core.js').read_text()+'\n'+runtime+'\n// BEGIN SNOW PASS PROTOTYPE')
+          if not default:sub("if(params.get('resume')==='1')return [...params.keys()].every(k=>k==='resume'||k==='test');",
+              "if(params.get('resume')==='1')return [...params.keys()].every(k=>k==='resume'||k==='test'||k==='overland-stream'&&params.get('test')==='1');")
+          sub(" if(facilitySite&&poiWalkActive){\n  if(facilitySite.id!=='snowpass'&&!facilityRoofMeshes.length)facilityBuildRoofs();",
+              " const stream=typeof poiOverlandPreviewTick==='function'?poiOverlandPreviewTick():null;\n if(stream){sceneMesh=stream;signOverlays=[];dirty=false}\n else if(facilitySite&&poiWalkActive){\n  if(facilitySite.id!=='snowpass'&&!facilityRoofMeshes.length)facilityBuildRoofs();")
+          sub(" draw(sceneMesh?.ground,p.vp);poiDrawSceneOcclusion(sceneMesh,p.vp);",
+              " if(stream)poiOverlandPresent(p.vp);else{draw(sceneMesh?.ground,p.vp);poiDrawSceneOcclusion(sceneMesh,p.vp);")
+          sub(" facilityDrawRoofs(p.vp);poiDrawGameRoofs(p.vp);",
+              " facilityDrawRoofs(p.vp);poiDrawGameRoofs(p.vp);}")
+          sub(" facilityBuildRoofs();poiMiniInvalidate();",
+              " if(!POI_OVERLAND_SPIKE||!poiOverlandScope(dest.region,dest.x,dest.z))facilityBuildRoofs();poiMiniInvalidate();")
+          sub(" if(dest.region!=='base')return poiSnowPassChange(dest,now);",
+              " if(dest.region!=='base'||POI_OVERLAND_SPIKE&&poiOverlandCommands.some(q=>q.id==='base'))return poiSnowPassChange(dest,now);")
+          sub("  snowPassRegion:()=>","  overlandStream:()=>poiOverlandInspect(),\n  snowPassRegion:()=>")
+          sub("if(!(swap?enter(row,from+dir,row,from):enter(from+dir,row,from,row))){",
+           "if(!(swap?enter(row,from+dir,row,from,q,next):enter(from+dir,row,from,row,next,q))){")
+          sub(" const dest=poiSnowPassEdge(nx,nz,poiWalkX,poiWalkZ);\n if(!dest)return false;",
+          """ const dest=poiSnowPassEdge(nx,nz,poiWalkX,poiWalkZ);
+           if(!dest)return false;
+           const continuous=poiOverlandTransfer(dest,now);
+           if(continuous!==null)return continuous;""")
+          sub("POI_FREE_RADIUS,canStep,(x,z,fromX,fromZ)=>{", "POI_FREE_RADIUS,canStep,(x,z,fromX,fromZ,px,pz)=>{")
+          sub("  const transition=poiWalkEnterCell(x-fromX,z-fromZ,now,true,onDoorCue);",
+          """  if(POI_OVERLAND_SPIKE)poiOverlandAnalogOffer={x:px,z:pz,angle,contact:c};
+            let transition;
+            try{transition=poiWalkEnterCell(x-fromX,z-fromZ,now,true,onDoorCue)}
+            finally{if(POI_OVERLAND_SPIKE)poiOverlandAnalogOffer=null}""")
+          sub(" },clipBody);\n if(result.stopped", " },clipBody);\n if(POI_OVERLAND_SPIKE&&poiOverlandResumeAnalog(c,old,now))return;\n if(result.stopped")
+          sub("function poiWalkFrameNoRegionRemote(){\n poiStopRepeat();",
+           "function poiWalkFrameNoRegionRemote(){\n poiStopRepeat(poiOverlandKeepAnalog);")
+          sub("""function poiStopRepeat(){
+           if(poiWalkRepeat!==null){clearInterval(poiWalkRepeat);poiWalkRepeat=null}
+           if(typeof poiAnalogStop==='function')poiAnalogStop();""",
+          """function poiStopRepeat(preserveAnalog=false){
+           if(poiWalkRepeat!==null){clearInterval(poiWalkRepeat);poiWalkRepeat=null}
+           if(preserveAnalog!==true&&typeof poiAnalogStop==='function')poiAnalogStop();""")
+          dst.parent.mkdir(parents=True,exist_ok=True);dst.write_text(s)
+          SOURCE
+          cat >.spike/core.js <<'SOURCE'
+          // BEGIN OVERLAND STREAM PLANNING
+          const POI_OVERLAND_ORIGINS=Object.freeze({base:[0,0],snowpass:[37,128],milda:[40,157]});
+          const POI_OVERLAND_CHUNK=8,POI_OVERLAND_RANGE=17,POI_OVERLAND_KEEP=18;
+          function poiOverlandGlobal(id,x,z){const o=POI_OVERLAND_ORIGINS[id];return o?[x+o[0],z+o[1]]:null}
+          function poiOverlandLocal(id,x,z){const o=POI_OVERLAND_ORIGINS[id];return o?[x-o[0],z-o[1]]:null}
+          function poiOverlandQueue(maps,gx,gz,radius=POI_OVERLAND_RANGE,cap=POI_OVERLAND_KEEP){
+           const list=[],s=POI_OVERLAND_CHUNK,range=Math.min(24,Math.max(0,radius));
+           for(const r of maps){
+            const p=poiOverlandLocal(r.id,gx,gz);if(!p)continue;
+            const [x,z]=p;
+            for(let j=Math.max(0,Math.floor((z-range)/s));j<=Math.min(Math.floor((r.height-1)/s),Math.floor((z+range)/s));j++)
+             for(let i=Math.max(0,Math.floor((x-range)/s));i<=Math.min(Math.floor((r.width-1)/s),Math.floor((x+range)/s));i++){
+              const x0=i*s,z0=j*s,x1=Math.min(x0+s,r.width),z1=Math.min(z0+s,r.height);
+              const d=Math.hypot(x-Math.max(x0,Math.min(x1,x)),z-Math.max(z0,Math.min(z1,z)));
+              if(d<=range)list.push({id:r.id,i,j,x0,z0,x1,z1,d,key:r.id+':'+i+','+j});
+             }
+           }
+           return list.sort((a,b)=>a.d-b.d||a.key.localeCompare(b.key)).slice(0,Math.min(POI_OVERLAND_KEEP,cap));
+          }
+          function poiOverlandIndex(world,ground=t=>/^(road|grass|earth|snow|stone)/i.test(t)){
+           const floors=new Map(),bands=new Map(),s=POI_OVERLAND_CHUNK;
+           for(const o of world){
+            if(!o||o.y!==0)continue;
+            const key=Math.floor(o.x/s)+','+Math.floor(o.z/s);
+            const row=bands.get(key);
+            if(row)row.push(o);else bands.set(key,[o]);
+            if(ground(o.type))floors.set(o.x+','+o.z,o.type);
+           }
+           return {floors,bands};
+          }
+          // END OVERLAND STREAM PLANNING
+          SOURCE
+          cat >.spike/surface.js <<'SOURCE'
+          // Bounded real surface prototype; only enabled on explicit QA launch.
+          const POI_OVERLAND_SPIKE=new URLSearchParams(location.search).get('overland-stream')==='1';
+          const POI_OVERLAND_GPU_LIMIT=4*1024*1024;
+          let poiOverlandMeshes=new Map(),poiOverlandIndexCache=new WeakMap(),poiOverlandSnow=null,poiOverlandMilda=null,poiOverlandCommands=[],poiOverlandDrawn=[],poiOverlandDrawing=false,poiOverlandEngaged=false,poiOverlandBake=null,poiOverlandStats={builds:0,maxBakeMs:0,frames:0};
+          function poiOverlandScope(id,x,z,pad=0){
+           const hasMilda=typeof poiMildaMap==='function';
+           return id==='snowpass'&&(z<=17+pad||hasMilda&&z>=17-pad)||
+            id==='milda'&&hasMilda&&z<=12+pad||
+            id==='base'&&x>=35-pad&&x<=63+pad&&z>=112-pad;
+          }
+          function poiOverlandSpecFor(id,layout,mapWorld,width,height){
+           if(!layout||!Array.isArray(mapWorld))return null;
+           let p=poiOverlandIndexCache.get(mapWorld);
+           if(!p){
+            const terrain=new Map((layout.map?.terrainHeights||[]).map(o=>[o.x+','+o.z,o.h]));
+            const statics=mapWorld.filter(o=>o.y>=0),roofList=statics.filter(o=>facilityIsRoofPiece(o));
+            const key=o=>o.x+','+o.z+','+o.y,chunk=o=>Math.floor(o.x/8)+','+Math.floor(o.z/8);
+            const batches=new Map(),roofGroups=new Map();
+            for(const o of statics){
+             const k=chunk(o),row=batches.get(k)||[];
+             row.push(o);batches.set(k,row);
+            }
+            for(const group of residentialRoofComponents(roofList.filter(o=>RESIDENTIAL_ROOFS.has(o.type)))){
+             const k=chunk(group[0]),row=roofGroups.get(k)||[];
+             row.push(group);roofGroups.set(k,row);
+            }
+            p={id,width,height,terrain,index:poiOverlandIndex(mapWorld,isFloor),batches,roofGroups,
+             roofLookup:new Map(roofList.map(o=>[key(o),o])),bridges:new Map(statics.filter(o=>BRIDGE_IDS.has(o.type)).map(o=>[o.x+','+o.z,o])),
+             walls:wallExteriorLookup(statics),lights:pineFloorLightingSources(statics)};
+            poiOverlandIndexCache.set(mapWorld,p);
+           }
+           return p;
+          }
+          function poiOverlandAreas(){
+           const id=facilitySite?.id,base=poiSnowPassBase,res=[];
+           const add=(id,site)=>{if(site?.map)res.push(poiOverlandSpecFor(id,site,site.map.world,site.map.width,site.map.height))};
+           res.push(poiOverlandSpecFor(id,facilitySite,world,MAP_W,MAP_H));
+           if(id==='base'||id==='milda'){
+            if(!poiOverlandSnow)poiOverlandSnow=poiSnowPassMap();
+            add('snowpass',poiOverlandSnow);
+           }
+           if(id==='snowpass'){
+            if(base)res.push(poiOverlandSpecFor('base',base.site,base.world,base.width,base.height));
+            // Attach later authored regions only once, when close enough to matter,
+            // and never construct them in a build where their map is not registered.
+            if(poiWalkViewZ>=9&&typeof poiMildaMap==='function'){
+             if(!poiOverlandMilda)poiOverlandMilda=poiMildaMap();
+             add('milda',poiOverlandMilda);
+            }
+           }
+           return res.filter(Boolean);
+          }
+          function poiOverlandClear(keep=new Set()){
+           for(const [k,m] of poiOverlandMeshes)if(!keep.has(k)){gl.deleteBuffer(m.buf);poiOverlandMeshes.delete(k)}
+          }
+          function* poiOverlandChunkRows(q,region){
+           const m=mesh(),{floors}=region.index,id=q.i+','+q.j;
+           const height=(x,z)=>region.terrain.get(x+','+z)||0;
+           const local=facilitySite?.id===region.id,offset=region.id==='base'?(local?facilitySite.townOffset:22)||0:0;
+           const ambient=region.id==='base'?(x,z)=>pineEastGroundColor(x,z,floors,offset):null;
+           for(let z=q.z0;z<q.z1;z++){
+            for(let x=q.x0;x<q.x1;x++){
+             const key=x+','+z,tile=floors.get(key)|| (region.id==='snowpass'?'poiSnowGround':'grass'),t=mesh();
+             const tint=ambient&&(!floors.has(key)||x-offset>=72&&Object.hasOwn(PINE_EAST_NATURE_TONES,tile))?ambient:null;
+             addFloorTile(t,x,z,tile,region.width*region.height,
+              ROAD_DIAGONALS.has(tile)?roadDiagonalConnections(floors,x,z,tile):ROAD_IDS.has(tile)&&!tile.endsWith('Full')?roadConnections(floors,x,z,tile):0,tint,true);
+             if(floors.has(key))shoreline(t,x,z,floors);
+             pineBakeFloorLighting(t,x,z,0,region.lights.blockers,region.lights.lamps);
+             shiftMesh(m,t,height(x,z)*TERRAIN_STEP);
+             const h=height(x,z);
+             if(h)for(const [dx,dz,face] of [[-1,0,3],[1,0,1],[0,-1,0],[0,1,2]])
+              if(height(x+dx,z+dz)<h)terrainSide(m,x,z,h,height(x+dx,z+dz),face);
+             yield;
+            }
+           }
+           for(const o of region.batches.get(id)||[]){
+            const t=o.type,y=o.y*1.4+height(o.x,o.z)*TERRAIN_STEP;
+            if(poiIsMonster(t)||RESIDENTIAL_ROOFS.has(t))continue;
+            if(isFloor(t)){if(o.y>0){const q=mesh();addFloorTile(q,o.x,o.z,t,region.width*region.height);shiftMesh(m,q,y)}}
+            else if(AUTO_ROOFS.has(t)){const q=mesh();connectedRoofGeometry(q,o,region.roofLookup);shiftMesh(m,q,height(o.x,o.z)*TERRAIN_STEP)}
+            else if(BRIDGE_IDS.has(t))bridgeConnectedGeometry(m,o,region.bridges);
+            else if(isWallId(t)){
+             const sides=wallFaceState(o,region.walls);
+             wallBlock(m,t,o.x+.5,y,o.z+.5,o.rot||0,sides.visible,sides.exterior);
+            }
+            else if(!local||!pineDrawBaseTree(m,o)&&!pineDrawEastNature(m,o))deco(m,t,o.x+.5,y,o.z+.5,o.rot||0);
+            yield;
+           }
+           for(const group of region.roofGroups.get(id)||[]){
+            if(!local||!pineGuildFantasyRoof(m,group))residentialRoofGeometry(m,group,region.roofLookup,true);
+            yield;
+           }
+           return m;
+          }
+          function poiOverlandUpload(q,m){
+           const bytes=m.p.length*12,held=[...poiOverlandMeshes.values()].reduce((n,m)=>n+m.bytes,0);
+           if(!bytes||held+bytes>POI_OVERLAND_GPU_LIMIT)return false;
+           const r=upload(m);r.bytes=bytes;
+           let x0=Infinity,y0=Infinity,z0=Infinity,x1=-Infinity,y1=-Infinity,z1=-Infinity;
+           for(let i=0;i<m.p.length;i+=3){
+            const x=m.p[i],y=m.p[i+1],z=m.p[i+2];
+            x0=Math.min(x0,x);y0=Math.min(y0,y);z0=Math.min(z0,z);x1=Math.max(x1,x);y1=Math.max(y1,y);z1=Math.max(z1,z);
+           }
+           r.bounds=[x0,y0,z0,x1,y1,z1];poiOverlandMeshes.set(q.key,r);
+           poiOverlandStats.builds++;return true;
+          }
+          function poiOverlandBakeFrame(list,areas,boot=false){
+           if(poiOverlandBake&&!list.some(q=>q.key===poiOverlandBake.q.key))poiOverlandBake=null;
+           let work=0;
+           const start=performance.now();
+           while(work++<(boot?2048:100)&&(boot||performance.now()-start<3)){
+            if(!poiOverlandBake){
+             const q=list.find(q=>!poiOverlandMeshes.has(q.key));if(!q)break;
+             poiOverlandBake={q,g:poiOverlandChunkRows(q,areas.find(a=>a.id===q.id))};
+            }
+            const r=poiOverlandBake.g.next();
+            if(r.done){
+             poiOverlandUpload(poiOverlandBake.q,r.value);poiOverlandBake=null;
+             break; // A frame may submit at most one fresh GPU chunk.
+            }
+           }
+           poiOverlandStats.maxBakeMs=Math.max(poiOverlandStats.maxBakeMs,performance.now()-start);
+          }
+          function poiOverlandPreviewTick(){
+           if(!POI_OVERLAND_SPIKE)return null;
+           poiOverlandCommands=[];poiOverlandDrawn=[];poiOverlandDrawing=false;
+           const site=facilitySite?.id;
+           const registered=site==='base'||site==='snowpass'||site==='milda'&&typeof poiMildaMap==='function';
+           const eligible=registered&&poiWalkActive&&poiWalkLevel===0&&!cameraTopDown&&!pineAIActive&&facilityVisibilityOwner()===null;
+           if(!eligible){
+            poiOverlandClear();poiOverlandBake=null;
+            if(!poiWalkActive){poiOverlandEngaged=false;poiOverlandIndexCache=new WeakMap()}
+            return null;
+           }
+           const near=poiOverlandScope(site,poiWalkViewX,poiWalkViewZ),prewarm=poiOverlandScope(site,poiWalkViewX,poiWalkViewZ,8);
+           if(!poiOverlandEngaged&&!prewarm){poiOverlandClear();poiOverlandBake=null;return null}
+           const areas=poiOverlandAreas(),g=poiOverlandGlobal(site,poiWalkViewX,poiWalkViewZ);
+           const list=poiOverlandQueue(areas,...g),keep=new Set(list.map(q=>q.key));poiOverlandClear(keep);
+           const boot=poiOverlandMeshes.size===0&&facilityScenes.size===0;
+           poiOverlandBakeFrame(list,areas,boot);
+           if(!poiOverlandEngaged){
+            // An ordinary session already has a complete scene; leave it presented
+            // until the surrounded local chunks have been built over multiple RAFs.
+            if(!near||facilityScenes.size&&list.some(q=>q.d<=8&&!poiOverlandMeshes.has(q.key)))return null;
+            poiOverlandEngaged=true;
+           }
+           for(const q of list){
+            const m=poiOverlandMeshes.get(q.key);
+            if(m)poiOverlandCommands.push({id:q.id,key:q.key,m});
+           }
+           if(!poiOverlandCommands.length)return null;
+           // Keep each GPU object owned by exactly one world/slot. Retire the active
+           // old atlas once switching to the small streamed neighborhood.
+           if(facilityScenes.size||facilityRoofMeshes.length)facilityInvalidateScenes();
+           poiOverlandStats.frames++;poiOverlandDrawing=true;
+           return poiOverlandCommands[0]?.m??null;
+          }
+          function poiOverlandNeighborVP(vp,active,other){
+           if(active===other)return vp;
+           const a=POI_OVERLAND_ORIGINS[active],b=POI_OVERLAND_ORIGINS[other];
+           const t=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,b[0]-a[0],0,b[1]-a[1],1]);
+           return mult(vp,t);
+          }
+          function poiOverlandBoxVisible(vp,b){
+           for(let a=0;a<3;a++)for(const dir of [-1,1]){
+            const x=vp[3]+dir*vp[a],y=vp[7]+dir*vp[4+a],z=vp[11]+dir*vp[8+a],w=vp[15]+dir*vp[12+a];
+            if(w+x*b[x>=0?3:0]+y*b[y>=0?4:1]+z*b[z>=0?5:2]<-.001)return false;
+           }
+           return true;
+          }
+          function poiOverlandPresent(vp){
+           const all=poiOverlandCommands,active=facilitySite.id,matrices=new Map([[active,vp]]);
+           for(const o of all)if(!matrices.has(o.id))matrices.set(o.id,poiOverlandNeighborVP(vp,active,o.id));
+           poiOverlandCommands=all.filter(o=>poiOverlandBoxVisible(matrices.get(o.id),o.m.bounds));
+           poiOverlandDrawn=poiOverlandCommands;
+           try{
+           for(const o of poiOverlandCommands)draw(o.m,poiOverlandNeighborVP(vp,facilitySite.id,o.id));
+           }finally{poiOverlandCommands=all}
+          }
+          function poiOverlandInspect(){
+           return {...poiOverlandStats,engaged:poiOverlandEngaged,active:facilitySite?.id,drawing:poiOverlandDrawing,effective:poiOverlandDrawing?poiOverlandDrawn.length:0,contact:poiAnalogContact?.id??null,captured:!!poiAnalogContact&&poiAnalogPad.hasPointerCapture(poiAnalogContact.id),last:poiOverlandDrawn.map(o=>({id:o.id,key:o.key,vertices:o.m.count})),
+            bytes:[...poiOverlandMeshes.values()].reduce((n,m)=>n+m.bytes,0),oldVariants:facilityScenes.size};
+          }
+          let poiOverlandAnalogOffer=null,poiOverlandAnalogHandoff=null,poiOverlandKeepAnalog=false;
+          function poiOverlandRealNeighbor(id,x,z){
+           return poiOverlandMeshes.has(id+':'+Math.floor(x/POI_OVERLAND_CHUNK)+','+Math.floor(z/POI_OVERLAND_CHUNK));
+          }
+          function poiOverlandTransfer(dest,now){
+           const pass=poiOverlandAnalogOffer,from=facilitySite?.id;
+           if(!POI_OVERLAND_SPIKE||!pass||!poiOverlandRealNeighbor(dest.region,dest.x,dest.z))return null;
+           const p=poiOverlandLocal(dest.region,...poiOverlandGlobal(from,pass.x,pass.z));
+           if(poiFreeCell(p[0])!==dest.x||poiFreeCell(p[1])!==dest.z)return null;
+           poiOverlandKeepAnalog=true;
+           try{if(!poiSnowPassChange(dest,now))return false}
+           finally{poiOverlandKeepAnalog=false}
+           poiOverlandAnalogHandoff={...pass,x:p[0],z:p[1]};
+           return true;
+          }
+          function poiOverlandResumeAnalog(c,old,now){
+           const h=poiOverlandAnalogHandoff;poiOverlandAnalogHandoff=null;
+           if(!h||h.contact!==c)return false;
+           poiAnalogContact=c;c.last=now;c.failures.clear();
+           poiFreePose={x:h.x,z:h.z,level:poiWalkLevel,angle:h.angle,distance:old.distance,walking:true,changed:true};
+           poiWalkFromX=poiWalkViewX=h.x;poiWalkFromZ=poiWalkViewZ=h.z;
+           poiWalkStarted=now-POI_WALK_MS;poiWalkNextReady=0;
+           return true;
+          }
+          SOURCE
+          cat >.spike/tests/overland-browser.mjs <<'SOURCE'
+          import assert from 'node:assert/strict';
+          import {createServer} from 'node:http';
+          import {createRequire} from 'node:module';
+          import {readFileSync} from 'node:fs';
+          import vm from 'node:vm';
+          const h=readFileSync(process.argv[2]??'release/world-editor.html','utf8');
+          for(const [,b] of h.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new vm.Script(b);
+          if(process.env.STREAM_PARSE_ONLY){console.log('exact scripts parse');process.exit(0)}
+          const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
+          const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(req.url==='/seed'?'<!doctype html><title>Spatial seam</title>':h)});
+          await new Promise((r,j)=>server.listen(0,'127.0.0.1',r).once('error',j));
+          const base='http://127.0.0.1:'+server.address().port;
+          let browser,page,where='launch';
+          const ready=()=>page.evaluate(()=>({a:window.__editorTest?.snowPassRegion(),p:window.__editorTest?.freeMovementPose(),q:window.__editorTest?.overlandStream()}));
+          try{
+           browser=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
+           const ctx=await browser.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.62});
+           page=await ctx.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(12000);
+           await page.goto(base+'/seed');await page.evaluate(()=>{
+            localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,townLayout:5,townMapHeight:128,
+             position:{x:49,z:122,y:0,facing:2},view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.24,orbitDistance:5.5}}));
+           });
+           where='actual neighboring terrain while standing at base z122';
+           await page.goto(base+'/?resume=1&test=1'+(process.env.USE_STREAM_DEFAULT?'':'&overland-stream=1'));
+           await page.locator('#pineStartupCover').waitFor({state:'hidden'});
+           await page.waitForFunction(()=>{const q=window.__editorTest?.overlandStream();return q?.drawing&&q.last.some(v=>v.id==='snowpass')});
+           const standing=await ready();assert(standing.q.oldVariants===0&&standing.a.id==='base');
+           assert(Math.abs(standing.p.z-122)<.02);
+           assert.equal(await page.evaluate(()=>window.__editorTest.canStep(49,128,49,127)),false);
+           await page.evaluate(()=>{
+            const log=window.__overlandSamples=[];
+            function frame(now){if(log.length>=600)return;const t=window.__editorTest,area=t.snowPassRegion(),p=t.freeMovementPose(),s=t.overlandStream();
+             log.push({t:now,id:area.id,x:p.x+(area.id==='snowpass'?37:0),z:p.z+(area.id==='snowpass'?128:0),
+              old:s.oldVariants,b:s.bytes,draw:s.drawing,n:s.effective,cover:!document.getElementById('poiSnowTransitionVeil').hidden});
+             requestAnimationFrame(frame);
+            }
+            requestAnimationFrame(frame);
+           });
+           const cdp=await ctx.newCDPSession(page),pad=page.locator('#poiAnalogPad'),r=await pad.boundingBox(),point={x:Math.round(r.x+r.width*.5),y:Math.round(r.y+r.height*.5),id:8};
+           const send=(type,touchPoints)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints});
+           where='same held pointer runs across base to snow';
+           await send('touchStart',[point]);await send('touchMove',[{...point,y:point.y+42}]);
+           await page.waitForFunction(()=>{const t=window.__editorTest;return t.snowPassRegion().id==='snowpass'&&t.freeMovementPose().z>1.5});
+           assert((await ready()).q.captured,'actual DOM pointer capture remains owned after the seam');
+           where='same held pointer reverses and runs back to base';
+           await send('touchMove',[{...point,y:point.y-42}]);
+           await page.waitForFunction(()=>{const t=window.__editorTest;return t.snowPassRegion().id==='base'&&t.freeMovementPose().z<125.9});
+           await send('touchEnd',[]);
+           const timeline=await page.evaluate(()=>window.__overlandSamples);
+           const changes=timeline.map((x,i)=>i>0&&x.id!==timeline[i-1].id?{a:timeline[i-1],b:x}:null).filter(Boolean);
+           assert.equal(changes.length,2);
+           for(const {a,b} of changes){
+            assert(Math.hypot(a.x-b.x,a.z-b.z)<.32,JSON.stringify({a,b}));
+            assert(a.draw&&b.draw&&a.old===0&&b.old===0,'both presented frames use only streamed neighboring geometry');
+           }
+           assert(!timeline.some(x=>x.cover));assert(timeline.every(x=>x.b<=4*1024*1024&&x.n<=18));
+           assert.deepEqual(errors,[]);
+           console.log('Seam rendered metrics:',JSON.stringify({changes,maxBytes:Math.max(...timeline.map(x=>x.b)),...((await ready()).q)}));
+          }catch(e){console.error(where,JSON.stringify(await ready().catch(()=>null)));throw e}
+          finally{await browser?.close();await new Promise(r=>server.close(r))}
+          SOURCE
+          cat >.spike/tests/overland-outlet-browser.mjs <<'SOURCE'
+          import assert from 'node:assert/strict';
+          import {createServer} from 'node:http';
+          import {createRequire} from 'node:module';
+          import {readFileSync} from 'node:fs';
+          import vm from 'node:vm';
+          const game=readFileSync(process.argv[2]??'dynamic/world-editor.html','utf8');
+          const key='  overlandStream:()=>poiOverlandInspect(),';assert.equal(game.split(key).length,2);
+          let h=game.replace(key,key+`
+            overlandOutletQA:{savedApproach:()=>workshopResumeRestorePosition({x:124,z:82,y:0,facing:0}),
+             mode:v=>{cameraTopDown=v;dirty=true;cursorDirty=true},
+             read:()=>({x:poiWalkX,z:poiWalkZ,until:poiWalkNextReady,now:performance.now(),top:cameraTopDown,
+              scene:poiOverlandInspect(),level:poiWalkLevel,vertices:sceneMesh?.count||0,position:{x:poiWalkViewX,z:poiWalkViewZ},legacy:facilityScenes.size})},`);
+          for(const [a,b] of [
+           [' const p=poiWildPick(rng);',' const p=null;'],
+           ['function poiWildRegionalFrame(now,rng){','function poiWildRegionalFrame(now,rng){return;']
+          ]){assert.equal(h.split(a).length,2);h=h.replace(a,b)}
+          for(const [,body] of h.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new vm.Script(body);
+          if(process.env.OUTLET_PARSE_ONLY){console.log('exact scripts parse');process.exit(0)}
+          const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
+          const server=createServer((q,r)=>{r.setHeader('Content-Type','text/html; charset=utf-8');r.end(q.url==='/seed'?'<!doctype html><title>Outlet</title>':h)});
+          await new Promise((r,j)=>server.listen(0,'127.0.0.1',r).once('error',j));
+          const base='http://127.0.0.1:'+server.address().port;
+          let b,page,checkpoint='boot';
+          const read=()=>page.evaluate(()=>window.__editorTest?.overlandOutletQA.read());
+          try{
+           b=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
+           page=await (await b.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.65})).newPage();
+           page.setDefaultTimeout(14000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
+           await page.goto(base+'/seed');await page.evaluate(()=>{
+            localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,townLayout:5,townMapHeight:128,
+             position:{x:83,z:107,y:0,facing:3},view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.24,orbitDistance:5.5}}));
+           });
+           await page.goto(base+'/?resume=1&test=1'+(process.env.USE_STREAM_DEFAULT?'':'&overland-stream=1'));
+           await page.locator('#pineStartupCover').waitFor({state:'hidden'});
+           await page.waitForFunction(()=>{const q=window.__editorTest.overlandOutletQA.read();return q.legacy>0&&!q.scene.drawing});
+           await page.evaluate(()=>{
+            window.__outletFrames=[];
+            function f(now){
+             const q=window.__editorTest.overlandOutletQA.read();
+             window.__outletFrames.push({now,x:q.x,z:q.z,draw:q.scene.drawing,visible:q.scene.effective,old:q.legacy,bytes:q.scene.bytes,vertices:q.vertices});
+             if(window.__outletFrames.length<4500)requestAnimationFrame(f);
+            }
+            requestAnimationFrame(f);
+           });
+           let x=83,z=107;
+           const path=async(corners)=>{
+           for(const [tx,tz] of corners){
+            while(x!==tx||z!==tz){
+             const dx=Math.sign(tx-x),dz=Math.sign(tz-z);x+=dx;z+=dz;
+             checkpoint='actual outlet move '+x+','+z;
+             await page.waitForFunction(()=>{const q=window.__editorTest.overlandOutletQA.read();return q.now>=q.until});
+             await page.keyboard.press(dx?dx>0?'ArrowRight':'ArrowLeft':dz>0?'ArrowDown':'ArrowUp');
+             await page.waitForFunction(({x,z})=>{const q=window.__editorTest.overlandOutletQA.read();return q.x===x&&q.z===z},{x,z});
+            }
+           }
+           };
+           await path([[65,107],[65,112],[54,112],[54,119],[49,119],[49,124]]);
+           const start=await read();assert(start.scene.drawing&&!start.legacy,'pre-existing base enters warm chunk rendering on approach');
+           const inFrames=await page.evaluate(()=>window.__outletFrames);
+           assert(inFrames.some(q=>!q.draw&&q.old>0)&&inFrames.some(q=>q.draw&&q.old===0),'real loop exercises both atlas and chunk render paths');
+           assert(inFrames.every(q=>q.vertices>0&&q.bytes<=4*1024*1024),'approach never swaps to a blank or over-budget scene');
+           const enter=inFrames.findIndex(q=>q.draw);
+           const frameGap=enter>0?inFrames[enter].now-inFrames[enter-1].now:null;
+           console.log('Actual pre-existing base approach frame switch',JSON.stringify({frameGap,length:inFrames.length}));
+           await page.evaluate(()=>{window.__outletFrames.length=0});
+           await path([[49,119],[54,119],[54,112],[65,112],[65,107],[83,107]]);
+           const end=await read();assert.deepEqual([end.x,end.z],[83,107]);
+           const frames=await page.evaluate(()=>window.__outletFrames);
+           assert(frames.filter(q=>q.x>=72&&q.z===107).length>=5,'real travel goes beyond the prior forced crop');
+           assert(frames.every(q=>q.draw&&q.visible>=1&&q.old===0&&q.bytes<=4*1024*1024),'outdoor route does not silently rebuild the old atlas');
+           const gaps=frames.slice(1).map((q,i)=>q.now-frames[i].now).sort((a,b)=>a-b);
+           console.log('Actual South Forest outbound draw metrics',JSON.stringify({frames:frames.length,max:gaps.at(-1),p99:gaps[Math.floor(gaps.length*.99)],bytes:Math.max(...frames.map(q=>q.bytes)),end}));
+           checkpoint='explicit overhead view remains original';
+           await page.evaluate(()=>window.__editorTest.overlandOutletQA.mode(true));
+           await page.waitForFunction(()=>{const q=window.__editorTest.overlandOutletQA.read();return q.top&&!q.scene.drawing&&q.legacy>0});
+           await page.evaluate(()=>window.__editorTest.overlandOutletQA.mode(false));
+           await page.waitForFunction(()=>{const q=window.__editorTest.overlandOutletQA.read();return !q.top&&q.scene.drawing&&q.legacy===0});
+           checkpoint='actual stock chapel path uses legacy cellar renderer';
+           assert.equal(await page.evaluate(()=>window.__editorTest.overlandOutletQA.savedApproach()),true,'use existing save restoration to reach distant chapel approach for this probe');
+           await page.waitForFunction(()=>{const q=window.__editorTest.overlandOutletQA.read();return q.x===124&&q.z===82&&q.level===0&&q.scene.drawing});
+           await page.keyboard.press('ArrowUp');
+           await page.waitForFunction(()=>{const q=window.__editorTest.overlandOutletQA.read();return q.level===-1&&q.legacy>0&&!q.scene.drawing&&q.vertices>0});
+           await page.waitForFunction(()=>{const q=window.__editorTest.overlandOutletQA.read();return q.now>=q.until});
+           await page.keyboard.press('ArrowDown');
+           await page.waitForFunction(()=>{const q=window.__editorTest.overlandOutletQA.read();return q.x===124&&q.z===82&&q.level===0&&q.scene.drawing&&!q.legacy});
+           assert.deepEqual(errors,[]);
+           console.log('PASS user-visible outlet leaves the prior crop, and explicit overhead renderer remains intact');
+          }catch(e){console.error(checkpoint,JSON.stringify(await read().catch(()=>null)));throw e}
+          finally{await b?.close();await new Promise(r=>server.close(r))}
+          SOURCE
+          cat >.spike/tests/planning.test.cjs <<'SOURCE'
+          const {test}=require('node:test'),a=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+          const c=vm.runInNewContext(fs.readFileSync(process.env.CORE||'core.js','utf8')+';({to:poiOverlandGlobal,from:poiOverlandLocal,choose:poiOverlandQueue,index:poiOverlandIndex})'),plain=v=>JSON.parse(JSON.stringify(v));
+          test('same fractional pose survives both seam directions in a shared global frame',()=>{
+           const g=c.to('base',49.17,127.59);
+           a.deepEqual(plain(c.from('snowpass',...g)),[12.170000000000002,-.4099999999999966]);
+           a.deepEqual(plain(c.to('snowpass',...c.from('snowpass',...g))),plain(g));
+           a.deepEqual(plain(c.to('milda',12,0)),[52,157]);
+          });
+          test('cache candidates are bounded, nearest first, and select real neighbor cells before the seam',()=>{
+           const maps=[{id:'base',width:128,height:128},{id:'snowpass',width:24,height:29},{id:'milda',width:25,height:30}];
+           const q=c.choose(maps,49,120);
+           a.ok(q.length<=18);
+           a.ok(q.some(v=>v.id==='base')&&q.some(v=>v.id==='snowpass'));
+           a.ok(!q.some(v=>v.id==='milda'));
+           a.ok(q.every((v,i)=>!i||q[i-1].d<=v.d));
+           a.equal(new Set(q.map(v=>v.key)).size,q.length);
+           const back=c.choose(maps,49,131);
+           a.ok(back.some(v=>v.id==='base')&&back.some(v=>v.id==='snowpass'));
+          });
+          test('real authored records partition by ownership without transforming stored grid identity',()=>{
+           const floor={x:7,z:7,y:0,type:'roadGravelFull'},tree={x:8,z:7,y:0,type:'treePine'},underground={x:7,z:7,y:-1,type:'stone'};
+           const p=c.index([floor,tree,underground]);
+           a.equal(p.floors.get('7,7'),floor.type);a.equal(p.bands.get('0,0')[0],floor);a.equal(p.bands.get('1,0')[0],tree);
+           a.ok(![...p.bands.values()].flat().includes(underground));
+          });
+
+          test('bounded local mesh is not culled when touching the camera clip and behind boxes are culled',()=>{
+           const whole=fs.readFileSync('surface.js','utf8'),i=whole.indexOf('function poiOverlandBoxVisible('),j=whole.indexOf('function poiOverlandPresent(',i);
+           const visible=vm.runInNewContext(whole.slice(i,j)+';poiOverlandBoxVisible');
+           const vp=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
+           a.ok(visible(vp,[.85,-.5,-.5,2,.5,.5]));
+           a.equal(visible(vp,[1.2,-.5,-.5,2,.5,.5]),false);
+           a.equal(visible(vp,[-2,-.5,-.5,-1.2,.5,.5]),false);
+          });
+          SOURCE
+          cat >.spike/horizon-build.py <<'SOURCE'
+          from pathlib import Path
+          import sys
+          d=Path(__file__).parent
+          source,out=map(Path,sys.argv[1:])
+          h=source.read_text()
+          def rep(a,b):
+           global h
+           if h.count(a)!=1: raise ValueError((h.count(a),a))
+           h=h.replace(a,b)
+          rep('function render(){',(d/'snow-horizon.js').read_text()+'\nfunction render(){')
+          rep(' poiOcclusionEnd();\n poiDrawEditorGhostRoof(p.vp);',' poiOcclusionEnd();\n facilityDrawSnowHorizon(p);\n poiDrawEditorGhostRoof(p.vp);')
+          out.write_text(h)
+          SOURCE
+          cat >.spike/snow-horizon.js <<'SOURCE'
+          // BEGIN SOUTH SNOW HORIZON
+          // Maiden profile in global tile units. Snow sector origin (37,128);
+          // the travel seam remains (49,127)->(49,128), below this skyline.
+          const POI_SNOW_HORIZON=Object.freeze({
+           bounds:[28,-1,137,71,15,154],
+           ridge:[[28,1.1,153],[32,3.8,151],[35,4.8,149],[38,7.7,147],[41,7.2,148],
+            [44,9.8,148],[46,8.6,147],[49,13.2,145],[52,10.9,146],[54,11.8,148],
+            [58,7.5,147],[61,8.4,148],[64,5.9,150],[68,3.2,152],[71,1.2,154]]
+          });
+          let poiSnowHorizonGpu=null,poiSnowHorizonLast=0;
+          function poiSnowHorizonMesh(){
+           const m=mesh(),profile=POI_SNOW_HORIZON.ridge;
+           const foot=([x,,z])=>[x,-.65,Math.max(137,z-9-(x%3))];
+           const snowline=([x,y,z])=>[x,Math.min(y,.70+y*(.43+(x%5)*.031)),z-3.6];
+           for(let i=1;i<profile.length;i++){
+            const a=profile[i-1],b=profile[i],fa=foot(a),fb=foot(b),sa=snowline(a),sb=snowline(b);
+            const rock=i%3===1?[.29,.38,.49]:[.31,.41,.52];
+            const ice=i%4===1?[.73,.86,.96]:[.85,.94,.99];
+            // Wound to face upward/north: downward normals washed pale snow into shadow.
+            tri(m,fa,sb,fb,rock);tri(m,fa,sa,sb,rock);
+            tri(m,sa,b,sb,ice);tri(m,sa,a,b,ice);
+           }
+           return m;
+          }
+          function poiSnowHorizonOpacity(region,floor,outdoor,x,z){
+           if(region!=='base'||floor!==0||!outdoor)return 0;
+           // Keep the main-world approach readable; replace no neighboring tiles.
+           // Leave the last six tiles of the authored route clear for real neighbor LOD.
+           const smooth=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t)};
+           return .87*smooth((122-z)/10)*smooth((150-Math.hypot(x-49,z-143))/30);
+          }
+          function poiSnowHorizonInFrame(vp){
+           const [x0,y0,z0,x1,y1,z1]=POI_SNOW_HORIZON.bounds;
+           let reject=63;
+           for(let i=0;i<8&&reject;i++){
+            const x=i&1?x1:x0,y=i&2?y1:y0,z=i&4?z1:z0;
+            const cx=vp[0]*x+vp[4]*y+vp[8]*z+vp[12],cy=vp[1]*x+vp[5]*y+vp[9]*z+vp[13],
+             cz=vp[2]*x+vp[6]*y+vp[10]*z+vp[14],w=vp[3]*x+vp[7]*y+vp[11]*z+vp[15];
+            reject&=(cx< -w?1:0)|(cx>w?2:0)|(cy< -w?4:0)|(cy>w?8:0)|(cz< -w?16:0)|(cz>w?32:0);
+           }
+           return reject===0;
+          }
+          function facilitySnowHorizonStatus(){
+           return {visible:poiSnowHorizonLast>0,opacity:poiSnowHorizonLast,vertices:poiSnowHorizonGpu?.count??0};
+          }
+          function facilityDrawSnowHorizon(p){
+           const {vp,skyHorizon}=p;
+           const opacity=poiSnowHorizonOpacity(facilitySite?.id,poiWalkLevel,Number.isFinite(skyHorizon),poiWalkViewX,poiWalkViewZ);
+           poiSnowHorizonLast=0;
+           if(opacity<.005||!poiSnowHorizonInFrame(vp))return;
+           if(!poiSnowHorizonGpu)poiSnowHorizonGpu=upload(poiSnowHorizonMesh());
+           if(!poiSnowHorizonGpu?.count)return;
+           gl.enable(gl.BLEND);gl.blendFunc(gl.CONSTANT_ALPHA,gl.ONE_MINUS_CONSTANT_ALPHA);gl.depthMask(false);
+           try{gl.blendColor(0,0,0,opacity);draw(poiSnowHorizonGpu,vp);poiSnowHorizonLast=opacity}
+           finally{
+            gl.depthMask(true);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.blendColor(0,0,0,0);gl.disable(gl.BLEND);
+           }
+          }
+          // END SOUTH SNOW HORIZON
+          SOURCE
+          cat >.spike/tests/snow-ridge-horizon.test.cjs <<'SOURCE'
+          const fs=require('node:fs'),vm=require('node:vm'),a=require('node:assert/strict'),{test}=require('node:test');
+          const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
+          function b(x,y){const i=h.indexOf(x),j=h.indexOf(y,i+1);if(i<0||j<0)throw Error('snow horizon not authored');return h.slice(i,j)}
+          test('snow is a sparse south-aligned outdoor skyline and hands off before the true snow seam',()=>{
+           const c=vm.createContext({});vm.runInContext(b('// BEGIN SOUTH SNOW HORIZON','// END SOUTH SNOW HORIZON')+
+           b('function mult(a,b)','function draw(mesh,vp')+b('function perspective(', 'function '),c);
+           const style=()=>({p:[],n:[],c:[]}),tri=(m,...v)=>m.p.push(...v[0],...v[1],...v[2]);
+           c.mesh=style;c.tri=tri;
+           const g=c.poiSnowHorizonMesh();a.ok(g.p.length/3>=30&&g.p.length/3<=192);
+           const points=[];for(let j=0;j<g.p.length;j+=3)points.push(g.p.slice(j,j+3));
+           a(points.every(([x,y,z])=>x>=28&&x<=71&&y>=-1&&y<=15&&z>=137&&z<=154));
+           a(points.some(([x,y])=>Math.abs(x-49)<3&&y>=11));
+           a.equal(c.poiSnowHorizonOpacity('base',0,true,49,108),.87);
+           a(c.poiSnowHorizonOpacity('base',0,true,49,116)<.87);
+           for(const args of [['base',0,true,49,122],['snowpass',0,true,49,108],['base',-1,true,49,108],['base',0,false,49,108]])a.equal(c.poiSnowHorizonOpacity(...args),0);
+           const vp=(eye,target)=>c.mult(c.perspective(Math.PI/3,2,.45,200),c.look(eye,target));
+           a(c.poiSnowHorizonInFrame(vp([50,2,94],[50,1,103])));
+           a(!c.poiSnowHorizonInFrame(vp([50,2,103],[50,1,94])));
+           a(!c.poiSnowHorizonInFrame(vp([50,2,100],[90,1,100])));
+          });
+          SOURCE
+          cat >.spike/tests/snow-continuous-seam-browser.mjs <<'SOURCE'
+          import assert from 'node:assert/strict';
+          import {createServer} from 'node:http';
+          import {createRequire} from 'node:module';
+          import {readFileSync} from 'node:fs';
+          import {Script} from 'node:vm';
+
+          const h=readFileSync(process.argv[2]??'world-editor.html','utf8');
+          const key='  freeMovementPose:()=>({x:poiWalkViewX,z:poiWalkViewZ,level:poiWalkLevel}),';
+          assert.equal(h.split(key).length,2,'native play instrumentation inserts into test API only');
+          const html=h.replace(key,key+`
+            seamlessSnowQA:()=>{
+             const pose={x:poiWalkViewX,z:poiWalkViewZ,y:poiWalkLevel},region=facilitySite?.id;
+             const s=window.__snowSeamProbe,v=$('poiSnowTransitionVeil'),d=$('poiDungeonFade');
+             return {pose,region,pointer:poiAnalogContact?.id??null,facing:poiWalkFacing,
+              heading:poiCameraYaw,pitch:poiCameraPitch,camera:poiThirdPerson,lit:window.pineStartup?.ready,
+              blocked:!!v&&!v.hidden,veil:!!v&&!v.hidden,
+              dark:!!d?.style.opacity&&+d.style.opacity>.03,active:poiWalkActive,
+              timestamp:performance.now(),uploads:s?.uploads.length,live:s?.live,contextLost:s?.lost};
+            },
+          `);
+          if(process.env.SNOW_SEAM_SYNTAX_ONLY==='1'){
+           for(const [,,body] of [...html.matchAll(/<script(?:\s+([^>]*))?>([\s\S]*?)<\/script>/gi)].filter(([,a])=>!a||!/\b(?:src|type)\s*=/.test(a)))new Script(body);
+           console.log('PASS exact seamless snow browser fixture anchors and script parse');process.exit(0);
+          }
+          const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
+          const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(req.url==='/seed'?'<title>seed</title>':html)});
+          await new Promise((r,j)=>server.listen(0,'127.0.0.1',r).once('error',j));
+          const origin='http://127.0.0.1:'+server.address().port, fixtureOnly=process.env.SNOW_SEAM_REPORT_ONLY==='1';
+          const position=s=>s.pose.z+(s.region==='snowpass'?128:0);
+          const initialKit=JSON.stringify({version:1,weapon:'equipWoodSword',potions:0,gold:9,
+           groundGold:[{id:'pile-qa',x:12,z:2,y:0,amount:2}],drops:[{type:'healingHerb',x:12,z:2,y:0}]});
+          function startProbe(){
+           const p=WebGLRenderingContext.prototype,s=window.__snowSeamProbe={
+            frames:[],uploads:[],sceneCounts:[],masked:0,high:0,live:0,lost:0,veils:[],thumb:[],samples:[],active:false};
+           const shapes=new WeakMap(),current=new WeakMap(),cap=4500;
+           for(const [method,wrap] of Object.entries({
+            bindBuffer(original,target,buffer){
+             let binding=current.get(this);
+             if(!binding){binding=new Map();current.set(this,binding)}
+             binding.set(target,buffer);return original.call(this,target,buffer);
+            },
+            bufferData(original,target,value,...args){
+             const buffer=current.get(this)?.get(target);
+             if(buffer){const bytes=typeof value==='number'?value:value?.byteLength??0;
+              const before=shapes.get(buffer)??0;shapes.set(buffer,bytes);s.live+=bytes-before;s.high=Math.max(s.high,s.live);
+              if(s.active&&s.uploads.length<cap)s.uploads.push({at:performance.now(),bytes,target,live:s.live});}
+             return original.call(this,target,value,...args);
+            },
+            deleteBuffer(original,buffer){
+             if(buffer){s.live-=shapes.get(buffer)??0;shapes.delete(buffer)}
+             return original.call(this,buffer);
+            },
+            drawArrays(original,mode,first,count){
+             if(s.active&&this.canvas?.id==='view')s.masked+=count;
+             return original.call(this,mode,first,count);
+            },
+            drawElements(original,mode,count,...args){
+             if(s.active&&this.canvas?.id==='view')s.masked+=count;
+             return original.call(this,mode,count,...args);
+            },
+            clear(original,flags){
+             const t=performance.now(),r=original.call(this,flags);
+             if(s.active&&this.canvas?.id==='view'&&(flags&this.COLOR_BUFFER_BIT)&&s.frames.length<cap){
+              if(s.frames.length)s.sceneCounts.push(s.masked);
+              s.masked=0;s.frames.push(t);
+              const qa=window.__editorTest?.seamlessSnowQA?.();
+              if(qa?.veil||qa?.dark)s.veils.push({at:t,region:qa.region});
+              if(qa)s.samples.push({t,region:qa.region,x:qa.pose.x,z:qa.pose.z,heading:qa.heading,pitch:qa.pitch,
+                pointer:qa.pointer,face:qa.facing,kit:qa.active});
+             }
+             return r;
+            }
+           })){const original=p[method];p[method]=function(...args){return wrap.call(this,original,...args)}}
+           addEventListener('webglcontextlost',()=>s.lost++,true);
+           for(const event of ['pointerdown','pointerup','pointercancel'])addEventListener(event,e=>{
+            if(s.active&&e.pointerType==='touch'&&e.isTrusted)s.thumb.push({event,id:e.pointerId,time:performance.now()});
+           },true);
+          }
+          function limits(summary){
+           const maxGap=+(process.env.SNOW_MAX_FRAME_GAP_MS??150),maxUpload=+(process.env.SNOW_MAX_SEAM_UPLOAD_BYTES??6*1024*1024);
+           const maxGPU=+(process.env.SNOW_MAX_LIVE_BUFFER_BYTES??48*1024*1024);
+           return {
+            rendered:summary.frames>=6,
+            noBlankCanvas:summary.sceneCounts.length>0&&summary.sceneCounts.every(n=>n>500),
+            sameThumb:summary.continued&&summary.thumb.filter(e=>e.event==='pointerdown').length===1&&
+             !summary.thumb.some(e=>e.event==='pointercancel'||e.event==='pointerup')&&
+             summary.continued.pointer===summary.thumb.find(e=>e.event==='pointerdown').id,
+            noCurtain:summary.veils.length===0,
+            noContextLoss:summary.lost===0,
+            responsive:summary.gap.max<=320&&summary.gap.max<=Math.max(maxGap,summary.away.max+30),
+            noSeamSpecificP99:summary.gap.p99<=Math.max(maxGap,summary.away.p99+30),
+            smallUploads:summary.largestUpload<=maxUpload,
+            boundedGpu:summary.peak<=maxGPU,
+            noPhaseJump:!summary.end||Math.abs(summary.start.heading-summary.end.heading)<.001&&Math.abs(summary.start.pitch-summary.end.pitch)<.001,
+           };
+          }
+          const quantile=(x,f)=>{if(!x.length)return 0;return x.toSorted((a,b)=>a-b)[Math.min(x.length-1,Math.floor(x.length*f))]};
+          const frameGaps=frames=>{
+           const gaps=frames.slice(1).map((t,i)=>t-frames[i]);
+           return {n:gaps.length,p50:quantile(gaps,.5),p95:quantile(gaps,.95),p99:quantile(gaps,.99),max:Math.max(0,...gaps)};
+          };
+          let browser,away;
+          const violations=[];
+          try{
+           browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
+           args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
+           for(const profile of ['away','warm','cold']){
+            const coldSnow=profile==='cold';
+            const ctx=await browser.newContext({viewport:{width:844,height:390},deviceScaleFactor:.65,isMobile:true,hasTouch:true,serviceWorkers:'block'});
+            const page=await ctx.newPage(),errors=[],remote=[],req=[];
+            page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>req.push(r.url()));
+            await ctx.route('**/*',r=>r.request().url().startsWith(origin)?r.continue():(remote.push(r.request().url()),r.abort()));
+            await page.addInitScript(startProbe);
+            await page.goto(origin+'/seed');
+            await page.evaluate(({coldSnow,initialKit,profile})=>{
+             localStorage.setItem('world-workshop-hotbar-v1',initialKit);
+             localStorage.setItem('world-workshop-town-clock-v1','{"version":1,"gameMs":330000}');
+             localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
+              ...(coldSnow?{region:'snowpass',regionHp:78}:{}),
+              position:coldSnow?{x:12,z:3,y:0,facing:0}:profile==='away'?{x:54,z:112,y:0,facing:2}:{x:49,z:125,y:0,facing:2},townLayout:5,townMapHeight:128,
+              view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:.37,orbitPitch:.24,orbitDistance:5.5}}));
+            },{coldSnow,initialKit,profile});
+            await page.goto(origin+'/?resume=1&test=1'+(process.env.SNOW_SEAM_QUERY??''));
+            await page.locator('#pineStartupCover').waitFor({state:'hidden',timeout:20000});
+            const get=()=>page.evaluate(()=>window.__editorTest?.seamlessSnowQA());
+            const originState=await get();
+            assert(originState.active);
+            assert.equal(originState.region,coldSnow?'snowpass':'base');
+            if(profile==='away'){
+             await page.evaluate(()=>{window.__snowSeamProbe.active=true});
+             await page.waitForTimeout(1500);
+             away=frameGaps(await page.evaluate(()=>window.__snowSeamProbe.frames));
+             assert(away.n>=6,'real away baseline produces a sustained canvas frame sample');
+             console.log('Away baseline, actual canvas frame gaps',JSON.stringify(away));
+             await ctx.close();continue;
+            }
+            const pad=await page.locator('#poiAnalogPad').boundingBox();assert(pad);
+            const cdp=await ctx.newCDPSession(page);
+            try{
+             const bind=id=>({x:Math.round(pad.x+pad.width/2),y:Math.round(pad.y+pad.height/2),id,radiusX:4,radiusY:4,force:.7});
+             async function cross(sign,label,id){
+              const from=await get(),input=bind(id),dst=sign>0?'snowpass':'base';
+              const start=await page.evaluate(()=>{const s=window.__snowSeamProbe;s.active=true;s.frames=[];s.veils=[];s.samples=[];s.uploads=[];s.thumb=[];s.sceneCounts=[];s.masked=0;s.high=s.live;
+               return {at:performance.now(),live:s.live};});
+              await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[input]});
+              await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...input,y:input.y+sign*36}]});
+              // The input assertion is deliberately evaluated after crossing. No
+              // re-press is allowed to rescue a cut, frozen, or cancelled thumb.
+              const firstPointer=await get();
+              let end,continued;
+              try{
+               end=await (await page.waitForFunction(dst=>{const s=window.__editorTest.seamlessSnowQA();return s.region===dst&&s},dst,{polling:25,timeout:8000})).jsonValue();
+               continued=await (await page.waitForFunction(({dst,sign})=>{
+                const s=window.__editorTest.seamlessSnowQA();
+                return s.region===dst&&(sign>0?s.pose.z>.78:s.pose.z<126.22)&&s;
+               },{dst,sign},{polling:25,timeout:1600})).jsonValue();
+              }catch(e){if(!end)throw new Error(label+' failed to cross despite real drag '+JSON.stringify(await get()),{cause:e})}
+              const q=await page.evaluate(()=>{const s=window.__snowSeamProbe;s.active=false;return s});
+              await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+              const summary={label,from:from.region,to:end?.region,start:firstPointer,end,continued,
+               elapsed:(continued??end).timestamp-start.at,frames:q.frames.length,sceneCounts:q.sceneCounts,veils:q.veils,lost:q.lost,
+               liveAtStart:start.live,peak:q.high,settled:q.live,largestUpload:Math.max(0,...q.uploads.map(u=>u.bytes)),
+               gap:frameGaps(q.frames),away,thumb:q.thumb};
+              const gates=limits(summary);
+              assert(sign*(position(end)-position(from))>.6,'global walking crosses the registered world edge');
+              if(continued){
+               assert.equal(continued.facing,sign>0?2:0,'holding the thumb does not reverse world orientation');
+               assert(Math.abs(continued.pose.x-(sign>0?12:49))<.14,'crossing does not move sideways');
+              }
+              console.log('Snow seam timing / bytes / trusted touch',JSON.stringify({...summary,gates}));
+              violations.push(...Object.entries(gates).filter(([,ok])=>!ok).map(([gate])=>label+':'+gate));
+             }
+             if(coldSnow)await cross(-1,'cold snow reload → base',74);
+             else{
+              await cross(1,'old base → snow',71);await cross(-1,'warm snow → base',72);
+              await cross(1,'repeat base → snow',73);
+             }
+             const persisted=await page.evaluate(()=>({resume:JSON.parse(localStorage.getItem('world-workshop-resume-v1')),kit:localStorage.getItem('world-workshop-hotbar-v1')}));
+             assert.equal(persisted.kit,initialKit,'actual sector crossings do not touch prior inventory and base-owned ground items');
+             assert.equal(persisted.resume.region,coldSnow?undefined:'snowpass','last crossing writes only its registered location');
+             assert.deepEqual(errors,[]);assert.deepEqual(remote,[],'no network requests to load or render a neighboring region');
+             assert(req.every(x=>x.startsWith(origin)));
+            }finally{await cdp.detach();await ctx.close()}
+           }
+           if(!fixtureOnly)assert.deepEqual(violations,[],'crossing visual, frame, input and memory gates');
+          }finally{await browser?.close();await new Promise(r=>server.close(r))}
+          SOURCE
+          cat >.spike/tests/snow-visible-from-forest-browser.mjs <<'SOURCE'
+          import assert from 'node:assert/strict';
+          import {createServer} from 'node:http';
+          import {createRequire} from 'node:module';
+          import {readFileSync} from 'node:fs';
+          import {Script} from 'node:vm';
+          const source=readFileSync(process.argv[2]??'world-editor.html','utf8');
+          const anchor=' facilityDrawSnowHorizon(p);';
+          assert.equal(source.split(anchor).length,2,'exact production sky/ridge draw hook; cannot pass on unrelated clouds or CSS');
+          const html=source.replace(anchor,` {
+            const probe=window.__captureSnowPixels,ready=probe&&!probe.result&&window.pineStartup.ready&&facilitySite?.id==='base';
+            let old,n,w,h;
+            if(ready){
+             w=gl.drawingBufferWidth;h=gl.drawingBufferHeight;n=w*h*4;
+             old=new Uint8Array(n);gl.readPixels(0,0,w,h,gl.RGBA,gl.UNSIGNED_BYTE,old);
+            }
+            facilityDrawSnowHorizon(p);
+            if(old){
+             const fresh=new Uint8Array(n);gl.readPixels(0,0,w,h,gl.RGBA,gl.UNSIGNED_BYTE,fresh);
+             let visible=0,snow=0,x0=w,y0=h,x1=-1,y1=-1;const bins=new Set();
+             for(let i=0;i<n;i+=4){
+              if(Math.abs(fresh[i]-old[i])+Math.abs(fresh[i+1]-old[i+1])+Math.abs(fresh[i+2]-old[i+2])+Math.abs(fresh[i+3]-old[i+3])<20)continue;
+              visible++;const x=(i/4)%w,y=Math.floor(i/(4*w));
+              x0=Math.min(x,x0);x1=Math.max(x,x1);y0=Math.min(y,y0);y1=Math.max(y,y1);
+              const [r,g,b,a]=fresh.slice(i,i+4);
+              if(a>70&&(r+g+b)/3>120&&b>=r+9&&b>=g){snow++;bins.add(Math.floor(x/8));}
+             }
+             probe.result={visible,snow,bins:bins.size,width:w,height:h,bounds:[x0,y0,x1,y1],
+              status:facilitySnowHorizonStatus(),location:[poiWalkX,poiWalkZ,poiWalkLevel],heading:poiCameraYaw,
+              pitch:poiCameraPitch,webgl:!gl.isContextLost(),error:gl.getError()};
+            }
+           }`);
+          if(process.env.SNOW_PIXEL_SYNTAX_ONLY==='1'){
+           for(const [,,body] of [...html.matchAll(/<script(?:\s+([^>]*))?>([\s\S]*?)<\/script>/gi)].filter(([,a])=>!a||!/\b(?:src|type)\s*=/.test(a)))new Script(body);
+           console.log('PASS exact distant snow framebuffer fixture anchors and script parse');process.exit(0);
+          }
+          const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
+          const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(req.url==='/seed'?'<title>seed</title>':html)});
+          await new Promise((r,j)=>server.listen(0,'127.0.0.1',r).once('error',j));
+          const origin='http://127.0.0.1:'+server.address().port;
+          let browser;
+          try{
+           browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
+           args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
+           for(const [label,z,heading,expect] of [['forest looking to pass',112,-.10,true],['same forest facing away',112,Math.PI-.10,false],
+            ['seam must show actual neighbor, not the distant silhouette',123,-.10,false]]){
+            const ctx=await browser.newContext({viewport:{width:844,height:390},deviceScaleFactor:.65,isMobile:true,hasTouch:true,serviceWorkers:'block'});
+            const p=await ctx.newPage(),errors=[],requests=[];
+            p.on('pageerror',e=>errors.push(e.message));p.on('request',r=>requests.push(r.url()));
+            try{
+             await ctx.route('**/*',r=>r.request().url().startsWith(origin)?r.continue():r.abort());
+             await p.goto(origin+'/seed');
+             await p.evaluate(({z,heading})=>{
+              localStorage.setItem('world-workshop-town-clock-v1','{"version":1,"gameMs":360000}');
+              localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
+               position:{x:z===112?54:49,z,y:0,facing:2},townLayout:5,townMapHeight:128,
+               view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:heading,orbitPitch:.12,orbitDistance:5.5}}));
+             },{z,heading});
+             await p.goto(origin+'/?resume=1&test=1');
+             await p.locator('#pineStartupCover').waitFor({state:'hidden',timeout:18000});
+             await p.evaluate(()=>{window.__captureSnowPixels={result:null}});
+             const result=await (await p.waitForFunction(()=>window.__captureSnowPixels.result,null,{polling:30,timeout:7000})).jsonValue();
+             assert.deepEqual(result.location,[z===112?54:49,z,0]);
+             assert(Math.abs(result.heading-heading)<.02&&Math.abs(result.pitch-.12)<.02,'resume holds the actual fixture camera');
+             assert(result.webgl&&result.error===0);
+             if(expect){
+              assert(result.status.visible&&result.status.vertices>60,'actual procedural ridge was rendered');
+              assert(result.visible>result.width*result.height*.003&&result.snow>=80&&result.bins>=5,
+               'snow cap shades a substantial spread of native pixels, not one vertex or CSS cloud: '+JSON.stringify(result));
+             }else{
+              assert.equal(result.visible,0,'distant stand-in should be absent: '+label);
+              assert.equal(result.status.visible,false);
+             }
+             assert.deepEqual(errors,[]);assert(requests.every(url=>url.startsWith(origin)));
+             console.log('Visible native snow framebuffer',label,JSON.stringify(result));
+            }finally{await ctx.close()}
+           }
+          }finally{await browser?.close();await new Promise(r=>server.close(r))}
+          SOURCE
+          cat >.spike/tests/snow-pass-browser.mjs <<'SOURCE'
+          import assert from 'node:assert/strict';
+          import {createServer} from 'node:http';
+          import {createRequire} from 'node:module';
+          import {readFileSync} from 'node:fs';
+          import vm from 'node:vm';
+          const h=readFileSync(process.argv[2]??'world-editor.html','utf8');
+          for(const [,body] of h.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new vm.Script(body);
+          if(process.env.SNOW_PASS_SYNTAX_ONLY){console.log('exact game scripts parse');process.exit(0)}
+          const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
+          const server=createServer((req,res)=>{
+           res.setHeader('Content-Type','text/html; charset=utf-8');
+           res.end(req.url==='/seed'?'<!doctype html><title>Ice route</title>':h);
+          });
+          await new Promise((r,j)=>server.listen(0,'127.0.0.1',r).once('error',j));
+          const root='http://127.0.0.1:'+server.address().port;
+          let b;
+          try{
+           b=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
+            args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
+           const page=await (await b.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.65})).newPage(),errors=[];
+           page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(12000);
+           await page.goto(root+'/seed');
+           const stock=await page.evaluate(()=>{
+            const slots=Array(27).fill(null);slots[0]={type:'equipWoodSword',count:1,durability:77};slots[1]={type:'healingHerb',count:1};
+            const kit=JSON.stringify({version:1,weaponDurabilityVersion:2,weapon:'equipWoodSword',potions:1,gold:9,slots,
+             drops:[{type:'healingHerb',x:50,z:126,y:0},{type:'healingHerb',x:12,z:2,y:0}]});
+            localStorage.setItem('world-workshop-hotbar-v1',kit);
+            localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
+             position:{x:49,z:126,y:0,facing:2},townLayout:5,townMapHeight:128,view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.24,orbitDistance:5.5}}));
+            return kit;
+           });
+           await page.goto(root+'/?resume=1&test=1');
+           const state=()=>page.evaluate(()=>({area:window.__editorTest?.snowPassRegion(),p:window.__editorTest?.freeMovementPose(),stream:window.__editorTest?.overlandStream(),
+            save:JSON.parse(localStorage.getItem('world-workshop-resume-v1')),kit:localStorage.getItem('world-workshop-hotbar-v1')}));
+           const at=(id,z)=>page.waitForFunction(({id,z})=>{const qa=window.__editorTest;return qa?.snowPassRegion().id===id&&Math.abs(qa.freeMovementPose().z-z)<.08},{id,z});
+           await page.locator('#pineStartupCover').waitFor({state:'hidden'});await at('base',126);
+           const old=await state();assert.equal(old.area.width,128);assert.equal(old.save.region,undefined);
+           await page.evaluate(()=>window.__editorTest.testWound(31));
+           const pad=page.locator('#poiAnalogPad'),cdp=await page.context().newCDPSession(page);
+           const send=(type,touchPoints)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints});
+           const roll=async(dir,next,z=dir>0?0:127)=>{
+            const r=await pad.boundingBox();assert(r);
+            const p={x:Math.round(r.x+r.width*.5),y:Math.round(r.y+r.height*.5),id:7};
+            await send('touchStart',[p]);await send('touchMove',[{...p,y:p.y+36*dir}]);
+            await at(next,z);
+            await send('touchEnd',[]);
+           };
+           // The actual switch must refuse a real storage failure rather than
+           // persisting a half-entered region or changing the carried kit.
+           await page.evaluate(()=>{
+            window.__snowStorageWrite=Storage.prototype.setItem;
+            Storage.prototype.setItem=function(k,v){
+             if(k==='world-workshop-resume-v1'&&JSON.parse(v).region==='snowpass'){
+              window.__snowRefused=true;throw new DOMException('fixture full','QuotaExceededError');
+             }
+             return window.__snowStorageWrite.call(this,k,v);
+            };
+           });
+           await roll(1,'base',127);
+           // At the edge, hold a new actual drag until the resolver attempts the write.
+           const rect=await pad.boundingBox(),press={x:Math.round(rect.x+rect.width/2),y:Math.round(rect.y+rect.height/2),id:8};
+           await send('touchStart',[press]);await send('touchMove',[{...press,y:press.y+36}]);
+           await page.waitForFunction(()=>window.__snowRefused===true);
+           await send('touchEnd',[]);
+           const refused=await state();assert.equal(refused.area.id,'base');
+           assert.equal(await page.evaluate(()=>window.__editorTest.canStep(49,128,49,127)),false,'ordinary map/path checks cannot pass through the special link');assert.equal(refused.save.region,undefined);assert.equal(refused.kit,stock);
+           await page.evaluate(()=>{Storage.prototype.setItem=window.__snowStorageWrite});
+           await page.waitForFunction(()=>window.__editorTest.snowPassRegion().field);
+           await roll(1,'snowpass');
+           await page.waitForFunction(()=>window.__editorTest.snowPassRegion().timing?.firstFrameMs>0);
+           const entry=await state();
+           assert.deepEqual([entry.area.width,entry.area.height,entry.area.actors,entry.area.hp],[24,29,0,69]);
+           assert.deepEqual(entry.area.spawn,[12,0]);assert.equal(entry.p.x,12);assert.equal(entry.save.region,'snowpass');assert.equal(entry.kit,stock);
+           assert.equal(entry.area.music,'snow','entering the active snow pass picks its own scene');
+           assert.deepEqual(await page.evaluate(()=>[window.__editorTest.snowInventoryQA.clock(),window.__editorTest.snowInventoryQA.weapon()]),[true,'equipWoodSword']);
+           await page.waitForTimeout(225);await page.keyboard.press('ArrowDown');await at('snowpass',1);
+           assert.equal(await page.evaluate(()=>window.__editorTest.snowInventoryQA.drop(1).ok),true);
+           assert.equal(await page.evaluate(()=>window.__editorTest.snowInventoryQA.gold(2).ok),true);
+           const saved=JSON.parse((await state()).kit);
+           assert.deepEqual(saved.drops,JSON.parse(stock).drops);
+           assert.deepEqual(saved.snowDrops,[{type:'healingHerb',x:12,z:2,y:0}]);
+           assert.equal(saved.snowGroundGold[0].amount,2);assert.equal(saved.gold,7);
+           await page.reload();await page.locator('#pineStartupCover').waitFor({state:'hidden'});await at('snowpass',1);
+           const restored=await state();assert.equal(restored.area.hp,69);assert.deepEqual(JSON.parse(restored.kit).snowDrops,saved.snowDrops);
+           await page.keyboard.press('ArrowDown');await at('snowpass',2);
+           const repicked=JSON.parse((await state()).kit);assert(!repicked.snowDrops?.length);assert.deepEqual(repicked.drops,saved.drops);
+           await roll(-1,'base');
+           await page.waitForFunction(()=>window.__editorTest.snowPassRegion().timing?.firstFrameMs>0);
+           const back=await state();
+           assert.equal(back.area.width,128);assert.equal(back.p.x,49);assert.equal(back.save.region,undefined);
+           assert.equal(back.area.hp,69);assert.deepEqual(JSON.parse(back.kit).snowGroundGold,saved.snowGroundGold);assert(back.area.actors>0);assert.deepEqual(back.area.spawn,old.area.spawn,'base death respawn does not use local snow coordinates');assert(back.area.forest,'same loaded base still has normal forest');
+           assert.deepEqual(JSON.parse(back.kit).drops,saved.drops);
+           await page.waitForTimeout(225);await page.keyboard.press('ArrowUp');await at('base',126);
+           await page.waitForTimeout(225);await page.keyboard.press('ArrowRight');
+           await page.waitForFunction(()=>window.__editorTest.freeMovementPose().x>49.92);
+           const picked=JSON.parse((await state()).kit);
+           assert.deepEqual(picked.drops,[{type:'healingHerb',x:12,z:2,y:0}],'only base local ground item is collected after return');
+           assert(picked.potions===2||picked.slots?.some(d=>d?.type==='healingHerb'&&d.count===2),'real base ground pickup still transfers into the same inventory');
+           assert(back.area.timing.veilFrames===0&&back.area.timing.veilMs===0&&back.stream.drawing,'cold return draws prefetched ground without a curtain');
+           assert(entry.area.activeScenes===0&&entry.stream.drawing&&entry.stream.effective>0&&entry.area.actors===0,'live chunk draws avoid a regional atlas or remote actor simulation');
+           console.log('Exact rAF switch timing/bytes',JSON.stringify({baseVertices:old.area.vertices,snowVertices:entry.area.vertices,entry:entry.area.timing,coldReturn:back.area.timing}));
+           const setResume=(region,position)=>page.evaluate(([region,position])=>{
+            const current=JSON.parse(localStorage.getItem('world-workshop-resume-v1'));
+            if(region===null)delete current.region;else current.region=region;
+            current.position=position;
+            localStorage.setItem('world-workshop-resume-v1',JSON.stringify(current));
+           },[region,position]);
+           await setResume('capital',{x:12,z:2,y:0,facing:2});
+           await page.reload();await page.locator('#pineStartupCover').waitFor({state:'hidden'});
+           await at('base',old.area.spawn[1]);
+           assert.equal((await state()).p.x,old.area.spawn[0],'unknown region never reuses its local position on base');
+           await setResume(null,{x:49,z:126,y:0,facing:2});
+           await page.reload();await page.locator('#pineStartupCover').waitFor({state:'hidden'});await at('base',126);
+           await roll(1,'snowpass');
+           await page.waitForFunction(()=>window.__editorTest.snowPassRegion().timing?.firstFrameMs>0);
+           await roll(-1,'base');
+           await page.waitForFunction(()=>window.__editorTest.snowPassRegion().timing?.firstFrameMs>0);
+           const warm=(await state()).area.timing;
+           assert(warm.veilFrames===0&&warm.veilMs===0,'warm return has no curtain and uses prefetched ground');
+           console.log('Exact warm return timing/bytes',JSON.stringify({warm}));
+           await page.evaluate(()=>window.__editorTest.snowInventoryQA.markEditor());
+           await roll(1,'snowpass');
+           await page.evaluate(()=>window.__editorTest.snowInventoryQA.editor());
+           const edit=await state();
+           assert.equal(edit.area.id,'base');assert.equal(edit.save.play,false);assert.equal(edit.save.region,undefined);
+           assert.equal(await page.evaluate(()=>window.__editorTest.snowInventoryQA.sameEditor()),true,'original unsaved base edit baseline remains distinct');
+           assert.deepEqual(errors,[]);
+           console.log('PASS legacy save, actual walking both borders, one region, cold reopen, base and held kit untouched');
+          }finally{await b?.close();await new Promise(r=>server.close(r))}
+          SOURCE
+          cat >.spike/tests/snow-neighbor-alignment-browser.mjs <<'SOURCE'
+          import assert from 'node:assert/strict';
+          import {createServer} from 'node:http';
+          import {createRequire} from 'node:module';
+          import {readFileSync} from 'node:fs';
+          import {Script} from 'node:vm';
+          const source=readFileSync(process.argv[2]??'world-editor.html','utf8');
+          const anchor=' for(const o of poiOverlandCommands)draw(o.m,poiOverlandNeighborVP(vp,facilitySite.id,o.id));';
+          assert.equal(source.split(anchor).length,2,'test must observe the actual nearby-chunk draw, not distant sky');
+          const html=source.replace(anchor,` for(const o of poiOverlandCommands){
+            const transform=poiOverlandNeighborVP(vp,facilitySite.id,o.id),q=window.__actualNeighborQA;
+            let before,x0,y0,w,h,actual,expected;
+            if(q&&!q.done&&q.tests.length<120&&o.id!==facilitySite.id&&
+               o.key===(o.id==='snowpass'?'snowpass:1,0':'base:6,15')){
+             const snow=o.id==='snowpass',active=facilitySite.id;
+             // Check the actual same world point through two independent matrices.
+             // These positions are authored route cells on either side of the global
+             // seam, not the decorative ridge and not opaque HTML or the minimap.
+             const point=snow?[12.5,.04,1.5]:[49.5,.04,126.5],off=snow?[37,128]:[-37,-128];
+             const clip=(m,x,y,z)=>{const w=m[3]*x+m[7]*y+m[11]*z+m[15];
+              return [(m[0]*x+m[4]*y+m[8]*z+m[12])/w,(m[1]*x+m[5]*y+m[9]*z+m[13])/w,w]};
+             actual=clip(transform,...point);expected=clip(vp,point[0]+off[0],point[1],point[2]+off[1]);
+             const bw=gl.drawingBufferWidth,bh=gl.drawingBufferHeight,cx=(actual[0]*.5+.5)*bw,cy=(actual[1]*.5+.5)*bh;
+             if(actual[2]>0&&cx>=12&&cx<bw-12&&cy>=12&&cy<bh-12){
+              x0=Math.round(cx)-12;y0=Math.round(cy)-12;w=24;h=24;
+              before=new Uint8Array(w*h*4);gl.readPixels(x0,y0,w,h,gl.RGBA,gl.UNSIGNED_BYTE,before);
+             }
+            }
+            draw(o.m,transform);
+            if(before){
+             const after=new Uint8Array(before.length);gl.readPixels(x0,y0,w,h,gl.RGBA,gl.UNSIGNED_BYTE,after);
+             let changed=0;
+             for(let i=0;i<after.length;i+=4)
+              if(Math.abs(after[i]-before[i])+Math.abs(after[i+1]-before[i+1])+Math.abs(after[i+2]-before[i+2])+Math.abs(after[i+3]-before[i+3])>=18)changed++;
+             q.tests.push({id:o.id,key:o.key,actual,expected,changed,count:o.m.count,x:poiWalkX,z:poiWalkZ});
+             if(changed>15)q.done=true;
+            }
+           }`);
+          if(process.env.SNOW_NEIGHBOR_SYNTAX_ONLY==='1'){
+           for(const [,,body] of [...html.matchAll(/<script(?:\s+([^>]*))?>([\s\S]*?)<\/script>/gi)].filter(([,a])=>!a||!/\b(?:src|type)\s*=/.test(a)))new Script(body);
+           console.log('PASS exact actual snow-neighbor probe anchors and script parse');process.exit(0);
+          }
+          const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
+          const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(req.url==='/seed'?'<title>seed</title>':html)});
+          await new Promise((r,j)=>server.listen(0,'127.0.0.1',r).once('error',j));
+          const url='http://127.0.0.1:'+server.address().port;
+          let b;
+          try{
+           b=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
+           args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
+           for(const snow of [false,true]){
+            const ctx=await b.newContext({viewport:{width:844,height:390},deviceScaleFactor:.65,isMobile:true,hasTouch:true});
+            const p=await ctx.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));
+            try{
+             await p.goto(url+'/seed');
+             await p.evaluate(snow=>{
+              localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
+               ...(snow?{region:'snowpass',regionHp:80}:{}),position:snow?{x:12,z:4,y:0,facing:0}:{x:49,z:122,y:0,facing:2},
+               townLayout:5,townMapHeight:128,view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,
+               top:false,third:true,orbitYaw:snow?Math.PI:0,orbitPitch:.25,orbitDistance:5.5}}));
+             },snow);
+             await p.goto(url+'/?resume=1&test=1');
+             await p.locator('#pineStartupCover').waitFor({state:'hidden',timeout:18000});
+             await p.evaluate(()=>{window.__actualNeighborQA={done:false,tests:[]}});
+             try{
+              await p.waitForFunction(()=>window.__actualNeighborQA.done,null,{polling:35,timeout:8000});
+             }catch(e){throw Error('Actual neighbor terrain pixels did not arrive from '+(snow?'snow':'base')+': '+JSON.stringify(await p.evaluate(()=>(
+              {trace:window.__actualNeighborQA.tests.slice(-12),state:window.__editorTest?.overlandStream?.()}))),{cause:e})}
+             const q=await p.evaluate(()=>({trace:window.__actualNeighborQA.tests,state:window.__editorTest.overlandStream()}));
+             const proof=q.trace.find(x=>x.changed>15);
+             assert.equal(proof.id,snow?'base':'snowpass');assert.equal(proof.z,snow?4:122);assert(proof.count>72);
+             assert(proof.actual.every((v,i)=>Math.abs(v-proof.expected[i])<.001),'actual draw VP registers neighbor on the exact world-space seam');
+             assert.deepEqual(errors,[]);console.log('PASS independently rendered near aligned scenery before crossing',JSON.stringify(proof));
+            }finally{await ctx.close()}
+           }
+          }finally{await b?.close();await new Promise(r=>server.close(r))}
+          SOURCE
+          python .spike/build.py world-editor.html .spike/stream.html --default
+          python .spike/horizon-build.py .spike/stream.html .spike/world-editor.html
+          test "$(git hash-object .spike/world-editor.html)" = 4bdee3dd2591b11d46ac1019af1375f75c211541
+          cd .spike && node --test tests/*.cjs
+      - if: matrix.probe != 'regressions'
+        run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
+      - if: matrix.probe == 'seam'
+        run: |
+          USE_STREAM_DEFAULT=1 node .spike/tests/overland-browser.mjs .spike/world-editor.html
+          node .spike/tests/snow-continuous-seam-browser.mjs .spike/world-editor.html
+      - if: matrix.probe == 'outlet'
+        run: USE_STREAM_DEFAULT=1 node .spike/tests/overland-outlet-browser.mjs .spike/world-editor.html
+      - if: matrix.probe == 'visuals'
+        run: |
+          node .spike/tests/snow-neighbor-alignment-browser.mjs .spike/world-editor.html
+          node .spike/tests/snow-visible-from-forest-browser.mjs .spike/world-editor.html
+      - if: matrix.probe == 'audio'
+        run: |
+          node tests/mystic-field-bgm-browser.mjs .spike/world-editor.html
+          node tests/snow-audio-browser.mjs .spike/world-editor.html
+      - if: matrix.probe == 'persistence'
+        run: node .spike/tests/snow-pass-browser.mjs .spike/world-editor.html
+      - if: matrix.probe == 'regressions'
+        run: |
+          cp .spike/world-editor.html world-editor.html
+          code=0
+          node --test --test-reporter=tap tests/*.cjs >.spike/unit.log 2>&1 || code=$?
+          grep -E '^(not ok|# tests|# pass|# fail)' .spike/unit.log | cut -c1-260 || true
+          exit "$code"
