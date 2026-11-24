@@ -1,0 +1,52 @@
+name: Disposable Companion V2 QA
+on:
+  push:
+    branches: [dot/workshop-companion-v2-qa]
+permissions:
+  contents: read
+jobs:
+  strict-unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - shell: bash
+        run: |
+          if ! node --test tests/*.test.cjs > "$RUNNER_TEMP/strict.out" 2>&1; then
+            grep -E '^not ok |^  location:|^  error:|^# (tests|pass|fail|duration)' "$RUNNER_TEMP/strict.out" | tail -250
+            exit 1
+          fi
+          grep -E '^# (tests|pass|fail|duration)' "$RUNNER_TEMP/strict.out"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strict-unit
+          path: ${{ runner.temp }}/strict.out
+          retention-days: 5
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        test: [companion-intent-browser, companion-ui-browser, companion-world-visual-browser, monster-companion-combat-browser, companion-effect-browser]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save playwright@1.56.1
+      - run: npx playwright install chromium
+      - run: node tests/${{ matrix.test }}.mjs
+        env:
+          FACILITY_SCREENSHOTS: screenshots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ matrix.test }}
+          path: screenshots
+          if-no-files-found: ignore
+          retention-days: 5

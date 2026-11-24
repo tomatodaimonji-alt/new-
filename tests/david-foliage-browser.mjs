@@ -7,13 +7,13 @@ import {Script} from 'node:vm';
 let fixture=readFileSync(process.argv[2]??'world-editor.html','utf8');
 function inject(a,b){assert.equal(fixture.split(a).length,2,a);fixture=fixture.replace(a,b)}
 const qa="if(facilityParams.get('test')==='1')window.__editorTest={";
-inject(qa,qa+`
-  rooflessQA:{
+inject(qa,`
+  window.__rooflessQA={
    frame:()=>render(),
    yaw:yaw=>{poiCameraYaw=yaw;poiWalkCamera();},
    state:()=>{
     const d=facilitySite.davidTemple,roofOwner=facilitySite.buildings.findIndex(b=>b.id==='davidTemple'),q=parameters();
-    return {x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,room:facilityHiddenRoof(),visible:facilityVisibleRoofs(),third:poiThirdPerson,
+    return {active:poiWalkActive,startup:window.pineStartup?.ready===true,x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,room:facilityHiddenRoof(),visible:facilityVisibleRoofs(),third:poiThirdPerson,
      sky:poiSkyCanLookUp(),cssSky:$('viewWrap').hasAttribute('data-poi-sky'),horizon:q.skyHorizon,
      count:facilityRoofMeshes[roofOwner]?.count??0,roofOwner,entry:d.entrance,retreat:d.retreat,
      flap:world.some(o=>o.y>0&&d.ring&&Math.hypot(o.x-d.ring.x,o.z-d.ring.z)<16),
@@ -21,8 +21,8 @@ inject(qa,qa+`
    },
    stepVector:key=>poiCameraRelativeStep(key),
    view:(pitch,distance)=>{poiCameraPitch=poiOrbitPitchClamp(pitch);poiCameraDistance=distance;poiWalkCamera();}
-  },
-`);
+  };
+`+qa);
 // Presentation-only A/B: the second navigation omits only this authored
 // planting, through the normal static map builder and native world renderer.
 const planted="  prop(x,z,type,rot);\n  if(isTree||type==='bush')plantedTrees.push(props.at(-1));";
@@ -67,12 +67,12 @@ try{
   },{x,z,pitch,distance});
   await p.goto(base+'/?resume=1&test=1'+(bare?'&bare=1':''),{waitUntil:'domcontentloaded',timeout:45000});
   await p.locator('#pineStartupCover').waitFor({state:'hidden',timeout:35000});
-  await p.waitForFunction(()=>window.__editorTest?.facility?.()?.active,null,{polling:50,timeout:30000});
+  await p.waitForFunction(()=>window.__rooflessQA?.state?.().active===true&&window.__rooflessQA.state().startup===true,null,{polling:50,timeout:30000});
   await p.clock.pauseAt((await p.evaluate(()=>Date.now()))+1500);
   await p.evaluate(()=>{window.__rooflessManual=true});
  }
- const inspect=async()=>last=await p.evaluate(()=>window.__editorTest.rooflessQA.state());
- async function advance(ms){await p.clock.fastForward(ms);await p.evaluate(()=>window.__editorTest.rooflessQA.frame());return inspect()}
+ const inspect=async()=>last=await p.evaluate(()=>window.__rooflessQA.state());
+ async function advance(ms){await p.clock.fastForward(ms);await p.evaluate(()=>window.__rooflessQA.frame());return inspect()}
  function openAir(s){
   assert.equal(s.room,null);assert.equal(s.count,0);assert.equal(s.flap,false);
   assert(!s.visible.includes(s.roofOwner));assert.equal(s.sky,true);assert.equal(s.cssSky,true);assert(Number.isFinite(s.horizon));assert.equal(s.error,0);
@@ -85,7 +85,7 @@ try{
  await seed(29,88,.12,7);
  let s=await advance(38);assert.deepEqual([s.x,s.z,s.y],[29,88,0]);openAir(s);
  assert.deepEqual(s.entry,{x:24,z:94,y:0});assert.deepEqual(s.retreat,{x:24,z:91,y:0});
- assert.deepEqual(await p.evaluate(()=>['n','e'].map(k=>window.__editorTest.rooflessQA.stepVector(k))),[[0,1],[-1,0]]);
+ assert.deepEqual(await p.evaluate(()=>['n','e'].map(k=>window.__rooflessQA.stepVector(k))),[[0,1],[-1,0]]);
  for(const z of [89,90,91])await walk(29,z,'ArrowUp');
  await walk(29,91,'ArrowUp'); // Real right-hand wing blocks the old off-axis hole.
  for(const x of [28,27,26,25,24])await walk(x,91,'ArrowRight');
@@ -95,7 +95,7 @@ try{
  async function capture(){
   const poses=[];
   for(const yaw of [-1.36,-.78,-.36,.40,.86,1.38]){
-   await p.evaluate(yaw=>{window.__editorTest.rooflessQA.yaw(yaw);window.__captureFoliage=true},yaw);
+   await p.evaluate(yaw=>{window.__rooflessQA.yaw(yaw);window.__captureFoliage=true},yaw);
    const t=await advance(24);assert.deepEqual([t.x,t.z,t.y],[29,88,0]);
    poses.push(await p.evaluate(()=>window.__foliageRaster));
   }
