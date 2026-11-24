@@ -96,7 +96,12 @@ try{
  let arena=await step('ArrowUp',24,102);
  for(let i=0;i<10&&!arena.contacted;i++)arena=await frame(80);
  roof(arena,vestibule);assert(arena.indoors&&!arena.tunnel&&!arena.sky&&arena.contacted&&arena.arena&&arena.los&&arena.distance===2,JSON.stringify(arena));
- assert.deepEqual(arena.light,[.77,.70,.62]);const wakingPortrait=await portrait();twoEyes(wakingPortrait,'both eyes during cinematic');
+ assert.deepEqual(arena.light,[.77,.70,.62]);
+ if(h.includes('return {name,difficulty:10,bounds,ring,approach,entrance:P(24,94)')){
+  const stars=await p.locator('#poiLocationStars').textContent();
+  assert.equal(stars,'★'.repeat(10),'the real temple HUD has exactly ten filled difficulty stars');
+ }
+ const wakingPortrait=await portrait();twoEyes(wakingPortrait,'both eyes during cinematic');
  console.log('Native close eyes and exact camera pose',JSON.stringify({dormantPortrait,wakingPortrait}));
  const highEye=await p.evaluate(()=>window.__editorTest.templeSealQA.eye());
  assert(highEye.eye[1]>1.1&&highEye.eye[1]<7.62&&highEye.desired[1]>7.62,JSON.stringify(highEye));
