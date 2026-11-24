@@ -54,7 +54,7 @@ install(' poiAudioTransient.add(source);source.start(when);source.stop(when+(cap
   poiAudioTransient.add(source);source.start(when);source.stop(when+(cap??(buffer.duration+.012)));
   if(window.__orvasManual){
    const id=buffer===poiDavidAlienCache?'boss-alien-beam':[...poiRecordedFoleyCache].find(([id,b])=>buffer===b&&/^david(?:BladeSweep|Sword)/.test(id))?.[0];
-   if(id)(window.__orvasFoley??=[]).push({id,running:source.context.state,loop:source.loop,when,cap,len:buffer.length});
+   if(id)(window.__orvasFoley??=[]).push({id,running:source.context.state,loop:source.loop,when,cap,len:buffer.length,duration:buffer.duration});
   }
 `);
 install('const b=poiOrvasTwinBladeBasis(arms,pose,i);poiOrvasSwordGeometry(local,b.grip,b.axis,b.blade)',`
@@ -79,6 +79,7 @@ install("    }else if(typeof poiOrvasGroundGeometry==='function'&&poiOrvasGround
 install("    effect.source=source;effect.gain=node;effect.ctx=ctx;",`
     effect.source=source;effect.gain=node;effect.ctx=ctx;
     source.__orvasTail=true;
+    node.gain.__orvasTail=true;
 `);
 install(' requestAnimationFrame(render);',' if(!window.__orvasManual)requestAnimationFrame(render);');
 for(const [,js] of h.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(js);
@@ -93,6 +94,11 @@ try{
  const ctx=await browser.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.65});
  const p=await ctx.newPage(),errors=[];
  await p.addInitScript(()=>{
+  const ramp=AudioParam.prototype.linearRampToValueAtTime;
+  AudioParam.prototype.linearRampToValueAtTime=function(value,when){
+   if(this.__orvasTail)(window.__orvasTailRamps??=[]).push({value,when});
+   return ramp.apply(this,arguments);
+  };
   const stop=AudioBufferSourceNode.prototype.stop;
   AudioBufferSourceNode.prototype.stop=function(t){
    if(this.__orvasTail)(window.__orvasTailStops??=[]).push({when:t,time:this.context.currentTime});
@@ -146,14 +152,23 @@ p.on('pageerror',e=>errors.push(e.message));p.setDefaultTimeout(18000);
 
 
  const beamStart=landed.beam.start;
- assert.equal(landed.audio[0].cap,.510);
+ const signal=landed.audio[0];
+ assert.equal(signal.cap,.765);assert(signal.duration>=signal.cap);
+ const ramps=await p.evaluate(()=>window.__orvasTailRamps);
+ assert(Math.abs(ramps[0].when-signal.when-.025)<.001&&ramps[0].value>0);
+ assert.equal(ramps.at(-1).value,0);
+ assert(Math.abs(ramps.at(-1).when-signal.when-.750)<.001);
+ assert(ramps.at(-2).value>0&&ramps.at(-2).value<ramps[0].value);
  await frame(315);
  let after=await read();
- assert(after.beam?.draw&&after.beam.alpha>.1&&after.beam.alpha<.4);
+ assert(after.beam?.draw&&after.beam.alpha>.30&&after.beam.alpha<.55);
  assert.deepEqual(after.hp,[52,100]);assert.equal(after.used,q.used-1);
- await frame(150);after=await read();assert(after.beam?.draw&&after.beam.alpha>0&&after.beam.alpha<.05);
- await frame(90);after=await read();assert.equal(after.beam,null);
- assert(after.clock-beamStart>=510);assert.deepEqual(after.hp,[52,100]);assert.equal(after.used,q.used-1);
+ await frame(610-(after.clock-beamStart));after=await read();
+ assert(after.clock-beamStart>510&&after.beam?.draw&&after.beam.alpha>.03&&after.beam.alpha<.09);
+ await frame(710-(after.clock-beamStart));after=await read();
+ assert(after.beam?.draw&&after.beam.alpha>0&&after.beam.alpha<.02);
+ await frame(785-(after.clock-beamStart));after=await read();assert.equal(after.beam,null);
+ assert(after.clock-beamStart>=765);assert.deepEqual(after.hp,[52,100]);assert.equal(after.used,q.used-1);
  assert.equal(after.audio.length,1);assert.equal(after.stops.length,1);
  ({q,held}=await start(2,[[32,108,0]]));landed=await until(v=>!v.pending&&v.beam?.draw);
  const swapBefore=landed.stops.length;
@@ -166,7 +181,7 @@ p.on('pageerror',e=>errors.push(e.message));p.setDefaultTimeout(18000);
  ({q,held}=await start(2,[[32,108,0]]));landed=await until(v=>!v.pending&&v.beam?.draw);
  await p.evaluate(()=>window.__workshopAudioForeground(false));await frame(7);
  interrupted=await read();assert.equal(interrupted.beam,null);assert.deepEqual(interrupted.hp,[52]);assert.equal(interrupted.used,q.used-1);
- const plays=interrupted.audio.length;await p.evaluate(()=>window.__workshopAudioForeground(true));await frame(550);
+ const plays=interrupted.audio.length;await p.evaluate(()=>window.__workshopAudioForeground(true));await frame(805);
  interrupted=await read();assert(!interrupted.beam&&interrupted.audio.length===plays);
  assert(interrupted.stops.some(e=>e.when===undefined||e.when-e.time<.05));
  ({q,held}=await start(3,[[28,108,0],[26,111,0],[23,108,0]]));
