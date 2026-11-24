@@ -29,9 +29,9 @@ try{
  const p=await c.newPage();const errors=[];p.on('pageerror',e=>errors.push(e.message));
  await p.goto(url+'/seed');
  await p.evaluate(()=>{
-  const slots=Array(27).fill(null);slots[0]={type:'orvasSoul',count:1,durability:193};
+  const slots=Array(27).fill(null);slots[0]={type:'equipWoodSword',count:1,durability:150};slots[1]={type:'orvasSoul',count:1,durability:193};
   localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weaponDurabilityVersion:2,slots,weapon:null,potions:0,
-    companionSoul:{version:1,active:'orvasSoul',pending:null,mode:'follow'}}));
+    companionSoul:{version:1,active:null,pending:null}}));
   localStorage.setItem('world-workshop-town-clock-v1','{"version":1,"gameMs":360000}');
   localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,position:{x:24,z:127,y:0,facing:2},
     townLayout:5,townMapHeight:182,templeDepth:1,view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:0,orbitPitch:.12,orbitDistance:6.5}}));
@@ -43,7 +43,12 @@ try{
  assert.deepEqual(await pos(),{x:24,z:127,level:0});
  const area=p.locator('#poiLocationName'),rank=p.locator('#poiLocationStars');
  assert.notEqual(await area.innerText(),'オルヴァスの大神殿');
- assert.equal(await p.locator('#poiCompanionHudHpValue').innerText(),'193/1050');
+ await p.bringToFront();
+ await p.locator('#poiHotbar [data-hotbar-slot="1"]').tap();
+ await p.locator('#poiCompanionCommands [data-companion-command="summon"]').tap();
+ await p.waitForFunction(()=>window.__editorTest?.companion?.()?.active==='orvasSoul'&&
+  document.querySelector('#poiCompanionHudHpValue')?.textContent==='193/1050');
+ assert.equal(await p.locator('#poiCompanionHudName').innerText(),'オルヴァス');
  phase='real temple traversal, actual player and active companion';
  for(const z of [128,129]){
   for(let i=0;i<4&&(await pos()).z!==z;i++){await p.keyboard.press('ArrowUp');await p.waitForTimeout(290)}
