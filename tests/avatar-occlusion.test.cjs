@@ -25,7 +25,11 @@ test('single world program dither is foreground/height gated and disabled before
  assert.match(frag,/gl_FragCoord\.w>uOcclusionInfo\.x/);
  assert.match(frag,/vWorldHeight>uOcclusionInfo\.y/);
  assert.match(frag,/smoothstep\([\s\S]*discard/);
- assert.match(render,/poiOcclusionBegin\(p,now\);[\s\S]*poiDrawSceneOcclusion\(sceneMesh,p\.vp\);\s*if\(typeof facilityDrawLocalScene==='function'\)facilityDrawLocalScene\(p\.vp\);\s*facilityDrawRoofs\(p\.vp\);poiDrawGameRoofs\(p\.vp\);[\s\S]*poiOcclusionEnd\(\);[\s\S]*poiDrawEditorGhostRoof[\s\S]*poiDrawWalkAvatar\(p\.vp,now\)/);
+ assert.match(render,/poiOcclusionBegin\(p,now\);[\s\S]*poiDrawSceneOcclusion\(sceneMesh,p\.vp\);\s*if\(typeof facilityDrawLocalScene==='function'\)facilityDrawLocalScene\(p\.vp\);\s*(?:if\(typeof facilityDrawForestScene==='function'\)facilityDrawForestScene\(p\.vp\);\s*)?facilityDrawRoofs\(p\.vp\);poiDrawGameRoofs\(p\.vp\);[\s\S]*poiOcclusionEnd\(\);[\s\S]*poiDrawEditorGhostRoof[\s\S]*poiDrawWalkAvatar\(p\.vp,now\)/);
+ if(html.includes('function facilityDrawForestScene(')){
+  assert.match(render,/poiOcclusionBegin\(p,now\);[\s\S]*facilityDrawForestScene\(p\.vp\);[\s\S]*poiOcclusionEnd\(\);/,
+   'new forest local mesh must also be inside the established occlusion pass');
+ }
  assert.doesNotMatch(block('function poiAvatarOcclusion(','// BEGIN NORTH AXE FOOTPRINT'),/makeScene\(|upload\(|readPixels\(/);
 });
 

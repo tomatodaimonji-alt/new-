@@ -1587,7 +1587,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v265）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v266）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -10681,6 +10681,87 @@ function poiDungeonArrive(x,z,fromY,toY){
  return changed;
 }
 // END DUNGEON POPULATION
+// BEGIN PORT QUESTS
+const POI_PORT_QUESTS=Object.freeze({
+ 'pier-lantern':{owner:'portfisher',title:'桟橋の明かり',pay:6,
+  ask:'西に伸びる木の桟橋の先まで歩いて、足元を確かめてきてくれないか。海には下りなくていい。'},
+ 'market-message':{owner:'portfishseller',title:'宿場への伝言',pay:8,
+  ask:'街道を東に戻って、北の宿場のマレクに「明日の入荷は昼すぎ」と伝えてくれない？　馬車や荷物の手配はしなくていいよ。'}
+});
+function poiPortQuestDecode(raw){
+ if(!raw||typeof raw!=='object'||Array.isArray(raw))return null;
+ const out={};
+ for(const id of Object.keys(POI_PORT_QUESTS))
+  if(Object.hasOwn(raw,id)&&['accepted','ready','done'].includes(raw[id]))out[id]=raw[id];
+ return Object.keys(out).length?out:null;
+}
+function poiPortQuestAvailable(){
+ const s=facilitySite;
+ return s?.id==='base'&&!!s.southPort?.dock?.end&&!!s.southRoad?.town;
+}
+function poiPortQuestState(kit,id){return kit.portQuests?.[id]||null}
+function poiPortQuestMenuRows(d){
+ const role=d.actor?.role;
+ if(!role||!['portfisher','portfishseller','southmerchant'].includes(role.id)||!poiPortQuestAvailable())return null;
+ const kit=poiHotbarRead(),back={id:'back',label:'戻る'},status={accepted:'（進行中）',ready:'（報告可）',done:'（完了）'};
+ if(d.page==='port-detail'){
+  const id=d.portQuest,q=POI_PORT_QUESTS[id];if(q?.owner!==role.id)return [back];
+  const phase=poiPortQuestState(kit,id);
+  return [...(!phase?[{id:'port-accept:'+id,label:'引き受ける'}]:
+    phase==='ready'?[{id:'port-report:'+id,label:'報告する'}]:[]),back];
+ }
+ if(d.page!=='request')return null;
+ if(role.id==='southmerchant')return poiPortQuestState(kit,'market-message')==='accepted'?
+  [{id:'port-deliver:market-message',label:'クレアの伝言を伝える'}]:null;
+ const [id,q]=Object.entries(POI_PORT_QUESTS).find(([,v])=>v.owner===role.id);
+ return [{id:'port-quest:'+id,label:q.title+(status[poiPortQuestState(kit,id)]||'')}];
+}
+function poiPortQuestPut(kit,id,phase,pay=0){
+ const gold=(kit.gold||0)+pay;
+ if(gold>POI_ECONOMY_GOLD_MAX)return 'full';
+ return poiEconomyWrite({...kit,...(pay?{gold}:{}),portQuests:{...kit.portQuests,[id]:phase}})?'ok':'storage';
+}
+function poiPortQuestChoose(d,action,now){
+ const [verb,id]=action.split(':'),q=Object.hasOwn(POI_PORT_QUESTS,id)?POI_PORT_QUESTS[id]:null;
+ if(!q||!poiPortQuestAvailable()||!poiWalkActive||pineAIActive||poiWalkLevel!==0||
+    poiTownDialogueTarget(now)!==d.actor)return false;
+ const who=d.actor.role.id,kit=poiHotbarRead(),phase=poiPortQuestState(kit,id);
+ if(verb==='port-deliver'){
+  if(d.page!=='request'||id!=='market-message'||who!=='southmerchant'||phase!=='accepted')return false;
+  d.text=poiPortQuestPut(kit,id,'ready')==='ok'?'クレアからだね。明日の荷は昼すぎ、わかったと伝えてくれ。':'保存できなかったので、もう一度伝えてくれ。';
+  return true;
+ }
+ if(who!==q.owner)return false;
+ if(verb==='port-quest'&&d.page==='request'){
+  d.page='port-detail';d.portQuest=id;d.index=0;
+  d.text=phase==='done'?'助かったよ。この依頼はもう済んでいる。':phase==='ready'?'おかえり。報告を聞かせて。':q.ask+'　お礼は '+q.pay+'G。';
+  return true;
+ }
+ if(d.page!=='port-detail'||d.portQuest!==id)return false;
+ if(verb==='port-accept'&&!phase){
+  d.text=poiPortQuestPut(kit,id,'accepted')==='ok'?'よろしく頼むよ。 '+q.ask:'保存できず、引き受けられなかった。';
+  return true;
+ }
+ if(verb==='port-report'&&phase==='ready'){
+  const result=poiPortQuestPut(kit,id,'done',q.pay);
+  d.text=result==='ok'?'ありがとう。依頼完了！　お礼に '+q.pay+'G。':
+   result==='full'?'金貨が上限です。金貨を使ってから、もう一度報告してください。':'保存できず、報酬はまだ受け取っていません。';
+  if(result==='ok'&&typeof poiWalletSync==='function')poiWalletSync((kit.gold||0)+q.pay);
+  return true;
+ }
+ return false;
+}
+function poiPortQuestVisit(){
+ const end=facilitySite?.southPort?.dock?.end;
+ if(!end||!poiWalkActive||pineAIActive||poiWalkLevel!==0||poiWalkX!==end.x||poiWalkZ!==end.z||end.y!==0||
+    !poiPortQuestAvailable())return false;
+ const id='pier-lantern',kit=poiHotbarRead();
+ if(poiPortQuestState(kit,id)!=='accepted'||!world.some(o=>o.x===end.x&&o.z===end.z&&o.y===0&&o.type==='woodfloorDark'))return false;
+ if(poiPortQuestPut(kit,id,'ready')!=='ok')return false;
+ if(typeof poiMessagePush==='function')poiMessagePush('桟橋の先を確かめた。ネリに報告しよう。','item');
+ return true;
+}
+// END PORT QUESTS
 function poiHotbarHasKit(){return facilitySite?.id==='base'}
 // Version 1 saves keep their original condition ratio, with no write on read.
 function poiMigrateWeaponDurability(saved){
@@ -10705,6 +10786,8 @@ function poiHotbarRead(){
  if(!valid)return poiHotbarState={weapon:null,potions:POI_HOTBAR_POTION_START,...(raw===null?{worn:{...POI_FRESH_ARMOR}}:{})};
  poiMigrateWeaponDurability(saved);
  const kit={weapon:saved.weapon,potions:saved.potions};
+ const pv=typeof poiPortQuestDecode==='function'?poiPortQuestDecode(saved.portQuests):null;
+ if(pv)kit.portQuests=pv;
  const worn=poiArmorDecode(saved.worn);if(worn)kit.worn=worn;
  const wornDurability=poiWornDurabilityDecode(saved.wornDurability,poiArmorWorn(kit));
  if(wornDurability)kit.wornDurability=wornDurability;
@@ -10794,6 +10877,7 @@ function poiHotbarSave(kit=poiHotbarState){
   const {weapon,potions,gold,claimedCaches,sword,drops,slots,towerFind,kitchenChest,worn,wornDurability,woodSwordBroken,npcTrade,goldBagOrder,quests,mineSurvey,mineGateCleared,mineTreasureChest,mineFindClaims,mineFindRolls,otherworldCleared,otherworldChest,chapelCleared,chapelChest,toolshopSupply}=kit;
   localStorage.setItem(POI_HOTBAR_KEY,JSON.stringify({version:1,weapon,potions:Math.min(potions,POI_HOTBAR_POTION_MAX),
    ...(poiHasExplicitWeaponDurability(kit)?{weaponDurabilityVersion:2}:{}),...(toolshopSupply?{toolshopSupply}:{}),...(kit.southShipment?{southShipment:kit.southShipment}:{}),...(kit.armedDrops?.length?{armedDrops:kit.armedDrops}:{}),...(kit.fireWandFound?{fireWandFound:true}:{}),...(kit.northTrailCampSupplies===true?{northTrailCampSupplies:true}:{}),...(kit.northWatchPostSupplies===true?{northWatchPostSupplies:true}:{}),...(kit.otherworldEastSupplyFound===true?{otherworldEastSupplyFound:true}:{}),...(kit.chapelWestSupplyFound===true?{chapelWestSupplyFound:true}:{}),...(kit.northMarshHerbFound===true?{northMarshHerbFound:true}:{}),...(kit.northWatchPostGuardLoot===true?{northWatchPostGuardLoot:true}:{}),...(kit.northMinotaurAxeAwarded===true?{northMinotaurAxeAwarded:true}:{}),...(Number.isInteger(kit.northFortReturn)&&kit.northFortReturn>=0&&kit.northFortReturn<=7?{northFortReturn:kit.northFortReturn}:{}),
+   ...(typeof poiPortQuestDecode==='function'&&poiPortQuestDecode(kit.portQuests)?{portQuests:poiPortQuestDecode(kit.portQuests)}:{}),
    ...(gold?{gold}:{}),...(claimedCaches?.length?{claimedCaches}:{}),...(towerFind?{towerFind}:{}),...(kitchenChest?{kitchenChest}:{}),...(worn?{worn}:{}),...(wornDurability?{wornDurability}:{}),...(woodSwordBroken?{woodSwordBroken}:{}),...(npcTrade?{npcTrade}:{}),...(goldBagOrder?{goldBagOrder}:{}),...(goldHotbarSlot!==null?{goldHotbarSlot}:{}),...(quests?.length?{quests}:{}),...(mineSurvey?{mineSurvey}:{}),...(mineGateCleared?{mineGateCleared}:{}),...(mineTreasureChest?{mineTreasureChest}:{}),...(mineFindClaims?.length?{mineFindClaims}:{}),...(mineFindRolls?{mineFindRolls}:{}),...(otherworldCleared?{otherworldCleared}:{}),...(otherworldChest?{otherworldChest}:{}),...(chapelCleared?{chapelCleared}:{}),...(chapelChest?{chapelChest}:{}),
    ...(dungeonPopulation?{dungeonPopulation}:{}),...(sword===false?{sword}:{}),...(drops?.length?{drops}:{}),...(kit.groundGold?.length?{groundGold:kit.groundGold}:{}),...(kit.goldStacks?.length?{goldStacks:kit.goldStacks}:{}),...(slots?{slots}:{})}));
   return true;
@@ -15817,10 +15901,12 @@ function poiNpcMenuRows(d){
   return [...(progress==='surveyed'?['quest-report']:d.questId&&!progress?['quest-accept']:[]),'back'].map(row);
  }
  if(d.page==='status')return ['back'].map(row);
+ const port=typeof poiPortQuestMenuRows==='function'?poiPortQuestMenuRows(d):null;
+ if(d.page==='port-detail')return port||[row('back')];
  if(d.page==='request'){
-  if(d.actor.role.portBounds)return ['local-help','recruit','back'].map(row);
+  if(d.actor.role.portBounds)return [...(port||[]),...['local-help','recruit','back'].map(row)];
   const service=poiNpcMenuService(d.actor);
-  return [...(service?[service]:[]),'sell','buy','recruit','back'].map(row);
+  return [...(port||[]),...[...(service?[service]:[]),'sell','buy','recruit','back'].map(row)];
  }
  if(d.page==='confirm'){
   const mode=d.pending?.page;
@@ -16099,7 +16185,7 @@ function poiNpcMenuBack(now=performance.now()){
  const d=poiTownDialogue;
  if(!d)return false;
  if(d.sleeping||d.page==='root'||d.page==='speech'){poiTownDialogueClose();poiShopSync();return true}
- d.page=d.page==='quest-detail'?'quest':d.page==='confirm'?d.pending.page:['buy','sell','shop'].includes(d.page)?'request':'root';
+ d.page=d.page==='port-detail'?'request':d.page==='quest-detail'?'quest':d.page==='confirm'?d.pending.page:['buy','sell','shop'].includes(d.page)?'request':'root';
  d.pending=null;d.questId=null;d.index=0;d.text=d.page==='quest'?'どのクエストを見ますか？':d.topic;
  poiNpcMenuRender(now);return true;
 }
@@ -16113,6 +16199,10 @@ function poiNpcMenuChoose(id,now=performance.now()){
  if(poiTownDialogueTarget(now)!==d.actor){poiTownDialogueClose();poiShopSync();return true}
  const row=d.rows.find(r=>r.id===id);if(!row)return false;
  if(id==='back')return poiNpcMenuBack(now);
+ if(id.startsWith('port-')){
+  if(typeof poiPortQuestChoose!=='function'||!poiPortQuestChoose(d,id,now))return false;
+  d.index=0;poiNpcMenuRender(now);poiShopSync();return true;
+ }
  if(id==='talk'){
   const topics=POI_NPC_EXTRA_SPEECH[d.actor.role.id]||['夕方になると門の外は暗くなる。帰り道は覚えておくといいよ。','町へ戻ると、ようやく一息つけるね。'];
   const port=typeof poiPortMarekTopic==='function'?poiPortMarekTopic(d.actor):null;
@@ -16721,7 +16811,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v265',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v266',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -16836,7 +16926,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v265';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v266';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -17051,7 +17141,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v265',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v266',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -19347,6 +19437,7 @@ function poiRegionAt(site,x,z,legacy=false,floor=null){
    typeof poiOtherworldIn==='function'&&poiOtherworldIn(site,x,z,floor)?'otherworld':null;
   if(realm){name=site[realm].name;difficulty=site[realm].difficulty}
   else if(typeof poiSouthPortContains==='function'&&poiSouthPortContains(site,x,z,floor)){name=site.southPort.name;difficulty=0}
+  else if(typeof poiSouthForestContains==='function'&&poiSouthForestContains(site,x,z,floor)){name=site.southForest.name;difficulty=site.southForest.difficulty}
   else if(typeof poiSouthTownContains==='function'&&poiSouthTownContains(site,x,z,floor)){name=site.southRoad.town.name;difficulty=0}
   else if(!inTown&&!inGuild&&name==='外'&&typeof poiNorthTrailRegion==='function'){
    const trail=poiNorthTrailRegion(site,x,z,floor);
@@ -19726,7 +19817,7 @@ function poiWalkEnterCell(dx,dz,now,continuous=false,onDoorCue){
  poiWalkStepMs=typeof poiChapelStepMs==='function'?poiChapelStepMs(poiWalkX,poiWalkZ,wet):POI_WALK_MS;
  if(!continuous){poiWalkStarted=now;poiWalkNextReady=now+poiWalkStepMs}
  if(facilitySite?.id==='base'&&poiWalkLevel===0&&typeof poiLookoutEnter==='function')poiLookoutEnter(poiWalkFromX,poiWalkFromZ,poiWalkX,poiWalkZ);
- if(facilitySite?.id==='base'){if(facilitySite.creek)poiCreekAudioSync();poiEconomyCollect(poiWalkX,poiWalkZ);if(typeof poiGroundGoldPickup==='function')poiGroundGoldPickup(poiWalkX,poiWalkZ);poiInventoryPickup(poiWalkX,poiWalkZ);poiMineFindExplore(poiWalkX,poiWalkZ);poiMineFindPickup(poiWalkX,poiWalkZ);poiArmedPickup(poiWalkX,poiWalkZ);if(typeof poiNorthTrailPickup==='function')poiNorthTrailPickup(poiWalkX,poiWalkZ)}
+ if(facilitySite?.id==='base'){if(facilitySite.creek)poiCreekAudioSync();poiEconomyCollect(poiWalkX,poiWalkZ);if(typeof poiGroundGoldPickup==='function')poiGroundGoldPickup(poiWalkX,poiWalkZ);poiInventoryPickup(poiWalkX,poiWalkZ);poiMineFindExplore(poiWalkX,poiWalkZ);poiMineFindPickup(poiWalkX,poiWalkZ);poiArmedPickup(poiWalkX,poiWalkZ);if(typeof poiPortQuestVisit==='function')poiPortQuestVisit();if(typeof poiNorthTrailPickup==='function')poiNorthTrailPickup(poiWalkX,poiWalkZ)}
  if(!poiWalkDoorFoley(door,fromLevel,onDoorCue)&&!continuous)poiWalkFootstep(wet);
  poiWalkRoof();if(!continuous)poiWalkAvatar(poiWalkStarted);poiWalkStatus();if(pineGameActive){workshopAdventureResumeQuiet=false;pineGameSave()}workshopResumeWrite();
  return dx?'x':'z';
@@ -20612,7 +20703,8 @@ function makeScene(){
  const cut=facilitySite&&!facilityBuildFullSurface?facilityVisibilityOwner():null;
  const sharedParts=facilityBuildFullSurface?[]:null;
  const localGradeSources=[],m=mesh(),visible=(localBatch||world).filter(o=>{
-  if(!localBatch&&poiWalkActive&&typeof poiFacilityLocalMember==='function'&&poiFacilityLocalMember(o)){
+  if(!localBatch&&poiWalkActive&&((typeof poiFacilityLocalMember==='function'&&poiFacilityLocalMember(o))||
+    (typeof poiSouthForestMember==='function'&&poiSouthForestMember(o)))){
    if(poiWalkLevel>=0&&o.y===0&&o.type==='lantern')localGradeSources.push(o);
    return false;
   }
@@ -21857,6 +21949,7 @@ function render(){
  poiOcclusionBegin(p,now);
  draw(sceneMesh?.ground,p.vp);poiDrawSceneOcclusion(sceneMesh,p.vp);
  if(typeof facilityDrawLocalScene==='function')facilityDrawLocalScene(p.vp);
+ if(typeof facilityDrawForestScene==='function')facilityDrawForestScene(p.vp);
  facilityDrawRoofs(p.vp);poiDrawGameRoofs(p.vp);
  poiOcclusionEnd();
  poiDrawEditorGhostRoof(p.vp);
@@ -24959,7 +25052,8 @@ function buildFacilitySite(id){
  southRoad.town=extendTownWorldSouthTown(expanded,southRoad);
  const northFort=extendTownWorldNorthFort(expanded.map.world,northTrail);
  const southPort=extendTownWorldSouthPort(expanded.map.world);
- return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad,northFort,southPort};
+ const southForest=extendTownWorldSouthForest(expanded.map.world,southPort);
+ return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad,northFort,southPort,southForest};
 }
 
 // The first southern coast uses the old 128x128 save frame, away from the inn.
@@ -24982,7 +25076,7 @@ function extendTownWorldSouthPort(world){
   }
   return output;
  };
- const name='潮待ちの港',bounds={x1:73,x2:92,z1:109,z2:127,y};
+ const name='セルネア',bounds={x1:73,x2:92,z1:109,z2:127,y};
  const approach=route([[105,111],[105,123],[84,123],[84,120]]),entrance=P(91,123);
  const dock={end:P(73,118),waterAhead:P(72,118),route:route([[84,120],[79,120],[79,118],[73,118]])};
  const market={stall:P(84,116),public:P(84,115,2),work:P(84,117,0),prep:P(86,117,3),rest:P(86,120,3)};
@@ -25021,6 +25115,51 @@ function extendTownWorldSouthPort(world){
  for(const o of floors.values()){world.push(o);if(o.type==='sea')water.push(P(o.x,o.z));}
  world.push(...props);
  return {name,difficulty:0,bounds,entrance,market,fisher,dock,approach,water,props,future,
+  authored:{index,count:world.length-index}};
+}
+
+// Small same-frame woodland route around the head of the port inlet.
+function extendTownWorldSouthForest(world,southPort){
+ const y=0,P=(x,z)=>({x,z,y}),K=(x,z)=>x+','+z;
+ const old=new Map(),floors=new Map(),props=[],index=world.length;
+ for(const o of world)if(o.y===0){const k=K(o.x,o.z),v=old.get(k)||[];v.push(o.type);old.set(k,v)}
+ const put=(x,z,type)=>{const k=K(x,z);if(!old.has(k))floors.set(k,{x,z,y,type,rot:0})};
+ const anchor=southPort.market.public,rest=P(54,119);
+ const corners=[[83,115],[83,107],[65,107],[65,112],[54,112],[54,119]];
+ let {x,z}=anchor;const route=[P(x,z)];
+ for(const [tx,tz] of corners)while(x!==tx||z!==tz){
+  x+=Math.sign(tx-x);z+=Math.sign(tz-z);route.push(P(x,z));
+ }
+ const name='潮風の森',difficulty=1;
+ // Author only shade islands and the walking lane, never a full-size
+ // repaint of the existing base. The forest opens onto a bright rest lawn.
+ for(let x=68;x<=82;x++)for(const z of [106,108])
+  if((x+z)%5!==0)put(x,z,'grassForest');
+ for(let x=50;x<=63;x++)for(const z of [111,113])
+  if((x+z)%4!==0)put(x,z,'grassForest');
+ for(let x=51;x<=57;x++)for(let z=117;z<=121;z++)put(x,z,x===54||z===119?'grassTrampled':'grassMeadow');
+ for(const p of route){
+  const k=K(p.x,p.z),prior=old.get(k);
+  if(prior&&!prior.every(t=>/^(road|earth|grass)/.test(t)))throw Error('forest road overlaps '+k);
+  put(p.x,p.z,p.z===119?'grassTrampled':p.x===83?'roadGravelFull':p.x%5===0?'roadMossFull':'earth');
+ }
+ const routeCells=new Set(route.map(p=>K(p.x,p.z)));
+ for(const [x,z,type,rot=0] of [
+  [81,106,'treeCedar',1],[79,108,'treePine'],[76,106,'treeBirch',1],[74,108,'treeCedar',2],
+  [71,106,'treePine'],[69,108,'treeCedar'],[67,106,'treeBirch',1],[64,108,'treePine',2],
+  [64,109,'rockMossy'],[63,111,'treeCedar'],[62,113,'treePine'],[60,111,'treeBirch'],
+  [58,113,'treeCedar',2],[56,111,'treePine'],[55,114,'treePine',1],[52,113,'treeCedar'],
+  [52,116,'treeBirch'],[56,116,'treeCedar'],[57,118,'treePine',1],[52,120,'treeBirch'],[56,121,'treeCedar'],
+  [53,118,'benchWood',1],[55,118,'lantern'],[51,118,'ruinStonePost',3],[55,120,'rockMossy'],[50,118,'bushFern',2],
+  [63,115,'tallGrass'],[66,106,'fallenLog',2],[80,110,'bushFern',1],[82,109,'ruinStonePost',3]
+ ]){
+  const k=K(x,z);
+  if(old.has(k)||routeCells.has(k))throw Error('forest side prop overlaps '+k+' '+type);
+  props.push({x,z,y,type,rot});
+ }
+ world.push(...floors.values(),...props);
+ return {name,difficulty,route,entrance:P(82,107),rest,props,future:[P(49,119),P(48,119)],
+  areas:[{x1:64,x2:82,z1:105,z2:108,y},{x1:48,x2:65,z1:108,z2:122,y}],
   authored:{index,count:world.length-index}};
 }
 
@@ -26865,6 +27004,7 @@ function workshopResumeApplyView(v){
 }
 function workshopResumeRestorePosition(p){
  if(typeof poiSouthPortRecoverPosition==='function')p=poiSouthPortRecoverPosition(p);
+ if(typeof poiSouthForestRecoverPosition==='function')p=poiSouthForestRecoverPosition(p);
  // The two former shortcut doorways now have walls. Preserve that exact
  // old save's floor, facing and nearby room instead of restarting in town.
  if(p&&facilitySite?.id==='base'&&p.y===-1){
@@ -27401,6 +27541,63 @@ function facilityDrawLocalScene(vp){
 }
 // END FACILITY LOCAL SCENE
 
+// BEGIN SOUTH FOREST LOCAL
+let poiSouthForestScene=null,poiSouthForestBuilds=0,poiSouthForestDraws=0;
+const poiSouthForestIndexes=new WeakMap();
+function poiSouthForestContains(site,x,z,y,padding=0){
+ const f=site?.id==='base'?site.southForest:null;
+ return !!f?.areas.some(b=>y===b.y&&x>=b.x1-padding&&x<=b.x2+padding&&z>=b.z1-padding&&z<=b.z2+padding);
+}
+function poiSouthForestMember(o){
+ const f=facilitySite?.id==='base'?facilitySite.southForest:null;
+ if(!f)return false;
+ let index=poiSouthForestIndexes.get(f);
+ const key=p=>p.x+','+p.z+','+p.y+','+p.type;
+ if(!index){index=new Set(f.props.map(key));poiSouthForestIndexes.set(f,index)}
+ return index.has(key(o));
+}
+// A pre-forest checkpoint could be on what used to be empty dry ground.
+function poiSouthForestRecoverPosition(p){
+ const f=facilitySite?.id==='base'?facilitySite.southForest:null;
+ if(!f||!p||p.y!==0)return p;
+ const prop=f.props.find(o=>o.x===p.x&&o.z===p.z&&o.y===0&&/^(?:tree|rockMossy$|fallenLog$|ruinStonePost$)/.test(o.type));
+ if(!prop||!world.some(o=>o.x===p.x&&o.z===p.z&&o.y===0&&o.type===prop.type))return p;
+ const prior=poiWalkLevel;
+ try{
+  poiWalkLevel=0;
+  if(poiWalkCanStep(p.x,p.z))return p;
+  const dist=o=>Math.abs(o.x-p.x)+Math.abs(o.z-p.z);
+  const dry=world.filter(o=>o.y===0&&/^(?:road|earth|grass)/.test(o.type)&&dist(o)<=2)
+   .sort((a,b)=>dist(a)-dist(b)||a.z-b.z||a.x-b.x);
+  const safe=dry.find(o=>poiWalkCanStep(o.x,o.z));
+  return safe?{...p,x:safe.x,z:safe.z}:p;
+ }finally{poiWalkLevel=prior}
+}
+function facilityForestSceneStatus(){
+ return {active:!!poiSouthForestScene,vertices:poiSouthForestScene?.mesh.count??0,builds:poiSouthForestBuilds,draws:poiSouthForestDraws};
+}
+function facilityClearForestScene(){
+ if(!poiSouthForestScene)return;
+ gl.deleteBuffer(poiSouthForestScene.mesh.buf);poiSouthForestScene=null;
+}
+function facilityDrawForestScene(vp){
+ const near=padding=>poiWalkActive&&poiSouthForestContains(facilitySite,poiWalkX,poiWalkZ,poiWalkLevel,padding);
+ const inspect=poiWalkActive&&poiWalkLevel===0&&!!facilitySite?.southForest&&(cameraTopDown||pineAIActive);
+ if(poiSouthForestScene&&(poiSouthForestScene.world!==world||poiSouthForestScene.site!==facilitySite||!inspect&&!near(14)))
+  facilityClearForestScene();
+ if(!poiSouthForestScene&&(inspect||near(10))){
+  const objects=world.filter(poiSouthForestMember);
+  if(!objects.length)return;
+  poiFacilityLocalBuild=objects;
+  try{poiSouthForestScene={mesh:makeScene(),world,site:facilitySite};poiSouthForestBuilds++}
+  finally{poiFacilityLocalBuild=null}
+ }
+ const mesh=poiSouthForestScene?.mesh;
+ if(mesh?.count){draw(mesh,vp);poiSouthForestDraws++}
+}
+// END SOUTH FOREST LOCAL
+
+
 function facilityRenderScene(){
  const cut=facilityVisibilityOwner(),floorKey=facilitySite.id==='guildsaved'?poiWalkLevel:facilitySite.id==='guildrenewal'?poiWalkLevel:0;
  const townGuildCut=cut!==null&&facilitySite.buildings[cut]?.id==='townGuild';
@@ -27518,6 +27715,7 @@ function facilityDrawRoofs(vp){
 }
 function facilityInvalidateScenes(){
  if(typeof facilityClearLocalScene==='function')facilityClearLocalScene();
+ if(typeof facilityClearForestScene==='function')facilityClearForestScene();
  facilityWatchtowerCameraWalls=null;
  facilityEntranceGuides=null;
  facilityGradeInvalidate();

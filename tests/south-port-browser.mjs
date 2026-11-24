@@ -123,7 +123,7 @@ try{
   assert.equal(initial.old.inn,'並木の宿');assert.equal(initial.old.market,'街道市場');
   assert.deepEqual(xy(initial.old.oldMarketDoor),[102,112]);
   assert.deepEqual(xy(initial.old.oldInnDoor),[108,116]);
-  assert.equal(initial.port?.name,'潮待ちの港');
+  assert.equal(initial.port?.name,'セルネア');
   assert.deepEqual(xy(initial.port.entrance),[91,123]);
   const far=[110,111];
   phase='old inn at a distance: no port draw/build';
@@ -162,7 +162,7 @@ try{
   phase='dock and solid water barrier';
   const dock=await q(p);
   assert.deepEqual(dock.pos,pos(...complete.at(-1)));
-  assert.equal(dock.scene,'surface');assert.equal(dock.location,'潮待ちの港');
+  assert.equal(dock.scene,'surface');assert.equal(dock.location,'セルネア');
   assert.equal(dock.local.active,'southPort');
   assert.equal(dock.local.builds,arriving.local.builds,'walking within the port does not upload a new local mesh per step');
   assert.equal(dock.entranceSerial,initial.entranceSerial);assert.equal(p.url(),url);
@@ -170,7 +170,7 @@ try{
   assert.deepEqual((await q(p)).pos,dock.pos,'ordinary input cannot walk off the last plank into deep sea');
   phase='cold reload on the far dock';
   const restored=await reload(p,complete.at(-1));
-  assert.equal(restored.location,'潮待ちの港');
+  assert.equal(restored.location,'セルネア');
   // One real frame is explicitly driven after cold resume to verify it
   // actually rehydrates the local geometry instead of only the coordinate.
   await tick(p,64);
