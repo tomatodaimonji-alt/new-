@@ -31,20 +31,12 @@ test('edit invalidation, other routes, and the rest of the base are not clipped'
  ctx.facilitySite.id='base';ctx.world=[];
  vm.runInContext('facilityWatchtowerCameraWalls=null',ctx);assert.equal(clamp(target,eye),eye);
  const westEye=[50,2,33];assert.equal(clamp([50,1,38],westEye),westEye);
- const start=html.indexOf('  const mineCamera=',end),stop=html.indexOf('  const arm=',start);
- assert.ok(start>end&&stop>start,'mine and tower share the real third-person eye selection');
+ const start=html.indexOf('  const eye=typeof facilitySharedWallCameraEye',end),stop=html.indexOf('  const arm=',start);
+ assert.ok(start>end&&stop>start,'mine and tower now share one production third-person arm');
  const select=html.slice(start,stop);
- const branch=Function('facilitySite','poiWalkLevel','x','z','poiDungeonPointIn','poiDungeonTravelKey',
-  'facilityMineCameraWalls','sceneMesh','facilityMineCameraEye','facilityWatchtowerCameraEye','target','desired',
-  select+';return eye;');
- const run=(id,y,inside,realm)=>branch({id,mine:{bounds:{}}},y,86,39,()=>inside,()=>realm,
-  actual=>{assert.equal(actual,'scene');return 'walls'},'scene',
-  (start,desired,walls)=>{assert.equal(walls,'walls');return 'mine'},()=> 'tower',target,eye);
- assert.equal(run('base',0,true,null),'tower','surface watchtower still takes its established helper');
- assert.equal(run('base',-1,true,null),'mine','B1 abandoned mine uses the targeted wall clip');
- assert.equal(run('base',-1,false,null),'tower','distant B1 sections retain their existing branch');
- assert.equal(run('base',-1,true,'chapel'),'tower','other realm remains on its previous route');
- assert.equal(run('kitchen',-1,true,null),'tower','standalone sessions retain their previous route');
+ const branch=Function('facilitySharedWallCameraEye','target','desired',select+';return eye;');
+ assert.equal(branch((t,d)=>{assert.equal(t,target);assert.equal(d,eye);return 'shared'},target,eye),'shared');
+ assert.equal(branch(undefined,target,eye),eye);
  const invalidate=html.indexOf('function facilityInvalidateScenes(){');
  assert.ok(invalidate>=0&&html.slice(invalidate,invalidate+240).includes('facilityWatchtowerCameraWalls=null;'),'global edits still invalidate watchtower wall geometry');
 });
