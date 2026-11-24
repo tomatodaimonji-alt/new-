@@ -52,7 +52,7 @@ try{
  await p.clock.install({time:new Date('2026-04-01T10:00:00Z')});await p.goto(origin+'/seed');
  await p.evaluate(()=>{
   const slots=Array(27).fill(null);slots[2]={type:'fireWand',count:1,charges:4};
-  localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,slots,gold:3,potions:0}));
+  localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weapon:null,slots,gold:3,potions:0}));
   localStorage.setItem('world-workshop-town-clock-v1','{"version":1,"gameMs":360000}');
   localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,position:{x:102,z:93,y:0,facing:1},townLayout:5,townMapHeight:128,
    view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.24,orbitDistance:5.5}}));
@@ -60,7 +60,8 @@ try{
  await p.goto(origin+'/?resume=1&test=1');await p.locator('#pineStartupCover').waitFor({state:'hidden'});
  const qt=()=>p.evaluate(()=>window.__editorTest.thermalQA.state());
  await p.clock.pauseAt((await p.evaluate(()=>Date.now()))+1500);
- assert((await p.evaluate(()=>{window.__thermalManual=true;return window.__editorTest.thermalQA.arm()})).ok);
+ const armed=await p.evaluate(()=>{window.__thermalManual=true;return window.__editorTest.thermalQA.arm()});
+ assert(armed.ok,JSON.stringify({armed,state:await qt()}));
  const c=await p.context().newCDPSession(p),r=await p.locator('#poiWalkAction').boundingBox(),pt={x:r.x+r.width/2,y:r.y+r.height/2,id:5};
  await c.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[pt]});await c.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
  const traces=[];
