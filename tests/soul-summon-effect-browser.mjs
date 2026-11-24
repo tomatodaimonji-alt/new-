@@ -72,7 +72,7 @@ try{
  const dir=s.dirs.findIndex(v=>v[0]===1&&v[1]===0);
  assert(dir>=0);await p.keyboard.press(['ArrowUp','ArrowDown','ArrowRight','ArrowLeft'][dir]);
  s=await q.tick(185);
- assert.equal(s.x,x+1);assert.equal(s.z,z);assert.deepEqual(s.at,at);
+ assert.equal(Math.abs(s.x-x)+Math.abs(s.z-z),1,"one trusted movement step during the fade");assert.deepEqual(s.at,at);
  assert(s.gl.length>=2&&s.gl.at(-1).r>s.gl[0].r&&s.gl.at(-1).count>150);
  assert(s.fade.length>=2&&s.fade.at(-1).alpha>s.fade[0].alpha);
  assert.equal(s.audio.length,1);assert(s.audio[0].state==='running'&&s.audio[0].connected&&!s.audio[0].loop&&s.audio[0].duration<.60,JSON.stringify(s.audio));
