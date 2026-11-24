@@ -1,186 +1,562 @@
-name: Fire Wand flare actual one-shot QA
+name: Orvas natural stone shatter actual lethal proof
 on:
   push:
     branches: ['dot/workshop-david-discovery-qa']
 permissions:
   contents: read
 jobs:
-  audio:
+  shatter:
     runs-on: ubuntu-24.04
     timeout-minutes: 9
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 04c55894a275b66e3139e5c08986c2b29b506805
+          ref: ab19e14057396356908558450c7f2c2f5ba84c8a
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Build exact sound-only candidate
+      - name: Build exact candidate
         run: |
           set -eu
-          test "$(git hash-object world-editor.html)" = aa855e8ed66395458f8f431d03c24d53168a304e
+          test "$(git hash-object world-editor.html)" = ae8350f7ad6130af38f489c4a803f4cd9769d9d6
           mkdir -p .qa/tests .qa/rendered
           cat >.qa/build.py <<'SOURCE'
           from pathlib import Path
           import base64,re,sys
-          src,dst=map(Path,sys.argv[1:]);s=src.read_bytes()
-          pcm=(Path(__file__).parent/'rendered/wandFlameLaunch.pcm').read_bytes()
-          assert len(pcm)==8256
+          src,dst=map(Path,sys.argv[1:]);s=src.read_bytes();here=Path(__file__).parent
+          def rep(a,b):
+           global s
+           if isinstance(a,str):a=a.encode()
+           if isinstance(b,str):b=b.encode()
+           assert s.count(a)==1,(a,s.count(a))
+           s=s.replace(a,b,1)
+          pcm=(here/'rendered/orvasStoneShatter.pcm').read_bytes()
+          assert len(pcm)==30720
           b64=base64.b64encode(pcm)
           lines=b' +\n'.join(b"  '"+b64[i:i+120]+b"'" for i in range(0,len(b64),120))
-          pattern=rb"\n wandFlameLaunch:\s*(?:'[A-Za-z0-9+/=]+'\s*(?:\+\s*)?)+(?=,)"
-          s,n=re.subn(pattern,b'\n wandFlameLaunch:\n'+lines,s);assert n==1
+          rep(b'const POI_RECORDED_FOLEY={\n',b'const POI_RECORDED_FOLEY={\n orvasStoneShatter:\n'+lines+b',\n')
+          rep("function poiDavidStoneHitFoley(o,s,now){","""function poiOrvasShatterFoley(o,s,now){
+           if(!poiWalkActive||!poiAudioEnabled||!poiAudioAllowed()||poiAudioLevels.master<=0||poiAudioLevels.se<=0)return false;
+           const b=poiDavidMatch(o);
+           if(!b||poiWalkLevel!==b.y)return false;
+           const p=poiAimOrigin(now),distance=Math.hypot(s.x-p.x,s.z-p.z);
+           if(distance>17)return false;
+           const gain=.73*Math.max(.26,1-Math.max(0,distance-2)*.050)*(poiDavidLine(s,p,b)?1:.36);
+           poiAudioStart();const ctx=poiAudioContext;
+           if(ctx?.state!=='running')return false;
+           // Only the existing one-shot transient register owns this clip. The
+           // boss's encounter attack teardown must not cut its ground contacts.
+           try{return poiTryRecordedFoley('orvasStoneShatter',ctx.currentTime,gain)}catch{return false}
+          }
+          function poiDavidStoneHitFoley(o,s,now){""")
+          rep("  if(state.hp<before)poiDavidStoneHitFoley(obj,state,now);","  if(state.hp>0&&state.hp<before)poiDavidStoneHitFoley(obj,state,now);")
+          rep(" if(!state.hp){\n  const debris=poiMonsterBreak(obj,state,now);"," if(!state.hp&&(!stone||before>0)){\n  const debris=poiMonsterBreak(obj,state,now);")
+          anchor='function poiMonsterBreak(obj,state,now,random=Math.random,actorEffect=null){'
+          rep(anchor,(here/'shatter.js').read_bytes()+anchor.encode()+b"""
+           const boss=!actorEffect&&state.hp===0&&typeof poiOrvasBreak==='function'&&typeof poiDavidMatch==='function'?poiDavidMatch(obj):null;
+           if(boss)return poiOrvasBreak(obj,boss,poiMonsterPose(obj,state,now),state,now,random);
+          """)
+          rep(" const ease=1-Math.pow(1-t,1.65);\n for(const c of e.parts){\n  const a=c.yaw*ease,",
+          """ for(const c of e.parts){
+            const u=e.orvasStone?Math.min(1,t/c.settleT):t;
+            const ease=1-Math.pow(1-u,1.65);
+            const a=c.yaw*ease,""")
+          rep("const lift=4*t*(1-t)*c.lift+Math.max(0,Math.sin((t-.66)*Math.PI/.34))*c.bounce*(t>.66?1:0);",
+          "const lift=4*u*(1-u)*c.lift+Math.max(0,Math.sin((u-.66)*Math.PI/.34))*c.bounce*(u>.66?1:0);")
+          rep("  const my=start+(c.centerY-start)*t+lift;","  const my=start+(c.centerY-start)*(e.orvasStone?u*u:u)+lift;")
           dst.parent.mkdir(parents=True,exist_ok=True);dst.write_bytes(s)
           SOURCE
-          cat >.qa/tests/fire-wand-flare.test.cjs <<'SOURCE'
-          const assert=require('node:assert/strict'),fs=require('node:fs'),test=require('node:test');
-          const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
-          const asset=name=>{
-           const m=html.match(new RegExp('\\n '+name+':\\s*((?:\'[A-Za-z0-9+/=]+\'\\s*(?:\\+\\s*)?)+)'));
-           assert(m,name);
-           return Buffer.from([...m[1].matchAll(/'([^']+)'/g)].map(x=>x[1]).join(''),'base64');
-          };
-          test('recorded fire wand is a short immediately voiced one-shot with smooth quiet tail and headroom',()=>{
-           const b=asset('wandFlameLaunch'),n=b.length/2,a=Array.from({length:n},(_,i)=>b.readInt16LE(i*2)/32768);
-           assert(n>=3360&&n<=4800,'140–200 ms only, no sustained torch');
-           const rms=(s,e)=>Math.sqrt(a.slice(s,e).reduce((sum,x)=>sum+x*x,0)/(e-s));
-           assert(Math.abs(a[0])<=1/32768&&Math.abs(a.at(-1))<=1/32768,'clickless endpoints');
-           const max=Math.max(...a.map(Math.abs));
-           assert(max>=.22&&max<=.60,'one shot peak .22–.60 before normal mixer');
-           const peak=a.findIndex(x=>Math.abs(x)>=max);
-           assert(peak<1680,'body arrives within first 70ms');
-           assert(rms(120,n*.30|0)>=.045,'audible body before the short decay');
-           assert(rms(n-480,n)<rms(120,n*.30|0)*.09,'last 20ms not a hiss');
-           assert(html.includes("poiTryRecordedFoley('wandFlameLaunch',now,.52)"),'same launch routing and mixing');
-          });
-          SOURCE
-          cat >.qa/tests/real-david-fire-foley.test.cjs <<'SOURCE'
-          const a=require('node:assert/strict'),{test}=require('node:test'),vm=require('node:vm'),fs=require('node:fs'),crypto=require('node:crypto');
-          const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
-          const exact=(first,last)=>{const x=h.indexOf(first),y=h.indexOf(last,x+first.length);a(x>=0&&y>x,first);return h.slice(x,y)};
-          test('all metal/flame masters are embedded exactly once with bounded 24kHz mono duration and clean tails',()=>{
-           const table=vm.runInNewContext(exact('const POI_RECORDED_FOLEY={','const poiRecordedFoleyCache')+';POI_RECORDED_FOLEY');
-           const items={
-            davidBladeSweep:[9600,'d2460f6fe00ae14e4f6fb7ce908f45cfcb12f47739a07bdd9da21d6ced7dc59a'],
-            davidSwordFirst:[6480,'26c5aff60be181dad9bbcabffe29d2d3e33fb4dda6490ceb5a09e3924a00cfcd'],
-            davidSwordSecond:[8400,'465cfa3222349c9f04f711225a9e03eb5a53e0466143eacf32501013489e5655'],
-            davidHeavyStomp:[27600,'b393593ad1d31dafb370fc06413a7a96f64240936ff0fb006066c91f2c46dde8'],
-            davidLeapStomp:[35040,'9232ab36dc816826bf640724486ca6f8fa090eb5b6733a12390d31b6d0962317'],
-            wandFlameLaunch:[4128,'5d4cdb5dd4abd03069a825a73fb6ef88ffdc2cb46570f1c398befd996db9b81a']
-           };
-           for(const [key,[len,sha]] of Object.entries(items)){
-            const bytes=Buffer.from(table[key]||'','base64');
-            a.equal(bytes.length,len*2,key);a.equal(crypto.createHash('sha256').update(bytes).digest('hex'),sha,key);
-            a.equal(bytes.readInt16LE(0),0);a.equal(bytes.readInt16LE(bytes.length-2),0);
-            const samples=[];for(let i=0;i<len;i++)samples.push(bytes.readInt16LE(i*2)/32768);
-            const peak=samples.reduce((n,v)=>Math.max(n,Math.abs(v)),0);
-            a(key==='wandFlameLaunch'?peak>.45&&peak<.47:peak>.66&&peak<(key==='davidLeapStomp'?.83:.81),key+' peak');
+          cat >.qa/shatter.js <<'SOURCE'
+          // BEGIN ORVAS SHATTER GEOMETRY
+          function poiOrvasChip(i,scale){
+           const m=mesh(),ring=[],edge=[],sides=5+i%3,h=scale*(.23+(i%4)*.065);
+           for(let k=0;k<sides;k++){
+            const a=k*2*Math.PI/sides+(i*.47),r=scale*(.76+.24*Math.sin(k*1.7+i+.08));
+            ring.push([r*Math.cos(a),0,r*Math.sin(a)*(.76+i%3*.07)]);
+            edge.push([r*Math.cos(a)*.61,h*(.72+.28*Math.cos(k+i)),r*Math.sin(a)*.55]);
            }
-          });
-          test('real accepted wand cast starts one short flare sound even without contact; cooldown, unpaid, muted and hidden casts do not duplicate it',()=>{
-           let now=1000,charges=2,events=[],shots=0,visible=true;
-           const c={console,performance:{now:()=>now},document:{get hidden(){return !visible},querySelector:()=>null},poiWalkActive:true,poiInventoryAllowed:()=>true,
-            poiPlayerWeaponProfile:()=>({ready:610}),poiPlayerWeaponPending:null,poiAttackReady:0,poiWalkX:24,poiWalkZ:100,poiWalkLevel:0,poiWalkFacing:0,
-            poiPlayerWeaponFlightBegin:()=>{shots++},poiWalkAvatar:()=>{},poiAudioEnabled:true,poiAudioAllowed:()=>true,poiAudioStart:()=>{},
-            poiAudioContext:{state:'running',currentTime:3},poiAudioLevels:{master:1,se:1},POI_WEAPON_SE:{},facilitySite:{id:'base'},
-            poiTryRecordedFoley:(...args)=>events.push(args),
-            poiInventorySpendFireWand:()=>charges>0?(charges--,true):false};
-           const cast=vm.runInNewContext(exact('function poiSound(','function poiAudioSyncLifecycle')+exact('function poiPlayerCastFireWand(','function poiPlayerFlightMs(')+';poiPlayerCastFireWand',c);
-           a.equal(cast(0).ok,true);a.equal(cast(0).reason,'cooldown');
-           a.deepEqual(events,[['wandFlameLaunch',3,.52]]);a.equal(shots,1);
-           now=1800;visible=false;a.equal(cast(0).reason,'unavailable');a.equal(charges,1);
-           visible=true;c.poiAudioLevels.se=0;a.equal(cast(0).ok,true);
-           now=2500;a.equal(cast(0).reason,'storage');
-           a.equal(shots,2);a.equal(events.length,1);a.equal(charges,0);
-          });
+           const tint=.47+i%5*.022,top=[tint+.09,tint+.068,tint+.015],shade=[tint-.065,tint-.077,tint-.10];
+           for(let k=0;k<sides;k++){
+            const j=(k+1)%sides,c=k%2?[tint+.015,tint,tint-.043]:shade;
+            tri(m,ring[k],edge[k],edge[j],c);tri(m,ring[k],edge[j],ring[j],c);
+            tri(m,edge[j],edge[k],[.03*scale,h,0],top);
+           }
+           return m;
+          }
+          function poiOrvasBreak(o,b,pose,state,now,rng){
+           const ox=pose.x-.5,oz=pose.z-.5,groundAt=(x,z)=>terrainY(x,z)+(facilitySite?o.y*1.4:0);
+           const x0=Math.floor(pose.x),z0=Math.floor(pose.z),pass=poiAimWall({y:o.y}),cache=new Map();
+           const valid=(x,z)=>{
+            const k=x+','+z;
+            if(!cache.has(k))cache.set(k,validPos(x,z)&&poiDavidIn(b,{x,z,y:o.y})&&
+             !(o.y===0&&facilityCreekIndex?.water.has(k))&&poiWalkCanStep(x,z));
+            return cache.get(k);
+           };
+           const sections=[],startAngle=rng()*Math.PI*2;
+           for(let i=0;i<13;i++){
+            const heavy=i<4,scale=heavy?.29+(i%3)*.047:.089+i%4*.036;
+            const spread=(heavy?.78+i*.24:1.32+(i%5)*.28)+(rng()-.5)*.16,angle=startAngle+i*2.399963+(rng()-.5)*.24;
+            let dx=0,dz=0,landed=false;
+            for(const [bend,ratio] of [[0,1],[.41,1],[-.55,1],[1.14,1],[-1.33,1],[2.27,.92],[-2.36,.76],[0,.56],[2.83,.52],[0,0]]){
+             const d={x:Math.cos(angle+bend),z:Math.sin(angle+bend)},r=spread*ratio;
+             const x=pose.x+r*d.x,z=pose.z+r*d.z,pad=scale*.77;
+             if(r>0&&poiAimWallLimit({x:ox,z:oz},d,r,pass)+POI_AIM_EPS<r)continue;
+             let clear=true;
+             // Check a padded path, not just the destination. Do not scatter into
+             // exterior sky, closed adjacent rooms or across blocked elevations.
+             for(let k=1;k<=4&&clear;k++){
+              const u=k/4,cx=pose.x+(x-pose.x)*u,cz=pose.z+(z-pose.z)*u;
+              for(const sx of [-pad,pad])for(const sz of [-pad,pad]){
+               const ix=Math.floor(cx+sx),iz=Math.floor(cz+sz);
+               if(!valid(ix,iz)||Math.abs(groundAt(ix,iz)-groundAt(x0,z0))>.38)clear=false;
+              }
+             }
+             if(!clear||sections.some(p=>Math.hypot(r*d.x-p.dx,r*d.z-p.dz)<(scale+p.size)*.62))continue;
+             dx=x-pose.x;dz=z-pose.z;landed=true;break;
+            }
+            if(!landed)continue;
+            const part=poiOrvasChip(i,scale),tilt=(rng()-.5)*(heavy?.44:.75),tc=Math.cos(tilt),ts=Math.sin(tilt);
+            let bottom=Infinity;
+            const cy=heavy?.81+(i%4)*.46:.22+(i%6)*.29;
+            // Expand around three original silhouette heights, without any upward
+            // ballistic impulse. Endpoints are flattened, not full statue limbs.
+            for(let j=0;j<part.p.length;j+=3){
+             part.p[j+1]+=cy;
+             bottom=Math.min(bottom,part.p[j]*ts+(part.p[j+1]-cy)*tc);
+            }
+            const ground=groundAt(Math.floor(pose.x+dx),Math.floor(pose.z+dz)),restScale=.91+i%3*.037;
+            sections.push({part,cx:0,cy,cz:0,fromX:dx*.065,fromZ:dz*.065,dx,dz,ground,centerY:ground+.011-bottom*restScale,
+             restScale,yaw:(i%2?1:-1)*(.65+i%4*.5),tilt,lift:.012+i%4*.012,bounce:.011+i%3*.009,settleT:(heavy?.49:.36)+i%5*.084,size:scale});
+           }
+           const floor=groundAt(x0,z0);
+           const effect={...pose,y:Math.max(floor,Math.min(pose.y,floor+.90)),type:o.type,parts:sections,start:now,floor:o.y,
+            facing:0,settled:null,orvasStone:true,hitFlashAt:state.hitFlashAt};
+           if(poiMonsterBreaks.length>=POI_MONSTER_BREAK_LIMIT)poiMonsterBreaks.shift();
+           poiMonsterBreaks.push(effect);poiMonsterMeshDirty=true;
+           if(typeof poiOrvasShatterFoley==='function')poiOrvasShatterFoley(o,state,now);
+           return effect;
+          }
+          // END ORVAS SHATTER GEOMETRY
           SOURCE
-          cat >.qa/tests/fire-wand-flare-browser.mjs <<'SOURCE'
+          cat >.qa/tests/orvas-stone-death-browser.mjs <<'SOURCE'
           import assert from 'node:assert/strict';
           import {createServer} from 'node:http';
           import {createRequire} from 'node:module';
           import {readFileSync} from 'node:fs';
           import {Script} from 'node:vm';
-          const source=readFileSync(process.argv[2]??'world-editor.html','utf8');
-          const a='  freeMovementPose:()=>({x:poiWalkViewX,z:poiWalkViewZ,level:poiWalkLevel}),';assert.equal(source.split(a).length,2);
-          let html=source.replace(a,a+`
-           wandUiQA:{
-            move:(from,to)=>poiInventoryMove(from,to),
-            audio:()=>({events:window.__flareEvents??[],state:poiAudioContext?.state,isLive:!!window.__flareSource&&poiAudioTransient.has(window.__flareSource)}),
-            view:()=>({
-             armed:poiArmedWandIndex(),weapon:poiHotbarRead().weapon,held:window.__wandWorldType,
-             mesh:poiWalkMesh?.count??0,charges:poiInventorySlots(poiHotbarRead()).map(c=>c?.charges??null)
-            })
-           },
-          `);
-          const mesh='function poiBuildPlayerMesh(weapon,pose,gear,stride=0,r=0,x=0,y=0,z=0,heading=null,worldSpear=false){';
-          assert.equal(html.split(mesh).length,2);html=html.replace(mesh,mesh+'if(worldSpear)window.__wandWorldType=weapon;');
-          const audioStart=' poiAudioTransient.add(source);source.start(when);source.stop(when+(cap??(buffer.duration+.012)));';
-          assert.equal(html.split(audioStart).length,2);
-          html=html.replace(audioStart,audioStart+`
-           if(buffer===poiRecordedFoleyCache.get('wandFlameLaunch')){
-            const data=buffer.getChannelData(0),peak=data.reduce((m,x)=>Math.max(m,Math.abs(x)),0);
-            window.__flareSource=source;
-            (window.__flareEvents??=[]).push({length:buffer.length,duration:buffer.duration,rate:buffer.sampleRate,channels:buffer.numberOfChannels,
-             loop:source.loop,cap,volume,peak});
-           }
-          `);
-          for(const m of html.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(m[1]);
-          if(process.env.WAND_UI_LAYOUT_ONLY==='1'){console.log('wand cursor browser fixture parses exact source');process.exit(0)}
+          let h=readFileSync(process.argv[2]??'world-editor.html','utf8');
+          const install=(a,b)=>{assert.equal(h.split(a).length,2,a);h=h.replace(a,b)};
+          const mark="if(facilityParams.get('test')==='1')window.__editorTest={";
+
+          install(" let kind=POI_DAVID_ORDER[d.cycle%POI_DAVID_ORDER.length];"," if(window.__finishManual)return false;\n let kind=POI_DAVID_ORDER[d.cycle%POI_DAVID_ORDER.length];");
+          install(mark,`
+           window.__finish={
+            frame:()=>render(),
+            place:()=>{
+             const {o,s}=poiDavidActive,now=performance.now(),p=poiMonsterPose(o,s,now,true);
+             const origin={x:p.x-.5+1.42,z:p.z-.5-.20,y:0};
+             if(!workshopResumeRestorePosition({x:Math.round(origin.x),z:Math.round(origin.z),y:0,facing:3}))return null;
+             poiFreePose={x:origin.x,z:origin.z,level:0,distance:0,walking:false,angle:Math.PI/2};
+             poiWalkFacing=3;poiCombatLockReset();
+             return origin;
+            },
+            setHP:(hp)=>{poiDavidActive.s.hp=hp},
+            state:()=>{
+             const [o,s]=[...poiMonsterStates].find(([o])=>o.type==='monsterStoneDavid')||[],p=o&&poiMonsterPose(o,s,performance.now(),true);
+             const a=poiAimOrigin(performance.now()),slot=poiInventorySlots(poiHotbarRead())[0];
+             const effect=poiMonsterBreaks.find(e=>e.orvasStone),kit=poiHotbarRead();
+             return {fx:effect&&{count:effect.parts.length,x:effect.x,z:effect.z,floor:effect.floor,settled:effect.settled?.p.length??0,
+               radius:effect.parts.map(a=>Math.hypot(a.dx,a.dz)),lift:effect.parts.map(a=>a.lift),ground:effect.parts.map(p=>[effect.x+p.dx,p.ground,effect.z+p.dz])},
+              voice:window.__stoneEvents??[],voiceActive:!!window.__stoneSource&&poiAudioTransient.has(window.__stoneSource),
+              drops:kit.armedDrops??[],dead:kit.dungeonPopulation?.dead?.['davidTemple.david'],
+              attackReady:poiAttackReady,now:performance.now(),ready:s?.david?.wakeDone,weapon:poiEquippedWeapon(),hp:s?.hp,
+              pending:!!poiPlayerWeaponPending,action:poiWalkActionStarted,durability:slot?.durability,
+              a,p:p&&{x:p.x-.5,z:p.z-.5,heading:p.heading}};
+            }
+           };`+mark);
+          install(' requestAnimationFrame(render);',' if(!window.__finishManual)requestAnimationFrame(render);');
+          const voice=' poiAudioTransient.add(source);source.start(when);source.stop(when+(cap??(buffer.duration+.012)));';
+          install(voice,voice+`
+           const clip=[...poiRecordedFoleyCache].find(([,v])=>v===buffer)?.[0];
+           if(clip==='orvasStoneShatter'||clip==='davidRockHit'||clip==='defeat'){
+            (window.__stoneEvents??=[]).push({clip,n:buffer.length,rate:buffer.sampleRate,loop:source.loop,volume,when});
+            if(clip==='orvasStoneShatter')window.__stoneSource=source;
+           }`);
+          for(const [,js] of h.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(js);
+          if(process.env.ORVAS_STONE_PARSE_ONLY){console.log('Exact giant-hurtbox browser fixture parses');process.exit(0)}
           const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
-          const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(req.url==='/seed'?'<title>temporary QA</title>':html)});
-          await new Promise((y,n)=>server.listen(0,'127.0.0.1',y).once('error',n));
-          const origin='http://127.0.0.1:'+server.address().port;let browser;
+          const srv=createServer((q,r)=>{r.setHeader('Content-Type','text/html; charset=utf-8');r.end(q.url==='/seed'?'<title>Seed</title>':h)});
+          await new Promise(r=>srv.listen(0,'127.0.0.1',r));
+          const root='http://127.0.0.1:'+srv.address().port;let browser;
           try{
-           browser=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
-           const page=await(await browser.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.75})).newPage();
-           const errors=[];page.on('pageerror',e=>errors.push(e.message));
-           await page.goto(origin+'/seed');
-           await page.evaluate(()=>{
-            const slots=Array(27).fill(null);slots[0]={type:'equipWoodSword',count:1,durability:90};slots[4]={type:'fireWand',count:1,charges:1};slots[6]={type:'fireWand',count:1,charges:2};
-            localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weaponDurabilityVersion:2,weapon:'equipWoodSword',potions:0,gold:0,slots}));
-            localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,position:{x:24,z:91,y:0,facing:0},
-             townLayout:5,townMapHeight:128,view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.35,orbitDistance:5.5}}));
-           });
-           await page.goto(origin+'/?resume=1&test=1',{waitUntil:'domcontentloaded'});
-           await page.locator('#pineStartupCover').waitFor({state:'hidden'});
-           await page.waitForFunction(()=>window.__editorTest?.wandUiQA);
-           const view=()=>page.evaluate(()=>window.__editorTest.wandUiQA.view());
-           const button=i=>page.locator('#poiHotbar [data-hotbar-slot="'+i+'"]');
-           const selected=async(slot)=>assert.deepEqual(await page.locator('#poiHotbar [aria-pressed="true"]').evaluateAll(xs=>xs.map(x=>x.dataset.hotbarSlot)),slot===null?[]:[String(slot)]);
-           await selected(0);assert.equal((await view()).held,'equipWoodSword');
-           await button(4).tap();await selected(4);let q=await view();
-           assert(q.mesh>0);assert.equal(q.armed,4);assert.equal(q.held,'fireWand');assert.equal(q.weapon,'equipWoodSword');
-           await button(6).tap();await selected(6);q=await view();assert.equal(q.armed,6);assert.equal(q.held,'fireWand');
-           assert((await page.evaluate(()=>window.__editorTest.wandUiQA.move(6,{zone:'hotbar',index:5}))).ok);
-           await selected(5);q=await view();assert.equal(q.armed,5);assert.equal(q.charges[5],2);assert.equal(q.charges[4],1);
-           assert((await page.evaluate(()=>window.__editorTest.wandUiQA.move(5,{zone:'bag',index:0}))).ok);
-           await selected(null);q=await view();assert.equal(q.armed,9);assert.equal(q.held,'fireWand');
-           await button(4).tap();await selected(4);
-           const events=()=>page.evaluate(()=>window.__editorTest.wandUiQA.audio());
-           assert.equal((await events()).events.length,0);
-           await page.locator('#poiWalkAction').tap();await selected(0);
-           await page.waitForFunction(()=>window.__editorTest.wandUiQA.audio().events.length===1);
-           const audio=await events(),e=audio.events[0];assert.equal(audio.state,'running');
-           assert.deepEqual([e.rate,e.length,e.channels,e.loop,e.cap,e.volume],[24000,4128,1,false,null,.52]);
-           assert(Math.abs(e.duration-.172)<1e-6&&e.peak<=.461);
-           await page.waitForFunction(()=>!window.__editorTest.wandUiQA.audio().isLive);
-           assert.equal((await events()).events.length,1);
-           q=await view();assert.equal(q.armed,null);assert.equal(q.charges[4],null);assert.equal(q.charges[9],2);
-           await page.waitForFunction(()=>window.__editorTest.wandUiQA.view().held==='equipWoodSword');
-           await button(0).tap();await selected(0);
-           assert.deepEqual(errors,[]);
-           console.log('Native Fire Wand physical cast, one real 172-ms no-loop audio buffer, ended source cleanup and exactly one charge.');
-          }finally{await browser?.close();await new Promise(y=>server.close(y))}
+           browser=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
+           {
+            const ctx=await browser.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.65});
+            const p=await ctx.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));p.setDefaultTimeout(20000);
+            await p.clock.install({time:new Date('2026-04-01T10:00:00Z')});
+            await p.goto(root+'/seed');await p.evaluate(()=>{const slots=Array(27).fill(null);slots[0]={type:'kitchenKnife',count:1,durability:40};slots[1]={type:'equipWoodSword',count:1};
+             localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weaponDurabilityVersion:2,weapon:'kitchenKnife',potions:0,slots}));
+             localStorage.setItem('world-workshop-resume-v1',JSON.stringify({
+             version:1,route:'facility',id:'base',play:true,position:{x:24,z:102,y:0,facing:2},townLayout:5,townMapHeight:128,
+             view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.24,orbitDistance:5.5}
+            }));});
+            await p.goto(root+'/?resume=1&test=1',{waitUntil:'domcontentloaded'});await p.locator('#pineStartupCover').waitFor({state:'hidden'});
+            await p.clock.pauseAt(await p.evaluate(()=>Date.now()+150));
+            await p.evaluate(()=>{window.__finishManual=true});
+
+
+            const qa=()=>p.evaluate(()=>window.__finish.state());
+            const frame=async(ms=40)=>{await p.clock.fastForward(ms);await p.evaluate(()=>window.__finish.frame());};
+            const until=async(check,limit=95)=>{let q=await qa();for(let i=0;i<limit&&!check(q);i++){await frame();q=await qa()}assert(check(q),JSON.stringify(q));return q};
+            await until(s=>s.ready);
+            assert(await p.evaluate(()=>window.__finish.place()));
+            await frame(20);
+            const before=await qa();
+            assert.equal(before.weapon,'kitchenKnife');
+            assert(Math.hypot(before.a.x-before.p.x,before.a.z-before.p.z)>1.35,JSON.stringify(before));
+
+            const tap=async()=>{
+             const button=await p.locator('#poiWalkAction').boundingBox();assert(button);
+             await p.touchscreen.tap(button.x+button.width/2,button.y+button.height/2);
+            };
+            await tap();
+            const nick=await until(s=>s.action>before.action&&!s.pending,15);
+            assert(nick.hp<before.hp&&nick.hp>0,JSON.stringify({before,nick}));
+            assert.deepEqual(nick.voice.map(q=>q.clip),['davidRockHit']);
+            assert(!nick.fx);
+            await until(s=>s.now>=s.attackReady,20);
+            await p.evaluate(()=>window.__finish.setHP(1));
+            await tap();
+            const killed=await until(s=>s.hp===0&&s.fx,25);
+            assert.deepEqual(killed.voice.map(q=>q.clip),['davidRockHit','orvasStoneShatter']);
+            assert.equal(killed.voice[1].n,15360);assert.equal(killed.voice[1].rate,24000);assert.equal(killed.voice[1].loop,false);
+            assert(killed.voice[1].volume>0&&killed.voice[1].volume<=.73);
+            assert(killed.fx.count>=11&&killed.fx.count<=13&&killed.fx.lift.every(y=>y<=.09)&&killed.fx.floor===0);
+            assert(killed.fx.radius.filter(r=>r>1.35).length>=6);
+            assert(killed.dead!==undefined);
+            const loot=killed.drops.map(r=>r.type);
+            for(const type of ['equipOrvasHead','equipOrvasGreatsword','equipOrvasTwinGreatswords'])assert(loot.includes(type));
+            await until(s=>s.fx?.settled>100,25);
+            await new Promise(r=>setTimeout(r,760));assert(!(await qa()).voiceActive);
+            assert.equal((await qa()).voice.filter(q=>q.clip==='orvasStoneShatter').length,1);
+            assert.deepEqual(errors,[]);
+            console.log('Actual nonlethal→lethal authored Orvas; distinct natural PCM, low scattered settled mesh and durable loot',JSON.stringify({fx:killed.fx,drops:killed.drops,voice:killed.voice}));
+            await ctx.close();
+           }
+          }finally{await browser?.close();await new Promise(r=>srv.close(r))}
           SOURCE
-          base64 -d >.qa/rendered/wandFlameLaunch.pcm <<'PCM'
-          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BAAFAAUABgAGAAcABwAHAAgACAAIAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAgACAAIAAgACAAHAAcABwAHAAYABgAGAAYABgAFAAUABQAFAAUABAAEAAQABAADAAMAAwADAAIAAgACAAIAAQABAAEAAQAAAAAAAAAAAAAA//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          cat >.qa/tests/orvas-stone-death.test.cjs <<'SOURCE'
+          const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),test=require('node:test');
+          const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
+          function pick(a,b){const i=h.indexOf(a),j=h.indexOf(b,i+1);return i>=0&&j>i?h.slice(i,j):''}
+          function shatter(wall=false,type='monsterStoneDavid',actorEffect=null){
+           const orig={x:20.5,z:20.5,y:0};
+           const p={p:[-.3,0,0,.3,.5,0,0,.2,.1],n:Array(9).fill(0),c:Array(9).fill(.5)};
+           const c={facilitySite:{id:'base'},facilityCreekIndex:null,validPos:(x,z)=>x>=0&&z>=0,
+            terrainY:()=>0,poiWalkCanStep:(x,z)=>!wall||x<=20,rot2:(x,z)=>[x,z],
+            poiAimWall:()=> (x,z)=>!wall||x<=20,poiDavidMatch:o=>o.type==='monsterStoneDavid'?{y:0}:null,
+            poiDavidIn:(_b,p)=>(!wall||p.x<20.5)&&p.y===0,poiMonsterPose:()=>orig,poiOrvasShatterFoley:()=>c.foley++,
+            poiMonsterFragmentTemplate:()=>Array.from({length:6},(_,i)=>({part:p,cx:0,cy:.4,cz:0,heading:i,spin:2})),
+            POI_MONSTER_BREAK_LIMIT:5,poiMonsterBreaks:[],poiMonsterMeshDirty:false,
+            mesh:()=>({p:[],n:[],c:[]}),tri:(m,a,b,d,col)=>{m.p.push(...a,...b,...d);m.n.push(...Array(9).fill(0));m.c.push(...col,...col,...col);},foley:0,result:null};
+           const code=pick('const POI_AIM_EPS=', 'function poiAimChooseLock')+
+            pick('// BEGIN ORVAS SHATTER GEOMETRY','// END ORVAS SHATTER GEOMETRY')+pick('function poiMonsterBreak(', 'function poiMonsterClearBreaks(');
+           Object.assign(c,{type,actorEffect});vm.createContext(c);
+           const e=vm.runInContext(code+";poiMonsterBreak({type,x:20,z:20,y:0},{x:20,z:20,facing:0,hp:0},100,()=>.37,actorEffect)",c);
+           return {e,c};
+          }
+          test('only the actual authored Orvas breaks into many small low stones with broad natural spacing',()=>{
+           const {e,c}=shatter();
+           assert(e?.orvasStone);
+           assert(e.parts.length>=11&&e.parts.length<=15);
+           assert(e.parts.every(p=>p.lift<=.09&&p.bounce<=.04&&p.ground===0&&p.centerY<.43));
+           assert(e.parts.filter(p=>Math.hypot(p.dx,p.dz)>1.35).length>=6);
+           assert(new Set(e.parts.map(p=>Math.floor(e.x+p.dx)+','+Math.floor(e.z+p.dz))).size>=8);
+           assert.equal(c.foley,1);
+           const ordinary=shatter(false,'monsterSlime');assert.equal(ordinary.e.parts.length,6);assert.equal(ordinary.c.foley,0);
+           const actor=shatter(false,'monsterStoneDavid',{actor:'companion'});assert.equal(actor.e.parts.length,6);assert.equal(actor.c.foley,0);
+          });
+          test('not pushed through the first real wall or into another area',()=>{
+           const {e,c}=shatter(true);
+           assert(e.parts.length>=6);
+           assert(e.parts.every(p=>e.x+p.dx<20.94));
+           assert.equal(c.foley,1);
+          });
+          test('dedicated embedded heavy impact and irregular small floor contacts are bounded and distinct',()=>{
+           const crypto=require('node:crypto'),m=h.match(/\n orvasStoneShatter:\s*((?:'[A-Za-z0-9+/=]+'\s*(?:\+\s*)?)+)/);
+           assert(m);const pcm=Buffer.from([...m[1].matchAll(/'([^']+)'/g)].map(x=>x[1]).join(''),'base64');
+           assert.equal(pcm.length,30720);
+           assert.equal(crypto.createHash('sha256').update(pcm).digest('hex'),'1baf1fc978221f41547d63133e5162623d0720ff587c997d2daccb9839c376a1');
+           const rms=(x,y)=>Math.sqrt(Array.from({length:y-x},(_,i)=>(pcm.readInt16LE(2*(x+i))/32768)**2).reduce((a,b)=>a+b)/(y-x));
+           assert(rms(100,4500)>.06);
+           for(const i of [4900,7100,9550,12150])assert(rms(i,i+1400)>.002);
+           assert.equal(rms(14500,15360),0);
+          });
+          SOURCE
+          base64 -d >.qa/rendered/orvasStoneShatter.pcm <<'PCM'
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAAAAAAAAAAABAAEAAQABAAIAAgACAAIAAQABAAAA//////7//v/9//3//P/8//z//f/9//3//f/+//7/////////
+          AAAAAP////////////8AAAAAAAABAAIAAgADAAMAAwADAAMAAwADAAMABAAEAAUABQAFAAYABgAHAAcACAAJAAoADAAPABIAFgAaAB4AIgAlACgAKQAqACkAKAAnACQAIgAgAB0AGgAXABQAEQANAAoABQAAAPv/
+          9f/v/+r/5v/i/+D/3v/d/97/4P/j/+b/6f/s/+7/8P/y//T/9f/1//b/9v/1//X/9f/1//T/9P/z//L/8f/w/+//7//v/+//8P/y//T/9v/4//v//f///wEAAgACAAIAAQAAAP///v/8//v/+v/5//j/+P/5//v/
+          /f///wIABAAGAAcABwAGAAUAAwABAP///P/7//r/+f/5//r/+//9/wAAAwAHAAoADgARABQAFQAWABYAFgAVABMAEQAQAA8AEAAQABIAFAAXABoAHQAgACQAJwApACoAKQAmACMAHgAYABIACwAGAAAA/P/5//f/
+          9f/1//T/9P/y//H/7//t/+z/6//s/+7/8f/z//b/+f/7//7/AQACAAMAAwACAAEA/v/7//j/9P/v/+r/5v/j/+H/4P/g/+D/4P/h/+L/4//l/+b/6P/p/+j/5//l/+H/3f/Y/9T/0f/O/8v/yv/K/8z/z//T/9j/
+          3P/g/+T/6P/s/+//8f/y//P/8v/y//D/7//s/+n/5f/g/9v/1v/S/8//zf/N/87/0P/S/9X/2P/b/93/3//g/+D/3v/b/9j/1f/T/9T/1v/b/+L/6//1/wAACwAVAB0AJAAoACoAKgAoACMAGwAQAAMA9f/n/9v/
+          0P/H/8D/vP+6/7r/vP+//8L/xf/H/8f/xf/D/8D/vf+6/7f/tP+w/6z/qP+j/5//nP+e/6//3/9MACABhgKWBFMHrAqFDr4SMxewG+kfgCMFJhQngiZ4JGkh+B3aGn4YwBYqFXcToRGCD7kMxQgfA0X7BPG/5HzX
+          o8p6v8K2p7D7rIarO6xer4q1lb8czrDgRvXTCNwYXSR+K98uJy/nLKQo7CJeHJkVJg9ZCUcEzf+b+1P3nvJI7Uzn2eBB2t7T/c3hyL7EvcH2v3O/OsBVwtfF6Mq30W3aEuV48SH/Ow3PGvwmMzE9OSQ/GENVRRRG
+          gkW/Q+1ANT3TOAs0IS9YKuQl6SF6HqAbWhmnF4kWCBY2FikX8xiVG/weCiOYJ3IsWjENNks63j2dQGxCN0PsQntB1D7oOq41LC9+J+QethVcDDUDg/pm8uLq7eN73YDX99HezDnIBsREwPO8Frqrt7G1KLQRs3Cy
+          SLKdsnaz4rTytry5Wb3dwVnH0M001WLdI+Y271D4IgFeCb4QCxcgHOgfYyKmI9MjFyOpIcIfnB1wG3QZ0xesFgsW6BUuFr0WdBctGMIYDxnxGE4YFBc9FcoSyA9PDH4IegRjAFn8e/ji9KDxxO5V7FXqvOiD55vm
+          +eWR5VvlUOVs5azlEuah5ljnO+hL6Yrq/eul7YLvlPHW80f24fih+4D+eAF8BHkHVwr9DFoPYhENE1gUQhXLFfgV0xVqFc4UERREE3QSoxHMEOUP3A6fDRsMSAonCMEFKAN6ANX9WPsb+TL3rvWZ9P7z4vNG9Cb1
+          evY3+E76rfxB//EBowQ9B6UJxAuDDdIOog/pD6IP0A53DaMLZwnYBg4EHwEd/hr7IvhF9ZXyJPAK7lzsLuuP6ozqLet17GTu8vAO9KT3l/vJ/xYEWQhuDDIQixNkFrMYeBq7G4kc8hwCHcMcOxxvG2AaEhmLF9EV
+          6RPbEasPXQ31CncI7gVmA+sAhv49/BP6CPgd9lH0qPIi8cTvle6Z7dPsQ+zj66/rn+ux6+HrMOyd7Cfty+2G7lbvN/Aj8RfyDfMG9Af1HPZQ97D4RvoV/CH+aQDoApMFWAgiC9MNThByEiMUSxXbFcwVHxXeExgS
+          5A9cDZ0Kxgf3BEsC2/+4/ez7ePpY+YT48PeS92T3YfeI99j3T/js+Kj5evpY+zb8Cv3J/Wn+5f43/1//X/86//n+pf5G/uj9kf1J/Rf9//wH/TL9fP3e/Ur+t/4b/3L/uf/y/xwAOgBRAGwAlwDeAEsB5QGuAqMD
+          vgT0BTcHfQi4CeAK7QvXDJUNJQ6CDq0Opg5sDv4NWw2GDIALTwr0CHYH2AUiBFwCkwDR/iL9kvso+uz45PcV94H2KfYM9ij2ePb29pz3YvhB+TH6Kfse/Af92v2O/h3/g/+9/8r/qv9f/+v+Uv6c/dT8B/xA+4f6
+          2/k9+ab4Evh89+D2OPZ+9av0uPOh8mfxDvCb7hrtlush6szorOfR5lLmP+aq5qDnK+lQ6w3uXPEt9Wr58/2mAloH6AstEAsUaxc+GnkcGB4bH4kfax/OHsAdVhykGsEYxhbFFNES+RBED7oNWwwkCxIKHwlFCH0H
+          wAYIBlEFmQTgAygDcQK9ARABbADV/03/1v5w/hz+2v2u/Zv9ov3C/fr9Q/6Z/vP+S/+X/9T///8UABMA+//P/5D/RP/x/pz+S/4C/sX9l/14/WT9WP1P/Ub9N/0a/er8oPw6/Lb7FPtX+oT5n/is97H2tfXC9OTz
+          I/OH8hXyzvGy8b/x9PFN8sryafMr9BH1F/Y+94P45flf++/8jv41AOABhgMhBaoGFwheCXYKVwv7C14MfgxaDPULUwt7CnQJSggKB8EFfgRPA0ECXAGqAC4A6f/X/+3/IABlAKwA6gAUASMBEgHhAJAAIwCg/w7/
+          d/7l/WH99fyo/ID8f/yk/Ov8Uf3S/Wv+F//S/5YAXAEfAtgChgMlBLcEOQWrBQ8GZAatBuoGHQdFB2IHcgd0B2gHTwcmB+wGoAY/BskFPgWfBO4DLwNkApEBuADg/w3/Qf6B/dH8Nfyx+0b79fq8+pj6iPqI+pb6
+          r/rP+vT6G/tE+237lvvB++37HPxO/IP8uvzw/CP9Uv16/Zv9sv2+/b/9s/2c/Xf9Rv0H/bv8YvwA/Jj7L/vL+m/6H/re+a35jvmB+YX5mPm8+e/5MPp8+s76I/t4+8n7Ffxb/Jr80/wF/TL9XP2H/bX96f0m/m7+
+          wv4k/5L/CACEAP4AcAHXASwCbAKSApsChQJSAgUCowEyAbwARwDc/3//N/8H//L++/4g/2L/vf8rAKQAIgGcAQwCbAK4Au8CEAMfAxwDDgP4AuICzgLCAr4CxQLZAvgCIQNPA38DrAPSA+4D/QP/A/ED1AOoA2wD
+          JQPUAn8CKgLbAZYBXwE5ASQBIAEqAUEBYAGGAa0B1AH3ARYCLwJDAk8CVAJTAkwCQAIvAhgC+AHOAZsBXwEaAc4AewAlAM//ev8o/9v+k/5S/hj+6P3B/aL9jP1//Xr9fv2N/aX9xf3q/RL+Of5e/n7+l/6m/qn+
+          ov6P/nT+Uf4r/gL+2f20/Zb9gP11/Xf9hf2f/cP98P0i/lf+jP6//vH+IP9P/3r/pP/L//L/GQBDAG4AmgDDAOcABQEbASkBLQEnARgBAAHiAL0AlABrAEcAKAARAAMA//8FABYAMQBVAIIAtQDsACUBXAGRAcEB
+          6wEQAiwCPgJHAkQCNgIeAgAC3gG8AZ0BgwFuAV4BVAFQAVMBWwFpAXwBkwGuAc8B9AEdAkgCdQKhAskC6wIGAxgDIQMiAxgDBAPlArsChgJLAgoCxQF/ATgB9AC0AHsASgAjAAcA9v/x//j/DAAsAFUAhAC1AOQA
+          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
+          9f/z//b//f8AAP///f/+/wUACgAJAAEA+f/5//z///8DAAgADwAUABQADwAKAAcABgAGAAcACAAGAAQAAwACAAEAAAD8//j/9f/z//L/8v/0//r///8CAAQABQAGAAIA/v/+///////+//7/AQAGAAkADAAPABEA
+          DgAJAAUAAQD9//n/9//0//L/8f/x//P/9f/4//v/+//7//7/AwAHAAUAAAD7//b/9P/0//f/+////wAAAQACAAMAAwADAAEA///+//3//f///wQACQAMAAwADQAOAA4ACgAEAAAAAAAAAP7//P/9/wAAAwAFAAUA
+          BQAEAAQAAwAAAPz/+//7//3///8AAAIABgAKAAwACgAIAAYABgAEAAAA/P/7//r/+f/2//P/8v/x//H/8P/v//D/8P/y//f//P/+//7//v8AAAQABgAIAAkADAAPABAAEAAPAA4ADAALAAoACAAEAP7/+v/5//v/
+          /P/8//v//f///wAAAAAAAAAAAAAAAP7//f/9//z//P/8//7/AAACAAIAAQD///7//P/7//r/+v/6//z//v8AAAAAAAAAAAAAAQADAAcACQAJAAgABgADAAEA///+//3//P/8//3//v///wEAAwAEAAMAAgAAAP//
+          /f/8//v/+//8//7/AAABAAMABQAHAAcABwAFAAIA///8//n/+f/6//v//P/9////AQACAAMAAwADAAIAAgACAAIAAQABAAIAAwAEAAQABAAEAAMAAwABAP///f/6//n/+P/4//n//P///wIAAwAFAAUABQAEAAMA
+          AgAAAP///v/+//3//f/9//z//f/+////AAAAAAAA//////////8AAP//AAAAAAAAAAD+//3//f/+//7///8BAAIAAwADAAMAAwADAAIAAQD+//f/6//j/+b/+P8VADcAWgCBAKwAyQC9AHwAGAC4/37/dP+D/4X/
+          af9H/0f/hv/3/2cAogCKAAsAL/8w/mL9AP0N/V79qP2m/XD9af3Z/bD+uf/jADgCtANBBcQG/AeiCKAIGQgWB2oFHQPSAFr/7v4N/xL/l/6N/TT81PqV+a74Wvil+Fb5MPof+xr8B/3h/cj+1/8JATgCSQM3BPoE
+          iwXmBe4FXgU2BOACtQHCABkAwP9h/3n+7vxc+6v6Q/u0/D3+jP/BAOIBvAIdA+YCFQLPAFH/6v3s/H/8fPyY/Ob83P2y/wYCMQS9BXcGYwaWBTMEkQIyAUoAef9R/vD80fsl+8X6rPr3+ob7EfyZ/Fz9d/6s/5oA
+          OQHUAYcCIgN1A4kDsANABBoFwQXTBSEFkANBAbn+rfyI+z/7jfst/Nr8Vf2Y/fD9pv6g/2kAqQBvAA8A0f/Q/wgAXQC0AAQBOwEiAbwAaABiAKcALgHSATsCJQKhAf4AZgDR/zT/if7X/T390fyi/Mr8T/0P/uP+
+          tf91ABUBhwHFAcQBgAESAaAAOQDp/9X/AQAdAOD/Zf/k/mz+Dv7+/W3+c/8BAekC3QR8BmkHbweKBuwE6QLJAMj+JP0M/Ir7dPuK+537p/u/+/X7TPzM/G39HP7J/mT/8v+JACEBhQGRAWIBMgEcAR0BMQFWAXkB
+          fgFQAfQAdwDy/4j/Uv9H/2j/yf9UAMwAGAFaAbkBLQKOAr0CsAJpAukBJQEjAA3/F/5g/f38/PxZ/fH9j/7z/vr+tv5s/lb+g/7i/mr/DwCtABsBVwGAAZkBkQFtAUoBKgEEAdEAiwAzANf/ev8Y/8H+i/57/oz+
+          uf4D/2T/w/8HADIAUwBxAJEAtwDdAO8A3wC0AIEAUAAhAO7/uP+a/6r/3P8QADMASQBjAHgAcgBYAEIAOgBDAFwAgQChAKUAeAAeALH/R//z/tf+/v5Q/6b/8/8xAE4AOAD7/73/ov+z/+P/FwA7AEUAMAD//8j/
+          nP9+/3H/gP+1//7/NwBJAD0AKQAdABwAHQAaAAgA3/+x/5j/nv+5/9T/5//8/xgAOQBhAH4AfQBhADkAEwD//wIAEwAsAEsAZQBsAF0ARQA5ADsAPQA+ADgAGQDl/7T/lP+G/4j/oP/F/+X///8SABgADQD8/+v/
+          1/+7/6r/uv/e//f//v8DABEAJwA/AEcANAAQAO3/0f+y/5n/lP+g/7b/1v/9/ycAUABkAFIAHADj/8b/zf/1/zMAZABqAEUADgDm/9v/3f/h/+P/6v8CACkARwBMADoAKQAiABEA9P/f/9P/y//L/8//1f/r/xEA
+          LgA2ACwAHgAWAA0A/f/t/+3//P8ZADwAUQBAAAMAsP91/3L/m//R/wgANwBLADkACgDW/7L/qf+y/8v/9/8nAD8APAArAA0A4v+4/63/y////zIAVgBsAHYAcABPABoA8P/p/wAAGgAfAAkA2/+u/5v/rf/S//P/
+          AwABAPL/4v/e/+j/+v8LABQAEAAIAAwAHwAuADAALQAuACwAHQD//97/yv/N/+j/CgAeACQAHQAIAOT/w/+//9n/+P8DAPn/7P/j/9b/xf/C/9r/BAAnAEQAWwBgAEoAIgD9/+3/+P8RACsAPwBIAEIAJgDz/8D/
+          rv/D/+r/DwArADoANgAhAAgA9//x/+v/4f/T/8T/u//E/+D//P8HAPv/3v/D/7r/z////zEAUABXAEkALQAPAPj/7v/2/wMACAACAPj/8v/x//D/8P/x//H/7f/i/9b/1//o/wIAGgAmAB4ACQD8/wEADwAaABwA
+          FAAJAP//+//+/wgAEgAPAAMA+v/4//f/+f8CAAgAAwD1/+z/7v/3/wEABQADAP3/9P/u/+3/8f/6/wUADAAPAA4ACQABAPr/9f/2//3/CAAVABoAEwAIAP//9//0//z/CAARABYAGQAZABgAFgAPAAEA8//v//L/
+          8//v/+P/2f/X/9n/4P/w/wgAGQAbABMADQALAAoACQANABQAGgAWAAkA9//p/+P/3v/Y/9z/6//8/wsAGAAgAB8AGQAPAAUAAAD+//n/8P/q/+z/9P/+/wgACwAEAPr/8//w/+7/7v/z//z/BgAPABIAEAANAAwA
+          EwAhADAAMwAiAAIA4//Q/8v/zv/Y/+z/AgANAAYA9//v//P/AQARACAAOABxANQAWAHjAUACJwJkAfP/9f2v+3v5tfe69tr2WPhy+x4A0wWGC9wPyREBEdEN1AjiAvb8+fec9DTzwPPs9SP5q/zg/1QC2QN3BFAE
+          mAOEAkAB7/+0/q397fx8/Fz8i/wA/bH9kv6U/58AkgFGAqMCqAJkAugBUAG+AE4ACQD0/xcAbwDrAHAB5wE0AkACCAKcARMBfADc/0P/wf5m/jL+IP4r/lP+kf7U/hL/R/9w/5T/vP/l/wYAHQAuAEQAZgCZANIA
+          AgETAfsAuQBVANr/YP8A/8j+vf7e/h//cv/E/wUAKwA0ACcAEQD9//T/+/8RADYAZwCaAMcA5gDwAOIAuwB7ACsA2/+b/3X/a/97/6L/2f8RAD4AWgBkAF4ATAAwAA4A6//O/7z/uv/G/9z/9v8OACEAKwAlABIA
+          +f/i/83/v/+5/7r/wf/O/+L//f8YACwANAAyACkAFQD3/9P/sf+W/4f/hf+S/6j/wf/Z/+7///8KAA8ACwABAPf/9/8FAB0AOQBXAHMAiACRAJAAiQB7AGgAUQA7ACkAGQAJAPj/5v/U/8j/xv/M/9f/5v/1//3/
+          +//v/93/yv+6/6//qf+l/6L/pv+x/8D/0P/k//r/DgAbACIAJQAmACcALAAzAD0ARgBLAEkAPgArABMA+//q/+b/7P/4/wMABQAAAPn/+P/8/////v/5//f/9f/z//H/8//3//z/AgAKABEAFwAbABwAHQAkADEA
+          OwBBAEMAPwAyAB0AAwDp/9L/vf+s/57/lP+O/47/lv+p/8L/3f/3/xIAKAA0ADcANAAsACAAEwAJAP//9f/q/+L/3f/d/+X/8v8DABQAIQAmACIAFQAGAPr/9P/0//n/AwANABQAGQAhACkALwAvAC8ALwAsACYA
+          HwAZABIACgACAPr/8f/m/9v/1P/T/9n/5f/0////AAD2/+j/3f/X/9P/z//M/87/1//n//j/AgAEAAIA/f/4//n///8HAA0AEQAVABoAHwAiACEAHwAeAB4AIAAhAB8AGwAXABMADgAGAP3/+P/3//3/BQALAA0A
+          CwAIAAAA+P/z//H/7//t/+v/6f/n/+j/7P/z//z/AwAHAAsACwAHAP//+P/0//f//f8EAAgACAAEAP///P/7//v//f/+/wAAAQABAP7/+//2//H/7v/u/+//8//8/wgAFAAdAB4AGwAWABEADwAOAAoABAD6//H/
+          7P/r/+3/8P/0//X/9P/z//P/9f/5/wEADAAXAB8AIQAfABkAEAAFAPz/9f/x/+7/7v/u/+//8P/x//H/8v/z//X/+P/+/wUACQAKAAoACwAMAA4ADwAQAA4ACgADAPn/7v/n/+T/5v/s//X//f8DAAkAEAAWABoA
+          GwAaABcAEQALAAgABgADAP///P/7//r/+f/5//n/+f/5//r//f8CAAgACgAHAAEA+v/0//H/8f/z//f/+f/7//3/AQAGAAkACgAKAAgABgADAAEA/v/6//j/+P/5//r//P/8//r/+P/1//X/9v/4//n/+/8AAAUA
+          CQALAAwADQANAA0ADQAMAAoABQD///z/+//8//z//f8AAAUACgANAAsABwABAPv/+P/4//r//v8BAAMABAAFAAUAAwAAAP////////7/+v/2//T/9P/2//r///8DAAMAAAD6//X/8//0//f//P8CAAgADAAOAA8A
+          EAAQAA0ACAADAP///P/7//3///8AAP7/+v/2//T/9v/4//r/+//9/wAABQAJAAoACAAEAAAA/v///wIABQAHAAYABQABAP3/+v/6//v//P/8//n/9f/z//T/+P/9/wQACgANAAwACgAHAAMAAAD+//z//P/8//z/
+          /v8BAAMABAAFAAcACQAJAAcABAABAP7/+//5//j/+P/4//j/+f/8/wAABQAKAA4AEAARAA0ABwD///n/9P/y//L/9f/5//z/AAADAAcACgALAAoABwAFAAEA/f/7//v//f8AAAMABAAFAAUAAwAAAPz/+f/2//X/
+          9f/2//n//P///wEAAgACAAEA/v/9//3///8BAAMABAAEAAQABAAEAAQABAACAAAA/f/8//v/+//7//z//v8AAAIAAwAEAAMAAQD+//z/+v/6//r/+//+/wMABgAKAAwADgANAAkABAD///v/+v/6//v//v///wAA
+          AAD/////AAABAAQACAAKAAkABQD///n/9P/z//X/+P/8////AgADAAIAAQAAAAAAAAABAAEAAgACAAIAAQABAAEAAgADAAMAAgAAAP7/+//6//n//P8AAAYACwAOAA0ACgAFAAAA+//3//b/9//5//r//P/9//3/
+          /v8AAAIABAAFAAUABAACAAAA/v/9//3//v///wAAAAD///7//f/9////AAACAAQABQAFAAUABAADAAIA///9//z//P/9//3//f/+//7//f/+////AQACAAMABAADAAEA///9//z//f/+/wAAAgADAAMAAwADAAIA
+          AQAAAP7//v/+/wAAAgADAAIAAQAAAP////8AAAIAAwAEAAIAAAD+//z/+//7//z//v8AAAEAAAD///////8AAAEAAgACAAEAAAD//////////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAA
+          AAAAAAEAAgACAAEAAQAAAAAAAAAAAAAAAQABAAEAAAAAAP///v/9//3//f/9//7///8AAAAAAQACAAMABAAEAAUABAADAAEAAAD///7//v/+//7//v/+//7//v/+////AAAAAAEAAQABAAEAAQABAAAAAAAAAAEA
+          AQAAAAAA///+//7//v/+////AAABAAIAAgADAAIAAgABAAAAAAD//////////////////wAAAAABAAEAAQABAAEAAAAAAP////////////////////8AAAEAAQABAAEAAAAAAP//////////AAAAAAAAAAAAAAEA
+          AQABAAEAAQABAAAAAAD///////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////8AAAAAAAAAAAAAAAD///////8AAAAAAQABAAEAAAAAAP//////////AAAAAAEAAQABAAEAAAAAAAAAAAAAAP//
+          ////////AAAAAAAAAAAAAAAAAAAAAAAAAAABAAEAAQABAAEAAAAAAP//////////AAAAAAEAAQABAAAAAAD/////////////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAEAAQABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQABAAEAAAAAAAAAAAD/////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAEAAQABAAIAAgAEAAUABQAEAAAA+f/y/+v/5//o/+7/9/8BAAkADgASABUAGAAZABgAEQAGAPr/
+          8P/o/+P/4//m/+v/8v/6/wUAFgAsAEAASwBJAD8AMAAdAAMA3v+v/33/Vv9D/0v/bP+h/9//GgBFAF4AbAB7AI4AoACpAKUAlgCCAG0AVQA2ABEA5//A/57/hv98/4z/uv8BAE4AjgCxALEAkQBZABAAuf9a//n+
+          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
+          //8HAA4AEwAWABYAFQAQAAoAAwD7//X/8P/t/+3/8P/z//f/+//+/wAAAwAFAAYABgAGAAYABAADAAIAAgACAAIAAQABAAAA/////////////wAAAQABAAIAAgACAAIAAgABAAEAAAAAAP//////////////////
+          /////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAA//////////8AAAAAAAAAAAAAAAAAAAAAAAABAAEAAQACAAEAAQABAAAAAAD/////////////////////AAAAAAEAAQAAAAAA/////wAAAAABAAEAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAQABAAIAAgABAAAAAAAAAAEAAQABAAEAAAAAAP////////////////////8AAP/////+//////8AAAAAAAAAAAAAAAAAAP///////wAAAAABAAEAAgACAAIAAQAAAAAAAAAAAAAAAAD//wAA
+          AAAAAP//////////AAABAAIAAgADAAMAAgACAAIAAgACAAIAAQAAAP///v/9//7//v///wAAAAD///7//f/+/wAAAQACAAIAAQABAAEAAQABAAAA/v/9//7/AAABAP///v/+////AQACAAIAAAD+//7/AAACAAIA
+          AQABAAIAAgABAAEAAgABAP///v/+/////f/6//n/+v/8//3///8BAAMABQAGAAUAAwACAAMABAADAAMABQAJAA0AEwAaACIAKwAvACsAIAAZAC4AcQDGAOsAygBUACX/Mf0j+xj6+vqs/UUBhQQyBv4FqwRGA2oC
+          9AFSASIAm/5k/eb83fzK/Iz8VPxQ/Jr8QP0J/or+rf73/gwAKwIOBfQHygmwCYcHCQRoALn9fPx3/A/9wv1p/hn/2f9mAGUAwf/H/vH9i/2S/dD9Ef43/kX+X/6N/qH+c/4h/gn+ev5o/4sAxAEWA10ESQWfBVMF
+          cgQgA5gBDwCn/nn9qvxg/LL8iP2t/uX/9ACdAb0BWAGQAJL/kP6t/Qj9yPz+/JT9Zf5U/1sAZgFJAuYCSAOGA6kDoQNGA3wCWgEVAOr+FP60/cX9J/6v/jb/mf/B/5v/Jf9+/ub9kf2j/Sf+Cv8TAAMBugE0AnAC
+          ZwIZAp8BMQEAAQ0BNgFGAREBkgDk/xz/U/6q/Tn9Af34/BX9Vf25/T7+2/6C/zMA+ADTAawCUAOSA2MDzQLjAdgA+/+K/4r/w//1//n/sv8J/w3+C/1x/IH8Qv2i/pgA6gLlBMcFVQXlAwECHQCT/pX9K/09/aT9
+          PP7g/nT/BwCnADIBbQEgAS8AwP5E/UL8Dfyp/Nz9Vv/PAAwC6QJVA1UDAwOAAvUBggEhAasAAgAz/2T+yP2A/YD9rP38/Xb+GP/O/30AFAGJAdYB9wHqAbABSQHDAD8A3f+u/6z/v//L/8D/ov+F/3j/eP+C/47/
+          j/98/2L/Yv+T/+v/SQCVAL0AtACBAD0A///R/7T/p/+g/5P/eP9i/27/s/8pALMAKgFrAV4BBgF6AOP/Zf8W//3+D/81/13/h/+1/+X/EQA+AHEAngC2AKkAdAAiAM//k/+B/5X/vP/g/+7/3P+2/5T/i/+p/+n/
+          NQB6AKoAwwDNANAA0ADEAKQAagAZAL//bf8s//7+9f4b/2T/vf8YAGkAoQCvAJMAXgAqAAoAAgAKABYAFwAIAOr/yP+q/5f/k/+d/7H/yP/i//v/CwAOAAMA7v/W/8L/v//T//z/LABUAGYAWwA+ACQAGgAjADoA
+          VABiAFgAOQAUAPj/7P/t//P/7//h/8v/tv+p/6r/uP/M/9//7//7/wIACAALAAgA///3//D/6f/i/+L/6P/z/wAADgAdAC4AQgBSAFcATQAzAA0A5P/G/73/x//b//L/AQAGAAUAAQD+/wAACwAeADAAPQBCAEIA
+          PAA0ACgAGQAHAPL/2v/B/6v/n/+i/7T/zf/o//7/DgAWABcAGAAaABoAFAAKAAIA/P/5//b/8v/x//T//f8HAA0ACwADAPb/6P/h/+r/AAAcADQAQQA/AC4AEwD6/+r/5P/l/+v/8//6//3//P/5//b/8//z//P/
+          8f/x//L/8f/u/+z/6v/r//H/+/8HABAAGwAnADIAOgA7ADQAJQAQAPn/5f/Y/9L/0f/V/9f/1//V/9X/2v/i/+r/7//0//f/9//2//j/+/8CAAwAHAAzAFAAbwCHAI8AhABsAFAAOQAuACsAKQAjABYABADw/97/
+          0P/G/7z/sP+h/5L/hf9+/3//hv+P/5n/pf+3/8z/4v/3/w4AIgAzAD4ARgBLAEoARAA6AC0AIgAeAB8AHwAbABEABADz/+T/4P/o//z/FAArADwARgBGADwAKQASAPr/5f/Y/9f/3P/l/+//9//7//3/+//2/+//
+          6//s//L/+f8BAAoAEAAQAAsAAADw/+D/0//L/8r/0v/i//f/DAAfADAAPABBAD8AOgAvACIAFwANAAAA7//f/9X/1P/d/+//AwATABkAEgADAPH/5f/i/+X/6//u/+z/5v/f/93/5P/y/wMAEQAWAA8AAQDy/+r/
+          7f/5/wsAHAAoACsAKAAhABgADgAIAAYACwATAB0AJQAoACYAHwAXAA8ACAAAAPX/6P/Z/8//zP/P/9b/3f/j/+r/8f/5/wMACQAJAAIA+P/v/+r/6v/u//P/9v/3//n/+//9/wAABAAKABEAGAAeACAAHQAZABYA
+          FgAWABYAEgAMAAIA9v/t/+n/7P/3/wcAFwAiACAAEwABAPH/5//m/+z/+P8GABIAFgASAAYA9//n/9z/1P/R/9L/2f/k//H//P8AAP7/+v/3//n/AAAKABcAIgAqACwAKgAmACAAGwAYABgAGgAaABcADwAEAPn/
+          7//p/+j/6//w//T/9v/1//P/8v/x//H/8f/x/+//6v/m/+T/5f/n/+v/8v/6/wIABgAHAAkADAAPABEAEAAMAAcAAwABAAQACgARABUAFgAUABEADwANAAsACAAEAAAA/P/5//n/+v/7//7/AQAEAAgADAAOAA0A
+          CQACAP3/+P/0/+//7P/q/+n/7P/x//f//f8BAAMABAAFAAUABgAFAAIA/v/6//j/+v/+/wIABQAGAAUAAgAAAP7///8BAAEAAQAAAP//AAADAAUABgAEAAIA///8//r/+P/3//X/9P/0//X/+P/7////BAAJAA0A
+          DwANAAgAAQD8//r/+//9////AQADAAUABwAHAAcABwAIAAkADQAPABAADgAIAAIA/f/7//v/+//7//n/9//1//T/9f/5//7/AgAEAAMAAgAAAP7//f/+////AQADAAQAAwD///n/9f/1//b/+f/8/wAAAgAEAAYA
+          BgAEAAAA/f/7//z//v8AAAMABQAGAAMA///9//3/AAAEAAkACwAKAAcABAABAAAAAAABAAEAAAD+//3/+//5//j/+P/4//v///8CAAMAAwACAAEAAAAAAAEAAgAEAAcACQAKAAgABQABAP3/+v/3//b/9v/3//j/
+          +f/7//3/AAADAAUABAABAP3/+v/6//z///8BAAMAAwACAAEAAAD///////8CAAYACAAJAAkABwAEAAEA/v/9//3//v8AAAIAAwADAAMAAQAAAP7//f/8//3///8BAAQABgAHAAYABQACAP///f/7//n/+P/3//X/
+          9f/0//X/9v/5//z//v8AAAEAAwAFAAgACgAMAA0ADQALAAoACAAGAAQAAAD8//r/+v/6//v//P/+////AAD//////v/9//z//P/9////AQACAAIAAQD+//z/+//7//z//v8AAAEAAgADAAMABQAGAAcABwAFAAIA
+          ///9//z//P/9//7/AAACAAIAAgABAP///f/7//v//P///wEABAAGAAcABwAFAAIA/f/6//j/+f/7//7/AQADAAMAAwADAAIAAgABAAEAAgACAAMABAAEAAQAAgAAAPz/+f/3//b/+P/8/wAABAAGAAcABgAEAAIA
+          AAD///3//f/8//z//P/9////AAABAAAAAAD/////AAAAAAEAAAD+//3//f/+/wAAAgAEAAUABAAEAAIAAQAAAAAAAAAAAAEAAgACAAEAAAAAAP/////+//7//v/+//7//v/+/////////wAAAQADAAMAAwABAAAA
+          ////////AAABAAIAAgACAAEAAAAAAP////8AAAAA///+//z//P/9//7/AQADAAUABQAEAAMAAAD///7//f/+////AQABAAEAAAD///7//v/+////AQAEAAUABQADAAEAAAD+//3//f/9//7//////wAAAAABAAEA
+          AQABAAEAAQAAAAAA/////////////////v/9//3//v8AAAIAAwADAAIAAAD+//3//f/+/wAAAwAEAAQAAgAAAP//////////AAABAAEAAQAAAP/////+////AAABAAIAAgABAAAA////////AAABAAEAAQABAAAA
+          //////7//v/9//7//v/+//////8AAAEAAQACAAIAAgACAAEAAAD///7//v8AAAQAEgAtAFMAgACsAMYAtABcALj/5v4i/pH9Rf1Z/eX96P46AJ0BzwKcA+IDlwPHApsBVQA4/3j+J/42/oL+5v5H/5T/xv/e/9//
+          0//H/8j/2//3/w8AFgAIAOv/zP+1/6v/sv/I/+r/FAA/AGYAggCMAIQAcwBfAEgALgAUAPz/5f/V/9T/4f/2/w8AKAA3ADQAHQD5/9f/wv+9/8P/0P/h//P/BAALAAYA8v/Z/8P/vP/G/97//v8bAC8AOQA6ADIA
+          IwAPAPr/7P/p//H/AQASACIALgA2ADcAMwArAB0ACgDy/9j/xP+5/7b/vf/L/9z/7v/+/wwAGQAjACkAKAAgABAA/f/q/9v/0f/Q/9f/5v/6/xAAJQAzADkANAAnABQAAQDx/+f/4f/h/+X/7f/3/wEACQAOAA8A
+          DgALAAcAAgD6//L/6v/m/+f/8P/9/w0AGwAlACkAJAAYAAkA+//y/+7/8f/5/wQADQARABEACwADAPn/8f/t/+v/6//s/+//8//2//f/9v/2//f/+v/+/wMACQAPABMAFAASAA0ACAACAP7/+//7//v//P/9//7/
+          //8AAAIAAwAEAAQAAwACAAEAAAD///7//v/+/wAAAwAFAAcABwAHAAUAAgD9//j/9P/y//L/9P/4//3/AgAHAAoACwAKAAgABQACAAAA/v/9//3//P/8//3///8BAAIAAwACAAIAAgACAAEAAQAAAP///f/8//v/
+          +//7//v//P/9////AQADAAUABQAFAAUABQAEAAMAAQAAAAAA///////////+//7//v/+////AAABAAIAAgACAAIAAQAAAP///v/9//3//f/+/wAAAQACAAIAAgABAAEAAQAAAP/////+//7//v/+//////8AAAEA
+          AgACAAIAAgABAAEAAQAAAAAAAAAAAAAAAQABAAEAAAAAAP///v/+//7//v/+////AAAAAAEAAgACAAIAAgACAAEAAAAAAP///v/+//7//////wAAAQABAAIAAgABAAEAAAAAAP/////+/////////wAAAAAAAAAA
+          AQABAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
           PCM
           python .qa/build.py world-editor.html .qa/world-editor.html
-          test "$(git hash-object .qa/world-editor.html)" = 58981ed357f7a05d6f14e28c25442f5d449cbda5
-      - name: Run scoped units
+          test "$(git hash-object .qa/world-editor.html)" = a7112424d5fd274fa24743b95ccc78f999e5b516
+      - name: Exact floor scatter tests and retained stone attacks
         working-directory: .qa
-        run: node --test tests/*.cjs
+        run: node --test tests/*.cjs ../tests/david-stone-foley.test.cjs
       - run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
-      - name: Touch arm and cast, exactly one real PCM source then cleanup
+      - name: Touch nonlethal and lethal hits, actual audio, shatter and reward
         working-directory: .qa
-        run: node tests/fire-wand-flare-browser.mjs
+        run: node tests/orvas-stone-death-browser.mjs
