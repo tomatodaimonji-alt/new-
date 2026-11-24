@@ -70,7 +70,9 @@ try{
  // Pause only the test clock, not the production actor or motion. Each
  // small time step still calls the original world draw and gameplay loop.
  await p.evaluate(()=>window.__editorTest.wakeQA.manual());
- await p.clock.pauseAt((await p.evaluate(()=>Date.now()))+150);
+ // The manually gated render is already dormant. Give the native host
+ // enough wall-clock headroom to send its pause command after screenshot.
+ await p.clock.pauseAt((await p.evaluate(()=>Date.now()))+3000);
  const advance=async()=>{await p.clock.fastForward(56);await p.evaluate(()=>window.__editorTest.wakeQA.draw());return val()};
  // Trusted input in third person yaw 0: ArrowUp physically enters +z.
  await p.keyboard.press('ArrowUp');

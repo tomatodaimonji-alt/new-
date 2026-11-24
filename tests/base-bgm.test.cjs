@@ -4,7 +4,7 @@ test('live town and non-Game World arrangements start music and use different or
  for(const [f,name] of [[b,'town'],[e,'indoor']]){
   a.equal(f.tick(10).active,name);
   a(f.voices.some(n=>n.instrument&&n.at>=10&&n.at<10.5));
-  a(f.deck(name).bus.to.includes(f.mixer));
+  a(f.deck(name).output.to.includes(f.mixer));
  }
  a.notEqual(b.deck('town').score.duration,e.deck('indoor').score.duration);
 });
@@ -22,3 +22,4 @@ test('town music develops over a complete repeat, stays bounded, and clears and 
  f.f.document.hidden=false;f.ctx.state='running';f.tick(200);
  a(f.voices.length>count);a(f.voices[count].at>=200);
 });
+

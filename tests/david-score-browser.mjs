@@ -44,7 +44,7 @@ try{
  await p.evaluate(()=>{
   localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weapon:'equipWoodSword',potions:3,gold:0}));
   localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
-   position:{x:24,z:91,y:0,facing:2},townLayout:5,townMapHeight:128,
+   position:{x:24,z:87,y:0,facing:2},townLayout:5,townMapHeight:128,
    view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.35,orbitDistance:5.5}}));
  });
  await p.goto(url+'/?resume=1&test=1',{waitUntil:'domcontentloaded'});
@@ -59,9 +59,11 @@ try{
   await p.keyboard.press(key);
   await wait(z=>{const s=window.__editorTest.templeScoreQA();return s.pos[0]===24&&s.pos[1]===z&&s.now>=s.pending},z);
  }
- trace='existing field';let s=await audio('outside');assert.deepEqual(s.pos,[24,91,0]);assert(!s.battle);
- trace='physical entrance and calm';for(const z of [92,93,94])await step(z,'ArrowDown');
- s=await audio('davidStill');assert(!s.battle);
+ trace='existing field';let s=await audio('outside');assert.deepEqual(s.pos,[24,87,0]);assert(!s.battle);
+ trace='physical forecourt before gate';await step(88,'ArrowDown');
+ s=await audio('davidStill');assert.deepEqual(s.pos,[24,88,0]);assert(!s.battle);
+ for(const z of [89,90,91,92,93,94])await step(z,'ArrowDown');
+ s=await state();assert.equal(s.audio.active,'davidStill');assert(!s.battle);
  assert.equal(s.events.filter(e=>e.key==='davidStill').length,1);
  trace='brief boundary retrace then actual wake';
  await step(95,'ArrowDown');await step(96,'ArrowDown');await step(97,'ArrowDown');await step(98,'ArrowDown');
@@ -73,12 +75,14 @@ try{
  assert(s.audio.decks.length<=2);
  trace='real retreat beyond entrance';
  for(const z of [97,96,95,94,93,92,91])await step(z,'ArrowUp');
+ await wait(()=>{const r=window.__editorTest.templeScoreQA();return r.audio.active==='davidStill'&&r.events.filter(e=>e.key==='davidStill').length===2});
+ for(const z of [90,89,88,87])await step(z,'ArrowUp');
  s=await audio('outside');
  await wait(()=>window.__editorTest.templeScoreQA().audio.decks.length===1);
- s=await state();assert(!s.battle);assert.deepEqual(s.pos,[24,91,0]);
+ s=await state();assert(!s.battle);assert.deepEqual(s.pos,[24,87,0]);
  assert(s.stops.includes('davidAwake')&&s.stops.includes('davidStill'));
  assert.equal(s.events.filter(e=>e.key==='davidAwake').length,1);
- assert.equal(s.events.filter(e=>e.key==='davidStill').length,1);
+ assert.equal(s.events.filter(e=>e.key==='davidStill').length,2);
  assert.equal(s.events.filter(e=>e.key==='outside').length,2);
  assert.deepEqual(errors,[]);
  console.log('Native contiguous field → quiet courtyard → actual combat → original field; both original recordings decoded, looped once, phase offset and retired.');
