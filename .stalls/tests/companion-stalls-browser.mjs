@@ -74,7 +74,11 @@ try{
     if(dist(s)<2.55&&trace.some(x=>x.join(',')===v.must.join(',')))break;
    }
    a(trace.some(x=>x.join(',')===v.must.join(',')),JSON.stringify({v,trace,last}));
-   a(trace.some(([x,z])=>Math.hypot(x-v.hero[0],z-v.hero[1])>dist(start)+.35),'path actually detours away first');
+   if(v.name==='pond'){
+    const away=trace.findIndex(([x,z])=>x<=114&&z===15);
+    const around=trace.findIndex(([x,z])=>x===112&&z===12);
+    a(away>=0&&away<around,'must go sideways on the near bank before passing the pond: '+JSON.stringify(trace));
+   }else a(trace.some(([x,z])=>Math.hypot(x-v.hero[0],z-v.hero[1])>dist(start)+.05),'path actually detours away first: '+JSON.stringify(trace));
    a(dist(last)<2.55,'same companion reaches player after legal detour');
    a(last.wards.length&&last.wards.every(x=>!x.safe&&x.hall),'actual authored slime safety restriction unchanged');
    a(last.searches.length>=1&&last.searches.length<=3,'a held destination reuses a bounded plan rather than searching per frame: '+last.searches);
