@@ -102,11 +102,11 @@ test('actual built map marks physical field landmarks as outside while port and 
  assert.equal(zone(105,111,0),'market');
  assert.equal(zone(118,60,-1),'mine');
 });
-test('only scene changes soften the incoming gain; late field decoding has the same soft attack without start delay',()=>{
+test('scene changes soften incoming gain independently of cold startup; late field decoding still fades without start delay',()=>{
  const x=engine();
  const target=bus=>bus.gain.events.filter(e=>e[0]==='target').at(-1);
  x.tick(10,'town');const town=x.run("poiOrchestraDecks.get('town')");
- assert.deepEqual(target(town.bus),['target',1,10,.10]);
+ assert.deepEqual(target(town.bus),['target',1,10,.30]);
  x.tick(10.2,'outside');const outside=x.run("poiOrchestraDecks.get('outside')");
  assert.deepEqual(target(town.bus),['target',0,10.2,.19]);
  assert.deepEqual(target(outside.bus),['target',1,10.2,.38]);
@@ -116,4 +116,11 @@ test('only scene changes soften the incoming gain; late field decoding has the s
  x.tick(11,'mine');const mine=x.run("poiOrchestraDecks.get('mine')");
  assert.deepEqual(target(mine.bus),['target',1,11,.38]);
  assert.deepEqual(target(outside.bus),['target',0,11,.19]);
+});
+test('cold-start outdoor recording delayed beyond the main boot fade still enters gently only once',()=>{
+ const x=engine();x.tick(10,'outside');const deck=x.run("poiOrchestraDecks.get('outside')");
+ assert.deepEqual(deck.bus.gain.events.at(-1),['target',1,10,.30]);assert.equal(x.loops().length,0);
+ x.success();x.tick(10.5);
+ const [sample]=x.loops();assert(sample);assert.deepEqual(sample.to.gain.events.at(-1),['target',1,sample.when,.30]);
+ x.tick(10.64);assert.equal(x.loops().length,1);
 });

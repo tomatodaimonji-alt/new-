@@ -23,7 +23,7 @@ test('ordinary, archer and mage use actual committed occupancy and smooth joined
  assert(m.c.every((v,i)=>i%3===0?v>.7:v<.38));
  for(let i=0;i<m.p.length;i+=3){
   assert(m.p[i]>=4-1e-7&&m.p[i]<=5+1e-7&&m.p[i+2]>=5-1e-7&&m.p[i+2]<=8+1e-7);
-  assert(Math.abs(m.p[i+1]+1.348)<1e-7);
+  assert(Math.abs(m.p[i+1]+1.247)<1e-7);
  }
  assert(m.p.some((v,i)=>i%3===0&&v>4+1e-7&&v<4.19),'corners are rounded');
  assert(m.p.some((v,i)=>i%3===2&&Math.abs(v-6)<1e-7),'joined tiles share their boundary without a gap or outline');

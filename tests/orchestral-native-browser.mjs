@@ -151,7 +151,7 @@ try{
  });
  let observed=await qa();checkMixer(observed.graph);
  assert.equal(observed.saved,volumeRaw);
- assert.equal(observed.graph.decks.town.actions.find(e=>e[0]==='setTargetAtTime'&&e[1]===1)?.[3],.10,'first app music onset did not get slower');
+ assert.equal(observed.graph.decks.town.actions.find(e=>e[0]==='setTargetAtTime'&&e[1]===1)?.[3],.30,'first app music has its verified gentle new onset');
  const stoppedTown=waves(observed.graph).map(e=>e.id);
  const masterId=observed.graph.buses[0].id;
  assert(stoppedTown.length&&waves(observed.graph).every(e=>e.links.includes(masterId)&&!e.links.includes(observed.graph.buses[3].id)));

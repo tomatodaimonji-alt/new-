@@ -30,7 +30,7 @@ test('a diagonal archer cue is one joined lane within committed endpoints, never
  a(m.p.length>=50);
  a(dims.first>=-1e-6&&dims.end>4.4&&dims.end<=Math.hypot(4,2)+1e-6);
  a(dims.width>=.15&&dims.width<=.24,'not the full width of any cell');
- for(let i=0;i<m.p.length;i+=9)a.deepEqual(m.p.slice(i,i+3),[.5,-1.4+.052,.5],'draws one contiguous fan, no isolated tile fill');
+ for(let i=0;i<m.p.length;i+=9)a.deepEqual(m.p.slice(i,i+3),[.5,-1.4+.153,.5],'draws one contiguous fan, no isolated tile fill');
 });
 test('line clips at a live wall and at mage flight shortening, while no visible length is fabricated for zero reach',()=>{
  const e=setup(),k=attack('monsterSkelMage',3,2);k.tiles=e.poiEnemyAttackTrace(0,0,k.x,k.z,()=>true).tiles;

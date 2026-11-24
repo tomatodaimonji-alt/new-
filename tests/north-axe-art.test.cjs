@@ -40,7 +40,7 @@ test('submitted mesh stays on the B1 floor in front of the exact committed origi
  const colors=new Set();
  for(let i=0;i<m.p.length;i+=3){
   const [x,y,z]=m.p.slice(i,i+3);
-  a(Math.abs(y+1.348)<1e-6,'world-space floor, not viewport pixels');
+  a(Math.abs(y+1.247)<1e-6,'world-space floor, not viewport pixels');
   a(z>=13.5-1e-6&&Math.hypot(x-64.5,z-13.5)<=4+1e-6);
   a(m.n[i+1]>=-1e-6,'upward or degenerate triangles face the light');
   colors.add(m.c.slice(i,i+3).join());

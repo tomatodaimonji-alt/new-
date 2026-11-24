@@ -10,7 +10,12 @@ const html=readFileSync(process.argv[2]??'world-editor.html');
 const baseline=process.argv[3]&&readFileSync(process.argv[3]);
 const trigger='  spawn={x:19,z:21};';
 assert.equal(html.toString().split(trigger).length,2,'temporary QA monster anchor');
-const inject=bytes=>bytes.toString().replace(trigger,"  put(20,21,'monsterDragon');\n"+trigger);
+const inject=bytes=>{
+ const source=bytes.toString(),mob='function poiMobFrame(now){';
+ // No unrelated outgoing enemy attacks or damage; the fixture actor
+ // remains in the real monster registry and takes only true player hits.
+ return source.replace(trigger,"  put(20,21,'monsterDragon');\n"+trigger).replace(mob,mob+'return;');
+};
 const combat=inject(html),oldCombat=baseline&&inject(baseline);
 const lethal=combat.replace("put(20,21,'monsterDragon')","put(20,21,'monsterSlime')");
 const lethalGoblin=combat.replace("put(20,21,'monsterDragon')","put(20,21,'monsterGoblin')");
@@ -166,30 +171,37 @@ function observe(){
  window.__comfort={contexts,starts,digests};
 }
 const events=page=>page.evaluate(async()=>{await Promise.all(window.__comfort.digests);return window.__comfort.starts;});
-const lastTarget=n=>n.gain.filter(v=>v[0]==='setTargetAtTime').at(-1)?.[1];
+const lastTarget=n=>n?.gain?.filter(v=>v[0]==='setTargetAtTime').at(-1)?.[1];
 const exact=(a,b,label)=>assert.ok(Math.abs(a-b)<1e-5,label+': expected '+b+', got '+a);
 const peak=n=>n.gain.find(v=>v[0]==='linearRampToValueAtTime')?.[1];
 const decay=n=>n.gain.find(v=>v[0]==='exponentialRampToValueAtTime')?.[2]-n.gain.find(v=>v[0]==='setValueAtTime')?.[2];
 const onset=n=>n.gain.find(v=>v[0]==='linearRampToValueAtTime')?.[2]-n.gain.find(v=>v[0]==='setValueAtTime')?.[2];
 function sfx(records){
+ // Orchestral percussion uses native BufferSources too, but belongs to
+ // BGM, not to the unchanged .90 × 88% SE bus. Expected sound lists still
+ // fail if an actual weapon cue is missing or has been routed elsewhere.
+ const effects=bus=>Math.abs(lastTarget(bus)-.90*.88)<1e-5;
  return records.flatMap(r=>{
   const {shape}=r;
   if(r.pcm){
-   const g=shape.next;exact(lastTarget(g.next),.90*.88,'PCM uses existing SE bus');
-   const pcmKind=r.pcm.frames===approved.wood.frames?'wood-pcm':'defeat-pcm';
+   const g=shape.next;if(!effects(g.next))return [];
+   const pcmKind=r.pcm.frames===approved.wood.frames?'wood-pcm':r.pcm.frames===approved.defeat.frames?'defeat-pcm':r.pcm.frames===4800?'player-hurt-pcm':'unexpected-pcm';
    return [{hz:pcmKind,peak:g.volume,pcm:r.pcm,when:r.when,clock:r.clock,wallClock:r.wallClock}];
   }
   if(r.kind==='source'&&!r.loop&&shape.next?.kind==='filter'){
-   const g=shape.next.next;exact(lastTarget(g.next),.90*.88,'SE bus');return [{hz:shape.next.frequency?.[0]?.[1]??shape.next.hz,low:shape.next.frequency?.[1]?.[1],peak:peak(g),onset:onset(g),decay:decay(g),when:r.when}];
+   const g=shape.next.next;if(!effects(g?.next))return [];
+   return [{hz:shape.next.frequency?.[0]?.[1]??shape.next.hz,low:shape.next.frequency?.[1]?.[1],peak:peak(g),onset:onset(g),decay:decay(g),when:r.when}];
   }
   if(r.kind==='osc'&&shape.frequency.length===2){
-   const g=shape.next;exact(lastTarget(g.next),.90*.88,'SE bus');return [{hz:shape.frequency[0][1],low:shape.frequency[1][1],peak:peak(g),onset:onset(g),decay:decay(g),when:r.when}];
+   const g=shape.next;if(!effects(g?.next))return [];
+   return [{hz:shape.frequency[0][1],low:shape.frequency[1][1],peak:peak(g),onset:onset(g),decay:decay(g),when:r.when}];
   }
   return [];
  });
 }
 
-const swordIcon='#poiHotbar [data-hotbar-slot="1"] canvas[data-item-model="equipWoodSword"]';
+const swordSlot=0,herbSlot=1,unarmedSlot=2;
+const swordIcon='#poiHotbar [data-hotbar-slot="'+swordSlot+'"] canvas[data-item-model="equipWoodSword"]';
 const attack='#poiWalkAction';
 // PCM-data SHA-256 from the owner-approved WAVs (RIFF headers excluded).
 const approved={
@@ -228,20 +240,20 @@ async function verifyIcon(browser){
  const {page,ctx,errors,offline}=await initialize(browser,320,740);
  try{
   await activate(page);
-  const model=await iconModel(page),old=(await slot(page,1).boundingBox());
+  const model=await iconModel(page),old=(await slot(page,swordSlot).boundingBox());
   assert.ok(old&&onSurface(await box(page,swordIcon),old),'the model is fully contained in the 320px slot');
   const original=await page.locator(swordIcon).elementHandle();
-  await slot(page,1).tap();
-  assert.equal(await slot(page,1).getAttribute('aria-pressed'),'true');
+  await slot(page,swordSlot).tap();
+  assert.equal(await slot(page,swordSlot).getAttribute('aria-pressed'),'true');
   assert.equal(await page.locator(swordIcon).evaluate((el,first)=>el===first,original),true,'same cached model canvas when selecting sword');
-  assert.deepEqual(await slot(page,1).boundingBox(),old,'selected rim does not move or resize slot');
+  assert.deepEqual(await slot(page,swordSlot).boundingBox(),old,'selected rim does not move or resize slot');
   assert.equal((await iconModel(page)).uri,model.uri,'selection does not modify rendered geometry or crop');
   await snapshot(page,'320-selected-model');
-  await slot(page,2).tap(); // full HP: leave all slots as-is
-  await page.keyboard.press('1');
-  assert.equal(await slot(page,1).getAttribute('aria-pressed'),'false');
+  await slot(page,herbSlot).tap(); // full HP: leave all slots as-is
+  await page.keyboard.press(String(unarmedSlot+1));
+  assert.equal(await slot(page,swordSlot).getAttribute('aria-pressed'),'false');
   assert.equal(await page.locator(swordIcon).evaluate((el,first)=>el===first,original),true,'same canvas after deselect and potion click');
-  assert.deepEqual(await slot(page,1).boundingBox(),old);
+  assert.deepEqual(await slot(page,swordSlot).boundingBox(),old);
   assert.equal((await iconModel(page)).uri,model.uri);
   await press(page,'#poiWalkToggle',true);
   await activate(page);
@@ -253,10 +265,13 @@ async function verifyIcon(browser){
 function withoutHurt(records){
  // A disposable dragon can independently attack the player; drop its own
  // hurt layers without dropping any expected player swing or impact layer.
- return records.filter(r=>r.hz!==420&&!(r.hz===180&&r.low===52));
+ return records.filter(r=>r.hz!=='player-hurt-pcm'&&r.hz!==420&&!(r.hz===180&&r.low===52));
 }
 async function soundCapture(page,weapon,expectHit,prev=false,expectDeath=false){
- if(weapon)await page.keyboard.press('2');else await page.keyboard.press('1');
+ await page.keyboard.press(String((weapon?swordSlot:unarmedSlot)+1));
+ const before=await state(page);
+ if(before?.inventory&&Object.hasOwn(before.inventory,'weapon'))
+  assert.equal(before.inventory.weapon,weapon?'equipWoodSword':null,'actual keyboard selection before real sound capture');
  const start=(await events(page)).length;
  await page.locator(attack).tap();
  const impactOnly=!prev&&weapon&&expectHit;
@@ -265,9 +280,20 @@ async function soundCapture(page,weapon,expectHit,prev=false,expectDeath=false){
  if(weapon){
   // The real contact decides whether wood uses approved impact PCM or,
   // for an empty swing, its existing air layers. Observe the relevant sound.
-  await page.waitForFunction(({start,frames,expectHit})=>window.__comfort.starts.slice(start).some(r=>
-   expectHit?r.pcm?.frames===frames:r.shape?.frequency?.[0]?.[1]===940||r.shape?.next?.frequency?.[0]?.[1]===940),
-   {start,frames:approved.wood.frames,expectHit});
+  try{
+   await page.waitForFunction(({start,frames,expectHit})=>window.__comfort.starts.slice(start).some(r=>
+    expectHit?r.pcm?.frames===frames:
+     r.kind==='source'&&r.shape?.next?.kind==='filter'&&
+       (r.shape.next.frequency?.[0]?.[1]??r.shape.next.hz)===940),
+    {start,frames:approved.wood.frames,expectHit});
+  }catch(error){
+   const after=await state(page),raw=(await events(page)).slice(start);
+   const sources=raw.map(r=>[r.kind,r.shape?.next?.kind,r.shape?.next?.hz,r.shape?.next?.frequency?.[0]?.[1],r.pcm?.frames]);
+   const at=after?.position||{};
+   const near=after?.combat?.actors?.filter(a=>a.level===at.level&&Math.hypot(a.x-at.x,a.z-at.z)<3);
+   throw new Error('Missing '+(expectHit?'recorded wood contact':'native 940Hz empty-swing air')+
+    ': '+JSON.stringify({pos:at,weapon:after?.inventory?.weapon,actionAt:after?.combat?.actionAt,near,sources:sources.slice(0,28)}),{cause:error});
+  }
  }
  const want=expectHit?[...swing,...hit,...(expectDeath?defeatLayers:[])]:swing;
  const segment=withoutHurt(sfx((await events(page)).slice(start)));
@@ -324,19 +350,21 @@ async function lethalCase(browser,weapon,species='monsterSlime'){
  const {page,ctx,errors,offline}=await initialize(browser,390,844,humanType?'/lethal-goblin':'/lethal',{x:19,z:21});
  try{
   const full=humanType?55:35;
-  const live=async()=> (await state(page)).combat.actors.find(a=>a.type===species);
-  const initial=await live();assert.deepEqual([initial.x,initial.z,initial.hp],[20,21,full]);
+  const where=(await state(page)).position;
+  const live=async()=> (await state(page)).combat.actors.find(a=>a.type===species&&a.level===where.level&&a.x===where.x+1&&a.z===where.z);
+  const initial=await live();assert(initial,'the real authored fixture actor is one tile east of the restored checkpoint');
+  assert.equal(initial.hp,full);
   // Real bare punch warms audio and damages both species without manually
   // changing health. A stronger goblin then takes its first nonlethal wood hit.
   await page.locator(attack).tap();
   await page.waitForFunction(()=>window.__comfort.contexts.some(c=>c.state==='running'));
-  assert.equal((await live())?.hp,full-20);
+  assert.equal((await live())?.hp,full-14);
   await page.waitForTimeout(400);
-  if(humanType){
-   await soundCapture(page,weapon,true);
-   assert.equal((await live())?.hp,7);
-   await page.waitForTimeout(400);
-  }
+  // Keep both lethal effects genuine: the stronger goblin takes the same
+  // 28-point sword hit, while a slime now needs one more 14-point punch.
+  await soundCapture(page,weapon,true);
+  assert.equal((await live())?.hp,humanType?13:7);
+  await page.waitForTimeout(400);
   const kill=await soundCapture(page,weapon,true,false,true);
   assert.ok(!(await live())?.hp,'common defeat sound accompanies actual '+species+' zero HP');
   await page.waitForTimeout(400);

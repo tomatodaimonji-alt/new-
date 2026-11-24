@@ -41,7 +41,7 @@ test('quiet water source fades with proximity and goes away when hidden, above g
   poiAudioContext:{createGain:mk,createBiquadFilter:mk,createBufferSource:mk,currentTime:1},
   poiAudioAmbience:mk()};
  vm.createContext(x);
- vm.runInContext(block('let poiCreekAudio=','function poiAudioStart('),x);
+ vm.runInContext(block('let poiCreekAudio=','function poiAudioMusicArm('),x);
  const read=()=>vm.runInContext('({source:poiCreekAudio?.source,level:poiCreekAudio?.level||0})',x);
  x.poiCreekAudioSync();assert.equal(read().source,undefined);
  x.poiWalkX=4;x.poiCreekAudioSync();const near=read();assert(near.source.started&&near.level>0&&near.level<=.2);

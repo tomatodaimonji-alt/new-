@@ -1540,6 +1540,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
   status='ready';stop();cover.dataset.state=status;
   const app=document.getElementById('app');if(app)app.inert=false;
   cover.hidden=true;
+  window.dispatchEvent(new Event('pineWorkshopReady'));
  };
  const fail=error=>{
   if(status!=='loading')return;
@@ -1579,13 +1580,14 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
   },
   fail,
   get loading(){return status==='loading'},
+  get ready(){return status==='ready'},
   get failed(){return status==='failed'}
  };
  arm();
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v263）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v264）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -7520,7 +7522,12 @@ const POI_ORCHESTRA_INSTRUMENTS={
  harp:{harm:[1,.40,.22,.09,.074,.035,.019],gain:.31,attack:.008,tail:.30,cutoff:4400,plucked:true},
  timpani:{drum:true,gain:.27},snare:{drum:true,gain:.15}
 };
-const POI_ORCHESTRA_LOOKAHEAD=.43,POI_ORCHESTRA_FADE=.93,POI_ORCHESTRA_ENTRY_DECAY=.38;
+const POI_ORCHESTRA_LOOKAHEAD=.43,POI_ORCHESTRA_FADE=.93,POI_ORCHESTRA_ENTRY_DECAY=.38,POI_ORCHESTRA_BOOT_DECAY=.30;
+let poiOrchestraHasOpened=false;
+function poiAudioStartupReady(){
+ const startup=typeof window!=='undefined'?window.pineStartup:null;
+ return !startup||startup.ready===true;
+}
 const poiOrchestraDecks=new Map(),poiOrchestraScoreCache=new Map();
 let poiOrchestraActive=null,poiOrchestraBattleUntil=-Infinity,poiOrchestraRoom=null,poiOrchestraTimbre=null;
 function poiOrchestraCombat(now=poiAudioContext?.currentTime){
@@ -7647,7 +7654,7 @@ function poiMysticFieldTry(deck,now){
  deck.fieldLoop=loop;
  // A late decode can miss the scene's fade. In that case give the recording
  // its own soft entry; a promptly decoded recording still enters through the scene bus.
- const late=deck.entryDecay===POI_ORCHESTRA_ENTRY_DECAY&&now-deck.entryAt>=deck.entryDecay;
+ const late=deck.entryDecay>=POI_ORCHESTRA_BOOT_DECAY&&now-deck.entryAt>=deck.entryDecay;
  gain.gain.setTargetAtTime(POI_MYSTIC_FIELD_GAIN,when,late?deck.entryDecay:.13);
  return true;
 }
@@ -7730,12 +7737,14 @@ function poiOrchestraActivate(scene,now){
   poiOrchestraDecks.set(scene,current);
  }
  current.retire=null;
- current.entryAt=now;current.entryDecay=prior===null?.10:POI_ORCHESTRA_ENTRY_DECAY;
+ current.entryAt=now;
+ current.entryDecay=prior===null?(poiOrchestraHasOpened?.10:POI_ORCHESTRA_BOOT_DECAY):POI_ORCHESTRA_ENTRY_DECAY;
+ poiOrchestraHasOpened=true;
  current.bus.gain.setTargetAtTime(1,now,current.entryDecay);
  poiOrchestraActive=scene;return current;
 }
 function poiOrchestraTick(now){
- if(!poiAudioContext||poiAudioContext.state!=='running'||!poiWalkActive||!poiAudioEnabled||!poiAudioAllowed())return;
+ if(!poiAudioStartupReady()||!poiAudioContext||poiAudioContext.state!=='running'||!poiWalkActive||!poiAudioEnabled||!poiAudioAllowed())return;
  for(const [key,deck] of poiOrchestraDecks)if(deck.retire!==null&&deck.retire<=now)poiOrchestraDrop(key,deck,now);
  const scene=poiOrchestraScene(now),deck=poiOrchestraActivate(scene,now);
  if(scene==='outside'){
@@ -7810,19 +7819,24 @@ function poiCreekAudioSync(){
   },850);
  }
 }
+function poiAudioMusicArm(){
+ // The wrapper can create/unlock AudioContext early, but don't queue
+ // music until the completed cover has actually been removed.
+ if(!poiAudioStartupReady()||!poiWalkActive||!poiAudioEnabled||!poiAudioAllowed()||
+    poiAudioContext?.state!=='running'||poiAudioInterval!==null)return;
+ poiAudioInterval=setInterval(poiAudioMusicPhrase,200);
+ poiAudioMusicPhrase();
+}
+window.addEventListener('pineWorkshopReady',poiAudioMusicArm);
 function poiAudioStart(wake=false){
  if(!poiAudioEnabled||!poiWalkActive||!poiAudioAllowed())return;
  try{
   if(!poiAudioInitialize())return;
   const ctx=poiAudioContext;
-  if(wake||ctx.state!=='running')ctx.resume().catch(()=>{});
+  if(wake||ctx.state!=='running')ctx.resume().then(poiAudioMusicArm,()=>{});
   if(wake)poiAudioApplyLevels();
   poiCreekAudioSync();
-  // Only the scheduled music and positional water are continuous.
-  // Use the timer, not a wind-source count, to guard repeated foreground signals.
-  if(poiAudioInterval!==null)return;
-  // Let checkpoint restoration finish before the first scene is chosen.
-  poiAudioInterval=setInterval(poiAudioMusicPhrase,200);
+  poiAudioMusicArm();
  }catch(e){console.warn('Audio unavailable',e)}
 }
 function poiAudioStop(suspend=false){
@@ -10568,7 +10582,7 @@ function poiHotbarSave(kit=poiHotbarState){
  }catch(_e){return false}
 }
 function poiEquippedWeapon(){return poiHotbarHasKit()?poiHotbarRead().weapon:null}
-function poiPlayerAttackDamage(weapon=poiEquippedWeapon()){const profile=typeof poiPlayerWeaponProfile==='function'?poiPlayerWeaponProfile(weapon):null;return profile?.damage??(POI_PLAYER_ATTACK+(weapon===POI_KNIFE?POI_KNIFE_BONUS:weapon==='equipWoodSword'?POI_HOTBAR_SWORD_BONUS:0))}
+function poiPlayerAttackDamage(weapon=poiEquippedWeapon()){if(weapon==null)return 14;const profile=typeof poiPlayerWeaponProfile==='function'?poiPlayerWeaponProfile(weapon):null;return profile?.damage??(POI_PLAYER_ATTACK+(weapon===POI_KNIFE?POI_KNIFE_BONUS:weapon==='equipWoodSword'?POI_HOTBAR_SWORD_BONUS:0))}
 const POI_ECONOMY_COIN=3,POI_ECONOMY_PRICE=6,POI_ECONOMY_GOLD_MAX=999999;
 const POI_ECONOMY_CACHES=Object.freeze([
  {id:'glade',x:67,z:33},{id:'shrine-path',x:78,z:44},{id:'lookout-path',x:86,z:28}
@@ -16469,7 +16483,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v263',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v264',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -16584,7 +16598,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v263';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v264';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -16799,7 +16813,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v263',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v264',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -21297,7 +21311,7 @@ function poiNorthAxeFootprint(a){
 function poiNorthAxeCueGeometry(a){
  const points=poiNorthAxeFootprint(a),m=mesh();
  if(points.length<2)return m;
- const point=(x,z)=>[x+.5,terrainY(Math.floor(x+.5),Math.floor(z+.5))+a.y*1.4+.052,z+.5];
+ const point=(x,z)=>poiEnemyCuePoint(x,z,a.y);
  const centre=point(a.sx,a.sz);
  const fill=[.91,.19,.14],rim=[1,.33,.26],border=[.87,.23,.19];
  const edge=(p,depth=0)=>point(a.sx+p.dx*Math.max(0,p.d-depth),a.sz+p.dz*Math.max(0,p.d-depth));
@@ -21351,8 +21365,11 @@ function poiEnemyCueTiles(a,s){
   (!a.angular||typeof poiEnemyAngleHitClear!=='function'||poiEnemyAngleHitClear(a,t.x,t.z,s))&&
   (typeof poiDungeonPatrolCanFight!=='function'||poiDungeonPatrolCanFight(a.obj,t.x,t.z)));
 }
+// Broad authored floor/slab and road faces rise up to .13. Lift the
+// warning above those faces, below small chips/props; walls and actors
+// still win the normal depth test. All attack shapes share this plane.
 function poiEnemyCuePoint(x,z,y){
- return [x+.5,terrainY(Math.floor(x+.5),Math.floor(z+.5))+y*1.4+.052,z+.5];
+ return [x+.5,terrainY(Math.floor(x+.5),Math.floor(z+.5))+y*1.4+.153,z+.5];
 }
 function poiEnemyCueRanged(a){
  return a?.obj?.type==='monsterSkelArcher'||a?.obj?.type==='monsterSkelMage';

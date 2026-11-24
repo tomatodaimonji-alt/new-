@@ -48,7 +48,7 @@ test('heal is capped, cannot be wasted at full HP, retains the selected sword an
  assert.equal(slots[1].count.textContent,'2');
  assert.equal(slots[0].attrs['aria-pressed'],'true');
  assert.deepEqual(stored(),{version:1,weapon:'equipWoodSword',potions:2,worn:{head:null,torso:null,legs:null,feet:null}});
- run('poiHotbarUse(2)');assert.equal(run('poiPlayerAttackDamage()'),20);
+ run('poiHotbarUse(2)');assert.equal(run('poiPlayerAttackDamage()'),14);
 });
 test('no kit leakage outside Game World or actions while AI/editor, and malformed state stays safe',()=>{
  const {run,slots,stored}=harness('{"version":1,"weapon":"illegal","potions":99}');
