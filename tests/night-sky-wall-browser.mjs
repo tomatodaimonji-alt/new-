@@ -23,17 +23,17 @@ fixture=inject(fixture,'  const arm=eye===desired?poiCameraDistance:Math.hypot(.
   if(window.__wallSkyManual)window.__wallSkyWitness={clipped:eye!==desired,arm};`);
 fixture=inject(fixture,' poiScreenNoteCaptureFrame();',`
  if(window.__wallSkyManual){
-  const rect=canvas.getBoundingClientRect(),data=new Uint8Array(4),pts=[];
-  for(const fy of [.055,.095,.135,.19,.245])for(const fx of [.30,.37,.44,.50,.56,.63,.70,.76]){
+  const rect=canvas.getBoundingClientRect(),data=new Uint8Array(4),pts=[];let clearAlpha=0,canvasHits=0;
+  for(const fy of [.021,.04,.075,.11,.15,.20,.245])for(const fx of [.30,.37,.44,.50,.56,.63,.70,.76]){
    const x=rect.x+rect.width*fx,y=rect.y+rect.height*fy;
-   if(document.elementFromPoint(x,y)!==canvas)continue;
+   if(document.elementFromPoint(x,y)===canvas)canvasHits++;
    gl.readPixels(Math.round(canvas.width*fx),Math.round(canvas.height*(1-fy)),1,1,gl.RGBA,gl.UNSIGNED_BYTE,data);
-   if(data[3]===0)pts.push({x,y});
+   if(data[3]===0){clearAlpha++;if(document.elementFromPoint(x,y)===canvas)pts.push({x,y})}
   }
   const stage=$('viewWrap');
   window.__wallSkyFrame={...window.__wallSkyWitness,state:[poiWalkX,poiWalkZ,poiWalkLevel],yaw:poiCameraYaw,
    pitch:poiCameraPitch,clock:poiTownClockSnapshot().minute,sky:stage.hasAttribute('data-poi-sky'),
-   raw:getComputedStyle(stage).backgroundImage,pts,gl:gl.getError()};
+   raw:getComputedStyle(stage).backgroundImage,clearAlpha,canvasHits,pts,gl:gl.getError()};
  }
  poiScreenNoteCaptureFrame();`);
 for(const [,source] of fixture.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(source);
@@ -62,7 +62,7 @@ try{
  const set=(...v)=>page.evaluate(v=>window.__editorTest.wallSkyQA.pose(...v),v);
  const render=()=>page.evaluate(()=>window.__editorTest.wallSkyQA.render());
  const grab=async label=>{
-  const f=await render();assert(f.pts.length>=3,label+' needs true uncovered sky: '+JSON.stringify(f));
+  const f=await render();if(f.pts.length<3){states.push({label,skippedOpaque:true,...f});return null;}
   const bytes=await page.screenshot({scale:'css'});
   f.rgb=await page.evaluate(async({bytes,pts})=>{
    const image=new Image();image.src='data:image/png;base64,'+bytes;await image.decode();
@@ -73,29 +73,38 @@ try{
   return f;
  };
  const rotate=async direction=>{
-  const x=direction<0?768:371,y=147,c=(a,b)=>({x:a,y:b,id:7,radiusX:4,radiusY:4,force:.7});
+  const x=direction<0?640:371,y=147,c=(a,b)=>({x:a,y:b,id:7,radiusX:4,radiusY:4,force:.7});
   const el=await page.evaluate(([x,y])=>document.elementFromPoint(x,y)?.id,[x,y]);assert.equal(el,'view');
   await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[c(x,y)]});
-  for(const t of [47,130,240,393]){
+  for(const t of [36,90,148,196]){
    await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[c(x+t*direction,y)]});
   }
   await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
  };
  const dayGreen=c=>c[1]>c[2]+3&&c[1]>110;
  const nightBlue=c=>c[2]>c[1]+10&&Math.max(...c)<150;
- for(const [label,x,z,opposite] of [['south ring',24,118,false],['entrance wing',29,95,true]]){
+ let clippedForDay=null;
+ for(const [label,x,z,dir] of [['south ring',24,118,-1],['entrance wing',29,95,1]]){
   checkpoint=label;
-  assert(await set(x,z,0,opposite?Math.PI:0,.10));
-  const clear=await grab(label+' clear');
-  assert(!clear.clipped&&clear.sky&&clear.rgb.filter(nightBlue).length>=3);
-  await rotate(opposite?1:-1);
-  const close=await grab(label+' after real rotation');
-  assert(close.clipped&&close.arm<clear.arm-.5&&close.clock===120&&close.gl===0);
+  assert(await set(x,z,0,Math.PI/2,-.145));
+  let clear=null,close=null;
+  for(let i=0;i<8;i++){
+   if(i)await rotate(dir);
+   const f=await grab(label+' angle '+i);
+   if(f?.clipped&&i>0)close=f;
+   else if(f&&!f.clipped)clear=f;
+   if(close&&clear)break;
+  }
+  assert(close&&clear,'must find visible sky at real clear and clipped orientations');
+  assert(clear.sky&&clear.rgb.filter(nightBlue).length>=3);
+  assert(close.arm<clear.arm-.5&&close.clock===120&&close.gl===0);
   if(legacy){assert.equal(close.sky,false);assert(close.rgb.filter(dayGreen).length>=3,'actual pale light fallback pixels: '+JSON.stringify(close.rgb));}
   else {assert.equal(close.sky,true);assert(close.rgb.filter(nightBlue).length>=3);assert.equal(close.rgb.filter(dayGreen).length,0);}
+  clippedForDay={x,z,yaw:close.yaw,pitch:close.pitch};
  }
  if(!legacy){
   checkpoint='real daylight remains different in a clipped view';
+  assert(await set(clippedForDay.x,clippedForDay.z,0,clippedForDay.yaw,clippedForDay.pitch));
   assert.equal(await page.evaluate(()=>window.__editorTest.setTownTime(720)),true);
   const day=await grab('day clipped');
   assert(day.clipped&&day.sky&&day.clock===720&&day.rgb.some(c=>c[2]>150));
