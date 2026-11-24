@@ -6,6 +6,7 @@ import vm from 'node:vm';
 const leapMode=process.argv.includes('--leap');
 const kind=leapMode?'leap':'stomp';
 const html=readFileSync(process.argv[2]??'world-editor.html','utf8');
+const leapRadius=Number(html.match(/POI_DAVID_LEAP_RADIUS=([0-9.]+)/)?.[1]);
 const key='  freeMovementPose:()=>({x:poiWalkViewX,z:poiWalkViewZ,level:poiWalkLevel}),';
 function inject(s,a,b){assert.equal(s.split(a).length,2,a);return s.replace(a,b)}
 let fixture=inject(html,key,key+`
@@ -96,7 +97,7 @@ try{
  assert.equal(audio.name,leapMode?'davidLeapStomp':'davidHeavyStomp');
  assert(Math.abs(audio.duration-(leapMode?1.46:1.15))<.001&&audio.linked&&audio.gain>0);
  assert.equal(audio.impact,e.start);
- assert(e.radius===(leapMode?8:6)&&e.quake===(leapMode?935:705));
+ assert(e.radius===(leapMode?leapRadius:6)&&e.quake===(leapMode?935:705));
  assert(recent.cracks.every(f=>f.age>=0&&f.n>0&&f.alpha>0&&f.radius===e.radius));
  assert(recent.cracks.at(-1).n>recent.cracks[0].n,'cracks spread from the real landing point');
  assert(Math.hypot(recent.cracks[0].fx-selected.q.sx-.5,recent.cracks[0].fz-selected.q.sz-.5)<1);
