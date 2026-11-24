@@ -1,15 +1,15 @@
 const fs=require('node:fs'),assert=require('node:assert/strict'),test=require('node:test'),vm=require('node:vm');
 const h=fs.readFileSync(process.env.PRODUCT||'world-editor.html','utf8');
 function cut(a,b){const i=h.indexOf(a),j=h.indexOf(b,i+1);return i>=0&&j>=0?h.slice(i,j):''}
-function execute({wall=Infinity,targets=[[2.6,0,0],[5,0,0]],wear=true}={}){
+function execute({wall=Infinity,targets=[[2.6,0,0],[5,0,0]],wear=true,range=8}={}){
  const hits=[],calls=[];
- const c={poiAimWall:()=>((x)=>x<wall),poiAimTargetList:()=>targets.map(([x,z,y],idx)=>({id:{type:'monsterSlime',y,idx},x,z,state:{hp:50}})),
+ const c={range,poiAimWall:()=>((x)=>x<wall),poiAimTargetList:()=>targets.map(([x,z,y],idx)=>({id:{type:'monsterSlime',y,idx},x,z,state:{hp:50}})),
   poiEquipmentSpendWeapon:t=>(calls.push(t),wear),poiPlayerDamageTarget:(pair,x,z,n)=>hits.push([pair[0].idx,n]),
   poiPlayerWeaponHands:()=>({right:{wrist:[0,.71,.31]}}),poiOrvasHeadPose:()=>({}),poiCreekPlayerHeight:()=>0,poiSound:()=>{},
   POI_DAVID_SWEEP_FORWARD:5.25,POI_DAVID_SWEEP_SIDE:4.2,window:{},performance:{now:()=>300}};
- const src=cut('function poiDavidArea(', 'const POI_DAVID_LEAP_LOAD=')+cut('const POI_ORVAS_EYES=', 'function poiOrvasHeadGeometry')+cut('const POI_AIM_EPS=', 'function poiAimChooseLock')+cut('// BEGIN ORVAS PLAYER BEAM','function poiDrawOrvasPlayerBeam');
+ const src=cut('function poiDavidArea(', 'const POI_DAVID_LEAP_LOAD=')+cut('const POI_ORVAS_HEAD_BASE=', 'function poiOrvasHeadGeometry')+cut('const POI_AIM_EPS=', 'function poiAimChooseLock')+cut('// BEGIN ORVAS PLAYER BEAM','function poiDrawOrvasPlayerBeam');
  vm.createContext(c);vm.runInContext(src,c);
- const rays=vm.runInContext("poiOrvasBeamResolve({type:'equipOrvasHead',profile:{range:8,damage:48},dx:1,dz:0,y:0,aim:{x:0,z:0,y:0}},300); poiOrvasPlayerBeam?.rays",c);
+ const rays=vm.runInContext("poiOrvasBeamResolve({type:'equipOrvasHead',profile:{range,damage:48},dx:1,dz:0,y:0,aim:{x:0,z:0,y:0}},300); poiOrvasPlayerBeam?.rays",c);
  return {hits,calls,rays};
 }
 test('equipped trophy emits two real eye rays, first eligible target only, one wear',()=>{
@@ -39,4 +39,10 @@ test('exact boss shape geometry: wide flank is single sweep only; paired right/l
  run('poiOrvasTwinFrame(poiPlayerWeaponPending,1139)');assert.equal(spans.length,2);
  run('poiOrvasTwinFrame(poiPlayerWeaponPending,1140)');assert.deepEqual(spans,['wear',[0,28],[0,35]]);
  assert.equal(c.poiPlayerWeaponPending,null);
+});
+
+test('actual full eye beam reaches 14 from committing player, clipping the same half-width as boss',()=>{
+ const empty=execute({targets:[],range:14});
+ assert(empty.rays.every(r=>Math.abs(r.x+r.end-14)<1e-6&&r.groundEligible));
+ const {rays}=execute({wall:6,targets:[],range:14});assert(rays.every(r=>r.end<6&&!r.groundEligible));
 });
