@@ -49,7 +49,7 @@ try{
   const slots=Array(27).fill(null);slots[9]={type:'orvasSoul',count:1,durability:1050};
   localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weapon:null,weaponDurabilityVersion:2,potions:0,slots,companionSoul:{version:1,active:'orvasSoul',pending:null}}));
   localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,position:{x:24,z:152,y:0,facing:0},townLayout:5,
-   townMapHeight:128,view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:0,orbitPitch:.24,orbitDistance:5.5}}));
+   townMapHeight:182,templeDepth:1,view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:0,orbitPitch:.24,orbitDistance:5.5}}));
  });
  await p.goto(base+'/?resume=1&test=1',{waitUntil:'domcontentloaded',timeout:45000});
  await p.locator('#pineStartupCover').waitFor({state:'hidden',timeout:35000});
