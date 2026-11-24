@@ -40,18 +40,23 @@ let fixture=insert(html,anchor,`
     if(!workshopResumeRestorePosition({x:24,z:101,y:0,facing:2}))return false;
     s.david.attack=null;s.david.next=-Infinity;
     poiPlayerHP=POI_PLAYER_MAX_HP;
-    return poiDavidBegin(o,s,performance.now()+100,kind);
+    if(!poiDavidBegin(o,s,performance.now()+100,kind))return false;
+    // Prevent an unrelated automatic next attack from entering this
+    // isolated pattern sample before Playwright reads its prior contact.
+    s.david.next=s.david.attack.until+10000;
+    return s.david.attack.start;
    },
    state:()=>{
     const [id,s]=[...poiMonsterStates].find(([o])=>o.type==='monsterStoneDavid')||[],f=window.__davidFrames;
     return {pos:[poiWalkX,poiWalkZ,poiWalkLevel],url:location.href,
      status:$('pineStartupCover').dataset.state,opens:f.coverShows,travel:poiDungeonEntranceSerial,step:poiWalkNextReady,
      now:performance.now(),hp:poiPlayerHP,scene:facilityViewLevel()<0?'cellar':'surface',
-     draw:f.last,cue:f.cue,statue:id?{x:s.x,z:s.z,hp:s.hp,d:s.david??null,pose:poiDavidPose(s,performance.now())}:null};
+     draw:f.last,cue:f.cue,contacts:f.contacts,statue:id?{x:s.x,z:s.z,hp:s.hp,d:s.david??null,pose:poiDavidPose(s,performance.now())}:null};
    }
   },`);
 fixture=insert(fixture,'function render(){','\n window.__davidFrames?.next();');
-fixture=insert(fixture,' if(!poiDavidCue){','window.__davidFrames.cue.builds++;');
+fixture=insert(fixture,' if(!poiDavidCue){','window.__davidFrames.cue.builds++;window.__davidFrames.cue.byStart[q.start]=(window.__davidFrames.cue.byStart[q.start]||0)+1;');
+fixture=insert(fixture,' const priorHP=poiPlayerHP;',"\n if(obj.type==='monsterStoneDavid')window.__davidFrames.contacts.push({start:poiDavidActive?.s?.david?.attack?.start,raw,amount,hp:Math.max(0,priorHP-amount)});");
 fixture=insert(fixture,'draw(poiDavidCue.lane,vp)',';window.__davidFrames.cue.lane++;');
 fixture=insert(fixture,'draw(poiDavidCue.beam,vp)',';window.__davidFrames.cue.beam++;');
 fixture=insert(fixture,'function poiWildRegionalFrame(now,rng){','return;');
@@ -68,7 +73,7 @@ await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',resolve).once('e
 const url='http://127.0.0.1:'+server.address().port;
 const install=()=>{
  let frame=0,draws=0,vertices=0;
- const summary=window.__davidFrames={coverShows:0,cue:{lane:0,beam:0,builds:0},last:null,next(){
+ const summary=window.__davidFrames={coverShows:0,cue:{lane:0,beam:0,builds:0,byStart:{}},contacts:[],last:null,next(){
   if(frame>0)this.last={frame,draws,vertices};frame++;draws=0;vertices=0;
  }};
  for(const Proto of [globalThis.WebGLRenderingContext?.prototype,globalThis.WebGL2RenderingContext?.prototype].filter(Boolean)){
@@ -137,7 +142,7 @@ try{
   assert.equal(far.status,'ready');
   await wait(p,t=>window.__editorTest.davidQA.state().now>=t+1150,far.now);
   const rested=await qa(p);assert(!rested.statue?.d?.awake);assert(!rested.statue?.d?.attack);
-  assert.deepEqual(rested.cue,{lane:0,beam:0,builds:0},'dormant room uploads no attack mesh');
+  assert.deepEqual(rested.cue,{lane:0,beam:0,builds:0,byStart:{}},'dormant room uploads no attack mesh');
   if(far.statue&&rested.statue)assert.deepEqual([rested.statue.x,rested.statue.z,rested.statue.hp,rested.statue.pose],[far.statue.x,far.statue.z,far.statue.hp,far.statue.pose],'distant boss/pose does not move or advance combat');
   checkpoint='physical crossing and awakening without any warp/cover';
   for(const z of [92,93,94,95,96,97,98]){
@@ -171,6 +176,7 @@ try{
    assert(t,kind+' test selects through the real boss commit entry');
    const pre=await qa(battle.p);
    assert.equal(pre.statue.d.attack.kind,kind);
+   assert.equal(pre.statue.d.attack.start,t);
    assert.equal(pre.statue.d.attack.hits.length,kind==='double'?2:1);
    assert.equal(pre.hp,100,'no anticipation damage on selected '+kind);
    await wait(battle.p,kind=>{
@@ -179,18 +185,16 @@ try{
    },kind);
    await wait(battle.p,({kind,cue})=>{const r=window.__editorTest.davidQA.state();
     return r.statue?.pose?.kind===kind&&r.cue.lane>cue.lane;}, {kind,cue:pre.cue});
-   if(screenshots)await battle.p.screenshot({path:screenshots+'/david-temple-'+kind+'-windup.png'});
-   await wait(battle.p,({kind,hits})=>{
-    const r=window.__editorTest.davidQA.state(),a=r.statue?.d?.attack;
-    return a?.kind===kind&&a.cursor>=hits&&r.hp<100;
-   },{kind,hits:kind==='double'?2:1});
-   const hit=await qa(battle.p);
+   const raw={sweep:[30],double:[28,35],stomp:[39],beam:[47]}[kind];
+   await wait(battle.p,({start,hits})=>window.__editorTest.davidQA.state().contacts.filter(a=>a.start===start).length>=hits,{start:t,hits:raw.length});
+   const hit=await qa(battle.p),contacts=hit.contacts.filter(a=>a.start===t);
+   assert.deepEqual(contacts.map(a=>a.raw),raw,kind+' commits each authored damage exactly once');
    assert(hit.hp<100&&hit.hp>0,kind+' one window is threatening but survivable');
-   assert(hit.cue.builds-pre.cue.builds<=1,'cue mesh is cached during '+kind);
-   assert.equal(hit.statue.d.attack.landed,kind==='double'?2:1);
-   if(kind==='double')assert(hit.hp<=100-28-35,'two real damage contacts on the same aim lane');
+   assert.equal(hit.hp,100-contacts.reduce((n,a)=>n+a.amount,0),'real starter armor remains in the damage path');
+   assert.equal(hit.cue.byStart[t],1,'cue mesh is cached for the exact committed '+kind);
    if(kind==='beam')await wait(battle.p,n=>window.__editorTest.davidQA.state().cue.beam>n,pre.cue.beam);
    else assert.equal(hit.cue.beam,pre.cue.beam);
+   if(screenshots)await battle.p.screenshot({path:screenshots+'/david-temple-'+kind+'-contact.png'});
   }
   assert.deepEqual(battle.errors,[]);
  }catch(e){console.error(checkpoint,await qa(battle.p).catch(()=>null),battle.errors);throw e}
