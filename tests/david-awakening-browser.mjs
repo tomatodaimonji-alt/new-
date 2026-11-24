@@ -92,6 +92,8 @@ try{
   }
  }
  const q=await val(),frames=q.frames,dormant=frames.find(f=>f.phase==='dormant');
+ const trace=frames.filter(f=>f.phase==='wake').map(f=>[Math.round(f.t),f.tipY.map(x=>Number(x.toFixed(3))),f.visibleTips.map(x=>Number(x.toFixed(4)))]);
+ console.log('native alternating swords and contact vertex trace',JSON.stringify({pulls:q.pulls,trace}));
  assert(q.cover&&q.errors===0);assert.deepEqual(errors,[]);
  assert(dormant.visibleTips.every(v=>v<.011)&&dormant.tipY.every(y=>y<0),'both actual emitted ends laid into floor');
  const ignition=frames.find(f=>f.phase==='wake'&&f.power>.24&&f.tipY.every(y=>y<0));

@@ -231,8 +231,11 @@ function assertNativeReturn(v,label){
  const legal=frame=>frame[0]>=13&&frame[0]<=35&&frame[1]>=93&&frame[1]<=115;
  assert(v.returnFrames.every(legal),label+' remains inside arena cells');
  for(let i=1;i<v.returnFrames.length;i++){
-  const [x,z]=v.returnFrames[i], [a,b]=v.returnFrames[i-1];
-  assert(Math.abs(x-a)+Math.abs(z-b)<=1,label+' step-by-step return cells');
+  const [x,z,rx,rz]=v.returnFrames[i], [a,b,ax,az]=v.returnFrames[i-1];
+  // The actual free ratchet can cross both rounded-cell boundaries in
+  // a diagonal frame; it cannot jump a cell or a full physical tile.
+  assert(Math.max(Math.abs(x-a),Math.abs(z-b))<=1&&Math.hypot(rx-ax,rz-az)<=1.05,
+   label+' continuous return cells: '+JSON.stringify([v.returnFrames[i-1],v.returnFrames[i]]));
  }
  assert(v.returnFrames.some(([, ,x,z])=>Math.abs(x-Math.round(x))+Math.abs(z-Math.round(z))>.01),label+' real visual interpolation between cells');
 }

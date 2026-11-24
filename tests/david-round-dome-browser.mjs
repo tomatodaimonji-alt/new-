@@ -10,6 +10,11 @@ const qa="if(facilityParams.get('test')==='1')window.__editorTest={";
 inject(qa,qa+`
   templeSealQA:{
    frame:()=>render(),
+   eye:()=>{
+    const pitch=poiCameraPitch,radius=poiCameraDistance;
+    try{poiCameraPitch=1.15;poiCameraDistance=12;parameters();return window.__seal.eye;}
+    finally{poiCameraPitch=pitch;poiCameraDistance=radius;}
+   },
    state:()=>{
     const s=facilitySite,d=s.davidTemple,roof=s.buildings.findIndex(b=>b.id==='davidTemple'),p=poiAimOrigin(performance.now());
     return {pos:[poiWalkX,poiWalkZ,poiWalkLevel],room:facilityHiddenRoof(),visible:facilityVisibleRoofs(),roof,
@@ -23,6 +28,8 @@ inject(qa,qa+`
   },
 `);
 inject(' requestAnimationFrame(render);',' if(!window.__seal.manual)requestAnimationFrame(render);');
+const camera="  const eye=typeof facilitySharedWallCameraEye==='function'?facilitySharedWallCameraEye(target,desired):desired;";
+inject(camera,camera+'\n  window.__seal.eye={eye,desired,target};');
 inject('  else draw(facilityRoofMeshes[i],vp);',
  '  else {if(facilitySite.buildings[i]?.id==="davidTemple"){window.__seal.draws++;window.__seal.vertices=facilityRoofMeshes[i].count}draw(facilityRoofMeshes[i],vp)}');
 for(const [,js] of h.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(js);
@@ -62,6 +69,8 @@ try{
  const vestibule=await step('ArrowUp',24,95);roof(vestibule,before); // centered baffle cannot be walked through
  assert(vestibule.indoors&&vestibule.tunnel&&!vestibule.sky&&!vestibule.contacted);
  assert.deepEqual(vestibule.light,[.76,.65,.54]);
+ const lowEye=await p.evaluate(()=>window.__editorTest.templeSealQA.eye());
+ assert(lowEye.eye[1]>1.1&&lowEye.eye[1]<3.19&&lowEye.desired[1]>3.19,JSON.stringify(lowEye));
  if(screenshots)await p.screenshot({path:screenshots+'/temple-02-warm-narrow-turn.png'});
  const track=[['ArrowLeft',25,95],['ArrowUp',25,96],['ArrowUp',25,97],['ArrowRight',24,97],['ArrowRight',23,97],
   ['ArrowUp',23,98],['ArrowUp',23,99],['ArrowLeft',24,99],['ArrowUp',24,100]];
@@ -72,6 +81,8 @@ try{
  for(let i=0;i<10&&!arena.contacted;i++)arena=await frame(80);
  roof(arena,vestibule);assert(arena.indoors&&!arena.tunnel&&!arena.sky&&arena.contacted&&arena.arena&&arena.los&&arena.distance===2,JSON.stringify(arena));
  assert.deepEqual(arena.light,[.77,.70,.62]);
+ const highEye=await p.evaluate(()=>window.__editorTest.templeSealQA.eye());
+ assert(highEye.eye[1]>1.1&&highEye.eye[1]<7.62&&highEye.desired[1]>7.62,JSON.stringify(highEye));
  assert.equal(arena.key,before.key);assert.equal(arena.screen,before.screen);assert(arena.ready);
  if(screenshots)await p.screenshot({path:screenshots+'/temple-03-close-david-reveal.png'});
  await p.clock.resume();await resume(24,96);const migrated=await frame();

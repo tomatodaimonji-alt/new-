@@ -15,6 +15,7 @@ test('large named western woodland leaves stock world, town and David coordinate
  a(f.coverage.reduce((n,b)=>n+(b.x2-b.x1+1)*(b.z2-b.z1+1),0)>2000);
  a(f.trees.length>=115&&f.trees.length<=155);a(fresh.length<=265);
  a(f.trees.every(o=>o.y===0&&Math.hypot(o.x-24,o.z-104)>19.5));
+ a(f.trees.every(o=>Math.hypot((o.x-f.reveal.x)/6.35,(o.z-f.reveal.z+2)/7.4)>=1),'final orbit clearing has no large near trees');
 });
 test('authored route is real four-neighbor walking, with no new obstacles in legacy east approaches',()=>{
  a.ok(f);
