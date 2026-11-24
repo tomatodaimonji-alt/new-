@@ -13,6 +13,18 @@ assert(temple,'genuine authored temple metadata required');
 assert.deepEqual([base.map.width,base.map.height],[128,128]);
 assert(base.map.world.some(o=>o.type==='monsterStoneDavid'&&o.x===24&&o.z===104&&o.y===0));
 assert.equal(base.map.world.filter(o=>o.type==='monsterStoneDavid').length,1);
+// Exercise the actual import validator as facilityLoadMap does, including
+// exported floor offsets and all palette entries present before catalog build.
+const validation=vm.runInNewContext(
+ slice('let MAP_W=16,MAP_H=16','const palette=[').split('\n')[0]+
+ slice('const palette=[','const catalog=new Map')+
+ slice('function validModel(','function loadData(')+
+ slice('function facilityExportMap(','function facilityDownload(')+
+ ';({validate:pineValidateWorldData,exportMap:facilityExportMap,palette})');
+const ids=new Set(validation.palette.map(p=>p.id));
+for(const id of ['monsterStoneDavid','poiDavidGatePier','poiDavidTempleColumn','poiDavidWaystone'])assert(ids.has(id),'live initial catalog: '+id);
+assert.equal(validation.validate(validation.exportMap(base.map)).newW,128);
+
 const anchor='  freeMovementPose:()=>({x:poiWalkViewX,z:poiWalkViewZ,level:poiWalkLevel}),';
 const insert=(s,k,v)=>{assert.equal(s.split(k).length,2,k);return s.replace(k,k+v)};
 let fixture=insert(html,anchor,`

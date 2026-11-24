@@ -28,8 +28,12 @@ test('extension keeps every old Game World tile and all other POIs intact',()=>{
  const northReturn=' return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad,northFort};';
  const forestBuild=' const southForest=extendTownWorldSouthForest(expanded.map.world,southPort);\n return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad,northFort,southPort,southForest};';
  const portReturn=' return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad,northFort,southPort};';
- const preForest=html.replace(forestBuild,portReturn);
- if(html.includes('const southForest=extendTownWorldSouthForest('))assert.notEqual(preForest,html,'strip only the exact final forest authoring call');
+ const templeBuild=' const davidTemple=extendTownWorldDavidTemple(expanded);\n return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad,northFort,southPort,southForest,davidTemple};';
+ const forestReturn=' return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad,northFort,southPort,southForest};';
+ const preTemple=html.replace(templeBuild,forestReturn);
+ if(html.includes('const davidTemple=extendTownWorldDavidTemple('))assert.notEqual(preTemple,html,'strip only the exact final temple authoring call');
+ const preForest=preTemple.replace(forestBuild,portReturn);
+ if(preTemple.includes('const southForest=extendTownWorldSouthForest('))assert.notEqual(preForest,preTemple,'strip only the exact final forest authoring call');
  const prePort=preForest.replace(portBuild,northReturn);
  if(preForest.includes('const southPort=extendTownWorldSouthPort('))assert.notEqual(prePort,preForest,'strip only the exact final port authoring call');
  const preFort=prePort.includes(northBuild)?prePort.replace(northBuild,oldBuild):prePort;

@@ -66,3 +66,13 @@ test('only old occupied temple masonry checkpoints relocate one legal step, pref
  c.world.splice(i,1);a.equal(c.poiDavidTempleRecoverPosition(upright),upright,'removed objects are not stale overrides');
  a.equal(c.poiWalkLevel,-1);a.match(h,/function workshopResumeRestorePosition\(p\)\{[^]*?p=poiDavidTempleRecoverPosition\(p\);/);
 });
+test('authored IDs exist before native catalog and the exported depth-offset map passes native validation',()=>{
+ const c=vm.createContext({MIN_MAP:12,MAX_MAP:128,MAX_LEVEL:8,TERRAIN_MAX:12,PINE_CHECK_COLORS:[],site});
+ vm.runInContext(cut('const palette=[','const catalog=new Map(')+
+  'const catalog=new Map(palette.map(p=>[p.id,p]));'+
+  cut('function validModel(','function displayJSON(')+cut('function facilityExportMap(','function facilityDownload(')+
+  ';globalThis.validation=()=>pineValidateWorldData(facilityExportMap(site.map));globalThis.catalog=catalog;',c);
+ for(const id of ['monsterStoneDavid','poiDavidGatePier','poiDavidTempleColumn','poiDavidWaystone'])a(c.catalog.has(id),id);
+ a.equal(c.catalog.get('monsterStoneDavid').cat,'character');
+ a.equal(c.validation().newW,128);
+});
