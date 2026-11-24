@@ -30,9 +30,9 @@ test('right touch selects once independently of synthetic click while left pad s
  h.pointer('click');assert.deepEqual(h.switches,[2],'matching touch-generated click is suppressed, not dispatched twice');
  h.pointer('click',{pointerType:'mouse',pointerId:1,detail:1});assert.deepEqual(h.switches,[2,2],'real mouse click still works');
 });
-test('drag excursion, canceled pointer, modal, bag, and consumable cannot select on secondary pulse',()=>{
- for(const mode of ['move','outside','cancel','modal','bag','portrait','consumable','no-stick']){
-  const h=setup();if(mode==='bag')h.ids.poiBagPanel.hidden=false;if(mode==='portrait')h.c.landscape=false;if(mode==='consumable')h.c.type='healingHerb';
+test('drag excursion, canceled pointer, modal, bag, gold, and other items cannot select on secondary pulse',()=>{
+ for(const mode of ['move','outside','cancel','modal','bag','portrait','gold','soul','other-item','no-stick']){
+  const h=setup();if(mode==='bag')h.ids.poiBagPanel.hidden=false;if(mode==='portrait')h.c.landscape=false;if(mode==='gold')h.c.type='gold';if(mode==='soul')h.c.type='slimeSoul';if(mode==='other-item')h.c.type='silverKey';
   if(mode==='no-stick')h.c.poiAnalogContact=null;
   h.pointer('pointerdown');
   if(mode==='move')h.pointer('pointermove',{clientX:149});
@@ -45,4 +45,20 @@ test('drag excursion, canceled pointer, modal, bag, and consumable cannot select
 test('wand is a weapon for moving shortcuts; changing left contact after down does not invalidate right release',()=>{
  const h=setup();h.c.type='fireWand';h.pointer('pointerdown');h.c.poiAnalogContact=null;h.pointer('pointerup');
  assert.deepEqual(h.switches,[2]);
+});
+
+
+test('only herbs and canned food use the movement shortcut once per real secondary tap',()=>{
+ for(const type of ['healingHerb','cannedFood']){
+  const h=setup();h.c.type=type;
+  h.pointer('pointerdown');assert.deepEqual(h.switches,[]);
+  h.pointer('pointerup');h.pointer('click');assert.deepEqual(h.switches,[2]);
+  assert.equal(h.c.poiAnalogContact.id,4);
+ }
+});
+test('slot changing to another valid healing or weapon type during a tap cannot use the replacement',()=>{
+ for(const replacement of ['cannedFood','equipIronSword']){
+  const h=setup();h.c.type='healingHerb';h.pointer('pointerdown');h.c.type=replacement;
+  h.pointer('pointerup');h.pointer('click');assert.deepEqual(h.switches,[]);
+ }
 });

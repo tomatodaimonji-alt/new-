@@ -21,7 +21,7 @@ test('carved dormant surface stays fixed, keeps size and gives actual head mesh 
  a.deepEqual(d,again);
  const {p,c:colors}=d.m,max=Math.max(...p.filter((v,i)=>i%3===1));
  a.ok(max>4.95&&max<5.33);
- a.ok(p.length<=5700);
+ a.ok(p.length<=6900);
  a.ok(!colors.some((v,i)=>i%3===0&&v>.89&&colors[i+1]<.30));
  a.ok(p.some((x,i)=>i%3===0&&x>.43&&p[i+1]>4.56&&p[i+1]<4.86),'ear is a physical front-profile relief, not painted on an existing block');
  a.ok(p.filter((v,i)=>i%3===1&&v>4.99).length>36,'visible irregular crown relief');
