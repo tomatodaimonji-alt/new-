@@ -12353,7 +12353,7 @@ function poiOrchestraScore(scene){
  const score={duration:s.beats*sec,events};
  poiOrchestraScoreCache.set(scene,score);return score;
 }
-function poiOrchestraRoomStart(ctx){
+function poiOrchestraRoomStart(ctx,target=poiAudioMusic){
  if(poiOrchestraRoom)return poiOrchestraRoom.input;
  if(typeof ctx.createDelay!=='function'||typeof ctx.createBiquadFilter!=='function')return null;
  const input=ctx.createGain(),nodes=[input];
@@ -12364,7 +12364,7 @@ function poiOrchestraRoomStart(ctx){
   const delay=ctx.createDelay(.20),filter=ctx.createBiquadFilter(),returnBus=ctx.createGain();
   delay.delayTime.value=sec;filter.type='lowpass';filter.frequency.value=hz;
   returnBus.gain.value=level;
-  input.connect(delay).connect(filter).connect(returnBus).connect(poiAudioMusic);
+  input.connect(delay).connect(filter).connect(returnBus).connect(target);
   nodes.push(delay,filter,returnBus);
  }
  poiOrchestraRoom={input,nodes};return input;
@@ -12563,7 +12563,11 @@ function poiOrchestraDrop(key,deck,now){
   try{event.source.stop(now)}catch(e){}
   event.cleanup();
  }
- try{deck.bus.disconnect()}catch(e){}
+ try{deck.bus.disconnect();deck.output?.disconnect()}catch(e){}
+ if(poiOrchestraRoom){
+  for(const node of poiOrchestraRoom.nodes)try{node.disconnect()}catch(e){}
+  poiOrchestraRoom=null;
+ }
  poiOrchestraDecks.delete(key);
 }
 function poiOrchestraReset(){
@@ -12573,37 +12577,61 @@ function poiOrchestraReset(){
  if(poiOrchestraRoom)for(const n of poiOrchestraRoom.nodes)try{n.disconnect()}catch(e){}
  poiOrchestraRoom=null;poiOrchestraActive=null;poiOrchestraBattleUntil=-Infinity;
 }
+const POI_ORCHESTRA_ZONE_OUT=.72,POI_ORCHESTRA_ZONE_IN=1.00;
+function poiOrchestraLevelAt(deck,now){
+ const e=deck.envelope;
+ if(!e)return 0;
+ const age=Math.max(0,now-e.at);
+ if(e.decay)return e.to+(e.from-e.to)*Math.exp(-age/e.decay);
+ const t=Math.min(1,age/Math.max(.001,e.seconds));
+ return e.from+(e.to-e.from)*t;
+}
+function poiOrchestraFadeTo(deck,to,now,seconds,decay=false){
+ const from=poiOrchestraLevelAt(deck,now),gain=deck.output.gain;
+ if(typeof gain.cancelScheduledValues==='function')gain.cancelScheduledValues(now);
+ if(typeof gain.setValueAtTime==='function')gain.setValueAtTime(from,now);
+ else gain.value=from;
+ deck.envelope={from,to,at:now,seconds,decay:decay?seconds:0};
+ if(decay)gain.setTargetAtTime(to,now,seconds);
+ else if(typeof gain.linearRampToValueAtTime==='function')gain.linearRampToValueAtTime(to,now+seconds);
+ else{
+  gain.setTargetAtTime(to,now,seconds/6);
+  if(typeof gain.setValueAtTime==='function')gain.setValueAtTime(to,now+seconds);
+ }
+}
 function poiOrchestraActivate(scene,now){
- if(scene===poiOrchestraActive)return poiOrchestraDecks.get(scene);
- const ctx=poiAudioContext,prior=poiOrchestraActive;
- // One live and at most one retiring scene, including an immediate turn
- // back at a doorway. Retarget an existing deck rather than stacking it.
- for(const [key,deck] of poiOrchestraDecks){
-  if(key!==scene&&key!==prior)poiOrchestraDrop(key,deck,now);
-  else if(key!==scene){
-   if(key==='snow')poiSnowAudioLeave(deck,now);
-   deck.retire=now+POI_ORCHESTRA_FADE;
-   deck.bus.gain.setTargetAtTime(0,now,.19);
+ const ctx=poiAudioContext,oldKey=poiOrchestraActive,old=poiOrchestraDecks.get(oldKey);
+ if(old){
+  if(old.retire!==null&&now>=old.retire){
+   // Retire the entire outgoing signal, including the wet reflections,
+   // before any incoming audio source can be created or scheduled.
+   poiOrchestraDrop(oldKey,old,now);poiOrchestraActive=null;
+  }else if(scene===oldKey){
+   if(old.retire!==null){old.retire=null;poiOrchestraFadeTo(old,1,now,.34)}
+   return old;
+  }else{
+   if(old.retire===null){
+    if(oldKey==='snow')poiSnowAudioLeave(old,now);
+    old.retire=now+POI_ORCHESTRA_ZONE_OUT;
+    poiOrchestraFadeTo(old,0,now,POI_ORCHESTRA_ZONE_OUT);
+   }
+   return null;
   }
  }
- let current=poiOrchestraDecks.get(scene);
- if(!current){
-  const bus=ctx.createGain();bus.gain.value=0;bus.connect(poiAudioMusic);
-  const room=poiOrchestraRoomStart(ctx);if(room)bus.connect(room);
-  current={score:poiOrchestraScore(scene),start:now+.065,index:0,cycle:0,bus,retire:null,sources:new Set()};
-  poiOrchestraDecks.set(scene,current);
- }
- current.retire=null;
- current.entryAt=now;
- current.entryDecay=prior===null?(poiOrchestraHasOpened?.10:POI_ORCHESTRA_BOOT_DECAY):POI_ORCHESTRA_ENTRY_DECAY;
- poiOrchestraHasOpened=true;
- current.bus.gain.setTargetAtTime(1,now,current.entryDecay);
- poiOrchestraActive=scene;return current;
+ const bus=ctx.createGain(),output=ctx.createGain();output.gain.value=0;
+ bus.connect(output);output.connect(poiAudioMusic);
+ const room=poiOrchestraRoomStart(ctx,output);if(room)bus.connect(room);
+ const changed=old!==undefined,entryDecay=changed?POI_ORCHESTRA_ENTRY_DECAY:poiOrchestraHasOpened?.10:POI_ORCHESTRA_BOOT_DECAY;
+ const current={score:poiOrchestraScore(scene),start:now+.065,index:0,cycle:0,bus,output,retire:null,
+  entryAt:now,entryDecay,sources:new Set(),envelope:null};
+ poiOrchestraDecks.set(scene,current);poiOrchestraActive=scene;poiOrchestraHasOpened=true;
+ poiOrchestraFadeTo(current,1,now,changed?POI_ORCHESTRA_ZONE_IN:entryDecay,!changed);
+ return current;
 }
 function poiOrchestraTick(now){
  if(!poiAudioStartupReady()||!poiAudioContext||poiAudioContext.state!=='running'||!poiWalkActive||!poiAudioEnabled||!poiAudioAllowed())return;
- for(const [key,deck] of poiOrchestraDecks)if(deck.retire!==null&&deck.retire<=now)poiOrchestraDrop(key,deck,now);
  const scene=poiOrchestraScene(now),deck=poiOrchestraActivate(scene,now);
+ if(!deck)return;
  if(scene==='snow'){poiSnowAudioTick(deck,now);return;}
  if(scene==='davidStill'||scene==='davidAwake'){poiDavidScoreTick(scene,deck,now);return;}
  if(scene==='outside'){
