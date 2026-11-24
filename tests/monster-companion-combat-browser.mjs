@@ -191,7 +191,11 @@ try{
  assert.match(await page.locator('#poiItemDetailDescription').innerText(),new RegExp(q.hp+' / 36'));
  assert.equal(await page.locator(cell+' .poiDurabilityMeter').getAttribute('data-durability-percent'),String(Math.ceil(q.hp/36*100)));
  unchanged(q);
- await tap(action);let state=await advance(48);assert.equal(state.actor,null);assert.equal(state.hp,q.hp);
+ assert.match(await page.locator(action).innerText(),/仲間に指示/);
+ await tap(action);let state=await advance(48);assert(state.actor,'opening command menu does not change the real ally');
+ assert(await page.locator('#poiCompanionCommands').evaluate(el=>el.open));
+ await tap('#poiCompanionCommands [data-companion-command="dismiss"]');
+ state=await advance(48);assert.equal(state.actor,null);assert.equal(state.hp,q.hp);
  await use(/仲間を呼ぶ/);await closeBag();state=await until(a=>!!a.actor);assert.equal(state.hp,q.hp);
  assert.equal(state.pickup,1);
  phase='real reload restores exact remaining durability and chosen summon';

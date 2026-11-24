@@ -47,22 +47,21 @@ test('actual own HP persists through resummon; committed legal covered attack we
  f.storage(false);a.equal(f.run('poiCompanionHurt(29,4800)'),false);a.equal(f.kit.slots[9].durability,29);
  f.storage(true);a.equal(f.run('poiCompanionHurt(29,4900)'),true);a.equal(f.kit.slots[9],null);a.equal(f.kit.companionSoul?.active??null,null);
 });
-test('assistance chases only recorded hostile intent, resolves real battle damage, and never silently crosses a wall or resets on area change',()=>{
+test('auto engages a visible hostile without player damaging it first; exact contact and floor/HP protection',()=>{
  const f=harness();a.ok(f.kill());f.run('poiCompanionTick(3500);poiCompanionUse(poiHotbarRead(),9);poiCompanionTick(4000);');
  f.ctx.poiPlayerDamageTarget=(hit,x,z,amount,weapon,now,silent,contact,source)=>{
   a.equal(silent,true);a.equal(contact,true);a.equal(source.companion,true);hit[1].hp-=amount;
  };
  f.run("this.o={type:'monsterGoblin',x:18,z:20,y:0};this.s={x:18,z:20,hp:31};poiMonsterStates.set(o,s);");
- f.run('poiCompanionTick(4650)');a.equal(f.ctx.s.hp,31);
- f.run('poiCompanionPlayerContact(o,s,4700)');
  f.ctx.poiAimWallLimit=()=>0;
- f.run('poiCompanionTick(4820)');a.equal(f.ctx.s.hp,31,'a wall blocks even an adjacent hostile');
+ f.run('poiCompanionTick(4650)');a.equal(f.ctx.s.hp,31,'a wall blocks even an adjacent hostile');
  f.ctx.poiAimWallLimit=(_o,_d,r)=>r;
- f.run('poiCompanionTick(5100)');a.equal(f.ctx.s.hp,25);
- a.equal(f.run("poiCompanionHurt(5,5150)"),true);
- f.ctx.poiWalkLevel=-1;f.run('poiCompanionTick(5250)');
+ f.run('poiCompanionTick(5100)');a.equal(f.ctx.s.hp,31,'before the real slime contact');
+ f.run('poiCompanionTick(5240)');a.equal(f.ctx.s.hp,25);
+ a.equal(f.run("poiCompanionHurt(5,5250)"),true);
+ f.ctx.poiWalkLevel=-1;f.run('poiCompanionTick(5300)');
  a.equal(f.kit.slots[9].durability,31);a.equal(f.kit.companionSoul.active,'slimeSoul');
- a.equal(f.run('poiCompanionSnapshot(5250).actor.y'),-1);
+ a.equal(f.run('poiCompanionSnapshot(5300).actor.y'),-1);
 });
 test('no award from a town-owned sparring actor or duplicate failed claims; one resolved strike cannot wear the same soul twice',()=>{
  const f=harness();
