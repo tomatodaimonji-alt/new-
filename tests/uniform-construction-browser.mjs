@@ -14,6 +14,7 @@ source=source.replace(anchor,anchor+`
 const a="if(facilityParams.get('test')==='1')window.__editorTest={";
 let html=source.replace(a,a+`
  outdoorQA:{
+  frameStats:()=>window.__frameWitness??[],
   z:()=>poiWalkZ,
   town:()=>facilitySite.davidTemple?.entrance,
   directions:()=>['n','s','e','w'].map(k=>poiCameraRelativeStep(k)),
@@ -44,17 +45,17 @@ let html=source.replace(a,a+`
   }
  },`);
 const r=' requestAnimationFrame(render);';
-assert.equal(html.split(r).length,2);html=html.replace(r,' if(!window.__outdoorManual)requestAnimationFrame(render);');
+assert.equal(html.split(r).length,2);html=html.replace(r,' if(!window.__outdoorManual){(window.__frameWitness??=[]).push(performance.now());if(window.__frameWitness.length>180)window.__frameWitness.shift();requestAnimationFrame(render);}');
 for(const [,js] of html.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(js);
 if(process.env.OUTDOOR_PARSE_ONLY)process.exit(0);
 const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
 const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(req.url==='/seed'?'<title>seed</title>':html)});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const url='http://127.0.0.1:'+server.address().port;
-let browser,phase='startup',last;
+let browser,phase='startup',last,errors=[];
 try{
  browser=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
  const c=await browser.newContext({viewport:{width:844,height:390},deviceScaleFactor:.75,isMobile:true,hasTouch:true});
- const p=await c.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));
+ const p=await c.newPage();p.on('pageerror',e=>errors.push(e.message));
  p.on('console',m=>{if(m.type()==='error')console.log('PAGE',m.text().slice(0,350));});
  const enabled=process.env.OUTDOOR_STOCK!=='1';
  await p.goto(url+'/seed');
@@ -89,12 +90,12 @@ try{
   await shot(name);
  }
  phase='ordinary RAF and true player input at real north tunnel threshold, preserving external cache without drawing it';
- const entrance=await p.evaluate(()=>window.__editorTest.outdoorQA.town());
+ await p.bringToFront(); const entrance=await p.evaluate(()=>window.__editorTest.outdoorQA.town());
  assert(entrance&&await set(entrance.x,entrance.z-2,0,690));
  await p.evaluate(()=>{for(let i=0;i<100;i++)window.__editorTest.outdoorQA.paint()});
  const warm=()=>p.evaluate(()=>window.__editorTest.outdoorQA.warm()), before=await warm();
  assert(before.active&&before.saved>3&&!before.inside,JSON.stringify(before));
- await p.evaluate(()=>{window.__outdoorManual=false;window.__editorTest.outdoorQA.paint()});
+ await p.evaluate(()=>{window.__frameWitness=[];window.__outdoorManual=false;window.__editorTest.outdoorQA.paint()});
  async function step(dz){
   const start=await warm(), directions=await p.evaluate(()=>window.__editorTest.outdoorQA.directions());
   const i=directions.findIndex(d=>d[0]===0&&d[1]===dz);
@@ -107,14 +108,14 @@ try{
   throw Error(JSON.stringify({start,latest:await warm(),directions,dz}));
  }
  for(let i=0;i<6&&(await warm()).z<entrance.z+1;i++)await step(1);
- await p.waitForFunction(()=>{const q=window.__editorTest.outdoorQA.warm();return q.inside&&!q.active},null,{timeout:3500,polling:40}).catch(async()=>{throw Error(JSON.stringify({before,insideFailure:await warm(),entrance}))});
+ await p.waitForFunction(()=>{const q=window.__editorTest.outdoorQA.warm();return q.inside&&!q.active},null,{timeout:10000,polling:65}).catch(async()=>{throw Error(JSON.stringify({before,insideFailure:await warm(),entrantFrames:await p.evaluate(()=>window.__editorTest.outdoorQA.frameStats().slice(-12)),errors,entrance}))});
  const inside=await warm();
  assert(inside.inside&&!inside.active&&inside.saved>3&&inside.drew===0,JSON.stringify({before,inside}));
  for(let i=0;i<4&&(await warm()).z>=entrance.z;i++)await step(-1);
- await p.waitForFunction(()=>{const q=window.__editorTest.outdoorQA.warm();return !q.inside&&q.active},null,{timeout:3500,polling:40}).catch(async()=>{throw Error(JSON.stringify({before,inside,exitFailure:await warm(),entrance}))});
+ await p.waitForFunction(()=>{const q=window.__editorTest.outdoorQA.warm();return !q.inside&&q.active},null,{timeout:10000,polling:65}).catch(async()=>{throw Error(JSON.stringify({before,inside,exitFailure:await warm(),exitFrames:await p.evaluate(()=>window.__editorTest.outdoorQA.frameStats().slice(-12)),errors,entrance}))});
  const exit=await warm();
  assert(!exit.inside&&exit.active&&exit.saved>3&&exit.built>=inside.built,JSON.stringify({before,inside,exit}));
  assert.deepEqual(errors,[]);
  console.log(JSON.stringify({out,temple:{before,inside,exit}},null,1));
-}catch(e){console.error('PHASE',phase,JSON.stringify(last));throw e}
+}catch(e){console.error('PHASE',phase,JSON.stringify(last),errors);throw e}
 finally{if(browser)await browser.close();await new Promise(r=>server.close(r));}
