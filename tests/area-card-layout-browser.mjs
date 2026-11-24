@@ -76,7 +76,7 @@ try{
   assert(s.lanes.length===(all?4:2));
   assert(s.lanes.every((r,i)=>r.left>=s.party.left-.2&&r.right<=s.party.right+.2&&(!i||s.lanes[i-1].bottom+3<=r.top)));
   for(const row of [...s.title,...s.stars])assert(row.right<=s.area.right-4&&row.left>=s.area.left+4,JSON.stringify(s));
-  assert(s.title.length>=(wrap?2:1));
+  assert(s.title.length>=(wrap?2:1),JSON.stringify(s));
   if(!wrap){assert.equal(s.stars.length,1);assert(s.font>=(w>600?11:9));}
  }
  const before=await measure();verify(before,844,390,false);assert(before.frames>0);
@@ -99,9 +99,15 @@ try{
  await p.evaluate(()=>{const s=document.querySelector('#viewWrap').style;s.setProperty('--poi-land-left','46px');s.setProperty('--poi-land-right','44px');});
  const narrow=await measure();verify(narrow,568,320,true,false,7,46);
  if(out)await p.screenshot({path:out+'/area-card-narrow-safe.png',timeout:10000});
- await p.evaluate(()=>document.querySelector('#viewWrap').style.setProperty('--poi-area-width','86px'));
+ await p.evaluate(()=>{
+  document.querySelector('#viewWrap').style.setProperty('--poi-area-width','77px');
+  document.querySelector('#poiLocationName').style.fontSize='14px';
+ });
  verify(await measure(),568,320,true,true,7,46);
- await p.evaluate(()=>document.querySelector('#viewWrap').style.removeProperty('--poi-area-width'));
+ await p.evaluate(()=>{
+  document.querySelector('#viewWrap').style.removeProperty('--poi-area-width');
+  document.querySelector('#poiLocationName').style.removeProperty('font-size');
+ });
  phase='original real map and inventory targets';
  await p.locator('#poiMiniOpen').tap();await p.locator('#poiLocalMapDialog').waitFor({state:'visible'});
  await p.locator('#poiLocalMapClose').tap();await p.locator('#poiLocalMapDialog').waitFor({state:'hidden'});
