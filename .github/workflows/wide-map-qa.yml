@@ -1,0 +1,54 @@
+name: Isolated wide local map QA
+on:
+  push:
+    branches: [dot/workshop-wide-map-modal-qa]
+permissions:
+  contents: read
+jobs:
+  strict:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: |
+          test "$(git hash-object world-editor.html)" = "ab78c71080874767f6344676ca50959494cea311"
+          python .qa-map-shell/build.py world-editor.html checked.html
+          test "$(git hash-object checked.html)" = "71e195988c1824c1ff3d978b5c911d40f5ff39d0"
+          mv checked.html world-editor.html
+          if ! node --test tests/*.test.cjs > "$RUNNER_TEMP/strict.out" 2>&1; then
+            grep -E '^not ok |^  location:|^  error:|^# (tests|pass|fail|duration)' "$RUNNER_TEMP/strict.out" | tail -250
+            exit 1
+          fi
+          grep -E '^# (tests|pass|fail|duration)' "$RUNNER_TEMP/strict.out"
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      FACILITY_SCREENSHOTS: screenshots
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save playwright@1.56.1
+      - run: npx playwright install chromium
+      - run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fonts-noto-cjk
+          fc-match -f '%{family}\n' 'sans-serif:lang=ja'
+      - run: |
+          test "$(git hash-object world-editor.html)" = "ab78c71080874767f6344676ca50959494cea311"
+          python .qa-map-shell/build.py world-editor.html checked.html
+          test "$(git hash-object checked.html)" = "71e195988c1824c1ff3d978b5c911d40f5ff39d0"
+          node tests/local-map-shell-browser.mjs checked.html world-editor.html
+          node tests/local-minimap-browser.mjs checked.html
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wide-map-before-after
+          path: screenshots
+          if-no-files-found: ignore
+          retention-days: 3
