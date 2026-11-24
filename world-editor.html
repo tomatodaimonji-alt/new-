@@ -13377,7 +13377,10 @@ function poiEconomyWrite(kit){
  poiHotbarState=kit;return true;
 }
 function poiEconomyRefresh(){
+ const hadWand=typeof poiArmedWand!=='undefined'&&poiArmedWand!==null;
+ const lostWand=hadWand&&typeof poiArmedWandIndex==='function'&&poiArmedWandIndex()===null;
  poiHotbarRender();if(typeof poiShopSync==='function')poiShopSync();
+ if(lostWand&&typeof poiWalkAvatar==='function')poiWalkAvatar();
  if(typeof poiCompanionHudSync==='function')poiCompanionHudSync();
 }
 const POI_TOOLSHOP_INITIAL=3,POI_TOOLSHOP_SHIPMENT=4,POI_TOOLSHOP_CAP=9;
@@ -14054,8 +14057,14 @@ function poiUseHotbarItem(index){
 let poiArmedWand=null;
 function poiArmedWandIndex(){
  if(!poiArmedWand)return null;
- if(!poiHotbarHasKit()||!poiStorageIndexExists(poiArmedWand.index,POI_HOTBAR_SIZE+POI_BAG_SAVED)||
-    poiInventorySlots(poiHotbarRead())[poiArmedWand.index]!==poiArmedWand.cell){poiArmedWand=null;return null}
+ if(!poiHotbarHasKit()){poiArmedWand=null;return null}
+ const slots=poiInventorySlots(poiHotbarRead()),cell=poiArmedWand.cell;
+ if(slots[poiArmedWand.index]!==cell){
+  // Moves preserve the exact item reference, never adopt another wand.
+  const next=slots.indexOf(cell);
+  if(!poiStorageIndexExists(next,POI_HOTBAR_SIZE+POI_BAG_SAVED)){poiArmedWand=null;return null}
+  poiArmedWand.index=next;
+ }
  return poiArmedWand.index;
 }
 function poiWandArm(index){
@@ -14063,12 +14072,16 @@ function poiWandArm(index){
  if(!poiInventoryAllowed()||!poiStorageIndexExists(index,POI_HOTBAR_SIZE+POI_BAG_SAVED))return result('unavailable');
  const cell=poiInventorySlots(poiHotbarRead())[index];
  if(cell?.type!==POI_FIRE_WAND||!Number.isInteger(cell.charges)||cell.charges<1)return result('empty');
- poiArmedWand=poiArmedWandIndex()===index?null:{index,cell};poiBagSetOpen(false);poiShopSync();poiWalkAvatar();
+ if(typeof poiCompanionClearShortcut==='function')poiCompanionClearShortcut();
+ poiArmedWand=poiArmedWandIndex()===index?null:{index,cell};poiBagSetOpen(false);
+ if(typeof poiHotbarRender==='function')poiHotbarRender();
+ poiShopSync();poiWalkAvatar();
  return result();
 }
 function poiWandDisarm(){
  if(!poiArmedWand)return;
  poiArmedWand=null;
+ if(typeof poiHotbarRender==='function')poiHotbarRender();
  poiShopSync();poiWalkAvatar();
 }
 function poiInventorySpendFireWand(index){
@@ -14197,7 +14210,7 @@ function poiCompanionShortcutTap(kit,index){
  if(active&&poiCompanionSelectedShortcut(kit)===index)
   return poiCompanionUiOpen(kit,index,$('poiHotbar')?.querySelector('[data-hotbar-slot="'+index+'"]'));
  const result=active?{ok:true}:poiCompanionUse(kit,index);
- if(result.ok){poiCompanionShortcut=index;poiHotbarRender()}
+ if(result.ok){if(typeof poiWandDisarm==='function')poiWandDisarm();poiCompanionShortcut=index;poiHotbarRender()}
  return result;
 }
 function poiCompanionUiCommand(mode){
@@ -14379,10 +14392,10 @@ function poiInventoryCell(kit,ref){return kit&&poiInventorySlots(kit)[poiInvento
 function poiInventorySelected(index){
  if(!poiHotbarHasKit())return false;
  const kit=poiHotbarRead(),slots=poiInventorySlots(kit),cell=slots[index];
- const companion=typeof poiCompanionSelectedShortcut==='function'?poiCompanionSelectedShortcut(kit):null;
- if(companion!==null)return index===companion;
  const wand=poiArmedWandIndex();
  if(wand!==null)return index===wand;
+ const companion=typeof poiCompanionSelectedShortcut==='function'?poiCompanionSelectedShortcut(kit):null;
+ if(companion!==null)return index===companion;
  if(kit.weapon)return cell?.type===kit.weapon;
  const reserved=poiGoldHotbarSlot(kit),empty=poiInventoryEmptyHotbar(kit,slots);
  return index!==reserved&&!cell&&index===(slots[poiHotbarEmptySlot]||poiHotbarEmptySlot===reserved?empty:poiHotbarEmptySlot);
