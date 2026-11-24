@@ -31,7 +31,7 @@ try{
   await p.goto(url+'/seed');
   await p.evaluate(()=>{
    const slots=Array(27).fill(null);slots[5]={type:'orvasSoul',count:1,durability:1050};
-   localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weaponDurabilityVersion:2,slots,companionSoul:{version:1,active:'orvasSoul',pending:null}}));
+   localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weapon:null,potions:0,weaponDurabilityVersion:2,slots,companionSoul:{version:1,active:'orvasSoul',pending:null}}));
    localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,position:{x:41,z:42,y:0,facing:2},townLayout:5,townMapHeight:180,
     view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:0,orbitPitch:.35,orbitDistance:5.5}}));
   });
