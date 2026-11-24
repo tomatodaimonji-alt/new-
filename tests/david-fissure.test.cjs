@@ -1,9 +1,10 @@
 const {test}=require('node:test'),a=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
+const leapRadius=Number(h.match(/POI_DAVID_LEAP_RADIUS=(\d+(?:\.\d+)?)/)?.[1]);
 const cut=(x,y)=>{const i=h.indexOf(x),j=h.indexOf(y,i+x.length);a(i>=0&&j>i,x);return h.slice(i,j)};
 function harness(){
  const b={x:24,z:104,y:0,room:{minX:16,maxX:31,minZ:96,maxZ:112}},logs=[],live=new Set(),c={
-  facilitySite:{id:'base',davidTemple:{boss:b}},poiWalkActive:true,poiWalkLevel:0,poiEnemyCueReduced:{matches:false},
+  POI_DAVID_LEAP_RADIUS:leapRadius,facilitySite:{id:'base',davidTemple:{boss:b}},poiWalkActive:true,poiWalkLevel:0,poiEnemyCueReduced:{matches:false},
   document:{hidden:false,querySelector:()=>null},poiAimOrigin:()=>({x:24,z:107,y:0}),poiDavidLine:()=>true,
   poiAimWall:()=>((x,z)=>!c.wall(x,z)),wall:()=>false,terrainY:(x,z)=>x===23?.25:0,
   mesh:()=>({p:[],c:[]}),quad(m,p,q,r,s,col){for(const v of [p,q,r,r,s,p]){m.p.push(...v);m.c.push(...col)}},
@@ -17,15 +18,15 @@ function harness(){
   ';({stomp:poiDavidImpactStomp,draw:typeof poiDrawDavidFissure==="function"?poiDrawDavidFissure:null,geom:typeof poiDavidFissureGeometry==="function"?poiDavidFissureGeometry:null,reset:poiDavidClearHeavyFeedback})',c);
  return {api,c,b,logs,live};
 }
-test('the actual stomp generates a growing, fading fissure with one buffer, rejects leap and cleans up',()=>{
+test('the actual stomp generates a growing, fading fissure with one buffer for each true contact and cleans up',()=>{
  const {api,c,logs,live}=harness(),q={kind:'stomp',sx:24,sz:104,y:0,dx:0,dz:1};a(api.draw,'no ground fracture visual');
  api.draw(999,[]);a.equal(logs.length,0);
  a(api.stomp(q,1000));
- api.draw(1040,[]);api.draw(1190,[]);api.draw(1400,[]);api.draw(1690,[]);
+ api.draw(1040,[]);api.draw(1190,[]);api.draw(1500,[]);api.draw(1690,[]);
  a.equal(c.uploads,1);a.equal(live.size,1);a(logs[1][0]>logs[0][0]&&logs[2][0]>=logs[1][0]);
- a(logs[3][1]<logs[2][1]&&logs[2][1]<logs[0][1]);api.draw(1780,[]);a.equal(live.size,0);
- api.stomp({...q,davidLeapImpact:true},2000);api.draw(2100,[]);a.equal(logs.length,4);
- api.stomp(q,3000);api.draw(3075,[]);api.reset();api.draw(3080,[]);a.equal(live.size,0);
+ a(logs[3][1]<logs[2][1]&&logs[2][1]<logs[0][1]);api.draw(2160,[]);a.equal(live.size,0);
+ api.stomp({...q,davidLeapImpact:true},2300);api.draw(2400,[]);a.equal(logs.length,5);api.draw(3810,[]);a.equal(live.size,0);
+ api.stomp(q,4000);api.draw(4075,[]);api.reset();api.draw(4080,[]);a.equal(live.size,0);
 });
 test('submitted cracks hug authored ground and never cross real wall, room/floor or six-tile reach',()=>{
  const {api,c,b}=harness();a(api.geom,'no ground fracture mesh');const e={x:24.94,z:104.70,sx:24,sz:104,y:0};
@@ -35,5 +36,11 @@ test('submitted cracks hug authored ground and never cross real wall, room/floor
   const [x,y,z]=blocked.p.slice(i,i+3);a(Math.hypot(x-24.5,z-104.5)<=6&&z<=106+1e-8);
   a(y>=.021&&y<=.272+1e-8);a(Math.abs(y-(Math.floor(x)===23?.25:0)-.021)<.002);
  }
+ c.wall=()=>false;
+ const leap=api.geom({...e,x:24.395,z:104.65,leap:true,radius:leapRadius},b),extent=m=>Math.max(...m.p.filter((_,i)=>i%3===0).map((x,i)=>Math.hypot(x-24.5,m.p[i*3+2]-104.5)));
+ a(extent(normal)<=6&&extent(leap)>leapRadius-1.65&&extent(leap)<=leapRadius);
+ c.wall=(x,z)=>z===106;
+ const leapBlocked=api.geom({...e,leap:true,radius:leapRadius},b);
+ a(leapBlocked.p.length<leap.p.length&&leapBlocked.p.filter((_,i)=>i%3===2).every(z=>z<=106+1e-8));
  const none=api.geom({...e,y:1},b);a.equal(none.p.length,0);
 });

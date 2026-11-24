@@ -22,14 +22,14 @@ function setup(){
 
 
 const arm=(api,c,s)=>{c.player.z=98;api.step(o,s,1000);c.player.z=94;api.tick(1620);return s.david.attack};
-test('real distance selection commits a fixed landing, radius 8 and only a single true contact',()=>{
+test('real distance selection commits a fixed landing, radius 7 and only a single true contact',()=>{
  const {c,s,api,boss}=setup();boss.room.arena=arena;c.stock=1000;
  const q=arm(api,c,s);a.equal(q?.kind,'leap');a(q.leap.z<=96&&q.leap.z>=95);
  a.equal(api.pose(s,1800).phase,'windup');a.equal(c.damage.length,0);
  for(let t=1700;t<=2500;t+=100)api.tick(t);
  const air=api.pose(s,2500);a.equal(air.phase,'airborne');a(air.leapHeight>0&&air.leapZ<104);
  a.equal(s.z,104,'air pose cannot change grounded occupancy early');
- c.player={x:31.85,z:q.leap.z,y:0};
+ c.player={x:30.85,z:q.leap.z,y:0};
  for(let t=2600;t<=3000;t+=100)api.tick(t);
  a.equal(c.damage.length,1);a(c.damage[0].n>=40);a.equal(s.z,q.leap.z);
  a.equal(api.pose(s,3000).phase,'recover');a.equal(api.incoming(o,s,28,3000),28);
@@ -44,15 +44,15 @@ test('real exit while airborne cancels contact and traces a visibly grounded rev
  api.tick(2500);const rev=api.pose(s,2500);a(rev.leapZ>start.leapZ);
  api.tick(3000);a.equal(api.pose(s,3000).phase,'dormant');a.deepEqual([s.x,s.z],[24,104]);a.equal(c.damage.length,0);
 });
-test('warning radius is eight actual ground tiles; moving beyond its edge, walls and extra floors cannot take the landing damage',()=>{
+test('warning radius is seven actual ground tiles; moving beyond its edge, walls and extra floors cannot take the landing damage',()=>{
  for(const mode of ['outside','wall','upper','late-wall']){
   const {api,c,s,boss}=setup();boss.room.arena=arena;c.stock=1000;
   c.player={x:24,z:110,y:0};api.step(o,s,1000);c.player.z=114;api.tick(1620);
   const q=s.david.attack;a.equal(q.kind,'leap');
   const g=api.cue(q,boss).lane.p;
-  a(Math.abs(Math.max(...g.filter((_,i)=>i%3===0))-(q.sx+.5+8))<.018,'cue reaches exactly 8 on clear east side');
+  a(Math.abs(Math.max(...g.filter((_,i)=>i%3===0))-(q.sx+.5+7))<.018,'cue reaches exactly 7 on clear east side');
   for(let t=1700;t<=2500;t+=100)api.tick(t);
-  c.player={x:mode==='outside'?32.2:31,z:q.leap.z,y:mode==='upper'?1:0};
+  c.player={x:mode==='outside'?31.2:30.6,z:q.leap.z,y:mode==='upper'?1:0};
   if(mode==='wall')c.wall=(x,z)=>x===27;
   if(mode==='late-wall')c.wall=(x,z)=>z===109;
   for(let t=2600;t<3090;t+=100)api.tick(t);

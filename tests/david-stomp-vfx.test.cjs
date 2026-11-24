@@ -35,7 +35,7 @@ test('shake takes only a copy of visible projection, is tiny, decays and obeys m
  }
  c.document.querySelector=()=>({open:true});a.equal(get()[13],0);
  c.document.querySelector=()=>null;
- a.equal(run('poiDavidImpactVp({vp:m,halfH:9},730)===m'),true);
+ a.equal(run('poiDavidImpactVp({vp:m,halfH:9},1110)===m'),true);
 });
 test('contact is wired only after the live attack advances; the native draw uses one pooled buffer and restores blend state',()=>{
  const part=cut('function poiDavidCombatFrame(now){','function poiDavidPose(s,now){');
@@ -51,5 +51,5 @@ test('contact is wired only after the live attack advances; the native draw uses
  a.deepEqual(calls.filter(c=>c[0]==='upload').map(c=>c[2]),[undefined,'puff'],'two geometry samples share the one actual GPU allocation');
  a.equal(calls.filter(c=>c[0]==='draw').length,3);
  a.deepEqual(calls.slice(-4),[['depthMask',true],['blendFunc','sa','1-sa'],['blendColor',0,0,0,0],['disable','blend']]);
- run('poiDrawDavidImpact(856,null)');a.deepEqual(calls.at(-1),['deleteBuffer','puff']);
+ run('poiDrawDavidImpact(1106,null)');a.deepEqual(calls.at(-1),['deleteBuffer','puff']);
 });
