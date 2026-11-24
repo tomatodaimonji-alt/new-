@@ -29,6 +29,21 @@ const anchor='  freeMovementPose:()=>({x:poiWalkViewX,z:poiWalkViewZ,level:poiWa
 const insert=(s,k,v)=>{assert.equal(s.split(k).length,2,k);return s.replace(k,k+v)};
 let fixture=insert(html,anchor,`
   davidQA:{
+   retreatStep:()=>{
+    const start=[poiWalkX,poiWalkZ],goal=[24,101];
+    if(start[0]===goal[0]&&start[1]===goal[1])return {done:true};
+    const q=[[...start,null]],seen=new Set([start.join(',')]);
+    for(let i=0;i<q.length;i++){
+     const [x,z,first]=q[i];
+     for(const [dx,dz,key] of [[0,-1,'ArrowUp'],[1,0,'ArrowRight'],[0,1,'ArrowDown'],[-1,0,'ArrowLeft']]){
+      const xx=x+dx,zz=z+dz,id=xx+','+zz;
+      if(xx<14||xx>27||zz<101||zz>107||seen.has(id)||!poiWalkCanStep(xx,zz,x,z))continue;
+      const route=first??{x:xx,z:zz,key};if(xx===goal[0]&&zz===goal[1])return route;
+      seen.add(id);q.push([xx,zz,route]);
+     }
+    }
+    return null;
+   },
    aimTest:(roll,target)=>{
     const f=window.__davidFrames;
     f.roll=roll;f.aimTarget=target;f.beamClock={now:performance.now()};
@@ -52,7 +67,10 @@ let fixture=insert(html,anchor,`
     const [o,s]=pair;
     if(!s.david?.awake)return false;
     s.x=s.fromX=o.x;s.z=s.fromZ=o.z;
-    if(!workshopResumeRestorePosition({x:24,z:101,y:0,facing:2}))return false;
+    // Sight the real beam from the open chamber, not below the dogleg
+    // roof lip. A shallow side orbit can see up the descending flame.
+    if(!workshopResumeRestorePosition({x:24,z:kind==='beam'?102:101,y:0,facing:2}))return false;
+    if(kind==='beam'){poiThirdPerson=true;poiCameraYaw=.94;poiCameraPitch=.13;poiCameraDistance=4.7;}
     s.david.attack=null;s.david.next=-Infinity;
     poiPlayerHP=POI_PLAYER_MAX_HP;
     if(!poiDavidBegin(o,s,performance.now()+100,kind))return false;
@@ -72,7 +90,7 @@ let fixture=insert(html,anchor,`
   },`);
 fixture=fixture.replace('function poiDavidBeamSide(roll=Math.random())','function poiDavidBeamSide(roll=window.__davidFrames.roll??.8)');
 fixture=insert(fixture,' source.connect(gain).connect(poiAudioEffects);',"\n const sample=[...poiRecordedFoleyCache].find(([k,b])=>b===buffer&&k.startsWith('david'));if(sample||buffer===poiDavidAlienCache){source.__davidSample={name:sample?.[0]??'davidAlienBeam',duration:buffer.duration,gain:gain.gain.value,linked:poiAudioEffects.context===ctx};}");
-fixture=insert(fixture,'q.sweep={side,tell:now,start:null,end:null,angle:0,hit:false};',"\n     if(window.__davidFrames.aimTarget)workshopResumeRestorePosition({x:24+window.__davidFrames.aimTarget*2,z:101,y:0,facing:2});");
+fixture=insert(fixture,'q.sweep={side,tell:now,start:null,end:null,angle:0,hit:false};',"\n     if(window.__davidFrames.aimTarget)workshopResumeRestorePosition({x:24+window.__davidFrames.aimTarget*2,z:102,y:0,facing:2});");
 fixture=fixture.replace('draw(poiDavidCue.fan,vp)','{const f=window.__davidFrames,c=f.glCounters();draw(poiDavidCue.fan,vp);f.fan++;f.beamSubmission(q.start,"fan",now,c);}');
 fixture=fixture.replace('if(poiDavidCue.beamVisible)poiDavidDrawThermalBeam(poiDavidCue.beam,vp,reduced?emission.alpha*.76:emission.alpha);',
  'if(poiDavidCue.beamVisible){window.__davidFrames.emission={now,turning:emission.turning,fraction:emission.fraction};poiDavidDrawThermalBeam(poiDavidCue.beam,vp,reduced?emission.alpha*.76:emission.alpha);}');
@@ -141,10 +159,10 @@ await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',resolve).once('e
 const url='http://127.0.0.1:'+server.address().port;
 const install=()=>{
  let frame=0,draws=0,vertices=0;
- const summary=window.__davidFrames={coverShows:0,cue:{lane:0,beam:0,builds:0,byStart:{}},contacts:[],timing:{},canceled:{},audio:[],audioStops:[],fan:0,live:0,rays:[],beamDraws:{},beamClock:null,returnClock:null,bufferIds:new WeakMap(),nextBuffer:1,
+ const summary=window.__davidFrames={coverShows:0,cue:{lane:0,beam:0,builds:0,byStart:{}},contacts:[],timing:{},canceled:{},audio:[],audioStops:[],fan:0,live:0,rays:[],beamDraws:{},beamClock:null,returnClock:null,fatalClock:null,bufferIds:new WeakMap(),nextBuffer:1,
   renderTime(real){
-   const c=this.returnClock||this.beamClock;if(!c)return real;
-   const lead=c.first-c.now,cap=this.returnClock?86:lead>0&&lead<=225?47:120;
+   const c=this.returnClock||this.beamClock||this.fatalClock;if(!c)return real;
+   const lead=c.first-c.now,cap=this.returnClock?86:this.fatalClock&&!this.beamClock?245:lead>0&&lead<=225?47:120;
    c.now=Math.max(c.now,Math.min(real,c.now+cap));return c.now;
   },
   glCounters(){return [draws,vertices]},
@@ -203,9 +221,31 @@ async function start(browser){
   await ctx.close();throw e
  }
 }
+const TEMPLE_IN=[[24,91],[24,92],[24,93],[24,94],[24,95],[25,95],[25,96],[25,97],[24,97],[23,97],[23,98],[23,99],[24,99],[24,100],[24,101],[24,102]],TEMPLE_NEAR=[[23,102],[22,102],[21,102],[20,102],[19,102],[18,102],[17,102]];
+async function routeWalk(p,points,after=()=>{}){
+ for(const [x,z] of points){
+  const {pos:[cx,cz]}=await qa(p);
+  if(x===cx&&z===cz)continue;
+  assert(Math.abs(x-cx)+Math.abs(z-cz)===1,JSON.stringify({from:[cx,cz],to:[x,z]}));
+  await step(p,x>cx?'ArrowRight':x<cx?'ArrowLeft':z>cz?'ArrowDown':'ArrowUp',x,z);await after();
+ }
+}
+async function escapeChamber(p){
+ // The old row can contain the real boss and cannot be walked through.
+ // Choose the next cardinal step from the live collision geometry.
+ for(let i=0;i<28;i++){
+  const n=await p.evaluate(()=>window.__editorTest.davidQA.retreatStep());
+  if(n?.done)return;
+  if(!n){await p.waitForTimeout(180);continue}
+  await p.keyboard.press(n.key);
+  try{await wait(p,([x,z])=>{const q=window.__editorTest.davidQA.state();return q.pos[0]===x&&q.pos[1]===z&&q.now>=q.step},[n.x,n.z],1200);}
+  catch(e){if(e.name!=='TimeoutError')throw e;} // actor can cross after planning: replan, never teleport
+ }
+ assert.fail('could not physically reach the escape lip: '+JSON.stringify(await qa(p)));
+}
 async function inside(browser){
  const session=await start(browser),p=session.p;
- for(const z of [92,93,94,95,96,97,98,99,100,101])await step(p,'ArrowDown',24,z);
+ await routeWalk(p,TEMPLE_IN.slice(1));
  await wait(p,()=>window.__editorTest.davidQA.state().statue?.d?.wakeDone);
  return session;
 }
@@ -222,8 +262,11 @@ function assertNativeReturn(v,label){
  const legal=frame=>frame[0]>=13&&frame[0]<=35&&frame[1]>=93&&frame[1]<=115;
  assert(v.returnFrames.every(legal),label+' remains inside arena cells');
  for(let i=1;i<v.returnFrames.length;i++){
-  const [x,z]=v.returnFrames[i], [a,b]=v.returnFrames[i-1];
-  assert(Math.abs(x-a)+Math.abs(z-b)<=1,label+' step-by-step return cells');
+  const [x,z,rx,rz]=v.returnFrames[i], [a,b,ax,az]=v.returnFrames[i-1];
+  // The actual free ratchet can cross both rounded-cell boundaries in
+  // a diagonal frame; it cannot jump a cell or a full physical tile.
+  assert(Math.max(Math.abs(x-a),Math.abs(z-b))<=1&&Math.hypot(rx-ax,rz-az)<=1.05,
+   label+' continuous return cells: '+JSON.stringify([v.returnFrames[i-1],v.returnFrames[i]]));
  }
  assert(v.returnFrames.some(([, ,x,z])=>Math.abs(x-Math.round(x))+Math.abs(z-Math.round(z))>.01),label+' real visual interpolation between cells');
 }
@@ -243,17 +286,19 @@ try{
   assert.deepEqual(rested.cue,{lane:0,beam:0,builds:0,byStart:{}},'dormant room uploads no attack mesh');
   if(far.statue&&rested.statue)assert.deepEqual([rested.statue.x,rested.statue.z,rested.statue.hp,rested.statue.pose],[far.statue.x,far.statue.z,far.statue.hp,far.statue.pose],'distant boss/pose does not move or advance combat');
   checkpoint='physical crossing and awakening without any warp/cover';
-  for(const z of [92,93,94,95,96,97,98]){
-   await step(p,'ArrowDown',24,z);s=await qa(p);
+  await routeWalk(p,TEMPLE_IN.slice(1),async()=>{
+   s=await qa(p);
    assert.equal(s.travel,far.travel);assert.equal(s.opens,far.opens);assert.equal(s.url,far.url);assert.equal(s.status,'ready');assert.equal(s.scene,'surface');
-  }
+  });
   await wait(p,()=>window.__editorTest.davidQA.state().statue?.d?.awake);
   s=await qa(p);assert.equal(s.statue.hp,1050,'tuned David is deliberately beyond ordinary early-game weapons');
   if(screenshots)await p.screenshot({path:screenshots+'/david-temple-wake.png'});
   checkpoint='approach produces real boss displacement before physical retreat';
+  await routeWalk(p,TEMPLE_NEAR);
   await wait(p,()=>{const s=window.__editorTest.davidQA.state().statue;return s?.d?.awake&&(s.x!==24||s.z!==104)});
   checkpoint='physical retreat cancels any chase or threat into exterior';
-  for(const z of [97,96,95,94,93,92,91])await step(p,'ArrowUp',24,z);
+  await escapeChamber(p);
+  await routeWalk(p,TEMPLE_IN.slice(0,-1).reverse());
   const back=await qa(p);
   await wait(p,t=>window.__editorTest.davidQA.state().now>=t+1550,back.now);
   s=await qa(p);assert.deepEqual(s.pos,[24,91,0]);assert(!s.statue?.d?.attack);
@@ -386,20 +431,25 @@ try{
   // the production footstep SE while Chromium has a trusted user gesture.
   await fp.bringToFront();
   await wait(fp,()=>!document.hidden&&document.hasFocus(),null,9000);
-  const route=[92,93,94,95,96,97,98];
+  const route=TEMPLE_IN.slice(1);
   const running=()=>window.__editorTest.davidQA.sound().running;
-  await step(fp,'ArrowDown',24,route.shift());
+  await routeWalk(fp,[route.shift()]);
   try{await wait(fp,running,null,2400)}catch(e){
    if(e.name!=='TimeoutError')throw e;
    // Touch the actual primary action, not guessed pixels. If audio hasn't
    // resumed yet, the second normal outside footstep gets a fresh gesture.
    await fp.locator('#poiWalkAction').tap({timeout:5000});
-   await step(fp,'ArrowDown',24,route.shift());
+   await routeWalk(fp,[route.shift()]);
    await wait(fp,running,null,9000);
   }
-  for(const z of route)await step(fp,'ArrowDown',24,z);
+  // A 1,008ms software WebGL stall correctly aborts an active leap,
+  // leaving this independently seeded player alive. Bound just the shared
+  // encounter render clock to native playable increments. No attack,
+  // damage, route, frames, death or audio source is injected.
+  await fp.evaluate(()=>{window.__davidFrames.fatalClock={now:performance.now()}});
+  await routeWalk(fp,route);await routeWalk(fp,TEMPLE_NEAR);
   await wait(fp,()=>{const s=window.__editorTest.davidQA.state().statue;return s?.d?.awake&&(s.x!==24||s.z!==104)});
-  await wait(fp,()=>window.__editorTest.davidQA.state().contacts.some(h=>h.hp===0),null,35000);
+  await wait(fp,()=>window.__editorTest.davidQA.state().contacts.some(h=>h.hp===0),null,60000);
   await wait(fp,()=>{const s=window.__editorTest.davidQA.state().statue;return !s?.d?.awake&&s?.x===24&&s?.z===104},null,12000);
   const summary=await qa(fp),audio=await fp.evaluate(()=>window.__editorTest.davidQA.sound());
   assertNativeReturn(summary,'real fatal contact');
