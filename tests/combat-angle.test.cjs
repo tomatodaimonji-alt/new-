@@ -75,21 +75,18 @@ test('a candidate on another editor floor is excluded even without a facility si
  const result=list({x:0,z:0,y:0},3,0);
  a.equal(result.length,1);a.equal(result[0].id,good);
 });
-test('windup uses canonical cancellation for discrete input and analog displacement for free input',()=>{
- const start=html.indexOf('function poiAimWindupMoved'),end=html.indexOf('function poiAimTargetList',start);
+test('the contact origin follows analog precision or the current keyboard interpolation',()=>{
+ const start=html.indexOf('function poiAimOrigin'),end=html.indexOf('function poiAimTargetList',start);
  a(start>=0&&end>start);
- const c={poiWalkX:4,poiWalkZ:5,poiWalkFacing:1,poiAimOrigin:()=>c.live};
- const moved=vm.runInNewContext(html.slice(start,end)+';poiAimWindupMoved',c);
- const base={x:4,z:5,facing:1,aim:{x:3.81,z:5,dir:{x:1,z:0},analog:false}};
- c.live={x:4,z:5,dir:{x:1,z:0},analog:false};
- a.equal(moved(base,10),false,'keyboard tween finishing is not input');
- c.poiWalkX=5;a.equal(moved(base,11),true);
- c.poiWalkX=4;c.poiWalkFacing=2;a.equal(moved(base,12),true);
- c.poiWalkFacing=1;
- const free={...base,aim:{x:3.81,z:5,dir:{x:1,z:0},analog:true}};
- c.live={x:3.81,z:5,dir:{x:1,z:0},analog:true};
- a.equal(moved(free,13),false,'released analog with a retained heading does not cancel');
- c.live.x=3.88;a.equal(moved(free,14),true);
+ const c={poiWalkX:4,poiWalkFromX:3,poiWalkZ:5,poiWalkFromZ:5,poiWalkLevel:0,poiWalkFacing:1,
+  poiWalkStarted:100,poiWalkStepMs:200,poiAimUnit:(x,z)=>({x,z}),poiFreePose:null};
+ const at=vm.runInNewContext(html.slice(start,end)+';poiAimOrigin',c);
+ a.equal(at(150).x,3.25,'read current keyboard interpolation rather than next destination');
+ a.equal(at(300).x,4);
+ c.poiFreePose={x:3.88,z:5.2,angle:0,level:0};
+ a.equal(at(150).x,3.88);a.equal(at(150).z,5.2);a.equal(at(150).analog,true);
+ c.poiFreePose.level=-1;
+ a.equal(at(150).x,3.25,'discard analog pose on a different floor');
 });
 
 test('a door closing behind the projectile does not undo traveled distance',()=>{
@@ -121,3 +118,4 @@ test('decorative enemy attack recoil does not push an adjacent locomotion body o
  enemy.actorFree={};const [moving]=targets.targets({x:0,z:0,y:-1},1,0);
  a(Math.abs(moving.x-.85)<1e-9&&Math.abs(moving.z-.24)<1e-9,'continuous underlying movement is still sampled');
 });
+

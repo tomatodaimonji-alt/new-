@@ -7,7 +7,7 @@ function staff(){
   cut('// BEGIN WORLD MELEE REACH','// Visual release only:')+
   cut('function characterArmRotation(','function roundStack(')+
   ';({profile:poiPlayerWeaponProfile("equipLongStaff"),pose:ms=>poiPlayerProfilePose("equipLongStaff",ms),'+
-  'plan:ms=>poiWorldMeleePlan("equipLongStaff",poiPlayerWeaponProfile("equipLongStaff"),ms),rig:poiWorldMeleeRig,characterArmRotation})',c);
+  'plan:ms=>poiWorldMeleePlan("equipLongStaff",poiPlayerWeaponProfile("equipLongStaff"),ms),rig:poiRigidHeldRotation,characterArmRotation})',c);
  return o;
 }
 const close=(actual,expected)=>a.ok(Math.abs(actual-expected)<1e-7,[actual,expected]);
@@ -31,9 +31,12 @@ test('one grip-connected shaft arcs high and rearward, reaches exact forward con
  close(at.height,.74);close(at.forward,2);close(at.mix,1);close(at.side,0);
  const handle=[0,.64,0],apex=[-.026,2.18,.02],g={x:.26,y:.91,z:.39};
  for(const plan of [w,a1,a2,at,after]){
-  const rig=s.rig(plan,g,apex,handle),tip=rig.point(...apex),held=rig.point(...handle);
-  close(tip[0],plan.side);close(tip[1],plan.height);close(tip[2],plan.forward);
-  close(held[0],g.x);close(held[1],g.y);close(held[2],g.z);
+  const rig=s.rig(plan,g,apex,handle,[1,1,1],(...v)=>v);
+  const tip=rig(...apex.map((v,i)=>v-handle[i])),held=rig(0,0,0);
+  const length=Math.hypot(...apex.map((v,i)=>v-handle[i]));
+  const aim=[plan.side-g.x,plan.height-g.y,plan.forward-g.z],gap=Math.hypot(...aim);
+  for(let i=0;i<3;i++)close(tip[i],aim[i]*length/gap);
+  close(Math.hypot(...tip),length);close(Math.hypot(...held),0);
  }
 });
 test('skeleton long staff alone uses the corresponding overhead visual, retaining original engine timing',()=>{
@@ -49,3 +52,4 @@ test('skeleton long staff alone uses the corresponding overhead visual, retainin
  a.equal(strike.hit-strike.start,660);
  a.equal(api.pose('monsterSkelSpearman',state,670).variant,'spear-thrust');
 });
+

@@ -73,13 +73,14 @@ test('empty sword action shows a swing without spending durability',()=>{
  assert.equal(h.c.poiWalkActionStarted,1000);assert(Number.isFinite(h.yaw()));
 });
 
-test('true sword contact is at 108 ms; movement does not replace tap origin or yaw',()=>{
- const h=setup('equipWoodSword',{analog:true}),center=h.target(.72),flank=h.target(.9,1.35);
- h.begin();assert.equal(center.hp,100);assert.equal(h.c.wear,0);
+test('true sword contact is at 108 ms; movement updates contact origin but not tap yaw',()=>{
+ const h=setup('equipWoodSword',{analog:true}),old=h.target(.72),center=h.target(2.7),flank=h.target(2.9,1.35);
+ h.begin();assert.equal(old.hp,100);assert.equal(center.hp,100);assert.equal(h.c.wear,0);
  h.c.poiFreePose={x:12.1,z:9.91,level:0,angle:Math.PI/2};
  h.c.poiWalkX=12;h.c.poiWalkFacing=3;
  h.frame(1107);assert.equal(center.hp,100);assert.equal(flank.hp,100);
- h.frame(1108);assert(center.hp<100);assert(flank.hp<100);assert.equal(h.contacts.length,2);
+ h.frame(1108);assert.equal(old.hp,100,'start-origin target is now behind the player');assert(center.hp<100);assert(flank.hp<100);assert.equal(h.contacts.length,2);
  assert(Math.abs(h.yaw()+Math.PI/2)<1e-6,'animation yaw stays at tap heading');
  assert.equal(h.c.wear,1);
 });
+

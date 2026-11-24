@@ -7,9 +7,16 @@ function talk(id,port){
   poiNpcMenuRender:()=>{},poiShopSync:()=>{}};
  vm.createContext(c);
  vm.runInContext(slice('const POI_NPC_EXTRA_SPEECH=','const POI_NPC_MENU_LABELS=')+
+  (h.includes('const poiNpcTalkCursor=')?slice('const poiNpcTalkCursor=','function poiNpcMenuActive('):'')+
   (h.includes('function poiPortMarekTopic(')?slice('function poiPortMarekTopic(','// END SOUTH PORT RESIDENTS'):'')+
   slice('function poiNpcMenuChoose(','// A flexible greeting'),c);
- return ()=>{assert.equal(c.poiNpcMenuChoose('talk',100),true);assert.equal(d.topic,d.text);return d.text};
+ return ()=>{
+  // A new visit reopens the root menu; only the NPC's topic cursor survives.
+  d.page='root';d.rows=[{id:'talk'}];
+  assert.equal(c.poiNpcMenuChoose('talk',100),true);assert.equal(d.topic,d.text);
+  if(h.includes('const poiNpcTalkCursor='))assert.equal(d.page,'speech','ordinary menu closes after the single selected line');
+  return d.text;
+ };
 }
 test('first explicit innkeeper Talk points from east gate through ruins and distinguishes slow wet and dry west',()=>{
  const next=talk('innkeeper',{name:'潮待ちの港',entrance:{x:91,z:123,y:0}});

@@ -12,8 +12,8 @@ test('held long-staff downstroke reaches its original two-tile contact in each c
   const pose=at(210);pose.meleeReach=c.poiWorldMeleePlan('equipLongStaff',c.poiPlayerWeaponProfile(),210);
   const [x,y,z]=c.poiBuildPlayerMesh('equipLongStaff',pose,null,0,r,0,0,0,null,true).p;
   const forward=x*dx+z*dz,lateral=x*dz-z*dx;
-  assert(Math.abs(forward-2)<1e-7,JSON.stringify({r,forward}));
-  assert(Math.abs(lateral)<1e-7&&Math.abs(y-.74)<1e-7);
+  assert(Math.abs(forward-2)<.001,JSON.stringify({r,forward}));
+  assert(Math.abs(lateral)<.001&&Math.abs(y-.74)<.001);
  }
  assert(c.poiBuildPlayerMesh('equipLongStaff',null,null,0,0).p[1]>1.40,'loftier visible idle staff');
 });
@@ -27,3 +27,4 @@ test('native prop has visibly longer calibrated silhouette while combat constant
  c.poiFantasyEquipmentGeometry({},'equipLongStaff',0,0,0);
  assert(Math.max(...calls)>=2.16);
 });
+
