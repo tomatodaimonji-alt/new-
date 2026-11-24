@@ -32,7 +32,7 @@ const {chromium}=createRequire(import.meta.url)('playwright'),s=createServer((re
 });
 await new Promise(r=>s.listen(0,'127.0.0.1',r));const url='http://127.0.0.1:'+s.address().port;
 const backend=process.env.HYBRID_BACKEND??'stock',tier=process.env.HYBRID_TIER??'near';
-const coords={near:[102,67],middle:[114,67],far:[124,88]},[x,z]=coords[tier],yaw=Math.atan2(84-x,67-z),expected={near:0,middle:1,far:2}[tier];
+const coords={near:[102,67],middle:[108,85],far:[124,88]},[x,z]=coords[tier],yaw=Math.atan2(84-x,67-z),expected={near:0,middle:1,far:2}[tier];
 let b;
 try{
  b=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
