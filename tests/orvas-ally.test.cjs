@@ -76,7 +76,7 @@ t.test('established canonical boss is retained across an actual arena-sized retr
  a(!b.poiOrvasAllyBossLatch(q,1597));a.equal(q.david.attack,null);
 });
 t.test('the production rubble emitter honors implicit outdoor terrain but not water or an absent cellar floor',()=>{
- const code=h.slice(h.indexOf('function poiDavidRaisedStoneGeometry('),h.indexOf('const globalpoiDavidImpact='));
+ const code=h.slice(h.indexOf('function poiDavidRaisedStoneGeometry('),h.indexOf('function poiDrawDavidRaisedStone('));
  const mesh=()=>({p:[],n:[],c:[]}), tri=(m,A,B,C,col)=>{m.p.push(...A,...B,...C);m.c.push(...col,...col,...col)};
  const c=vm.createContext({mesh,tri,poiAimWall:()=>null,poiDavidArena:()=>null,poiDavidIn:()=>true,poiDavidRoomRay:(q,b,d,n)=>n,
   poiDavidFractureFloors:e=>e.floors,facilitySite:{id:'base'},validPos:()=>true,MAP_W:128,MAP_H:182,

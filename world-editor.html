@@ -18680,7 +18680,7 @@ window.addEventListener('pageshow',()=>{poiAudioPageHidden=false;poiAudioSyncLif
 // hint never overrides a hidden document or an active pagehide.
 window.__workshopAudioForeground=visible=>{
  if(typeof visible!=='boolean')return;
- if(!visible){if(typeof poiHealingCastCancel==="function")poiHealingCastCancel();if(typeof poiStopRepeat==='function')poiStopRepeat();if(typeof poiMineUnlockCancel==='function')poiMineUnlockCancel()}
+ if(!visible){if(typeof poiCompanionSummonCancel==='function')poiCompanionSummonCancel();if(typeof poiHealingCastCancel==="function")poiHealingCastCancel();if(typeof poiStopRepeat==='function')poiStopRepeat();if(typeof poiMineUnlockCancel==='function')poiMineUnlockCancel()}
  poiAudioNativeForeground=visible;
  if(!visible&&typeof poiOrvasAllyStop==='function'&&poiCompanionActor?.id==='orvasSoul')
   poiOrvasAllyStop(poiCompanionActor,performance.now(),true);
@@ -18946,7 +18946,114 @@ function poiCompanionEngage(a,now){
  }
  return t.s;
 }
+// BEGIN COMPANION SUMMON EFFECT
+const POI_COMPANION_SUMMON_MS=560;
+let poiCompanionSummonTicket=null,poiCompanionSummonEvent=null,poiCompanionSummonGpu=null;
+let poiCompanionSummonPcm=null,poiCompanionSummonAudioOwner=null;
+const poiCompanionSummonVp=new Float32Array(16);
+function poiCompanionSummonIntent(id,now){
+ poiCompanionSummonCancel();
+ poiCompanionSummonTicket={id,place:poiCompanionPlace(),until:now+1500};
+ if(typeof poiAudioStart==='function'&&poiAudioEnabled&&poiAudioAllowed())poiAudioStart();
+}
+function poiCompanionSummonBuffer(ctx){
+ if(poiCompanionSummonAudioOwner===ctx&&poiCompanionSummonPcm)return poiCompanionSummonPcm;
+ const rate=24000,n=Math.round(.58*rate),b=ctx.createBuffer(1,n,rate),f=b.getChannelData(0),tau=2*Math.PI;
+ const partial=(t,h)=>Math.sin(tau*h*t), env=(t,end)=>t<0||t>=end?0:Math.min(1,t/.037)*(1-t/end)**2;
+ let noise=.15,low=0;
+ for(let i=0;i<n;i++){
+  const t=i/rate,u=t-.131;
+  noise=(noise*15485.87+.173)%1;low+=.063*(noise-.5-low);
+  const aura=(partial(t,261.626)*.22+partial(t,392)*.13+partial(t,523.25)*.045+low*.11)*env(t,.57);
+  const reply=(partial(u,392)*.22+partial(u,587.33)*.08+partial(u,783.99)*.032)*env(u,.433);
+  f[i]=aura+reply;
+ }
+ poiCompanionSummonAudioOwner=ctx;return poiCompanionSummonPcm=b;
+}
+function poiCompanionSummonCancel(){
+ poiCompanionSummonTicket=null;
+ const e=poiCompanionSummonEvent;poiCompanionSummonEvent=null;
+ if(e?.source)try{
+  const t=e.source.context.currentTime,g=e.gain?.gain;
+  if(g){g.cancelScheduledValues(t);g.setValueAtTime(g.value,t);g.linearRampToValueAtTime(0,t+.023);}
+  e.source.stop(t+.027);
+ }catch{}
+}
+function poiCompanionSummonAttach(a,now){
+ const token=poiCompanionSummonTicket;
+ if(!token||!a||token.id!==a.id)return false;
+ poiCompanionSummonTicket=null;
+ if(now>token.until||!poiCompanionSame(token.place,poiCompanionPlace())||!poiCompanionAllowed())return false;
+ const p=poiCompanionPosition(a);
+ const ground=typeof poiCreekWalkHeight==='function'?poiCreekWalkHeight(a.x,a.z):terrainY(a.x,a.z);
+ const e=poiCompanionSummonEvent={actor:a,place:token.place,start:now,x:p.x+.5,z:p.z+.5,height:ground+a.y*1.4+.038};
+ poiCompanionSummonSound(e,now);
+ return true;
+}
+function poiCompanionSummonSound(e,now){
+ if(e.played)return;
+ if(now-e.start>150||typeof poiAudioAllowed!=='function'||!poiAudioEnabled||!poiAudioAllowed()||
+    poiAudioLevels.master<=0||poiAudioLevels.se<=0){e.played=true;return}
+ // Android's user-gesture resume can finish just after the spawning frame.
+ // Retry within this one visual onset only; never play an old queued source.
+ const ctx=poiAudioContext;if(ctx?.state!=='running')return;
+ e.played=true;
+ try{
+  poiPlayImpactBuffer(poiCompanionSummonBuffer(ctx),ctx.currentTime+.007,.43,(source,gain)=>{
+   e.source=source;e.gain=gain;
+   source.addEventListener?.('ended',()=>{e.source=null;},{once:true});
+  },.584);
+ }catch{}
+}
+function poiCompanionSummonPrune(now){
+ const t=poiCompanionSummonTicket,e=poiCompanionSummonEvent;
+ if(!t&&!e)return;
+ const actor=poiCompanionActor,where=poiCompanionPlace();
+ if((t&&(!poiCompanionSame(t.place,where)||now>t.until))||
+    (e&&(!poiCompanionSame(e.place,where)||e.actor!==actor))||!poiCompanionAllowed()){
+  poiCompanionSummonCancel();return;
+ }
+ if(e&&now-e.start>POI_COMPANION_SUMMON_MS+65)poiCompanionSummonEvent=null;
+ else if(e)poiCompanionSummonSound(e,now);
+}
+function poiCompanionSummonOpacity(a,now){
+ const e=poiCompanionSummonEvent;
+ if(!e||a!==e.actor)return 1;
+ const t=Math.max(0,Math.min(1,(now-e.start)/450));
+ return .05+.95*t*t*(3-2*t);
+}
+function poiCompanionSummonDraw(now,vp){
+ const e=poiCompanionSummonEvent,age=e?now-e.start:Infinity;
+ if(age<0||age>=POI_COMPANION_SUMMON_MS||e.actor!==poiCompanionActor||poiWalkLevel!==e.actor.y)return;
+ if(!poiCompanionSummonGpu){
+  const m=mesh(),polar=(theta,r,h)=>[Math.cos(theta)*r,h,Math.sin(theta)*r];
+  for(let i=0,n=36;i<n;i++){
+   const a=i*2*Math.PI/n,b=(i+1)*2*Math.PI/n;
+   quad(m,polar(a,.88,0),polar(b,.88,0),polar(b,.949,0),polar(a,.949,0),[.71,.89,.56]);
+   if(i%3!==2)quad(m,polar(a,.65,.007),polar(b,.65,.007),polar(b,.686,.007),polar(a,.686,.007),[.89,.81,.45]);
+   if(i%6===0){
+    tri(m,polar(a-.030,.81,.003),polar(a+.030,.81,.003),polar(a,.72,.215),[.81,.95,.62]);
+   }
+  }
+  poiCompanionSummonGpu=upload(m);
+ }
+ const t=age/POI_COMPANION_SUMMON_MS,r=.30+1.09*(1-(1-t)**2),ramp=Math.min(1,age/95);
+ const alpha=.53*ramp*(1-t)**1.35;
+ const q=poiCompanionSummonVp;
+ for(let i=0;i<4;i++){
+  q[i]=vp[i]*r;q[4+i]=vp[4+i];q[8+i]=vp[8+i]*r;
+  q[12+i]=vp[12+i]+e.x*vp[i]+e.height*vp[4+i]+e.z*vp[8+i];
+ }
+ gl.enable(gl.BLEND);gl.blendFunc(gl.CONSTANT_ALPHA,gl.ONE_MINUS_CONSTANT_ALPHA);gl.depthMask(false);
+ try{gl.blendColor(0,0,0,alpha);draw(poiCompanionSummonGpu,q);}
+ finally{gl.depthMask(true);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.blendColor(0,0,0,0);gl.disable(gl.BLEND);}
+}
+if(typeof document!=='undefined'&&typeof document.addEventListener==='function')
+ document.addEventListener('visibilitychange',()=>{if(document.hidden)poiCompanionSummonCancel();});
+// END COMPANION SUMMON EFFECT
+
 function poiCompanionTick(now){
+ if(typeof poiCompanionSummonPrune==='function')poiCompanionSummonPrune(now);
  if(typeof poiOrvasAllyRouteFrame==='function')poiOrvasAllyRouteFrame(now);
  if(typeof document!=='undefined'&&document.hidden)return;
  if(!poiCompanionAllowed()){
@@ -18961,7 +19068,9 @@ function poiCompanionTick(now){
  if(!poiCompanionType(id)||!poiInventorySlots(kit).some(c=>c?.type===id)){poiCompanionActor=null;poiCompanionTarget=null;return}
  const where=poiCompanionPlace();
  if(!poiCompanionActor||poiCompanionActor.id!==id||!poiCompanionSame(poiCompanionActor,where)){
-  poiCompanionActor=poiCompanionSpawn(id,now);poiCompanionTarget=null;return;
+  poiCompanionActor=poiCompanionSpawn(id,now);poiCompanionTarget=null;
+  if(poiCompanionActor&&typeof poiCompanionSummonAttach==='function')poiCompanionSummonAttach(poiCompanionActor,now);
+  return;
  }
  const a=poiCompanionActor,mode=poiCompanionMode(kit);
  const blocked=typeof document!=='undefined'&&
@@ -19359,6 +19468,13 @@ a.id+':'+a.x+':'+a.z+':'+a.y+':'+(fast?'fast:':'idle:')+Math.floor(now/(fast?32:
   poiCompanionMeshKey=key;poiCompanionWorldActor=a;poiCompanionDrawPose=pose;
  }
  if(!poiCompanionMesh)return;
+ const summon=typeof poiCompanionSummonOpacity==='function'?poiCompanionSummonOpacity(a,now):1;
+ if(summon<1){
+  gl.enable(gl.BLEND);gl.blendFunc(gl.CONSTANT_ALPHA,gl.ONE_MINUS_CONSTANT_ALPHA);gl.depthMask(false);
+  try{gl.blendColor(0,0,0,summon);draw(poiCompanionMesh,vp);}
+  finally{gl.depthMask(true);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.blendColor(0,0,0,0);gl.disable(gl.BLEND);}
+  return;
+ }
  if(typeof poiDrawMonsterHitFlash==='function'&&now-a.hurtAt<210){
   poiCompanionMesh.hitFlashSpans=[{first:0,end:poiCompanionMesh.count,source:{hitFlashAt:a.hurtAt}}];
   poiDrawMonsterHitFlash(poiCompanionMesh,vp,now);
@@ -19418,6 +19534,7 @@ function poiCompanionCommand(mode,now=performance.now(),token=null){
  poiCompanionTarget=null;
  if(change){
   poiCompanionActor=null;
+  if(summon&&typeof poiCompanionSummonIntent==='function')poiCompanionSummonIntent(id,now);
   if(typeof toast==='function')toast(spec.name.replace(/の魂$/,'')+'を仲間として呼んだ。');
  }
  if(poiCompanionActor){
@@ -33569,6 +33686,9 @@ function poiDavidDrawThermalBeam(g,vp,alpha){
 // BEGIN DAVID STOMP IMPACT
 const POI_DAVID_DUST_MS=640,POI_DAVID_QUAKE_MS=705,POI_DAVID_PUFFS=12,POI_DAVID_FISSURE_MS=1160;
 let poiDavidImpact=null,poiDavidDustMesh=null;
+const globalpoiDavidImpact=()=>poiDavidImpact,setglobalpoiDavidImpact=v=>{poiDavidImpact=v};
+const globalpoiDavidDustMesh=()=>poiDavidDustMesh,setglobalpoiDavidDustMesh=v=>{poiDavidDustMesh=v};
+
 // BEGIN DAVID HEAVY FEEDBACK
 const POI_DAVID_HEAVY_PROFILE=Object.freeze({
  foot:[.024,205,.39],sweep:[.036,220,0],double:[.044,235,0],beam:[.028,220,0]
@@ -33707,11 +33827,11 @@ function poiDavidImpactVisible(e,now,limit=e?.dustMs??POI_DAVID_DUST_MS,keepDeat
  return e.view;
 }
 function poiDavidImpactVp(frame,now){
- const ally=poiOrvasAllyEffects;
- const stomp=poiDavidImpact??ally.impact,foot=poiDavidHeavyBump??ally.bump;
- if(foot&&(now-foot.start>=foot.ms||foot.owner!==facilitySite)){if(foot===ally.bump)ally.bump=null;else poiDavidHeavyBump=null;}
+ const ally=typeof poiOrvasAllyEffects!=='undefined'?poiOrvasAllyEffects:null;
+ const stomp=poiDavidImpact??ally?.impact,foot=poiDavidHeavyBump??ally?.bump;
+ if(foot&&(now-foot.start>=foot.ms||foot.owner!==facilitySite)){if(foot===ally?.bump)ally.bump=null;else poiDavidHeavyBump=null;}
  const grounded=stomp&&now-stomp.start<stomp.quakeMs;
- const e=grounded?stomp:(poiDavidHeavyBump??ally.bump),age=e?now-e.start:Infinity,ms=grounded?e.quakeMs:e?.ms??0;
+ const e=grounded?stomp:(poiDavidHeavyBump??ally?.bump),age=e?now-e.start:Infinity,ms=grounded?e.quakeMs:e?.ms??0;
  if(age>=ms||age<0||!poiDavidImpactVisible(e,now,ms)||
     (typeof poiEnemyCueReduced!=='undefined'&&poiEnemyCueReduced?.matches))return frame.vp;
  const p=poiAimOrigin(now),d=Math.hypot(e.x-p.x-.5,e.z-p.z-.5);
@@ -34288,8 +34408,6 @@ function poiDavidRaisedStoneGeometry(e,b){
  }
  return m;
 }
-const globalpoiDavidImpact=()=>poiDavidImpact,setglobalpoiDavidImpact=v=>{poiDavidImpact=v};
-const globalpoiDavidDustMesh=()=>poiDavidDustMesh,setglobalpoiDavidDustMesh=v=>{poiDavidDustMesh=v};
 const globalpoiDavidFissure=()=>poiDavidFissure,setglobalpoiDavidFissure=v=>{poiDavidFissure=v};
 const globalpoiDavidFissureMesh=()=>poiDavidFissureMesh,setglobalpoiDavidFissureMesh=v=>{poiDavidFissureMesh=v};
 const globalpoiDavidRaisedStoneMesh=()=>poiDavidRaisedStoneMesh,setglobalpoiDavidRaisedStoneMesh=v=>{poiDavidRaisedStoneMesh=v};
@@ -34514,6 +34632,7 @@ function render(){
  if(poiWalkActive){
   poiEconomyDraw(p.vp,now);poiInventoryDraw(p.vp,now);
   if(typeof poiTownResidentsDraw==='function')poiTownResidentsDraw(now,p.vp);
+  if(typeof poiCompanionSummonDraw==='function')poiCompanionSummonDraw(now,p.vp);
   if(typeof poiDrawCompanion==='function')poiDrawCompanion(now,p.vp);
   poiMonsterRender(now,p.vp);
   if(typeof poiDrawOrvasPlayerBeam==='function')poiDrawOrvasPlayerBeam(now,p.vp);
