@@ -135,6 +135,15 @@ jobs:
            assert.equal(q.marks().length,3);
            assert(q.marks().every(m=>m.m.p.length>0));
           });
+          test('GPU buffers retire on expiry or exact map swap, never drawing across scenes',()=>{
+           const q=setup(),deleted=[];q.c.poiWalkActive=true;q.c.gl.deleteBuffer=b=>deleted.push(b);
+           q.f(100,0);q.f(180,1.8);q.marks()[0].gpu={buf:'expired'};
+           vm.runInContext('poiDrawOrvasWalkFissures(860,null)',q.c);
+           assert.equal(q.marks().length,0);assert.deepEqual(deleted,['expired']);
+           q.f(280,3.6);q.marks()[0].gpu={buf:'moved'};q.c.world=[];
+           vm.runInContext('poiDrawOrvasWalkFissures(285,null)',q.c);
+           assert.equal(q.marks().length,0);assert.deepEqual(deleted,['expired','moved']);
+          });
           SOURCE
           cat >.qa/tests/orvas-walk-fissures-browser.mjs <<'SOURCE'
           import assert from 'node:assert/strict';
@@ -223,6 +232,7 @@ jobs:
            // Keep the actual player at distance just over the settled sweep reach
            // but under the leap trigger, without forcing a trajectory or attack kind.
            for(let z=155;z>=152;z--){s=await retreat(z);assert.deepEqual(s.marks,[])}
+           await until(s=>s.wakeDone,70);
            where='actual trusted retreat maintains distance band as boss physically chases';
            for(const [nextZ,bossZ] of [[151,157.36],[150,156.36]]){
             await until(s=>s.renderPose.z-.5<=bossZ,36);
