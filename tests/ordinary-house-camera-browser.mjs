@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {createRequire} from 'node:module';
 import {readFileSync} from 'node:fs';
+import {mkdir} from 'node:fs/promises';
 import {Script} from 'node:vm';
 const html=readFileSync(process.argv[2]??'world-editor.html','utf8'),baseline=process.argv.includes('--baseline');
 let h=html;
@@ -51,7 +52,9 @@ await new Promise(r=>server.listen(0,'127.0.0.1',r));const url='http://127.0.0.1
 const max=(xs,f)=>Math.max(...xs.map(f));
 const angle=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b));
 let browser;
+const shots=process.env.FACILITY_SCREENSHOTS;
 try{
+ if(shots)await mkdir(shots,{recursive:true});
  browser=await chromium.launch({executablePath:process.env.CHROMIUM_EXECUTABLE||undefined,
   args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
  for(const sc of [
@@ -82,6 +85,9 @@ try{
     assert(k,JSON.stringify(move));await p.keyboard.press(k);
     for(let i=0;i<6;i++){a=await frame();frames.push(a)}
     assert.deepEqual([a.x,a.z,a.level],[x,z,0],sc.name+' trusted step '+JSON.stringify(a));
+    if(shots&&z===60&&x===75&&sc.route.indexOf(sc.route.find(e=>e[1]===60))!==-1&&frames.length<28){
+     try{await p.screenshot({path:shots+'/'+(baseline?'before':'after')+'-pictured-x75-z60.png',timeout:6000});}catch(e){if(e.name!=='TimeoutError')throw e}
+    }
    }
    const tilt=max(frames,f=>f.pitch),error=max(frames,f=>Math.abs(f.pitch-sc.pitch));
    const gap=max(frames.slice(1),(f)=>{const i=frames.indexOf(f),prior=frames[i-1];return Math.abs(f.arm-prior.arm);});

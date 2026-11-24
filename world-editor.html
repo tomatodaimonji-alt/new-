@@ -31138,11 +31138,27 @@ function poiWallCameraCandidates(target,desired){
 const POI_HOME_CAMERA_IDS=new Set(['cottage','rowhouse','gardener']);
 const poiHomeCameraPlans=new WeakMap();
 let poiHomeCameraArmState=null;
-function poiHomeCameraZone(site,x,z,y){
- if(y!==0||!site?.buildings||!(site.id==='base'||site.id==='homes'||POI_HOME_CAMERA_IDS.has(site.id)))return false;
+function poiHomeCameraBuildings(site){
+ if(!site?.buildings||!(site.id==='base'||site.id==='homes'||POI_HOME_CAMERA_IDS.has(site.id)))return [];
  let plans=poiHomeCameraPlans.get(site.buildings);
  if(!plans){plans=site.buildings.filter(b=>POI_HOME_CAMERA_IDS.has(b.id));poiHomeCameraPlans.set(site.buildings,plans);}
- return plans.some(b=>x>=b.x1-1.45&&x<=b.x2+1.45&&z>=b.z1-1.45&&z<=b.z2+1.45);
+ return plans;
+}
+function poiHomeCameraZone(site,x,z,y){
+ if(y!==0)return false;
+ return poiHomeCameraBuildings(site).some(b=>x>=b.x1-1.45&&x<=b.x2+1.45&&z>=b.z1-1.45&&z<=b.z2+1.45);
+}
+function poiHomeCameraDoorCap(site,x,z){
+ let n=Infinity;
+ for(const home of poiHomeCameraBuildings(site)){
+  const d=home.entrance;
+  if(!d)continue;
+  // The logical door flag closes during the next step, before the visual
+  // walker clears the aperture. Pre-compress the real aligned arm from
+  // either side so that close contact cannot turn into a one-frame zoom.
+  n=Math.min(n,.43+1.95*Math.max(0,Math.hypot(x-d.x,z-d.z)-.68));
+ }
+ return n;
 }
 function poiHomeCameraLimit(raw,desired,dir,now){
  const old=poiHomeCameraArmState;
@@ -31196,6 +31212,7 @@ function facilitySharedWallCameraEye(target,desired){
     n=Math.min(n,peek+margin);
    }
   }
+  n=Math.min(n,poiHomeCameraDoorCap(facilitySite,target[0]-.5,target[2]-.5));
   const stable=poiHomeCameraLimit(n,distance,direction,performance.now());
   return stable>=distance-1e-5?desired:target.map((v,i)=>v+direction[i]*stable);
  }
