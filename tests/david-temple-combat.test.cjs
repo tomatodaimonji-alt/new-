@@ -4,11 +4,11 @@ const cut=(x,y)=>{const i=h.indexOf(x),j=h.indexOf(y,i+x.length);a(i>=0&&j>i,x);
 const o={type:'monsterStoneDavid',x:24,z:104,y:0};
 function setup(){
  const boss={...o,room:{minX:16,maxX:31,minZ:96,maxZ:112}},s={x:24,z:104,hp:1050,facing:2},c={
-  facilitySite:{id:'base',davidTemple:{boss}},document:{hidden:false,addEventListener:(event,fn)=>{c.visibility=fn}},poiWalkLevel:0,poiWalkX:24,poiWalkZ:100,player:{x:24,z:101,y:0},
-  poiMonsterStates:new Map([[o,s]]),poiMonsterMeshDirty:false,valid:true,wall:()=>false,stock:100,damage:[],sounds:[],
+  facilitySite:{id:'base',davidTemple:{boss}},poiWalkActive:true,document:{hidden:false,addEventListener:(event,fn)=>{c.visibility=fn}},poiWalkLevel:0,poiWalkX:24,poiWalkZ:100,player:{x:24,z:101,y:0},
+  poiMonsterStates:new Map([[o,s]]),poiMonsterMeshDirty:false,valid:true,Math:Object.assign(Object.create(Math),{random:()=>.99}),wall:()=>false,stock:100,damage:[],sounds:[],
   poiEnemyThreatEnabled:()=>c.valid,poiAimOrigin:()=>c.player,poiAimWall:()=>((x,z)=>!c.wall(x,z)),
   poiMobHitPlayer:(obj,now,n)=>{c.damage.push({obj,now,n});c.stock-=n;return c.stock<=0},
-  poiMonsterCanMove:()=>true,poiSound:id=>c.sounds.push(id),terrainY:()=>0,
+  poiMonsterCanMove:()=>true,poiSound:id=>c.sounds.push(id),poiDavidAttackFoley:(q,_p,_b,i,phase)=>c.sounds.push({kind:q.kind,i,phase}),terrainY:()=>0,
   mesh:()=>({p:[],c:[]}),poiEnemyCuePoint:(x,z,y)=>[x+.5,.153+y*1.4,z+.5],
   quad:(m,...q)=>{m.c.push(q.pop());for(const p of q)m.p.push(...p)}
  
@@ -84,6 +84,7 @@ test('live private encounter clock selects all four kinds, not only the exposed 
  for(let t=1000;t<8500;t+=10){api.tick(t);if(s.david?.attack)seen.add(s.david.attack.kind)}
  a.deepEqual([...seen].slice(0,4),['sweep','double','stomp','beam']);
  a.deepEqual(c.damage.slice(0,5).map(d=>d.n),[30,28,35,39,47]);
+ a.deepEqual(c.sounds.slice(0,5),[['sweep',0],['double',0],['double',1],['stomp',0],['beam',0]].map(([kind,i])=>({kind,i,phase:'impact'})));
  a.equal(s.hp,1050,'monster health and general player reports are not rewritten');
 });
 test('actual floor cue and elevated red beam end at a new wall and never outside the arena',()=>{

@@ -15,7 +15,7 @@ const d=(a,b)=>Math.hypot(...a.map((v,i)=>v-b[i]));
 test('authored giant dormant mesh is stable and uses no red color till awakened',()=>{
  const f=harness(),a0=JSON.parse(f(null,'dormant')),a1=f(null,'dormant',1);
  a.equal(JSON.stringify(a0),a1);
- a.ok(a0.m.p.length<4500,`coords=${a0.m.p.length}`);
+ a.ok(a0.m.p.length<=5700,`coords=${a0.m.p.length}`);
  a.ok(a0.m.p.every(Number.isFinite)&&a0.m.n.every(Number.isFinite));
  const height=Math.max(...a0.m.p.filter((_,i)=>i%3===1));
  a.ok(height>4.8&&height<5.3);

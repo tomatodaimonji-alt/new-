@@ -1,0 +1,7 @@
+# White Ring Temple attack Foley
+David's blade air swell and both eye-beam sounds are original sound designs (filtered noise, bent oscillators and damped envelopes), not recordings of actual weapons. The two sword landings and heel rumble add a pitched and filtered extract of the game's existing wood-contact master (SHA-256 dbde51a5692c23eed2e7a5f65e0482457c4e9bb509180a71e6ec3f003b182012), made from these original CC0 1.0 recordings already credited in the game:
+- [Wood Knock](https://freesound.org/people/Mrguff/sounds/369710/) by Mrguff
+- [Door Knock Angry](https://freesound.org/people/Julibellule/sounds/657774/) by Julibellule
+No new source/network request. The dry knock layer is shaped by newly designed stone grit, low-end body, and room-tail envelopes, rather than played recognizably as a door or wood hit. The stomp uses 50/73 Hz low body plus ~121 Hz harmonics and rubble texture for phone audibility, peak −3.2 dBFS before the normal SE mix. Each mono int16 sample is regenerated deterministically by `python render.py V271_HTML pcm`.
+
+Committed wind-up alone is silent here. An actual sweep/collision-stage swing uses blade air, each executed sword strike uses its distinct hit, and stomp uses one lasting rumble even if the player dodges. Initial eye discharge and extended sweep have separate cues. Outside/stale/hidden attacks do not audio-trigger; stock transient cleanup is preserved and the boss-only early exit fades its sources without changing music, other Foley, or mixer settings.
