@@ -22,7 +22,7 @@ replace(testApi,testApi+`
     saved:JSON.parse(localStorage.getItem(POI_HOTBAR_KEY)||'{}').sacredTempleSeen===true}:null;
    return {x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,name:poiRegionAt(facilitySite,poiWalkX,poiWalkZ,false,poiWalkLevel).name,
     path:f.route,reveal:f.reveal,tree:f.trees[10],fog:[...gl.getUniform(program,loc.sacredFog)],raster:window.__sacredRaster||null,
-    scene:poiSacredForestStatus(),err:gl.getError(),directions:['n','s','e','w'].map(k=>poiCameraRelativeStep(k)),
+    scene:poiSacredForestStatus(),stream:typeof poiOverlandInspect==='function'?{active:poiOverlandInspect().drawing,effective:poiOverlandInspect().effective}:null,err:gl.getError(),directions:['n','s','e','w'].map(k=>poiCameraRelativeStep(k)),
     mini,nearTemple:poiDavidTempleContains(facilitySite,at.x,at.z,at.y)};
   }
  },
@@ -33,7 +33,9 @@ const apply=" if(typeof poiSacredApplyFog==='function')poiSacredApplyFog(now,day
 replace(apply,apply+`
  if(window.__sacredCompareDry){gl.uniform3f(loc.sacredFog,0,0,0);gl.clearColor(0,0,0,0)}
 `);
-const end=" if(typeof poiSacredDrawScene==='function')poiSacredDrawScene(p.vp);";
+const legacyEnd=" if(typeof poiSacredDrawScene==='function')poiSacredDrawScene(p.vp);";
+const streamedEnd=" if(!stream&&typeof poiSacredDrawScene==='function')poiSacredDrawScene(p.vp);";
+const end=html.includes(streamedEnd)?streamedEnd:legacyEnd;
 replace(end,end+`
  if(window.__sacredCapture){
   window.__sacredCapture=false;
@@ -89,9 +91,9 @@ try{
  const black=[0,0,0,255];
  assert(s.mini.temple.every(c=>c===null),'distant temple is outside the local map');
  const stableTrail=s.mini.localTrail;assert.notDeepEqual(stableTrail,black);
- const route=s.path.slice(1);let raster,compare,peak=0,builds=0,first=null;
+ const route=s.path.slice(1);let raster,compare,peak=0,builds=0,renderedStream=0,first=null;
  for(const q of route){
-  await step(q);s=last;peak=Math.max(peak,s.fog[2]);builds=Math.max(builds,s.scene.vertices);
+  await step(q);s=last;peak=Math.max(peak,s.fog[2]);builds=Math.max(builds,s.scene.vertices);renderedStream=Math.max(renderedStream,s.stream?.effective??0);
   if(q.x===24&&q.z===115){
    phase='actual WebGL fog leaves near shaded terrain while replacing distant geometry';
    await p.evaluate(()=>{window.__sacredCapture=true});s=await tick(38);raster=s.raster;first=s;
@@ -101,7 +103,7 @@ try{
    phase='woodland bend and clearing';
   }
  }
- assert(peak>.73&&builds>1000&&builds<=146*180);
+ assert(peak>.73&&(builds>1000&&builds<=146*180||renderedStream>0));
  assert.equal(s.err,0);assert(s.fog[2]<.04,'weather lifts only at the reveal and entry');
  assert(first&&first.fog[2]>.73&&(raster.haze-compare.haze)>raster.total*.02&&raster.textured>raster.total*.03,JSON.stringify({raster,compare}));
  assert.deepEqual([s.x,s.z],[24,125]);
