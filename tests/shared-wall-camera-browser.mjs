@@ -21,6 +21,7 @@ try{
   args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
  for(const q of [
   {name:'watchtower exterior',x:107,z:61,y:0,yaw:0,hit:true,side:61},
+  {name:'ordinary rowhouse exterior',x:76,z:52,y:0,yaw:0,hit:true,side:52},
   {name:'north town gate opening',x:34,z:23,y:0,yaw:0,hit:false},
   {name:'mine corridor',x:109,z:60,y:-1,yaw:Math.PI,hit:true,rotate:true},
   {name:'inactive David exterior',x:24,z:123,y:0,yaw:0,hit:true,side:121.5}

@@ -48,3 +48,11 @@ test('the real third-person projection uses one shared physical arm instead of a
  a.match(fn,/facilitySharedWallCameraEye\(target,desired\)/);
  a.doesNotMatch(fn,/facilityDavidCameraEye|facilityWatchtowerCameraEye|facilityMineCameraEye/);
 });
+test('an underground low orbit can preserve useful arm length without crossing the wall’s horizontal plane or changing saved pitch',()=>{
+ const {c,f}=setup([{x:109,z:61,y:-1,type:'stonewall'}]);c.poiWalkLevel=-1;c.poiCameraPitch=.12;
+ const target=[109.5,-.3,60.5],requested=[109.5,-.3+5.5*Math.sin(.12),60.5+5.5*Math.cos(.12)];
+ const eye=f(target,requested);
+ a.equal(c.poiCameraPitch,.12);
+ a(eye[2]<60.999&&eye[1]>requested[1],eye);
+ a(Math.hypot(...eye.map((x,i)=>x-target[i]))>=1.75,eye);
+});
