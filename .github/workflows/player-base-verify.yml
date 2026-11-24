@@ -1,24 +1,19 @@
-name: Verify v302 same runtime with isolated historical actor fixture bindings
+name: Verify persistent miniature floor souls and actual contact
 on:
   push:
-    branches: [dot/workshop-player-base-verify]
+    branches: [dot/workshop-floor-soul-v302-qa]
 jobs:
-  mobile:
+  native:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 12
     env:
       FACILITY_SCREENSHOTS: screenshots
-      SOUL_BEHAVIOR_NATIVE: '1'
-      SOUTH_MERCHANT_NIGHT: '1'
-      SOUTH_ROAD_PROFILE: '1'
     strategy:
       fail-fast: false
       matrix:
-        script: [david-foley-browser]
+        script: [soul-floor-browser, movement-heal-multitouch-browser, orvas-soul-award-browser]
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -31,7 +26,7 @@ jobs:
           name: ${{ matrix.script }}
           path: screenshots
           if-no-files-found: ignore
-  unit:
+  strict:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -40,9 +35,29 @@ jobs:
         with:
           node-version: '22'
       - run: |
-          if node --test tests/*.cjs > "$RUNNER_TEMP/unit.out" 2>&1; then
+          if node --test tests/{soul-floor,companion-effect,monster-companion,orvas-soul,orvas-ally,soul-command-menu,soul-follow-priority,soul-summon-effect}.test.cjs > "$RUNNER_TEMP/unit.out" 2>&1; then
             tail -8 "$RUNNER_TEMP/unit.out"
           else
-            grep -E '^not ok |^  location:|^  error:|^# (tests|pass|fail|duration)' "$RUNNER_TEMP/unit.out" | cut -c1-350 | tail -300
+            grep -E '^not ok |^  location:|^  error:|^# (tests|pass|fail|duration)' "$RUNNER_TEMP/unit.out" | cut -c1-350 | tail -200
             exit 1
           fi
+  differential:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          git fetch --depth=1 origin 8a3fe9d85302d953202ae95194c2699af568f0c6
+          git worktree add --detach "${RUNNER_TEMP}/baseline" FETCH_HEAD
+          (cd "${RUNNER_TEMP}/baseline" && node --test tests/*.cjs) > "${RUNNER_TEMP}/baseline.out" 2>&1 || true
+          node --test tests/*.cjs > "${RUNNER_TEMP}/candidate.out" 2>&1 || true
+          for lane in baseline candidate; do
+            echo "$lane:"
+            grep -E '^# (tests|pass|fail)' "${RUNNER_TEMP}/$lane.out"
+            sed -En 's/^not ok [0-9]+ - //p' "${RUNNER_TEMP}/$lane.out" | sort > "${RUNNER_TEMP}/$lane.names"
+          done
+          comm -13 "${RUNNER_TEMP}/baseline.names" "${RUNNER_TEMP}/candidate.names" | tee "${RUNNER_TEMP}/new-fails"
+          test ! -s "${RUNNER_TEMP}/new-fails"

@@ -45,14 +45,15 @@ test('real cold hotbar decoder reads the authored death ledger and every physica
    {id:'orvas-soul',type:'orvasSoul',x:24,z:105,y:0,durability:1050}]};
  const data=new Map([['world-workshop-hotbar-v1',JSON.stringify(seed)],
   ['world-workshop-town-clock-v1','{"version":1,"gameMs":240000}']]),writes=[];
- const c=vm.createContext({POI_MONSTER_STATS:{monsterStoneDavid:{hp:1050}},MAX_MAP:128,facilitySite:{id:'base'},poiWalkActive:true,pineAIActive:false,
+ const c=vm.createContext({POI_MONSTER_STATS:{monsterStoneDavid:{hp:1050}},MAX_MAP:128,poiDavidDepthGroundPoint:d=>d.x===24&&d.z===159,facilitySite:{id:'base'},poiWalkActive:true,pineAIActive:false,
   poiWalkLevel:0,poiWalkX:24,poiWalkZ:102,world:[],poiMonsterStates:new Map(),document:{hidden:false},
   localStorage:{getItem:key=>data.get(key)??null,setItem:(key,value)=>writes.push([key,value])}});
  vm.runInContext(cut('function poiDungeonThemeAt(','function poiDungeonEnterEffect(')+
   cut('const POI_TOWN_CLOCK_KEY=','function poiTownClockSuspend(')+cut('// BEGIN MONSTER COMPANION CORE','function poiResetCombat('),c);
  const read=JSON.parse(vm.runInContext('JSON.stringify(poiHotbarRead())',c));
- a.equal(read.orvasRewards,31);a.deepEqual(read.armedDrops.slice(0,4),seed.armedDrops.map(d=>({...d,z:d.z+54})));
- a.deepEqual(read.armedDrops[4],{id:'orvas-waistcloth',type:'armorOrvasWaistcloth',x:25,z:159,y:0,durability:96});
+ a.equal(read.orvasRewards,31);a.deepEqual(read.armedDrops.slice(0,3),seed.armedDrops.slice(0,3).map(d=>({...d,z:d.z+54})));
+ a.deepEqual(read.soulDrops,[{type:'orvasSoul',x:24,z:159,y:0,durability:1050}]);
+ a.deepEqual(read.armedDrops[3],{id:'orvas-waistcloth',type:'armorOrvasWaistcloth',x:25,z:159,y:0,durability:96});
  a.equal(read.dungeonPopulation.dead['davidTemple.david'],450);
  a.deepEqual(read.slots[1],cells[1]);a.equal(read.companionSoul.active,'slimeSoul');
  a.equal(writes.length,0);
