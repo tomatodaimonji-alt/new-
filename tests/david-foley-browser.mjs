@@ -49,7 +49,18 @@ let fixture=insert(html,anchor,`
     f.roll=roll;f.aimTarget=target;f.beamClock={now:performance.now()};
    },
    releaseBeamClock:()=>{window.__davidFrames.beamClock=null},
-   sound:()=>({running:poiAudioContext?.state==='running',events:window.__davidFrames.audio,stops:window.__davidFrames.audioStops,cleanup:window.__davidFrames.foleyCleanup,pending:poiDavidFoleySources.size}),
+   sound:()=>({running:poiAudioContext?.state==='running',events:window.__davidFrames.audio,stops:window.__davidFrames.audioStops,deadlines:window.__davidFrames.audioDeadlines,ended:window.__davidFrames.ended,cleanup:window.__davidFrames.foleyCleanup,pending:poiDavidFoleySources.size}),
+   closeRealLiveBeam:()=>{
+    const {o,s}=poiDavidActive??{};
+    if(!o)return null;
+    const b=poiDavidMatch(o),p=poiAimOrigin(performance.now()),q={kind:'beam',sx:s.x,sz:s.z,beamOpened:true};
+    poiDavidAttackFoley(q,p,b,0,'beamOnset');
+    const active=poiDavidBeamSources.get(q)?.source;
+    if(!active||!active.loop||active.context.state!=='running')return null;
+    const id=active.__davidSample.id,liveBefore=poiDavidFoleySources.has(active);
+    poiDavidBeamAudioEnd(q);
+    return {id,liveBefore,closed:q.beamClosed,pending:poiDavidFoleySources.has(active)};
+   },
    pokeSound:(mode)=>{
     const {o,s}=poiDavidActive??{};
     if(!o)return;
@@ -91,7 +102,7 @@ let fixture=insert(html,anchor,`
   },`);
 fixture=fixture.replace('function poiDavidBeamSide(roll=Math.random())','function poiDavidBeamSide(roll=window.__davidFrames.roll??.8)');
 fixture=insert(fixture,'function poiDavidStopAttackFoley(){',"\n window.__davidFrames.foleyCleanup.push({death:poiPlayerDeath?.phase??null,tracked:poiDavidFoleySources.size,stops:window.__davidFrames.audioStops.length});");
-fixture=insert(fixture,' source.connect(gain).connect(poiAudioEffects);',"\n const sample=[...poiRecordedFoleyCache].find(([k,b])=>b===buffer&&k.startsWith('david'));if(sample||buffer===poiDavidAlienCache){source.__davidSample={name:sample?.[0]??'davidAlienBeam',duration:buffer.duration,gain:gain.gain.value,linked:poiAudioEffects.context===ctx};}");
+fixture=insert(fixture,' source.connect(gain).connect(poiAudioEffects);',"\n const sample=[...poiRecordedFoleyCache].find(([k,b])=>b===buffer&&k.startsWith('david'));if(sample||buffer===poiDavidAlienCache){source.__davidSample={id:++window.__davidFrames.audioId,name:sample?.[0]??'davidAlienBeam',duration:buffer.duration,gain:gain.gain.value,linked:poiAudioEffects.context===ctx};}");
 fixture=insert(fixture,'q.sweep={side,tell:now,start:null,end:null,angle:0,hit:false};',"\n     if(window.__davidFrames.aimTarget)workshopResumeRestorePosition({x:24+window.__davidFrames.aimTarget*2,z:102,y:0,facing:2});");
 fixture=fixture.replace('draw(poiDavidCue.fan,vp)','{const f=window.__davidFrames,c=f.glCounters();draw(poiDavidCue.fan,vp);f.fan++;f.beamSubmission(q.start,"fan",now,c);}');
 fixture=fixture.replace('if(poiDavidCue.beamVisible)poiDavidDrawThermalBeam(poiDavidCue.beam,vp,reduced?emission.alpha*.76:emission.alpha);',
@@ -161,7 +172,7 @@ await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',resolve).once('e
 const url='http://127.0.0.1:'+server.address().port;
 const install=()=>{
  let frame=0,draws=0,vertices=0;
- const summary=window.__davidFrames={coverShows:0,cue:{lane:0,beam:0,builds:0,byStart:{}},contacts:[],timing:{},canceled:{},audio:[],audioStops:[],foleyCleanup:[],fan:0,live:0,rays:[],beamDraws:{},beamClock:null,returnClock:null,fatalClock:null,bufferIds:new WeakMap(),nextBuffer:1,
+ const summary=window.__davidFrames={coverShows:0,cue:{lane:0,beam:0,builds:0,byStart:{}},contacts:[],timing:{},canceled:{},audio:[],audioId:0,audioStops:[],audioDeadlines:[],ended:[],foleyCleanup:[],fan:0,live:0,rays:[],beamDraws:{},beamClock:null,returnClock:null,fatalClock:null,bufferIds:new WeakMap(),nextBuffer:1,
   renderTime(real){
    const c=this.returnClock||this.beamClock||this.fatalClock;if(!c)return real;
    const lead=c.first-c.now,cap=this.returnClock?86:this.fatalClock&&!this.beamClock?245:lead>0&&lead<=225?47:120;
@@ -179,12 +190,21 @@ const install=()=>{
  }
  const nativeStart=AudioBufferSourceNode.prototype.start;
  AudioBufferSourceNode.prototype.start=function(...args){
-  const result=nativeStart.apply(this,args);if(this.__davidSample)summary.audio.push({...this.__davidSample,state:this.context.state,when:args[0],loop:this.loop});return result;
+  const result=nativeStart.apply(this,args);
+  if(this.__davidSample){
+   const {id}=this.__davidSample;
+   summary.audio.push({...this.__davidSample,state:this.context.state,when:args[0],loop:this.loop});
+   this.addEventListener('ended',()=>summary.ended.push({id,at:this.context.currentTime}),{once:true});
+  }
+  return result;
  };
  const nativeStop=AudioBufferSourceNode.prototype.stop;
  AudioBufferSourceNode.prototype.stop=function(when){
   const result=nativeStop.call(this,when);const now=this.context.currentTime;
-  if(this.__davidSample&&Number.isFinite(when)&&when-now<.067)summary.audioStops.push({name:this.__davidSample.name,time:when,now});
+  if(this.__davidSample&&Number.isFinite(when)){
+   const {id,name}=this.__davidSample,entry={id,name,time:when,now};
+   summary.audioDeadlines.push(entry);if(when-now<.075)summary.audioStops.push(entry);
+  }
   return result;
  };
  document.addEventListener('DOMContentLoaded',()=>{
@@ -411,9 +431,19 @@ try{
     assert.deepEqual(contacts.map(c=>c.raw),shouldHit?[47,36]:[47],'only live sweeping ray can apply the extra contact once');
     const sourceAfter=await battle.p.evaluate(()=>window.__editorTest.davidQA.sound());
     const audio=sourceAfter.events.slice(initial.audio);
-    assert(sourceAfter.stops.slice(initial.stops).some(e=>e.name==='davidAlienBeam'&&e.time-e.now>0),'sustained real source schedules an actual fade-stop on completion');
+
     assert.deepEqual(audio.map(a=>a.name),['davidAlienBeam']);
     assert(audio[0].loop&&audio[0].linked&&audio[0].state==='running','one real looping source on normal SE bus');
+    const cueSound=audio[0],deadline=sourceAfter.deadlines.find(e=>e.id===cueSound.id&&Math.abs(e.time-cueSound.when-4)<.012);
+    assert(deadline,'actual sustained source records a finite native safety deadline');
+    const early=sourceAfter.stops.some(e=>e.id===cueSound.id&&e.time-e.now>0);
+    // SwiftShader may use >4 wall seconds while producing the correct
+    // playable encounter ticks. If it does, require true native end.
+    if(!early){
+     await wait(battle.p,id=>window.__editorTest.davidQA.sound().ended.some(e=>e.id===id),cueSound.id,5200);
+     const ended=(await battle.p.evaluate(()=>window.__editorTest.davidQA.sound())).ended.find(e=>e.id===cueSound.id);
+     assert(ended.at>=deadline.time-.03,JSON.stringify({cueSound,deadline,ended,stops:sourceAfter.stops}));
+    }
     const hold=drawSamples.filter(d=>d.kind==='straight');
     const partial=hold.filter(d=>d.fraction>0&&d.fraction<.99);
     assert(partial.length>=2&&partial[0].fraction<partial.at(-1).fraction,'visible eye-to-wall progression in native draws');
@@ -425,6 +455,15 @@ try{
    assert(complete,'no real native frame sequence for extended beam '+side);
    await battle.p.evaluate(()=>window.__editorTest.davidQA.releaseBeamClock());
   }
+  checkpoint='real early fade needs an active tracked native sustained source';
+  const early=await battle.p.evaluate(()=>window.__editorTest.davidQA.closeRealLiveBeam());
+  assert(early?.liveBefore&&early.closed&&!early.pending,JSON.stringify(early));
+  await wait(battle.p,id=>window.__editorTest.davidQA.sound().ended.some(e=>e.id===id),early.id);
+  const stopped=await battle.p.evaluate(()=>window.__editorTest.davidQA.sound());
+  const playback=stopped.events.find(e=>e.id===early.id),ending=stopped.ended.find(e=>e.id===early.id);
+  const fade=stopped.stops.find(e=>e.id===early.id);
+  assert(playback.loop&&playback.linked&&fade&&Math.abs(fade.time-fade.now-.063)<.015,JSON.stringify({early,playback,fade,ending}));
+  assert(ending.at<playback.when+4,'active source really ended before its native safety stop');
   const before=(await battle.p.evaluate(()=>window.__editorTest.davidQA.sound())).events.length;
   await battle.p.evaluate(()=>{window.__editorTest.davidQA.pokeSound('mute');window.__editorTest.davidQA.pokeSound('outside')});
   assert.equal((await battle.p.evaluate(()=>window.__editorTest.davidQA.sound())).events.length,before);
