@@ -5,6 +5,7 @@ import {readFileSync} from 'node:fs';
 import {Script} from 'node:vm';
 let h=readFileSync(process.argv[2]??'world-editor.html','utf8');
 const install=(a,b)=>{assert.equal(h.split(a).length,2,a);h=h.replace(a,b)};
+const matchedPower=h.includes('const POI_ORVAS_JUDGMENT_POWER=46;');
 const mark="if(facilityParams.get('test')==='1')window.__editorTest={";
 
 
@@ -85,7 +86,7 @@ install(mark,`
 install(' requestAnimationFrame(render);',' if(!window.__orvasManual)requestAnimationFrame(render);');
 install('  draw(poiOrvasGroundGpu,vp,start,count);',`
   draw(poiOrvasGroundGpu,vp,start,count);
-  if(e.player){const a=window.__orvasPlayerTraceDraws??=[];if(a.length<120)a.push({kind:e.kind,start:e.start,count})}
+  if(e.player){const a=window.__orvasPlayerTraceDraws??=[];if(!a.some(d=>d.kind===e.kind&&d.start===e.start))a.push({kind:e.kind,start:e.start,count})}
 `);
 for(const [,js] of h.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(js);
 if(process.env.ORVAS_NATIVE_PARSE_ONLY){console.log('Orvas weapons actual browser fixture parses');process.exit(0)}
@@ -157,10 +158,10 @@ try{
  assert.equal(paint(landed,'sweep',held.start).length,1,'single sideways sweep leaves its own shallow marks');
  ({q,held}=await start(4,[[27,108,0],[26,111,0],[23,108,0]]));
  const first=await until(v=>v.cursor===1);
- assert(first.clock-held.start>=720);assert.deepEqual(first.hp,[72,100,100]);
+ assert(first.clock-held.start>=720);assert.deepEqual(first.hp,[matchedPower?54:72,100,100]);
  assert.equal(paint(first,'double',held.start).length,1);
  landed=await until(v=>!v.pending);
- assert(landed.clock-held.start>=1040);assert.deepEqual(landed.hp,[37,100,100]);assert.equal(landed.used,q.used-1);
+ assert(landed.clock-held.start>=1040);assert.deepEqual(landed.hp,[matchedPower?8:37,100,100]);assert.equal(landed.used,q.used-1);
  const twin=paint(landed,'double',held.start);
  assert.equal(twin.length,2);assert(twin[1].start-twin[0].start>=280);
  assert(Math.hypot(twin[0].x-twin[1].x,twin[0].z-twin[1].z)>.13);

@@ -1615,7 +1615,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v296）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v297）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -1850,7 +1850,7 @@ window.pineStartup.start(async()=>{'use strict';
  window.addEventListener('resize',syncVisibleViewport);
  if(window.visualViewport)window.visualViewport.addEventListener('resize',syncVisibleViewport);
  const canvas=document.getElementById('view'),gl=canvas.getContext('webgl',{antialias:true,alpha:true,depth:true,powerPreference:'low-power'}),toastEl=document.getElementById('toast');
-let MAP_W=16,MAP_H=16,terrainHeights=new Map();const TERRAIN_MAX=8,TERRAIN_STEP=1;const MIN_MAP=12,MAX_MAP=128,MAX_LEVEL=9,SAVE_KEY='forest-world-editor-v1',TAU=Math.PI*2;
+let MAP_W=16,MAP_H=16,terrainHeights=new Map();const TERRAIN_MAX=8,TERRAIN_STEP=1;const MIN_MAP=12,MAX_MAP=128,POI_SACRED_DEPTH_H=182,POI_SACRED_DEPTH_W=48,MAX_LEVEL=9,SAVE_KEY='forest-world-editor-v1',TAU=Math.PI*2;
 const $=id=>document.getElementById(id);
 const facilityParams=new URLSearchParams(location.search);
 const startupEditor=facilityParams.get('startup-editor')==='1';
@@ -2130,7 +2130,8 @@ const catalog=new Map(palette.map(p=>[p.id,p]));let selected='wall',mode='place'
 let pineObjectSelection=null,pineSelectedTile=null,pineMoveArmed=false;
 const byId=id=>catalog.get(id)||models.find(m=>m.id===id)||prefabs.find(p=>p.id===id);
 const cellKey=(x,z,y=0)=>x+','+z+','+y;
-const validPos=(x,z)=>Number.isInteger(x)&&Number.isInteger(z)&&x>=0&&z>=0&&x<MAP_W&&z<MAP_H;
+const validPos=(x,z)=>Number.isInteger(x)&&Number.isInteger(z)&&x>=0&&z>=0&&x<MAP_W&&z<MAP_H&&
+ (MAP_W!==128||MAP_H!==182||z<128||x<48);
 const safeColor=s=>/^#[0-9a-f]{6}$/i.test(s);
 const hexRGB=s=>[1,3,5].map(i=>parseInt(s.slice(i,i+2),16)/255);
 const mesh=()=>({p:[],n:[],c:[]});
@@ -6190,7 +6191,8 @@ function poiDavidTempleArchitecture(m,id,x,y,z,r){
 // BEGIN ROUND DAVID TEMPLE ART
 // The original radial wall survives as an exterior stone shell.
 function poiDavidRoundWall(m,x,y,z){
- const theta=Math.atan2(z-104.5,x-24.5),rx=Math.cos(theta),rz=Math.sin(theta),tx=-rz,tz=rx;
+ const ring=facilitySite?.davidTemple?.ring;
+ const theta=Math.atan2(z-(ring?.z??158)-.5,x-(ring?.x??24)-.5),rx=Math.cos(theta),rz=Math.sin(theta),tx=-rz,tz=rx;
  const ivory=[.86,.82,.73],base=[.57,.55,.50],trim=[.95,.90,.76],shade=[.70,.67,.61];
  const block=(h,w,d,low,c)=>{
   const p=(u,v,q)=>[x+u*tx+q*rx,y+v,z+u*tz+q*rz],a=p(-w/2,low,-d/2),b=p(w/2,low,-d/2),
@@ -19580,7 +19582,7 @@ const POI_DUNGEON_SPAWN_ROWS=Object.freeze([
  ['otherworld.archive-archer','monsterSkelArcher',109,88],
  ['otherworld.cloister-mage','monsterSkelLongStaff',120,82],
  ['northFort.minotaur','monsterNorthMinotaur',64,13],
- ['davidTemple.david','monsterStoneDavid',24,104]
+ ['davidTemple.david','monsterStoneDavid',24,158]
 ]);
 const POI_DUNGEON_SPAWN_KEYS=new Map(POI_DUNGEON_SPAWN_ROWS.map(([id,type,x,z])=>[type+':'+x+':'+z,id]));
 const POI_DUNGEON_SPAWN_TYPES=new Map(POI_DUNGEON_SPAWN_ROWS.map(([id,type])=>[id,type]));
@@ -19637,14 +19639,14 @@ function poiNorthMinotaurRewardRestore(kit,raw,minute=poiDungeonPopulationMinute
 // BEGIN ORVAS REWARD CORE
 const POI_ORVAS_NAME='オルヴァス';
 const POI_ORVAS_REWARDS=Object.freeze({
- 'orvas-head':Object.freeze({id:'orvas-head',type:'equipOrvasHead',x:24,z:103,y:0,bit:1}),
- 'orvas-greatsword':Object.freeze({id:'orvas-greatsword',type:'equipOrvasGreatsword',x:25,z:104,y:0,bit:2}),
- 'orvas-twin-greatswords':Object.freeze({id:'orvas-twin-greatswords',type:'equipOrvasTwinGreatswords',x:23,z:104,y:0,bit:4}),
- 'orvas-soul':Object.freeze({id:'orvas-soul',type:'orvasSoul',x:24,z:105,y:0,bit:8})
+ 'orvas-head':Object.freeze({id:'orvas-head',type:'equipOrvasHead',x:24,z:157,y:0,bit:1}),
+ 'orvas-greatsword':Object.freeze({id:'orvas-greatsword',type:'equipOrvasGreatsword',x:25,z:158,y:0,bit:2}),
+ 'orvas-twin-greatswords':Object.freeze({id:'orvas-twin-greatswords',type:'equipOrvasTwinGreatswords',x:23,z:158,y:0,bit:4}),
+ 'orvas-soul':Object.freeze({id:'orvas-soul',type:'orvasSoul',x:24,z:159,y:0,bit:8})
 });
 function poiOrvasRewardValid(drop){
  const d=Object.hasOwn(POI_ORVAS_REWARDS,drop?.id)?POI_ORVAS_REWARDS[drop.id]:null;
- return d&&d.type===drop.type&&d.x===drop.x&&d.z===drop.z&&d.y===drop.y?d:null;
+ return d&&d.type===drop.type&&d.x===drop.x&&(d.z===drop.z||d.z-54===drop.z)&&d.y===drop.y?d:null;
 }
 function poiOrvasRewardOwned(kit,type){
  return poiInventoryOrdinarySlots(kit).some(c=>c?.type===type)||poiAnyChestHas(kit,type)||kit.drops?.some(d=>d.type===type);
@@ -20902,11 +20904,16 @@ let poiHotbarEmptySlot=2,poiInventoryMesh=null,poiInventoryMeshDrops=null,poiInv
 const POI_REPEATABLE_MONSTER_WEAPONS=new Set(['equipWoodBow','equipWoodSpear','equipStoneMace',
  'equipBoneSword','equipIronSword','equipPlainStaff','equipLongStaff']);
 function poiRepeatableMonsterWeapon(type){return POI_REPEATABLE_MONSTER_WEAPONS.has(type)}
+function poiDavidDepthGroundPoint(p){
+ // Only the base/snow shared kit can create ordinary ground stacks. The
+ // extension is a narrow base surface lobe, never an editor or snow region.
+ return !!p&&p.region!=='snowpass'&&p.y===0&&p.x>=0&&p.x<48&&p.z>=128&&p.z<182;
+}
 function poiInventoryReadDrops(raw){
  if(!Array.isArray(raw))return [];
  const seen=new Set(),unique=new Set(),out=[];
  for(const d of raw.slice(0,POI_INVENTORY_LIMIT)){
-  if(!d||![d.x,d.z,d.y].every(Number.isInteger)||d.x<0||d.x>=MAX_MAP||d.z<0||d.z>=MAX_MAP||d.y< -1||d.y>9)continue;
+  if(!d||![d.x,d.z,d.y].every(Number.isInteger)||d.x<0||d.x>=MAX_MAP||d.z<0||(d.z>=MAX_MAP&&(typeof poiDavidDepthGroundPoint!=='function'||!poiDavidDepthGroundPoint(d)))||d.y< -1||d.y>9)continue;
   const key=(d.region==='snowpass'?'s:':'')+d.x+','+d.z+','+d.y;
   const max=poiInventoryStack(d.type),count=Number.isInteger(d.count)?Math.max(1,Math.min(max,d.count)):1;
   const c=poiInventorySanitizeCell({...d,count}),isWeapon=poiHotbarWeaponForType(d.type)&&!poiRepeatableMonsterWeapon(d.type);
@@ -21085,7 +21092,7 @@ function poiGroundGoldDecode(raw){
  const seen=new Set(),out=[];
  if(!Array.isArray(raw))return out;
  for(const p of raw.slice(0,POI_INVENTORY_LIMIT)){
-  if(!p||![p.x,p.z,p.y,p.amount].every(Number.isSafeInteger)||p.x<0||p.x>=MAX_MAP||p.z<0||p.z>=MAX_MAP||p.y< -1||p.y>9||p.amount<1||p.amount>POI_ECONOMY_GOLD_MAX)continue;
+  if(!p||![p.x,p.z,p.y,p.amount].every(Number.isSafeInteger)||p.x<0||p.x>=MAX_MAP||p.z<0||(p.z>=MAX_MAP&&(typeof poiDavidDepthGroundPoint!=='function'||!poiDavidDepthGroundPoint(p)))||p.y< -1||p.y>9||p.amount<1||p.amount>POI_ECONOMY_GOLD_MAX)continue;
   const key=(p.region==='snowpass'?'s:':'')+p.x+','+p.z+','+p.y;
   if(seen.has(key))continue;
   seen.add(key);out.push({x:p.x,z:p.z,y:p.y,amount:p.amount,...(p.region==='snowpass'?{region:p.region}:{})});
@@ -24797,7 +24804,7 @@ function poiTownNpcGraph(){
 }
 function poiTownNpcStance(p,g=poiTownNpcGraph()){
  const {x,z,y}=p,k=poiTownNpcKey(x,z,y);
- if(x<0||x>=MAP_W||z<0||z>=MAP_H)return false;
+ if(x<0||x>=MAP_W||z<0||z>=MAP_H||(typeof poiSacredDepthVoid==='function'&&poiSacredDepthVoid(facilitySite,x,z)))return false;
  if(g.walk.has(k))return g.walk.get(k);
  const types=g.cells.get(k)||[],xy=x+','+z,deck=y===0?g.bridge.get(xy):null;
  const steps=t=>t==='guildStairUp'||t==='guildStairDown';
@@ -26834,7 +26841,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v296',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v297',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -26949,7 +26956,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v296';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v297';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -27164,7 +27171,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v296',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v297',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -28312,7 +28319,7 @@ function poiOrvasCutResolve(shot,now,kind,index=0){
  });
  if(!hits.length||shot.track&&!hits.some(c=>poiAimPinContains(shot,c)))return false;
  if(!shot.orvasPaid&&!poiEquipmentSpendWeapon(shot.type))return false;
- const damage=kind==='double'?POI_DAVID_PATTERNS.double.damage[index]:shot.profile.damage;
+ const damage=shot.profile.damage; // Each actual contact shares the single sword's raw power.
  for(const t of hits)poiPlayerDamageTarget([t.id,t.state],Math.round(t.x),Math.round(t.z),damage,shot.type,now,true,false,o);
  return true;
 }
@@ -28370,6 +28377,7 @@ function poiDrawOrvasPlayerBeam(now,vp){
  finally{gl.depthMask(true);gl.blendColor(0,0,0,0);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.disable(gl.BLEND)}
 }
 // END ORVAS PLAYER BEAM
+const POI_ORVAS_JUDGMENT_POWER=46;
 const POI_PLAYER_WEAPON_PROFILES=Object.freeze({
  kitchenKnife:{range:1,get damage(){return POI_PLAYER_ATTACK+POI_KNIFE_BONUS},hit:80,ready:225,pose:190,
   commitAim:true,contactSound:true,speed:4,reach:1},
@@ -28380,8 +28388,8 @@ const POI_PLAYER_WEAPON_PROFILES=Object.freeze({
  equipBoneSword:{...POI_SWORD_PROFILE,range:1.55,damage:24},
  equipIronSword:{...POI_SWORD_PROFILE,range:2,damage:30},
  equipOrvasHead:{range:14,damage:48,hit:420,ready:1520,pose:760,speed:1,reach:5,eyeBeam:true},
- equipOrvasGreatsword:{get range(){return POI_DAVID_SWEEP_FORWARD},damage:46,hit:560,ready:1150,pose:1150,speed:1,reach:5,sweep:true,orvasCut:'sweep'},
- equipOrvasTwinGreatswords:{range:3.55,damage:63,hit:720,ready:1730,pose:1730,speed:1,reach:4,orvasCut:'double'},
+ equipOrvasGreatsword:{get range(){return POI_DAVID_SWEEP_FORWARD},get damage(){return POI_ORVAS_JUDGMENT_POWER},hit:560,ready:1150,pose:1150,speed:1,reach:5,sweep:true,orvasCut:'sweep'},
+ equipOrvasTwinGreatswords:{range:3.55,get damage(){return POI_ORVAS_JUDGMENT_POWER},hit:720,ready:1730,pose:1730,speed:1,reach:4,orvasCut:'double'},
  equipNorthMinotaurAxe:{range:2.55,damage:34,hit:300,ready:800,pose:670,sweep:true,frontArc:true,speed:2,reach:3},
  equipPlainStaff:{range:1,damage:23,hit:140,ready:350,pose:300,speed:3,reach:1},
  equipLongStaff:{range:2,damage:20,hit:210,ready:510,pose:400,commitAim:true,speed:2,reach:2},
@@ -30051,6 +30059,10 @@ function poiCreekPlayerHeight(now){
 function poiCreekWalkHeight(x,z){
  return (poiWalkLevel===0?facilityCreekIndex?.bridgeHeight.get(x+','+z):null)??terrainY(x,z);
 }
+function poiSacredDepthVoid(site,x,z){
+ const lobe=site?.id==='base'?site.sacredDepth:null;
+ return !!lobe&&z>=lobe.oldH&&x>=lobe.w;
+}
 function poiWalkCanStep(x,z,fromX,fromZ,exceptMonster,skipNpcTile=false){
  if(!validPos(x,z))return false;
  const north=facilitySite?.id==='base'?(facilitySite.townOffset||0):null;
@@ -31529,6 +31541,10 @@ function pinePlayJoinedNaturalGrade(kind,site,walking){
  // between authored ground tiles. Join only the ground under Game World play.
  return walking&&site?.id==='base'&&(kind==='earth'||kind==='moss'||/^grass(?:Meadow|Wild|Forest|Dry|Tuft|Flowers|Pebbles|Patch|Weeds|Trampled)?$/.test(kind));
 }
+function poiSacredPaintArea(site,z,width,height){
+ const lobe=site?.id==='base'?site.sacredDepth:null;
+ return width*(lobe&&z<lobe.oldH?lobe.oldH:height);
+}
 function makeScene(){
  const localBatch=typeof poiFacilityLocalBuild==='undefined'?null:poiFacilityLocalBuild;
  const wallFade=poiWalkActive&&facilitySite?[]:null,storeyFade=wallFade?[]:null;
@@ -31586,7 +31602,8 @@ function makeScene(){
   return baseGrass[i]||(baseGrass[i]=pineEastGroundColor(x,z,floors,baseOffset));
  }:null;
  if(!cachedGrade&&!localBatch){
- if(!facilitySite||facilityViewLevel()>=0)for(let z=0;z<MAP_H;z++)for(let x=0;x<MAP_W;x++){
+ if(!facilitySite||facilityViewLevel()>=0)for(let z=0;z<MAP_H;z++)
+  for(let x=0,cols=MAP_W===128&&MAP_H===182&&z>=128?48:MAP_W;x<cols;x++){
   if(facilitySite&&facilityStairOpenings.has(facilityCellKey(x,z,0))){
    const h=terrainY(x,z);
    if(facilityUsesOpenCellarStair()){
@@ -31607,7 +31624,7 @@ function makeScene(){
   if(woodlandRiver(x,z))facilityWoodlandWater(tmp,x,z,floors,creekWater,creekShoals,canalWater.has(x+','+z),x-baseOffset);
   else{
    if(townGuildWood(x,z,kind))pineDrawTownGuildFloor(tmp,x,z,kind);
-   else addFloorTile(tmp,x,z,kind,MAP_W*MAP_H,ROAD_DIAGONALS.has(kind)?roadDiagonalConnections(floors,x,z,kind):ROAD_IDS.has(kind)&&!kind.endsWith('Full')?roadConnections(floors,x,z,kind):0,ambientTint||eastBlend,pinePlayJoinedNaturalGrade(kind,facilitySite,poiWalkActive));
+   else addFloorTile(tmp,x,z,kind,poiSacredPaintArea(facilitySite,z,MAP_W,MAP_H),ROAD_DIAGONALS.has(kind)?roadDiagonalConnections(floors,x,z,kind):ROAD_IDS.has(kind)&&!kind.endsWith('Full')?roadConnections(floors,x,z,kind):0,ambientTint||eastBlend,pinePlayJoinedNaturalGrade(kind,facilitySite,poiWalkActive));
    if(!canalQuays.has(x+','+z)&&!(creekWater&&x-baseOffset>=67&&facilityWoodlandBank(tmp,x,z,kind,woodlandRiver,groundCorner))&&floors.has(x+','+z))shoreline(tmp,x,z,floors);
   }
   pineBakeFloorLighting(tmp,x,z,0,pineShadows,pineWarmLamps);
@@ -31662,7 +31679,7 @@ function makeScene(){
   const wet=kind==='water'&&o.y===-1?chapelWet.get(o.x+','+o.z):undefined;
   if(wet!==undefined)poiChapelWetFloor(tmp,o.x,o.z,wet);
   else if(townGuildWood(o.x,o.z,kind))pineDrawTownGuildFloor(tmp,o.x,o.z,kind);
-  else addFloorTile(tmp,o.x,o.z,kind,MAP_W*MAP_H,ROAD_IDS.has(kind)&&!kind.endsWith('Full')?roadConnections(layer,o.x,o.z,kind):0);
+  else addFloorTile(tmp,o.x,o.z,kind,poiSacredPaintArea(facilitySite,o.z,MAP_W,MAP_H),ROAD_IDS.has(kind)&&!kind.endsWith('Full')?roadConnections(layer,o.x,o.z,kind):0);
   let lodgingColor=null;
   if(lodging&&o.y>0&&o.x>=lodging.x1-4&&o.x<=lodging.x2+4&&o.z>=lodging.z1-4&&o.z<=lodging.z2+4&&
      facilityFloorOwner(o.x,o.z,o.y)!==lodgingIndex){
@@ -31852,7 +31869,7 @@ void main(){
  }
  color=mix(color,vec3(1.0,.13,.14),uHitFlash);
  if(uSacredFog.z>0.0){
-  float mist=smoothstep(2.65,9.7,length(vLootXZ-uSacredFog.xy))*uSacredFog.z;
+  float mist=smoothstep(5.1,25.5,length(vLootXZ-uSacredFog.xy))*uSacredFog.z;
   color=mix(color,uSacredColor,mist);
  }
  gl_FragColor=vec4(color,1.0);
@@ -32258,8 +32275,24 @@ function poiSkyCanLookUp(){
  return poiWalkActive&&poiThirdPerson&&!cameraTopDown&&!pineAIActive&&
   facilitySite?.id==='base'&&poiWalkLevel===0&&!poiWalkIndoor();
 }
+const POI_ORBIT_LOOKUP_LIMIT=-1.02,POI_ORBIT_LOW_EYE=-.16;
+function poiOrbitHigherDome(){
+ return poiWalkActive&&poiThirdPerson&&!cameraTopDown&&!pineAIActive&&poiWalkLevel===0&&
+  typeof poiDavidTempleEnclosedAt==='function'&&poiDavidTempleEnclosedAt(facilitySite,poiWalkViewX,poiWalkViewZ,poiWalkLevel);
+}
 function poiOrbitPitchClamp(pitch){
- return Math.max(poiSkyCanLookUp()?-.16:.12,Math.min(1.15,pitch));
+ const low=poiSkyCanLookUp()||poiOrbitHigherDome()?POI_ORBIT_LOOKUP_LIMIT:.12;
+ return Math.max(low,Math.min(1.15,pitch));
+}
+function poiOrbitHigherLens(eye,target,pitch,allowed){
+ const extra=Math.min(0,pitch-POI_ORBIT_LOW_EYE);
+ if(!allowed||extra>=0)return target;
+ const horizontal=Math.hypot(eye[0]-target[0],eye[2]-target[2]);
+ if(horizontal<1e-5)return target;
+ // The low camera arm has already obeyed actual floor and solid walls.
+ // Rotate only the view direction as the user keeps looking up.
+ const down=Math.atan2(eye[1]-target[1],horizontal);
+ return [target[0],eye[1]-horizontal*Math.tan(Math.max(-1.20,down+extra)),target[2]];
 }
 const POI_SKY_COLOR=[
  [0,[16,29,62],[60,86,126]],[300,[16,29,62],[60,86,126]],
@@ -32346,9 +32379,9 @@ function parameters(){
   const ground=poiCreekPlayerHeight(performance.now())+poiWalkLevel*1.4;
   const skyOutdoor=poiSkyCanLookUp();
   const homeAngle=!sacredView&&poiHomeCameraZone(facilitySite,poiWalkViewX,poiWalkViewZ,poiWalkLevel);
+  const higher=poiThirdPerson&&!cameraTopDown&&(skyOutdoor||sacredView);
   const pitch=!poiThirdPerson?(cameraTopDown?.71:.49):
-   homeAngle?Math.max(-.16,poiCameraPitch):
-   poiCameraPitch<.15&&skyOutdoor?poiCameraPitch:Math.max(.12,poiCameraPitch);
+   homeAngle||higher?Math.max(POI_ORBIT_LOW_EYE,poiCameraPitch):Math.max(.12,poiCameraPitch);
   const horizontal=radius*Math.cos(pitch);
   const desired=[x-horizontal*Math.sin(bearing),ground+1.1+radius*Math.sin(pitch),z-horizontal*Math.cos(bearing)];
   if(pitch<.12){
@@ -32363,19 +32396,20 @@ function parameters(){
   const arm=eye===desired?radius:Math.hypot(...eye.map((v,i)=>v-target[i]));
   const near=eye!==desired&&arm<1.81?.08:.45;
   const fov=eye===desired?Math.PI/3:facilityWatchtowerCloseFov(arm);
+  const lensTarget=poiDavidRevealLook(eye,target,performance.now());
+  const viewTarget=poiOrbitHigherLens(eye,lensTarget,poiCameraPitch,higher);
   let sky=null;
   if(skyOutdoor){
    // Anchor the time-of-day palette to physical elevations, not camera
    // opacity. Empty pixels below the horizon still use the current time.
    // The collision arm can shorten or tilt at a wall. Project the
    // palette with that real view instead of exposing the editor color.
-   const eyeHorizontal=Math.hypot(eye[0]-target[0],eye[2]-target[2]);
-   const tilt=Math.atan2(eye[1]-target[1],Math.max(1e-6,eyeHorizontal)),scale=50/Math.tan(fov/2);
+   const eyeHorizontal=Math.hypot(eye[0]-viewTarget[0],eye[2]-viewTarget[2]);
+   const tilt=Math.atan2(eye[1]-viewTarget[1],Math.max(1e-6,eyeHorizontal)),scale=50/Math.tan(fov/2);
    const stop=elevation=>50-scale*Math.tan(Math.min(Math.PI/3,tilt+elevation));
    sky={skyHorizon:stop(0),skyMiddle:stop(Math.PI/12),skyHigh:stop(Math.PI/6)};
   }
-  const lensTarget=poiDavidRevealLook(eye,target,performance.now());
-  return{...q,halfH,halfW,centerX,centerZ,elev,targetY,...sky,vp:mult(perspective(fov,Math.max(.1,q.aspect),near,Math.max(90,sceneReach*1.6+18)),look(eye,lensTarget))};
+  return{...q,halfH,halfW,centerX,centerZ,elev,targetY,...sky,vp:mult(perspective(fov,Math.max(.1,q.aspect),near,Math.max(90,sceneReach*1.6+18)),look(eye,viewTarget))};
  }
  const cameraDistance=Math.max(80,sceneReach*1.6+24);
  const eye=[centerX+cameraDistance*Math.sin(yaw)*Math.cos(elev),targetY+cameraDistance*Math.sin(elev),centerZ+cameraDistance*Math.cos(yaw)*Math.cos(elev)];
@@ -33900,7 +33934,9 @@ function saveLocal(){
   const saved=JSON.stringify(data());localStorage.setItem(SAVE_KEY,saved);workshopResumeTag=workshopResumeMapTag(saved);
  }catch(e){console.warn('Save write failed',e)}
 }
-function data(){return{format:'forest-world-v1',version:1,size:MAP_W,width:MAP_W,height:MAP_H,terrainHeights:[...terrainHeights.entries()].map(([key,h])=>{const [x,z]=key.split(',').map(Number);return{x,z,h}}),world:world.map(o=>({...o})),models:models.map(m=>({id:m.id,name:m.name,parts:m.parts.map(p=>({...p}))})),prefabs:prefabs.map(p=>({id:p.id,name:p.name,w:p.w,h:p.h,tiles:p.tiles.map(t=>({...t}))})),checks:pineCheckMarks.map(p=>({...p}))}}
+let pineStockDepthExportOffset=0;
+function data(){return{format:'forest-world-v1',version:1,size:MAP_W,width:MAP_W,height:MAP_H,
+ ...(MAP_W===128&&MAP_H===182?{workshopFacility:{version:1,floorOffset:pineStockDepthExportOffset,groundY:pineStockDepthExportOffset,stockDepth:1}}:{}),terrainHeights:[...terrainHeights.entries()].map(([key,h])=>{const [x,z]=key.split(',').map(Number);return{x,z,h}}),world:world.map(o=>({...o})),models:models.map(m=>({id:m.id,name:m.name,parts:m.parts.map(p=>({...p}))})),prefabs:prefabs.map(p=>({id:p.id,name:p.name,w:p.w,h:p.h,tiles:p.tiles.map(t=>({...t}))})),checks:pineCheckMarks.map(p=>({...p}))}}
 function snapshot(){undoStack.push(JSON.stringify(data()));if(undoStack.length>45)undoStack.shift();redoStack.length=0}
 function commit(){poiWildInvalidate();poiMiniInvalidate();if(facilitySite){facilityRefreshStairs();facilityInvalidateScenes();facilitySurfaceEdited=true;if(typeof poiTownNpcLightInvalidate==='function')poiTownNpcLightInvalidate()}worldMaxLevel=world.reduce((top,o)=>Math.max(top,o.y),0);dirty=true;cursorDirty=true;saveLocal();updateStats();workshopResumeWrite();if(poiWalkActive)poiMiniUpdate()}
 function restore(json){
@@ -34456,9 +34492,16 @@ function refreshPalette(){
 function numeric(id,fallback=0){const v=Number($(id).value);return Number.isFinite(v)?v:fallback}
 
 function validModel(m){if(!m||typeof m.id!=='string'||!/^custom-[a-z0-9-]{1,32}$/.test(m.id)||typeof m.name!=='string'||m.name.length>40||!Array.isArray(m.parts)||m.parts.length>100)return false;return m.parts.every(p=>['x','y','z','w','h','d'].every(k=>Number.isFinite(p[k])&&Math.abs(p[k])<=8)&&p.w>=.04&&p.h>=.04&&p.d>=.04&&safeColor(p.color))}
-function pineValidateWorldData(o){if(!o||o.format!=='forest-world-v1'||o.version!==1||!Array.isArray(o.world)||!Array.isArray(o.models)||o.world.length>40000||o.models.length>80)throw Error('データ形式または件数が不正です');
+function pineValidateWorldData(o,stockDepth=false){if(!o||o.format!=='forest-world-v1'||o.version!==1||!Array.isArray(o.world)||!Array.isArray(o.models)||o.world.length>40000||o.models.length>80)throw Error('データ形式または件数が不正です');
 const newW=o.width??o.size,newH=o.height??o.size;
-if(!Number.isInteger(newW)||!Number.isInteger(newH)||newW<MIN_MAP||newW>MAX_MAP||newH<MIN_MAP||newH>MAX_MAP)throw Error('マップの広さが不正です');
+const exportMeta=o.workshopFacility;
+const depthExport=exportMeta?.version===1&&exportMeta.stockDepth===1&&
+ Number.isInteger(exportMeta.floorOffset)&&exportMeta.floorOffset>=0&&exportMeta.floorOffset<=1&&exportMeta.groundY===exportMeta.floorOffset;
+const extended=(stockDepth||depthExport)&&newW===MAX_MAP&&newH===POI_SACRED_DEPTH_H;
+if(exportMeta?.stockDepth!==undefined&&!extended)throw Error('深い地形データの形式が不正です');
+if(!Number.isInteger(newW)||!Number.isInteger(newH)||newW<MIN_MAP||newW>MAX_MAP||newH<MIN_MAP||newH>MAX_MAP&&!extended)throw Error('マップの広さが不正です');
+const outsideLobe=p=>p?.z>=128&&p.x>=POI_SACRED_DEPTH_W;
+if(extended&&[o.world,o.terrainHeights,o.checks].some(rows=>Array.isArray(rows)&&rows.some(outsideLobe)))throw Error('マップの範囲外です');
 const blocks=o.prefabs||[];if(!Array.isArray(blocks)||blocks.length>100)throw Error('設計図の数が多すぎます');
 if(!o.models.every(validModel))throw Error('モデルの内容が不正です');
 const heights=o.terrainHeights??[];
@@ -34469,7 +34512,8 @@ if(!Array.isArray(incomingChecks)||incomingChecks.length>300||
  p.x>=0&&p.z>=0&&p.x<newW&&p.z<newH&&p.y>=0&&p.y<=MAX_LEVEL&&PINE_CHECK_COLORS.includes(p.color)))
  throw Error('チェックデータが不正です');
 return {newW,newH,blocks,heights,incomingChecks};}
-function loadData(o){const {newW,newH,blocks,heights,incomingChecks}=pineValidateWorldData(o);
+function loadData(o,stockDepth=false){const {newW,newH,blocks,heights,incomingChecks}=pineValidateWorldData(o,stockDepth);
+pineStockDepthExportOffset=newW===128&&newH===182&&o.workshopFacility?.floorOffset===1?1:0;
 pineObjectSelection=null;pineSelectedTile=null;pineMoveArmed=false;cursorDirty=true;
 pineCheckMarks=incomingChecks.map(p=>({...p}));pineCheckNodes.clear();
 $('pineCheckOverlay').replaceChildren();pineCheckRefresh();
@@ -36965,6 +37009,10 @@ function buildFacilitySite(id){
  const northFort=extendTownWorldNorthFort(expanded.map.world,northTrail);
  const southPort=extendTownWorldSouthPort(expanded.map.world);
  const southForest=extendTownWorldSouthForest(expanded.map.world,southPort);
+ // Only the stock base appends the southwestern lobe. Legacy coordinates,
+ // 128-wide editor maps and the original z=127 snow outlet stay fixed.
+ expanded.map.height=182;
+ expanded.sacredDepth={w:48,oldH:128,h:182};
  const davidTemple=extendTownWorldDavidTemple(expanded);
  const sacredForest=extendTownWorldSacredForest(expanded,davidTemple);
  return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad,northFort,southPort,southForest,davidTemple,sacredForest};
@@ -36972,77 +37020,64 @@ function buildFacilitySite(id){
 
 // BEGIN SACRED FOREST MAP
 function extendTownWorldSacredForest(site,temple){
- const world=site.map.world,index=world.length,y=0,P=(x,z)=>({x,z,y}),K=(x,z)=>x+','+z;
- const covered=[
-  {x1:2,x2:20,z1:48,z2:73},{x1:2,x2:44,z1:74,z2:124}
- ];
- const old=new Map(),taken=new Set(),paths=[],trees=[],ground=[],bury=[];
- for(const o of world)if(o.y===0){
-  const k=K(o.x,o.z),v=old.get(k)||[];v.push(o.type);old.set(k,v);
- }
- for(const p of site.map.terrainHeights||[])taken.add(K(p.x,p.z));
- const around=(x,z)=>Math.hypot(x-temple.ring.x,z-temple.ring.z);
+ const world=site.map.world,index=world.length,P=(x,z)=>({x,z,y:0}),K=(x,z)=>x+','+z;
+ const covered=[{x1:4,x2:31,z1:71,z2:93},{x1:4,x2:43,z1:89,z2:133},{x1:4,x2:44,z1:126,z2:141}];
+ const old=new Set(world.filter(o=>o.y===0).map(o=>K(o.x,o.z)));
+ const grade=new Set((site.map.terrainHeights||[]).map(o=>K(o.x,o.z)));
+ const occupied=new Set([...old,...grade]),trees=[],soil=[],soft=[];
  const route=knots=>{
-  const full=[];let [x,z]=knots[0];full.push(P(x,z));
-  for(const [xx,zz] of knots.slice(1))while(x!==xx||z!==zz){
-   x+=Math.sign(xx-x);z+=Math.sign(zz-z);full.push(P(x,z));
+  let [x,z]=knots[0];const dots=[P(x,z)];
+  for(const [u,v] of knots.slice(1)){
+   if(x!==u&&z!==v)throw Error('sacred forest path must remain cardinal');
+   while(x!==u||z!==v){x+=Math.sign(u-x);z+=Math.sign(v-z);dots.push(P(x,z));}
   }
-  return full;
+  return dots;
  };
- const main=route([[12,49],[9,49],[9,56],[7,56],[7,65],[10,65],[10,71],[15,71],[15,79],[17,79],[17,82],[24,82],[24,86],[28,86],[28,88],[29,88]]);
- const westLoop=route([[7,56],[4,56],[4,60],[3,60],[3,66],[5,66],[5,65],[7,65]]);
- const gladeLoop=route([[10,71],[10,77],[8,77],[8,83],[16,83],[16,82],[17,82]]);
- // Reserve the junction from the existing eastern road, never replace it.
- const east=route([[41,77],[41,84],[35,84],[35,88],[29,88]]);
- const lane=new Set();
- for(const dots of [main,westLoop,gladeLoop,east,temple.approach]){
-  for(const p of dots){
-   const k=K(p.x,p.z);lane.add(k);
-   if(old.has(k)||taken.has(k))continue;
-   // Soft edges and path breaks blend into existing turf.
-   if((p.x*7+p.z*13)%17===0)continue;
-   ground.push({...p,type:(p.x*17+p.z*3)%11<2?'grassTrampled':'earth',rot:0});taken.add(k);
-  }
+ const main=route([[12,49],[12,56],[15,56],[15,67],[13,67],[13,77],[9,77],[9,88],[13,88],[13,99],[18,99],[18,109],[24,109],[24,125]]);
+ const east=route([[41,70],[41,77],[38,77],[38,81],[35,81],[35,86],[28,86],[28,95],[19,95],[19,99],[18,99]]);
+ const glade=route([[9,81],[6,81],[6,95],[10,95],[10,99],[13,99]]);
+ const paths=[main,east,glade],lane=new Set(paths.flatMap(a=>a.map(p=>K(p.x,p.z))));
+ for(const p of temple.approach)lane.add(K(p.x,p.z));
+ const plant=(p,type,list)=>{
+  const k=K(p.x,p.z);
+  if(occupied.has(k))return false;
+  list.push({...p,type,rot:(p.x*7+p.z*11)%4});occupied.add(k);return true;
+ };
+ for(const path of paths)for(const p of path){
+  // Uninterrupted walkability, gently broken natural path coloration.
+  plant(p,(p.x*7+p.z*13)%13<2?'grassTrampled':p.z<69?'roadGravelFull':'earth',soil);
  }
- // Broad forest depth without painting 2,600 new floor objects.
- // Grow in irregular bands; preserve a surprisingly open west trail and
- // keep narrow negative space near crossings, bends and the temple apron.
  const noise=(x,z,s=0)=>(Math.imul((x+37)*14513+(z+53)*11579+s*9127,2654435761)>>>0)/4294967296;
- const reveal=temple.approach[0],tries=[];
- // Give both the player and a normal third-person orbit room when the
- // trail opens: a solid canopy behind the player otherwise hides the gate.
- const sightClearing=(x,z)=>Math.hypot((x-reveal.x)/6.35,(z-reveal.z+2)/7.4)<1;
+ const reveal=P(24,125),ring=temple.ring,canopy=[];
+ const keepRoute=(x,z)=>paths.some(a=>a.some(p=>Math.hypot(x-p.x,z-p.z)<2.25));
+ const keepGate=(x,z)=>Math.hypot((x-reveal.x)/5.7,(z-reveal.z+1)/6.2)<1||
+  x>=20&&x<=28&&z>=124||
+  Math.hypot(x-ring.x,z-ring.z)<ring.radius+3.2;
+ const openEast=(x,z)=>z<82&&x>=29||z<86&&x>=38;
+ const picks=[];
  for(const b of covered)for(let z=b.z1;z<=b.z2;z++)for(let x=b.x1;x<=b.x2;x++){
   const k=K(x,z);
-  if(old.has(k)||taken.has(k)||lane.has(k)||around(x,z)<19.6||
-     (z>=86&&z<=92&&x>=22&&x<=33)||sightClearing(x,z))continue;
-  const hush=(z>=73&&z<=83&&x>=12&&x<=37)||z>=97&&x>=36;
-  const grove=Math.sin(x*.39+z*.27)*Math.sin(x*.16-z*.28)>.08;
-  const score=noise(x,z)+(.18*(+grove))+(.18*(+hush));
-  if(score>.63)tries.push({x,z,score});
+  if(occupied.has(k)||lane.has(k)||z<73||openEast(x,z)||keepGate(x,z)||keepRoute(x,z))continue;
+  const screen=(z>=88&&z<=98&&x>=14&&x<=34)||(z>=104&&z<=117&&x>=16&&x<=34);
+  const grove=Math.sin(x*.33+z*.23)*Math.sin(x*.17-z*.29)>.2;
+  const score=noise(x,z)+.22*(+grove)+.21*(+screen);
+  if(score>.69)picks.push({x,z,score,screen});
  }
- tries.sort((a,b)=>b.score-a.score||a.z-b.z||a.x-b.x);
- for(const {x,z} of tries){
-  if(trees.length>=146)break;
-  if(trees.some(o=>Math.hypot(o.x-x,o.z-z)<2.55))continue;
-  const species=noise(x,z,3),type=species<.13?'treeBirch':species<.39?'treeOak':species<.68?'treePine':'treeCedar';
-  trees.push({...P(x,z),type,rot:Math.floor(noise(x,z,4)*4)});taken.add(K(x,z));
+ picks.sort((a,b)=>b.score-a.score||a.z-b.z||a.x-b.x);
+ for(const {x,z,screen} of picks){
+  if(trees.length>=96)break;
+  if(trees.some(o=>Math.hypot(o.x-x,o.z-z)<3.15))continue;
+  const r=noise(x,z,7),kind=screen?(r<.48?'treeCedar':'treePine'):r<.16?'treeBirch':r<.43?'treeOak':r<.68?'treePine':'treeCedar';
+  if(plant(P(x,z),kind,trees)&&screen)canopy.push(P(x,z));
  }
- // Low vegetation and stones guide the eye, with no literal temple sign.
- for(const [x,z,type] of [
-  [7,50,'bushFern'],[11,53,'tallGrass'],[8,60,'bushFern'],[6,63,'flowerField'],
-  [11,69,'bushFern'],[13,72,'tallGrass'],[11,76,'bushFern'],[12,80,'flowerField'],
-  [18,81,'bushFern'],[20,83,'tallGrass'],[22,81,'bushFern'],[25,84,'flowerField'],
-  [29,85,'bushFern'],[33,81,'tallGrass'],[37,84,'bushFern'],[39,81,'tallGrass']
- ]){
-  const k=K(x,z);
-  if(!old.has(k)&&!taken.has(k)&&!lane.has(k)&&around(x,z)>19.6){
-   bury.push({...P(x,z),type,rot:(x+z)%4});taken.add(k);
-  }
+ for(const [x,z,type] of [[11,54,'tallGrass'],[19,60,'flowerField'],[11,65,'flowerField'],
+  [12,72,'bushFern'],[16,75,'tallGrass'],[11,79,'bushFern'],[7,88,'tallGrass'],[13,91,'bushFern'],
+  [15,102,'bushFern'],[21,110,'tallGrass'],[22,114,'bushFern'],[26,119,'tallGrass'],
+  [37,77,'flowerField'],[33,83,'bushFern'],[28,89,'tallGrass']]){
+  if(!lane.has(K(x,z)))plant(P(x,z),type,soft);
  }
- world.push(...ground,...bury,...trees);
- return {name:'深樹の聖林',difficulty:1,coverage:covered,route:main,routes:[main,westLoop,gladeLoop],
-  reveal,trees,authored:{index,count:world.length-index}};
+ world.push(...soil,...soft,...trees);
+ return {name:'深樹の聖林',difficulty:1,coverage:covered,route:main,routes:paths,trees,canopy,reveal,authored:{index,count:world.length-index}};
 }
 // END SACRED FOREST MAP
 
@@ -37111,114 +37146,76 @@ function extendTownWorldSouthPort(world){
 // Small same-frame woodland route around the head of the port inlet.
 // BEGIN DAVID TEMPLE MAP
 function extendTownWorldDavidTemple(site){
- const world=site.map.world,index=world.length,y=0,P=(x,z)=>({x,z,y});
- const k=(x,z,y)=>x+','+z+','+y,old=new Set(world.map(o=>k(o.x,o.z,o.y)));
- const grade=new Set((site.map.terrainHeights||[]).map(o=>k(o.x,o.z,0)));
- const floor=new Map(),props=[],footprint=[];
- const ring={x:24,z:104,radius:18};
- const bounds={x1:6,x2:42,z1:86,z2:122,y};
- const name='白環の大神殿',boss={...P(24,104),type:'monsterStoneDavid',room:{
-  minX:13,maxX:35,minZ:93,maxZ:115,arena:{x:ring.x,z:ring.z,radius:16.95,minZ:93.5}
+ const world=site.map.world,index=world.length,y=0,P=(x,z)=>({x,z,y}),K=(x,z,lv=0)=>x+','+z+','+lv;
+ const previous=new Set(world.map(o=>K(o.x,o.z,o.y))),height=new Set((site.map.terrainHeights||[]).map(p=>K(p.x,p.z)));
+ const floor=new Map(),props=[],occupied=new Set(),footprint=[];
+ const ring={x:24,z:158,radius:18},entry=128,exit=142,bounds={x1:6,x2:42,z1:124,z2:176,y};
+ const name='白環の大神殿',boss={...P(ring.x,ring.z),type:'monsterStoneDavid',room:{
+  minX:7,maxX:41,minZ:exit,maxZ:175,arena:{x:ring.x,z:ring.z,radius:16.95,minZ:exit-.5}
  }};
- const put=(x,z,type)=>{const key=k(x,z,0);if(!old.has(key)&&!grade.has(key))floor.set(key,{...P(x,z),type,rot:0})};
- const prop=(x,z,type,rot=0,y=0)=>{const key=k(x,z,y);if(old.has(key)||grade.has(k(x,z,0)))throw Error('David temple prop overlap '+key);props.push({x,z,y,type,rot})};
- for(let z=bounds.z1;z<=bounds.z2;z++)for(let x=bounds.x1;x<=bounds.x2;x++){
+ const put=(x,z,type)=>{
+  const k=K(x,z);if(previous.has(k)||height.has(k))return;
+  floor.set(k,{...P(x,z),type,rot:0});
+ };
+ const prop=(x,z,type,rot=0,y=0)=>{
+  const k=K(x,z,y);if(previous.has(k)||height.has(K(x,z)))throw Error('Deep temple prop overlap '+k);
+  if(occupied.has(k))return;
+  occupied.add(k);props.push({x,z,y,type,rot});
+ };
+ const corridor=(x,z)=>x>=23&&x<=25&&z>=entry&&z<exit;
+ const shell=new Set();
+ for(let z=ring.z-ring.radius;z<=bounds.z2;z++)for(let x=bounds.x1;x<=bounds.x2;x++){
   const r=Math.hypot(x-ring.x,z-ring.z);
   if(r>ring.radius+.20)continue;
-  const oldCell=old.has(k(x,z,0));
-  const stripe=(x===23||x===25)&&z<103;
+  const stripe=x===24&&z<=ring.z;
   put(x,z,Math.abs(r-4.8)<.54||Math.abs(r-13.5)<.54||stripe?'roadRoyalFull':
    r<4.25?'roadCutStoneFull':r>15?'roadMossFull':'roadAncientFull');
-  if(!oldCell)footprint.push(P(x,z));
-  // The north arc is replaced by enclosed, mirror-symmetric returns.
-  // The rest of the original round shell remains untouched.
-  if(r>=16.95&&z>=94&&!oldCell)prop(x,z,'poiDavidWallRound');
+  footprint.push(P(x,z));
+  if(r>=16.95&&!corridor(x,z)){
+   prop(x,z,'poiDavidWallRound');shell.add(x+','+z);
+  }
  }
- // Four-neighbor connected returns from the circular shoulders meet the
- // same z=94 aperture as the piers. The old trail bends outside at z=91.
- const eastWing=[
-  [38,94,3],[38,93,3],[37,93,3],[37,92,3],[36,92,3],
-  [36,91,2],[35,91,2],[35,90,2],[34,90,2],[33,90,2],
-  [32,90,2],[31,90,1],[31,91,1],[30,91,1],[30,92,1],
-  [29,92,1],[29,93,0],[28,93,0],[28,94,0]
- ];
- const occupied=new Set(props.map(o=>k(o.x,o.z,o.y)));
- for(const [xx,z,tier] of eastWing)for(const x of [xx,2*ring.x-xx]){
-  // Radial depth transitions already owned by the original shoulder.
-  if(occupied.has(k(x,z,0)))continue;
-  prop(x,z,'poiDavidWallWingTall');
- }
- const approach=[P(29,88),P(29,89),P(29,90),P(29,91),P(28,91),P(27,91),P(26,91),P(25,91),P(24,91),P(24,92),P(24,93),P(24,94)];
- for(const p of approach.slice(1,-1))put(p.x,p.z,'roadGravelFull');
- for(let z=92;z<=96;z++)for(let x=22;x<=26;x++)
-  put(x,z,x===24?'roadRoyalFull':'roadCutStoneFull');
- prop(27,90,'poiDavidWaystone',0);
- prop(21,94,'poiDavidGatePier',0);prop(27,94,'poiDavidGatePier',2);
- // The passage is physically doglegged: both baffles stop outside LOS.
- // The old portal stays x24,z94, the final mouth points back down its axis.
- const tunnelPath=[[24,94],[24,95],[25,95],[25,96],[25,97],[24,97],
-  [23,97],[23,98],[23,99],[24,99],[24,100],[24,101]].map(([x,z])=>P(x,z));
- for(let z=94;z<=100;z++){
-  for(const x of [22,26])prop(x,z,'poiDavidWallTunnel');
+ // Real three-tile clear passage. Recessed stone beams continue the radial
+ // shell above its opening, rather than leaving a peekable gap over the roof.
+ const tunnelPath=[];
+ for(let z=entry;z<exit;z++){
+  tunnelPath.push(P(24,z));
+  for(let x=22;x<=26;x++)put(x,z,x===24?'roadRoyalFull':'roadCutStoneFull');
+  for(const x of [22,26]){
+   prop(x,z,z===entry?'poiDavidGatePier':'poiDavidWallTunnel',x===22?0:2);
+   shell.add(x+','+z);
+  }
   for(let x=22;x<=26;x++)prop(x,z,'poiDavidTunnelRoof',0,2);
  }
- for(const [x,z] of [[23,96],[24,96],[24,98],[25,98]])prop(x,z,'poiDavidWallTunnel');
- for(let x=21;x<=27;x++)prop(x,94,'poiDavidWallHeader',0,3);
+ for(let x=23;x<=25;x++)prop(x,141,'poiDavidWallHeader',0,3);
  prop(ring.x,ring.z,'poiDavidSacredRoof',0,2);
- for(const [x,z,rot] of [[22,95,0],[26,96,2],[22,97,0],[26,99,2],[22,100,0],
-  [7,104,0],[41,104,2],[10,114,0],[38,114,2],[24,121,3]])prop(x,z,'poiDavidCandleSconce',rot,1);
- for(const [x,z] of [[10,104],[38,104],[13,113],[35,113],[22,118],[26,118]])prop(x,z,'lantern');
+ for(let z=130;z<=140;z+=2)prop(z%4===0?26:22,z,'poiDavidCandleSconce',z%4===0?2:0,1);
+ for(const [x,z,rot] of [[7,158,0],[41,158,2],[10,148,1],[38,148,1],[10,168,0],[38,168,2],[24,175,3]])
+  prop(x,z,'poiDavidCandleSconce',rot,1);
  prop(boss.x,boss.z,boss.type,0);
-// Off-center copses in existing meadow, not a uniform hedge at the wall.
-// Coordinates deliberately spare the front look-through, walk-in, and arena.
- const grove=[
-  // Broadleaf and sparse birch northwest of the old walking line.
-  [14,86,'treeOak',1],[17,85,'treeBirch',3],[12,87,'bushFern',2],[13,89,'tallGrass',1],
-  [16,84,'tallGrass',3],[19,85,'flowerField',1],[11,90,'tallGrass',0],
-  // The northeast shoulder opens back up toward the road; no high screen.
-  [42,91,'treeRound',3],[45,92,'treePine',0],[39,86,'tallGrass',2],[44,90,'bushFern',0],
-  [42,88,'tallGrass',1],[41,92,'flowerField',3],[43,94,'tallGrass',0],
-  // Rocky west and southwest ground with widely broken canopies.
-  [3,101,'treeRound',1],[4,111,'treePine',2],[5,106,'bush',3],[4,99,'tallGrass',0],
-  [2,104,'tallGrass',2],[3,108,'bush',0],[5,113,'flowerField',2],[6,112,'tallGrass',1],
-  // Loose shrubs and two saplings at the southeast edge; no hard visual ring.
-  [47,109,'treeRound',1],[19,124,'treePine',3],[45,104,'tallGrass',1],[44,109,'bush',2],
-  [45,111,'tallGrass',0],[48,108,'bush',3],[17,122,'tallGrass',2],
-  [22,124,'flowerField',1],[22,125,'bush',3]
- ];
- const taken=new Set([...world,...props].map(o=>o.x+','+o.z));
- const plantedTrees=[];
- for(const [x,z,type,rot] of grove){
-  const key=x+','+z,isTree=type.startsWith('tree');
-  if(x<0||z<0||x>=site.map.width||z>=site.map.height||taken.has(key)||grade.has(k(x,z,0))||
-     Math.hypot(x-ring.x,z-ring.z)<=ring.radius+.72||
-     approach.some(p=>Math.hypot(x-p.x,z-p.z)<=(isTree?3:1.2)))continue;
-  prop(x,z,type,rot);
-  if(isTree||type==='bush')plantedTrees.push(props.at(-1));
-  taken.add(key);
- }
+ const approach=[120,121,122,123,124,125,126,127,128].map(z=>P(24,z));
+ for(let z=124;z<entry;z++)for(let x=22;x<=26;x++)put(x,z,x===24?'roadRoyalFull':'roadCutStoneFull');
+ for(const x of [21,27])prop(x,126,'poiDavidWaystone');
  world.push(...floor.values(),...props);
- // Close only the centered gateway for the enclosure flood. The physical
- // doorway cells themselves remain walkable, with the exterior starting
- // on the former trail side (z=93). North pockets behind wings stay inside.
- const shell=new Set(props.filter(o=>/^poiDavid(?:Wall|GatePier|Waystone)/.test(o.type)).map(o=>o.x+','+o.z));
- const cells=new Set([boss.x+','+boss.z]),pending=[[boss.x,boss.z]];
+ const walk=new Set([boss.x+','+boss.z]),pending=[[boss.x,boss.z]];
  for(let i=0;i<pending.length;i++){
   const [cx,cz]=pending[i];
   for(const [dx,dz] of [[0,-1],[1,0],[0,1],[-1,0]]){
    const x=cx+dx,z=cz+dz,key=x+','+z;
-   if(cells.has(key)||shell.has(key)||z===93&&x>=22&&x<=26||
-      Math.hypot(x-ring.x,z-ring.z)>ring.radius+.20)continue;
-   cells.add(key);pending.push([x,z]);
+   if(walk.has(key)||shell.has(key)||z<exit||Math.hypot(x-ring.x,z-ring.z)>ring.radius+.20)continue;
+   walk.add(key);pending.push([x,z]);
   }
  }
- const tunnel=c=>{const [x,z]=c.split(',').map(Number);return x>=23&&x<=25&&z>=94&&z<=100};
- boss.room.arena.cells=new Set([...cells].filter(c=>!tunnel(c)));
+ boss.room.arena.cells=walk;
+ const cells=new Set(walk);
+ for(let z=entry;z<exit;z++)for(let x=23;x<=25;x++)cells.add(x+','+z);
  const enclosure=[...cells].map(c=>{const [x,z]=c.split(',').map(Number);return P(x,z)});
- const interior={permanent:true,minX:23,maxX:25,enterZ:94,exitZ:101,path:tunnelPath};
+ const interior={permanent:true,minX:23,maxX:25,enterZ:entry,exitZ:exit,path:tunnelPath};
  site.buildings.push({id:'davidTemple',name,...bounds,footprint,floorFootprints:{0:enclosure},permanentRoof:true});
- return {name,difficulty:10,bounds,ring,approach,entrance:P(24,94),threshold:{minX:22,maxX:26,z:94,y},retreat:P(24,91),boss,interior,enclosure:cells,musicArrival:{minX:22,maxX:26,minZ:88,maxZ:100,y},
-  resumeSolid:[...props.filter(o=>o.y===0&&/^poiDavid/.test(o.type)),...plantedTrees],authored:{index,count:world.length-index}};
+ return {depth:1,name,difficulty:10,bounds,ring,approach,entrance:P(24,entry),
+  threshold:{minX:23,maxX:25,z:entry,y},retreat:P(24,125),boss,interior,enclosure:cells,
+  musicArrival:{minX:22,maxX:26,minZ:124,maxZ:exit-1,y},
+  resumeSolid:props.filter(o=>o.y===0&&/^poiDavid/.test(o.type)),authored:{index,count:world.length-index}};
 }
 function poiDavidTempleEnclosedAt(site,x,z,y){
  const t=site?.id==='base'?site.davidTemple:null;
@@ -37230,7 +37227,15 @@ function poiDavidTempleTunnelAt(site,x,z,y){
 }
 function poiDavidTempleContains(site,x,z,y,pad=0){
  const d=site?.id==='base'?site.davidTemple:null;
- return !!d&&d.bounds.y===y&&Math.hypot(x-d.ring.x,z-d.ring.z)<=d.ring.radius+pad;
+ return !!d&&d.bounds.y===y&&(Math.hypot(x-d.ring.x,z-d.ring.z)<=d.ring.radius+pad||
+  (typeof poiDavidTempleTunnelAt==='function'&&poiDavidTempleTunnelAt(site,x,z,y)));
+}
+function poiDavidTempleMigrateResume(s,p){
+ const d=facilitySite?.id==='base'?facilitySite.davidTemple:null;
+ if(d?.depth!==1||!p||p.y!==0||s?.templeDepth===1)return p;
+ const arena=p.z>=94&&Math.hypot(p.x-24,p.z-104)<=18.20;
+ const corridor=p.x>=23&&p.x<=25&&p.z>=94&&p.z<=100;
+ return arena||corridor?{...p,x:d.retreat.x,z:d.retreat.z,y:d.retreat.y??0}:p;
 }
 function poiDavidTempleRecoverPosition(p){
  const site=facilitySite,d=site?.id==='base'?site.davidTemple:null;
@@ -39214,7 +39219,7 @@ function poiWalkFrameNoRegionRemote(){
 function poiSnowPassChange(dest,now){
  const start=performance.now(),prepared=poiSnowPassPrepare(dest);
  if(!prepared||!workshopResumeReady||workshopResumeLeaving||poiGameResetDeparture||poiGameResetBlocked)return false;
- const record={version:1,route:'facility',id:'base',play:true,townLayout:5,townMapHeight:128,
+ const record={version:1,route:'facility',id:'base',play:true,townLayout:5,townMapHeight:poiSnowPassBase?.height??(facilitySite?.id==='base'?facilitySite.map.height:128),
   position:{x:dest.x,z:dest.z,y:0,facing:dest.facing},view:workshopResumeView(),
   editorView:facilityEditView?workshopResumeView(facilityEditView):null,
   ...(dest.region==='snowpass'?{region:'snowpass',regionHp:poiPlayerHP}:{})};
@@ -39266,18 +39271,21 @@ function workshopResumeDecode(raw){
  const fit=(v,min,max)=>Number.isFinite(v)&&v>=min&&v<=max;
  const view=v=>v&&fit(v.yaw,-7,7)&&fit(v.zoom,.025,4)&&fit(v.panX,-MAX_MAP*4,MAX_MAP*4)&&
   fit(v.panZ,-MAX_MAP*4,MAX_MAP*4)&&Number.isInteger(v.level)&&v.level>=-1&&v.level<=MAX_LEVEL&&
-  fit(v.orbitYaw,-7,7)&&fit(v.orbitPitch,-.16,1.15)&&fit(v.orbitDistance,2.5,15)
+  fit(v.orbitYaw,-7,7)&&fit(v.orbitPitch,-1.02,1.15)&&fit(v.orbitDistance,2.5,15)
   ?{yaw:v.yaw,zoom:v.zoom,panX:v.panX,panZ:v.panZ,level:v.level,hideUpper:v.hideUpper===true,
     top:v.top===true,third:v.third===true,orbitYaw:v.orbitYaw,orbitPitch:v.orbitPitch,orbitDistance:v.orbitDistance}:null;
  const p=d.position;
- const position=p&&Number.isInteger(p.x)&&p.x>=0&&p.x<MAX_MAP&&Number.isInteger(p.z)&&p.z>=0&&p.z<MAX_MAP&&
+ const deep=d.route==='facility'&&d.id==='base'&&d.townLayout===5&&typeof POI_SACRED_DEPTH_H==='number'&&d.townMapHeight===POI_SACRED_DEPTH_H;
+ const position=p&&Number.isInteger(p.x)&&p.x>=0&&p.x<MAX_MAP&&Number.isInteger(p.z)&&p.z>=0&&
+  (p.z<MAX_MAP||deep&&p.y>=0&&p.x<POI_SACRED_DEPTH_W&&p.z<POI_SACRED_DEPTH_H)&&
   Number.isInteger(p.y)&&p.y>=-1&&p.y<=MAX_LEVEL&&Number.isInteger(p.facing)&&p.facing>=0&&p.facing<4
   ?{x:p.x,z:p.z,y:p.y,facing:p.facing}:null;
  return {version:1,route:d.route,id:d.route==='facility'?d.id:null,play:d.play===true,position,
   ...(typeof poiSnowPassDecode==='function'?poiSnowPassDecode(d,position):{}),
+  ...(d.route==='facility'&&d.id==='base'&&d.templeDepth===1?{templeDepth:1}:{}),
   ...(d.route==='facility'&&d.id==='base'&&([2,3,4,5].includes(d.townLayout))?{townLayout:d.townLayout}:{}),
   ...(d.route==='facility'&&d.id==='base'&&d.townLayout===5&&Number.isInteger(d.townMapHeight)&&
-   d.townMapHeight>=96&&d.townMapHeight<=MAX_MAP?{townMapHeight:d.townMapHeight}:{}),
+   d.townMapHeight>=96&&(d.townMapHeight<=MAX_MAP||deep)?{townMapHeight:d.townMapHeight}:{}),
   tag:typeof d.tag==='string'&&/^(empty|[a-f0-9]{8})$/.test(d.tag)?d.tag:null,
   view:view(d.view),editorView:view(d.editorView)};
 }
@@ -39316,6 +39324,7 @@ function workshopResumeWrite(override,seed=false){
  const record=override||{version:1,route,id:facilitySite?.id==='snowpass'?'base':facilitySite?.id??null,play:poiWalkActive,
   ...(facilitySite?.id==='snowpass'&&poiWalkActive?{region:'snowpass',regionHp:poiPlayerDeath?POI_PLAYER_MAX_HP:poiPlayerHP}:{}),
   ...(facilitySite?.id==='base'?(facilitySite.townOffset>=22?{townLayout:5,townMapHeight:facilitySite.map.height}:{townLayout:facilitySite.townOffset?4:3}):{}),
+  ...(facilitySite?.id==='base'&&facilitySite.davidTemple?.depth===1?{templeDepth:1}:{}),
   tag:route==='editor'||route==='map-play'?workshopResumeTag:null,
   position:poiWalkActive?(typeof poiPlayerDeath!=='undefined'&&poiPlayerDeath&&!poiPlayerDeath.relocated?
    poiPlayerDeathSpawn(poiPlayerDeath.checkpoint):{x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,facing:poiWalkFacing}):null,
@@ -39428,7 +39437,8 @@ function workshopResumeRestore(s){
   if(s.play){
    const snow=s.region==='snowpass'&&typeof poiSnowPassApply==='function'&&poiSnowPassApply({region:'snowpass',x:12,z:0,facing:2},performance.now(),true);
    facilitySetPlay(true);
-   workshopResumeRestorePosition(snow?s.position:facilitySite.id==='base'?workshopResumeTownPosition(s,offset):s.position);
+   const next=snow?s.position:facilitySite.id==='base'?workshopResumeTownPosition(s,offset):s.position;
+   workshopResumeRestorePosition(typeof poiDavidTempleMigrateResume==='function'?poiDavidTempleMigrateResume(s,next):next);
    if(snow&&Number.isInteger(s.regionHp)){poiPlayerHP=s.regionHp;poiCombatHud()}
    if(poiWalkActive)workshopResumeApplyView(s.view);
   }
@@ -39491,7 +39501,8 @@ function facilityExportMap(map){
  return {...map,
   world:floorOffset?translated(map.world):map.world,
   ...(Array.isArray(map.checks)?{checks:floorOffset?translated(map.checks):map.checks}:{}),
-  workshopFacility:{version:1,floorOffset,groundY:floorOffset}};
+  workshopFacility:{version:1,floorOffset,groundY:floorOffset,
+   ...(map.width===128&&map.height===182?{stockDepth:1}:{})}};
 }
 function facilityDownload(){
  if(!facilitySite)return;
@@ -40075,7 +40086,7 @@ function poiSacredTreeGeometry(m,o){
  const ox=o.x+.5,oz=o.z+.5,y=terrainY(o.x,o.z);
  const seed=(n)=>((Math.imul((o.x+11)*17417+(o.z+17)*7919+n*9577,1597334677)>>>0)/4294967296);
  const pine=o.type==='treePine'||o.type==='treeCedar',birch=o.type==='treeBirch';
- const h=(pine?5.4:birch?4.65:5.0)+seed(0)*1.35,w=(pine?1.20:1.48)+seed(1)*.38;
+ const h=(pine?9.45:birch?7.9:8.8)+seed(0)*2.3,w=(pine?1.5:1.88)+seed(1)*.47;
  const theta=seed(2)*6.2831853,trunk=birch?[.56,.55,.46]:[.24,.20,.15];
  const leaf=pine?[.16,.30,.23]:[.21,.35,.24];
  function ring(r,base,lx=0,lz=0){
@@ -40087,8 +40098,8 @@ function poiSacredTreeGeometry(m,o){
  const low=ring(.25,0),mid=ring(.115,h*.73,(seed(8)-.5)*.3,(seed(9)-.5)*.3);
  for(let i=0;i<6;i++)quad(m,low[(i+1)%6],low[i],mid[i],mid[(i+1)%6],trunk);
  // Tiered, irregular shadow masses; 72 triangles at most per whole tree.
- const layers=pine?[[.30,.24,1], [.47,.23,.84],[.64,.22,.66],[.78,.22,.45]]:
-  [[.40,.28,.76],[.51,.30,1],[.67,.29,.73]];
+ const layers=pine?[[.39,.22,1], [.52,.22,.84],[.67,.21,.66],[.79,.21,.45]]:
+  [[.48,.25,.76],[.57,.27,1],[.69,.28,.73]];
  for(let j=0;j<layers.length;j++){
   const [base,height,scale]=layers[j],lx=(seed(10+j)-.5)*.64,lz=(seed(14+j)-.5)*.64;
   const rim=ring(w*scale,h*base,lx,lz),tip=[ox+lx*.55,y+h*(base+height),oz+lz*.55];
@@ -40148,13 +40159,12 @@ function poiSacredFogStrength(site,x,z,y){
  const f=poiSacredForestOf(site);
  if(!f||y!==0)return 0;
  const smooth=(a,b,t)=>{const v=Math.max(0,Math.min(1,(t-a)/(b-a)));return v*v*(3-2*v)};
- const margin=Math.max(...f.coverage.map(b=>Math.min(x-b.x1,b.x2-x,z-b.z1,b.z2-z)));
- // More than one overlapping rectangle edge must not make a clear stripe.
- const inner=Math.min(x-5,17-x,z-66,81-z);
- const r=site.davidTemple?.ring;
- const clear=r?smooth(17.6,23.1,Math.hypot(x-r.x,z-r.z)):1;
- const reveal=smooth(2.6,8.5,Math.hypot(x-f.reveal.x,z-f.reveal.z));
- return smooth(-1.6,3.6,Math.max(margin,inner))*Math.min(clear,reveal);
+ const inside=Math.max(...f.coverage.map(b=>Math.min(x-b.x1,b.x2-x,z-b.z1,b.z2-z)));
+ const progression=smooth(69,109,z);
+ const close=smooth(2.2,10.5,Math.hypot(x-f.reveal.x,z-f.reveal.z));
+ // Clear meadow, layered distance in the woods, then let the stone and
+ // candlelight take over only at the actual path's final turn.
+ return .985*progression*smooth(-1.25,3.2,inside)*close*(1-smooth(123,128,z));
 }
 function poiSacredApplyFog(now,light){
  const p=poiWalkActive&&!cameraTopDown&&!pineAIActive?poiAimOrigin(now):null;
@@ -40240,7 +40250,15 @@ function facilityBuildRoofs(){
 function facilityVisibleRoofs(){
  if(!poiWalkActive||poiWalkLevel<0)return [];
  const hidden=facilityHiddenRoof();
- return facilityRoofMeshes.flatMap(({count},i)=>count&&(i!==hidden||facilitySite.buildings[i]?.permanentRoof)?[i]:[]);
+ return facilityRoofMeshes.flatMap(({count},i)=>{
+  const b=facilitySite.buildings[i],d=facilitySite.davidTemple;
+  // Close approach is naturally revealed through the forest. Avoid sending
+  // the broad dome to the far view from the town edge (full plan still intact).
+  if(b?.id==='davidTemple'&&d?.depth===1&&!cameraTopDown&&
+     Math.min(Math.hypot(poiWalkViewX-d.entrance.x,poiWalkViewZ-d.entrance.z),
+      Math.hypot(poiWalkViewX-d.ring.x,poiWalkViewZ-d.ring.z))>49)return [];
+  return count&&(i!==hidden||b?.permanentRoof)?[i]:[];
+ });
 }
 function facilityCollectEntranceGuides(site,tiles){
  if(!site||site.id==='guildsaved'||site.id==='guildrenewal')return [];
@@ -40340,7 +40358,7 @@ function facilitySetEditLevel(next){
 function facilityLoadMap(map){
  if(typeof poiHealingCastCancel==="function")poiHealingCastCancel();
  const normalized=facilityExportMap(map);
- loadData(normalized);
+ loadData(normalized,facilitySite?.id==='base'&&facilitySite.sacredDepth?.h===normalized.height);
  const floorOffset=normalized.workshopFacility.floorOffset;
  if(floorOffset){
   for(const o of world)o.y-=floorOffset;
