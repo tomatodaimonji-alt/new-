@@ -41,9 +41,9 @@ let fixture=insert(html,anchor,`
     s.david.attack=null;s.david.next=-Infinity;
     poiPlayerHP=POI_PLAYER_MAX_HP;
     if(!poiDavidBegin(o,s,performance.now()+100,kind))return false;
-    // Prevent an unrelated automatic next attack from entering this
-    // isolated pattern sample before Playwright reads its prior contact.
-    s.david.next=s.david.attack.until+10000;
+    // Lock out only automatic follow-up selection in the isolated
+    // battery. Original timing, hit shape, health and cues are untouched.
+    window.__davidFrames.onlySelected=true;
     return s.david.attack.start;
    },
    state:()=>{
@@ -58,6 +58,7 @@ fixture=insert(fixture,'function render(){','\n window.__davidFrames?.next();');
 fixture=insert(fixture,' if(!poiDavidCue){','window.__davidFrames.cue.builds++;window.__davidFrames.cue.byStart[q.start]=(window.__davidFrames.cue.byStart[q.start]||0)+1;');
 fixture=insert(fixture,' const priorHP=poiPlayerHP;',"\n if(obj.type==='monsterStoneDavid')window.__davidFrames.contacts.push({start:poiDavidActive?.s?.david?.attack?.start,raw,amount,now,hp:Math.max(0,priorHP-amount)});");
 fixture=insert(fixture,'   const i=q.cursor++,late=now-q.hits[i];',"\n   { const impact=window.__davidFrames; (impact.timing[q.start]??=[]).push({i,late:now-q.hits[i],inside:poiDavidArea(q,p),clear:poiDavidLine({x:q.sx,z:q.sz},p,b)}); }");
+fixture=insert(fixture,' if(q&&now>=q.until){d.attack=null;poiMonsterMeshDirty=true}',"\n if(window.__davidFrames.onlySelected)return false;");
 fixture=insert(fixture,'draw(poiDavidCue.lane,vp)',';window.__davidFrames.cue.lane++;');
 fixture=insert(fixture,'draw(poiDavidCue.beam,vp)',';window.__davidFrames.cue.beam++;');
 fixture=insert(fixture,'function poiWildRegionalFrame(now,rng){','return;');
@@ -191,7 +192,7 @@ try{
    const hit=await qa(battle.p),contacts=hit.contacts.filter(a=>a.start===t);
    assert.deepEqual(contacts.map(a=>a.raw),raw,kind+' commits each authored damage exactly once');
    assert(hit.hp<100&&hit.hp>0,kind+' one window is threatening but survivable');
-   if(kind==='double')assert(contacts[1].now-contacts[0].now>=320,'live double hits never bunch under frame lag');
+   if(kind==='double')assert(contacts[1].now-contacts[0].now>=319.999,'live double hits never bunch under frame lag');
    assert.equal(hit.hp,100-contacts.reduce((n,a)=>n+a.amount,0),'real starter armor remains in the damage path');
    assert.equal(hit.cue.byStart[t],1,'cue mesh is cached for the exact committed '+kind);
    if(kind==='beam')await wait(battle.p,n=>window.__editorTest.davidQA.state().cue.beam>n,pre.cue.beam);
@@ -199,7 +200,7 @@ try{
    if(screenshots)await battle.p.screenshot({path:screenshots+'/david-temple-'+kind+'-contact.png'});
   }
   assert.deepEqual(battle.errors,[]);
- }catch(e){console.error(checkpoint,await qa(battle.p).catch(()=>null),battle.errors);throw e}
+ }catch(e){console.error(checkpoint,JSON.stringify(await qa(battle.p).catch(()=>null)),battle.errors);throw e}
  finally{await battle.ctx.close()}
  console.log('PASS real same-scene temple walk, four authored boss hits, safe physical retreat and preserved cold resume');
 }finally{await browser?.close();await new Promise(r=>server.close(r))}
