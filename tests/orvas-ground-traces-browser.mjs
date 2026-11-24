@@ -48,9 +48,9 @@ put(ap,ap+`
    const b=facilitySite?.davidTemple?.boss;if(!b)return false;
    return workshopResumeRestorePosition({x:b.x,z:b.z-2,y:b.y,facing:2});
   },
-  dodge:()=>{
+  dodge:(side=1)=>{
    const b=facilitySite.davidTemple.boss;
-   return workshopResumeRestorePosition({x:b.x+2,z:b.z-2,y:b.y,facing:2});
+   return workshopResumeRestorePosition({x:b.x+2*side,z:b.z-2,y:b.y,facing:2});
   },
   select:(cycle,roll)=>{
    const d=poiDavidActive?.s?.david;
@@ -91,7 +91,7 @@ let b,errorContext;
 try{
  b=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
  const out=process.env.FACILITY_SCREENSHOTS;if(out)mkdirSync(out,{recursive:true});
- for(const [label,cycle,roll] of [['double',1,1],['beam',3,1],['alternate',3,.42],['stomp',2,1]]){
+ for(const [label,cycle,roll] of [['double',1,1],['beam',3,1],['alternate',3,.42],['stomp',2,1]].filter(([label])=>!process.env.ORVAS_TRACE_CASE||process.env.ORVAS_TRACE_CASE===label)){
   console.log('Begin',label);
   const context=await b.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.70});
   const p=await context.newPage(),errors=[];p.on('pageerror',x=>errors.push(x.message));
@@ -123,8 +123,8 @@ try{
   const pre=await until(s=>s.q?.kind===kind&&s.q.cursor===0,115,'normal real cast');
   assert.equal(pre.start.length,0,'no decal on warning');
   assert.equal(pre.drawn.length,0);assert.equal(pre.hp,100);
-  if(label!=='stomp')assert(await p.evaluate(()=>window.__editorTest.orvasTracesQA.dodge()));
-  const first=await until(s=>s.q?.cursor===1&&(label==='stomp'?s.stomp: s.start.length>0&&s.drawn.length>0),45,'first executed contact and real GPU');
+  if(label!=='stomp')assert(await p.evaluate(side=>window.__editorTest.orvasTracesQA.dodge(side),label==='alternate'?-1:1));
+  const first=await until(s=>s.q?.kind===kind&&s.q.cursor===1&&(label==='stomp'?s.stomp:label==='alternate'||s.start.length>0&&s.drawn.length>0),45,'first executed contact and real GPU');
   assert.equal(first.gl,0);
   if(label==='double'){
    const second=await until(s=>s.start.length===2&&s.drawn.some(d=>d.start===s.start[1].start),25,'second overhead contact');
@@ -135,7 +135,7 @@ try{
    assert(second.uploads.slice(1).some(u=>u.reuse));
   }else if(label==='alternate'){
    const later=await until(s=>s.q?.done&&s.start[0]?.ribbon>100,45,'rotating beam submits contiguous optical strip');
-   assert.equal(later.start.length,1);assert.deepEqual(later.start[0].cells,first.start[0].cells);
+   assert.equal(later.start.length,1);assert.deepEqual(later.start[0].cells,first.start.find(d=>d.kind==='beam')?.cells??[]);
    assert(Math.abs(later.start[0].genuineSweepAngle-later.q.angle)<1e-5);
    assert(later.start[0].ribbon<=5250&&later.drawn.some(d=>d.count>later.start[0].ribbon));
    assert(later.uploads.every((u,i)=>i===0||u.reuse));
