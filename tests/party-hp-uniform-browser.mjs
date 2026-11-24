@@ -9,6 +9,7 @@ assert.equal(html.split(key).length,2);
 const fixture=html.replace(key,key+`
  partyHPQA:{
   ready:()=>poiCompanionActor?.id==='orvasSoul',
+  diagnose:()=>({play:poiWalkActive,site:facilitySite?.id,position:[poiWalkX,poiWalkZ],bag:poiHotbarRead().companionSoul,actor:poiCompanionActor?.id,visibility:document.visibilityState}),
   injure:()=>{
    const now=performance.now();
    poiMobHitPlayer({type:'monsterSlime'},now,27);
@@ -30,14 +31,15 @@ try{
   const p=await ctx.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));p.setDefaultTimeout(25000);
   await p.goto(url+'/seed');
   await p.evaluate(()=>{
-   const slots=Array(27).fill(null);slots[5]={type:'orvasSoul',count:1,durability:1050};
+   const slots=Array(27).fill(null);slots[0]={type:'equipWoodSword',count:1,durability:120};slots[5]={type:'orvasSoul',count:1,durability:1050};
    localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weapon:null,potions:0,weaponDurabilityVersion:2,slots,companionSoul:{version:1,active:'orvasSoul',pending:null}}));
-   localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,position:{x:41,z:42,y:0,facing:2},townLayout:5,townMapHeight:180,
+   localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,position:{x:41,z:42,y:0,facing:2},townLayout:5,townMapHeight:182,
     view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:0,orbitPitch:.35,orbitDistance:5.5}}));
   });
   await p.goto(url+'/?resume=1&test=1',{waitUntil:'domcontentloaded',timeout:45000});
   await p.locator('#pineStartupCover').waitFor({state:'hidden'});
-  await p.waitForFunction(()=>window.__editorTest?.partyHPQA.ready()&&!document.querySelector('#poiCompanionHud').hidden);
+  try{await p.waitForFunction(()=>window.__editorTest?.partyHPQA.ready()&&!document.querySelector('#poiCompanionHud').hidden)}
+  catch(e){console.error(await p.evaluate(()=>window.__editorTest?.partyHPQA.diagnose()),errors);throw e}
   const snapshot=()=>p.evaluate(()=>{
    const rect=el=>{const r=el.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height,right:r.right,bottom:r.bottom}};
    const css=(el,keys)=>Object.fromEntries(keys.map(k=>[k,getComputedStyle(el)[k]]));
