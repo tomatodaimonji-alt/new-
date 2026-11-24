@@ -139,7 +139,7 @@ try{
  const scenario=process.env.ORVAS_AWARD_CASE;let q,p,s;
  if(scenario!=='pending'){
  phase='real canonical awakening and actual slime-companion final blow';
- q=await begin('ally',155);p=q.p;await q.tick();await q.step(24,156);
+ q=await begin('ally',155);p=q.p;await q.tick();await q.step(24,156);await q.step(24,157);
  s=await q.until(v=>v.awake&&v.actor?.id==='slimeSoul');const walkSwing=s.swing;
  assert(await p.evaluate(()=>window.__editorTest.orvasAwardQA.pin()));
  s=await q.until(v=>v.ground.some(d=>d.id==='orvas-soul')&&v.draw.length);
@@ -177,10 +177,9 @@ try{
  }
  if(scenario!=='pickup'){
  phase='real sword finish while recovered old slime waits on the ground and bag is full';
- q=await begin('pending',155);p=q.p;await q.tick();await q.step(24,156);
+ q=await begin('pending',155);p=q.p;await q.tick();await q.step(24,156);await q.step(24,157);
  s=await q.until(v=>v.awake&&v.pending===null&&v.slimeGround?.type==='slimeSoul');
  assert(await p.evaluate(()=>window.__editorTest.orvasAwardQA.pin()));
- s=await q.step(24,157);
  await p.locator('#poiWalkAction').tap();
  s=await q.until(v=>v.ground.some(d=>d.id==='orvas-soul'));
  checkGrant(s,false);assert.equal(s.pending,null);assert.equal(s.slimeGround?.type,'slimeSoul');

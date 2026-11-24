@@ -109,7 +109,11 @@ try{
  await swipe(activeIndex);
  const blocked=await tick(760);assert.equal(blocked.active,'orvasSoul');assert.deepEqual(blocked.souls,[]);
  assert.equal(blocked.slots[activeIndex].durability,317);
- await slot(activeIndex).tap();await p.locator('#poiCompanionCommands [data-companion-command="dismiss"]').tap();
+ const dismiss=p.locator('#poiCompanionCommands [data-companion-command="dismiss"]');
+ for(let n=0;n<3&&!await dismiss.isVisible();n++){
+  await tick(360);await slot(activeIndex).tap();await tick(150);
+ }
+ assert(await dismiss.isVisible(),await p.locator('#poiCompanionCommands').evaluate(e=>e.outerHTML));await dismiss.tap();
  await until(v=>v.active===null);
  phase='real finishing blow emits fracture, reverse gather, miniature form and local tumble without receiving item';
  let spawned=await p.evaluate(()=>window.__editorTest.soulFloorQA.spawn());if(!spawned){
