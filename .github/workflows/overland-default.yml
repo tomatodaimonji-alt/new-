@@ -47,12 +47,16 @@ jobs:
               " facilityDrawRoofs(p.vp);poiDrawGameRoofs(p.vp);}")
           sub(" facilityBuildRoofs();poiMiniInvalidate();",
               " if(!POI_OVERLAND_SPIKE||!poiOverlandScope(dest.region,dest.x,dest.z))facilityBuildRoofs();poiMiniInvalidate();")
+          sub(" const incoming=onBase?poiSnowPassMap():base.site,map=onBase?incoming.map:null;",
+              " const incoming=onBase?(POI_OVERLAND_SPIKE?(poiOverlandSnow??=poiSnowPassMap()):poiSnowPassMap()):base.site,map=onBase?incoming.map:null;")
           sub(" width:MAP_W,height:MAP_H,terrainHeights,models,prefabs,checks:pineCheckMarks,maxLevel:worldMaxLevel,hasCellar:facilityHasCellar}:poiSnowPassBase;",
-              " width:MAP_W,height:MAP_H,terrainHeights,models,prefabs,checks:pineCheckMarks,maxLevel:worldMaxLevel,hasCellar:facilityHasCellar,\n  ...(POI_OVERLAND_SPIKE&&!cold?{overlandStatic:{floors:facilityFloorMasks,stairs:facilityStairOpenings,doors:facilityDoorTiles,creek:facilityCreekIndex,mini:new Map(poiMiniStatic)}}:{})}:poiSnowPassBase;")
+              " width:MAP_W,height:MAP_H,terrainHeights,models,prefabs,checks:pineCheckMarks,maxLevel:worldMaxLevel,hasCellar:facilityHasCellar,\n  ...(POI_OVERLAND_SPIKE?{overlandStatic:{floors:facilityFloorMasks,stairs:facilityStairOpenings,doors:facilityDoorTiles,creek:facilityCreekIndex,nav:poiTownNpcNav,mini:new Map(poiMiniStatic)}}:{})}:poiSnowPassBase;")
           sub(" facilityPrepareFloorMasks();facilitySurfaceEdited=onBase?false:base.edited;",
-              " const staticBase=!onBase?base.overlandStatic:null;\n if(staticBase){facilityFloorMasks=staticBase.floors;facilityStairOpenings=staticBase.stairs;facilityDoorTiles=staticBase.doors;facilityCreekIndex=staticBase.creek}\n else facilityPrepareFloorMasks();\n facilitySurfaceEdited=onBase?false:base.edited;\n poiMiniInvalidate();if(staticBase)for(const [key,value] of staticBase.mini)poiMiniStatic.set(key,value);")
+              " const staticBase=!onBase?base.overlandStatic:null;\n if(staticBase){facilityFloorMasks=staticBase.floors;facilityStairOpenings=staticBase.stairs;facilityDoorTiles=staticBase.doors;facilityCreekIndex=staticBase.creek;poiTownNpcNav=staticBase.nav}\n else facilityPrepareFloorMasks();\n facilitySurfaceEdited=onBase?false:base.edited;\n poiMiniInvalidate();if(staticBase)for(const [key,value] of staticBase.mini)poiMiniStatic.set(key,value);")
           sub("if(!POI_OVERLAND_SPIKE||!poiOverlandScope(dest.region,dest.x,dest.z))facilityBuildRoofs();poiMiniInvalidate();",
               "if(!POI_OVERLAND_SPIKE||!poiOverlandScope(dest.region,dest.x,dest.z))facilityBuildRoofs();")
+          sub(" const cells=new Map();\n for(const o of world){\n  const k=poiTownNpcKey(o.x,o.z,o.y);",
+              " const warm=typeof poiOverlandIndexCache!=='undefined'?poiOverlandIndexCache.get(world)?.townCells:null;\n const cells=warm||new Map();\n for(const o of warm?[]:world){\n  const k=poiTownNpcKey(o.x,o.z,o.y);")
           sub("function poiWalkReset(x,z){","function poiWalkReset(x,z,quietPresentation=false){")
           sub("if(poiWalkActive){poiCreekAudioSync();poiWalkRoof();poiWalkAvatar();poiWalkCamera();poiWalkStatus()}",
               "if(poiWalkActive){poiCreekAudioSync();if(!quietPresentation){poiWalkRoof();poiWalkAvatar();poiWalkCamera();poiWalkStatus()}}")
@@ -144,16 +148,20 @@ jobs:
             const terrain=new Map((layout.map?.terrainHeights||[]).map(o=>[o.x+','+o.z,o.h]));
             const statics=mapWorld.filter(o=>o.y>=0),roofList=statics.filter(o=>facilityIsRoofPiece(o));
             const key=o=>o.x+','+o.z+','+o.y,chunk=o=>Math.floor(o.x/8)+','+Math.floor(o.z/8);
-            const batches=new Map(),roofGroups=new Map();
+            const batches=new Map(),roofGroups=new Map(),townCells=id==='base'?new Map():null;
             for(const o of statics){
              const k=chunk(o),row=batches.get(k)||[];
              row.push(o);batches.set(k,row);
+            }
+            if(townCells)for(const o of mapWorld){
+             const k=poiTownNpcKey(o.x,o.z,o.y),list=townCells.get(k);
+             if(list)list.push(o.type);else townCells.set(k,[o.type]);
             }
             for(const group of residentialRoofComponents(roofList.filter(o=>RESIDENTIAL_ROOFS.has(o.type)))){
              const k=chunk(group[0]),row=roofGroups.get(k)||[];
              row.push(group);roofGroups.set(k,row);
             }
-            p={id,width,height,terrain,index:poiOverlandIndex(mapWorld,isFloor),batches,roofGroups,
+            p={id,width,height,terrain,townCells,index:poiOverlandIndex(mapWorld,isFloor),batches,roofGroups,
              roofLookup:new Map(roofList.map(o=>[key(o),o])),bridges:new Map(statics.filter(o=>BRIDGE_IDS.has(o.type)).map(o=>[o.x+','+o.z,o])),
              walls:wallExteriorLookup(statics),lights:pineFloorLightingSources(statics)};
             poiOverlandIndexCache.set(mapWorld,p);
@@ -163,7 +171,11 @@ jobs:
           function poiOverlandAreas(){
            const id=facilitySite?.id,base=poiSnowPassBase,res=[];
            const add=(id,site)=>{if(site?.map)res.push(poiOverlandSpecFor(id,site,site.map.world,site.map.width,site.map.height))};
-           res.push(poiOverlandSpecFor(id,facilitySite,world,MAP_W,MAP_H));
+           // Snow remains read-only and enters play through facilityLoadMap's clone.
+           // Reuse its exact authored preview input across activation, rather than
+           // indexing/render-preparing the same records a second time on the seam.
+           if(id==='snowpass'&&facilitySite?.map)add(id,facilitySite);
+           else res.push(poiOverlandSpecFor(id,facilitySite,world,MAP_W,MAP_H));
            if(id==='base'||id==='milda'){
             if(!poiOverlandSnow)poiOverlandSnow=poiSnowPassMap();
             add('snowpass',poiOverlandSnow);
@@ -1129,7 +1141,7 @@ jobs:
           SOURCE
           python .spike/build.py world-editor.html .spike/stream.html --default
           python .spike/horizon-safe.py .spike/stream.html .spike/world-editor.html
-          test "$(git hash-object .spike/world-editor.html)" = 7afb933e32395b254120ec99e95905b7b0a984f0
+          test "$(git hash-object .spike/world-editor.html)" = 2675cb81ee3d3b9010b276a33ea0da9130f4f493
           cd .spike && node --test tests/*.cjs
       - if: matrix.probe != 'regressions'
         run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
