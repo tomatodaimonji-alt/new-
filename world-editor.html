@@ -14209,6 +14209,11 @@ const POI_DAVID_PATTERNS=Object.freeze({
 });
 const POI_DAVID_ORDER=['sweep','double','stomp','beam'];
 let poiDavidActive=null;
+const poiDavidHidden=()=>typeof document!=='undefined'&&document.hidden;
+if(typeof document!=='undefined')document.addEventListener('visibilitychange',()=>{
+ const q=poiDavidActive?.s?.david?.attack;
+ if(q&&poiDavidHidden())q.interrupted=true;
+});
 function poiDavidMatch(o){
  const b=facilitySite?.id==='base'?facilitySite.davidTemple?.boss:null,r=b?.room;
  return b?.type===POI_DAVID_TYPE&&o?.type===b.type&&o.x===b.x&&o.z===b.z&&o.y===b.y&&
@@ -14241,7 +14246,7 @@ function poiDavidCease(o,s,b){
 }
 function poiDavidMobFrame(o,s,now){
  const b=poiDavidMatch(o);
- if(!b||s.hp<=0||!poiEnemyThreatEnabled())return false;
+ if(!b||s.hp<=0||poiDavidHidden()||!poiEnemyThreatEnabled())return false;
  if(s.david?.awake){poiDavidActive={o,s};return false}
  const p=poiAimOrigin(now),src={x:s.x,z:s.z};
  if(!poiDavidIn(b,p)||Math.hypot(p.x-src.x,p.z-src.z)>POI_DAVID_WAKE_RANGE||!poiDavidLine(src,p,b))return false;
@@ -14252,11 +14257,11 @@ function poiDavidMobFrame(o,s,now){
 }
 function poiDavidBegin(o,s,now,kind){
  const b=poiDavidMatch(o),d=s.david,k=POI_DAVID_PATTERNS[kind],p=poiAimOrigin(now);
- if(!b||!d?.awake||!k||now<d.next||!poiDavidIn(b,p)||!poiDavidLine({x:s.x,z:s.z},p,b))return false;
+ if(poiDavidHidden()||!b||!d?.awake||!k||now<d.next||!poiDavidIn(b,p)||!poiDavidLine({x:s.x,z:s.z},p,b))return false;
  const dx=p.x-s.x,dz=p.z-s.z,len=Math.hypot(dx,dz);if(len<.01)return false;
  d.dx=dx/len;d.dz=dz/len;
  d.attack={kind,start:now,hits:k.hits.map(t=>now+t),sx:s.x,sz:s.z,y:b.y,dx:d.dx,dz:d.dz,
-  cursor:0,lastContactAt:null,landed:0,executed:0,until:now+k.hits.at(-1)+Math.round(k.rest*(s.hp<=525?.75:1))};
+  cursor:0,lastFrameAt:now,lastContactAt:null,landed:0,executed:0,until:now+k.hits.at(-1)+Math.round(k.rest*(s.hp<=525?.75:1))};
  d.next=d.attack.until;
  poiMonsterMeshDirty=true;
  return true;
@@ -14281,12 +14286,22 @@ function poiDavidCombatFrame(now){
  const p=poiAimOrigin(now);
  if(!poiEnemyThreatEnabled()||!poiDavidIn(b,p)){poiDavidCease(o,s,b);return false}
  const q=d.attack;
- if(q&&q.cursor<q.hits.length&&now>=q.hits[q.cursor]){
-  // Advance missed clocks independently; never bundle two old hits
-  // after a dropped frame or backgrounding.
-  while(q.cursor<q.hits.length&&now>=q.hits[q.cursor]){
-   const i=q.cursor++;
-   if(now-q.hits[i]>=150)continue;
+ if(q&&(poiDavidHidden()||q.interrupted||now-q.lastFrameAt>750)){
+  // Losing the visible frame pipeline is not a playable wind-up. Never
+  // replay its queued contacts, even when resuming within one strike.
+  d.attack=null;d.next=now+350;poiMonsterMeshDirty=true;return false;
+ }
+ if(poiDavidHidden())return false;
+ if(q){
+  q.lastFrameAt=now;
+  if(q.cursor<q.hits.length&&now>=q.hits[q.cursor]){
+   // On playable slow frames, execute only one contact. Carry its delay
+   // into the next wind-up and recovery so neither gets compressed.
+   const i=q.cursor++,late=now-q.hits[i];
+   if(late>0){
+    for(let j=i;j<q.hits.length;j++)q.hits[j]+=late;
+    q.until+=late;d.next=q.until;
+   }
    q.executed++;q.lastContactAt=now;poiMonsterMeshDirty=true;
    if(typeof poiSound==='function')poiSound(q.kind==='beam'?'wand-fire':'stone-hit');
    if(poiDavidArea(q,p)&&poiDavidLine({x:q.sx,z:q.sz},p,b)){
@@ -14318,7 +14333,7 @@ function poiDavidPose(s,now){
   return {...common,phase:age<POI_DAVID_WAKE_MS?'wake':'ready',kind:null,
    progress:clamp(age/POI_DAVID_WAKE_MS),contact:0};
  }
- Object.assign(common,{elapsed:Math.max(0,now-q.start),hitTimes:POI_DAVID_PATTERNS[q.kind].hits});
+ Object.assign(common,{elapsed:Math.max(0,now-q.start),hitTimes:q.hits.map(t=>t-q.start)});
  const contact=q.cursor,last=q.lastContactAt;
  if(Number.isFinite(last)&&now-last<110)return {...common,phase:'impact',kind:q.kind,progress:clamp((now-last)/110),contact};
  const next=q.hits[contact];

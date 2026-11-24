@@ -4,7 +4,7 @@ const cut=(x,y)=>{const i=h.indexOf(x),j=h.indexOf(y,i+x.length);a(i>=0&&j>i,x);
 const o={type:'monsterStoneDavid',x:24,z:104,y:0};
 function setup(){
  const boss={...o,room:{minX:16,maxX:31,minZ:96,maxZ:112}},s={x:24,z:104,hp:1050,facing:2},c={
-  facilitySite:{id:'base',davidTemple:{boss}},poiWalkLevel:0,poiWalkX:24,poiWalkZ:100,player:{x:24,z:101,y:0},
+  facilitySite:{id:'base',davidTemple:{boss}},document:{hidden:false,addEventListener:(event,fn)=>{c.visibility=fn}},poiWalkLevel:0,poiWalkX:24,poiWalkZ:100,player:{x:24,z:101,y:0},
   poiMonsterStates:new Map([[o,s]]),poiMonsterMeshDirty:false,valid:true,wall:()=>false,stock:100,damage:[],sounds:[],
   poiEnemyThreatEnabled:()=>c.valid,poiAimOrigin:()=>c.player,poiAimWall:()=>((x,z)=>!c.wall(x,z)),
   poiMobHitPlayer:(obj,now,n)=>{c.damage.push({obj,now,n});c.stock-=n;return c.stock<=0},
@@ -41,8 +41,16 @@ test('real double contact resolves twice with actual dodge and wall; expired con
  const run=(skip=false,wall=false,move=false)=>{
   const {c,s,api}=setup();api.step(o,s,1000);a(api.begin(o,s,1700,'double'));
   const q=s.david.attack;a.deepEqual(Array.from(q.hits),[2420,2740]);
-  api.tick(skip?2720:2419);a.equal(c.damage.length,0);
-  if(!skip){api.tick(2420);a.equal(c.damage.length,1);a.equal(c.damage[0].n,28);api.tick(2430);a.equal(c.damage.length,1);}
+  if(skip){
+   for(const t of [1900,2100,2300,2600])api.tick(t);
+   a.deepEqual(c.damage.map(x=>x.n),[28]);
+   api.tick(2740);a.equal(c.damage.length,1,'late first contact preserves separation');
+   api.tick(2920);a.deepEqual(c.damage.map(x=>x.n),[28,35]);
+   return {c,s,api};
+  }
+  for(const t of [1900,2100,2300,2419])api.tick(t);
+  a.equal(c.damage.length,0);
+  api.tick(2420);a.equal(c.damage.length,1);a.equal(c.damage[0].n,28);api.tick(2430);a.equal(c.damage.length,1);
   if(wall)c.wall=(x,z)=>z===103;if(move)c.player.x+=2;
   api.tick(2740);api.tick(2750);
   return {c,s,api};
@@ -50,12 +58,21 @@ test('real double contact resolves twice with actual dodge and wall; expired con
  const landed=run();a.deepEqual(landed.c.damage.map(x=>x.n),[28,35]);
  a.equal(landed.api.pose(landed.s,2748).contact,2);a.equal(landed.api.incoming(o,landed.s,28,3000),18);
  for(const x of [run(false,true),run(false,false,true)])a.deepEqual(x.c.damage.map(z=>z.n),[28]);
- a.deepEqual(run(true).c.damage.map(x=>x.n),[35]);
+ run(true);
+});
+test('hidden resume and long frame discontinuity cancel instead of replaying contacts',()=>{
+ for(const hide of [true,false]){
+  const {c,s,api}=setup();api.step(o,s,1000);a(api.begin(o,s,1700,'double'));
+  for(const t of [1900,2100,2300])api.tick(t);
+  if(hide){c.document.hidden=true;c.visibility();c.document.hidden=false;c.visibility();}
+  api.tick(hide?2500:3400);
+  a.equal(c.damage.length,0);a.equal(s.david.attack,null);
+ }
 });
 test('beam cannot hit behind a wall, sweep is forward, retreat cancels an already declared attack',()=>{
  const {c,s,api}=setup();api.step(o,s,1100);
  a(api.begin(o,s,1750,'beam'));const q=s.david.attack;a.equal(q.hits[0],2750);
- c.wall=(x,z)=>z===103;api.tick(2750);a.equal(c.damage.length,0);
+ c.wall=(x,z)=>z===103;api.tick(2250);api.tick(2750);a.equal(c.damage.length,0);
  c.wall=()=>false;c.player.z=104.8;a(api.begin(o,s,4000,'sweep'));c.player.z=103;api.tick(4560);a.equal(c.damage.length,0);
  c.player.z=101;a(api.begin(o,s,5700,'stomp'));c.player.z=95;api.tick(6630);
  a.equal(c.damage.length,0);a.equal(api.pose(s,6640).phase,'dormant');

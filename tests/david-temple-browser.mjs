@@ -56,8 +56,8 @@ let fixture=insert(html,anchor,`
   },`);
 fixture=insert(fixture,'function render(){','\n window.__davidFrames?.next();');
 fixture=insert(fixture,' if(!poiDavidCue){','window.__davidFrames.cue.builds++;window.__davidFrames.cue.byStart[q.start]=(window.__davidFrames.cue.byStart[q.start]||0)+1;');
-fixture=insert(fixture,' const priorHP=poiPlayerHP;',"\n if(obj.type==='monsterStoneDavid')window.__davidFrames.contacts.push({start:poiDavidActive?.s?.david?.attack?.start,raw,amount,hp:Math.max(0,priorHP-amount)});");
-fixture=insert(fixture,'   const i=q.cursor++;',"\n   { const impact=window.__davidFrames; (impact.timing[q.start]??=[]).push({i,late:now-q.hits[i],inside:poiDavidArea(q,p),clear:poiDavidLine({x:q.sx,z:q.sz},p,b)}); }");
+fixture=insert(fixture,' const priorHP=poiPlayerHP;',"\n if(obj.type==='monsterStoneDavid')window.__davidFrames.contacts.push({start:poiDavidActive?.s?.david?.attack?.start,raw,amount,now,hp:Math.max(0,priorHP-amount)});");
+fixture=insert(fixture,'   const i=q.cursor++,late=now-q.hits[i];',"\n   { const impact=window.__davidFrames; (impact.timing[q.start]??=[]).push({i,late:now-q.hits[i],inside:poiDavidArea(q,p),clear:poiDavidLine({x:q.sx,z:q.sz},p,b)}); }");
 fixture=insert(fixture,'draw(poiDavidCue.lane,vp)',';window.__davidFrames.cue.lane++;');
 fixture=insert(fixture,'draw(poiDavidCue.beam,vp)',';window.__davidFrames.cue.beam++;');
 fixture=insert(fixture,'function poiWildRegionalFrame(now,rng){','return;');
@@ -191,6 +191,7 @@ try{
    const hit=await qa(battle.p),contacts=hit.contacts.filter(a=>a.start===t);
    assert.deepEqual(contacts.map(a=>a.raw),raw,kind+' commits each authored damage exactly once');
    assert(hit.hp<100&&hit.hp>0,kind+' one window is threatening but survivable');
+   if(kind==='double')assert(contacts[1].now-contacts[0].now>=320,'live double hits never bunch under frame lag');
    assert.equal(hit.hp,100-contacts.reduce((n,a)=>n+a.amount,0),'real starter armor remains in the damage path');
    assert.equal(hit.cue.byStart[t],1,'cue mesh is cached for the exact committed '+kind);
    if(kind==='beam')await wait(battle.p,n=>window.__editorTest.davidQA.state().cue.beam>n,pre.cue.beam);
