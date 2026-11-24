@@ -51,7 +51,7 @@ try{
  p.on('pageerror',e=>errors.push(e.message));p.setDefaultTimeout(12000);
  await p.clock.install({time:new Date('2026-04-01T10:00:00Z')});await p.goto(origin+'/seed');
  await p.evaluate(()=>{
-  const slots=Array(27).fill(null);slots[2]={type:'fireWand',count:1,charges:4};
+  const slots=Array(27).fill(null);slots[0]={type:'equipWoodSword',count:1};slots[2]={type:'fireWand',count:1,charges:4};
   localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weapon:null,slots,gold:3,potions:0}));
   localStorage.setItem('world-workshop-town-clock-v1','{"version":1,"gameMs":360000}');
   localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,position:{x:102,z:93,y:0,facing:1},townLayout:5,townMapHeight:128,

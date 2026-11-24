@@ -83,7 +83,7 @@ fixture=insert(fixture,'function poiDavidDrawThermalBeam(g,vp,alpha){',`
  }
 `);
 fixture=insert(fixture,'draw(g,vp,0,g.coreCount);',`
- if(g===poiDavidCue?.live){probe.live++;probe.beamSubmission(poiDavidCue.q.start,'live',performance.now(),before)}
+ if(g===poiDavidCue?.live){probe.live++;probe.beamSubmission(poiDavidCue.q.start,'live',probe.beamClock?.now??performance.now(),before)}
  else if(g===poiDavidCue?.beam)probe.cue.beam++;
  if(pre){
   const after=new Uint8Array(pre.length);gl.readPixels(0,0,w,h,gl.RGBA,gl.UNSIGNED_BYTE,after);
@@ -99,9 +99,13 @@ fixture=insert(fixture,'draw(g,vp,0,g.coreCount);',`
 `);
 fixture=insert(fixture,'const m=poiDavidSweepBeamMesh(q,b,now);', "\n   if(m.p.length){const ray=poiDavidBeamRay(q,q.sweep.angle);window.__davidFrames.rays.push({start:q.start,side:q.sweep.side,angle:q.sweep.angle,x:ray.x,z:ray.z,vertices:m.p.length/3});}");
 fixture=insert(fixture,'   const {x:cx,y,z:cz,attack,heading,david}=poiMonsterPose(obj,s,now),part=mesh();', "\n   if(obj.type==='monsterStoneDavid'&&s.david?.returning){const f=window.__davidFrames;f.returnFrames.push([s.x,s.z,cx-.5,cz-.5]);}");
+fixture=insert(fixture,'function poiDavidReturnFrame(o,s,b,now){',
+ "\n window.__davidFrames.returnClock??={now};");
+fixture=insert(fixture,'function poiDavidArrive(s,now){',
+ "\n window.__davidFrames.returnClock=null;");
 fixture=insert(fixture,'function poiDavidCease(o,s,b,now){', "\n if(s.david?.awake&&!s.david.returning)window.__davidFrames.returnAnchor=[s.x,s.z];");
 fixture=insert(fixture,'function render(){','\n window.__davidFrames?.next();');
-// Bound the shared update/renderer clock only for directional-beam samples:
+// Bound the shared update/renderer clock only for directional beam and walk-home samples:
 // a software-WebGL host can skip the entire (110,450) ms telegraph even
 // without meeting the game's separate 750 ms anti-replay cancellation. The
 // same production function still generates, uploads and submits every mesh.
@@ -131,8 +135,8 @@ await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',resolve).once('e
 const url='http://127.0.0.1:'+server.address().port;
 const install=()=>{
  let frame=0,draws=0,vertices=0;
- const summary=window.__davidFrames={coverShows:0,cue:{lane:0,beam:0,builds:0,byStart:{}},contacts:[],timing:{},canceled:{},audio:[],audioStops:[],fan:0,live:0,rays:[],beamDraws:{},beamClock:null,
-  renderTime(real){const c=this.beamClock;if(!c)return real;c.now=Math.max(c.now,Math.min(real,c.now+120));return c.now;},
+ const summary=window.__davidFrames={coverShows:0,cue:{lane:0,beam:0,builds:0,byStart:{}},contacts:[],timing:{},canceled:{},audio:[],audioStops:[],fan:0,live:0,rays:[],beamDraws:{},beamClock:null,returnClock:null,
+  renderTime(real){const c=this.returnClock||this.beamClock;if(!c)return real;c.now=Math.max(c.now,Math.min(real,c.now+(this.returnClock?86:120)));return c.now;},
   glCounters(){return [draws,vertices]},
   beamSubmission(start,kind,now,[priorDraws,priorVertices]){
    (this.beamDraws[start]??=[]).push({kind,now,draws:draws-priorDraws,vertices:vertices-priorVertices});
