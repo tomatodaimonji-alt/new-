@@ -17,7 +17,13 @@ test('only true authored main doors under a live approved roof have a guide',()=
   {facilityIsRoofPiece:isRoof,rot2:(x,z,r)=>[[x,z],[-z,x],[-x,-z],[z,-x]][r]});
  for(const id of ids){
   const b=build(id),actual=JSON.parse(JSON.stringify(read(b,b.map.world)));
-  assert.equal(actual.length,b.buildings.length,id);
+  const expected=b.buildings.filter(o=>o.id!=='davidTemple');
+  assert.deepEqual(actual.map(g=>g.id),Array.from(expected,o=>o.id),id);
+  const temple=b.buildings.find(o=>o.id==='davidTemple');
+  if(temple){
+   const door=b.davidTemple.entrance,atDoor=b.map.world.filter(o=>o.x===door.x&&o.z===door.z);
+   assert(!atDoor.some(o=>isRoof(o)||o.type.endsWith('Door')),'open temple arch is not a covered door');
+  }
   for(const guide of actual){
    const target=b.buildings[guide.owner];
    assert.equal(guide.id,target.id); assert.equal(Math.abs(guide.x-target.entrance.x)+Math.abs(guide.z-target.entrance.z),1);

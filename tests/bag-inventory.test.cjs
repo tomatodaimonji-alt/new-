@@ -3,7 +3,8 @@ const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 function fixture(saved=null){
  let failure=false,raw=saved&&JSON.stringify(saved),writes=0,clockRaw=null,clockWrites=0;
  const ctx={MAX_MAP:128,poiPlayerHP:100,POI_PLAYER_MAX_HP:100,facilitySite:{id:'base'},poiWalkActive:true,pineAIActive:false,poiWalkX:4,poiWalkZ:5,poiWalkLevel:0,poiWalkFacing:0,world:[],
- poiMonsterStates:new Map(),
+ poiMonsterStates:new Map(),poiPlayerWeaponPending:null,poiPlayerWeaponCancel(){},
+ poiDungeonEntranceSerial:0,poiOtherworldTravelSerial:0,performance:{now:()=>0},
  localStorage:{getItem(key){return key==='world-workshop-town-clock-v1'?clockRaw:raw},setItem(key,v){
   if(failure)throw Error('quota');
   if(key==='world-workshop-town-clock-v1'){clockRaw=v;clockWrites++;return}
@@ -223,7 +224,8 @@ test('shortcut details explicitly split, equip, use and move without double-tap 
  assert.equal(c.poiEquippedWeapon(),'equipWoodSword');
  vm.runInContext('poiPlayerHP=70;poiCombatHud=()=>{}',c);
  assert.equal(c.poiUseHotbarItem(1).ok,true);
- assert.equal(c.poiPlayerHP,100);
+ assert.equal(c.poiPlayerHP,70);assert.equal(c.poiInventorySnapshot().hotbar[1].count,2);
+ c.poiHealingCastFrame(1450);assert.equal(c.poiPlayerHP,100);
  assert.equal(c.poiDoubleTapStorage('hotbar',2).ok,true);
  assert.equal(c.poiInventorySnapshot().bag[0].count,3);
  assert.equal(c.poiInventorySnapshot().hotbar[2],null);
@@ -504,3 +506,4 @@ test('toolshop state and chapel rewards survive the same authoritative kit trans
  assert.equal(f.raw().toolshopSupply.stock,5);assert.deepEqual(f.raw().chapelChest,start.chapelChest);
  assert.equal(f.raw().chapelCleared,true);assert.equal(f.raw().gold,14);
 });
+

@@ -18,7 +18,7 @@ test('the translated town remains protected while all four gate approaches provi
   world:[],validPos:(x,z)=>x>=0&&z>=0&&x<108&&z<68,facilityFloorOwner:()=>null,poiAudioAllowed:()=>true,
   facilityCreekIndex:{water:new Set()},poiMonsterAt:()=>null,terrainLevel:()=>0,terrainPassable:()=>true,isFloor:()=>true};
  vm.createContext(x);
- vm.runInContext(cut('const POI_SAFE_TOWN=','const poiMiniStatic=')+cut('const POI_WILD_MAX=','function poiMonsterCanMove('),x);
+ vm.runInContext(cut('const POI_SAFE_TOWN=','// BEGIN LOCAL MINI CORE')+cut('const POI_WILD_MAX=','function poiMonsterCanMove('),x);
  assert.equal(x.poiRegionAt(site,31,33).difficulty,0);
  assert.equal(x.poiRegionAt(site,69,57).difficulty,0);
  for(const [gx,gz,xx,zz,face] of [[31,59,31,60,2],[74,57,75,57,1],[24,12,24,11,0],[13,39,12,39,3]]){
@@ -53,7 +53,7 @@ test('actual grassy approach at each live gate has valid reachable slime cells a
   facilityCreekIndex:{water},poiMonsterAt:()=>null,terrainLevel:()=>0,terrainPassable:()=>true,
   isFloor:t=>/^(?:road|grass|woodfloor|basicfloor|brickfloor|stone$|earth$|moss$|river$)/.test(t)};
  vm.createContext(x);
- vm.runInContext(cut('const POI_SAFE_TOWN=','const poiMiniStatic=')+cut('const POI_WILD_MAX=','function poiMonsterCanMove('),x);
+ vm.runInContext(cut('const POI_SAFE_TOWN=','// BEGIN LOCAL MINI CORE')+cut('const POI_WILD_MAX=','function poiMonsterCanMove('),x);
  for(const [xx,zz,face] of [[41,71,2],[86,67,1],[34,20,0],[21,49,3]]){
   Object.assign(x,{poiWalkX:xx,poiWalkZ:zz,poiWalkFacing:face});
   const p=x.poiWildGatePick(()=>.31);

@@ -54,16 +54,16 @@ test('real world avatar uses committed oblique strike angle in a late contact fr
   poiRoleToolGripStyle:()=>null,poiPlayerProfilePose:(_,ms)=>({strike:ms===108?1.5:0,twist:0,edgeTilt:1.45}),
   mesh(){return {p:[],n:[],c:[]}},characterHuman(){},deco(m){m.p=[-.018,1.6,.02,0,.25,0];m.n=[0,1,0,0,1,0];m.c=[.5,.5,.5,.2,.2,.2]},
   upload:m=>m};
- const source=cut('// BEGIN WORLD MELEE REACH','// END WORLD MELEE REACH')+
+ const source=cut('function tri(m,','function addPart(m,')+cut('function poiHumanGearType(','function poiRoleClothingGeometry(')+cut('// BEGIN WORLD MELEE REACH','// END WORLD MELEE REACH')+
   cut('function poiBuildPlayerMesh(','const POI_MONSTER_BREAK_MS=')+
   cut('function characterArmRotation(','function roundStack(')+cut('function rot2(','function rotY(').split('\n')[0];
  vm.runInNewContext(source,e);
  e.poiWalkAvatar(now);a.equal(e.poiWalkAttackPosePending,true);
- const [x,y,z]=e.poiWalkMesh.p;
+ const [x,y,z]=e.poiWalkMesh.p.slice(-6);
  close((x-originX)*.6+(z-originZ)*.8,2,.04);
  close((x-originX)*.8-(z-originZ)*.6,0,.007);
  close(y,-1.4+.03+.77,.007);
  const p=e.poiBuildPlayerMesh(type,null,null);
- a.ok(p.p[1]<1.7,'catalog uses unchanged original wrist rig');
+ a.ok(p.p.at(-5)<1.7,'catalog uses unchanged original wrist rig');
 });
 

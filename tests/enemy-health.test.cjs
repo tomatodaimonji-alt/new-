@@ -12,7 +12,7 @@ test('nearby living enemy health follows the head, reuses a progress bar, and hi
   POI_MONSTER_STATS:{monsterSlime:{hp:35}},byId:()=>({name:'スライム'}),
   mesh:()=>({p:[]}),deco:m=>m.p.push(0,0,0,.30,.83,.22),poiMonsterRenderType:o=>o.type,
   poiMonsterPose:()=>({x:4.5,y:1,z:5.5}),poiWorldToScreen:(_vp,x,y,z)=>{projections.push([x,y,z]);return {x:x*20,y:160-y*10,z}}};
- vm.createContext(scope);vm.runInContext(html.slice(a,b),scope);
+ vm.createContext(scope);vm.runInContext(html.slice(html.indexOf('function poiSacredInteriorHostileVisible('),html.indexOf('let poiSacredInteriorVbo'))+html.slice(a,b),scope);
  scope.poiRenderEnemyHealth(0,[]);
  const [bar]=children;
  assert.equal(bar.tag,'progress');assert.equal(bar.max,35);assert.equal(bar.value,35);

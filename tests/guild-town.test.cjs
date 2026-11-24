@@ -66,7 +66,7 @@ test('base route can walk through the street to the guild and up both flights wi
 });
 test('roof and named safe area are scoped to the destination guild',()=>{
  assert(g);
- const region=html.match(/const POI_SAFE_TOWN=[\s\S]*?(?=const poiMiniStatic=)/)[0];
+ const region=html.match(/const POI_SAFE_TOWN=[\s\S]*?(?=\/\/ BEGIN LOCAL MINI CORE)/)[0];
  const f=vm.runInNewContext(region+';poiRegionAt');
  const base={id:'base',buildings:site.buildings};
  assert.deepEqual(norm(f(base,34,15)),{name:'冒険者ギルド',difficulty:0,stars:'☆☆☆☆☆☆☆☆☆☆'});

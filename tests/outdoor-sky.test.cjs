@@ -6,14 +6,14 @@ function make(vars={}){
  const c=vm.createContext({...{
   $:()=>el, facilitySite:{id:'base'}, poiWalkActive:true, poiThirdPerson:true, poiWalkLevel:0, pineAIActive:false,
   poiWalkViewX:64,poiWalkViewZ:42,poiCameraYaw:0,poiCameraPitch:-.16,poiCameraDistance:5.5,
-  cameraTopDown:false, poiWalkIndoor:()=>false, poiCreekPlayerHeight:()=>0, facilityWatchtowerCameraEye:(_t,e)=>e,
+  cameraTopDown:false, poiWalkIndoor:()=>false, poiCreekPlayerHeight:()=>0, facilitySharedWallCameraEye:(_t,e)=>e,
   facilityWatchtowerCloseFov:()=>1.2, validPos:()=>true, terrainY:()=>0,
   performance:{now:()=>0}, layout:()=>({aspect:2}), zoom:1, MAP_W:128, MAP_H:128, panX:0,panZ:0,
   worldMaxLevel:3,TERRAIN_MAX:5,TERRAIN_STEP:.35,terrainHeights:new Map(), hideUpper:false,level:0,yaw:0,
   poiTownClockGameMs:720*500, POI_TOWN_MINUTE_MS:500, MAX_LEVEL:5, MAX_MAP:128,
   mult:(_a,b)=>b, ortho:()=>[], look:(eye,target)=>({eye,target}),perspective:()=>[]
  },...vars});
- vm.runInContext(slice('// BEGIN OUTDOOR SKY','// END OUTDOOR SKY')+slice('function parameters(){','function cursorAt(')+
+ vm.runInContext((h.includes('// BEGIN ORDINARY HOME CAMERA ARM')?slice('// BEGIN ORDINARY HOME CAMERA ARM','// END ORDINARY HOME CAMERA ARM'):'')+slice('// BEGIN OUTDOOR SKY','// END OUTDOOR SKY')+slice(h.includes('// BEGIN SACRED THRESHOLD PORTRAIT')?'// BEGIN SACRED THRESHOLD PORTRAIT':'function parameters(){','function cursorAt(')+
  slice('function workshopResumeDecode(','function workshopResume')+'\n;this.camera=()=>parameters();',c);
  return {c,style,attrs};
 }
@@ -22,7 +22,7 @@ test('normal orbit and overhead unchanged; outdoor elevated aim reveals a sky gr
  const normal=make({poiCameraPitch:.35}).c.camera();
  assert(normal.skyHorizon>15&&normal.skyHorizon<22);
  assert(Math.abs(normal.vp.eye[1]-(1.1+5.5*Math.sin(.35)))<1e-9);
- assert.equal(c.poiOrbitPitchClamp(-2),-.16);
+ assert.equal(c.poiOrbitPitchClamp(-2),-1.02);
  const looked=c.camera();assert(looked.vp.eye[1]<looked.vp.target[1]);
  assert(looked.skyHorizon>50&&looked.skyHorizon<70);
  c.poiSkyBackdrop(looked);assert(attrs.has('data-poi-sky'));
@@ -32,7 +32,7 @@ test('normal orbit and overhead unchanged; outdoor elevated aim reveals a sky gr
  c.cameraTopDown=true;c.poiThirdPerson=false;c.poiSkyBackdrop(c.camera());assert(!attrs.has('data-poi-sky'));
  const cliff=make({terrainY:()=>1.2}).c.camera();assert(cliff.vp.eye[1]>=1.42-1e-8);
 });
-test('negative sky pitch survives valid saves but remains unavailable indoors, underground, or during a collision clip',()=>{
+test('negative sky pitch survives saves, remains gated indoors and underground, and wall correction preserves the real camera restriction',()=>{
  const {c}=make();
  const saved=()=>c.workshopResumeDecode(JSON.stringify({version:1,route:'facility',id:'base',play:true,
   view:{yaw:0,zoom:1,panX:0,panZ:0,level:0,orbitYaw:0,orbitPitch:-.16,orbitDistance:5.5,third:true}}));
@@ -40,15 +40,21 @@ test('negative sky pitch survives valid saves but remains unavailable indoors, u
  assert.equal(make({poiWalkIndoor:()=>true}).c.poiOrbitPitchClamp(-1),.12);
  const underground=make({poiWalkLevel:-1,poiDungeonPointIn:()=>false}).c;
  assert.equal(underground.poiOrbitPitchClamp(-1),.12);assert.equal(underground.camera().skyHorizon,undefined);
- const clipped=make({facilityWatchtowerCameraEye:(_t,e)=>[e[0],e[1],e[2]+1]}).c;
- assert.equal(clipped.camera().skyHorizon,undefined);
+ const clipped=make({facilitySharedWallCameraEye:(_t,e)=>[e[0],e[1],e[2]+1]}).c;
+ const clear=c.camera(),corrected=clipped.camera();
+ assert.equal(corrected.vp.eye[2],clear.vp.eye[2]+1,'real collision-adjusted eye is still used');
+ assert.equal(corrected.vp.eye[1],clear.vp.eye[1]);
+ assert(Number.isFinite(corrected.skyHorizon),'surface wall correction no longer force-flashes the editor color');
+ const {eye,target}=corrected.vp;
+ const horizon=50-50*(eye[1]-target[1])/Math.hypot(eye[0]-target[0],eye[2]-target[2])/Math.tan(.6);
+ assert(Math.abs(corrected.skyHorizon-horizon)<1e-9,'sky uses corrected angle and original clipped lens');
  assert(h.includes('poiOrbitPitchClamp(poiCameraPitch+(now.y-multiGesture.y)*.004)'));
  assert(h.includes('poiOrbitPitchClamp(poiCameraPitch+(e.clientY-t.lastY)*.006)'));
 });
 test('fixed-time sky uses opaque fixed-world colors at straight, upward, and deep downward angles',()=>{
  const {c,attrs,style}=make({poiTownClockGameMs:90*500,poiCameraDistance:5.5});
  const steps=[];
- for(const p of [.12,-.16,.14,.15,.35,.75]){
+ for(const p of [.12,-.16,-.99,.14,.15,.35,.75]){
   c.poiCameraPitch=p;
   const packet=c.camera();c.poiSkyBackdrop(packet);
   assert(attrs.has('data-poi-sky'));assert.equal(packet.skyOpacity,undefined);

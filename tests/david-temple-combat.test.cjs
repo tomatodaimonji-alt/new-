@@ -4,26 +4,30 @@ const cut=(x,y)=>{const i=h.indexOf(x),j=h.indexOf(y,i+x.length);a(i>=0&&j>i,x);
 const o={type:'monsterStoneDavid',x:24,z:104,y:0};
 function setup(){
  const boss={...o,room:{minX:16,maxX:31,minZ:96,maxZ:112}},s={x:24,z:104,hp:1050,facing:2},c={
-  facilitySite:{id:'base',davidTemple:{boss}},document:{hidden:false,addEventListener:(event,fn)=>{c.visibility=fn}},poiWalkLevel:0,poiWalkX:24,poiWalkZ:100,player:{x:24,z:101,y:0},
-  poiMonsterStates:new Map([[o,s]]),poiMonsterMeshDirty:false,valid:true,wall:()=>false,stock:100,damage:[],sounds:[],
+  facilitySite:{id:'base',davidTemple:{boss}},poiWalkActive:true,document:{hidden:false,addEventListener:(event,fn)=>{c.visibility=fn}},poiWalkLevel:0,poiWalkX:24,poiWalkZ:100,player:{x:24,z:101,y:0},
+  poiMonsterStates:new Map([[o,s]]),poiMonsterMeshDirty:false,valid:true,Math:Object.assign(Object.create(Math),{random:()=>.99}),wall:()=>false,stock:100,damage:[],sounds:[],
   poiEnemyThreatEnabled:()=>c.valid,poiAimOrigin:()=>c.player,poiAimWall:()=>((x,z)=>!c.wall(x,z)),
   poiMobHitPlayer:(obj,now,n)=>{c.damage.push({obj,now,n});c.stock-=n;return c.stock<=0},
-  poiMonsterCanMove:()=>true,poiSound:id=>c.sounds.push(id),terrainY:()=>0,
+  poiMonsterCanMove:()=>true,poiSound:id=>c.sounds.push(id),poiDavidAttackFoley:(q,_p,_b,i,phase)=>c.sounds.push({kind:q.kind,i,phase}),terrainY:()=>0,
   mesh:()=>({p:[],c:[]}),poiEnemyCuePoint:(x,z,y)=>[x+.5,.153+y*1.4,z+.5],
+  tri:(m,x,y,z,col)=>{m.c.push(col);m.p.push(...x,...y,...z)},
   quad:(m,...q)=>{m.c.push(q.pop());for(const p of q)m.p.push(...p)}
  
  };
- const api=vm.runInNewContext(cut('// BEGIN DAVID TEMPLE COMBAT','// END DAVID TEMPLE COMBAT')+
+ c.wallNow=0;
+ c.window={performance:{now:()=>c.wallNow},pineStartup:{},addEventListener:()=>{}};
+ const lifecycle=cut('// BEGIN WORKSHOP SUSPENDABLE GAME CLOCK','// END WORKSHOP SUSPENDABLE GAME CLOCK');
+ const api=vm.runInNewContext(lifecycle+cut('// BEGIN DAVID TEMPLE COMBAT','// END DAVID TEMPLE COMBAT')+
   cut('function poiAimWallLimit(','function poiAimChooseLock(')+cut('// BEGIN DAVID TEMPLE CUES','// END DAVID TEMPLE CUES')+
-  ';({step:poiDavidMobFrame,tick:poiDavidCombatFrame,pose:poiDavidPose,area:poiDavidArea,begin:poiDavidBegin,match:poiDavidMatch,incoming:poiDavidIncoming,cue:poiDavidCueGeometry})',Object.assign(c,{POI_AIM_EPS:1e-7}));
+  ';({realStep:poiDavidMobFrame,step:(o,s,t)=>{const prior=poiAimOrigin;let ok;try{poiAimOrigin=()=>({x:s.x,z:s.z-2,y:o.y});ok=poiDavidMobFrame(o,s,t)}finally{poiAimOrigin=prior};if(ok){const b=poiDavidMatch(o);for(const u of [POI_DAVID_AWAKENING.first,POI_DAVID_AWAKENING.second,POI_DAVID_AWAKENING.ready])poiDavidAwakeningTick(o,s,b,t+u);if(!s.david?.wakeDone)throw Error("post-awakening fixture unavailable");s.david.next=t+620;}return ok},tick:poiDavidCombatFrame, frame:()=>{if(!poiGameFrozen())poiDavidCombatFrame(performance.now())},pose:poiDavidPose,area:poiDavidArea,begin:poiDavidBegin,match:poiDavidMatch,incoming:poiDavidIncoming,cue:(q,b)=>({...poiDavidCueGeometry(q,b),beam:poiDavidThermalBeam(q,{x:q.dx,z:q.dz},poiDavidBeamReach(q,b,{x:q.dx,z:q.dz}),0)})})',Object.assign(c,{POI_AIM_EPS:1e-7}));
  return {c,s,api,boss};
 }
 test('only canonical authored room enables dormant encounter; no damage or patrol through threshold',()=>{
- const {c,s,api}=setup();c.player={x:24,z:95,y:0};api.step(o,s,1000);
- a.equal(s.david,undefined);a.deepEqual([s.x,s.z],[24,104]);c.player={x:24,z:97,y:0};
- c.wall=(x,z)=>z===99;api.step(o,s,1100);a(!s.david?.awake);c.wall=()=>false;
- api.step(o,s,1200);a(s.david.awake);a.equal(api.pose(s,1410).phase,'wake');a.equal(api.incoming(o,s,28,1410),10);
- c.player={x:24,z:94,y:0};api.tick(1800);a(!s.david?.awake);a.equal(c.damage.length,0);
+ const {c,s,api}=setup();c.player={x:24,z:95,y:0};api.realStep(o,s,1000);
+ a.equal(s.david,undefined);a.deepEqual([s.x,s.z],[24,104]);c.player={x:24,z:102,y:0};
+ c.wall=(x,z)=>z===103;api.realStep(o,s,1100);a(!s.david?.awake);c.wall=()=>false;
+ api.realStep(o,s,1200);a(s.david.awake);a.equal(api.pose(s,1410).phase,'wake');a.equal(api.incoming(o,s,28,1410),0);
+ c.player={x:24,z:94,y:0};api.tick(1800);a(s.david?.returning);api.tick(2250);a(!s.david?.awake);a.equal(c.damage.length,0);
  a.deepEqual([s.x,s.z],[24,104]);delete c.facilitySite.davidTemple;
  a.equal(api.match(o),null);a.equal(api.incoming(o,s,28,2000),0);
 });
@@ -60,14 +64,25 @@ test('real double contact resolves twice with actual dodge and wall; expired con
  for(const x of [run(false,true),run(false,false,true)])a.deepEqual(x.c.damage.map(z=>z.n),[28]);
  run(true);
 });
-test('hidden resume and long frame discontinuity cancel instead of replaying contacts',()=>{
- for(const hide of [true,false]){
-  const {c,s,api}=setup();api.step(o,s,1000);a(api.begin(o,s,1700,'double'));
-  for(const t of [1900,2100,2300])api.tick(t);
-  if(hide){c.document.hidden=true;c.visibility();c.document.hidden=false;c.visibility();}
-  api.tick(hide?2500:3400);
-  a.equal(c.damage.length,0);a.equal(s.david.attack,null);
+test('short frozen boss wind-up resumes with remaining time; truly stale foreground frames do not replay',()=>{
+ const normal=setup(),paused=setup();
+ for(const {c,s,api} of [normal,paused]){
+  api.step(o,s,1000);a(api.begin(o,s,1700,'double'));
+  for(const t of [1900,2100,2300]){c.wallNow=t;api.frame()}
  }
+ const {c,s,api}=paused;
+ c.document.hidden=true;c.visibility();c.wallNow=12300;api.frame();
+ a.equal(c.damage.length,0);a.equal(s.david.attack.executed,0);
+ c.document.hidden=false;c.visibility();api.frame();a.equal(c.damage.length,0);
+ for(const t of [2340,2390,2425]){
+  normal.c.wallNow=t;normal.api.frame();
+  c.wallNow=t+10000;api.frame();
+ }
+ a.deepEqual(c.damage.map(v=>v.n),[28]);
+ a.deepEqual(c.damage,normal.c.damage);
+ const stale=setup();stale.api.step(o,stale.s,1000);a(stale.api.begin(o,stale.s,1700,'double'));
+ for(const t of [1900,2100,2300,3400])stale.api.tick(t);
+ a.equal(stale.c.damage.length,0);a.equal(stale.s.david.attack,null);
 });
 test('beam cannot hit behind a wall, sweep is forward, retreat cancels an already declared attack',()=>{
  const {c,s,api}=setup();api.step(o,s,1100);
@@ -84,12 +99,16 @@ test('live private encounter clock selects all four kinds, not only the exposed 
  for(let t=1000;t<8500;t+=10){api.tick(t);if(s.david?.attack)seen.add(s.david.attack.kind)}
  a.deepEqual([...seen].slice(0,4),['sweep','double','stomp','beam']);
  a.deepEqual(c.damage.slice(0,5).map(d=>d.n),[30,28,35,39,47]);
+ const impact=c.sounds.filter(v=>v.phase==='impact');
+ a.deepEqual(impact.slice(0,5),[['sweep',0],['double',0],['double',1],['stomp',0],['beam',0]].map(([kind,i])=>({kind,i,phase:'impact'})));
+ const onset=c.sounds.findIndex(v=>v.kind==='beam'&&v.phase==='beamOnset');
+ a(onset>=0&&onset<c.sounds.findIndex(v=>v.kind==='beam'&&v.phase==='impact'),'initial continuous cue begins before the unchanged damage contact');
  a.equal(s.hp,1050,'monster health and general player reports are not rewritten');
 });
 test('actual floor cue and elevated red beam end at a new wall and never outside the arena',()=>{
  const {api,c,boss}=setup(),q={kind:'beam',dx:0,dz:-1,sx:24,sz:104,y:0};
  const open=api.cue(q,boss);
- a(open.lane.p.length>60&&open.beam.p.length>12);a(open.beam.c.every(([r,g,b])=>r>=.99&&g<=.10&&b<=.09));
+ a(open.lane.p.length>60&&open.beam.p.length>12);a(open.beam.c.some(([r,g,b])=>r>=.99&&g>.70&&b>.40),'hot core');a(open.beam.c.some(([r,g,b])=>r>=.95&&g<.30&&b<.11),'distinct warm sheath');
  const ys=open.beam.p.filter((_,i)=>i%3===1),zs=open.beam.p.filter((_,i)=>i%3===2);
  a(Math.max(...ys)>4.7&&Math.min(...ys)<.70,'beam actually comes down from the eyes toward hit corridor');
  a(Math.min(...zs)>=96-1e-5,'ray respects room edge in front even at selected 14-tile nominal length');

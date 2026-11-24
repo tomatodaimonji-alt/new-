@@ -1,78 +1,72 @@
-const a=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),crypto=require('node:crypto'),{test}=require('node:test');
+const {test}=require('node:test'),a=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const cut=(x,y)=>{const i=h.indexOf(x),j=h.indexOf(y,i+1);a(i>=0&&j>i,x);return h.slice(i,j)};
 const build=vm.runInNewContext(cut('const FACILITY_SITES=Object.freeze(','function workshopResumeDecode(')+';buildFacilitySite');
-const site=build('base'),key=o=>[o.x,o.z,o.y].join(',');
-test('the surface temple appends an open stocked arena to the old walkable road without changing any authored records',()=>{
- const d=site.davidTemple;a(d,'temple is absent');
- a(d.name==='白環の大神殿');a.deepEqual([d.boss.x,d.boss.z,d.boss.y],[24,104,0]);a.equal(d.boss.type,'monsterStoneDavid');
- a.deepEqual([site.map.width,site.map.height],[128,128]);const all=site.map.world,old=all.slice(0,d.authored.index),added=all.slice(d.authored.index);
- a.equal(old.length,8984);a.equal(crypto.createHash('sha256').update(JSON.stringify(old)).digest('hex'),process.env.OLD_PREFIX||'15535689893b8a631827467885930d45d786e0d3b559b74d6a2544267d03439a');
- const oldKeys=new Set(old.map(key));a(added.every(o=>!oldKeys.has(key(o))));a(added.length<=690);
- a.equal(added.filter(o=>o.type===d.boss.type).length,1);
- const grid=new Map();for(const o of all){const k=key(o);grid.set(k,[...(grid.get(k)||[]),o.type])}
- const isFloor=t=>/^(?:road|grass|earth|stone$|woodfloor)/.test(t);
- const walk=(x,z)=> (grid.get(key({x,z,y:0}))||[]).every(t=>isFloor(t)||t==='lantern'||t===d.boss.type);
- a.equal(key(d.approach[0]),'29,88,0');
- for(const [i,p] of d.approach.entries()){
-  a(walk(p.x,p.z),key(p));a((grid.get(key(p))||[]).some(isFloor),key(p));
-  if(i){const b=d.approach[i-1];a.equal(Math.abs(b.x-p.x)+Math.abs(b.z-p.z),1)}
+const site=build('base'),t=site.davidTemple,w=site.map.world,W=o=>/^poiDavid(?:Wall|GatePier)/.test(o.type);
+site.id="base";
+test('canonical same-world entry uses real straight dark masonry, then close centered reveal',()=>{
+ a.deepEqual([t.entrance.x,t.entrance.z,t.retreat.z,t.boss.x,t.boss.z],[24,128,125,24,158]);
+ a(t.interior&&t.interior.exitZ===142,'a real same-scene passage is authored');
+ a(t.interior.path.length>=10);
+ const occupied=(x,z)=>w.some(o=>o.x===x&&o.z===z&&o.y===0&&W(o));
+ for(let i=0;i<t.interior.path.length;i++){const p=t.interior.path[i],q=t.interior.path[i-1]??p;
+  a(!occupied(p.x,p.z)); a(i===0||Math.abs(q.x-p.x)+Math.abs(q.z-p.z)===1);
  }
- for(let x=18;x<=30;x++)for(let z=98;z<=110;z++){
-  a(walk(x,z),x+','+z);a(!(grid.get(key({x,z,y:2}))||[]).length,'overhead swing stays open');
+ a(occupied(22,132)&&occupied(26,132)&&!occupied(24,132),'the straight aperture has solid side walls and stays walkable');
+ a(!t.boss.room.arena.cells.has('24,141')&&t.boss.room.arena.cells.has('24,142')&&t.boss.room.arena.cells.has('24,158'));
+});
+test('solid dome/ceiling, tunnel top and locally budgeted warm sconces are physical scene content',()=>{
+ a.equal(t.interior.permanent,true);
+ const pieces=w.slice(t.authored.index,t.authored.index+t.authored.count);
+ a.equal(pieces.filter(o=>o.type==='poiDavidSacredRoof').length,1);
+ a(pieces.filter(o=>o.type==='poiDavidTunnelRoof').length>=7);
+ a(pieces.filter(o=>/^poiDavidCandle/.test(o.type)).length>=8);
+ a(pieces.filter(o=>/^poiDavidCandle/.test(o.type)).length<=16);
+ const roof=vm.runInNewContext(cut('function facilityVisibleRoofs(','function facilityCollectEntranceGuides(')+';facilityVisibleRoofs',
+  {poiWalkActive:true,poiWalkLevel:0,poiWalkViewX:24,poiWalkViewZ:145,cameraTopDown:false,facilitySite:site,facilityHiddenRoof:()=>site.buildings.findIndex(b=>b.id==='davidTemple'),facilityRoofMeshes:site.buildings.map(()=>({count:1}))});
+ a(roof().includes(site.buildings.findIndex(b=>b.id==='davidTemple')),'authored roof must actually draw even on its inside');
+});
+test('the true wall-ray and walking functions block axial and side exterior sightings, but establish a short clear boss reveal',()=>{
+ const c=vm.createContext({facilitySite:site,world:w,poiWalkActive:true,poiWalkLevel:0,poiMonsterAt:()=>null,
+   isWallId:t=>/Wall/.test(t),isFloor:t=>/^(road|earth|grass|floor)/i.test(t),poiIsMonster:t=>t==='monsterStoneDavid',pineSuperVehicleType:()=>false,
+   facilityCreekIndex:null,validPos:(x,z)=>x>=0&&x<128&&z>=0&&z<182&&(z<128||x<48),POI_AIM_EPS:1e-6});
+ vm.runInContext(cut('function poiWalkPassableDoor(','let facilityCreekIndex=')+
+  cut('function poiPlayerRayClear(','function poiPlayerWeaponTrace(')+
+  cut('function poiAimWallLimit(','function poiAimChooseLock(')+cut('function poiWalkCanStep(','function poiFreeCenter(')+
+  cut('function poiDavidTempleEnclosedAt(','// END DAVID TEMPLE MAP'),c);
+ const opts=(x,z,fx,fz)=>c.poiPlayerRayClear(x,z,0,fx,fz);
+ function direct(x,z,tx=24,tz=158){
+  const dx=tx-x,dz=tz-z,len=Math.hypot(dx,dz);
+  return c.poiAimWallLimit({x,z},{x:dx/len,z:dz/len},len,opts)>=len-1e-6;
  }
- for(let z=94;z<=103;z++)a(walk(24,z),'clear exact retreat');
- const b=site.buildings.find(x=>x.id==='davidTemple');
- a(b.footprint.length>=350);a(b.floorFootprints[0].length===b.footprint.length);
- a(added.some(o=>o.type==='roofTile'&&o.y===2));a(!added.some(o=>/portal|guildStair|ironGate|rewardChest/i.test(o.type)));
+ for(const x of [17,19,21,27,29,31])for(let z=126;z<=133;z+=1.3)a(!direct(x,z),`side peek at ${x},${z}`);
+ for(const z of [128,129,130,131,132,133,134])for(const x of [22,23,24,25,26]){
+  const p={x,z,y:0,facing:2};
+  if(c.poiWalkCanStep(x,z))continue;
+  const q=c.poiDavidTempleRecoverPosition(p);
+  a(Math.hypot(q.x-x,q.z-z)<=1&&c.poiWalkCanStep(q.x,q.z),JSON.stringify(p));
+  a.deepEqual([q.y,q.facing],[p.y,p.facing]);
+ }
+ for(const p of t.interior.path)a(c.poiWalkCanStep(p.x,p.z));
+ a(direct(24,142),'the actual eye line down the release portal is clear; actual long straight hall opens into centered arena');
+ a(c.poiDavidTempleEnclosedAt(site,23,132,0)&&c.poiDavidTempleTunnelAt(site,23,132,0));
+ a(c.poiDavidTempleEnclosedAt(site,24,142,0)&&!c.poiDavidTempleTunnelAt(site,24,142,0));
+ a(!c.poiDavidTempleEnclosedAt(site,24,125,0));
 });
-test('actual surface collision and local wildlife keepout respect the new arena and old road',()=>{
- const d=site.davidTemple;a.ok(d);site.id='base';
- const world=site.map.world;
- const c=vm.createContext({facilitySite:site,world,poiWalkLevel:0,poiWalkActive:true,poiMonsterAt:()=>null,
-  poiIsMonster:t=>t==='monsterStoneDavid',pineSuperVehicleType:()=>false,isWallId:t=>t.includes('wall'),
-  facilityCreekIndex:null,validPos:(x,z)=>Number.isInteger(x)&&Number.isInteger(z)&&x>=0&&z>=0&&x<128&&z<128,
-  isFloor:t=>/^(?:road|grass|earth|stone$|woodfloor)/.test(t)});
- vm.runInContext(cut('// BEGIN DAVID TEMPLE MAP','// END DAVID TEMPLE MAP')+
-  cut('function poiWalkPassableDoor(','let facilityCreekIndex=')+cut('function poiWalkCanStep(','function poiFreeCenter(')+
-  cut('function poiWildProtectedArea(','function poiWildNearResident('),c);
- for(const p of d.approach)a(c.poiWalkCanStep(p.x,p.z),'legal actual approach '+key(p));
- for(let x=d.threshold.minX;x<=d.threshold.maxX;x++)a(c.poiWalkCanStep(x,94),'full actual threshold');
- for(const [x,z] of [[21,94],[27,94],[24,115],[13,104],[34,104],[15,101]])a.equal(c.poiWalkCanStep(x,z),false);
- for(let z=95;z<=103;z++)a(c.poiWalkCanStep(24,z,24,z+1));
- a(c.poiWildProtectedArea(24,104));a(c.poiWildProtectedArea(24,91));
- a.equal(c.poiWildProtectedArea(29,88),false,'not adding a protected road band elsewhere');
- a.equal(c.poiDavidTempleContains(site,24,104,-1),false,'no lower-floor side effect');
-});
-test('open courtyard keeps native sky while roofed colonnades retain cutaway',()=>{
- const c=vm.createContext({facilitySite:site,poiWalkActive:true,poiWalkX:24,poiWalkZ:100,poiWalkLevel:0,
-  facilityDoorTiles:new Set(),facilityCellKey:(...p)=>p.join(','),facilityFloorOwner:()=>13});
- c.facilitySite.id='base';
- vm.runInContext(cut('// BEGIN DAVID TEMPLE MAP','// END DAVID TEMPLE MAP')+cut('function facilityHiddenRoof(','function pineGuildRenewalSample('),c);
- a.equal(c.facilityHiddenRoof(),null,'not indoor in open center');
- c.poiWalkX=16;a.equal(c.facilityHiddenRoof(),13,'ordinary cutaway under covered colonnade');
- c.poiWalkX=60;a.equal(c.facilityHiddenRoof(),13,'no unrelated change');
-});
-test('only old occupied temple masonry checkpoints relocate one legal step, preferring exterior',()=>{
- const d=site.davidTemple,y=0,c=vm.createContext({facilitySite:site,world:site.map.world.slice(),poiWalkLevel:-1});
- c.poiWalkCanStep=(x,z)=>!c.world.some(o=>o.x===x&&o.z===z&&o.y===0&&(/stonewall|poiDavid/.test(o.type)));
- vm.runInContext(cut('// BEGIN DAVID TEMPLE MAP','// END DAVID TEMPLE MAP'),c);
- const p={x:13,z:104,y,facing:0},copy=o=>JSON.parse(JSON.stringify(o));
- a.deepEqual(copy(c.poiDavidTempleRecoverPosition(p)),{...p,x:12});
- const upright={x:15,z:101,y,facing:2},to=c.poiDavidTempleRecoverPosition(upright);
- a.equal(Math.abs(to.x-upright.x)+Math.abs(to.z-upright.z),1);a.equal(to.facing,2);
- for(const p of [{x:24,z:94,y,facing:1},{x:24,z:102,y,facing:1},{...upright,y:-1},{x:75,z:37,y}])a.equal(c.poiDavidTempleRecoverPosition(p),p);
- const i=c.world.findIndex(o=>o.x===upright.x&&o.z===upright.z&&o.y===0&&o.type==='poiDavidTempleColumn');
- c.world.splice(i,1);a.equal(c.poiDavidTempleRecoverPosition(upright),upright,'removed objects are not stale overrides');
- a.equal(c.poiWalkLevel,-1);a.match(h,/function workshopResumeRestorePosition\(p\)\{[^]*?p=poiDavidTempleRecoverPosition\(p\);/);
-});
-test('authored IDs exist before native catalog and the exported depth-offset map passes native validation',()=>{
- const c=vm.createContext({MIN_MAP:12,MAX_MAP:128,MAX_LEVEL:8,TERRAIN_MAX:12,PINE_CHECK_COLORS:[],site});
- vm.runInContext(cut('const palette=[','const catalog=new Map(')+
-  'const catalog=new Map(palette.map(p=>[p.id,p]));'+
+
+test('old editor and prefab dome ID validates alongside unrelated stocked objects and still has real legacy geometry',()=>{
+ const c=vm.createContext({MIN_MAP:12,MAX_MAP:128,MAX_LEVEL:8,TERRAIN_MAX:12,POI_SACRED_DEPTH_H:182,POI_SACRED_DEPTH_W:48,PINE_CHECK_COLORS:[],site,facilitySite:site,
+  world:w,validPos:(x,z)=>x>=0&&x<128&&z>=0&&z<182&&(z<128||x<48),isWallId:()=>false,mesh:()=>({p:[],n:[],c:[]})});
+ vm.runInContext(cut('const palette=[','const catalog=new Map(')+'const catalog=new Map(palette.map(p=>[p.id,p]));'+
   cut('function validModel(','function displayJSON(')+cut('function facilityExportMap(','function facilityDownload(')+
-  ';globalThis.validation=()=>pineValidateWorldData(facilityExportMap(site.map));globalThis.catalog=catalog;',c);
- for(const id of ['monsterStoneDavid','poiDavidGatePier','poiDavidTempleColumn','poiDavidWaystone'])a(c.catalog.has(id),id);
- a.equal(c.catalog.get('monsterStoneDavid').cat,'character');
- a.equal(c.validation().newW,128);
+  cut('function tri(m,a,b,c,col){','function addPart(')+cut('// BEGIN ROUND DAVID TEMPLE ART','// END ROUND DAVID TEMPLE ART')+
+  ';globalThis.validation=m=>{const f=facilityExportMap(m);return {...pineValidateWorldData(f),world:f.world,offset:f.workshopFacility.floorOffset}};',c);
+ const roof={x:24,z:104,y:2,type:'poiDavidDome',rot:0},m=c.mesh();
+ const prefab={id:'prefab-old-dome',name:'旧ドーム',w:1,h:1,tiles:[{x:0,z:0,y:2,type:roof.type,rot:0}]};
+ const previous=Object.assign({},site.map,{world:[...site.map.world,roof],prefabs:[prefab]});
+ const imported=c.validation(previous);
+ a.equal(imported.newW,128);a(imported.world.some(o=>o.type===roof.type&&o.y===2+imported.offset));
+ a(imported.world.some(o=>o.type==='monsterStoneDavid'&&o.x===24&&o.z===158));
+ a.equal(imported.blocks[0].tiles[0].type,roof.type);
+ c.poiDavidDomeGeometry(m,24.5,104.5);a(m.p.length/3>2000&&m.p.length/3<3200);
 });

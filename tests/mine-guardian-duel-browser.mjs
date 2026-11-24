@@ -8,11 +8,13 @@ const anchor='  freeMovementPose:()=>({x:poiWalkViewX,z:poiWalkViewZ,level:poiWa
 function inject(s,a,b){assert.equal(s.split(a).length,2,a);return s.replace(a,b)}
 let fixture=inject(html,anchor,anchor+`
   guardianDuelQA:{
+   manual:()=>{window.__qaDuelManual=true},
+   frame:()=>render(),
    arm:()=>{window.__qaDuelArmed=true},
    status:()=>{
     const rows=[...poiMonsterStates],boss=rows.find(([o])=>o.type==='monsterMineGuard'&&o.x===120&&o.z===55&&o.y===-1);
     const o=boss?.[0],s=boss?.[1],a=s?.playerAttack,now=performance.now();
-    return {hp:poiPlayerHP,bossHP:s?.hp,bossPose:s?{x:s.x,z:s.z}:null,now,openUntil:s?.guardOpenUntil??0,
+    return {hp:poiPlayerHP,bossHP:s?.hp,bossPose:s?{x:s.x,z:s.z}:null,now,nextMob:poiNextMobTick,openUntil:s?.guardOpenUntil??0,
      pose:{x:poiWalkViewX,z:poiWalkViewZ},walk:{x:poiWalkX,z:poiWalkZ,y:poiWalkLevel},weapon:poiEquippedWeapon(),
      threats:poiEnemyThreatTiles(now).filter(t=>t.type==='monsterMineGuard'),
      strike:a?{start:a.start,hit:a.hit,dx:a.dx,dz:a.dz,pending:a.pending,trial:!!a.guardTrial,visualHitAt:a.visualHitAt}:null,
@@ -32,10 +34,13 @@ fixture=inject(fixture,'function poiMobHitPlayer(obj,now,attackDamage){',`functi
 function __qaGuardianHit(obj,now,attackDamage){`);
 // Read the actual pose used in the monster WebGL mesh build, not merely a
 // threat flag computed as part of the AI. Frame probes do not drive the game.
-fixture=inject(fixture,'   const {x:cx,y,z:cz,attack,heading}=poiMonsterPose(obj,s,now),part=mesh();',`
-   const {x:cx,y,z:cz,attack,heading}=poiMonsterPose(obj,s,now),part=mesh();
+fixture=inject(fixture,'   const {x:cx,y,z:cz,attack,heading,david}=poiMonsterPose(obj,s,now),part=mesh();',`
+   const {x:cx,y,z:cz,attack,heading,david}=poiMonsterPose(obj,s,now),part=mesh();
    if(obj.type==='monsterMineGuard'&&attack){const log=window.__qaDuelDraw??=[];if(log.length<110)
     log.push({now,phase:attack.phase,exposed:!!attack.exposed,tell:attack.tell??0,pitch:attack.pitch,dx:s.playerAttack?.dx,dz:s.playerAttack?.dz});}`);
+// The real render (including walk, hit resolver and WebGL) is advanced in
+// small timestamp steps during the time-sensitive sidestep only.
+fixture=inject(fixture,' requestAnimationFrame(render);',' if(!window.__qaDuelManual)requestAnimationFrame(render);');
 const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(req.url==='/seed'?'<!doctype html><title>Guardian duel QA</title>':fixture)});
 await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',resolve).once('error',reject));
 const origin='http://127.0.0.1:'+server.address().port;
@@ -48,6 +53,9 @@ try{
   const ctx=await browser.newContext({viewport:{width:844,height:390},deviceScaleFactor:.75,isMobile:true,hasTouch:true});
   const p=await ctx.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));p.setDefaultTimeout(13000);
   const tag=evade?'sidestep':'stand';
+  if(evade)await p.clock.install({time:new Date('2026-11-23T12:00:00Z')});
+  const advance=async(ms=32)=>{await p.clock.fastForward(ms);await p.evaluate(()=>window.__editorTest.guardianDuelQA.frame());};
+  const until=async(pred,limit)=>{let s=await q();for(let i=0;i<limit&&!pred(s);i++){await advance();s=await q()}assert(pred(s),JSON.stringify(s));return s};
   const q=()=>p.evaluate(()=>window.__editorTest.guardianDuelQA.status());
   const when=(predicate,arg,timeout=4500)=>p.waitForFunction(predicate,arg,{polling:25,timeout});
   let cdp;
@@ -84,11 +92,19 @@ try{
    cdp=await ctx.newCDPSession(p);
    const left={x:Math.round(pad.x+pad.width/2),y:Math.round(pad.y+pad.height/2),id:1,force:.7,radiusX:4,radiusY:4};
    const touch=(type,touchPoints)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints});
-   if(evade)await touch('touchStart',[left]); // hold neutral until the tell.
+   if(evade){
+    await p.evaluate(()=>window.__editorTest.guardianDuelQA.manual());
+    const wall=await p.evaluate(()=>Date.now());
+    await p.clock.pauseAt(wall+1500);
+    const s=await q(),debt=Math.ceil(s.nextMob-s.now);
+    if(debt>0)await p.clock.fastForward(debt+16);
+    await advance(); // Disarmed; align scheduler before accepting input.
+    await touch('touchStart',[left]); // Hold neutral until the tell.
+   }
    checkpoint=tag+': committed tell';
    await p.evaluate(()=>window.__editorTest.guardianDuelQA.arm());
-   const next=await when(()=>{const s=window.__editorTest.guardianDuelQA.status();return s.strike?.pending&&s});
-   const committed=await next.jsonValue();
+   const committed=evade?await until(s=>s.strike?.pending,36):
+    await (await when(()=>{const s=window.__editorTest.guardianDuelQA.status();return s.strike?.pending&&s})).jsonValue();
    assert(committed.strike.trial,'actual authored guardian started the new encounter swing');
    assert(committed.strike.hit-committed.strike.start>=600&&committed.strike.hit-committed.strike.start<=900,'readable wind-up');
    assert(Math.abs(committed.strike.dx)<.04&&committed.strike.dz>.92,'hammer initially commits to the player directly south');
@@ -97,12 +113,12 @@ try{
     await touch('touchMove',[{...left,x:left.x+34,y:left.y-14}]);
     // The small forward component keeps the final real analog pose within
     // wooden-sword range after moving outside the committed narrow lane.
-    await when(()=>window.__editorTest.guardianDuelQA.status().pose.x>120.86,null,2000);
+    await until(s=>s.pose.x>120.86,19);
     await touch('touchEnd',[]);
    }
    checkpoint=tag+': contact and recovery';
-   await when(start=>{const s=window.__editorTest.guardianDuelQA.status();return s.strike?.start===start&&!s.strike.pending},committed.strike.start,4500);
-   const contact=await q();
+   const contact=evade?await until(s=>s.strike?.start===committed.strike.start&&!s.strike.pending,30):
+    (await when(start=>{const s=window.__editorTest.guardianDuelQA.status();return s.strike?.start===start&&!s.strike.pending},committed.strike.start,4500),await q());
    assert.equal(contact.strike.dx,committed.strike.dx);assert.equal(contact.strike.dz,committed.strike.dz);
    assert(contact.draw.some(d=>d.phase==='windup'&&d.tell>0&&Number.isFinite(d.pitch)&&d.now<committed.strike.hit),'real rendered hammer anticipation has visible pose and warm tell');
    if(evade){
@@ -111,19 +127,18 @@ try{
     assert.equal(contact.hits.length,0);
     assert(contact.openUntil>contact.now,'successful evade opens a real recovery window');
     checkpoint=tag+': visible opening and raw wooden-sword punish';
-    await when(at=>window.__editorTest.guardianDuelQA.status().draw.some(d=>d.phase==='open'&&d.exposed&&d.now>=at),contact.strike.visualHitAt,850);
-    let near=await q();
+    let near=await until(s=>s.draw.some(d=>d.phase==='open'&&d.exposed&&d.now>=contact.strike.visualHitAt),12);
     if(Math.hypot(near.pose.x-120,near.pose.z-55)>1.23){
      // If the CDP stop landed one frame past attack distance, take a
      // short genuine step in during recovery rather than forcing a pose.
      await touch('touchStart',[left]);await touch('touchMove',[{...left,x:left.x-31,y:left.y-9}]);
-     await when(()=>{const p=window.__editorTest.guardianDuelQA.status().pose;return Math.hypot(p.x-120,p.z-55)<1.15},null,850);
+     await until(s=>Math.hypot(s.pose.x-120,s.pose.z-55)<1.15,18);
      await touch('touchEnd',[]);
      near=await q();
     }
     assert(near.openUntil>near.now,'recovery is still active when the player counterattacks');
     await hit();
-    await when(at=>{const s=window.__editorTest.guardianDuelQA.status();return s.action>at&&!s.actionPending},initial.action,3500);
+    await until(s=>s.action>initial.action&&!s.actionPending,16);
     assert.equal(originalHP-(await q()).bossHP,28,'same wooden sword now deals its unchanged raw damage');
    }else{
     assert.equal(contact.hits.length,1,'standing triggers exactly one authored guardian hit');

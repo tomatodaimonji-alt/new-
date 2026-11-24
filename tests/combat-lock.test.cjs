@@ -7,7 +7,7 @@ function setup(){
  const origin={x:10,z:10},canvas={clientWidth:600,clientHeight:600},targets=new Map(),samples=[],avatars=[];
  const style={}; const marker={hidden:true,style,dataset:{},setAttribute(){}};const layer={append(){}};
  const bag={hidden:true},menu={hidden:true},note={hidden:true};
- const c={poiWalkActive:true,pineAIActive:false,poiMonsterStates:targets,poiWalkX:10,poiWalkZ:10,poiWalkLevel:0,
+ const c={world:[],poiWalkActive:true,pineAIActive:false,poiMonsterStates:targets,poiWalkX:10,poiWalkZ:10,poiWalkLevel:0,
   poiWalkViewX:10,poiWalkViewZ:10,poiWalkFromX:10,poiWalkFromZ:10,poiWalkStarted:0,poiWalkStepMs:160,poiWalkFacing:1,
   poiFreePose:{x:10,z:10,level:0,angle:-Math.PI/2,walking:false,distance:0}, poiWalkActionStarted:-10000,
   POI_WALK_MS:160,facilitySite:null,terrainY:()=>0,poiWalkActionWeapon:null,poiWalkAttackPosePending:false,poiWalkMesh:null,
@@ -22,11 +22,11 @@ function setup(){
   poiCreekPlayerHeight:()=>0,gl:{deleteBuffer(){}},upload:()=>({buf:{}}),poiBuildPlayerMesh:(...args)=>{avatars.push(args);return {}}
  };
  vm.createContext(c);
- vm.runInContext(cut('// BEGIN ANGULAR COMBAT MATH','// BEGIN PLAYER WEAPON PROFILES')+
+ vm.runInContext(html.slice(html.indexOf('function poiSacredInteriorHostileVisible('),html.indexOf('let poiSacredInteriorVbo'))+cut('// BEGIN ANGULAR COMBAT MATH','// BEGIN PLAYER WEAPON PROFILES')+
   cut('// BEGIN PLAYER BARE HAND RIG','// END PLAYER BARE HAND RIG')+
   cut('function poiWalkAvatar(','const POI_MONSTER_BREAK_MS='),c);
  const enemy=(dx,dz,y=0)=>{
-  const state={x:origin.x+dx,z:origin.z+dz,hp:40};const obj={type:'monsterSlime',x:state.x,z:state.z,y};targets.set(obj,state);return state;
+  const state={x:origin.x+dx,z:origin.z+dz,hp:40};const obj={type:'monsterSlime',x:state.x,z:state.z,y};c.world.push(obj);targets.set(obj,state);return state;
  };
  const draw=(when=1000)=>{samples.length=0;c.poiAimRenderMarker(when,null,layer);return marker.hidden?null:samples.at(-1);};
  return {c,enemy,draw,marker,bag,menu,avatars};

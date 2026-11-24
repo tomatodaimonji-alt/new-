@@ -8,7 +8,8 @@ function renderer(){
  vm.createContext(c);
  const dispatch=slice('function decoBase(','switch(id){').split(' if(oldTownShopDetails')[0]+'}';
  vm.runInContext(slice('function tri(','function addPart(')+slice('// BEGIN FISHING PORT ART','// END FISHING PORT ART')+
-  '\n'+dispatch+'\n'+slice('function deco(','// Deterministic micro-variation:'),c);
+  '\n'+dispatch+'\n'+slice('// BEGIN DAVID TEMPLE ARCHITECTURE','// END DAVID TEMPLE ARCHITECTURE')+
+  '\n'+slice('function deco(','// Deterministic micro-variation:'),c);
  return (id,r)=>{const mesh=c.mesh();c.deco(mesh,id,.5,0,.5,r);return mesh};
 }
 function positions(m){const p=[];for(let i=0;i<m.p.length;i+=3)p.push(m.p.slice(i,i+3));return p}

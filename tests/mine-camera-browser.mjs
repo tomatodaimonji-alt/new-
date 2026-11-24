@@ -8,6 +8,8 @@ const anchor="  const arm=eye===desired?poiCameraDistance:Math.hypot(...eye.map(
 assert.equal(html.split(anchor).length,2);
 const fixture=html.replace(anchor,`${anchor}
   if(location.search.includes('test=1'))window.__mineCameraProbe=()=>{
+   const mineCamera=facilitySite?.id==='base'&&poiWalkLevel===-1&&
+    poiDungeonPointIn(facilitySite.mine?.bounds,Math.floor(target[0]),Math.floor(target[2]),poiWalkLevel);
    const walls=mineCamera?facilityMineCameraWalls(sceneMesh):[];
    const vector=p=>p.map((v,i)=>v-target[i]);
    return {mineCamera,requested:poiCameraYaw,actualPitch:poiCameraPitch,arm,eye,desired,target,n:walls.length,

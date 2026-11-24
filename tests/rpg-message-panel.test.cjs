@@ -63,7 +63,7 @@ test('announcement names the defeated monster and does not duplicate the working
  c.poiWalkActive=false;c.poiAnnounceDefeat('monsterGoblin',500);
  assert.deepEqual(toasts,['ゴブリンを倒した']);
  const attack=snippet('function poiPlayerDamageTarget(','function poiPlayerWeaponResolve(');
- assert.match(attack,/if\(!state\.hp\)\{[\s\S]*?poiAnnounceDefeat\(obj\.type,now\)/);
+ assert.match(attack,/if\(!state\.hp&&\(!stone\|\|before>0\)\)\{[\s\S]*?poiAnnounceDefeat\(obj\.type,now\)/);
 });
 test('announcement heading is outside its live log and the 2.3 height ratio is preserved',()=>{
  assert.match(html,/<div id="poiMessagePanel" hidden><div id="poiMessageHeading">アナウンス<\/div><div id="poiMessageLog" role="log" aria-labelledby="poiMessageHeading"/);
@@ -123,4 +123,3 @@ test('last choice scrolls into the independent menu instead of moving the speech
  vm.runInNewContext(snippet('function poiNpcMenuMark(','function poiNpcMenuRender('),c);
  c.poiNpcMenuMark();assert.equal(menu.scrollTop,63);
 });
-

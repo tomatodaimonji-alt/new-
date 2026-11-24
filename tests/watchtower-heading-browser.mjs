@@ -5,16 +5,16 @@ import {createServer} from 'node:http';
 
 const html=readFileSync(process.argv[2]||'world-editor.html','utf8');
 // Probe the eye selected by production just before its distance/FOV use.
-const towerBranch=':facilityWatchtowerCameraEye(target,desired);';
+const sharedArm="const eye=typeof facilitySharedWallCameraEye==='function'?facilitySharedWallCameraEye(target,desired):desired;";
 const cameraLine='const arm=eye===desired?poiCameraDistance:Math.hypot(...eye.map((v,i)=>v-target[i]));';
-assert.equal(html.split(towerBranch).length,2,'unique actual surface watchtower fallback');
+assert.equal(html.split(sharedArm).length,2,'unique actual shared wall arm');
 assert.equal(html.split(cameraLine).length,2,'unique final orbit eye consumption');
 const at=html.indexOf(cameraLine);
-assert(html.slice(at-220,at).includes(towerBranch),'the unchanged watchtower branch feeds the sampled eye');
+assert(html.slice(at-220,at).includes(sharedArm),'the shared arm directly feeds the sampled eye');
 const random=' const p=poiWildPick(rng);';
 assert.equal(html.split(random).length,2);
 const fixture=html.replace(random,' const p=null;').replace(cameraLine,cameraLine+`
- if(!mineCamera&&window.__towerOrbitSamples&&window.__towerOrbitSamples.length<1200){
+ if(poiWalkLevel===0&&window.__towerOrbitSamples&&window.__towerOrbitSamples.length<1200){
   const v=eye.map((a,i)=>a-target[i]),seen=Math.atan2(-v[0],-v[2]);
   const delta=Math.atan2(Math.sin(seen-poiCameraYaw),Math.cos(seen-poiCameraYaw));
   window.__towerOrbitSamples.push({x:target[0],z:target[2],delta,distance:Math.hypot(...v),rise:v[1],yaw:poiCameraYaw});

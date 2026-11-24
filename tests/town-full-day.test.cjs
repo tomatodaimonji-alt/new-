@@ -15,7 +15,7 @@ let ms=0;const x={world,MAP_W:site.map.width,MAP_H:site.map.height,facilitySite:
   const absoluteMinute=480+Math.floor(ms/500),minute=absoluteMinute%1440;
   return {minute,absoluteMinute,hour:Math.floor(minute/60),day:Math.floor(absoluteMinute/1440)+1};
  }};
-vm.createContext(x);vm.runInContext(cut('function poiWalkPassableDoor(','let facilityCreekIndex=')+cut('function isFloor(','// Tabletop decor')+cut('const POI_SAFE_TOWN=','const poiMiniStatic=')+cut('const POI_WILD_MAX=','function poiMonsterCanMove(')+cut('const POI_TOWN_RESIDENT_ROLES=','let cameraTopDown='),x);
+vm.createContext(x);vm.runInContext(cut('function poiWalkPassableDoor(','let facilityCreekIndex=')+cut('function isFloor(','// Tabletop decor')+cut('const POI_SAFE_TOWN=','// BEGIN LOCAL MINI CORE')+cut('const POI_WILD_MAX=','function poiMonsterCanMove(')+cut('const POI_TOWN_RESIDENT_ROLES=','let cameraTopDown='),x);
 const phases=new Map();
 for(ms=0;ms<15*60*500;ms+=95){
  x.poiTownResidentsFrame(ms);

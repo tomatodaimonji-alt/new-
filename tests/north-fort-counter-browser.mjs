@@ -61,8 +61,8 @@ fixture=inject(fixture,counterProbe,counterProbe+`
  if(observedBoss?.type==='monsterNorthMinotaur')
   (window.__qaFortCounters??=[]).push({now,openUntil:observedBossState.northOpenUntil,amount,weapon});
 `);
-fixture=inject(fixture,'   const {x:cx,y,z:cz,attack,heading}=poiMonsterPose(obj,s,now),part=mesh();',`
-   const {x:cx,y,z:cz,attack,heading}=poiMonsterPose(obj,s,now),part=mesh();
+fixture=inject(fixture,'   const {x:cx,y,z:cz,attack,heading,david}=poiMonsterPose(obj,s,now),part=mesh();',`
+   const {x:cx,y,z:cz,attack,heading,david}=poiMonsterPose(obj,s,now),part=mesh();
    if(obj.x===64&&obj.z===13&&obj.y===-1&&attack){const log=window.__qaFortDraw??=[];if(log.length<120)log.push({phase:attack.phase,exposed:!!attack.exposed,tell:attack.tell??0,now,kind:s.playerAttack?.northAttack});}`);
 // Record actual submitted VBO vertex count and active blend opacity, after
 // the real WebGL drawing call has completed. Baseline remains red by behavior.
