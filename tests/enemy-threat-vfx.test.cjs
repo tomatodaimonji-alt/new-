@@ -14,6 +14,7 @@ test('a normal gameplay render with a pending threat submits the scene and monst
   signOverlays:[],poiEnemyThreatTiles:()=>[{x:5,z:5,y:0,start:100,hit:620}],
   poiDrawEnemyThreatTiles:()=>calls.push('target-tile overlay'),
   poiDavidActive:null,poiDavidMatch:()=>null, // This isolated scene contains only the ordinary monster.
+  poiCompanionActor:null,poiOrvasAllyEffects:{cue:null,impact:null,dust:null,fissure:null,fissureMesh:null,raised:null},
   draw:what=>calls.push(what),poiMonsterRender:()=>calls.push('monster'),
  });
  for(const name of ['requestAnimationFrame','poiTownClockFrame','poiWalkFrame','poiMessageUpdate','poiOcclusionBegin',
