@@ -25,7 +25,8 @@ test('both physical slimes ignore the landing, survey, and rooms outside their l
  }
  assert(c.poiMineEarlyMayMove({type:'monsterSlime',x:41,z:71,y:0},116,62),'unrelated actors unaffected');
  const begin=cut('function poiEnemyBeginPlayer(','function poiEnemyCancelPlayer('),loop=cut('function poiMobFrame(','const POI_TOWN_RESIDENT_ROLES=');
- assert.match(begin,/!poiMineEarlyMayMove\(obj,poiWalkX,poiWalkZ\)/);
+ assert.match(begin,/tx=ally\?\.x\?\?poiWalkX,tz=ally\?\.z\?\?poiWalkZ/);
+ assert.match(begin,/!poiMineEarlyMayMove\(obj,tx,tz\)/);
  assert.match(loop,/const allowed=poiMineEarlyMayMove\(obj,poiWalkX,poiWalkZ\)/);
  assert.match(loop,/if\(!allowed\|\|patrol&&dist>6\.5\)[\s\S]{0,130}continue;/);
 });
@@ -44,3 +45,4 @@ test('mine entrance extension changes no older geometry except two exact attache
   for(const dz of [-1,1])if(W.has((x+1)+','+(z+dz)))assert(W.has((x+1)+','+z)||W.has(x+','+(z+dz)));
  }
 });
+
