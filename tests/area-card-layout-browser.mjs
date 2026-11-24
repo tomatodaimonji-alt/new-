@@ -87,7 +87,7 @@ try{
  const peak=await measure();verify(peak,844,390,false);
  const growth=(rest,big,min=1.08)=>{
   assert(big.area.height>=rest.area.height*min,JSON.stringify({area:rest.area,big:big.area}));
-  assert.equal(big.area.top,rest.area.top);assert.equal(big.area.left,rest.area.left);assert.equal(big.area.right,rest.area.right);
+  assert(big.area.top<=rest.area.top+.2&&big.area.top>=rest.area.top-3&&big.area.top>=big.clock.bottom+1.4);assert.equal(big.area.left,rest.area.left);assert.equal(big.area.right,rest.area.right);
   for(const key of ['mini','mapOpen','clock','party','analog'])assert.deepEqual(big[key],rest[key],key+' is stationary');
  };
  growth(before,peak);

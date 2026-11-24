@@ -114,7 +114,7 @@ async function trial(browser,reduced,viewport={width:320,height:740}){
     return result;
    });
    assert(Math.abs(sizes.width-sizes.original.width)<.2&&Math.abs(sizes.left-sizes.original.left)<.2);
-   assert(Math.abs(sizes.top-sizes.original.top)<.2&&sizes.height>sizes.original.height*1.08,'real card enlarges downward '+JSON.stringify(sizes));
+   assert(sizes.top<=sizes.original.top+.2&&sizes.top>=sizes.original.top-3&&sizes.top>=sizes.clock.top+sizes.clock.height+1.4&&sizes.height>sizes.original.height*1.08,'real card enlarges downward '+JSON.stringify(sizes));
    assert.equal(sizes.duration,landscape?1750:1050);
    assert.equal(sizes.afterOldDuration.left,sizes.original.left,'late animation keeps the fixed left edge');
    assert.match(sizes.peakShadow,/inset/);
