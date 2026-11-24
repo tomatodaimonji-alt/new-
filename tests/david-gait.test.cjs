@@ -48,3 +48,17 @@ test('only the right blade sweeps; the left holds one constant guard and the ove
  const high=c.poiDavidRig({kind:'double',phase:'windup',progress:1});
  assert.ok(high.hands.every(h=>h[1]>4.4));
 });
+test('moving skirt clears the high knee under the covered front lapel during a stomp',()=>{
+ const c=sandbox();vm.runInContext(cut('function poiDavidSkirt(','function poiDavidGeometry('),c);
+ const r=c.poiDavidRig({kind:'stomp',phase:'windup',elapsed:805,hitTimes:[930]});
+ const [x,y,z]=r.knees[0],faces=[];
+ c.poiDavidSkirt(r,()=>{},(a,b,c,d)=>faces.push([a,b,c],[a,c,d]),[.45,.4,.3]);
+ const intersections=faces.flatMap(([a,b,c])=>{
+  const d=(b[1]-c[1])*(a[0]-c[0])+(c[0]-b[0])*(a[1]-c[1]);
+  if(Math.abs(d)<1e-7)return [];
+  const s=((b[1]-c[1])*(x-c[0])+(c[0]-b[0])*(y-c[1]))/d;
+  const t=((c[1]-a[1])*(x-c[0])+(a[0]-c[0])*(y-c[1]))/d;
+  return Math.min(s,t,1-s-t)>=0?[s*a[2]+t*b[2]+(1-s-t)*c[2]]:[];
+ });
+ assert.ok(Math.max(...intersections)>z+.23,JSON.stringify({knee:r.knees[0],intersections}));
+});
