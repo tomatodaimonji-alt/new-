@@ -34,7 +34,6 @@ inject('function poiWildPick(rng){','function poiWildPick(rng){return null;');
 inject('poiCompanionMonsterDefeated(obj,state,now,debris);','poiCompanionMonsterDefeated(obj,state,now,debris,()=>0);');
 const hit=' const before=state.hp;\n state.hp=Math.max(0,state.hp-amount);';
 inject(hit,hit+"\n if(window.__soulFoe?.[0]===obj&&before>0&&state.hp===0)(window.__trueSoulDeath??=[]).push({source:source?.companion??null,amount});");
-const sound="function poiSoulFloorCollect(item){";
 inject("poiSoulFloorMotion.delete(item.type);poiEconomyRefresh();",
 "poiSoulFloorMotion.delete(item.type);poiEconomyRefresh();(window.__soulPickUps??=[]).push(item.type);");
 for(const [,body] of h.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(body);
@@ -93,7 +92,7 @@ try{
  const dropped=await until(s=>s.souls.some(d=>d.type==='orvasSoul')&&s.fx.some(q=>q.stage==='roll')&&s.movingMesh>0);
  const slime=dropped.souls.find(d=>d.type==='orvasSoul');assert.equal(slime.durability,317);assert.equal(dropped.slots[2],null);assert.equal(dropped.gold,12);
  assert.deepEqual(dropped.saved.soulDrops,[slime]);assert.deepEqual(dropped.pickUps,[]);
- phase='cold reload keeps floor HP and visually settles; directly crossing is not pickup';
+ phase='cold reload keeps floor HP and does not claim without entering the tile';
  await p.clock.resume();await load();const stayed=await until(s=>s.staticMesh>0);
  assert.deepEqual(stayed.souls,[slime]);assert(!stayed.slots.some(c=>c?.type==='orvasSoul'));
  if(process.env.FACILITY_SCREENSHOTS){
@@ -105,11 +104,8 @@ try{
   mkdirSync(process.env.FACILITY_SCREENSHOTS,{recursive:true});
   await p.screenshot({path:process.env.FACILITY_SCREENSHOTS+'/orvas-317-lateral-ground.png'});
  }
- const stepped=await go(slime);assert(stepped.souls.some(d=>d.type==='orvasSoul'));assert.deepEqual(stepped.pickUps,[]);
- assert.equal((await until(s=>s.button==='soul-pickup')).button,'soul-pickup');
- if(process.env.FACILITY_SCREENSHOTS){mkdirSync(process.env.FACILITY_SCREENSHOTS,{recursive:true});await p.screenshot({path:process.env.FACILITY_SCREENSHOTS+'/orvas-317-manual-soul.png'});}
- phase='real action pickup preserves exact HP and does not activate';
- await take();const picked=await until(s=>s.pickUps.length===1);
+ phase='actual discrete tile entry picks up once preserving exact HP without activation';
+ await go(slime);const picked=await until(s=>s.pickUps.length===1);
  assert.deepEqual(picked.souls,[]);assert.equal(picked.slots.find(c=>c?.type==='orvasSoul')?.durability,317);assert.equal(picked.active,null);
  phase='active ally cannot be duplicated by a native drop swipe';
  const activeIndex=picked.slots.findIndex(c=>c?.type==='orvasSoul');assert(activeIndex>=0&&activeIndex<9);

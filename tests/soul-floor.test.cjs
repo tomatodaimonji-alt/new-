@@ -2,15 +2,15 @@ const {test}=require('node:test'),a=require('node:assert/strict'),vm=require('no
 const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 function part(a0,b){const i=h.indexOf(a0),j=h.indexOf(b,i+1);a(i>=0&&j>i,a0);return h.slice(i,j)}
 function state(kit){
- const valid={slimeSoul:{hp:36},orvasSoul:{hp:1050}},saves=[],sounds=[];
- const c=vm.createContext({POI_SOUL_FLOOR_MAX:4,poiWalkX:10,poiWalkZ:11,poiWalkLevel:0,MAX_MAP:128,performance:{now:()=>700},
-  poiCompanionType:x=>Object.hasOwn(valid,x)?valid[x]:null,poiInventorySlots:k=>k.slots,poiInventoryAllowed:()=>true,
+ const valid={slimeSoul:{hp:36},orvasSoul:{hp:1050}},saves=[],sounds=[],notices=[];
+ const c=vm.createContext({POI_SOUL_FLOOR_MAX:4,poiWalkX:10,poiWalkZ:11,poiWalkLevel:0,MAX_MAP:128,performance:{now:()=>700},region:undefined,
+  poiCompanionType:x=>Object.hasOwn(valid,x)?valid[x]:null,poiInventorySlots:k=>k.slots,poiInventoryAllowed:()=>true,poiCompanionAllowed:()=>true,
   poiInventoryEdited:(k,slots)=>({...k,slots}),poiHotbarRead:()=>kit,poiSoulFloorMotion:new Map(),
   poiEconomyWrite:k=>(saves.push(k),kit=k,true),poiEconomyRefresh(){},poiSound:(...x)=>sounds.push(x),
   poiInventoryAccept:(k,type,n,source)=>({slots:[...k.slots,{type,count:n,durability:source.durability}],accepted:n}),
-  poiInventoryItemName:x=>x,toast(){}});
- vm.runInContext(part('function poiSoulFloorDecode(','function poiSoulFloorWorld(')+part('function poiSoulFloorCollect(','// END SOUL FLOOR STATE'),c);
- return {c,saves,sounds,get:()=>kit};
+  poiInventoryItemName:x=>x,poiSnowGroundMatch(p){return p.region===c.region},toast:x=>notices.push(x)});
+ vm.runInContext(part('function poiSoulFloorDecode(','function poiSoulFloorWorld(')+part('function poiSoulFloorWorld(','function poiSoulFloorAt(')+part('function poiSoulFloorReachable(','// END SOUL FLOOR STATE'),c);
+ return {c,saves,sounds,notices,get:()=>kit};
 }
 test('strict floor records keep known identity/durability, fixed realm and no duplicate types',()=>{
  const a0={x:10,z:11,y:0,type:'slimeSoul',durability:17},t=state({slots:[]});
@@ -25,10 +25,37 @@ test('exact pickup is one transaction with preserved durability and no auto-summ
  a.deepEqual(t.sounds,[['item-pickup','slimeSoul']]);
  a.equal(t.c.poiSoulFloorCollect(drop),false);
 });
-test('movement never invokes collection, and battle reuses durable real death reward',()=>{
- a.doesNotMatch(part('function poiWalkStepWithFallback','function poiNorthTrailForkSignReachable('),/poiSoulFloorCollect/);
+test('successful movement calls walkover once from both analog and discrete real entry, never from frame or spawn',()=>{
+ const enter=part('function poiWalkEnterCell','function poiNorthTrailForkSignReachable(');
+ a.match(enter,/poiSoulFloorWalkover\(poiWalkX,poiWalkZ,now\)/);
+ a.equal(h.match(/poiSoulFloorWalkover\(poiWalkX,poiWalkZ,now\)/g)?.length,1);
  a.match(h,/const soul=typeof poiSoulFloorReachable[^\n]+poiSoulFloorCollect\(soul\)/);
  a.match(h,/poiDungeonRememberDefeat\(obj,state,debris\)/);
+});
+test('walkover requires matching region/level, full tile entry and completed roll; stores one item with exact durability',()=>{
+ const snow={x:10,z:11,y:0,type:'orvasSoul',durability:317,region:'snowpass'};
+ const base={x:10,z:11,y:0,type:'slimeSoul',durability:7};
+ const t=state({slots:[],soulDrops:[snow,base]});
+ t.c.poiSoulFloorMotion.set(base.type,{end:730});
+ a.equal(t.c.poiSoulFloorWalkover(10,10,1700),false); // standing/off-centre neighboring cell
+ a.equal(t.c.poiSoulFloorWalkover(10,11,729),false);
+ t.c.poiWalkLevel=-1;
+ a.equal(t.c.poiSoulFloorWalkover(10,11,730),false);
+ t.c.poiWalkLevel=0;
+ a.equal(t.c.poiSoulFloorWalkover(10,11,730),true);
+ a.equal(t.c.poiSoulFloorWalkover(10,11,800),false);
+ a.equal(t.get().soulDrops[0],snow);
+ a.deepEqual(t.get().slots,[{type:'slimeSoul',count:1,durability:7}]);
+ t.c.region='snowpass';
+ a.equal(t.c.poiSoulFloorWalkover(10,11,800),true);
+ a.equal(t.get().slots[1].durability,317);a.equal(t.saves.length,2);
+ a.deepEqual(t.sounds,[['item-pickup','slimeSoul'],['item-pickup','orvasSoul']]);
+});
+test('walkover with full bag silently keeps grounded item for a later successful entry',()=>{
+ const drop={x:10,z:11,y:0,type:'slimeSoul',durability:7},t=state({slots:[],soulDrops:[drop]});
+ t.c.poiInventoryAccept=()=>({accepted:0,slots:[]});
+ a.equal(t.c.poiSoulFloorWalkover(10,11,800),false);
+ a.equal(t.get().soulDrops[0],drop);a.equal(t.sounds.length,0);a.equal(t.saves.length,0);a.equal(t.notices.length,0);
 });
 test('duplicate legacy hotbar order cannot replace the wounded held Orvas; floor pickup refuses identical owned token',()=>{
  const drop={x:10,z:11,y:0,type:'orvasSoul',durability:1050},full={type:'orvasSoul',count:1,durability:1050},wounded={...full,durability:317},k={slots:[full,null,wounded],soulDrops:[drop],companionSoul:{version:1,active:'orvasSoul'}};

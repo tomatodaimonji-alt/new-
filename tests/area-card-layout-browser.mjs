@@ -66,10 +66,10 @@ try{
    lanes:[...document.querySelectorAll('#poiPartyCards .poiPartyCard')].filter(x=>!x.hidden).map(rect)};
  });
  function verify(s,w,h,all=true,wrap=false,gap=7,left=5){
-  assert(Math.abs(s.mini.width-Math.min(100,Math.max(67,h*.24)))<1.2,JSON.stringify(s));
-  assert(Math.abs(s.mini.width-s.mini.height)<1.2);
+  assert(Math.abs(s.mini.height-Math.min(100,Math.max(67,h*.24)))<1.2,JSON.stringify(s));
+  assert(Math.abs(s.mini.width-s.area.width)<1.2);
   assert(Math.abs(s.area.left-s.mini.left)<.2&&Math.abs(s.mini.left-left)<.4);
-  assert(Math.abs(s.clock.left-s.mini.left)<.2&&Math.abs(s.clock.width-s.mini.width)<1.2);
+  assert(Math.abs(s.clock.left-s.mini.left)<.2&&Math.abs(s.clock.width-s.mini.height)<1.2);
   assert(s.area.bottom<s.clock.top&&s.clock.bottom<=s.analog.top+.6,'the HUD stops above the touch pad');
   assert(s.area.right+gap<=s.party.left&&s.party.right<=w-5,'two separate safe-area columns');
   assert(s.area.height>=37);
