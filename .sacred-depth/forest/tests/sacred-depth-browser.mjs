@@ -78,13 +78,16 @@ try{
   await p.keyboard.press(['ArrowUp','ArrowDown','ArrowRight','ArrowLeft'][i]);
   const n=await tick();assert.deepEqual([n.x,n.z,n.y],[q.x,q.z,0],'actual collision and west trail');
  }
+ const screenshot=async name=>{if(process.env.FACILITY_SCREENSHOTS){mkdirSync(process.env.FACILITY_SCREENSHOTS,{recursive:true});await p.screenshot({path:process.env.FACILITY_SCREENSHOTS+'/'+name+'.png'});}};
  phase='two stock town gates reveal open sky, not the far roof';
  await seed(23,49);let s=await tick(40);assert.equal(s.mapH,182);assert.equal(s.z,49);assert.equal(s.roofDraws,0);assert.equal(s.fog[2],0);
+ await screenshot('open-west-town-gate');
  const gate=async(x,z,yaw)=>{
   assert(await p.evaluate(([x,z,yaw])=>window.__editorTest.sacredQA.gate(x,z,yaw),[x,z,yaw]));
   return tick(32);
  };
  s=await gate(41,69,-.55);assert.deepEqual([s.x,s.z],[41,69]);assert.equal(s.roofDraws,0);assert.equal(s.fog[2],0);
+ await screenshot('open-south-town-gate');
  phase='walk the whole contiguous path into the grove and 54 cells beyond the old temple';
  s=await gate(23,49,0);for(let x=22;x>=12;x--)await step({x,z:49});s=last;
  const route=s.path.slice(1);let peak=0,maxTrees=0,forests=[],raw,clear;

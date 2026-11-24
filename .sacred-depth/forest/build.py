@@ -69,7 +69,7 @@ section('function poiSacredFogStrength(','function poiSacredApplyFog(','''functi
  const close=smooth(2.2,10.5,Math.hypot(x-f.reveal.x,z-f.reveal.z));
  // Clear meadow, layered distance in the woods, then let the stone and
  // candlelight take over only at the actual path's final turn.
- return .96*progression*smooth(-1.25,3.2,inside)*close*(1-smooth(123,128,z));
+ return .985*progression*smooth(-1.25,3.2,inside)*close*(1-smooth(123,128,z));
 }
 ''')
 rep('smoothstep(2.65,9.7,length(vLootXZ-uSacredFog.xy))','smoothstep(5.1,25.5,length(vLootXZ-uSacredFog.xy))')
