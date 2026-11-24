@@ -5604,6 +5604,7 @@ function poiDavidHeadPoint(p,pose){
  const a=Math.atan2(-bx,bz)-Math.atan2(-dx,dz),c=Math.cos(a),s=Math.sin(a);
  return [p[0]*c-p[2]*s,p[1],p[0]*s+p[2]*c];
 }
+const POI_DAVID_GAIT_STRIDE=1.78;
 function poiDavidRig(pose){
  const p=pose||{},phase=p.phase||'dormant',kind=p.kind,t=Math.max(0,Math.min(1,p.progress||0)),contact=p.contact||0;
  const ease=v=>{v=Math.max(0,Math.min(1,v));return v*v*(3-2*v)},q=ease(t),mix=(a,b,k)=>a.map((v,i)=>v+(b[i]-v)*k);
@@ -5657,6 +5658,26 @@ function poiDavidRig(pose){
   hands=rest.map((h,i)=>mix(h,[(i?1:-1)*1.62,2.61,.04],phase==='windup'?q:phase==='impact'?1:1-q));
   axes=[[-.53,-.62,.54],[.53,-.62,.54]];
  }
+ let leapCrouch=0;
+ if(kind==='leap'){
+  // Wind up, tuck in flight, plant both feet, then wait in the deep
+  // kneel before slowly bearing the weight back up. Visual only.
+  const load=ease(t),tuck=Math.sin(t*Math.PI)**1.2;
+  const settle=phase==='impact'?ease(t):phase==='recover'?1-ease((t-.52)/.48):0;
+  const ground=phase==='windup'?load*.71:phase==='airborne'?.71*(1-ease(t/.22)):
+   phase==='impact'?settle:phase==='recover'?settle:0;
+  const lift=phase==='airborne'?tuck:0;
+  leapCrouch=phase==='windup'?.43*load:phase==='airborne'?.43*(1-ease(t/.25))+.14*lift:.65*settle;
+  for(let i=0;i<2;i++){
+   const side=i?1:-1,foot=feet[i],knee=knees[i];
+   feet[i]=[foot[0]+side*(ground*.105+lift*.09),lift*(i?.42:.67),
+    foot[2]+ground*(i?.14:-.035)+lift*(i?-.42:.60)];
+   knees[i]=[knee[0]+side*(ground*.105+lift*.11),knee[1]-ground*.22+lift*(i?.38:.56),
+    knee[2]+ground*(i?.45:.33)+lift*(i?.14:.50)];
+   hands[i]=[rest[i][0]+side*(ground*.33+lift*.36),rest[i][1]+ground*.11+lift*.67,rest[i][2]+ground*.25-lift*.34];
+   axes[i]=[axes[i][0]+side*(ground*.49+lift*.36),axes[i][1]-ground*.08+lift*.32,axes[i][2]-ground*.28];
+  }
+ }
  if(kind==='beam'){
   const widen=phase==='windup'?q:(phase==='impact'||phase==='beam-hold'||phase==='beam-tell'||phase==='beam-sweep')?1:1-q;
   hands=rest.map((h,i)=>mix(h,[(i?1:-1)*1.50,2.77,.20],widen));
@@ -5666,7 +5687,7 @@ function poiDavidRig(pose){
  // animation cycle per grid update. Swing uses an ease with endpoint
  // slope matching the support foot, avoiding a heel velocity snap.
  if(kind==null&&(phase==='ready'||phase==='idle'||phase==='return')&&p.walkAmount>0){
-  const stride=1.78,period=2*stride,d=p.walkDistance,blend=p.walkAmount;
+  const stride=POI_DAVID_GAIT_STRIDE,period=2*stride,d=p.walkDistance,blend=p.walkAmount;
   for(let i=0;i<2;i++){
    const u=((d+i*stride)%period)/stride, swing=u<1, t=swing?u:u-1;
    const advance=swing?stride*(-.5-t+2*ease(t)):stride*(.5-t);
@@ -5682,7 +5703,7 @@ function poiDavidRig(pose){
  });
  const elbows=hands.map((h,i)=>[(i?1:-1)*(1.25+Math.max(0,Math.abs(h[0])-1.1)*.42),
   h[1]>3.55?3.99:(3.67+h[1])*.50,-.04]);
- return {feet,knees,shoulders,hands,elbows,swordTips,eyes:sights,glow};
+ return {feet,knees,shoulders,hands,elbows,swordTips,eyes:sights,glow,leapCrouch};
 }
 function poiDavidSkirt(r,T,Q,fold){
  // Sculpted diagonal split between the two unequal front lapels. The
@@ -5723,8 +5744,11 @@ function poiDavidSkirt(r,T,Q,fold){
   upper=lower;
  }
 }
+function poiDavidLeapBodyY(y,depth){
+ return depth?y-depth*Math.max(0,Math.min(1,(y-1.05)/1.27)):y;
+}
 function poiDavidGeometry(m,x,y,z,pose){
- const r=poiDavidRig(pose),P=v=>[x+v[0],y+v[1],z+v[2]];
+ const r=poiDavidRig(pose),P=v=>[x+v[0],y+poiDavidLeapBodyY(v[1],r.leapCrouch),z+v[2]];
  const stone=[.58,.552,.495],pale=[.714,.682,.611],chalk=[.797,.765,.694],shadow=[.342,.313,.258],fold=[.477,.444,.375];
  const shade=(c,v)=>c.map(n=>n*v),add=(a,b,k=1)=>a.map((v,i)=>v+b[i]*k);
  const sub=(a,b)=>add(a,b,-1),unit=v=>{const d=Math.hypot(...v)||1;return v.map(n=>n/d)};
@@ -8372,6 +8396,173 @@ function poiPlayImpactBuffer(buffer,when,volume,onSource,cap=null){
 // CC0 recorded Foley: wood impact and common enemy defeat. See docs/recorded-combat-audio.md.
 // Short mono PCM is bundled inline because the installed app serves only this HTML.
 const POI_RECORDED_FOLEY={
+ davidFootPlant:
+  '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' +
+  'qw3EB0wB3fki8nPrF+fB5fbmBumN6oTrWOx57Lzq/eab4hbfyNz62uzYtNYW1abUEdUO1brT5dHp0N7Q1NBv0DPQWtBC0DPP7cxzyQzFZMAvvJK4SbVEstiv' +
+  'Va6wrV6t16xErF+sn63mr+eyeLaIup2+vcEsw0XDKMOLw1vEKcXcxanGn8e4yArKrsulzcnPedGv0QbQPM1NynbHlcThwfy/e790wLPCIsa0yvbPE9Vr2cPc' +
+  '99783xbg7N9T4ODhhuST5xjqp+uj7KbtwO6y727wHvHu8eXyVPQC91T7yACEBgQM0BB7FCsXgxkRHNceTSHJIrUi0CCPHfsZHBeFFVYVXxZGGKIa+xzEHmkf' +
+  'kB5fHEEZUxVjENIKwAXsAQ3/ufw6+zr7Hv3LAKMFpQrfDsoROhNKE3kSnRF2ERcS7hJ3E4YTLxMLEyIU5RZ5GtAdtCBZI8YlCShVKp4shS63LyIwwy9ULpcr' +
+  '3CfoI2MgmB2VGy4aKxl3GAwY0xe+F9MXDhhyGAEZhBmvGUIZNBj7FkkWgBaxF/4ZhR0iIp4n2C19NNk6RECERLlHKkoGTGBNOU6ZTn9O+E1GTchMz0yTTe1O' +
+  'UFA3UY5RgVEXUTxQJU9HTuhNxU1dTYxMxUt7S2tL4EpqSSFHO0S+QKI8DjhxM2svdizTKm0qtCoMKzsrYSuPK4MrzCpIKT0n3ST9IY4e7hrNF9AVOxW3FasW' +
+  '1BdMGSIb4xyeHbscoRovGIsVEhJoDSgIfgM3AET+Lf2l/Jr82vwR/Rf9Nf3o/Qr/n/+k/sH7Rvfo8Vrs8+al4XXcuNfK08nQts6JzSvNec1dzqDPr9Dl0BLQ' +
+  'gM5LzDXJR8UIwRa9BbpCuOy3xLhxupS8ur5mwCfB3sDzv+6++r0BvfW70rrFuR+52riSuEG4i7gXuti8IcBOw+/Fvsf0yC/Kt8tGzajOHND50U7U7NaJ2a/b' +
+  'y9ya3F/bbtlu1r3Rocs+xX+/yrp9t/W19rWhtkO3Hrj6uUG9uMG+xtbL7ND11aTasd4S4uTkXufd6a3s9u++8+z3Sfy+AHIFkQrtD98UxhiuG3Ae8yFMJsYq' +
+  'hy4BMfAxdjE3MOou4i0WLYQscyxWLVEv1jEMNIk1aTbFNqs2djZrNl826zX4NMszezLcMBkv5y3ILWUuBy9mL+svQzGiM5Y2fTkpPNw+ukGGRMVGGkiFSFpI' +
+  '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' +
+  'uNz83V3fmeCe4ZLiiOOW5C7mvej66z/vDfLu8370yfNc8rbwGu+57azs6etz62HrnOvX6xTsuuzc7QDvuu8Z8HPwz/DY8IDwP/CF8FnxiPLl81P1yPYK+Mv4' +
+  'Nvn2+Xb7RP2j/lL/l//J//H/yv8T/xT+l/0+/ub/CgJnBOUGIwmLCsgKKAqJCcEJGQs4DXsPMxHuEbYRxBAdD7UMtQluBiMD8P/D/KX51/Zi9ObxBu+66yTo' +
+  'ceQX4aLeMt2r3GDd7t955FPqc/AM9sX6uP4rAlMFcQjmC9oP7ROKF10aVBx8HfkdyR2XHBwahhY6Eo8NAQljBY0DwQObBa8I8wxSEjoY8R0KI1cnsyoULaQu' +
+  'qi8+MDIwUy+lLWIryCgFJlkjHCFvHxke6xwPHLwbEhxLHY0fgSJ6Jfsn5CkhK6gr2CtaLHgt/i7EMLQyhzTINS42zzXtNLczUDLyMOQvWi8/L0MvLy8CL58u' +
+  '5i0pLfwskC2ILn4vejCfMYkyeDICMVAuzCrhJroiMB5OGcIUgxEDENwPMxBZEEQQQxBrEIsQexAvELEPDg84DtIMgQp/B2UEkAES//P8Zvu5+gb7Afwo/Tv+' +
+  'eP9bAQsENwdrCk0Nng8VETARZg+2C/cGigJw/5P9D/wc+sH3kPXK8xjyUPAD78HuEe/R7oHthOs/6efmtOST4mvgd97r3K3bftpJ2R3YIdel1vrWE9iQ2UDb' +
+  'Tt3Y34niyORG5iXnnOe754Dn4ebm5eLkY+Sy5J7l5OZ06Drqx+uG7ArsMeoz54jjqN/j23fYkdU200rRqc9LzlbN7Mwfze3NJs+C0M/R7tLP01vUf9Rp1I7U' +
+  'PNUV1lLWZ9Vt0xbR7c7ezKrKjsgix8PGYMfDyLrKLc1G0BvUcNgN3fXhEOfj6+rv9fIH9Qr2xPUm9JPxzO6G7Cfr4uqx60Ht3+6h7+/uCO3d6kLpaOg+6A/p' +
+  'Peug7nDyCPZk+bL8w/9GAjoEuAWKBkkGywQ6AvX+hvto+M31zfOH8hbyePJc83D07/Vq+Bj8rACiBYYKEw8eE3oWQRkEHD4frCKcJbAnDSkOKggrNSyXLRAv' +
+  'gDDBMbYyYjPQMwo0NzRzNIE0CjQPM9wxojB4L4ou+i2/LcEt/S2QLpYvEDHfMrQ0ODYyN5Y3gDcqN8Q2NzYpNX0zpTFDMIYvGC+fLgAuZi0tLYItPC4jLyIw' +
+  'IzH3MWgyYjLMMXYwXy7CK/MoTSYnJMcieCKQIwUmHynRK2ot2S0zLUMrsCdyIgAcCBXxDc0Gvv9C+Sn09vA37y7uru0O7onv8/HM9F73FvnF+Zf5vvg59/T0' +
+  'LfKM76PtYOwu66bprec15X3iF+Bc3iPdR9z521jcDt2F3ZPdr90g3n7eNt4m3YXbhNlH1/DUhdLwzx/N8MlUxpfCPr+3vBu7CLrduDy3NbUXsxuxWq/frcGs' +
+  'GqwGrJKsia17riKvmq8fsMKwZLH0sY+yX7NmtEW1VbVTtMiyjbEKsQuxR7HosW6z/bUguUq8Rb9LwqDFI8lRzLrOUdBV0e3RC9Kg0bzQr8/xzqfOhc5bzm3O' +
+  '987cz+TQ39HE0uXT8NUf2djcNODC4svkD+cz6jfumPLs9gn7lf79AAUC/gF8ARoBWwFlAisEqwbfCYYNehHyFREbnyAaJtgqSS5AMP8w+jCrMIgw/TA4MiQ0' +
+  'bjaHOMk5vzloOFM2UjQAM3gymjJJM2409zXGN5g5LjukPDY+vj+/QNlAAkB3Pq88CjuqOa44Sjh3OMM4zjijOHc4WjhCODQ4VTj4OFg6UjxdPuo/uEDwQB1B' +
+  'vUHlQlZEvkWwRrNGp0XoQ/BB7j/GPWM77jiRNjM0uDF2LxQu9C3QLuUvYTDBLwsutCtRKTknWSVRI+IgMh5mG0QYgxRQEEEM5AhPBhEEuwFo/4L9O/xz++v6' +
+  'lvqg+kP7nPyZ/gQBngMoBlUIAApRC28MGw0CDTIMygqbCFoFEwE6/HD3XPOH8DDvGO+v74LwWvEh8uPyyPPq9CL2Efdi9+r2uvUw9MHymPGx8Bfw6u8r8KTw' +
+  'FPFS8UnxBPHF8AXxJfIZ9EX20fci+BL3+vSM8onwcu9J77fviPD58Vf0q/fp+xoBIQedDecTPBkjHakfQCFhIkcjxCOII6IigyF/IIIfch6HHRMdGB0cHWwc' +
+  'xxqSGEEWyxPyEMsNvgokCOkFmAOqAN38Wvic80Hv4+v56ZTpZero63/tiu6I7lvtdeud6Vrom+cM56rmwOZq51roJemg6dnp3umB6YXoAed25VnkqeMa43ni' +
+  'ruFg4CDe39oa14TTndB5zujMxMsQy8DKhsoByhbJEshbxzzH38dSyXTLD84Q0WjU19fJ2r/cy91h3rLeoN4q3pfdJd3n3OncRN393RHfkuCk4kXlOOgu6wru' +
+  '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' +
+  '8xnsF88VmRMkEVEO8Qr3BuECif9Y/Sr82vtq/Ij9bP5//uL9Df1Z/On7nPs7+6n63/nS+IH37/UF9Jzxqe5S6/znGOXl4mzhruCV4N/gNeFy4a/hAeI34vPh' +
+  '6OAQ39Tcxtol2QbYtdd92DjaeNzm3ivh0uKJ43Hj9uJ14gziveGP4Y/hm+FW4YLgXN9r3unduN3I3Rneqt6I39HgmeLk5IfnBerM65XsjOwH7DLr+uk66Obl' +
+  'G+MM4PTcE9rE14PWrNYm2Fzar9zp3h7hTuN35a3n9+lM7KDu3fDl8sD0gvYo+NL5y/sy/ucAygPsBmEKIA7+EaEVthgzGzMdph56H+YfPyCDIHMg6h8qH9Me' +
+  'VB+uIKci5iTsJjIocijPJ64mcyUkJFEinR9YHD4Z3RZEFSgUTRPQEgsTKxTwFe0X7Bn7GxIe7B9EISUiyiJ5I6IkpCZIKbYrKC14LeostCvxKc0nmiWdI9gh' +
+  'DSASHj0cOhtwG6kcbh50IJoivSSIJn4nTCf3JeMjvCH/H7Yepx2qHMobJBu5GpAawBpSGyMc+RzIHb4e8h8ZIcEh1yGvIakh0iHTIWEhpCAHILcfkB+JH+gf' +
+  '+SC3Iq4kISaCJuAltCR1Iz4i4yBSH5Udjhv5GMsVNBJoDrkKiAcTBWYDSgJaATEAnv68/M368fgb9y31I/Mg8Rnvteyl6QbmDeKb3YLY9dKHzcDIz8SowSu/' +
+  'J72Su6C6groeuxm8H70TviG/l8CTwsXEtMYdyPzIRMngyMXHBMbnw+vBhcDuvybADMFpwvzDhMXQxtTHxMjgyTbLhMxhzV7NVMyKynPIS8YOxMXBv790vlK+' +
+  'cL9YwTTDXMS2xIfEKcTlwwDEtMQAxobHvch0ydnJR8oiy8nMh89m0ynYa93F4uXnq+wu8XP1VPnF/Pf/AAO9BQ0I8QlgCywMNQyBCygKgggoB3wGbQbuBioI' +
+  'JQpvDGgOqw8yEC4Q8w/+D4cQRhHOEeQRYREgEDQO/QsLCvMI9AihCTUKTQruCTwJfQjpB0oHKQZOBNcB9f78+4X5HPjw9934ffpT/P/9Y/+LAJcBtQIHBIoF' +
+  'DQcvCIEI6AfWBgcGHgZMB0kJrAsgDk8Q2RGMEoISBhJnEckQMBCyD4EPsQ8HEDEQFBDBD0APgA6cDf0MEA3wDVIPwhD2EdsSZRNxE/ESBRLLEEgPow1jDBQM' +
+  'zAwuDsgPPxFeEkwTehRLFt8YGxzKH5Uj5yYqKTIqOiqgKc4oKij3J0YoDSkaKiYrHCwXLTQueS/KMN8xTTKvMe0vXC2GKtAniCUCJC8jdiJbIRYgJx+pHnAe' +
+  'bx6mHsUeUR4qHZgbLhqxGbwaZh1IIcglUipOLisxszIwMxAzkjLNMfMwUTD9L58vui4hLQUryyjiJmEl6yMRIrgf8RzQGXAW6xJAD20LkwfRAxgAT/yU+D31' +
+  'd/Iv8FfuDu0r7BbrYukW53zkEeJh4KzfyN9v4GDhROLR4gXjFeM946TjQ+TW5Bnl9eRl5GzjMeLn4H7fwt2728TZK9ju1vTVQ9Xg1LzUttSp1JDUkdTB1N3U' +
+  'f9SP02LSatHt0OjQJNFl0ZrR3dFP0s/S3NIP0rjQms8xz13PrM/Iz6XPWc/hzk3O9c0szg/PnNC80kXV9teR2gDdWt/R4ZHkdecc6lLsJu6X74fwAvER8bTw' +
+  'HfDO70zwxPH88632rvnR/Nf/fgKNBAIGMwdzCLQJrwpOC8gLawxBDSsOEw/rD6QQPRHGETMSXhJKEkwSvBLdE9oVjxiFG1Me0CDgImgkhyWjJhco1ymQKw0t' +
+  'aC7JLzAxgjLHM0Q1MDdhOVA7eDy5PFM8jzuZOo85kDivN+02KTYrNdszOjJAMNctASvnJ7AkfCGBHgUcGxqGGOgWCxX1EtAQ6g6ODbUMGwyLC/4Kggo+CmEK' +
+  '7wqvC1wMxwzKDEwMWQsOCpEIIAfpBbYEIAP9AIv+Jvzq+dP3A/a19OfzRfNx8kDxwu8n7rnsxett65zrR+xp7cLu9e/O8DPx5PCz78PtWetz6Njkb+CI28HW' +
+  'uNLRzzzOBM7kzj7QhNGH0nTTvdTi1gza1d2q4SrlCOgL6lHrXuzA7Z3vnvEs89vzlPOM8lHxvvB+8azz8va8+nL+wwGrBE8HwQnVCzoNzw3EDV4NqgyHC98J' +
+  '4gfzBXMElQNVA4QD0gPjA28DSwJiAM/98Pob+B71Z/G57IHnf+JJ3kLbmNkm2ZLZm9oj3CTeu+Aa5B3oLOyS7/XxS/Ob8/LyivHP7yPuwuzX62TrI+vR6nnq' +
+  'aerT6onrNey57ELtEe4+76rwP/IT9Cf2Hfho+cL5XfnC+Hn4wPiN+cf6YPww/t7/AAFGAbIAn/+Y/hv+gP76/4gCxwUcCQkMVg4fENYR7xNlFt8YGhsPHdAe' +
+  'byDqITwjcSS0JTYn+ijKKoMsRS5HMJYy/jQuN+s4KjoYO/c7+jwaPiE/yz/fPzc/4D0ePCU69DeXNU4zbDEGMM8uTi01K3EoDiVRIcgd7BrEGAgXiBU/FAET' +
+  'cRFaD+MMZAo1CIgGcgX6BAkFjwWHBrkH1wjNCcEK1gviDKYNLw7IDpcPdBAxEdoRlBI/E3kT7BKMEZYPag1vC+sJAAm9CBMJswkDCm4JygdoBcUCNQDf/eD7' +
+  'Tvoc+Rr4Afej9Tb0HPN18gPydfG58O/vKu9T7k3tIOzy6u3pHul46Ano/Odh6BTp+ekj66jsiu7F8D3zqfWk9wX52PkC+ij5LfeH9ODxqe8Y7j/t9+z47CXt' +
+  'ge3y7TnuM+797bLtGO3R69/po+dw5VHjOuEh3/zc49oV2bXXpdaw1d/UatRc1G/UTNTl023TB9Ob0gjSdtFh0TrSItTx1lna/N1p4UrkjOY+6GnpLeqn6szq' +
+  'Zupf6dHnCOZ/5JPjSuNl44jjc+Mh46HiA+J44UjhceGV4UfhieDZ38bfoeBc4qPkAecD6Vfqsur96ZHo7uZi5QvkA+N44nji7eLN40TlrudN6/nvIfUa+mz+' +
+  'zgEvBMMFwQZNB7MHagijCR4LeAyHDWMORA9DECMRfxEfEfoPHg7FC14JOQdqBe4DxQLVAfAADwBR/67++P0w/aj8xPyl/Qr/jADeAfAC4AOyBBkF1AQABO0C' +
+  'vgFqAP3+pf2A/JD72fpQ+ur5uPnc+WT6WPu7/GX+JQDuAc8DzgXcB+MJ1AuBDaEO8w5UDrkMQApNB28EAgIOAJT+rv1E/d38+Pto+mL4YfbQ9NPzSPMG8/Xy' +
+  '6vKW8trxCPG+8FXxrfJn9CP2kfeL+CX5kPnV+dP5cvmg+Ff31fWj9DD0o/QQ9mz4dPvZ/loCpAVXCDQKMQt2C08LBAutCksK7wmdCTkJugh2CPkIlwo7DXAQ' +
+  'mBM8Fi8YSRlQGTUYQxYBFP4RjRCbD+AOHQ43DTwMXQvzCoELRA33D+QSRBWmFhgX/Ra5FpMWhhZJFqsV7RSEFLQUjxUeFzIZWRsgHVQeFB+XH/AfASDRH7kf' +
+  'FiDuIOghnyLpIswiVyKKIWggHh/8HUsdFR0uHWYdxx2EHsEfXiHtIu8jHySNI1cikiB3Hm0c0hrFGSEZqhhGGAYY7RfjF8gXlBdLF+QWThaXFewUeRRDFD8U' +
+  'URRRFCcU6hPeE1sUkhVdF1UZDRs9HNcc+Ry8HAYchhrvF1oUHBCLCwwHIgMjAAD+c/w3+wb6rPgb90D1+vJd8L7tc+ug6THo7+aw5WDk6uJR4dbft97e3Qzd' +
+  'RtzV2/jbs9zQ3f7e49884ALgbd+93h/et92k3fXdtN7U3yXhhuIO5NblpecK6bnpp+np6KHn7+X54xDimODJ35bf7t/M4B7ireMS5ePlAuam5TjlA+UD5QLl' +
+  '5OTB5MTkBuWa5Yzm2ed36Vvrd+3B7zTyr/Tz9s74Rvqf+y79Fv8dAeICLQTsBAoFcgRPAwsC9wApALn/1f+tAGoCQQUuCdINexJpFiMZdxp+GqEZXRgGF8IV' +
+  'iBQ0E6QR6g86DsoMxgs+CwQLxApWCuQJoQmHCXsJjgnmCXIKDgu3C34Meg3UDqEQmxJaFMkVJxeYGO0Z1hpGG5QbABxxHM0cFB0sHe0cSRw5G8kZTxgnF3AW' +
+  'MBZ+FmQXwxh8Gowc+h6mITkkQiZ0J9InnCcTJ2cmuyUDJQckmSKkIDEebxutGBQWqhOYEQYQ5A7tDeYMnQvzCfsHEAauBCQEaAQzBT0GYAePCKEJVgqJCjUK' +
+  'aglLCA8HBgaDBZEF4gUYBvQFRAX7A1wCxgB2/3v+2v2V/Zf9kv0F/YT7BfnU9WHyHO887Lnpcuc45cni4N943NbYd9XW0izRbdBv0A/RP9Le06fVQ9dr2OzY' +
+  'xNhB2M7XrNf91+zYidqQ3JTeTuCa4WXiqeJ04tfh1eBv37rd99t52n/ZD9n02PbY+Njw2OnY6Njg2M/Y1tge2b7ZxNo+3CjeaeC64r/kH+ae5kXmkOVG5e/l' +
+  'mOcE6trsw+9a8j70RvWZ9Yb1PvWv9K7zS/K88D/vCO4z7dHs+Oyw7cju7e/x8OXx4vLP85X0bvWw9oj48fql/RcAvgF2An8CRwJFAr0CjANQBMUE3wS5BJkE' +
+  '0ASPBbgG1wd6CJgIoAgICegJFAtbDJUNlw45D10P/g47Dj0NBwxlCjsI+AVhBPsDvwRVBkoIFQpNC/8LlQx6DeMO0hAZE2YVaxcVGYca0xvdHIcd0x34HU4e' +
+  'Px8BIV8j3iUCKHQpECoIKt4p9ClbKtwqKysUK40qpil1KDYnPSaOJdckpSOlIckePhtIFygTLA+eC6AILgY/BN8CBwJ9Af8AegAYABMAgwBaAWsCiwObBJMF' +
+  'fQZXB/0HVwhmCEUIPgibCGMJXgpdC00MDg1rDTwNjgycC5oKlAmFCIgH1AaSBtkGvQciCaQKzgtFDKMLkwlHBmECjf5N+/r4mffT9jj2gvWi9KbzsPL38aDx' +
+  'i/FY8b7w0e/07oru0+7g75jx2/OK9mv5GPwW/j7/+v/zAJICwQQFB7gIagkpCWQIsAeaB24IJApqDK8OWhAGEZcQIw/oDGQKLAiXBpIFsgSGA9wBzP+l/cv7' +
+  'pPpr+gP7DvwR/Y/9Lv3u+0P6wfjQ9533//ec+Cj5jPnS+QL6JfpT+qr6I/tx+yn7D/o8+CX2W/RE8wfzk/Or9Aj2bvez+Mn5pvo0+4X70vsf/AL8EPsm+WH2' +
+  'HPPw74vtZeyc7PXt3u+P8WXyGfK88Inu5+tm6Wnn7uWs5Frj7+Gj4Mvfnt8Y4B3hm+J05GnmLuiT6W7qe+pt6ULnYuR14Ujfr97q3yLi8OOX5EvkQOND4Wve' +
+  'l9vX2ZDZuNpE3d3grOTS5+zpButt63PrCOu/6XPnd+Q34RTeVdv02MnWG9WP1DbVKtaI1mjWjtaf19PZAt3D4N/kaOlt7pTzMfjR+4v+tgB5Au0DNAVQBoIH' +
+  'gAm9DNAQtRSnF6cZRRvhHGIeph/pIJ8iEyUqKG8rQC4EMJEwhjDRMI0x3TEIMVcvpi2ZLNssJS81M9o3BjxAP1dBhEJrQ29EY0XpRb5FrESQQlA/wjrgNA8u' +
+  'BidhIGQaHRWuEFwNcAsfC0sMbA7DEKMSpxO+EwATchEdD1AMkQlKB5UFMQSUAl0AkP1l+hf34PMB8b/uVu3v7L/tx++s8hb28vke/jUC7gVBCRMMIw5XD94P' +
+  '4Q9IDw0OZQx1CkMI4AVtAwgB4/4b/Xf7mvlT94r0LPF97QPqD+ed5JTi++Dq34Hf6t9I4ZTjsOaN6vruZPMs9wb67vsD/X393P3L/pAA5AJJBVQHvQhyCb0J' +
+  'DQq5CtoLQw2SDkEP0Q4jDZMKuQcuBWoDjgI3ArwBpwDU/lr8gfmY9tXzbPGE7wnutOxf6zvqx+mC6pPsv++E80X3gvoP/R3/7wClAlQEFAboB60JJQsVDGcM' +
+  'RwwQDCYMxQy8DXAOQA7ADNIJsgUPAcv8jPmF93r2+PWc9T718fT39I31yPaI+Ib6ZPzE/Wf+WP7x/an94v3w/vIAnwNpBrUI+Qn5CfoIfQfaBSgEbAKeAKb+' +
+  'b/z8+Wv37fS48gvxP/Cx8Iryh/US+ZL8rv9TAo8EWgaWBzoIQQiXB00GxQSJA/ECEQPEA8EEvwWIBg8HcwfUBzkIhAh9CAcIFAeXBZUDRwEE/x793/t1+8X7' +
+  'afzo/Ov8Z/yq+y37VftP/BD+aQAhA/cFnQjUCoYM0g3rDtEPQRAVEIUP9Q6sDq0O3Q4xD64PNRB/EE0QgQ8qDnIMhQqFCIMGhQSVAtQAXP8i/hf9OPyE++r6' +
+  'UPqq+Rv50vjm+F/5Lfoi++77JvyG+yX6Ufhb9pT0PPNf8vbxBvJ48gTzYfNz81DzKPMp83bzJvRE9bP2IfhA+QX6nvo5+977bPyd/D78b/uW+g/6GPrZ+kj8' +
+  'Lf47AB4ChwNOBI0EjQR+BFsEDQSWA/oCIQLtAE7/Sf3u+mn4CPb18w3yG/Ap7nTsJOsr6nTpAun46Hzpjerd6xvtSe6u73nxivOi9ZX3WfkE+578Df4k/8H/' +
+  '7v/q/+7/7f+2/1T/Bv/v/v3+Cv/p/mT+Yf33+1362fii9+b2wPYf98P3avji+Av53Ph0+AT4qfdS9972Vfbq9d71V/Y49zP4BfmS+dH5xfmK+UL5Cfn8+EX5' +
+  'Efpi+/D8aP6n/6EAOAE4AYIAJ/9Q/Sb7xPg39p3zNfE477rtyux+7NTsqO3h7mLw3PHa8hjzqPLq8TvxwvBz8E3wbPD08PDxSPPw9Aj3nPlr/Af/BQEnAngC' +
+  'PQKkAbEAfv9T/nT9Df0+/Q7+T/+dAH8BswFWAdIAhQCMAOAAeAFBAhkD7AO5BJYFnwbEB6wIAwncCK4I+AgCCrcLug2UD/EQwBE5ErASYhNCFPkUBRUJFAsS' +
+  'Vw87DNoITgXQAa7+Bfy/+bv39fWV9N/zBPT79JD2jvjU+kn9zv9KArAEAwdVCZgLkw0wD5sQ8REAE30TXxP3EqISkRLEEiITehOpE9kTbhScFT4X+RhtGkob' +
+  'aRvRGp4Z9BcxFtMUJRQQFEkUjRTCFOQU6xTFFHQUHBTeE60TXxPXEg8SCxHOD28OGg38CyULdQrCCQEJSwjBB3QHZAd5B44HhwdXBwMHngZFBgoG3AWDBdAE' +
+  'tgNFAoMAgf5x/JD6Dfnp9/T27fW99Ifzi/L+8e7xL/J68qjyvPLQ8vzyRfOR89DzHvSf9Ej16/VL9j/2xvX39Orzw/K18erwZvAQ8Mvvhu9V72/vBvAd8Yvy' +
+  'G/Sw9UX34Ph++hX8lP3e/tX/dwDkAEkB0wGPAl0DFwS2BE8F7AWBBvcGQQdXBywHtAbwBfsE/AMbA3QCFQLqAccBbQHCAOb/JP/E/vr+yP/8AEgCVwPrA+wD' +
+  'cgOaAnkBMQDn/qv9bPwH+3L5wvcd9q70ofMQ8/vyW/Mg9Cr1TPZq94n4wfkg+6r8ZP5CABsCpgOcBNwEgQTRAxkDiwI4AgsC2AF0AdUAJQCi/3n/qv/+/x4A' +
+  '0f8l/1b+k/3z/IX8TvxF/Fz8k/zy/HL9Bf6i/j//zP89AIYAmABmAO//TP+x/lL+Rv5+/tf+J/8//xD/rv47/sT9R/3D/Dj8s/tL+w778PrR+p36VvoL+s35' +
+  'u/n4+Yv6Uvsi/Nn8bv3k/UX+n/4A/3L/8v9xANEA8wDYAKUAdQBRACsA5v9x/97+UP7d/YP9Qv0e/Rj9K/1N/XX9nv3G/eX97f3S/Zf9T/0i/TH9g/0E/qb+' +
+  'Yf8sAAEB4AHAAo0DOgTABBsFTgViBVYFIQXCBEMEtgM/A/4C9QL8AuQCmAIgApcBHgHFAIgAawB6ALAA7QAOAf8AxwB2AB4A0P+a/4j/nf/a/zAAigDZAB8B' +
+  'ZQGyAf8BOAJMAjMC6gF7Af8AmQBjAGUAkgDTAAwBLAE2ATIBJQEWARUBMgFuAbsBEQJyAugCbwP1A2MErgTbBPIE8gTYBKwEdgQ6BAEE0wO5A7oD0QPsA/cD' +
+  '8wPsA+YD2wPEA5sDWAP4AoYCEwKqAUsB9ACkAFoACwCy/1j/FP/8/hz/d/8JAL8AfwEnAp8C3ALmAtECvQK/AtcC+AIKA+8ClwINAmoB1QBpAC4AGgAgADkA' +
+  'YQCRAMUA8wANARMBFAEhATkBVQFsAXkBegFvAVYBNAEUAf4A8wDsANsAuQCKAFIAEQDE/3f/Qv8z/0j/af+G/5v/rv/I/+7/IABdAKEA7AA+AZYB8AFBAoIC' +
+  'sQLRAuYC9gIHAyADRANwA5gDrwOtA5ADWQMMA7ICUQLwAZABMQHXAI4AVwAtAAgA5v/I/7D/n/+U/47/kf+g/7b/z//s/xEAPABoAJQAvgDjAAMBIQFEAWgB' +
+  'hQGRAYYBYgEvAfsAzACiAHgAUQAwABgACAACAAsAJABLAHkApgDMAOYA8QDtANoAvQCXAGsAPAAMANz/qv9v/yb/1f6C/jT+7/21/Yz9dv12/Yf9of26/cz9' +
+  '1P3T/cr9u/2s/aH9n/2f/Zv9jv18/Wn9Wf1L/T79M/0q/SD9Fv0N/Qf9Bv0I/RD9HP0s/UD9Vf1w/Y/9s/3U/e79+f33/er92v3K/b39s/2s/aP9mv2Q/Yb9' +
+  'fv15/Xv9hf2W/az9xf3g/fv9E/4l/i/+Nf44/j7+Sf5b/nL+kP61/uD+Cv8u/0n/XP9r/3v/jv+l/8H/3//7/xEAIAAoAC0AMQA2ADoAPwBDAEcASABIAEkA' +
+  'SgBMAE4ATwBRAFIAVABZAGEAawB1AH4AhgCMAJAAkwCVAJgAmwCfAKIApgCqAK8AtAC5AL4AwwDIAM0A0QDTANMAzwDJAMIAugCzAK0AqACkAJ4AlwCOAIUA' +
+  'fAB1AG8AagBjAFwAVABMAEMAOgAxACgAIAAYABEACgADAP3/+P/2//T/8f/u/+v/5//j/+H/4P/f/97/3f/b/9n/2P/X/9j/2v/d/+H/5P/o/+v/7v/x//P/' +
+  '9f/3//j/+v/6//v/+v/6//n/+f/5//n/+v/7//v/+//7//v/+//7//v/+v/6//n/+f/6//r/+v/7//v//P/8//3//f/9//3//f/9//3//f/+//7//v/+////' +
+  '/////////////wAAAAAAAAAAAAAAAAAAAAAAAAAA',
  wandFlameLaunch:
   'AAABAAoAEQAYAEAAXwA5ADcAugAqAdkASgB2AKYAXAC3/yT/owCrAnUBF//m/pb+jP6U/yX9Pfmf+ZT8ePrr9Xz4bfkS8yr2K/9w+0L2mfx9ACf33fP4/XoA' +
   'FADjC34O7APIA2gLewuLBbgBufjL7HnuQfcG/3oC/AG5C7EVchEFAwf9WBLGJ6MlKhmUGGQgZBQJ+urtLedb5t4ADRLX/N71yhWYLPEbQQt9F4kWAhEmDy/v' +
@@ -15872,6 +16063,8 @@ function poiMonsterAt(x,z,reserveSlide=false,except=null){
    if(poiMonsterActorOccupies(state.actorFree,performance.now(),x,z,reserveSlide))return [obj,state];
    continue;
   }
+  const landing=reserveSlide&&obj.type==='monsterStoneDavid'&&state.david?.attack;
+  if(landing?.kind==='leap'&&!landing.cursor&&landing.leap.x===x&&landing.leap.z===z)return [obj,state];
   const destination=state.x===x&&state.z===z;
   if(obj.type==='monsterMineGuard'&&state.guardSlideUntil){
    const source=state.fromX===x&&state.fromZ===z;
@@ -16345,13 +16538,110 @@ function poiDavidArea(q,p){
  if(q.kind==='beam')return f>=.28-e&&f<=14+e&&Math.abs(s)<=.56+e;
  return false;
 }
+const POI_DAVID_LEAP_LOAD=450,POI_DAVID_LEAP_AIR=600,POI_DAVID_LEAP_REST=1050,
+ POI_DAVID_LEAP_COOL=6800,POI_DAVID_LEAP_RADIUS=8,POI_DAVID_LEAP_DAMAGE=43;
+const poiDavidLeapClamp=t=>Math.max(0,Math.min(1,t));
+function poiDavidLeapPoint(q,now){
+ const l=q.leap,t=poiDavidLeapClamp((now-l.launch)/POI_DAVID_LEAP_AIR);
+ return {x:l.x0+(l.x-l.x0)*t,z:l.z0+(l.z-l.z0)*t,h:2.25*4*t*(1-t),t};
+}
+function poiDavidLeapRoute(s,b,x,z){
+ const x0=s.x,z0=s.z,k=(a,c)=>a+','+c,goal=k(x,z),queue=[{x:x0,z:z0,prev:null}],seen=new Set([k(x0,z0)]);
+ const guide=p=>Math.abs(p.x-x)+Math.abs(p.z-z);
+ for(let i=0;i<queue.length&&i<96;i++){
+  const p=queue[i];
+  if(k(p.x,p.z)===goal){
+   const path=[];for(let q=p;q.prev;q=q.prev)path.push({x:q.x,z:q.z});return path.reverse();
+  }
+  const steps=[[0,-1],[1,0],[0,1],[-1,0]].map(([dx,dz])=>({x:p.x+dx,z:p.z+dz}));
+  steps.sort((a,c)=>guide(a)-guide(c));
+  for(const r of steps){
+   const key=k(r.x,r.z);
+   if(seen.has(key)||!poiDavidIn(b,{...r,y:b.y})||
+      r.x<Math.min(x,x0)-1||r.x>Math.max(x,x0)+1||r.z<Math.min(z,z0)-1||r.z>Math.max(z,z0)+1)continue;
+   if(!poiMonsterCanMove(r.x,r.z,s,p.x,p.z))continue;
+   seen.add(key);queue.push({...r,prev:p});
+  }
+ }
+ return null;
+}
+function poiDavidLeapBegin(o,s,b,p,now,distance){
+ const d=s.david;
+ if(distance<7||distance>12.5||now<(d.leapReady||0)||now-(s.moveStarted??-1e9)<(s.guardMoveMs||380)||
+    !poiDavidLine({x:s.x,z:s.z},p,b))return false;
+ const dx=(p.x-s.x)/distance,dz=(p.z-s.z)/distance;
+ for(const short of [1.25,2,2.75]){
+  const x=Math.floor(p.x-dx*short+.5),z=Math.floor(p.z-dz*short+.5);
+  if(!poiDavidIn(b,{x,z,y:b.y})||!poiDavidLine({x:s.x,z:s.z},{x,z,y:b.y},b))continue;
+  const route=poiDavidLeapRoute(s,b,x,z);
+  if(!route?.length)continue;
+  const launch=now+POI_DAVID_LEAP_LOAD,land=launch+POI_DAVID_LEAP_AIR;
+  d.dx=dx;d.dz=dz;
+  d.attack={kind:'leap',start:now,hits:[land],sx:x,sz:z,y:b.y,dx,dz,cursor:0,lastFrameAt:now,lastContactAt:null,
+   landed:0,executed:0,until:land+POI_DAVID_LEAP_REST,leap:{x,z,x0:s.x,z0:s.z,launch,land,route}};
+  d.leapReady=now+POI_DAVID_LEAP_COOL;d.next=d.attack.until;
+  poiMonsterMeshDirty=true;return true;
+ }
+ return false;
+}
+function poiDavidLeapAbort(s,now){
+ const d=s.david,q=d.attack;
+ if(q?.kind!=='leap'||q.cursor||Math.min(now,q.lastFrameAt)<q.leap.launch)return;
+ const a=poiDavidLeapPoint(q,Math.min(now,q.lastFrameAt,q.leap.land-17));
+ d.leapAbort={...a,start:now,x0:q.leap.x0,z0:q.leap.z0,until:now+405};
+}
+function poiDavidLeapTick(o,s,b,p,q,now){
+ if(q.cursor||now<q.leap.land)return false;
+ const l=q.leap,last=l.route.at(-2)||{x:l.x0,z:l.z0};
+ if(!poiDavidIn(b,{x:l.x,z:l.z,y:b.y})||!poiDavidLine({x:l.x0,z:l.z0},{x:l.x,z:l.z,y:b.y},b)||
+    !poiMonsterCanMove(l.x,l.z,s,last.x,last.z)){
+  poiDavidCease(o,s,b,now);return false;
+ }
+ for(const r of l.route){
+  const prior=s.david.trail.findIndex(p=>p.x===r.x&&p.z===r.z);
+  if(prior>=0)s.david.trail.length=prior+1;else s.david.trail.push({...r});
+ }
+ s.x=s.fromX=l.x;s.z=s.fromZ=l.z;s.moveStarted=now-380;s.guardMoveMs=0;
+ q.cursor=q.executed=1;q.lastContactAt=now;q.until=now+POI_DAVID_LEAP_REST;s.david.next=q.until;
+ poiMonsterMeshDirty=true;
+ if(typeof poiDavidImpactStomp==='function')poiDavidImpactStomp({...q,kind:'stomp',davidLeapImpact:true},now);
+ if(typeof poiDavidAttackFoley==='function')poiDavidAttackFoley({...q,kind:'stomp'},p,b,0,'impact');
+ const length=Math.hypot(p.x-l.x,p.z-l.z),line=length<1e-6||poiDavidRoomRay(q,b,{x:(p.x-l.x)/length,z:(p.z-l.z)/length},
+  length,poiAimWall({y:b.y}))+1e-6>=length;
+ if(length<=POI_DAVID_LEAP_RADIUS+1e-6&&line){
+  q.landed=1;
+  if(poiMobHitPlayer(o,now,POI_DAVID_LEAP_DAMAGE)){poiDavidCease(o,s,b,now);return true}
+ }
+ return false;
+}
+function poiDavidLeapPose(d,q,now,common){
+ const a=d.leapAbort;
+ if(a){
+  const t=poiDavidLeapClamp((now-a.start)/(a.until-a.start));
+  return {...common,kind:'leap',phase:'airborne',progress:.5+.5*t,contact:0,
+   leapX:a.x+(a.x0-a.x)*t,leapZ:a.z+(a.z0-a.z)*t,leapHeight:a.h*(1-t)};
+ }
+ if(q?.kind!=='leap')return null;
+ const {leap:l}=q;
+ if(q.cursor){
+  const age=now-q.lastContactAt,impact=age<125;
+  return {...common,kind:'leap',phase:impact?'impact':'recover',contact:1,
+   progress:poiDavidLeapClamp(impact?age/125:(age-125)/(POI_DAVID_LEAP_REST-125))};
+ }
+ if(now<l.launch)return {...common,kind:'leap',phase:'windup',contact:0,progress:poiDavidLeapClamp((now-q.start)/POI_DAVID_LEAP_LOAD)};
+ const p=poiDavidLeapPoint(q,now);
+ return {...common,kind:'leap',phase:'airborne',contact:0,progress:p.t,leapX:p.x,leapZ:p.z,leapHeight:p.h};
+}
+
 function poiDavidCease(o,s,b,now){
  const d=s.david;
  if(!d?.awake||d.returning)return;
+ poiDavidLeapAbort(s,now);
  d.attack=null;
  if(typeof poiDavidStopAttackFoley==='function')poiDavidStopAttackFoley();
+ if(typeof poiDavidClearHeavyFeedback==='function')poiDavidClearHeavyFeedback();
  if(typeof poiAimLocked!=='undefined'&&poiAimLocked?.id===o)poiCombatLockReset();
- if(s.x===b.x&&s.z===b.z&&now-(s.moveStarted??-1e9)>=(s.guardMoveMs||380)){
+ if(!d.leapAbort&&s.x===b.x&&s.z===b.z&&now-(s.moveStarted??-1e9)>=(s.guardMoveMs||380)){
   poiDavidArrive(s,now);return;
  }
  d.returning=true;d.next=now+80;poiMonsterMeshDirty=true;
@@ -16364,6 +16654,10 @@ function poiDavidArrive(s,now){
 }
 function poiDavidReturnFrame(o,s,b,now){
  const d=s.david;
+ if(d.leapAbort){
+  if(now<d.leapAbort.until)return;
+  d.leapAbort=null;poiMonsterMeshDirty=true;
+ }
  if(now<(s.moveStarted??-1e9)+(s.guardMoveMs||380))return;
  if(s.x===b.x&&s.z===b.z){poiDavidArrive(s,now);return;}
  if(now<d.next||poiDavidHidden()||poiWalkLevel!==b.y)return;
@@ -16429,11 +16723,13 @@ function poiDavidCombatFrame(now){
  const live=poiDavidActive;if(!live)return false;
  const {o,s}=live,b=poiDavidMatch(o),d=s.david;
  if(!b||s.hp<=0||poiMonsterStates.get(o)!==s||!d?.awake){poiDavidActive=null;return false}
+ if(typeof poiDavidFootFeedback==='function')poiDavidFootFeedback(o,s,b,now);
  if(d.returning){poiDavidReturnFrame(o,s,b,now);return false}
  const p=poiAimOrigin(now);
  if(!poiEnemyThreatEnabled()||!poiDavidIn(b,p)){poiDavidCease(o,s,b,now);return false}
  const q=d.attack;
  if(q&&(poiDavidHidden()||q.interrupted||now-q.lastFrameAt>750)){
+  if(q.kind==='leap'){poiDavidCease(o,s,b,now);return false}
   // Losing the visible frame pipeline is not a playable wind-up. Never
   // replay its queued contacts, even when resuming within one strike.
   if(q.kind==='beam')poiDavidBeamAudioEnd(q);
@@ -16444,9 +16740,13 @@ function poiDavidCombatFrame(now){
   q.lastFrameAt=now;
   if(q.kind==='beam'&&!q.beamOpened&&q.cursor===0&&now>=q.hits[0]-POI_DAVID_BEAM_GROW){
    q.beamOpened=true;poiDavidAttackFoley(q,p,b,0,'beamOnset');
+   if(typeof poiDavidHeavyContact==='function')poiDavidHeavyContact('beam',q,now,b);
   }
   if(q.kind==='beam'&&!q.sweep&&q.cursor>0&&now-q.lastContactAt>=POI_DAVID_BEAM_SHORT)poiDavidBeamAudioEnd(q);
-  if(q.cursor<q.hits.length&&now>=q.hits[q.cursor]){
+  if(q.kind==='leap'){
+   if(poiDavidLeapTick(o,s,b,p,q,now))return true;
+   if(d.returning)return false;
+  }else if(q.cursor<q.hits.length&&now>=q.hits[q.cursor]){
    // On playable slow frames, execute only one contact. Carry its delay
    // into the next wind-up and recovery so neither gets compressed.
    const i=q.cursor++,late=now-q.hits[i];
@@ -16456,6 +16756,7 @@ function poiDavidCombatFrame(now){
    }
    q.executed++;q.lastContactAt=now;poiMonsterMeshDirty=true;
    if(q.kind==='stomp'&&typeof poiDavidImpactStomp==='function')poiDavidImpactStomp(q,now);
+   if((q.kind==='sweep'||q.kind==='double')&&typeof poiDavidHeavyContact==='function')poiDavidHeavyContact(q.kind,q,now,b);
    if(q.kind==='beam'){
     const side=poiDavidBeamSide();
     if(side){
@@ -16475,6 +16776,7 @@ function poiDavidCombatFrame(now){
  if(q&&now>=q.until){d.attack=null;poiMonsterMeshDirty=true}
  if(now<d.next)return false;
  const distance=Math.hypot(p.x-s.x,p.z-s.z),mid=distance<=6;
+ if(poiDavidLeapBegin(o,s,b,p,now,distance))return false;
  let kind=POI_DAVID_ORDER[d.cycle%POI_DAVID_ORDER.length];
  const near=distance<=(kind==='sweep'?POI_DAVID_SWEEP_FORWARD-.05:4.15);
  if(!near&&kind!=='beam'&&(kind!=='stomp'||!mid)){
@@ -16491,6 +16793,7 @@ function poiDavidPose(s,now){
  const common={david:true,dx:d.dx,dz:d.dz,width:1,squash:1,lift:0,
   facing:d.dx>0?3:d.dx<0?1:d.dz<0?2:0};
  const clamp=t=>Math.max(0,Math.min(1,t));
+ const leap=poiDavidLeapPose(d,q,now,common);if(leap)return leap;
  if(d.returning)return {...common,phase:'return',kind:null,progress:0,contact:0};
  if(!q){
   const age=now-d.wakeAt;
@@ -16523,6 +16826,7 @@ function poiDavidPose(s,now){
 function poiDavidIncoming(o,s,amount,now){
  if(!(amount>0)||!poiDavidMatch(o)||!s.david?.awake||s.david.returning)return 0;
  const phase=poiDavidPose(s,now).phase,q=s.david.attack;
+ if(q?.kind==='leap'&&phase==='recover')return amount;
  // Hard stone resists frantic hits. A complete real dodge exposes the
  // joints without changing what the player can use, how hard they swing,
  // or preventing a strong player from winning with present equipment.
@@ -21709,7 +22013,7 @@ function poiMonsterPose(obj,s,now,locomotionOnly=false){
   const gait=s.david?.gaitDistance,age=now-(s.moveStarted??-1e9),walkDistance=(gait??0)+e;
   const walkAmount=gait===undefined?0:
    Math.min(1,walkDistance/.34)*Math.max(0,Math.min(1,1-(age-(s.guardMoveMs||380)-34)/145));
-  return {x:x+.5,y:terrainY(s.x,s.z)+(facilitySite?obj.y*1.4:0),z:z+.5,
+  return {x:(david?.leapX??x)+.5,y:terrainY(s.x,s.z)+(facilitySite?obj.y*1.4:0)+(david?.leapHeight||0),z:(david?.leapZ??z)+.5,
    heading:bearing??(s.guardTrialHeading?Math.atan2(-s.guardTrialHeading[0],s.guardTrialHeading[1]):undefined),
    david:locomotionOnly?null:david?{...david,walkDistance,walkAmount}:null};
  }
@@ -24704,7 +25008,7 @@ function poiEnemyCueLaneGeometry(a){
 // BEGIN DAVID TEMPLE CUES
 let poiDavidCue=null;
 function poiDavidCuePairs(q,b){
- const {kind,dx,dz,sx,sz,y}=q,r=b.room,whole=kind==='stomp',strip=kind==='double'||kind==='beam';
+ const {kind,dx,dz,sx,sz,y}=q,r=b.room,whole=kind==='stomp'||kind==='leap',strip=kind==='double'||kind==='beam';
  const fan=kind==='beamfan',a=fan?POI_DAVID_BEAM_ARC:whole?Math.PI:Math.PI/2;
  const low=fan&&q.sweep.side>0?0:-a,high=fan&&q.sweep.side<0?0:a;
  const half=kind==='double'?1.5:.56,far=kind==='double'?3.55:14,near=kind==='double'?.55:.28;
@@ -24725,7 +25029,7 @@ function poiDavidCuePairs(q,b){
   const c=Math.cos(t),s=Math.sin(t),ux=dx*c-dz*s,uz=dz*c+dx*s;
 
   const l=strip?near/Math.max(1e-7,c):0;
-  const rr=strip?Math.min(far/Math.max(1e-7,c),half/Math.max(1e-7,Math.abs(s))):fan?14:whole?6:poiDavidSweepRadius(c,s);
+  const rr=strip?Math.min(far/Math.max(1e-7,c),half/Math.max(1e-7,Math.abs(s))):fan?14:kind==='leap'?POI_DAVID_LEAP_RADIUS:whole?6:poiDavidSweepRadius(c,s);
   const h=poiDavidRoomRay(q,b,{x:ux,z:uz},rr,pass,convex);
   return {ux,uz,lo:Math.min(l,h),hi:h,t};
  });
@@ -24815,13 +25119,45 @@ function poiDavidDrawThermalBeam(g,vp,alpha){
 // BEGIN DAVID STOMP IMPACT
 const POI_DAVID_DUST_MS=455,POI_DAVID_QUAKE_MS=310,POI_DAVID_PUFFS=12;
 let poiDavidImpact=null,poiDavidDustMesh=null;
+// BEGIN DAVID HEAVY FEEDBACK
+const POI_DAVID_HEAVY_PROFILE=Object.freeze({
+ foot:[.024,205,.39],sweep:[.036,220,0],double:[.044,235,0],beam:[.028,220,0]
+});
+let poiDavidHeavyBump=null;
+function poiDavidClearHeavyFeedback(){poiDavidHeavyBump=null;poiDavidImpact=null}
+function poiDavidFootFeedback(o,s,b,now){
+ const d=s.david,gait=d?.gaitDistance;
+ if(!d||gait===undefined||typeof POI_DAVID_GAIT_STRIDE==='undefined')return;
+ const age=now-(s.moveStarted??-1e9),t=Math.max(0,Math.min(1,age/(s.guardMoveMs||380))),e=t*t*(3-2*t);
+ const count=Math.floor((gait+e+1e-7)/POI_DAVID_GAIT_STRIDE),previous=d.footPlantCount,observed=d.footPlantObserved;
+ d.footPlantCount=count;d.footPlantObserved=now;
+ if(previous===undefined||count<=previous||now-observed>650||s.fromX===s.x&&s.fromZ===s.z||d.attack||d.leapAbort)return;
+ const x=(s.fromX??s.x)+(s.x-(s.fromX??s.x))*e,z=(s.fromZ??s.z)+(s.z-(s.fromZ??s.z))*e;
+ poiDavidHeavyContact('foot',{sx:x,sz:z,y:b.y},now,b);
+}
+function poiDavidHeavyContact(kind,q,now,b){
+ const spec=POI_DAVID_HEAVY_PROFILE[kind];
+ if(!spec||!poiEnemyThreatEnabled()||poiDavidHidden()||!b||q.y!==poiWalkLevel)return false;
+ const p=poiAimOrigin(now),distance=Math.hypot(p.x-q.sx,p.z-q.sz);
+ if(distance>=11||!poiDavidIn(b,p))return false;
+ const clear=poiDavidLine({x:q.sx,z:q.sz},p,b);
+ if(clear)poiDavidHeavyBump={owner:facilitySite,y:q.y,sx:q.sx,sz:q.sz,x:q.sx+.5,z:q.sz+.5,start:now,cap:spec[0],ms:spec[1],viewAt:now,view:true};
+ if(kind==='foot'&&poiAudioEnabled&&poiAudioAllowed()&&poiAudioLevels.master>0&&poiAudioLevels.se>0){
+  const gain=spec[2]*Math.max(.18,1-distance/12)*(clear?1:.25);
+  poiAudioStart();const ctx=poiAudioContext;
+  if(ctx?.state==='running')try{poiTryRecordedFoley('davidFootPlant',ctx.currentTime,gain,poiDavidTrackAttackFoley)}catch{}
+ }
+ return true;
+}
+// END DAVID HEAVY FEEDBACK
+
 function poiDavidImpactStomp(q,now){
  if(q?.kind!=='stomp'||!poiWalkActive||!Number.isFinite(now)||facilitySite?.id!=='base'||
     q.y!==poiWalkLevel||!facilitySite.davidTemple?.boss)return false;
  const foot=typeof poiDavidRig==='function'?poiDavidRig({kind:'stomp',phase:'impact'}).feet[0]:[-.56,0,.20];
  const x=q.sx+.5+foot[0]*q.dz+foot[2]*q.dx,z=q.sz+.5-foot[0]*q.dx+foot[2]*q.dz;
  if(![x,z].every(Number.isFinite))return false;
- poiDavidImpact={start:now,x,z,y:q.y,sx:q.sx,sz:q.sz,owner:facilitySite,lastBucket:-1,viewAt:-Infinity,view:false};
+ poiDavidImpact={leap:!!q.davidLeapImpact,start:now,x,z,y:q.y,sx:q.sx,sz:q.sz,owner:facilitySite,lastBucket:-1,viewAt:-Infinity,view:false};
  return true;
 }
 function poiDavidImpactVisible(e,now){
@@ -24840,14 +25176,17 @@ function poiDavidImpactVisible(e,now){
  return e.view;
 }
 function poiDavidImpactVp(frame,now){
- const e=poiDavidImpact,age=e?now-e.start:Infinity;
- if(age>=POI_DAVID_QUAKE_MS||age<0||!poiDavidImpactVisible(e,now)||
+ const stomp=poiDavidImpact,foot=poiDavidHeavyBump;
+ if(foot&&(now-foot.start>=foot.ms||foot.owner!==facilitySite))poiDavidHeavyBump=null;
+ const grounded=stomp&&now-stomp.start<(stomp.leap?345:POI_DAVID_QUAKE_MS);
+ const e=grounded?stomp:poiDavidHeavyBump,age=e?now-e.start:Infinity,ms=grounded?(stomp.leap?345:POI_DAVID_QUAKE_MS):e?.ms??0;
+ if(age>=ms||age<0||!poiDavidImpactVisible(e,now)||
     (typeof poiEnemyCueReduced!=='undefined'&&poiEnemyCueReduced?.matches))return frame.vp;
  const p=poiAimOrigin(now),d=Math.hypot(e.x-p.x-.5,e.z-p.z-.5);
- const v=1-age/POI_DAVID_QUAKE_MS,falloff=Math.max(0,1-d/10);
+ const v=1-age/ms,falloff=Math.max(0,1-d/10);
  // Tiny y-only projected bump. No pointer ray, view controls or saved camera
  // use this copy; only passes of the frame being presented use it.
- const world=.062*v*v*falloff*Math.sin(age*.078),dy=world/Math.max(5,frame.halfH||9);
+ const world=(grounded?(stomp.leap?.086:.062):e.cap)*v*v*falloff*Math.sin(age*.078),dy=world/Math.max(5,frame.halfH||9);
  if(Math.abs(dy)<1e-6)return frame.vp;
  const out=new Float32Array(frame.vp);
  for(let i=0;i<16;i+=4)out[i+1]+=dy*out[i+3];

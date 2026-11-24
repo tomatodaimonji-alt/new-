@@ -24,6 +24,9 @@ fixture=inject(fixture,'function poiWildRegionalFrame(now,rng){','function poiWi
 fixture=inject(fixture,'function poiWildPick(rng){','function poiWildPick(rng){return null;');
 fixture=inject(fixture,'draw(poiDavidCue.lane,vp)','draw(poiDavidCue.lane,vp);if(q.kind==="sweep"){const a=window.__arenaCue??=[];if(a.length<70)a.push({start:q.start,vertices:poiDavidCue.lane.count,now})}');
 fixture=inject(fixture,' const priorHP=poiPlayerHP;',' const priorHP=poiPlayerHP;if(obj.type==="monsterStoneDavid")(window.__arenaDamage??=[]).push({start:poiDavidActive?.s?.david?.attack?.start,raw,amount,now});');
+// This older fixture's proof is specifically ground pursuit. The normal
+// leap lane is exercised independently by david-leap-browser.
+fixture=inject(fixture,'function poiDavidLeapBegin(o,s,b,p,now,distance){','function poiDavidLeapBegin(o,s,b,p,now,distance){return false;');
 for(const [,js] of fixture.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new vm.Script(js);
 if(process.env.DAVID_LAYOUT_ONLY==='1'){console.log('PASS exact browser fixture anchors and inline syntax');process.exit(0)}
 const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
