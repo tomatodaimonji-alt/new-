@@ -9,6 +9,17 @@ const api="if(facilityParams.get('test')==='1')window.__editorTest={";
 inject(api,api+`
  orvasAwardQA:{
   frame:()=>render(),
+  path:(x,z)=>{
+   const queue=[{x:poiWalkX,z:poiWalkZ,path:[]}],seen=new Set([poiWalkX+','+poiWalkZ]);
+   for(let i=0;i<queue.length&&i<120;i++){
+    const p=queue[i];if(p.x===x&&p.z===z)return p.path;
+    for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
+     const a=p.x+dx,b=p.z+dz,k=a+','+b;if(seen.has(k)||!poiWalkCanStep(a,b,p.x,p.z))continue;
+     seen.add(k);queue.push({x:a,z:b,path:[...p.path,[a,b]]});
+    }
+   }
+   return null;
+  },
   pin:()=>{
    const b=poiDavidActive;
    if(!b?.s.david?.wakeDone||poiDungeonSpawnId(b.o)!=='davidTemple.david')return false;
@@ -18,16 +29,19 @@ inject(api,api+`
   },
   inspect:()=>{
    const k=poiHotbarRead(),saved=JSON.parse(localStorage.getItem(POI_HOTBAR_KEY)||'{}'),
-    ground=(k.armedDrops||[]).filter(d=>d.id.startsWith('orvas-'));
+    ground=[...(k.armedDrops||[]).filter(d=>d.id.startsWith('orvas-')),...(k.soulDrops||[]).filter(d=>d.type==='orvasSoul').map(d=>({id:'orvas-soul',...d}))];
    const b=poiDavidActive,a=poiCompanionActor;
    const authored=[...poiMonsterStates].find(([o])=>o.type==='monsterStoneDavid'),site=authored?poiDavidMatch(authored[0]):null;
    const at=poiAimOrigin(performance.now());
    return {x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,dir:['n','s','e','w'].map(k=>poiCameraRelativeStep(k)),
     awake:!!b?.s?.david?.wakeDone,bossHp:b?.s.hp??null,
+    wake:{hidden:document.hidden,cursor:b?.s?.david?.wakeCursor??null,returning:b?.s?.david?.returning??null,
+     at:b?.s?.david?.wakeAt??null,readyAt:authored?.[1].davidReadyAt??null,atPlayer:[at.x,at.z],animation:authored?poiDavidPose(authored[1],performance.now())?.phase:null},
     bossProbe:authored?{x:authored[1].x,z:authored[1].z,hp:authored[1].hp,arena:poiDavidIn(site,at),
      threat:poiEnemyThreatEnabled(),los:site?poiDavidLine(authored[1],at,site):null,next:poiNextMobTick}:null,active:k.companionSoul?.active??null,pending:k.companionSoul?.pending??null,
     actor:a?{id:a.id,x:a.x,z:a.z}:null,slots:poiInventorySlots(k),saved,ground,
-    draw:window.__orvasGroundVerts??[],hits:window.__orvasFinishLog??[],clock:performance.now(),
+    draw:window.__orvasGroundVerts??[],soulMoving:[...poiSoulFloorMotion.values()].map(r=>[r.item.type,poiSoulFloorFrame(r,performance.now()).phase]),
+    prompt:$('poiWalkAction')._shopPrompt,slimeGround:k.soulDrops?.find(d=>d.type==='slimeSoul')??null,hits:window.__orvasFinishLog??[],clock:performance.now(),
     swing:poiWalkActionStarted,hp:poiPlayerHP,atomic:window.__orvasWrites??[]};
   }
  },
@@ -37,10 +51,10 @@ const hit=' const before=state.hp;\n state.hp=Math.max(0,state.hp-amount);';
 inject(hit,hit+`
  if(obj.type==='monsterStoneDavid'&&before>0&&state.hp===0)(window.__orvasFinishLog??=[]).push({companion:!!source?.companion,amount});
 `);
-const crystal='function poiDrawOrvasSoulDrop(m,x,y,z){';
-inject(crystal,crystal+'\n const prior=m.p.length;');
-const end='  tri(m,rim[i],rim[n],bottom,i%2?[.26,.59,.72]:[.19,.39,.52]);\n }\n}';
-inject(end,end.slice(0,-1)+" window.__orvasGroundVerts=[x,z,m.p.length-prior];\n}");
+const crystal='function poiSoulFloorPiece(m,type,x,y,z,yaw=0,tilt=0,scale=1){';
+inject(crystal,crystal+'\n const before=m.p.length;');
+const end='function poiSoulFloorGlow(m,x,y,z,scale=1){';
+inject('}\n'+end," if(type==='orvasSoul')window.__orvasGroundVerts=[x,z,m.p.length-before];\n}\n"+end);
 for(const [,js] of h.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(js);
 if(process.env.ORVAS_AWARD_SYNTAX_ONLY){console.log('Native reward atom and ground mesh injection parse');process.exit(0)}
 const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
@@ -65,7 +79,7 @@ try{
     if(key==='world-workshop-hotbar-v1'){
      const k=JSON.parse(value);
      if(k.orvasRewards&8)(window.__orvasWrites??=[]).push({flag:k.orvasRewards,dead:typeof k.dungeonPopulation?.dead?.['davidTemple.david']==='number',
-      soul:(k.armedDrops||[]).filter(d=>d.id==='orvas-soul').length});
+      soul:(k.soulDrops||[]).filter(d=>d.type==='orvasSoul').length});
     }
     return out;
    };
@@ -93,12 +107,13 @@ try{
     throw Error(JSON.stringify({phase,stage,bootErrors,detail:String(e)}));
    }
    if(realBoot)await p.clock.install({time:new Date('2026-04-01T10:00:00Z')});
-   await p.clock.pauseAt((await p.evaluate(()=>Date.now()))+1500);
+   await p.bringToFront();await p.waitForFunction(()=>!document.hidden);
    await p.evaluate(()=>{window.__orvasAwardManual=true});
+   await p.clock.pauseAt((await p.evaluate(()=>Date.now()))+4500);
   }
   await open();
   const see=async()=>last=await p.evaluate(()=>window.__editorTest.orvasAwardQA.inspect());
-  const tick=async(ms=36)=>{await p.clock.fastForward(ms);await p.evaluate(()=>window.__editorTest.orvasAwardQA.frame());return see()};
+  const tick=async(ms=50)=>{await p.clock.fastForward(ms);await p.evaluate(()=>window.__editorTest.orvasAwardQA.frame());return see()};
   const until=async(fn,n=180)=>{for(let i=0;i<n;i++){const s=await tick();if(fn(s))return s;}throw Error(JSON.stringify(last));};
   const step=async(x,z)=>{
    const s=last,i=s.dir.findIndex(d=>d[0]===x-s.x&&d[1]===z-s.z);assert(i>=0);
@@ -118,30 +133,47 @@ try{
  function checkGrant(s,source){
   assert.equal(s.hits.length,1);assert.equal(s.hits[0].companion,source);
   assert.deepEqual(s.ground.map(d=>d.id).sort(),['orvas-greatsword','orvas-head','orvas-soul','orvas-twin-greatswords','orvas-waistcloth']);
-  assert.deepEqual(s.ground.find(d=>d.id==='orvas-soul'),{id:'orvas-soul',type:'orvasSoul',x:24,z:159,y:0,durability:1050});
+  const soul=s.ground.find(d=>d.id==='orvas-soul');assert.equal(soul.durability,1050);
+  assert.equal(soul.y,0);assert(Math.hypot(soul.x-24,soul.z-158)<=5,JSON.stringify(soul));
   assert.equal(s.saved.orvasRewards,31);assert.equal(typeof s.saved.dungeonPopulation.dead['davidTemple.david'],'number');
   assert.deepEqual(s.atomic[0],{flag:31,dead:true,soul:1});
   assert(s.atomic.every(w=>w.soul<=1));
  }
+ function assertGearConserved(s){
+  const items=['armorOrvasWaistcloth','equipOrvasGreatsword','equipOrvasHead','equipOrvasTwinGreatswords'];
+  const types=[...s.ground.map(d=>d.type),...s.slots.filter(Boolean).map(c=>c.type)].filter(t=>items.includes(t)).sort();
+  assert.deepEqual(types,items.sort());
+ }
  const scenario=process.env.ORVAS_AWARD_CASE;let q,p,s;
  if(scenario!=='pending'){
  phase='real canonical awakening and actual slime-companion final blow';
- q=await begin('ally',155);p=q.p;await q.tick();await q.step(24,156);
- s=await q.until(v=>v.awake&&v.actor?.id==='slimeSoul');const walkSwing=s.swing;
+ q=await begin('ally',155);p=q.p;await q.tick();await q.step(24,156);await q.step(24,157);
+ s=await q.until(v=>v.awake&&v.actor?.id==='slimeSoul',350);const walkSwing=s.swing;
  assert(await p.evaluate(()=>window.__editorTest.orvasAwardQA.pin()));
+ // Active melee ally must have an actual clear lane; stand aside from
+ // the one-tile center path instead of blocking it with the player body.
+ await q.step(23,157);
  s=await q.until(v=>v.ground.some(d=>d.id==='orvas-soul')&&v.draw.length);
- checkGrant(s,true);assert.equal(s.swing,walkSwing);assert.deepEqual(s.draw.slice(0,2),[24.5,159.5]);assert(s.draw[2]>72);
- phase='cold reload preserves floor reward, then actually walk over it';
+ checkGrant(s,true);assert.equal(s.swing,walkSwing);assert(s.draw[2]>280);
+ const visualSoul=s.ground.find(d=>d.id==='orvas-soul');
+ s=await q.until(v=>!v.soulMoving.length&&v.draw[0]===visualSoul.x+.5&&v.draw[1]===visualSoul.z+.5);
+ assert(s.draw[2]>280);
+ phase='cold reload preserves floor reward through an actual walk before explicit collectible action';
  p=await q.cold();s=await q.until(v=>v.ground.some(d=>d.id==='orvas-soul'));
  assert.equal(s.ground.length,5);assert(s.slots.every(c=>c?.type!=='orvasSoul'));
- for(const [x,z] of [[23,156],[22,156],[22,157],[22,158],[22,159],[23,159],[24,159]])s=await q.step(x,z);
+ const item=s.ground.find(d=>d.id==='orvas-soul');
+ const path=await p.evaluate(d=>window.__editorTest.orvasAwardQA.path(d.x,d.z),item);assert(path,JSON.stringify(item));
+ for(const [x,z] of path)s=await q.step(x,z);
+ s=await q.until(v=>v.prompt==='soul-pickup');
+ assert(s.ground.some(d=>d.id==='orvas-soul'));assert(s.slots.every(c=>c?.type!=='orvasSoul'));
+ await p.locator('#poiWalkAction').tap();s=await q.until(v=>v.slots.some(c=>c?.type==='orvasSoul'));
  assert.equal(s.slots.filter(c=>c?.type==='orvasSoul').length,1);
  assert.equal(s.slots.find(c=>c?.type==='orvasSoul').durability,1050);
- assert.equal(s.ground.length,4);assert(s.ground.every(d=>d.type!=='orvasSoul'));
- s=await q.step(24,160);s=await q.step(24,159);
+ assertGearConserved(s);assert(s.ground.every(d=>d.type!=='orvasSoul'));
+ s=await q.tick(300);
  assert.equal(s.slots.filter(c=>c?.type==='orvasSoul').length,1);assert.equal(s.saved.orvasRewards,31);
  p=await q.cold();s=await q.until(v=>v.slots.some(c=>c?.type==='orvasSoul'));
- assert.equal(s.ground.length,4);assert.equal(s.saved.orvasRewards,31);
+ assertGearConserved(s);assert.equal(s.saved.orvasRewards,31);
  assert(s.slots.some(c=>c?.type==='slimeSoul'&&c.durability===29));
  phase='real confirmed reset seeds weapons and one inactive usable soul; no ground or fight award';
  await p.locator('#poiLandscapeMenuToggle').tap();
@@ -155,17 +187,16 @@ try{
  assert.deepEqual(q.errors,[]);await q.c.close();
  }
  if(scenario!=='pickup'){
- phase='real sword finish while normal slime claim remains pending and bag is full';
- q=await begin('pending',155);p=q.p;await q.tick();await q.step(24,156);
- s=await q.until(v=>v.awake&&v.pending==='slimeSoul');
+ phase='real sword finish while recovered old slime waits on the ground and bag is full';
+ q=await begin('pending',155);p=q.p;await q.tick();await q.step(24,156);await q.step(24,157);
+ s=await q.until(v=>v.awake&&v.pending===null&&v.slimeGround?.type==='slimeSoul',350);
  assert(await p.evaluate(()=>window.__editorTest.orvasAwardQA.pin()));
- s=await q.step(24,157);
  await p.locator('#poiWalkAction').tap();
  s=await q.until(v=>v.ground.some(d=>d.id==='orvas-soul'));
- checkGrant(s,false);assert.equal(s.pending,'slimeSoul');
+ checkGrant(s,false);assert.equal(s.pending,null);assert.equal(s.slimeGround?.type,'slimeSoul');
  assert(s.slots.every(c=>c?.type!=='orvasSoul'||!c));
  assert.deepEqual(q.errors,[]);
  }
- console.log('Canonical Orvas actual companion and player finishes, verified atomic visible floor reward, real walk pickup/reload and explicit reset provision');
+ console.log('Canonical Orvas actual companion and player finishes, verified atomic visible floor reward, explicit native pickup/reload and explicit reset provision');
 }catch(e){console.error(phase,last&&{...last,slots:last.slots.filter(Boolean),saved:last.saved?.orvasRewards});throw e}
 finally{await browser?.close();await new Promise(ok=>server.close(ok))}
