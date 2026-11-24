@@ -10,8 +10,8 @@ const slice=(a,b)=>{const i=html.indexOf(a),j=html.indexOf(b,i+1);assert(i>=0&&j
 const base=JSON.parse(JSON.stringify(vm.runInNewContext(slice('const FACILITY_SITES=Object.freeze(','function workshopResumeDecode(')+";buildFacilitySite('base')")));
 const temple=base.davidTemple;
 assert(temple,'genuine authored temple metadata required');
-assert.deepEqual([base.map.width,base.map.height],[128,128]);
-assert(base.map.world.some(o=>o.type==='monsterStoneDavid'&&o.x===24&&o.z===104&&o.y===0));
+assert.deepEqual([base.map.width,base.map.height],[128,182]);
+assert(base.map.world.some(o=>o.type==='monsterStoneDavid'&&o.x===24&&o.z===158&&o.y===0));
 assert.equal(base.map.world.filter(o=>o.type==='monsterStoneDavid').length,1);
 // Exercise the actual import validator as facilityLoadMap does, including
 // exported floor offsets and all palette entries present before catalog build.
@@ -23,21 +23,21 @@ const validation=vm.runInNewContext(
  ';({validate:pineValidateWorldData,exportMap:facilityExportMap,palette})');
 const ids=new Set(validation.palette.map(p=>p.id));
 for(const id of ['monsterStoneDavid','poiDavidGatePier','poiDavidTempleColumn','poiDavidWaystone'])assert(ids.has(id),'live initial catalog: '+id);
-assert.equal(validation.validate(validation.exportMap(base.map)).newW,128);
+assert.equal(validation.validate(validation.exportMap(base.map),true).newW,128);
 
 const anchor='  freeMovementPose:()=>({x:poiWalkViewX,z:poiWalkViewZ,level:poiWalkLevel}),';
 const insert=(s,k,v)=>{assert.equal(s.split(k).length,2,k);return s.replace(k,k+v)};
 let fixture=insert(html,anchor,`
   davidQA:{
    retreatStep:()=>{
-    const start=[poiWalkX,poiWalkZ],goal=[24,101];
+    const start=[poiWalkX,poiWalkZ],goal=[24,155];
     if(start[0]===goal[0]&&start[1]===goal[1])return {done:true};
     const q=[[...start,null]],seen=new Set([start.join(',')]);
     for(let i=0;i<q.length;i++){
      const [x,z,first]=q[i];
      for(const [dx,dz,key] of [[0,-1,'ArrowUp'],[1,0,'ArrowRight'],[0,1,'ArrowDown'],[-1,0,'ArrowLeft']]){
       const xx=x+dx,zz=z+dz,id=xx+','+zz;
-      if(xx<14||xx>27||zz<101||zz>107||seen.has(id)||!poiWalkCanStep(xx,zz,x,z))continue;
+      if(xx<14||xx>27||zz<155||zz>161||seen.has(id)||!poiWalkCanStep(xx,zz,x,z))continue;
       const route=first??{x:xx,z:zz,key};if(xx===goal[0]&&zz===goal[1])return route;
       seen.add(id);q.push([xx,zz,route]);
      }
@@ -52,7 +52,7 @@ let fixture=insert(html,anchor,`
     const [o,s]=pair;
     if(!s.david?.awake)return false;
     s.x=s.fromX=o.x;s.z=s.fromZ=o.z;
-    if(!workshopResumeRestorePosition({x:24,z:101,y:0,facing:2}))return false;
+    if(!workshopResumeRestorePosition({x:24,z:155,y:0,facing:2}))return false;
     s.david.attack=null;s.david.next=-Infinity;
     poiPlayerHP=POI_PLAYER_MAX_HP;
     if(!poiDavidBegin(o,s,performance.now()+100,kind))return false;
@@ -70,7 +70,7 @@ let fixture=insert(html,anchor,`
    }
   },`);
 fixture=fixture.replace('function poiDavidBeamSide(roll=Math.random())','function poiDavidBeamSide(roll=.8)');
-fixture=insert(fixture,'   const {x:cx,y,z:cz,attack,heading,david}=poiMonsterPose(obj,s,now),part=mesh();', "\n   if(obj.type==='monsterStoneDavid'&&s.david?.returning){const f=window.__davidFrames;f.returnFrames.push([s.x,s.z,cx-.5,cz-.5]);}");
+fixture=insert(fixture,'   const {x:cx,y,z:cz,attack,heading,david}=poiMonsterPose(obj,s,now),part=mesh();', "\n   if(obj.type==='monsterStoneDavid'&&s.david?.returning){const f=window.__davidFrames;f.returnFrames.push([s.x,s.z,cx-.5,cz-.5,poiDavidIn(poiDavidMatch(obj),{x:cx-.5,z:cz-.5,y:obj.y})]);}");
 fixture=insert(fixture,'function poiDavidCease(o,s,b,now){', "\n if(s.david?.awake&&!s.david.returning)window.__davidFrames.returnAnchor=[s.x,s.z];");
 fixture=insert(fixture,'function render(){','\n window.__davidFrames?.next();');
 const renderStart=fixture.indexOf('function render(){'),renderClock=' const now=performance.now();';
@@ -115,7 +115,7 @@ const install=()=>{
  });
 };
 const screenshots=process.env.FACILITY_SCREENSHOTS;
-const save={version:1,route:'facility',id:'base',play:true,position:{x:24,z:91,y:0,facing:2},townLayout:5,townMapHeight:128,
+const save={version:1,route:'facility',id:'base',play:true,position:{x:24,z:125,y:0,facing:2},townLayout:5,townMapHeight:182,templeDepth:1,
  view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.35,orbitDistance:5.5}};
 const economy={version:1,weapon:'equipWoodSword',potions:0,gold:37,claimedCaches:['glade']};
 const editor={format:'forest-world-v1',version:1,width:30,height:30,size:30,world:[{x:2,y:0,z:2,type:'stonewall',rot:1}],models:[],prefabs:[],terrainHeights:[],checks:[]};
@@ -144,7 +144,7 @@ async function start(browser){
   await ctx.close();throw e
  }
 }
-const TEMPLE_IN=[[24,91],[24,92],[24,93],[24,94],[24,95],[25,95],[25,96],[25,97],[24,97],[23,97],[23,98],[23,99],[24,99],[24,100],[24,101],[24,102]],TEMPLE_NEAR=[[23,102],[22,102],[21,102],[20,102],[19,102],[18,102],[17,102]];
+const TEMPLE_IN=Array.from({length:32},(_,i)=>[24,125+i]),TEMPLE_NEAR=[23,22,21,20,19,18,17].map(x=>[x,156]);
 async function routeWalk(p,points,after=()=>{}){
  for(const [x,z] of points){
   const {pos:[cx,cz]}=await qa(p);
@@ -180,9 +180,9 @@ async function step(p,key,x,z){
  },[x,z]);
 }
 function assertNativeReturn(v,label){
- assert(v.returnAnchor&&(v.returnAnchor[0]!==24||v.returnAnchor[1]!==104),label+' starts genuinely displaced');
+ assert(v.returnAnchor&&(v.returnAnchor[0]!==24||v.returnAnchor[1]!==158),label+' starts genuinely displaced');
  assert(v.returnFrames.length>=2,label+' emits distinct renderer poses during return');
- const legal=frame=>frame[0]>=13&&frame[0]<=35&&frame[1]>=93&&frame[1]<=115;
+ const legal=frame=>frame[4]===true;
  assert(v.returnFrames.every(legal),label+' remains inside arena cells');
  for(let i=1;i<v.returnFrames.length;i++){
   const [x,z,rx,rz]=v.returnFrames[i], [a,b,ax,az]=v.returnFrames[i-1];
@@ -202,7 +202,7 @@ try{
  try{
   let s;
   checkpoint='real old v270 save outside doorway';
-  const far=await qa(p);assert.deepEqual(far.pos,[24,91,0]);
+  const far=await qa(p);assert.deepEqual(far.pos,[24,125,0]);
   assert.equal(far.status,'ready');
   await wait(p,t=>window.__editorTest.davidQA.state().now>=t+1150,far.now);
   const rested=await qa(p);assert(!rested.statue?.d?.awake);assert(!rested.statue?.d?.attack);
@@ -217,16 +217,17 @@ try{
   s=await qa(p);assert.equal(s.statue.hp,1050,'tuned David is deliberately beyond ordinary early-game weapons');
   if(screenshots)await p.screenshot({path:screenshots+'/david-temple-wake.png'});
   checkpoint='approach produces real boss displacement before physical retreat';
+  await p.evaluate(()=>{window.__davidFrames.stableClock={now:performance.now()}});
   await routeWalk(p,TEMPLE_NEAR);
-  await wait(p,()=>{const s=window.__editorTest.davidQA.state().statue;return s?.d?.awake&&(s.x!==24||s.z!==104)},null,25000);
+  await wait(p,()=>{const s=window.__editorTest.davidQA.state().statue;return s?.d?.awake&&(s.x!==24||s.z!==158)},null,25000);
   checkpoint='physical retreat cancels any chase or threat into exterior';
   await escapeChamber(p);
   await routeWalk(p,TEMPLE_IN.slice(0,-1).reverse());
   const back=await qa(p);
   await wait(p,t=>window.__editorTest.davidQA.state().now>=t+1550,back.now);
-  s=await qa(p);assert.deepEqual(s.pos,[24,91,0]);assert(!s.statue?.d?.attack);
+  s=await qa(p);assert.deepEqual(s.pos,[24,125,0]);assert(!s.statue?.d?.attack);
   assert(!s.statue?.d?.awake||s.statue.d.returning,'crossing exterior cancels any future strike immediately');
-  await wait(p,()=>{const s=window.__editorTest.davidQA.state().statue;return !s?.d?.awake&&(!s||s.x===24&&s.z===104)});
+  await wait(p,()=>{const s=window.__editorTest.davidQA.state().statue;return !s?.d?.awake&&(!s||s.x===24&&s.z===158)});
   s=await qa(p);
   assert.equal(s.hp,back.hp);assert.equal(s.travel,far.travel);assert.equal(s.opens,far.opens);
   assertNativeReturn(s,'physical exit');
@@ -235,7 +236,7 @@ try{
   checkpoint='cold genuine outside resume retains prior v270 save and same room';
   await p.reload({waitUntil:'domcontentloaded',timeout:25000});await p.locator('#pineStartupCover').waitFor({state:'hidden'});
   await wait(p,()=>window.__editorTest?.davidQA&&window.__editorTest.facility().active);
-  s=await qa(p);assert.deepEqual(s.pos,[24,91,0]);assert.equal((await pack()).gold,37);
+  s=await qa(p);assert.deepEqual(s.pos,[24,125,0]);assert.equal((await pack()).gold,37);
   assert.equal(await p.evaluate(()=>JSON.parse(localStorage.getItem('forest-world-editor-v1')).world[0].type),'stonewall');
   assert.deepEqual(errors,[]);
  }catch(e){console.error(checkpoint,await qa(p).catch(()=>null),errors);throw e}

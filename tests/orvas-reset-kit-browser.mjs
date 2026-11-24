@@ -9,8 +9,10 @@ const mark='  freeMovementPose:()=>({x:poiWalkViewX,z:poiWalkViewZ,level:poiWalk
 assert.equal(html.split(mark).length,2);
 html=html.replace(mark,mark+`
   orvasResetDropQA:()=>poiInventoryDrop(2),
+  orvasResetLoseQA:()=>poiCompanionHurt(1050,performance.now()),
   resetKitQA:()=>{const k=poiHotbarRead(),slots=poiInventorySlots(k);
    return {walking:poiWalkActive,site:facilitySite?.id,pos:[poiWalkX,poiWalkZ,poiWalkLevel],
+    soul:poiCompanionSnapshot(performance.now()),liveSoul:poiCompanionActor?.id??null,
     kit:{weapon:k.weapon,potions:k.potions,gold:k.gold??0,orvasRewards:k.orvasRewards??0,
      drops:(k.drops??[]).filter(c=>c.type==='equipOrvasHead').length,slots:slots.map(c=>c?{type:c.type,count:c.count,durability:c.durability}:null)},
     spawn:facilitySite?.spawn,max:['equipOrvasHead','equipOrvasGreatsword','equipOrvasTwinGreatswords'].map(poiEquipmentDurabilityMax),
@@ -29,7 +31,7 @@ const errors=[];
 const ready=async()=>{await p.locator('#pineStartupCover').waitFor({state:'hidden',timeout:25000});
  await p.waitForFunction(()=>!!window.__editorTest?.resetKitQA?.().walking,null,{timeout:13000});};
 const snapshot=()=>p.evaluate(()=>window.__editorTest.resetKitQA());
-const noOrvas=s=>assert.equal(s.kit.slots.filter(c=>keys.includes(c?.type)).length,0);
+const noOrvas=s=>assert.equal(s.kit.slots.filter(c=>keys.includes(c?.type)||c?.type==='orvasSoul').length,0);
 async function localPage(){p=await browser.newPage({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.7});p.on('pageerror',e=>errors.push(e.message));}
 async function open(){await p.locator('#poiLandscapeMenuToggle').click();await p.locator('[data-landscape-action="reset"]').click();
  await p.locator('#poiResetGameDialog').waitFor({state:'visible'});assert.equal(await p.evaluate(()=>document.activeElement.id),'poiResetGameCancel');}
@@ -39,6 +41,9 @@ function seeded(s){
  assert.deepEqual(all.slice(2,5).map(c=>c?.type),keys,'three explicit reset slots are inside the 9-slot shortcut bar');
  assert.equal(all[0]?.type,'equipWoodSword');assert.equal(all[1]?.count,3);assert.equal(s.kit.potions,3);
  assert.equal(s.kit.weapon,null);assert.equal(s.kit.orvasRewards,0);
+ assert.deepEqual(all.filter(c=>c?.type==='orvasSoul'),[{type:'orvasSoul',count:1,durability:1050}]);
+ assert.deepEqual(all[5],{type:'orvasSoul',count:1,durability:1050});assert.equal(all.filter(Boolean).length,6);
+ assert(!s.soul.active&&!s.soul.pending&&!s.liveSoul);
 }
 try{
  browser=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
@@ -63,6 +68,15 @@ try{
  assert.equal(JSON.parse(s.first).before[kitKey],before.raw);assert.equal(JSON.parse(s.backup).phase,'complete');
  where='reload again is not an initialization or second grant';
  const first=s.first;await p.reload({waitUntil:'domcontentloaded'});await ready();s=await snapshot();seeded(s);assert.equal(s.first,first);
+ where='summon reset soul from real shortcut, return to soul, and lose actual HP';
+ const shortcut=p.locator('#poiHotbar [data-hotbar-slot="5"]');
+ const soulState=(active)=>p.waitForFunction(active=>{const q=window.__editorTest.resetKitQA();return active?q.soul.active==='orvasSoul'&&q.liveSoul==='orvasSoul':!q.soul.active&&!q.liveSoul},active);
+ await shortcut.tap();await soulState(true);assert.equal((await snapshot()).soul.hp,1050);
+ await shortcut.tap();await p.locator('#poiCompanionCommands [data-companion-command="dismiss"]').tap();await soulState(false);
+ seeded(await snapshot());
+ await shortcut.tap();await soulState(true);
+ assert(await p.evaluate(()=>window.__editorTest.orvasResetLoseQA()));
+ s=await snapshot();assert(!s.kit.slots.some(c=>c?.type==='orvasSoul'));assert.equal(s.soul.active,null);
  where='dropping one experimental weapon then retaining reset-camera URL must not grant it again';
  assert(await p.evaluate(()=>window.__editorTest.orvasResetDropQA().ok),'the real inventory drop is persisted');
  s=await snapshot();assert.equal(s.kit.slots[2],null);assert.equal(s.kit.drops,1);
@@ -72,7 +86,7 @@ try{
  const response=await p.goto(keptURL,{waitUntil:'domcontentloaded'});
  assert.equal(new URL(response.url()).searchParams.get('reset-camera'),'1');
  await ready();s=await snapshot();
- assert.equal(s.kit.slots[2],null);assert.equal(s.kit.drops,1);
+ assert.equal(s.kit.slots[2],null);assert.equal(s.kit.drops,1);assert(!s.kit.slots.some(c=>c?.type==='orvasSoul'));
  assert.deepEqual(s.kit.slots.filter(c=>keys.includes(c?.type)).map(c=>c.type),keys.slice(1));
  assert.equal(s.first,first);
  where='second explicit initialization replaces rather than accumulating another set';

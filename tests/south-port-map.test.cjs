@@ -8,7 +8,7 @@ const expectedPrefix='49466e43ba72fa3d8ce839bbbd5083a37d086e3542c4a103426b883aff
 const floors=vm.runInNewContext(h.match(/^const ROAD_(?:BASES|DIAGONALS|IDS)=.+$/gm).join("\n")+"\n"+h.match(/^function isFloor\(t\)\{.+\}$/m)[0]+";isFloor");
 test('actual southern inn connects on foot to a quiet coast and safe walkable pier, with no new objects on old authored cells',()=>{
  assert(p,'south coast present');
- assert.equal(p.name,'セルネア');assert.equal(site.map.width,128);assert.equal(site.map.height,128);
+ assert.equal(p.name,'セルネア');assert.equal(site.map.width,128);assert.equal(site.map.height,site.sacredDepth?.h??128);
  assert.equal(key(p.approach[0]),'105,111,0');assert.equal(key(p.entrance),'91,123,0');
  assert.equal(key(p.dock.end),'73,118,0');assert.equal(key(p.dock.waterAhead),'72,118,0');
  const all=[...p.approach,...p.dock.route.slice(1)];

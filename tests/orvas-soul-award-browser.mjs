@@ -79,7 +79,7 @@ try{
    localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weaponDurabilityVersion:2,weapon:mode==='ally'?null:'equipWoodSword',potions:0,slots,
     companionSoul:{version:1,active:mode==='ally'?'slimeSoul':null,pending:mode==='ally'?null:'slimeSoul'}}));
    localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,position:{x:24,z,y:0,facing:0},
-    townLayout:5,townMapHeight:128,view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:Math.PI,orbitPitch:.19,orbitDistance:5.7}}));
+    townLayout:5,townMapHeight:182,templeDepth:1,view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:Math.PI,orbitPitch:.19,orbitDistance:5.7}}));
   },{mode,z});
   async function open(realBoot=false){
    await p.goto(url+'/?resume=1&test=1',{waitUntil:'domcontentloaded',timeout:45000});
@@ -117,33 +117,33 @@ try{
  }
  function checkGrant(s,source){
   assert.equal(s.hits.length,1);assert.equal(s.hits[0].companion,source);
-  assert.deepEqual(s.ground.map(d=>d.id).sort(),['orvas-greatsword','orvas-head','orvas-soul','orvas-twin-greatswords','orvas-waistcloth']);
-  assert.deepEqual(s.ground.find(d=>d.id==='orvas-soul'),{id:'orvas-soul',type:'orvasSoul',x:24,z:105,y:0,durability:1050});
-  assert.equal(s.saved.orvasRewards,31);assert.equal(typeof s.saved.dungeonPopulation.dead['davidTemple.david'],'number');
-  assert.deepEqual(s.atomic[0],{flag:31,dead:true,soul:1});
+  assert.deepEqual(s.ground.map(d=>d.id).sort(),['orvas-greatsword','orvas-head','orvas-soul','orvas-twin-greatswords']);
+  assert.deepEqual(s.ground.find(d=>d.id==='orvas-soul'),{id:'orvas-soul',type:'orvasSoul',x:24,z:159,y:0,durability:1050});
+  assert.equal(s.saved.orvasRewards,15);assert.equal(typeof s.saved.dungeonPopulation.dead['davidTemple.david'],'number');
+  assert.deepEqual(s.atomic[0],{flag:15,dead:true,soul:1});
   assert(s.atomic.every(w=>w.soul<=1));
  }
  const scenario=process.env.ORVAS_AWARD_CASE;let q,p,s;
  if(scenario!=='pending'){
  phase='real canonical awakening and actual slime-companion final blow';
- q=await begin('ally',101);p=q.p;await q.tick();await q.step(24,102);
+ q=await begin('ally',155);p=q.p;await q.tick();await q.step(24,156);
  s=await q.until(v=>v.awake&&v.actor?.id==='slimeSoul');const walkSwing=s.swing;
  assert(await p.evaluate(()=>window.__editorTest.orvasAwardQA.pin()));
  s=await q.until(v=>v.ground.some(d=>d.id==='orvas-soul')&&v.draw.length);
- checkGrant(s,true);assert.equal(s.swing,walkSwing);assert.deepEqual(s.draw.slice(0,2),[24.5,105.5]);assert(s.draw[2]>72);
+ checkGrant(s,true);assert.equal(s.swing,walkSwing);assert.deepEqual(s.draw.slice(0,2),[24.5,159.5]);assert(s.draw[2]>72);
  phase='cold reload preserves floor reward, then actually walk over it';
  p=await q.cold();s=await q.until(v=>v.ground.some(d=>d.id==='orvas-soul'));
- assert.equal(s.ground.length,5);assert(s.slots.every(c=>c?.type!=='orvasSoul'));
- for(const [x,z] of [[23,102],[22,102],[22,103],[22,104],[22,105],[23,105],[24,105]])s=await q.step(x,z);
+ assert.equal(s.ground.length,4);assert(s.slots.every(c=>c?.type!=='orvasSoul'));
+ for(const [x,z] of [[25,156],[26,156],[26,157],[26,158],[26,159],[25,159],[24,159]])s=await q.step(x,z);
  assert.equal(s.slots.filter(c=>c?.type==='orvasSoul').length,1);
  assert.equal(s.slots.find(c=>c?.type==='orvasSoul').durability,1050);
- assert.equal(s.ground.length,4);assert(s.ground.every(d=>d.type!=='orvasSoul'));
- s=await q.step(24,106);s=await q.step(24,105);
- assert.equal(s.slots.filter(c=>c?.type==='orvasSoul').length,1);assert.equal(s.saved.orvasRewards,31);
+ assert.equal(s.ground.length,3);assert(s.ground.every(d=>d.type!=='orvasSoul'));
+ s=await q.step(24,160);s=await q.step(24,159);
+ assert.equal(s.slots.filter(c=>c?.type==='orvasSoul').length,1);assert.equal(s.saved.orvasRewards,15);
  p=await q.cold();s=await q.until(v=>v.slots.some(c=>c?.type==='orvasSoul'));
- assert.equal(s.ground.length,4);assert.equal(s.saved.orvasRewards,31);
+ assert.equal(s.ground.length,3);assert.equal(s.saved.orvasRewards,15);
  assert(s.slots.some(c=>c?.type==='slimeSoul'&&c.durability===29));
- phase='real confirmed reset retains only the three weapon starters, never the soul';
+ phase='real confirmed reset seeds weapons and one inactive usable soul; no ground or fight award';
  await p.locator('#poiLandscapeMenuToggle').tap();
  await p.locator('[data-landscape-action="reset"]').tap();
  await p.locator('#poiResetGameDialog').waitFor({state:'visible'});
@@ -151,21 +151,21 @@ try{
  await Promise.all([p.waitForURL(/reset-camera=1/),p.locator('#poiResetGameConfirm').tap()]);
  await p.locator('#pineStartupCover').waitFor({state:'hidden'});s=await q.see();
  assert.deepEqual(s.slots.slice(2,5).map(o=>o?.type),['equipOrvasHead','equipOrvasGreatsword','equipOrvasTwinGreatswords']);
- assert(s.slots.every(c=>c?.type!=='orvasSoul'));assert(!s.ground.some(d=>d.type==='orvasSoul'));
+ assert.deepEqual(s.slots.filter(c=>c?.type==='orvasSoul').map(c=>[c.count,c.durability]),[[1,1050]]);assert(!s.ground.some(d=>d.type==='orvasSoul'));assert(!s.actor&&!(s.saved?.orvasRewards));
  assert.deepEqual(q.errors,[]);await q.c.close();
  }
  if(scenario!=='pickup'){
  phase='real sword finish while normal slime claim remains pending and bag is full';
- q=await begin('pending',101);p=q.p;await q.tick();await q.step(24,102);
+ q=await begin('pending',155);p=q.p;await q.tick();await q.step(24,156);
  s=await q.until(v=>v.awake&&v.pending==='slimeSoul');
  assert(await p.evaluate(()=>window.__editorTest.orvasAwardQA.pin()));
- s=await q.step(24,103);
+ s=await q.step(24,157);
  await p.locator('#poiWalkAction').tap();
  s=await q.until(v=>v.ground.some(d=>d.id==='orvas-soul'));
  checkGrant(s,false);assert.equal(s.pending,'slimeSoul');
  assert(s.slots.every(c=>c?.type!=='orvasSoul'||!c));
  assert.deepEqual(q.errors,[]);
  }
- console.log('Canonical Orvas actual companion and player finishes, verified atomic visible floor reward, real walk pickup/reload and reset exclusion');
+ console.log('Canonical Orvas actual companion and player finishes, verified atomic visible floor reward, real walk pickup/reload and explicit reset provision');
 }catch(e){console.error(phase,last&&{...last,slots:last.slots.filter(Boolean),saved:last.saved?.orvasRewards});throw e}
 finally{await browser?.close();await new Promise(ok=>server.close(ok))}

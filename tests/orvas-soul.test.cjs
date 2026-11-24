@@ -59,8 +59,7 @@ test('real cold hotbar decoder reads the authored death ledger and every physica
  vm.runInContext(cut('function poiDungeonThemeAt(','function poiDungeonEnterEffect(')+
   cut('const POI_TOWN_CLOCK_KEY=','function poiTownClockSuspend(')+cut('// BEGIN MONSTER COMPANION CORE','function poiResetCombat('),c);
  const read=JSON.parse(vm.runInContext('JSON.stringify(poiHotbarRead())',c));
- a.equal(read.orvasRewards,31);a.deepEqual(read.armedDrops.slice(0,4),seed.armedDrops);
- a.deepEqual(read.armedDrops[4],{id:'orvas-waistcloth',type:'armorOrvasWaistcloth',x:25,z:105,y:0,durability:96});
+ a.equal(read.orvasRewards,15);a.deepEqual(read.armedDrops,seed.armedDrops.map(d=>({...d,z:d.z+54})));
  a.equal(read.dungeonPopulation.dead['davidTemple.david'],450);
  a.deepEqual(read.slots[1],cells[1]);a.equal(read.companionSoul.active,'slimeSoul');
  a.equal(writes.length,0);

@@ -1,0 +1,46 @@
+name: Isolated local minimap QA
+on:
+  push:
+    branches: [dot/workshop-slime-companion-qa]
+permissions:
+  contents: read
+jobs:
+  strict-unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: |
+          test "$(git hash-object world-editor.html)" = "9854592ed243431332f40b55e829dfd85e63376c"
+          python .qa-local-minimap/build.py world-editor.html checked.html
+          test "$(git hash-object checked.html)" = "5c0d4f2cc8a37f2bb344c27e18ef15a087005ab6"
+          mv checked.html world-editor.html
+          if ! node --test tests/*.test.cjs > "$RUNNER_TEMP/strict.out" 2>&1; then
+            grep -E '^not ok |^  location:|^  error:|^# (tests|pass|fail|duration)' "$RUNNER_TEMP/strict.out" | tail -250
+            exit 1
+          fi
+          grep -E '^# (tests|pass|fail|duration)' "$RUNNER_TEMP/strict.out"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strict-unit
+          path: ${{ runner.temp }}/strict.out
+          retention-days: 3
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save playwright@1.56.1
+      - run: npx playwright install chromium
+      - run: |
+          test "$(git hash-object world-editor.html)" = "9854592ed243431332f40b55e829dfd85e63376c"
+          python .qa-local-minimap/build.py world-editor.html checked.html
+          test "$(git hash-object checked.html)" = "5c0d4f2cc8a37f2bb344c27e18ef15a087005ab6"
+          node tests/local-minimap-browser.mjs checked.html
