@@ -15,6 +15,9 @@ function harness(){
  const decal=h.includes('// BEGIN DAVID GROUND FISSURE')?cut('// BEGIN DAVID GROUND FISSURE','// END DAVID GROUND FISSURE'):'';
  const api=vm.runInNewContext(cut('const POI_DAVID_SWEEP_FORWARD=','function poiDavidLine(')+cut('function poiAimWallLimit(','function poiAimChooseLock(')+
   cut('// BEGIN DAVID STOMP IMPACT','function poiDavidDustGeometry')+decal+
+  // The isolated hostile crop still executes its real accessors and cleanup;
+  // the allied renderer shares the drawing function via a separate bank.
+  cut('const globalpoiDavidFissure=','const globalpoiDavidRaisedStoneMesh=')+
   ';({stomp:poiDavidImpactStomp,draw:typeof poiDrawDavidFissure==="function"?poiDrawDavidFissure:null,geom:typeof poiDavidFissureGeometry==="function"?poiDavidFissureGeometry:null,reset:poiDavidClearHeavyFeedback})',c);
  return {api,c,b,logs,live};
 }

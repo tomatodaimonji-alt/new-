@@ -119,7 +119,7 @@ try{
  assert.equal(last.mini.builds,beforeBuild+1,'same surface cache is rebuilt exactly once at discovery');
  await step({x:24,z:129});
  assert.equal(last.mini.builds,beforeBuild+1);
- assert.equal(last.fog[2],0);assert.equal(last.name,'白環の大神殿');
+ assert.equal(last.fog[2],0);assert.equal(last.name,'オルヴァスの大神殿');
  phase='cold reload away from the gate preserves discovery while keeping unrelated pouch data';
  await p.clock.resume();await seed(12,49);s=await tick(38);
  assert(s.mini.saved&&!s.mini.concealed&&s.mini.temple.every(c=>c===null));

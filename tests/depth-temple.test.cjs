@@ -28,8 +28,9 @@ test('legacy temple resume moves once to open forecourt but woodland, subterrane
 test('only the named far dome is withheld from ordinary far ground view; near visibility and plan are unchanged',()=>{
  const first=h.indexOf('function facilityVisibleRoofs('),end=h.indexOf('function facilityCollectEntranceGuides(',first);
  const {site}=boot(),ctx={facilitySite:site,facilityRoofMeshes:[{count:8}],facilityHiddenRoof:()=>0,poiWalkActive:true,
-  poiWalkLevel:0,cameraTopDown:false,poiWalkViewX:24,poiWalkViewZ:49};
- const r=vm.runInNewContext(h.slice(first,end)+';facilityVisibleRoofs',ctx);
+  poiWalkLevel:0,cameraTopDown:false,pineAIActive:false,poiWalkViewX:24,poiWalkViewZ:49};
+ const i=h.indexOf('// BEGIN SACRED TEMPLE SIGHTLINE'),j=h.indexOf('// END SACRED TEMPLE SIGHTLINE',i);
+ const r=vm.runInNewContext((i<0?'':h.slice(i,j))+h.slice(first,end)+';facilityVisibleRoofs',ctx);
  a.equal(r().length,0);ctx.cameraTopDown=true;a.deepEqual(Array.from(r()),[0]);
  ctx.cameraTopDown=false;ctx.poiWalkViewZ=120;a.deepEqual(Array.from(r()),[0]);
  ctx.poiWalkViewZ=151;a.deepEqual(Array.from(r()),[0]);
