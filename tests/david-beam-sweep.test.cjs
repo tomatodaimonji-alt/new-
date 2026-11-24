@@ -85,7 +85,10 @@ test('live private encounter clock selects all four kinds, not only the exposed 
  for(let t=1000;t<8500;t+=10){api.tick(t);if(s.david?.attack)seen.add(s.david.attack.kind)}
  a.deepEqual([...seen].slice(0,4),['sweep','double','stomp','beam']);
  a.deepEqual(c.damage.slice(0,5).map(d=>d.n),[30,28,35,39,47]);
- a.deepEqual(c.sounds.slice(0,5),[['sweep',0],['double',0],['double',1],['stomp',0],['beam',0]].map(([kind,i])=>({kind,i,phase:'impact'})));
+ const impact=c.sounds.filter(v=>v.phase==='impact');
+ a.deepEqual(impact.slice(0,5),[['sweep',0],['double',0],['double',1],['stomp',0],['beam',0]].map(([kind,i])=>({kind,i,phase:'impact'})));
+ const onset=c.sounds.findIndex(v=>v.kind==='beam'&&v.phase==='beamOnset');
+ a(onset>=0&&onset<c.sounds.findIndex(v=>v.kind==='beam'&&v.phase==='impact'),'initial continuous cue begins before the unchanged damage contact');
  a.equal(s.hp,1050,'monster health and general player reports are not rewritten');
 });
 test('actual floor cue and elevated red beam end at a new wall and never outside the arena',()=>{

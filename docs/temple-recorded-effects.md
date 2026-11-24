@@ -1,4 +1,7 @@
 # White Ring Temple and Fire Wand recorded effects
+
+> Historical v275 mix: as of v278 the David beam is no longer a torch or compressed-air sample. See [the current metallic sweep and beam notes](david-alien-beam-and-metal.md). The Fire Wand remains as described.
+
 The new Foley is cut from four uploader-published Freesound recordings, each released under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). The loudness shaping and low resonant layers are custom. The eye beam is fictional: its air and flame textures are real recordings, not a recording of a real beam.
 - [metal-gate-slam](https://freesound.org/people/newagesoup/sounds/335976/) by newagesoup: gate striking a metal pole in a stairwell. Edited for the blade pass, both blade landings and rumble. Published HQ preview [335976](https://cdn.freesound.org/previews/335/335976_4067257-hq.mp3), SHA-256 `711ee4a606a7e593c009a52ebfad5e1d9cb69bd1e9e1dbaa0cef312d030db620`.
 - [Closing large metal door-002](https://freesound.org/people/AudioPapkin/sounds/814977/) by AudioPapkin: field-recorded massive metal door. Edited for the two impacts and foot weight; muffled low resonance, not a full door closing sound. Published HQ preview [814977](https://cdn.freesound.org/previews/814/814977_8698658-hq.mp3), SHA-256 `ec9849a86fa4c4c1aca763e4ddc76723c5050752665c220a68bb20f1c9eeb922`.
