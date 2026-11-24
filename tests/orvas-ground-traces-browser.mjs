@@ -58,7 +58,7 @@ put(ap,ap+`
   },
   get:()=>{
    const b=facilitySite?.davidTemple?.boss,d=poiDavidActive?.s?.david,q=d?.attack;
-   return {start:poiOrvasGroundTraces.map(e=>({kind:e.kind,start:e.start,x:e.x,z:e.z,cells:[...e.cells],points:e.parts.reduce((n,m)=>n+m.p.length/3,0)})),
+   return {start:poiOrvasGroundTraces.map(e=>({kind:e.kind,start:e.start,x:e.x,z:e.z,cells:[...e.cells],ribbon:e.sweepMesh?.p.length/3||0,genuineSweepAngle:e.sweepAngle,points:e.parts.reduce((n,m)=>n+m.p.length/3,0)})),
     drawn:window.__orvasDraws??[],uploads:window.__orvasUploads??[],gl:gl.getError(),
     now:performance.now(),nextMob:poiNextMobTick,hp:poiPlayerHP,boss:b?
     {x:b.x,z:b.z,y:b.y}:null,player:[poiWalkX,poiWalkZ,poiWalkLevel],awake:d?.awake,ready:d?.wakeDone,
@@ -115,7 +115,7 @@ try{
   };
   assert(await p.evaluate(()=>window.__editorTest.orvasTracesQA.seed()));
   const initial=await read();assert.deepEqual(initial.player,[initial.boss.x,initial.boss.z-2,initial.boss.y]);
-  await p.clock.pauseAt((await p.evaluate(()=>Date.now()))+1500);
+  await p.bringToFront();await p.clock.pauseAt((await p.evaluate(()=>Date.now()))+12000);
   const aligned=await read();if(aligned.nextMob>aligned.now)await p.clock.fastForward(Math.ceil(aligned.nextMob-aligned.now)+20);
   await until(s=>s.awake,55,'natural exact wake range');
   assert(await p.evaluate(([c,r])=>window.__editorTest.orvasTracesQA.select(c,r),[cycle,roll]));
@@ -134,8 +134,12 @@ try{
    assert.equal(second.hp,100,'actual blade contact traces do not require hitting player');
    assert(second.uploads.slice(1).some(u=>u.reuse));
   }else if(label==='alternate'){
-   const later=await until(s=>s.q?.done&&s.start[0]?.cells.length>first.start[0].cells.length,38,'rotating beam paints additional legal cells');
-   assert.equal(later.start.length,1);assert(later.start[0].cells.length<=24);assert(later.uploads.every((u,i)=>i===0||u.reuse));
+   const later=await until(s=>s.q?.done&&s.start[0]?.ribbon>100,45,'rotating beam submits contiguous optical strip');
+   assert.equal(later.start.length,1);assert.deepEqual(later.start[0].cells,first.start[0].cells);
+   assert(Math.abs(later.start[0].genuineSweepAngle-later.q.angle)<1e-5);
+   assert(later.start[0].ribbon<=5250&&later.drawn.some(d=>d.count>later.start[0].ribbon));
+   assert(later.uploads.every((u,i)=>i===0||u.reuse));
+   console.log('Actual swept strip submission',JSON.stringify({tipAngle:later.q.angle,ribbon:later.start[0].ribbon,gl:later.gl}));
   }else if(label==='beam'){
    const stripes=await p.evaluate(()=>window.__editorTest.orvasTracesQA.verifyStripes());
    assert(stripes&&stripes.left>35&&stripes.right>35&&stripes.center===0&&stripes.error===0,JSON.stringify(stripes));

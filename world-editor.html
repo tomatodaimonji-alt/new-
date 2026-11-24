@@ -34539,7 +34539,7 @@ function poiOrvasBossOpticalEnds(q,d,reach,base,eye,floor,front,b,pass){
   if(length<=.012)continue;
   const H=base+eye,landing=base+floor,dy=(landing-H)/length;
   const face=safe&&poiOrvasWallContact(x,H,z,d,length,dy);
-  const end={x,z,length,h:landing,face:null,floor:false};
+  const end={x,z,length,h:landing,face:null,floor:false,eyeSide:side};
   if(face&&face.at<=length+.15){
    end.length=face.at-.008;end.h=H+dy*end.length;end.face=face;
   }else if(ground){
@@ -35025,10 +35025,117 @@ function poiOrvasFloorMark(m,ground,x,z,d){
  return m.p.length>0;
 }
 // END ORVAS PHYSICAL TIP WITNESSES
+function poiOrvasSweepGroundSample(g,x,z,height){
+ const p=g(x,z);
+ return p&&Math.abs(p[1]-height)<=.105?p:null;
+}
+function poiOrvasSweepGroundEdge(g,a,b){
+ // Check each actual grid boundary, not only periodic samples. A diagonal
+ // corner can cross a missing cell for much less than one sample interval.
+ const cuts=[0,1];
+ for(const j of [0,2]){
+  const lo=Math.min(a[j],b[j]),hi=Math.max(a[j],b[j]),d=b[j]-a[j];
+  if(d)for(let k=Math.floor(lo)+1;k<hi;k++)cuts.push((k-a[j])/d);
+ }
+ cuts.sort((a,b)=>a-b);
+ for(let i=1;i<cuts.length;i++){
+  const t=(cuts[i-1]+cuts[i])*.5;
+  const x=a[0]+(b[0]-a[0])*t,z=a[2]+(b[2]-a[2])*t,y=a[1]+(b[1]-a[1])*t;
+  if(!poiOrvasSweepGroundSample(g,x-.5,z-.5,y-.008))return false;
+ }
+ return true;
+}
+function poiOrvasSweepWallSample(row,p,n){
+ const o=[p[0]-row.x+n[0]*.055,p[1]-row.y+n[1]*.055,p[2]-row.z+n[2]*.055],ray=n.map(v=>-v);
+ const at=row.s.tris?poiWallCameraTriangles(row.s.tris,o,ray,.11):poiWallCameraSlab(row.s,o,ray,.11);
+ return Number.isFinite(at)&&Math.abs(at-.055)<.015;
+}
+function poiOrvasSweepRibbon(m,g,last,next){
+ if(last.kind!==next.kind)return false;
+ const a=last.p,b=next.p,d=b.map((v,i)=>v-a[i]),len=Math.hypot(...d);
+ if(len<.008||len>.39)return false;
+ const at=t=>a.map((v,i)=>v+d[i]*t);
+ let sample,n;
+ if(next.kind==='floor'){
+  const flat=Math.hypot(d[0],d[2]);if(flat<.008||Math.abs(d[1])>.13)return false;
+  n=[-d[2]/flat,0,d[0]/flat];
+  sample=(p,w)=>{
+   const v=poiOrvasSweepGroundSample(g,p[0]+n[0]*w,p[2]+n[2]*w,p[1]);
+   return v&&[v[0],v[1]+.008,v[2]];
+  };
+ }else{
+  const f=next.face,k=last.face,N=f.normal;
+  if(Math.hypot(N[0],N[2])<.55||N.reduce((n,v,i)=>n+v*k.normal[i],0)<.997||
+     N.reduce((n,v,i)=>n+v*d[i],0)**2>.0001)return false;
+  const cross=[N[1]*d[2]-N[2]*d[1],N[2]*d[0]-N[0]*d[2],N[0]*d[1]-N[1]*d[0]],w=Math.hypot(...cross);
+  if(w<1e-6)return false;n=cross.map(x=>x/w);
+  sample=(p,r)=>{
+   const v=p.map((x,i)=>x+n[i]*r);
+   return (poiOrvasSweepWallSample(k.row,v,N)||poiOrvasSweepWallSample(f.row,v,N))?v.map((x,i)=>x+N[i]*.017):null;
+  };
+ }
+ const size=Math.max(1,Math.ceil(len/(next.kind==='wall'?.048:.076))),rows=[];
+ for(let i=0;i<=size;i++){
+  const p=at(i/size),width=.045+.009*Math.sin(p[0]*7.1+p[2]*6.7);
+  if(!sample(p,0))return false;
+  const l=sample(p,width),r=sample(p,-width);
+  if(!l||!r)return false;
+  rows.push([l,r]);
+ }
+ if(next.kind==='floor')for(let i=1;i<rows.length;i++){
+  const [l,r]=rows[i-1],[nl,nr]=rows[i];
+  const same=[r,nl,nr].every(p=>Math.floor(p[0])===Math.floor(l[0])&&Math.floor(p[2])===Math.floor(l[2]));
+  if(!same&&![[l,nl],[nl,nr],[nr,r],[r,l],[l,nr]].every(([p,q])=>poiOrvasSweepGroundEdge(g,p,q)))return false;
+ }
+ for(let i=1;i<rows.length;i++){
+  const [l,r]=rows[i-1],[nl,nr]=rows[i];
+  quad(m,l,nl,nr,r,next.kind==='wall'?[.134,.066,.036]:poiOrvasScorchPaint(g.material?.((a[0]+b[0])*.5,(a[2]+b[2])*.5),0));
+ }
+ return true;
+}
+function poiOrvasSweepOpticalSample(q,e,b,angle,pass,ground){
+ const d=poiDavidBeamRay(q,angle),reach=poiDavidBeamReach(q,b,d);
+ const base=terrainY(q.sx,q.sz)+q.y*1.4,eye=typeof POI_DAVID_EYE_Y==='number'?POI_DAVID_EYE_Y:4.75;
+ const front=typeof POI_DAVID_EYE_FRONT==='number'?POI_DAVID_EYE_FRONT:.29;
+ const tips=poiOrvasBossOpticalEnds(q,d,reach,base,eye,.68,front,b,pass),checked=new Map();
+ for(const tip of tips){
+  if(tip.face){
+   const f=tip.face;checked.set(tip.eyeSide,{kind:'wall',p:[f.wx,f.h,f.wz],face:f});
+  }else if(tip.floor){
+   const x=tip.x+d.x*tip.length,z=tip.z+d.z*tip.length,g=ground(x,z);
+   if(g)checked.set(tip.eyeSide,{kind:'floor',p:[x,g[1],z]});
+  }
+ }
+ return checked;
+}
+function poiOrvasSweepTrace(q,e,b,now,angle){
+ const from=e.sweepAngle??0,gap=angle-from;
+ if(Math.abs(gap)<1e-6)return false;
+ const pass=poiAimWall({y:q.y}),ground=poiOrvasTraceGround(q,e,b,pass);
+ const m=e.sweepMesh??=mesh(),before=m.p.length;
+ // A slow frame covers all traversed angles from the true straight start.
+ // Short spans and surface probes prevent a chord over an occluder or lip.
+ const steps=Math.min(80,Math.ceil(Math.abs(gap)/.021));
+ let tips=e.sweepTips??poiOrvasSweepOpticalSample(q,e,b,from,pass,ground);
+ for(let i=1;i<=steps;i++){
+  const next=poiOrvasSweepOpticalSample(q,e,b,from+gap*i/steps,pass,ground);
+  if(m.p.length<15500)for(const [side,p] of next){
+   const last=tips.get(side);if(last)poiOrvasSweepRibbon(m,ground,last,p);
+  }
+  tips=next;
+ }
+ e.sweepAngle=angle;e.sweepTips=tips;
+ if(m.p.length===before)return false;
+ if(!e.sweepPlaced){e.sweepPlaced=true;e.parts.push(m)}
+ e.seen=now;
+ if(!e.pushed){e.pushed=true;poiOrvasTracePush(e)}else poiOrvasGroundDirty=true;
+ return true;
+}
 function poiOrvasBeamTrace(q,b,now,angle=0){
  if(!q?.executed||q.kind!=='beam'||!poiWalkActive||q.y!==poiWalkLevel)return false;
  const fresh=!q.orvasBeamGround,e=q.orvasBeamGround??=poiOrvasTraceEvent(q,'beam',now);
  if(e.owner!==facilitySite||(e.pushed&&!poiOrvasGroundTraces.includes(e)))return false;
+ if(q.sweep)return q.sweep.start!==null&&poiOrvasSweepTrace(q,e,b,now,angle);
  if(!fresh&&Math.abs(angle-e.lastAngle)<.075&&!q.sweep?.done)return false;
  const d=poiDavidBeamRay(q,angle),reach=poiDavidBeamReach(q,b,d),pass=poiAimWall({y:q.y});
  const base=terrainY(q.sx,q.sz)+q.y*1.4,eye=typeof POI_DAVID_EYE_Y==='number'?POI_DAVID_EYE_Y:4.75;
