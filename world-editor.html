@@ -4815,6 +4815,8 @@ case 'mineEntrance':{
  B(0,1.55,.012,.99,.213,.233,beam);B(0,1.715,.037,.99,.061,.20,weathered);
  B(0,1.604,.139,.35,.049,.016,dark);B(0,1.612,.150,.18,.021,.015,metal);
  break;}
+case 'monsterStoneDavid':
+ poiDavidGeometry(m,x,y,z,null);break;
 case 'monsterNorthMinotaur':
  poiNorthMinotaurGeometry(m,x,y,z);break;
 case 'monsterMineGuard':{
@@ -5552,6 +5554,150 @@ function poiNorthMinotaurArtPose(a,now){
  const end=[.15+sx*1.61,1.46,.105+sz*1.64];
  return {head:0,grip:lerp(grip,idle.grip,rest),end:lerp(end,idle.end,rest)};
 }
+// BEGIN STONE DAVID VISUAL
+const POI_DAVID_EYE_Y=4.75,POI_DAVID_EYE_FRONT=.29;
+const POI_DAVID_BLADE=3.10;
+function poiDavidRig(pose){
+ const p=pose||{},phase=p.phase||'dormant',kind=p.kind,t=Math.max(0,Math.min(1,p.progress||0)),contact=p.contact||0;
+ const ease=v=>{v=Math.max(0,Math.min(1,v));return v*v*(3-2*v)},q=ease(t),mix=(a,b,k)=>a.map((v,i)=>v+(b[i]-v)*k);
+ const feet=[[-.56,0,.20],[.56,0,-.12]],knees=[[-.56,1.04,.12],[.53,1.04,-.05]];
+ const shoulders=[[-.98,3.68,.02],[.98,3.68,.02]];
+ const rest=[[-1.22,2.37,.26],[1.22,2.37,.26]],up=[-.30,.89,.34],up2=[.30,.89,.34];
+ let hands=[...rest],axes=[[-.13,-.59,.80],[.13,-.59,.80]],glow=phase!=='dormant';
+ const sights=[[-.151,POI_DAVID_EYE_Y,POI_DAVID_EYE_FRONT],[.151,POI_DAVID_EYE_Y,POI_DAVID_EYE_FRONT]];
+ if(phase==='wake'){
+  hands=rest.map((h,i)=>mix(h,[(i?1:-1)*1.29,2.55,.40],Math.sin(Math.PI*t)));
+  glow=t>.22;
+ }
+ if(kind==='sweep'){
+  const load=[[-1.58,2.66,-.50],[1.58,2.66,-.50]],loadAxis=[[-.93,.22,-.35],[.93,.22,-.35]];
+  const strike=[[-1.00,2.34,.84],[1.15,2.48,.62]],strikeAxis=[[-.123,.01,.992],[.74,.06,.67]];
+  const through=[[-1.34,2.56,.41],[1.42,2.62,.33]],throughAxis=[[-.89,.23,.38],[.94,.22,.25]];
+  [hands,axes]=[rest,axes].map((from,i)=>{
+   const loadPose=i?loadAxis:load,strikePose=i?strikeAxis:strike,throughPose=i?throughAxis:through;
+   return from.map((v,k)=>{
+    if(phase==='windup'){
+     if(t<.68)return mix(v,loadPose[k],ease(t/.68));
+     return mix(loadPose[k],strikePose[k],ease((t-.68)/.32));
+    }
+    if(phase==='impact')return strikePose[k];
+    return t<.36?mix(strikePose[k],throughPose[k],ease(t/.36)):mix(throughPose[k],v,ease((t-.36)/.64));
+   });
+  });
+ }
+ if(kind==='double'){
+  const raise=[[-.68,4.59,.27],[.68,4.59,.27]],fall=[[-.68,2.35,1.15],[.68,2.35,1.15]];
+  const elapsed=Number.isFinite(p.elapsed)?p.elapsed:null;
+  const hits=p.hitTimes||[720,1040];
+  [hands,axes]=[rest,axes].map((from,j)=>from.map((v,i)=>{
+   const high=j?(i?up2:up):raise[i],low=j?[0,-.703,.712]:fall[i],hit=hits[i];
+   if(elapsed!==null){
+    if(elapsed<410)return mix(v,high,ease(elapsed/410));
+    if(elapsed<hit-(i?145:178))return high;
+    if(elapsed<hit)return mix(high,low,ease((elapsed-(hit-(i?145:178)))/(i?145:178)));
+    return mix(low,v,ease((elapsed-hits[1]-105)/510));
+   }
+   if(phase==='windup')return mix(v,high,q);
+   return contact>i?mix(low,v,phase==='recover'?q:0):high;
+  }));
+ }
+ if(kind==='stomp'){
+  const elapsed=Number.isFinite(p.elapsed)?p.elapsed:null,hit=p.hitTimes?.[0]??930;
+  const action=elapsed!==null?elapsed<hit-125?ease(elapsed/(hit-125)):1-ease((elapsed-hit+125)/125):phase==='windup'?q:0;
+  const height=1.19*action;
+  feet[0]=[-.56,height,.20+height*.43];
+  knees[0]=[-.57,1.04+height*.79,.12+height*.57];
+  hands=rest.map((h,i)=>mix(h,[(i?1:-1)*1.62,2.61,.04],phase==='windup'?q:phase==='impact'?1:1-q));
+  axes=[[-.53,-.62,.54],[.53,-.62,.54]];
+ }
+ if(kind==='beam'){
+  const widen=phase==='windup'?q:phase==='impact'?1:1-q;
+  hands=rest.map((h,i)=>mix(h,[(i?1:-1)*1.50,2.77,.20],widen));
+  axes=[[-.58,-.46,.66],[.58,-.46,.66]];
+ }
+ if(kind==null&&(phase==='ready'||phase==='idle')&&p.walk){
+  const r=Math.sin(p.walk*Math.PI*2)*.32;
+  feet[0][2]+=r;feet[1][2]-=r;feet[r>=0?0:1][1]=Math.abs(r)*.52;
+ }
+ const swordTips=hands.map((h,i)=>{
+  const v=axes[i],s=POI_DAVID_BLADE/Math.hypot(...v);return h.map((a,j)=>a+v[j]*s);
+ });
+ const elbows=hands.map((h,i)=>[(i?1:-1)*(1.25+Math.max(0,Math.abs(h[0])-1.1)*.42),
+  h[1]>3.55?3.99:(3.67+h[1])*.50,-.04]);
+ return {feet,knees,shoulders,hands,elbows,swordTips,eyes:sights,glow};
+}
+function poiDavidGeometry(m,x,y,z,pose){
+ const r=poiDavidRig(pose),P=v=>[x+v[0],y+v[1],z+v[2]];
+ const stone=[.57,.54,.48],pale=[.71,.665,.577],chalk=[.81,.756,.656],shadow=[.36,.351,.322],fold=[.47,.448,.397];
+ const shade=(c,v)=>c.map(n=>n*v),add=(a,b,k=1)=>a.map((v,i)=>v+b[i]*k);
+ const sub=(a,b)=>add(a,b,-1),unit=v=>{const d=Math.hypot(...v)||1;return v.map(n=>n/d)};
+ const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+ const T=(a,b,c,col)=>tri(m,P(a),P(b),P(c),col),Q=(a,b,c,d,col)=>quad(m,P(a),P(b),P(c),P(d),col);
+ const prism=(p,q,w,d,u,v,col,n=6,cap=true)=>{
+  const axis=unit(sub(q,p)),across=unit(cross(Math.abs(axis[2])>.93?[0,1,0]:[0,0,1],axis)),depth=cross(axis,across);
+  const ring=(point,a,b)=>Array.from({length:n},(_,i)=>{
+   const t=(i+.5)*Math.PI*2/n;return add(add(point,across,a*Math.cos(t)),depth,b*Math.sin(t));
+  });
+  const lo=ring(p,w,d),hi=ring(q,u,v);
+  for(let i=0;i<n;i++){const j=(i+1)%n;Q(lo[i],lo[j],hi[j],hi[i],shade(col,i%3===0?.85:i%3===1?1:1.08))}
+  if(cap)for(let i=1;i<n-1;i++){T(lo[0],lo[i+1],lo[i],shade(col,.85));T(hi[0],hi[i],hi[i+1],col)}
+ };
+ for(let i=0;i<2;i++){
+  const s=i?1:-1,f=r.feet[i],k=r.knees[i],hip=[s*.42,2.29,.01];
+  const ankle=add(f,[0,.24,-.14]);
+  prism(add(f,[0,.03,0]),add(f,[0,.24,-.06]),.30,.43,.27,.33,shadow,6);
+  prism(ankle,k,.23,.235,.28,.272,stone,6,false);
+  prism(k,hip,.28,.272,.372,.335,pale,6,false);
+  Q(add(k,[-.15,-.14,.246]),add(k,[.15,-.14,.246]),add(k,[.18,.16,.276]),add(k,[-.18,.16,.276]),stone);
+ }
+ // Layered stylised stone drapery wraps hips and rises over one shoulder.
+ prism([0,2.01,-.015],[0,2.62,0],.87,.46,.79,.425,fold,8);
+ for(let i=0;i<5;i++){
+  const f=-.68+i*.31,tilt=.12+i*.028;
+  T([f,2.15,.42],[f+tilt,2.08,.43],[f+.16,2.61,.421],shade(stone,i%2?.91:1.08));
+ }
+ prism([0,2.54,0],[0,3.16,0],.73,.41,.93,.46,pale,8,false);
+ prism([0,3.16,0],[0,3.73,-.01],.93,.46,1.05,.39,stone,8,false);
+ prism([0,3.72,-.01],[0,4.04,-.012],1.04,.39,.37,.285,pale,8,true);
+ Q([-.77,2.57,.381],[-.52,2.72,.441],[.61,3.84,.31],[.43,3.94,.33],fold);
+ Q([-.62,2.66,.419],[-.53,2.71,.443],[.63,3.82,.321],[.55,3.86,.352],chalk);
+ prism([0,3.91,.005],[0,4.35,.025],.33,.281,.29,.249,stone,6,false);
+ prism([0,4.26,.018],[0,4.61,.031],.31,.29,.417,.32,pale,8,false);
+ prism([0,4.60,.013],[0,4.97,-.013],.417,.32,.362,.296,pale,8,false);
+ prism([0,4.92,-.024],[0,5.12,-.045],.405,.30,.255,.23,shadow,8);
+ const faceNose=[0,4.57,.43];
+ T([-.068,4.68,.303],[.068,4.68,.303],faceNose,pale);
+ T([-.048,4.81,.296],[-.068,4.68,.303],faceNose,stone);
+ T([.048,4.81,.296],faceNose,[.068,4.68,.303],chalk);
+ Q([-.135,4.449,.299],[.133,4.447,.299],[.102,4.485,.322],[-.108,4.486,.322],shadow);
+ for(const [ex,ey,ez] of r.eyes){
+  const bright=r.glow?[1,.12,.083]:[.24,.224,.193],edge=r.glow?[.78,.06,.056]:shadow;
+  Q([ex-.12,ey-.052,ez+.011],[ex+.12,ey-.052,ez+.011],[ex+.108,ey+.071,ez+.014],[ex-.113,ey+.073,ez+.014],edge);
+  Q([ex-.088,ey-.023,ez+.017],[ex+.09,ey-.023,ez+.017],[ex+.086,ey+.027,ez+.017],[ex-.086,ey+.027,ez+.017],bright);
+  Q([ex-.135,ey+.045,ez+.021],[ex+.12,ey+.05,ez+.021],[ex+.103,ey+.106,ez+.022],[ex-.101,ey+.106,ez+.031],pale);
+ }
+ for(let i=0;i<2;i++){
+  const a=r.shoulders[i],e=r.elbows[i],g=r.hands[i],tip=r.swordTips[i];
+  prism(a,e,.332,.31,.245,.23,stone,6,false);prism(e,g,.247,.23,.177,.176,pale,6);
+  const axis=unit(sub(tip,g)),blade=unit(cross(Math.abs(axis[1])>.96?[0,0,1]:[0,1,0],axis)),thick=cross(axis,blade);
+  const point=(along,wide=0,deep=0)=>add(add(add(g,axis,along),blade,wide),thick,deep);
+  prism(point(-.25),point(.205),.16,.146,.16,.146,fold,6);
+  prism(point(-.37),point(-.25),.19,.155,.2,.151,stone,6);
+  prism(point(.21,-.36),point(.21,.36),.10,.12,.10,.12,shadow,6);
+  // Long stone blades: raised central fuller, lighter sharp bevels,
+  // and exactly one indexed tip shared by all four blade facets.
+  const ring=(t,w,h)=>[point(t,-w),point(t,0,h),point(t,w),point(t,0,-h)];
+  const base=ring(.26,.25,.078),taper=ring(2.68,.16,.068);
+  for(let j=0;j<4;j++){
+   const k=(j+1)%4,c=j%2?chalk:pale;
+   Q(base[j],base[k],taper[k],taper[j],c);T(taper[j],taper[k],tip,c);
+  }
+  Q(point(.32,-.051,.064),point(.32,.051,.064),point(2.54,.036,.053),point(2.54,-.036,.053),stone);
+ }
+ return r;
+}
+// END STONE DAVID VISUAL
+
 function poiNorthMinotaurGeometry(m,x,y,z,pose=null){
  const {head,grip,end}=pose||poiNorthMinotaurArtPose(null,0);
  const hide=[.48,.245,.174],warm=[.57,.314,.215],tan=[.64,.394,.276],shade=[.31,.159,.127];
@@ -5668,7 +5814,37 @@ function poiNorthMinotaurGeometry(m,x,y,z,pose=null){
 }
 // END NORTH MINOTAUR ART
 
+// BEGIN DAVID TEMPLE ARCHITECTURE
+const POI_DAVID_TEMPLE_ARCH=new Set(['poiDavidGatePier','poiDavidTempleColumn','poiDavidWaystone']);
+palette.push(...[['poiDavidGatePier','大神殿の門柱'],['poiDavidTempleColumn','大神殿の石柱'],['poiDavidWaystone','白環の道標']].map(([id,name])=>({id,name,cat:'build',icon:'▥'})));
+function poiDavidTempleArchitecture(m,id,x,y,z,r){
+ const pale=[.81,.77,.68],shadow=[.54,.53,.51],white=[.94,.90,.80],metal=[.58,.48,.30];
+ const B=(dx,dy,dz,w,h,d,c)=>cube(m,x+dx,y+dy,z+dz,w,h,d,c);
+ if(id==='poiDavidTempleColumn'){
+  B(0,.02,0,.83,.20,.83,shadow);B(0,.22,0,.68,.22,.68,pale);
+  B(0,.44,0,.53,2.10,.53,pale);B(0,2.54,0,.71,.17,.71,white);B(0,2.71,0,.83,.11,.83,shadow);
+  for(const u of [-.14,0,.14])B(u,.54,-.274,.042,1.85,.04,white);
+  return;
+ }
+ if(id==='poiDavidWaystone'){
+  B(0,.02,0,.72,.21,.55,shadow);B(0,.23,0,.44,.91,.35,pale);B(0,1.14,0,.59,.16,.47,white);
+  B(0,.60,-.18,.31,.36,.058,shadow);
+  for(let i=0;i<8;i++){const t=2*Math.PI*i/8;B(.108*Math.cos(t),.78+.108*Math.sin(t),-.225,.065,.061,.035,white)}
+  return;
+ }
+ const toward=r===2?-1:1;
+ B(0,.02,0,.94,.29,.98,shadow);B(0,.31,0,.84,.23,.90,white);B(0,.54,0,.69,3.06,.72,pale);
+ for(const u of [-.22,0,.22])B(u,.61,-.374,.08,2.85,.07,white);
+ B(0,3.60,0,.94,.28,1.02,white);
+ // Two stone spans meet above the traversable centerline; no runtime door.
+ B(toward*1.54,3.88,0,3.10,.56,.82,shadow);B(toward*1.49,4.44,0,3.01,.19,1.01,white);
+ B(toward*2.78,4.63,0,.56,.29,.74,pale);
+ B(toward*2.70,3.98,-.447,.22,.34,.09,metal);
+}
+// END DAVID TEMPLE ARCHITECTURE
+
 function deco(m,id,x,y,z,r=0){
+ if(POI_DAVID_TEMPLE_ARCH.has(id)){poiDavidTempleArchitecture(m,id,x,y,z,r);return}
  if(id==='poiHealingHerb'){poiDrawHealingHerb(m,x,y,z);return}
  if(id==='poiCanalQuay'){poiCanalQuayGeometry(m,x,y,z,r);return}
  if(POI_FORT_PARTS.has(id)){poiFortGeometry(m,id,x,y,z,r);return}
@@ -10446,7 +10622,7 @@ window.__workshopAudioForeground=visible=>{
 // Foreground gameplay always uses the current mixer settings.
 
 const POI_PLAYER_MAX_HP=100,POI_PLAYER_ATTACK=20;
-const POI_MONSTER_STATS={monsterNorthMinotaur:{hp:224,attack:33},monsterSlime:{hp:35,attack:6},monsterGoblin:{hp:55,attack:10},monsterSkeleton:{hp:45,attack:9},monsterDragon:{hp:150,attack:22},monsterMineGuard:{hp:140,attack:18},monsterSkelWarrior:{hp:72,attack:11},monsterSkelKnight:{hp:108,attack:16},monsterSkelArcher:{hp:58,attack:10},monsterSkelSpearman:{hp:70,attack:12},monsterSkelMage:{hp:65,attack:14},monsterSkelLongStaff:{hp:82,attack:12},monsterPondSkater:{hp:60,attack:10}};
+const POI_MONSTER_STATS={monsterStoneDavid:{hp:1050,attack:30},monsterNorthMinotaur:{hp:224,attack:33},monsterSlime:{hp:35,attack:6},monsterGoblin:{hp:55,attack:10},monsterSkeleton:{hp:45,attack:9},monsterDragon:{hp:150,attack:22},monsterMineGuard:{hp:140,attack:18},monsterSkelWarrior:{hp:72,attack:11},monsterSkelKnight:{hp:108,attack:16},monsterSkelArcher:{hp:58,attack:10},monsterSkelSpearman:{hp:70,attack:12},monsterSkelMage:{hp:65,attack:14},monsterSkelLongStaff:{hp:82,attack:12},monsterPondSkater:{hp:60,attack:10}};
 let poiPlayerHP=POI_PLAYER_MAX_HP,poiSpawnX=0,poiSpawnZ=0,poiMonsterStates=new Map(),poiNextMobTick=0,poiAttackReady=0;
 let poiDamageLabels=[];
 let poiMonsterMesh=null,poiMonsterMeshLast=-10000,poiMonsterMeshDirty=true;
@@ -10577,7 +10753,8 @@ const POI_DUNGEON_SPAWN_ROWS=Object.freeze([
  ['otherworld.elite','monsterDragon',101,79],['otherworld.arena-knight','monsterSkelKnight',106,78],
  ['otherworld.archive-archer','monsterSkelArcher',109,88],
  ['otherworld.cloister-mage','monsterSkelLongStaff',120,82],
- ['northFort.minotaur','monsterNorthMinotaur',64,13]
+ ['northFort.minotaur','monsterNorthMinotaur',64,13],
+ ['davidTemple.david','monsterStoneDavid',24,104]
 ]);
 const POI_DUNGEON_SPAWN_KEYS=new Map(POI_DUNGEON_SPAWN_ROWS.map(([id,type,x,z])=>[type+':'+x+':'+z,id]));
 const POI_DUNGEON_SPAWN_TYPES=new Map(POI_DUNGEON_SPAWN_ROWS.map(([id,type])=>[id,type]));
@@ -10597,6 +10774,7 @@ function poiDungeonPopulationDecode(raw,minute=poiDungeonPopulationMinute()){
  return Object.keys(dead).length||Object.keys(questEntries).length?{version:1,dead,questEntries}:null;
 }
 function poiDungeonSpawnId(o){
+ if(o?.type==='monsterStoneDavid')return typeof poiDavidMatch==='function'&&poiDavidMatch(o)?'davidTemple.david':null;
  if(facilitySite?.id!=='base'||o?.y!==-1)return null;
  if(o.dungeonSpawnId&&POI_DUNGEON_SPAWN_TYPES.get(o.dungeonSpawnId)===o.type)return o.dungeonSpawnId;
  return POI_DUNGEON_SPAWN_KEYS.get(o.type+':'+o.x+':'+o.z)||null;
@@ -13601,7 +13779,7 @@ function poiHealPlayerFeedback(healed){
 }
 function poiWorldToScreen(vp,x,y,z){const w=vp[3]*x+vp[7]*y+vp[11]*z+vp[15];if(w<=.05)return null;const a=(vp[0]*x+vp[4]*y+vp[8]*z+vp[12])/w,b=(vp[1]*x+vp[5]*y+vp[9]*z+vp[13])/w;if(Math.abs(a)>1.25||Math.abs(b)>1.25)return null;return {x:(a+1)*.5*canvas.clientWidth,y:(1-b)*.5*canvas.clientHeight}}
 function poiRenderDamageLabels(now,vp){const layer=$('poiDamageLayer');if(!layer)return;const active=poiWalkActive?poiDamageLabels.filter(d=>now-d.time<950):[];poiDamageLabels=active;if(!active.length){if(layer.childElementCount)layer.replaceChildren();return}layer.replaceChildren();for(const d of active){const elapsed=(now-d.time)/950,point=poiWorldToScreen(vp,d.x,d.y+elapsed*.75,d.z);if(!point)continue;const el=document.createElement('span');el.className='poiDamageNumber'+(d.healing?' playerHeal':d.isPlayer?' playerDamage':d.guarded?' guarded':'');el.textContent=(d.healing?'+':'-')+d.value+(d.guarded?' ガード':'');el.style.left=point.x+'px';el.style.top=point.y+'px';el.style.opacity=String(Math.min(1,(1-elapsed)*2.5));layer.append(el)}}
-const POI_ENEMY_HEAD_HEIGHT={monsterSlime:.83,monsterGoblin:1.39,monsterSkeleton:1.61,monsterDragon:2.09,monsterNorthMinotaur:2.66};
+const POI_ENEMY_HEAD_HEIGHT={monsterStoneDavid:5.32,monsterSlime:.83,monsterGoblin:1.39,monsterSkeleton:1.61,monsterDragon:2.09,monsterNorthMinotaur:2.66};
 const POI_ENEMY_BAR_GAP=13;
 // BEGIN ENEMY HEALTH GEOMETRY
 const poiEnemyHealthModels=new Map();
@@ -13641,6 +13819,7 @@ function poiRenderEnemyHealth(now,vp){
  if(typeof poiAimRenderMarker==='function')poiAimRenderMarker(now,vp,layer);
  const frame=++poiEnemyBarFrame;
  if(poiWalkActive&&!pineAIActive)for(const [obj,state] of poiMonsterStates){
+  if(obj.type==='monsterStoneDavid'&&!state.david?.awake)continue;
   if(state.hp<=0||(facilitySite&&obj.y!==poiWalkLevel)||
     (typeof poiDungeonVisualVisible==='function'&&!poiDungeonVisualVisible(obj.x,obj.z,obj.y))||
     Math.max(Math.abs(state.x-poiWalkX),Math.abs(state.z-poiWalkZ))>10)continue;
@@ -13695,7 +13874,8 @@ const POI_WILD_ROAM_LEASH=5,POI_WILD_ROAM_STEP=.68;
 function poiWildProtectedArea(x,z,site=facilitySite){
  const n=site?.northTrail,pond=n?.marsh?.pond?.bounds;
  const inside=p=>p&&x>=p.x1&&x<=p.x2&&z>=p.z1&&z<=p.z2;
- return (typeof poiSouthPortContains==='function'&&poiSouthPortContains(site,x,z,0))||
+ return (typeof poiDavidTempleContains==='function'&&poiDavidTempleContains(site,x,z,0,3))||
+  (typeof poiSouthPortContains==='function'&&poiSouthPortContains(site,x,z,0))||
   inside(pond)||!!n?.regions?.some(r=>r.outdoorLandmark&&inside(r.bounds));
 }
 function poiWildNearResident(x,z,pad=1){
@@ -14014,6 +14194,145 @@ const POI_NORTH_MINOTAUR_ATTACKS=Object.freeze({
 });
 const POI_NORTH_MINOTAUR_OPEN_MS=1120;
 const POI_NORTH_MINOTAUR_COUNTER_DIST=1.62,POI_NORTH_MINOTAUR_BRACE=.33;
+// BEGIN DAVID TEMPLE COMBAT
+// Canonical statue only, one active state and one short-lived cue buffer.
+const POI_DAVID_TYPE='monsterStoneDavid',POI_DAVID_WAKE_RANGE=7,POI_DAVID_WAKE_MS=620;
+const POI_DAVID_PATTERNS=Object.freeze({
+ sweep:{hits:[560],damage:[30],rest:590},
+ double:{hits:[720,1040],damage:[28,35],rest:690},
+ stomp:{hits:[930],damage:[39],rest:670},
+ beam:{hits:[1000],damage:[47],rest:760}
+});
+const POI_DAVID_ORDER=['sweep','double','stomp','beam'];
+let poiDavidActive=null;
+function poiDavidMatch(o){
+ const b=facilitySite?.id==='base'?facilitySite.davidTemple?.boss:null,r=b?.room;
+ return b?.type===POI_DAVID_TYPE&&o?.type===b.type&&o.x===b.x&&o.z===b.z&&o.y===b.y&&
+  Number.isInteger(b.y)&&r&&[r.minX,r.maxX,r.minZ,r.maxZ].every(Number.isInteger)&&
+  r.minX<=b.x&&b.x<=r.maxX&&r.minZ<=b.z&&b.z<=r.maxZ?b:null;
+}
+function poiDavidIn(b,p){
+ const r=b?.room;
+ return !!r&&p?.y===b.y&&p.x>=r.minX-.5&&p.x<=r.maxX+.5&&p.z>=r.minZ-.5&&p.z<=r.maxZ+.5;
+}
+function poiDavidLine(src,p,b){
+ const dx=p.x-src.x,dz=p.z-src.z,n=Math.hypot(dx,dz);
+ return n<1e-7||poiAimWallLimit(src,{x:dx/n,z:dz/n},n,poiAimWall({y:b.y}))+1e-6>=n;
+}
+function poiDavidArea(q,p){
+ if(!p||p.y!==q.y)return false;
+ const x=p.x-q.sx,z=p.z-q.sz,f=x*q.dx+z*q.dz,s=x*q.dz-z*q.dx,n=Math.hypot(x,z),e=1e-6;
+ if(q.kind==='sweep')return n<=4.2+e&&f>=-e;
+ if(q.kind==='double')return f>=.55-e&&f<=3.55+e&&Math.abs(s)<=1.5+e;
+ if(q.kind==='stomp')return n<=6+e;
+ if(q.kind==='beam')return f>=.28-e&&f<=14+e&&Math.abs(s)<=.56+e;
+ return false;
+}
+function poiDavidCease(o,s,b){
+ if(!s.david?.awake)return;
+ s.david=null;poiMonsterMeshDirty=true;
+ s.x=s.fromX=b.x;s.z=s.fromZ=b.z;s.moveStarted=-10000;s.guardMoveMs=0;
+ if(poiDavidActive?.s===s)poiDavidActive=null;
+ if(typeof poiAimLocked!=='undefined'&&poiAimLocked?.id===o)poiCombatLockReset();
+}
+function poiDavidMobFrame(o,s,now){
+ const b=poiDavidMatch(o);
+ if(!b||s.hp<=0||!poiEnemyThreatEnabled())return false;
+ if(s.david?.awake){poiDavidActive={o,s};return false}
+ const p=poiAimOrigin(now),src={x:s.x,z:s.z};
+ if(!poiDavidIn(b,p)||Math.hypot(p.x-src.x,p.z-src.z)>POI_DAVID_WAKE_RANGE||!poiDavidLine(src,p,b))return false;
+ const dx=p.x-src.x,dz=p.z-src.z,len=Math.hypot(dx,dz)||1;
+ s.david={awake:true,wakeAt:now,next:now+POI_DAVID_WAKE_MS,cycle:0,dx:dx/len,dz:dz/len,attack:null};
+ poiDavidActive={o,s};poiMonsterMeshDirty=true;
+ return true;
+}
+function poiDavidBegin(o,s,now,kind){
+ const b=poiDavidMatch(o),d=s.david,k=POI_DAVID_PATTERNS[kind],p=poiAimOrigin(now);
+ if(!b||!d?.awake||!k||now<d.next||!poiDavidIn(b,p)||!poiDavidLine({x:s.x,z:s.z},p,b))return false;
+ const dx=p.x-s.x,dz=p.z-s.z,len=Math.hypot(dx,dz);if(len<.01)return false;
+ d.dx=dx/len;d.dz=dz/len;
+ d.attack={kind,start:now,hits:k.hits.map(t=>now+t),sx:s.x,sz:s.z,y:b.y,dx:d.dx,dz:d.dz,
+  cursor:0,lastContactAt:null,landed:0,executed:0,until:now+k.hits.at(-1)+Math.round(k.rest*(s.hp<=525?.75:1))};
+ d.next=d.attack.until;
+ poiMonsterMeshDirty=true;
+ return true;
+}
+function poiDavidApproach(o,s,b,p,now){
+ if(now-s.moveStarted<250||Math.hypot(p.x-s.x,p.z-s.z)<2.6)return false;
+ const dx=p.x-s.x,dz=p.z-s.z,near=(x,z)=>Math.hypot(p.x-x,p.z-z);
+ const dirs=[[Math.sign(dx),0],[0,Math.sign(dz)]].sort((a,c)=>dx*(c[0]-a[0])+dz*(c[1]-a[1]));
+ for(const [u,v] of dirs){
+  const x=s.x+u,z=s.z+v;
+  if(!(u||v)||!poiDavidIn(b,{x,z,y:o.y})||near(x,z)>=near(s.x,s.z)||!poiMonsterCanMove(x,z,s,s.x,s.z))continue;
+  s.fromX=s.x;s.fromZ=s.z;s.x=x;s.z=z;s.moveStarted=now;s.guardMoveMs=235;
+  const d=s.david,dist=near(x,z)||1;d.dx=(p.x-x)/dist;d.dz=(p.z-z)/dist;d.next=now+250;
+  poiMonsterMeshDirty=true;return true;
+ }
+ return false;
+}
+function poiDavidCombatFrame(now){
+ const live=poiDavidActive;if(!live)return false;
+ const {o,s}=live,b=poiDavidMatch(o),d=s.david;
+ if(!b||s.hp<=0||poiMonsterStates.get(o)!==s||!d?.awake){poiDavidActive=null;return false}
+ const p=poiAimOrigin(now);
+ if(!poiEnemyThreatEnabled()||!poiDavidIn(b,p)){poiDavidCease(o,s,b);return false}
+ const q=d.attack;
+ if(q&&q.cursor<q.hits.length&&now>=q.hits[q.cursor]){
+  // Advance missed clocks independently; never bundle two old hits
+  // after a dropped frame or backgrounding.
+  while(q.cursor<q.hits.length&&now>=q.hits[q.cursor]){
+   const i=q.cursor++;
+   if(now-q.hits[i]>=150)continue;
+   q.executed++;q.lastContactAt=now;poiMonsterMeshDirty=true;
+   if(typeof poiSound==='function')poiSound(q.kind==='beam'?'wand-fire':'stone-hit');
+   if(poiDavidArea(q,p)&&poiDavidLine({x:q.sx,z:q.sz},p,b)){
+    q.landed++;
+    if(poiMobHitPlayer(o,now,POI_DAVID_PATTERNS[q.kind].damage[i])){poiDavidCease(o,s,b);return true}
+   }
+  }
+ }
+ if(q&&now>=q.until){d.attack=null;poiMonsterMeshDirty=true}
+ if(now<d.next)return false;
+ const distance=Math.hypot(p.x-s.x,p.z-s.z),near=distance<=4.15,mid=distance<=6;
+ let kind=POI_DAVID_ORDER[d.cycle%POI_DAVID_ORDER.length];
+ if(!near&&kind!=='beam'&&(kind!=='stomp'||!mid)){
+  if(poiDavidApproach(o,s,b,p,now))return false;
+  kind=mid?'stomp':'beam';
+ }
+ if(poiDavidBegin(o,s,now,kind)){d.cycle++;return false}
+ if(!poiDavidApproach(o,s,b,p,now))d.next=now+190;
+ return false;
+}
+function poiDavidPose(s,now){
+ const d=s?.david,q=d?.attack;
+ if(!d?.awake)return {david:true,phase:'dormant',kind:null,progress:0,contact:0,dx:0,dz:-1,width:1,squash:1,lift:0};
+ const common={david:true,dx:d.dx,dz:d.dz,width:1,squash:1,lift:0,
+  facing:d.dx>0?3:d.dx<0?1:d.dz<0?2:0};
+ const clamp=t=>Math.max(0,Math.min(1,t));
+ if(!q){
+  const age=now-d.wakeAt;
+  return {...common,phase:age<POI_DAVID_WAKE_MS?'wake':'ready',kind:null,
+   progress:clamp(age/POI_DAVID_WAKE_MS),contact:0};
+ }
+ Object.assign(common,{elapsed:Math.max(0,now-q.start),hitTimes:POI_DAVID_PATTERNS[q.kind].hits});
+ const contact=q.cursor,last=q.lastContactAt;
+ if(Number.isFinite(last)&&now-last<110)return {...common,phase:'impact',kind:q.kind,progress:clamp((now-last)/110),contact};
+ const next=q.hits[contact];
+ if(next!==undefined)return {...common,phase:'windup',kind:q.kind,progress:clamp((now-(contact?q.hits[contact-1]+110:q.start))/
+  Math.max(1,next-(contact?q.hits[contact-1]+110:q.start))),contact};
+ return {...common,phase:'recover',kind:q.kind,progress:clamp((now-q.hits.at(-1))/(q.until-q.hits.at(-1))),contact};
+}
+function poiDavidIncoming(o,s,amount,now){
+ if(!(amount>0)||!poiDavidMatch(o)||!s.david?.awake)return 0;
+ const phase=poiDavidPose(s,now).phase,q=s.david.attack;
+ // Hard stone resists frantic hits. A complete real dodge exposes the
+ // joints without changing what the player can use, how hard they swing,
+ // or preventing a strong player from winning with present equipment.
+ if(phase==='recover'&&q?.executed===q.hits.length&&q.landed===0)return amount;
+ return Math.max(1,Math.round(amount*(phase==='recover'?.65:.35)));
+}
+// END DAVID TEMPLE COMBAT
+
 function poiNorthMinotaurMatch(obj){
  const b=facilitySite?.northFort?.boss;
  return b?.type==='monsterNorthMinotaur'&&obj?.type===b.type&&obj.x===b.x&&obj.z===b.z&&obj.y===b.y?b:null;
@@ -14277,6 +14596,7 @@ function poiEnemyNextVisualVariant(type,s){
  const id=(s.attackVisualSequence||0)%count;s.attackVisualSequence=id+1;return id;
 }
 function poiEnemyVisualAttack(type,s,now){
+ if(type==='monsterStoneDavid'&&typeof poiDavidPose==='function'){const p=poiDavidPose(s,now);return p.phase==='dormant'||p.phase==='ready'?null:p}
  if(type==='monsterNorthMinotaur'&&typeof poiNorthMinotaurPose==='function')return poiNorthMinotaurPose(s,now);
  if(type==='monsterSlime')return poiSlimeAttackPose(s,now);
  if(type==='monsterPondSkater')return poiPondSkaterPose(s,now);
@@ -14741,6 +15061,7 @@ function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMo
  let changed=false,crowdRead=false,crowd=null;for(const [obj,state] of poiMonsterStates){if((facilitySite&&obj.y!==poiWalkLevel)||state.hp<=0||state.townOwned||(state.wildSpawn&&!poiWildPlayerOutside())||state.playerAttack?.pending||
  (state.northReturnReady!==undefined&&now<state.northReturnReady)||
  (obj.type==='monsterSlime'&&typeof poiSlimeRecovering==='function'&&poiSlimeRecovering(state,now)))continue;
+ if(obj.type==='monsterStoneDavid'){if(typeof poiDavidMobFrame==='function'&&poiDavidMobFrame(obj,state,now))changed=true;continue}
  if(obj.type==='monsterNorthMinotaur'){if(typeof poiNorthMinotaurFrame==='function'&&poiNorthMinotaurFrame(obj,state,now))changed=true;continue}
  if(state.actorFree&&poiMonsterActorPoint(state.actorFree,now).t<1)continue;
  const patrol=typeof poiDungeonPatrolSite==='function'&&!state.wildSpawn?poiDungeonPatrolSite(obj):null;
@@ -18037,6 +18358,7 @@ function poiAimOrigin(now){
 function poiAimTargetList(o,range,now){
  const targets=[];
  for(const [obj,state] of poiMonsterStates){
+  if(obj.type==='monsterStoneDavid'&&!state.david?.awake)continue;
   if(state.hp<=0||obj.y!==o.y||Math.abs(state.x-o.x)>range+2||Math.abs(state.z-o.z)>range+2||
      (typeof poiDungeonVisualVisible==='function'&&!poiDungeonVisualVisible(obj.x,obj.z,obj.y)))continue;
   // Continuous body translation counts, but ornamental attack recoil,
@@ -18168,7 +18490,7 @@ function poiAimProjectileSample(v,now){
  const y=terrainY(Math.floor(x),Math.floor(z))+(facilitySite?v.y*1.4:0)+(arrow?.90:.77)+Math.sin(Math.PI*progress)*(arrow?.095:.043);
  return {x,y,z,dx:v.dx,dz:v.dz};
 }
-const POI_COMBAT_TORSO_HEIGHT={monsterSlime:.44,monsterDragon:.98,monsterSkelWarrior:.87,monsterSkelKnight:.89,monsterSkelMage:.86,monsterPondSkater:.24,monsterNorthMinotaur:1.51};
+const POI_COMBAT_TORSO_HEIGHT={monsterStoneDavid:2.65,monsterSlime:.44,monsterDragon:.98,monsterSkelWarrior:.87,monsterSkelKnight:.89,monsterSkelMage:.86,monsterPondSkater:.24,monsterNorthMinotaur:1.51};
 function poiAimRenderMarker(now,vp,layer){
  if(!poiAimMarker){poiAimMarker=document.createElement('span');poiAimMarker.id='poiAimLockMarker';poiAimMarker.hidden=true;poiAimMarker.setAttribute('aria-hidden','true');layer.append(poiAimMarker)}
  let point=null;
@@ -18300,6 +18622,7 @@ function poiHitstopMarkDrawn(now){
 // END PLAYER HITSTOP
 function poiPlayerDamageTarget(monster,x,z,amount,weapon,now,silent=false,atContact=false,source=null){
  const [obj,state]=monster;
+ if(obj.type==='monsterStoneDavid'&&typeof poiDavidIncoming==='function'&&!state.david?.awake)return;
  if(state.actorFree&&typeof poiMonsterActorPoint==='function'){
   const p=poiMonsterActorPoint(state.actorFree,now);
   state.x=Math.floor(p.x+.5);state.z=Math.floor(p.z+.5);
@@ -18307,6 +18630,7 @@ function poiPlayerDamageTarget(monster,x,z,amount,weapon,now,silent=false,atCont
  if(obj.type==='monsterMineGuard'&&typeof poiMineGuardTrialIncoming==='function')amount=poiMineGuardTrialIncoming(obj,state,amount,now,source);
  const incoming=amount;
  if(obj.type==='monsterNorthMinotaur'&&typeof poiNorthMinotaurIncoming==='function')amount=poiNorthMinotaurIncoming(obj,state,amount,now);
+ if(obj.type==='monsterStoneDavid'&&typeof poiDavidIncoming==='function')amount=poiDavidIncoming(obj,state,amount,now);
  const guarded=amount<incoming;
  const before=state.hp;
  state.hp=Math.max(0,state.hp-amount);
@@ -19167,6 +19491,16 @@ const POI_MONSTER_BREAK_MS=5655,POI_MONSTER_BREAK_LIMIT=5;
 const POI_MONSTER_FLIGHT_MS=760,POI_MONSTER_FADE_AT=POI_MONSTER_BREAK_MS-550;
 const poiMonsterBreaks=[],poiMonsterFragmentTemplates=new Map();
 function poiMonsterPose(obj,s,now,locomotionOnly=false){
+ if(obj.type==='monsterStoneDavid'){
+  const t=Math.max(0,Math.min(1,(now-(s.moveStarted??-1e9))/(s.guardMoveMs||380))),e=t*t*(3-2*t);
+  const x=(s.fromX??s.x)+(s.x-(s.fromX??s.x))*e,z=(s.fromZ??s.z)+(s.z-(s.fromZ??s.z))*e;
+  const david=typeof poiDavidPose==='function'?poiDavidPose(s,now):null;
+  const bearing=david&&david.phase!=='dormant'&&Math.hypot(david.dx,david.dz)>.01?Math.atan2(-david.dx,david.dz):null;
+  const walk=t<1&&(s.fromX!==s.x||s.fromZ!==s.z)?t:0;
+  return {x:x+.5,y:terrainY(s.x,s.z)+(facilitySite?obj.y*1.4:0),z:z+.5,
+   heading:bearing??(s.guardTrialHeading?Math.atan2(-s.guardTrialHeading[0],s.guardTrialHeading[1]):undefined),
+   david:locomotionOnly?null:david?{...david,walk}:null};
+ }
  const t=Math.max(0,Math.min(1,(now-s.moveStarted)/(obj.type==='monsterPondSkater'?POI_POND_SKATER_MOVE:s.guardMoveMs||380))),e=t*t*(3-2*t);
  const free=s.actorFree,p=free?poiMonsterActorPoint(free,now):null;
  let x=p?p.x:(s.fromX??s.x)+(s.x-(s.fromX??s.x))*e;
@@ -19177,7 +19511,7 @@ function poiMonsterPose(obj,s,now,locomotionOnly=false){
  let bounce=moving?.10*Math.sin(phase*Math.PI):resting?0:.02*Math.sin(now*.003+obj.x);
  const attack=locomotionOnly?null:typeof poiEnemyVisualAttack==='function'?poiEnemyVisualAttack(obj.type,s,now):
   obj.type==='monsterSlime'?poiSlimeAttackPose(s,now):obj.type==='monsterMineGuard'?poiMineGuardPose(s,now):obj.type==='monsterPondSkater'?poiPondSkaterPose(s,now):null;
- if(attack){x+=attack.dx;z+=attack.dz;bounce+=attack.lift}
+ if(attack&&!attack.david){x+=attack.dx;z+=attack.dz;bounce+=attack.lift}
  else if(!locomotionOnly&&obj.type!=='monsterSlime'&&s.townOwned&&Number.isFinite(s.counterAt)&&now>=s.counterAt&&now-s.counterAt<340){
   const hop=Math.sin(Math.PI*(now-s.counterAt)/340);
   x+=(s.counterTargetX-s.x)*.33*hop;z+=(s.counterTargetZ-s.z)*.33*hop;bounce+=.27*hop;
@@ -19326,6 +19660,11 @@ function poiMonsterRender(now,vp){
  let slimeAttack=false;
  for(const [o,s] of poiMonsterStates){
   if(s.hp<=0||!onSlice(o))continue;
+  if(o.type==='monsterStoneDavid'){
+   const p=typeof poiDavidPose==='function'?poiDavidPose(s,now):null;
+   if(p&&p.phase!=='dormant'&&p.phase!=='ready'&&p.phase!=='idle'){slimeAttack=true;break}
+   continue;
+  }
   if(poiEnemyVisualAttack(o.type,s,now)){slimeAttack=true;break}
  }
  const settle=poiSlimeMeshAnimating&&!slimeAttack;poiSlimeMeshAnimating=slimeAttack;
@@ -19333,9 +19672,10 @@ function poiMonsterRender(now,vp){
   const m=mesh(),hitFlashSpans=[];
   for(const [obj,s] of poiMonsterStates){
    if(!onSlice(obj)||s.hp<=0)continue;
-   const {x:cx,y,z:cz,attack,heading}=poiMonsterPose(obj,s,now),part=mesh();
+   const {x:cx,y,z:cz,attack,heading,david}=poiMonsterPose(obj,s,now),part=mesh();
    const art=poiMonsterRenderType(obj);
-   if(art==='monsterNorthMinotaur')poiNorthMinotaurGeometry(part,cx,y,cz,poiNorthMinotaurArtPose(attack?s.playerAttack:null,now));
+   if(art==='monsterStoneDavid')poiDavidGeometry(part,cx,y,cz,david);
+   else if(art==='monsterNorthMinotaur')poiNorthMinotaurGeometry(part,cx,y,cz,poiNorthMinotaurArtPose(attack?s.playerAttack:null,now));
    else {
     if(attack&&typeof poiEnemyWeaponRig==='function')part.enemyGripPose=poiEnemyWeaponRig(poiArmedMonsterArt(art)?.weapon,attack,s.playerAttack,now);
     deco(part,art,cx,y,cz,0);
@@ -19478,6 +19818,7 @@ function poiWalkFrame(now){
  panX=poiWalkViewX+.5-MAP_W/2;panZ=poiWalkViewZ+.5-MAP_H/2;
  if(lockTurn||(free?free.changed:now-poiWalkStarted<=poiWalkStepMs+32)||poiWalkAttackPosePending){poiWalkAvatar(now);if(free)free.changed=false}
  if(typeof poiHitstopPending==='function'&&poiHitstopPending())return;
+ if(typeof poiDavidCombatFrame==='function'&&poiDavidCombatFrame(now))return;
  if(poiEnemyResolvePlayer(now))return;
  poiWildSpawnFrame(now);poiMobFrame(now);poiMineUnlockFrame(now);
 }
@@ -19634,6 +19975,7 @@ function poiRegionAt(site,x,z,legacy=false,floor=null){
    typeof poiOtherworldIn==='function'&&poiOtherworldIn(site,x,z,floor)?'otherworld':null;
   if(realm){name=site[realm].name;difficulty=site[realm].difficulty}
   else if(typeof poiSouthPortContains==='function'&&poiSouthPortContains(site,x,z,floor)){name=site.southPort.name;difficulty=0}
+  else if(typeof poiDavidTempleContains==='function'&&poiDavidTempleContains(site,x,z,floor)){name=site.davidTemple.name;difficulty=site.davidTemple.difficulty}
   else if(typeof poiSouthForestContains==='function'&&poiSouthForestContains(site,x,z,floor)){name=site.southForest.name;difficulty=site.southForest.difficulty}
   else if(typeof poiSouthTownContains==='function'&&poiSouthTownContains(site,x,z,floor)){name=site.southRoad.town.name;difficulty=0}
   else if(!inTown&&!inGuild&&name==='外'&&typeof poiNorthTrailRegion==='function'){
@@ -22056,6 +22398,84 @@ function poiEnemyCueLaneGeometry(a){
  }
  return m;
 }
+// BEGIN DAVID TEMPLE CUES
+let poiDavidCue=null;
+function poiDavidCuePairs(q,b){
+ const {kind,dx,dz,sx,sz,y}=q,r=b.room,whole=kind==='stomp',strip=kind==='double'||kind==='beam';
+ const a=whole?Math.PI:Math.PI/2,half=kind==='double'?1.5:.56,far=kind==='double'?3.55:14,near=kind==='double'?.55:.28;
+ const bearings=new Set([0]);
+ for(let i=0;i<=60;i++)bearings.add(-a+i*2*a/60);
+ if(strip)for(const n of [near,far]){
+  const angle=Math.atan2(half,n);
+  for(const sign of [-1,1])for(let i=0;i<=12;i++)bearings.add(sign*i*angle/12);
+ }
+ for(let x=r.minX-.5;x<=r.maxX+.5;x++)for(let z=r.minZ-.5;z<=r.maxZ+.5;z++){
+  const u=x-sx,v=z-sz;if(u*u+v*v>210)continue;
+  const angle=Math.atan2(v*dx-u*dz,u*dx+v*dz);
+  if(Math.abs(angle)<=a)for(const e of [-1e-6,0,1e-6])if(Math.abs(angle+e)<=a)bearings.add(angle+e);
+ }
+ const pass=poiAimWall({y}),o={x:sx,z:sz};
+ return [...bearings].sort((a,b)=>a-b).map(t=>{
+  const c=Math.cos(t),s=Math.sin(t),ux=dx*c-dz*s,uz=dz*c+dx*s;
+  const lim=(v,u,lo,hi)=>Math.abs(u)<1e-8?Infinity:((u>0?hi:lo)-v)/u;
+  const edge=Math.min(lim(sx,ux,r.minX-.5,r.maxX+.5),lim(sz,uz,r.minZ-.5,r.maxZ+.5));
+  const l=strip?near/Math.max(1e-7,c):0;
+  const rr=strip?Math.min(far/Math.max(1e-7,c),half/Math.max(1e-7,Math.abs(s))):whole?6:4.2;
+  const h=poiAimWallLimit(o,{x:ux,z:uz},Math.max(0,Math.min(rr,edge)),pass);
+  return {ux,uz,lo:Math.min(l,h),hi:h,t};
+ });
+}
+function poiDavidCueGeometry(q,b){
+ const lane=mesh(),beam=mesh(),pairs=poiDavidCuePairs(q,b);
+ const fill=q.kind==='beam'?[.96,.10,.09]:[.91,.20,.15],rim=[1,.34,.22];
+ const point=(p,d)=>poiEnemyCuePoint(q.sx+p.ux*d,q.sz+p.uz*d,q.y);
+ for(let i=1;i<pairs.length;i++){
+  const u=pairs[i-1],v=pairs[i];
+  if(u.hi-u.lo<1e-5&&v.hi-v.lo<1e-5)continue;
+  const ua=Math.max(u.lo,u.hi-.105),va=Math.max(v.lo,v.hi-.105);
+  quad(lane,point(u,u.lo),point(v,v.lo),point(v,va),point(u,ua),fill);
+  quad(lane,point(u,ua),point(v,va),point(v,v.hi),point(u,u.hi),rim);
+ }
+ if(q.kind==='beam'){
+  const centre=pairs.find(p=>Math.abs(p.t)<1e-8),reach=centre?.hi??0;
+  if(reach>.42){
+   const eye=typeof POI_DAVID_EYE_Y==='number'?POI_DAVID_EYE_Y:4.75,
+    front=typeof POI_DAVID_EYE_FRONT==='number'?POI_DAVID_EYE_FRONT:.29,cy=terrainY(q.sx,q.sz)+q.y*1.4;
+   const P=(l,w,h)=>[q.sx+.5+q.dx*l+q.dz*w,cy+h,q.sz+.5+q.dz*l-q.dx*w];
+   for(const side of [-1,1])quad(beam,
+    P(front,side*.165,eye-.08),P(front,side*.165,eye+.08),
+    P(reach,side*.34,.83),P(reach,side*.34,.55),[1,.025,.02]);
+   quad(beam,P(front,-.17,eye-.012),P(front,.17,eye-.012),P(reach,.32,.68),P(reach,-.32,.68),[1,.10,.08]);
+  }
+ }
+ return {lane,beam};
+}
+function poiDrawDavidCue(now,vp){
+ const s=poiDavidActive?.s,q=s?.david?.attack,o=poiDavidActive?.o,b=poiDavidMatch(o);
+ const active=q&&b&&s.hp>0&&poiEnemyThreatEnabled()&&poiWalkLevel===q.y&&poiDavidIn(b,poiAimOrigin(now));
+ if(poiDavidCue&&(!active||poiDavidCue.q!==q||poiDavidCue.door!==poiWalkDoorOpen||poiDavidCue.map!==world)){
+  for(const m of [poiDavidCue.lane,poiDavidCue.beam])if(m)gl.deleteBuffer(m.buf);
+  poiDavidCue=null;
+ }
+ if(!active)return;
+ const pending=q.cursor<q.hits.length,age=Number.isFinite(q.lastContactAt)?now-q.lastContactAt:Infinity;
+ if(!pending&&age>=210)return;
+ if(!poiDavidCue){
+  const {lane,beam}=poiDavidCueGeometry(q,b);
+  poiDavidCue={q,door:poiWalkDoorOpen,map:world,lane:lane.p.length?upload(lane):null,beam:beam.p.length?upload(beam):null};
+ }
+ const reduced=!!poiEnemyCueReduced?.matches;
+ const alpha=reduced?.26:age<160?.42-.18*age/160:.19+.075*Math.sin((now-q.start)*.014);
+ gl.enable(gl.BLEND);gl.blendFunc(gl.CONSTANT_ALPHA,gl.ONE_MINUS_CONSTANT_ALPHA);gl.depthMask(false);
+ try{
+  if(poiDavidCue.lane){gl.blendColor(0,0,0,alpha);draw(poiDavidCue.lane,vp)}
+  if(age<180&&poiDavidCue.beam){gl.blendColor(0,0,0,reduced?.64:.92-.45*age/180);draw(poiDavidCue.beam,vp)}
+ }finally{
+  gl.depthMask(true);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.blendColor(0,0,0,0);gl.disable(gl.BLEND);
+ }
+}
+// END DAVID TEMPLE CUES
+
 let poiEnemyCueCache=new Map(),poiEnemyCueWorld=null,poiEnemyCueImpact=null;
 function poiDrawNorthAxeCue(now,vp){
  // Shared pipeline (including the fort axe). Realm changes, menu inactivity
@@ -22163,6 +22583,7 @@ function render(){
  poiDrawEditorGhostRoof(p.vp);
  drawSignOverlays(p.vp,daylight);pineDrawEditCursor(p.vp);
  poiDrawNorthAxeCue(now,p.vp);
+ if(typeof poiDrawDavidCue==='function')poiDrawDavidCue(now,p.vp);
  if(poiWalkActive){
   poiEconomyDraw(p.vp,now);poiInventoryDraw(p.vp,now);
   if(typeof poiTownResidentsDraw==='function')poiTownResidentsDraw(now,p.vp);
@@ -25262,7 +25683,8 @@ function buildFacilitySite(id){
  const northFort=extendTownWorldNorthFort(expanded.map.world,northTrail);
  const southPort=extendTownWorldSouthPort(expanded.map.world);
  const southForest=extendTownWorldSouthForest(expanded.map.world,southPort);
- return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad,northFort,southPort,southForest};
+ const davidTemple=extendTownWorldDavidTemple(expanded);
+ return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad,northFort,southPort,southForest,davidTemple};
 }
 
 // The first southern coast uses the old 128x128 save frame, away from the inn.
@@ -25328,6 +25750,71 @@ function extendTownWorldSouthPort(world){
 }
 
 // Small same-frame woodland route around the head of the port inlet.
+// BEGIN DAVID TEMPLE MAP
+function extendTownWorldDavidTemple(site){
+ const world=site.map.world,index=world.length,y=0,P=(x,z)=>({x,z,y});
+ const k=(x,z,y)=>x+','+z+','+y,old=new Set(world.map(o=>k(o.x,o.z,o.y)));
+ const grade=new Set((site.map.terrainHeights||[]).map(o=>k(o.x,o.z,0)));
+ const floor=new Map(),props=[],footprint=[],bounds={x1:13,x2:34,z1:94,z2:115,y};
+ const name='白環の大神殿',boss={...P(24,104),type:'monsterStoneDavid',room:{minX:16,maxX:31,minZ:96,maxZ:112}};
+ const put=(x,z,type)=>{const key=k(x,z,0);if(old.has(key)||grade.has(key))throw Error('David temple floor overlap '+key);floor.set(key,{...P(x,z),type,rot:0})};
+ const prop=(x,z,type,rot=0,y=0)=>{const key=k(x,z,y);if(old.has(key)||grade.has(k(x,z,0)))throw Error('David temple prop overlap '+key);props.push({x,z,y,type,rot})};
+ for(let z=bounds.z1;z<=bounds.z2;z++)for(let x=bounds.x1;x<=bounds.x2;x++){
+  const r=Math.hypot(x-boss.x,z-boss.z),stripe=(x===23||x===25)&&z<103;
+  put(x,z,Math.abs(r-4.8)<.54||stripe?'roadRoyalFull':
+   r<4.25?'roadCutStoneFull':x<=15||x>=32?'roadMossFull':'roadAncientFull');
+  footprint.push(P(x,z));
+  const border=x===bounds.x1||x===bounds.x2||z===bounds.z1||z===bounds.z2;
+  if(border&&!(z===94&&x>=22&&x<=26)){
+   const corner=(x===13||x===34)&&(z===94||z===115);
+   if(z!==94||x!==21&&x!==27)prop(x,z,corner?'stonewallAll':'stonewallPlain',x===13||x===34?1:0);
+  }
+  if(poiDavidTempleHasRoof(x,z))prop(x,z,'roofTile',0,2);
+ }
+ const approach=[P(29,88),P(29,89),P(29,90),P(29,91),P(28,91),P(27,91),P(26,91),P(25,91),P(24,91),P(24,92),P(24,93),P(24,94)];
+ for(const p of approach.slice(1,-1))put(p.x,p.z,'roadGravelFull');
+ for(let z=92;z<=93;z++)for(let x=22;x<=26;x++)put(x,z,'roadCutStoneFull');
+ prop(27,90,'poiDavidWaystone',0);
+ prop(21,94,'poiDavidGatePier',0);prop(27,94,'poiDavidGatePier',2);
+ for(const x of [15,32])for(const z of [97,101,105,109])prop(x,z,'poiDavidTempleColumn');
+ for(const x of [15,32])for(const z of [99,107])prop(x,z,'lantern');
+ prop(boss.x,boss.z,boss.type,0);
+ world.push(...floor.values(),...props);
+ site.buildings.push({id:'davidTemple',name,...bounds,footprint,floorFootprints:{0:footprint}});
+ return {name,difficulty:6,bounds,approach,entrance:P(24,94),threshold:{minX:22,maxX:26,z:94,y},retreat:P(24,91),boss,
+  resumeSolid:props.filter(o=>o.y===0&&/^(?:stonewall|poiDavid)/.test(o.type)),authored:{index,count:world.length-index}};
+}
+function poiDavidTempleHasRoof(x,z){return z>=97&&z<=111&&(x>=14&&x<=16||x>=31&&x<=33)}
+function poiDavidTempleContains(site,x,z,y,pad=0){
+ const b=site?.id==='base'?site.davidTemple?.bounds:null;
+ return !!b&&b.y===y&&x>=b.x1-pad&&x<=b.x2+pad&&z>=b.z1-pad&&z<=b.z2+pad;
+}
+// Before the temple existed its empty surface was valid for an old checkpoint.
+// Only exact new masonry gets recovery; a blocked outside checkpoint never
+// jumps through the temple's perimeter or through another obstacle.
+function poiDavidTempleRecoverPosition(p){
+ const site=facilitySite,d=site?.id==='base'?site.davidTemple:null;
+ if(!d||!p||p.y!==0)return p;
+ const at=(o,x,z)=>o.x===x&&o.z===z&&o.y===0;
+ const prop=d.resumeSolid.find(o=>at(o,p.x,p.z));
+ if(!prop||!world.some(o=>at(o,p.x,p.z)&&o.type===prop.type))return p;
+ const prior=poiWalkLevel;
+ try{
+  poiWalkLevel=0;
+  if(poiWalkCanStep(p.x,p.z))return p;
+  const b=d.bounds,edge=poiDavidTempleContains(site,p.x,p.z,0)&&
+   (p.x===b.x1||p.x===b.x2||p.z===b.z1||p.z===b.z2);
+  for(const [dx,dz] of [[0,-1],[1,0],[0,1],[-1,0]]){
+   const x=p.x+dx,z=p.z+dz;
+   if(edge&&poiDavidTempleContains(site,x,z,0))continue;
+   if(world.some(o=>at(o,x,z)&&/^(?:river|water|lake|sea)$/.test(o.type)))continue;
+   if(poiWalkCanStep(x,z,p.x,p.z))return {...p,x,z};
+  }
+  return p;
+ }finally{poiWalkLevel=prior}
+}
+// END DAVID TEMPLE MAP
+
 function extendTownWorldSouthForest(world,southPort){
  const y=0,P=(x,z)=>({x,z,y}),K=(x,z)=>x+','+z;
  const old=new Map(),floors=new Map(),props=[],index=world.length;
@@ -27391,6 +27878,7 @@ function workshopResumeApplyView(v){
 function workshopResumeRestorePosition(p){
  if(typeof poiSouthPortRecoverPosition==='function')p=poiSouthPortRecoverPosition(p);
  if(typeof poiSouthForestRecoverPosition==='function')p=poiSouthForestRecoverPosition(p);
+ if(typeof poiDavidTempleRecoverPosition==='function')p=poiDavidTempleRecoverPosition(p);
  // The two former shortcut doorways now have walls. Preserve that exact
  // old save's floor, facing and nearby room instead of restarting in town.
  if(p&&facilitySite?.id==='base'&&p.y===-1){
@@ -27596,6 +28084,8 @@ function facilityValidLanding(x,z,y){
 function facilityUsesGuildRendering(){return facilitySite?.id==='guildrenewal'||facilitySite?.id==='guildsaved'}
 function facilityHiddenRoof(){
  if(!facilitySite||!poiWalkActive)return null;
+ if(typeof poiDavidTempleContains==='function'&&poiDavidTempleContains(facilitySite,poiWalkX,poiWalkZ,poiWalkLevel)&&
+    !poiDavidTempleHasRoof(poiWalkX,poiWalkZ))return null;
  if(facilityDoorTiles.has(facilityCellKey(poiWalkX,poiWalkZ,poiWalkLevel))){
   const owner=facilityFloorOwner(poiWalkX,poiWalkZ,poiWalkLevel);
   // The tile must be an actual door belonging to this floor, not just an
@@ -28044,7 +28534,9 @@ function facilityBuildRoofs(){
 function facilityVisibleRoofs(){
  if(!poiWalkActive||poiWalkLevel<0)return [];
  const hidden=facilityHiddenRoof();
- return facilityRoofMeshes.flatMap(({count},i)=>count&&i!==hidden?[i]:[]);
+ return facilityRoofMeshes.flatMap(({count},i)=>count&&i!==hidden&&
+  (facilitySite.buildings[i]?.id!=='davidTemple'||cameraTopDown||pineAIActive||
+   poiDavidTempleContains(facilitySite,poiWalkX,poiWalkZ,0,30))?[i]:[]);
 }
 function facilityCollectEntranceGuides(site,tiles){
  if(!site||site.id==='guildsaved'||site.id==='guildrenewal')return [];
