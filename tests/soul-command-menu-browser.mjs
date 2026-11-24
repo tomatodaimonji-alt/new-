@@ -17,9 +17,24 @@ inject(anchor,anchor+`
     active:k.companionSoul?.active??null,mode:poiCompanionMode(k),savedMode:k.companionSoul?.mode??null,
     weapon:k.weapon,wand:poiArmedWandIndex(),hp:slots[2]?.durability??null,orvasHp:slots[5]?.durability??null,
     xy:[poiWalkViewX,poiWalkViewZ],contact:poiAnalogContact?.id??null,walking:!!poiFreePose?.walking,
-    actor:a?.id??null,pending:!!a?.attackMotion?.pending,target:poiCompanionTarget?.o?.type??null,
+    actor:a?.id??null,ally:a?[poiCompanionPosition(a).x,poiCompanionPosition(a).z]:null,
+    leader:!!a?.followLeader,allyMoving:!!a?.freeMoving,pending:!!a?.attackMotion?.pending,target:poiCompanionTarget?.o?.type??null,
     foe:window.__soulFoe?.s?.hp??null,foePos:window.__soulFoe?.s?[window.__soulFoe.s.x,window.__soulFoe.s.z]:null,
     supported:poiInventoryAllowed(),damage:window.__soulDamage??[]};
+  },
+  walkAxis:()=>{
+   const p=poiCompanionPlayerPoint(performance.now());
+   const directions=[[44,0],[-44,0],[0,44],[0,-44]];
+   return directions.map(([x,y])=>{
+    const sample=poiAnalogSample(x,y,poiThirdPerson,poiThirdPerson?poiCameraYaw:yaw);
+    let length=0;
+    for(let i=1;i<=90;i++){
+     const current={x:p.x+sample.dx*(i-1)/10,z:p.z+sample.dz*(i-1)/10},next={x:p.x+sample.dx*i/10,z:p.z+sample.dz*i/10};
+     if(!poiWalkCanStep(Math.round(next.x),Math.round(next.z),Math.round(current.x),Math.round(current.z)))break;
+     length=i/10;
+    }
+    return {x,y,length};
+   }).sort((a,b)=>b.length-a.length)[0];
   },
   opponent:()=>{
    const a=poiCompanionActor,p={x:poiWalkX,z:poiWalkZ},c=poiCompanionPosition(a);
@@ -56,7 +71,7 @@ try{
  await p.goto(url+'/seed');await p.evaluate(()=>{
   const slots=Array(27).fill(null);slots[0]={type:'equipWoodSword',count:1,durability:90};
   slots[2]={type:'slimeSoul',count:1,durability:22};slots[4]={type:'fireWand',count:1,charges:5};slots[5]={type:'orvasSoul',count:1,durability:123};
-  localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weapon:'equipWoodSword',gold:3,potions:0,slots,companionSoul:{version:1,active:'slimeSoul',pending:null,mode:'flee'}}));
+  localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weaponDurabilityVersion:2,fireWandFound:true,weapon:'equipWoodSword',gold:3,potions:0,slots,companionSoul:{version:1,active:'slimeSoul',pending:null,mode:'flee'}}));
   localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,position:{x:102,z:93,y:0,facing:2},townLayout:5,townMapHeight:182,templeDepth:1,
    view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:0,orbitPitch:.25,orbitDistance:5.5}}));
  });
@@ -88,6 +103,37 @@ try{
  assert.equal(moving.contact,left.contact);
  const returned=await tap(command('back'),[held]);assert(!returned.open);assert.deepEqual(returned.cursor,[5]);assert.equal(returned.active,'slimeSoul');
  assert.equal(returned.contact,left.contact);await touch('touchEnd',[]);
+ if(process.env.SOUL_BEHAVIOR_NATIVE==='1'){
+  where='native analog pressure, ordinary companion species rate and four/two follow hysteresis';
+  const axis=await p.evaluate(()=>window.__editorTest.soulMenuQA.walkAxis());assert(axis.length>=7,JSON.stringify(axis));
+  const pos=async n=>({...start,x:start.x+axis.x*n,y:start.y+axis.y*n});
+  const distance=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+  const rate=(a,b,field)=>distance(a[field],b[field])/(b.time-a.time);
+  const gap=q=>distance(q.ally,q.xy);
+  await touch('touchStart',[start]);await touch('touchMove',[await pos(1.04)]);
+  let previous=await read(),first,fast=[];
+  for(let i=0;i<190&&!first;i++){
+   const q=await step();
+   if(q.allyMoving&&q.leader){first=q;break;}
+   assert(!q.leader,'follow did not move with a clear route');
+   if(gap(q)<3.8)assert(distance(previous.ally,q.ally)<.003,'must wait for the 4 tile start gap');
+   previous=q;
+  }
+  assert(first,'ordinary companion starts only after a genuine player move');assert(gap(first)>3.75,JSON.stringify(first));
+  // A small sample avoids travelling out of the known clear ray; changing pressure changes only player rate.
+  fast=[first];for(let i=0;i<4;i++)fast.push(await step());
+  await touch('touchMove',[await pos(.54)]);await step();
+  const slow=[await step()];for(let i=0;i<4;i++)slow.push(await step());
+  const arFast=rate(fast[0],fast.at(-1),'ally'),arSlow=rate(slow[0],slow.at(-1),'ally');
+  const prFast=rate(fast[0],fast.at(-1),'xy'),prSlow=rate(slow[0],slow.at(-1),'xy');
+  assert(prFast>prSlow*1.25&&prSlow>.0005,JSON.stringify({prFast,prSlow}));
+  for(const speed of [arFast,arSlow])assert(Math.abs(speed-1/380)<.00016,JSON.stringify({speed,arFast,arSlow,prFast,prSlow}));
+  await touch('touchEnd',[]);
+  const stopped=await until(q=>!q.leader&&!q.allyMoving&&gap(q)<2.09,160);assert(gap(stopped)>1.89,JSON.stringify(stopped));
+  const after=await step(200);assert(distance(after.ally,stopped.ally)<.003);assert.deepEqual(errors,[]);
+  await cdp.detach();await ctx.close();
+  console.log('PASS real touch native species speed under two unequal player speeds, 4-to-2 hysteresis',JSON.stringify({arFast,arSlow,prFast,prSlow,start:gap(first),stop:gap(stopped)}));
+ }else{
  where='actual valid nearby foe ignored while following';
  const hp=await p.evaluate(()=>window.__editorTest.soulMenuQA.opponent());assert(hp);
  for(let i=0;i<25;i++){const q=await step();assert.equal(q.foe,hp);assert(!q.pending&&q.mode==='follow');}
@@ -112,5 +158,6 @@ try{
  const gone=await step();assert(!gone.open);assert.equal(gone.orvasHp,null);assert.equal(gone.active,null);assert(!gone.cursor.includes(5));
  assert.deepEqual(errors,[]);await cdp.detach();await ctx.close();
  console.log('PASS exact real four commands, exact cursor, simultaneous movement, autonomous fight/follow cancel, durability and zero terminal',JSON.stringify({old:left.mode,hit:landed.damage,restored:reload.orvasHp}));
+ }
 }catch(e){console.error(where,JSON.stringify(last));throw e}
 finally{await browser?.close();await new Promise(r=>server.close(r))}

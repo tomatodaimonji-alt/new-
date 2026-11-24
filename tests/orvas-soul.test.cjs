@@ -9,31 +9,23 @@ test('same authored maximum durability; existing distinct ownership and mode cod
  const record=c.poiCompanionDecode({version:1,pending:'slimeSoul',active:'orvasSoul',mode:'fight'});
  a.equal(record.pending,'slimeSoul');a.equal(record.active,'orvasSoul');a.equal(record.mode,'fight');
 });
-test('only real contact within the Orvas range, direct ray and locked hostile; no hostile boss controller',()=>{
- const foe={type:'monsterSlime',y:0},s={x:1.75,z:0,hp:35},hits=[];
- const c=vm.createContext({poiWalkLevel:0,poiWalkX:0,poiWalkZ:0,poiMonsterStates:new Map([[foe,s]]),poiCompanionNormal:()=>true,
-  poiCompanionDavidFocus:()=>null,poiCompanionAttackClear:()=>true,poiCompanionType:()=>({attack:16}),
-  poiPlayerDamageTarget:(target,x,z,amount)=>hits.push([target[0],amount])});
- vm.runInContext(cut('// BEGIN COMPANION V2 AI','// END COMPANION V2 AI'),c);
- const ally={id:'orvasSoul',x:0,z:0,y:0},target={o:foe,s};
- a(c.poiCompanionCommit(ally,target,100));a.equal(ally.attackMotion.hit,480);
- a(c.poiCompanionResolve(ally,479,'auto'));a.equal(hits.length,0);
- a(c.poiCompanionResolve(ally,480,'auto'));a.deepEqual(hits,[[foe,16]]);
- a.equal(c.poiCompanionResolve(ally,481,'auto'),false);
- const other={...ally,attackMotion:null,nextHit:0};a(c.poiCompanionCommit(other,target,2500));
- c.poiCompanionAttackClear=()=>false;a(c.poiCompanionResolve(other,2880,'auto'));a.equal(hits.length,1);
+test('the Orvas actor routes to its isolated native combat rather than the old miniature swing',()=>{
+ a.match(h,/a\.id==='orvasSoul'[^\n]*poiOrvasAllyResolve\(a,now,mode\)/);
+ a.match(h,/\(distance<=POI_ORVAS_ALLY_TETHER\|\|(?:latch|liveOrvasBoss)\)\?poiOrvasAllyEngage\(a,now\)/);
+ const runtime=cut('// BEGIN ORVAS ALLY BOSS RUNTIME','// END ORVAS ALLY BOSS RUNTIME');
+ a.doesNotMatch(runtime,/poiDavidActive\s*=/);
 });
-test('real stone scale adapts at a doorway; shatter cache is tinted/scaled without ever mutating the wild fragments',()=>{
+test('the original model keeps full scale at a doorway; allied shatter cache never mutates original material',()=>{
  const c=vm.createContext({facilitySite:{buildings:[{id:'toolshop'}]},facilityFloorOwner:(x,z)=>x===16&&z===8?0:null});
  vm.runInContext(cut('// BEGIN ORVAS COMPANION GEOMETRY','// END ORVAS COMPANION GEOMETRY'),c);
- a.equal(c.poiCompanionOrvasScale({x:13,z:8,y:0}),.53);
- a.equal(c.poiCompanionOrvasScale({x:15,z:8,y:0}),.205);
- a.equal(c.poiCompanionOrvasScale({x:2,z:4,y:-1}),.205);
+ a.equal(c.poiCompanionOrvasScale({x:13,z:8,y:0}),1);
+ a.equal(c.poiCompanionOrvasScale({x:15,z:8,y:0}),1);
+ a.equal(c.poiCompanionOrvasScale({x:2,z:4,y:-1}),1);
  const old=[{cx:1,cy:2,cz:3,part:{p:[1,2,3],n:[0,1,0],c:[.9,.1,.1]}}];
- const scaled=c.poiCompanionScaledFragments(old,.53);
- a.equal(scaled[0].cy,1.06);a.equal(scaled[0].part.p[2],1.59);
- a.equal(scaled[0].part.c[2],.83);a.equal(old[0].part.p[2],3);
- a.equal(c.poiCompanionScaledFragments(old,.53),scaled);
+ const scaled=c.poiCompanionScaledFragments(old,1);
+ a.equal(scaled[0].cy,2);a.equal(scaled[0].part.p[2],3);
+ a.equal(scaled[0].part.c[2],.1);a.equal(old[0].part.p[2],3);
+ a.equal(c.poiCompanionScaledFragments(old,1),scaled);
 });
 test('the guaranteed ground soul adds its own visible geometry at the real loot coordinate',()=>{
  const c=vm.createContext({tri:(m,...v)=>m.p.push(...v.slice(0,3).flat())});

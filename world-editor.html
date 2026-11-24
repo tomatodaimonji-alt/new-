@@ -19293,7 +19293,7 @@ function poiOrvasAllyResolve(a,now,mode){
  if(now>=q.until){d.attack=null;return false}
  return true;
 }
-if(typeof document!=='undefined')document.addEventListener('visibilitychange',()=>{
+if(typeof document!=='undefined'&&typeof document.addEventListener==='function')document.addEventListener('visibilitychange',()=>{
  if(document.hidden&&poiCompanionActor?.id==='orvasSoul')poiOrvasAllyStop(poiCompanionActor,performance.now(),true);
 });
 // END ORVAS ALLY BOSS RUNTIME
@@ -19586,7 +19586,7 @@ function poiCompanionCommit(a,t,now){
 function poiCompanionResolve(a,now,mode){
  const q=a.attackMotion;
  if(!q?.pending)return false;
- if(mode==='follow'||mode==='flee'||!poiCompanionTargetLegal(a,q.target?.o,q.target?.s)){
+ if(mode==='follow'||mode==='flee'||mode==='escape'||!poiCompanionTargetLegal(a,q.target?.o,q.target?.s)){
   q.pending=false;return false;
  }
  if(now<q.hit)return true;
@@ -33290,7 +33290,8 @@ function poiEnemyCueLaneGeometry(a){
  return m;
 }
 // BEGIN DAVID TEMPLE CUES
-let poiDavidHostileCue=null;
+let poiDavidCue=null;
+const readDavidHostileCue=()=>poiDavidCue,storeDavidHostileCue=cue=>{poiDavidCue=cue};
 function poiDavidCuePairs(q,b){
  const {kind,dx,dz,sx,sz,y}=q,r=b.room,whole=kind==='stomp'||kind==='leap',strip=kind==='double'||kind==='beam';
  const fan=kind==='beamfan',a=fan?POI_DAVID_BEAM_ARC:whole?Math.PI:Math.PI/2;
@@ -34050,13 +34051,22 @@ function poiDavidRaisedStoneGeometry(e,b){
  // Preserve the authored paint seam on the displaced pieces by clipping
  // the actual road triangles, not painting a substitute cap over the slab.
  const usable=k=>!!k&&(ROAD_IDS.has(k)&&k.endsWith('Full')||
-   e.arena&&/^(grass|earth|moss|stone|sand|soil|brickfloor|basicfloor|woodfloor|tatami|poiSnowGround)/i.test(k));
+   e.arena&&(ROAD_IDS.has(k)||/^(grass|earth|moss|stone|sand|soil|brickfloor|basicfloor|plasterfloor|ironfloor|woodfloor|tatami|poiSnowGround)/i.test(k)));
+ // The outdoor renderer has legal implicit grass where no explicit floor
+ // row exists. Never fake it in a cellar, water, stair or the unused lobe.
+ const kindAt=(x,z)=>floors.get(x+','+z)??(e.arena&&e.y===0&&validPos(x,z)&&
+  (typeof poiSacredDepthVoid!=='function'||!poiSacredDepthVoid(facilitySite,x,z))&&
+  (typeof facilityStairOpenings==='undefined'||!facilityStairOpenings.has(facilityCellKey(x,z,e.y)))?'grass':null);
  const road=(x,z)=>{
   const key=x+','+z;
   if(!paint.has(key)){
-   const id=floors.get(key),t=mesh();
+   const id=kindAt(x,z),t=mesh();
    if(id&&ROAD_IDS.has(id)&&id.endsWith('Full'))roadTile(t,x,z,id,0,MAP_W*MAP_H);
-   else if(usable(id))addFloorTile(t,x,z,id,MAP_W*MAP_H);
+   else if(usable(id)){
+    const adjacent=ROAD_DIAGONALS.has(id)?roadDiagonalConnections(floors,x,z,id):ROAD_IDS.has(id)?roadConnections(floors,x,z,id):0;
+    const implicit=!floors.has(key)&&facilitySite?.id==='base'?(x,z)=>pineEastGroundColor(x,z,floors,facilitySite.townOffset||0):null;
+    addFloorTile(t,x,z,id,MAP_W*MAP_H,adjacent,implicit);
+   }
    paint.set(key,t);
   }
   return paint.get(key);
@@ -34073,7 +34083,7 @@ function poiDavidRaisedStoneGeometry(e,b){
   return out;
  };
  const piece=(x,z,span,depth,angle,height,slab,id)=>{
-  const ix=Math.floor(x),iz=Math.floor(z),idAt=floors.get(ix+','+iz);
+  const ix=Math.floor(x),iz=Math.floor(z),idAt=kindAt(ix,iz);
   if(!usable(idAt))return;
   const c=Math.cos(angle),s=Math.sin(angle),g=terrainY(ix,iz)+1.4*e.y;
   const poly=shape.map(([u,v])=>[x+c*u*span-s*v*depth,z+s*u*span+c*v*depth]);
@@ -34082,7 +34092,7 @@ function poiDavidRaisedStoneGeometry(e,b){
    const p=poly[i],q=poly[(i+1)%poly.length];witnesses.push(p,[(p[0]+q[0])/2,(p[1]+q[1])/2]);
   }
   if(!witnesses.every(([wx,wz])=>{
-   const xx=Math.floor(wx),zz=Math.floor(wz),k=floors.get(xx+','+zz);
+   const xx=Math.floor(wx),zz=Math.floor(wz),k=kindAt(xx,zz);
    return usable(k)&&Math.abs(terrainY(xx,zz)+1.4*e.y-g)<.065&&near(wx,wz);
   }))return;
   const xs=poly.map(p=>p[0]),zs=poly.map(p=>p[1]);
@@ -34169,7 +34179,7 @@ function poiDrawDavidCue(now,vp,ally=false){
  const s=ally?poiCompanionActor:poiDavidActive?.s,q=s?.david?.attack,o=poiDavidActive?.o,b=ally?q?.allyArena:poiDavidMatch(o);
  const finishing=!!s?.david?.deathFinish,active=q&&b&&(ally?s.id==='orvasSoul'&&poiCompanionSame(s,poiCompanionPlace()):s.hp>0)&&
   (poiEnemyThreatEnabled()||finishing)&&poiWalkLevel===q.y&&(poiDavidIn(b,poiAimOrigin(now))||ally&&poiOrvasAllyBossLatch(s,now));
- let poiDavidCue=ally?poiOrvasAllyEffects.cue:poiDavidHostileCue;
+ let poiDavidCue=ally?poiOrvasAllyEffects.cue:readDavidHostileCue();
  try{
  if(poiDavidCue&&(!active||poiDavidCue.q!==q||poiDavidCue.door!==poiWalkDoorOpen||poiDavidCue.map!==world)){
   for(const m of [poiDavidCue.lane,poiDavidCue.beam,poiDavidCue.fan])if(m)gl.deleteBuffer(m.buf);
@@ -34215,7 +34225,7 @@ function poiDrawDavidCue(now,vp,ally=false){
    }
   if(poiDavidCue.beamVisible)return {cue:poiDavidCue,emission,reduced};
  }
- }finally{if(ally)poiOrvasAllyEffects.cue=poiDavidCue;else poiDavidHostileCue=poiDavidCue;}
+ }finally{if(ally)poiOrvasAllyEffects.cue=poiDavidCue;else storeDavidHostileCue(poiDavidCue);}
 }
 function poiDrawDavidBeam(now,vp,frame){
  if(!frame)return;
