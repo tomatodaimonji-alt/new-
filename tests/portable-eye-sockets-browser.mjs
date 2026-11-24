@@ -56,7 +56,7 @@ try{
  await p.clock.install({time:new Date('2026-04-01T10:00:00Z')});
  await p.goto(origin+'/seed');
  await p.evaluate(()=>{
-  const slots=Array(27).fill(null);slots[2]={type:'equipOrvasHead',count:1,durability:50};
+  const slots=Array(27).fill(null);slots[0]={type:'equipWoodSword',count:1,durability:30};slots[2]={type:'equipOrvasHead',count:1,durability:50};
   localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weapon:'equipOrvasHead',weaponDurabilityVersion:2,slots,potions:0}));
   localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,position:{x:111,z:60,y:0,facing:1},
    townLayout:5,townMapHeight:182,templeDepth:1,view:{yaw:0,zoom:1,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:0,orbitPitch:.2,orbitDistance:6.7}}));
