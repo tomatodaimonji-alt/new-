@@ -53,6 +53,16 @@ if(html.includes('function poiOverlandPresent(vp)')){
 replace(testApi,testApi+`
  sacredQA:{
   frame:()=>{window.__depthRoofDraws=0;render()},
+  streamFilterProbe:()=>{
+   if(typeof poiOverlandChunkRows!=='function')return null;
+   const o=world.find(t=>t.y===0&&/^poiDavidWall/.test(t.type)&&poiSacredTempleVisualMember(facilitySite,t));
+   if(!o)return null;
+   const i=Math.floor(o.x/8),j=Math.floor(o.z/8),x0=i*8,z0=j*8;
+   const region=poiOverlandSpecFor('base',facilitySite,world,MAP_W,MAP_H);
+   const gen=poiOverlandChunkRows({i,j,x0,z0,x1:x0+8,z1:z0+8},region);
+   let r;while(!(r=gen.next()).done){}
+   return {x:o.x,z:o.z,seen:r.value.qaSacredSeen||0,emitted:r.value.qaSacredVertices||0,total:r.value.p.length/3};
+  },
   details:()=>({port:facilitySite.southPort.market.public,portName:facilitySite.southPort.name,forest:facilitySite.southForest.rest,
     town:facilitySite.town,temple:facilitySite.davidTemple.entrance,day:poiTownClockGameMs}),
   gate:(x,z,yaw,pitch,minute)=>{const ok=workshopResumeRestorePosition({x,z,y:0,facing:2});poiCameraYaw=yaw;poiCameraPitch=pitch;poiCameraDistance=6;poiTownClockGameMs=minute*POI_TOWN_MINUTE_MS;return ok},
@@ -155,7 +165,10 @@ try{
  }
  if(!baseline&&html.includes('function poiOverlandPresent(vp)')){
   assert(observedStream,'actual chunk rendering used near the snow neck');
-  assert(observedNames>0,'real hidden authored temple pieces reached the streamed bake filter');
+  const exactBake=await p.evaluate(()=>window.__editorTest.sacredQA.streamFilterProbe());
+  assert(exactBake?.seen>0&&exactBake.total>0,'real authored wall patch is exercised through the actual chunk baker');
+  assert.equal(exactBake.emitted,0,'the streamed wall patch emits ground but no named temple geometry');
+  console.log('STREAMED ACTUAL HIDDEN STONE',JSON.stringify({fromVisibleNeighborhood:observedNames,exactBake}));
  }
  if(baseline)assert(samples.find(s=>s.key==='forest').roof,'stock dome is submitted from the reported coastal forest');
  assert.deepEqual(errors,[]);
