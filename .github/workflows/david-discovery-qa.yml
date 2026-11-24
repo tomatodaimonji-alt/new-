@@ -251,6 +251,8 @@ jobs:
             await until(s=>!s.d?.finish&&(!s.q));
             const respawn=await until(s=>s.death?.relocated);
             assert(respawn.hp>0&&respawn.death.blackAt-dead.death.start>=1650);
+            const cleared=await until(s=>!s.death);assert.equal(cleared.hp,respawn.hp);assert(!cleared.q);
+            for(let i=0;i<12;i++)await frame();assert.equal((await qa()).hp,respawn.hp);assert(!(await qa()).q);
             assert.deepEqual(errors,[]);
             console.log('Actual lethal blade, rendered second blade without another hit, then original return and defeated-player respawn');
             await ctx.close();
@@ -387,7 +389,7 @@ jobs:
             const ctx=await browser.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.65});
             const p=await ctx.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));p.setDefaultTimeout(20000);
             await p.clock.install({time:new Date('2026-04-01T10:00:00Z')});
-            await p.goto(root+'/seed');await p.evaluate(()=>{const slots=Array(27).fill(null);slots[0]={type:'kitchenKnife',count:1,durability:40};
+            await p.goto(root+'/seed');await p.evaluate(()=>{const slots=Array(27).fill(null);slots[0]={type:'kitchenKnife',count:1,durability:40};slots[1]={type:'equipWoodSword',count:1};
              localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weaponDurabilityVersion:2,weapon:'kitchenKnife',potions:0,slots}));
              localStorage.setItem('world-workshop-resume-v1',JSON.stringify({
              version:1,route:'facility',id:'base',play:true,position:{x:24,z:102,y:0,facing:2},townLayout:5,townMapHeight:128,
@@ -407,7 +409,8 @@ jobs:
             const before=await qa();
             assert.equal(before.weapon,'kitchenKnife');
             assert(Math.hypot(before.a.x-before.p.x,before.a.z-before.p.z)>1.35,JSON.stringify(before));
-            await p.locator('#poiWalkAction').tap();
+            const button=await p.locator('#poiWalkAction').boundingBox();assert(button);
+            await p.touchscreen.tap(button.x+button.width/2,button.y+button.height/2);
             const after=await until(s=>s.action>before.action&&!s.pending,15);
             assert(after.hp<before.hp,JSON.stringify({before,after}));
             assert.equal(after.durability,before.durability-1);
