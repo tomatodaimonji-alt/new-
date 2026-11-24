@@ -1573,9 +1573,32 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  --poi-v230-pad-top-reserve:calc(var(--poi-mini-size) + 76px + clamp(0px,(118px - var(--poi-area-width)) * .62,20px));
 }
 /* END FIXED AREA CARD */
+/* BEGIN WIDE HUD MAP */
+#poiMiniOpen{width:var(--poi-area-width)}
+#poiMiniMap{width:100%;height:var(--poi-mini-size);aspect-ratio:auto}
+/* END WIDE HUD MAP */
+
 
 #poiWalkPad:has(:is(#poiNpcInventory,#poiBagPanel,#poiNpcTradePanel):not([hidden])) #poiCompanionHud{visibility:hidden}
 #poiPartyHud #poiCompanionHud[hidden]{display:none!important}
+/* BEGIN STORAGE PARTY LANE */
+/* Only the real inventory/chest should coexist with the live party HUD.
+   NPC/trade hiding and [hidden] on the party or ally still win. */
+#viewWrap[data-analog-play] #poiWalkPad:has(#poiBagPanel:not([hidden])):not(:has(:is(#poiNpcInventory,#poiNpcTradePanel):not([hidden]))) #poiPartyCards
+ > .poiPartyCard:not([hidden]){visibility:visible;pointer-events:none}
+#viewWrap[data-analog-play] #poiWalkPad:has(#poiBagPanel:not([hidden])){
+ --poi-party-storage-reserve:100px;
+ --poi-land-inventory-room:calc(var(--editor-visible-height,100dvh) - var(--poi-land-top) - var(--poi-land-bottom) - var(--poi-land-hotbar-height) - var(--poi-party-storage-reserve) - 63px);
+}
+@media (orientation:landscape) and (max-height:430px){
+ #viewWrap[data-analog-play] #poiWalkPad:has(#poiBagPanel:not([hidden])){--poi-party-storage-reserve:53px}
+ #viewWrap[data-analog-play] #poiWalkPad:has(#poiBagPanel:not([hidden])) #poiPartyCards{
+  --poi-storage-party-w:min(18vw,121px,max(52px,calc((100vw - var(--poi-land-left) - var(--poi-land-right) - var(--poi-area-width) - var(--poi-area-gap) - 4px) / 2)));
+  grid-template-columns:repeat(2,minmax(0,1fr));width:calc(2 * var(--poi-storage-party-w) + 4px);
+ }
+}
+/* END STORAGE PARTY LANE */
+
 #poiCompanionCommands{
  --soul-side:max(8px,env(safe-area-inset-left),env(safe-area-inset-right));
  --soul-width:min(152px,calc(100vw - var(--soul-side) * 2));
@@ -1684,7 +1707,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v313）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v317）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -2291,8 +2314,9 @@ const catalog=new Map(palette.map(p=>[p.id,p]));let selected='wall',mode='place'
 let pineObjectSelection=null,pineSelectedTile=null,pineMoveArmed=false;
 const byId=id=>catalog.get(id)||models.find(m=>m.id===id)||prefabs.find(p=>p.id===id);
 const cellKey=(x,z,y=0)=>x+','+z+','+y;
-const validPos=(x,z)=>Number.isInteger(x)&&Number.isInteger(z)&&x>=0&&z>=0&&x<MAP_W&&z<MAP_H&&
- (MAP_W!==128||MAP_H!==182||z<128||x<48||typeof poiSnowSleeveOwn==='function'&&poiSnowSleeveOwn(x,z));
+const validPos=(x,z)=>Number.isInteger(x)&&Number.isInteger(z)&&x>=0&&z>=0&&
+ ((x<MAP_W&&z<MAP_H&&(MAP_W!==128||MAP_H!==182||z<128||x<48||typeof poiSnowSleeveOwn==='function'&&poiSnowSleeveOwn(x,z)))||
+ typeof poiSquareFieldPlayAt==='function'&&poiSquareFieldPlayAt(x,z));
 const safeColor=s=>/^#[0-9a-f]{6}$/i.test(s);
 const hexRGB=s=>[1,3,5].map(i=>parseInt(s.slice(i,i+2),16)/255);
 const mesh=()=>({p:[],n:[],c:[]});
@@ -18874,10 +18898,10 @@ function poiSoulFloorDecode(raw){
  for(const p of raw.slice(0,32)){
   const spec=poiCompanionType(p?.type);
   if(!spec||seen.has(p.type)||![p.x,p.y,p.z,p.durability].every(Number.isSafeInteger)||
-   p.x<0||p.x>=MAX_MAP||p.z<0||p.y< -1||p.y>9||p.durability<1||p.durability>spec.hp||
+   p.x<0||p.z<0||p.y< -1||p.y>9||p.durability<1||p.durability>spec.hp||
    p.region!==undefined&&p.region!=='snowpass'||
    p.region==='snowpass'&&(typeof poiSnowGroundIn==='function'?!poiSnowGroundIn(p):p.y!==0||p.x>=24||p.z>=29)||
-   (p.z>=MAX_MAP&&(p.region||typeof poiDavidDepthGroundPoint!=='function'||!poiDavidDepthGroundPoint(p))))continue;
+   ((p.x>=MAX_MAP||p.z>=MAX_MAP)&&(p.region||typeof poiDavidDepthGroundPoint!=='function'||!poiDavidDepthGroundPoint(p))))continue;
   const key=[p.region??'base',p.x,p.z,p.y].join(',');
   if(cells.has(key))continue;
   seen.add(p.type);cells.add(key);
@@ -18987,12 +19011,19 @@ function poiSoulFloorReachable(now){
  }
  return best;
 }
-function poiSoulFloorCollect(item){
+function poiSoulFloorWalkover(x,z,now){
+ if(!poiInventoryAllowed()||!poiCompanionAllowed())return false;
+ const list=poiHotbarRead().soulDrops;
+ const item=list?.find(d=>d.x===x&&d.z===z&&d.y===poiWalkLevel&&poiSoulFloorWorld(d));
+ if(!item||poiSoulFloorMotion.get(item.type)?.end>now)return false;
+ return poiSoulFloorCollect(item,true);
+}
+function poiSoulFloorCollect(item,walkover=false){
  if(!poiInventoryAllowed())return false;
  const kit=poiHotbarRead(),list=kit.soulDrops??[];
  if(!list.includes(item)||kit.companionSoul?.active===item.type||poiInventorySlots(kit).some(c=>c?.type===item.type))return false;
  const {slots,accepted}=poiInventoryAccept(kit,item.type,1,item);
- if(accepted!==1){toast('持ち物に空きがありません。');return false}
+ if(accepted!==1){if(!walkover)toast('持ち物に空きがありません。');return false}
  const next=poiInventoryEdited({...kit,soulDrops:list.filter(d=>d!==item)},slots);
  if(!poiEconomyWrite(next)){toast('魂を保存できませんでした。');return false}
  poiSoulFloorMotion.delete(item.type);poiEconomyRefresh();
@@ -19176,8 +19207,14 @@ function poiCompanionAdvance(a,to,now,stop){
  a.px=p.x;a.pz=p.z;a.freeAt=now;a.freeMoving=false;
  if(!to||typeof poiFreeAdvance!=='function')return false;
  const dt=Math.max(0,Math.min(64,now-(previous??now)));
- const dx=to.x-p.x,dz=to.z-p.z,len=Math.hypot(dx,dz);
- const step=Math.min(Math.max(0,len-stop),dt*poiCompanionSpeed(a));
+ let dx=to.x-p.x,dz=to.z-p.z,len=Math.hypot(dx,dz);
+ const speed=dt*poiCompanionSpeed(a);
+ let step=Math.min(Math.max(0,len-stop),speed);
+ const scope=typeof poiCompanionNavScope==='function'?poiCompanionNavScope(a,to):null;
+ const nook=scope&&step<.001&&speed>.001&&!poiCompanionNavGroundClear(a,p,to);
+ let waypoint=scope&&(a.localDetour||nook)?poiCompanionNavLeg(a,to,p,now,stop,scope,nook):null;
+ if(!scope)a.localDetour=null;
+ if(waypoint){dx=waypoint.x-p.x;dz=waypoint.z-p.z;len=Math.hypot(dx,dz);step=Math.min(len,speed)}
  if(step<.001||!len)return false;
  const cells=new Map(),edge=(x,z,fx,fz)=>{
   const key=[x,z,fx,fz].join(',');
@@ -19190,10 +19227,20 @@ function poiCompanionAdvance(a,to,now,stop){
  let next=solve(dx*step/len,dz*step/len);
  if(clip(next)){
   const slides=[solve(dx*step/len,0),solve(0,dz*step/len)].filter(p=>p.distance>.001&&!clip(p));
-  if(!slides.length)return false;
-  next=slides.sort((a,b)=>b.distance-a.distance)[0];
+  if(!slides.length){if(!scope)return false;next=solve(0,0)}
+  else next=slides.sort((a,b)=>b.distance-a.distance)[0];
  }
- if(next.distance<step*.19&&typeof poiCompanionPlan==='function'){
+ if(scope&&next.distance<step*.19&&!waypoint){
+  waypoint=poiCompanionNavLeg(a,to,p,now,stop,scope,true);
+  if(waypoint){
+   const rx=waypoint.x-p.x,rz=waypoint.z-p.z,leg=Math.hypot(rx,rz);
+   if(leg>.001){
+    const t=Math.min(1,speed/leg),d=solve(rx*t,rz*t);
+    if(!clip(d)&&d.distance>next.distance)next=d;
+   }
+  }
+ }
+ if(next.distance<step*.19&&!waypoint&&typeof poiCompanionPlan==='function'){
   const route=a.freeRoute??(a.freeRoute=poiCompanionPlan(a,{x:Math.round(to.x),z:Math.round(to.z)},now));
   if(route){
    const rx=route.x-p.x,rz=route.z-p.z,d=Math.hypot(rx,rz);
@@ -19224,6 +19271,102 @@ function poiCompanionCell(x,z,y,fx,fz){
  if(poiWalkX===x&&poiWalkZ===z||!poiWalkCanStep(x,z,fx,fz))return false;
  return !(typeof poiTownNpcActorOccupied==='function'&&poiTownNpcActorOccupied(x,z,y));
 }
+function poiFindLocalDetour(from,to,can,arrived,maxNodes=72,maxDepth=24){
+ const key=(x,z)=>x+','+z,heur=(x,z)=>Math.abs(x-to.x)+Math.abs(z-to.z);
+ const open=[{x:from.x,z:from.z,d:0,h:heur(from.x,from.z),prev:null}],cost=new Map([[key(from.x,from.z),0]]);
+ for(let rank=0;rank<maxNodes&&open.length;rank++){
+  let pick=0;
+  for(let i=1;i<open.length;i++)if(open[i].d+open[i].h<open[pick].d+open[pick].h||
+   open[i].d+open[i].h===open[pick].d+open[pick].h&&open[i].h<open[pick].h)pick=i;
+  const p=open.splice(pick,1)[0];
+  if(p.d!==cost.get(key(p.x,p.z)))continue;
+  if(p.prev&&arrived(p.x,p.z)){
+   const path=[];
+   for(let q=p;q.prev;q=q.prev)path.push({x:q.x,z:q.z});
+   return path.reverse();
+  }
+  if(p.d>=maxDepth)continue;
+  for(const [dx,dz] of [[0,-1],[1,0],[0,1],[-1,0]]){
+   const x=p.x+dx,z=p.z+dz,k=key(x,z),d=p.d+1;
+   if(d>=(cost.get(k)??Infinity)||!can(x,z,p.x,p.z))continue;
+   cost.set(k,d);open.push({x,z,d,h:heur(x,z),prev:p});
+  }
+ }
+ return null;
+}
+function poiCompanionNavScope(a,to){
+ if(facilitySite?.id!=='base'||a.y!==poiWalkLevel)return null;
+ if(a.y===-1){
+  const b=facilitySite.mine?.bounds,inside=(x,z)=>b&&x>=b.x1&&x<=b.x2&&z>=b.z1&&z<=b.z2;
+  return inside(a.x,a.z)&&inside(to.x,to.z)?inside:null;
+ }
+ if(a.y!==0||!facilityCreekIndex?.parts?.size)return null;
+ for(const d of facilityCreekIndex.parts.values()){
+  if(Math.abs(a.x-d.x)+Math.abs(a.z-d.z)>15||Math.abs(to.x-d.x)+Math.abs(to.z-d.z)>15)continue;
+  return (x,z)=>Math.abs(x-d.x)+Math.abs(z-d.z)<=15;
+ }
+ return null;
+}
+function poiCompanionNavGroundClear(a,p,to){
+ const dx=to.x-p.x,dz=to.z-p.z,len=Math.hypot(dx,dz);
+ if(len<=.72||typeof poiFreeAdvance!=='function')return true;
+ const step=len-.70,can=(x,z,fx,fz)=>poiCompanionCell(x,z,a.y,fx,fz);
+ const q=poiFreeAdvance(p.x,p.z,dx*step/len,dz*step/len,POI_COMPANION_FREE_RADIUS,can,can);
+ return !q.stopped&&Math.hypot(q.x-(p.x+dx*step/len),q.z-(p.z+dz*step/len))<.08;
+}
+function poiCompanionBridgeLift(a){
+ if(a.y!==0||facilitySite?.id!=='base'||!facilityCreekIndex?.parts?.size)return 0;
+ const p=poiCompanionPosition(a),key=(x,z)=>x+','+z;
+ const {parts,bridgeHeight,water}=facilityCreekIndex;
+ const x=a.x,z=a.z,ground=terrainY(x,z),k=key(x,z),own=parts.get(k),h=bridgeHeight.get(k)??ground;
+ for(const [dx,dz,offset] of [[1,0,p.x-x],[0,1,p.z-z]]){
+  const dir=Math.sign(offset);if(!dir)continue;
+  const tx=x+dx*dir,tz=z+dz*dir,k=key(tx,tz),neighbor=parts.get(k),span=own||neighbor;
+  if(!span||!(span.rot%2===1?dx:dz)||!neighbor&&water.has(k))continue;
+  return h+( (bridgeHeight.get(k)??terrainY(tx,tz))-h)*Math.abs(offset)-ground;
+ }
+ return h-ground;
+}
+function poiCompanionNavLeg(a,to,p,now,stop,scope,allowPlan){
+ const end={x:Math.round(to.x),z:Math.round(to.z)};
+ let q=a.localDetour;
+ if(q&&(q.world!==world||q.y!==a.y||Math.abs(q.to.x-end.x)+Math.abs(q.to.z-end.z)>2))a.localDetour=q=null;
+ if(q){
+  while(q.path.length&&Math.hypot(q.path[0].x-p.x,q.path[0].z-p.z)<.075)q.path.shift();
+  if(q.path.length){
+   const n=q.path[0];
+   if(n.x===a.x&&n.z===a.z||poiCompanionCell(n.x,n.z,a.y,a.x,a.z))return n;
+  }
+  a.localDetour=q=null;
+ }
+ if(!allowPlan||now<(a.localPlanAt||0))return null;
+ a.localPlanAt=now+650;
+ const path=poiFindLocalDetour(a,end,(x,z,fx,fz)=>scope(x,z)&&poiCompanionCell(x,z,a.y,fx,fz),
+  (x,z)=>Math.hypot(x-to.x,z-to.z)<=stop+.25&&poiCompanionNavGroundClear(a,{x,z},to));
+ if(!path?.length)return null;
+ a.localDetour={world,y:a.y,to:end,path};
+ return path[0];
+}
+function poiMineHostileDetour(o,s,patrol,to,now,allowPlan){
+ if(patrol?.name!=='mine'||poiWalkLevel!==-1||!poiMonsterCrowdNormal(o))return false;
+ const same=s.mineDetour?.goal?.x===to.x&&s.mineDetour.goal.z===to.z;
+ if(!same)s.mineDetour=null;
+ const can=(x,z,fx,fz)=>poiDungeonPatrolCanFight(o,x,z,patrol)&&poiMineEarlyMayMove(o,x,z)&&
+  poiOtherworldEnemyMayFight(o,x,z)&&poiMonsterCanMove(x,z,s,fx,fz);
+ if(!s.mineDetour?.path.length&&allowPlan&&now>=(s.minePlanAt||0)){
+  s.minePlanAt=now+760;
+  const path=poiFindLocalDetour(s,to,can,(x,z)=>Math.abs(x-to.x)+Math.abs(z-to.z)===1,50,14);
+  if(path?.length)s.mineDetour={goal:{x:to.x,z:to.z},path};
+ }
+ const n=s.mineDetour?.path[0];
+ if(!n)return false;
+ if(!can(n.x,n.z,s.x,s.z)){s.mineDetour=null;return false}
+ const dx=n.x-s.x,dz=n.z-s.z;
+ s.mineDetour.path.shift();
+ s.fromX=s.x;s.fromZ=s.z;s.x=n.x;s.z=n.z;s.moveStarted=now;
+ s.facing=dx?(dx>0?3:1):(dz<0?2:0);poiMonsterMeshDirty=true;return true;
+}
+
 function poiCompanionDirection(from,to){
  const dx=to.x-from.x,dz=to.z-from.z;
  return Math.abs(dx)>=Math.abs(dz)?[[Math.sign(dx)||1,0],[0,Math.sign(dz)||1],[0,-(Math.sign(dz)||1)],[-(Math.sign(dx)||1),0]]:
@@ -19638,7 +19781,10 @@ function poiCompanionTick(now){
    if(!to&&latch){
     a.freeGoal=null;a.freeFollows=false;
    }else{
-    const follow=poiCompanionFollowWanted(a,distance);
+    const blockedNear=distance>1.1&&distance<POI_COMPANION_FOLLOW_BEGIN&&
+     typeof poiCompanionNavScope==='function'&&poiCompanionNavScope(a,player)&&
+     !poiCompanionNavGroundClear(a,origin,player);
+    const follow=poiCompanionFollowWanted(a,distance)||blockedNear||!!a.localDetour;
     a.freeGoal=to===a?null:to||(follow?player:null);
     a.freeFollows=!to;
    }
@@ -19717,6 +19863,31 @@ function poiOrvasAllyLeapPath(a,src,target,dx,dz){
  }
  return null;
 }
+function poiOrvasAllyLanding(a,q){
+ const l=q.leap,o={x:l.x0,z:l.z0,y:q.y},vx=l.x-o.x,vz=l.z-o.z,n=Math.hypot(vx,vz);
+ const steps=Math.max(1,Math.ceil(n*5)),pass=poiAimWall(o),r=POI_COMPANION_FREE_RADIUS;
+ let last=null;
+ // The launch already checked the walking footprint. During flight, other
+ // actors under the arc don't veto it; the landing tile must remain free.
+ // Real walls still clip the sweep, with fallbacks on this same trajectory.
+ for(let i=steps;i>0;i--){
+  const x=Math.round(o.x+vx*i/steps),z=Math.round(o.z+vz*i/steps);
+  if(last?.x===x&&last.z===z)continue;
+  last={x,z};let px=x,pz=z;
+  for(let j=i-1;j>=0;j--){
+   px=Math.round(o.x+vx*j/steps);pz=Math.round(o.z+vz*j/steps);
+   if(px!==x||pz!==z)break;
+  }
+  if(x===a.x&&z===a.z||!poiCompanionCell(x,z,a.y,px,pz)||
+     typeof poiActorSameGrade==='function'&&!poiActorSameGrade(x,z,a.x,a.z))continue;
+  const dx=x-o.x,dz=z-o.z,len=Math.hypot(dx,dz);
+  if(len<1e-6)continue;
+  const d={x:dx/len,z:dz/len};
+  if([-r,0,r].every(k=>poiAimWallLimit({x:o.x-d.z*k,z:o.z+d.x*k},d,len,pass)+1e-6>=len))
+   return last;
+ }
+ return null;
+}
 function poiOrvasAllyEngage(a,now){
  if(now<(a.david?.next??a.nextHit??0))return a;
  if(now<(a.allyScanAt||0))return null;
@@ -19741,7 +19912,7 @@ function poiOrvasAllyEngage(a,now){
  d.attack={kind,start:now,hits,sx:leap?.x??src.x,sz:leap?.z??src.z,y:a.y,dx,dz,cursor:0,executed:0,landed:0,
   lastFrameAt:now,lastContactAt:null,until,ally:true,allyArena:b,
   ...(kind==='beam'&&typeof terrainY==='function'?{beamBase:terrainY(a.x,a.z)+a.y*1.4}:{}),
-  ...(leap?{leap:{...leap,x0:src.x,z0:src.z,launch,land}}:{})};
+  ...(leap?{leap:{...leap,x0:src.x,z0:src.z,launch,land,boss:t.o.type==='monsterStoneDavid'?poiDavidMatch(t.o):null}}:{})};
  if(leap)d.leapReady=now+POI_DAVID_LEAP_COOL;
  return a;
 }
@@ -19793,9 +19964,12 @@ function poiOrvasAllyRouteFrame(now){
 }
 function poiOrvasAllyResolve(a,now,mode){
  const d=a.david,q=d?.attack;if(!q)return false;
+ const leapBoss=q.leap?.boss,boss=poiOrvasAllyBossLatch(a,now);
+ const sameArena=leapBoss&&poiDavidIn(leapBoss,poiAimOrigin(now))&&
+    poiDavidIn(leapBoss,{...poiCompanionPosition(a),y:a.y});
  if((mode==='flee'||mode==='follow')||!poiEnemyThreatEnabled()||now-q.lastFrameAt>750||poiDavidHidden()||
-    (!poiOrvasAllyBossLatch(a,now)&&!(a.fightLatch&&poiOrvasAllyTarget(a,a.fightLatch.o,a.fightLatch.s,now))&&Math.hypot(a.x-poiWalkX,a.z-poiWalkZ)>POI_ORVAS_ALLY_TETHER)||
-    (a.allyTarget?.o.type==='monsterStoneDavid'&&!poiOrvasAllyBossLatch(a,now))){
+    (!boss&&!sameArena&&!(a.fightLatch&&poiOrvasAllyTarget(a,a.fightLatch.o,a.fightLatch.s,now))&&Math.hypot(a.x-poiWalkX,a.z-poiWalkZ)>POI_ORVAS_ALLY_TETHER)||
+    (q.kind==='leap'?(leapBoss&&!sameArena):a.allyTarget?.o.type==='monsterStoneDavid'&&!boss)){
   poiOrvasAllyStop(a,now,true);return false;
  }
  q.lastFrameAt=now;
@@ -19809,9 +19983,9 @@ function poiOrvasAllyResolve(a,now,mode){
   const i=q.cursor,late=now-q.hits[i];
   if(q.kind==='leap'){
    const l=q.leap;
-   // A changed door or new occupant cancels landing rather than teleporting.
-   const path=poiOrvasAllyLeapPath(a,{x:l.x0,z:l.z0},{x:l.x+q.dx*1.25,z:l.z+q.dz*1.25},q.dx,q.dz);
-   if(!path||path.x!==l.x||path.z!==l.z){poiOrvasAllyStop(a,now);return false}
+   const path=poiOrvasAllyLanding(a,q);
+   if(!path){poiOrvasAllyStop(a,now);d.next=Math.max(d.next,q.until);return false}
+   q.sx=l.x=path.x;q.sz=l.z=path.z;
    a.x=a.fx=l.x;a.z=a.fz=l.z;a.px=l.x;a.pz=l.z;a.freeRoute=null;a.freeGoal=null;
   }
   for(let j=i;j<q.hits.length;j++)q.hits[j]+=late;
@@ -19968,6 +20142,7 @@ function poiCompanionWorldPose(a,now){
  const x=a.freeDx??a.x-a.fx,z=a.freeDz??a.z-a.fz,facing=Math.abs(x)>Math.abs(z)?(x>0?3:1):(z<0?2:0);
  if(a.id==='orvasSoul'&&typeof poiCompanionOrvasPose==='function'){
   const pose=poiCompanionOrvasPose(a,now,facing);
+  if(typeof poiCompanionBridgeLift==='function')pose.y+=poiCompanionBridgeLift(a);
   return typeof poiCompanionSeamRender==='function'?poiCompanionSeamRender(a,pose):pose;
  }
  const actor={type:'monsterSlime',x:a.x,z:a.z,y:a.y};
@@ -19977,6 +20152,7 @@ function poiCompanionWorldPose(a,now){
  const art=poiMonsterPose(actor,state,now);
  art.y+=terrainY(a.x,a.z)-terrainY(physical.x,physical.z)+poiCompanionPose(a,now).hop;
  const pose={...art,facing};
+ if(typeof poiCompanionBridgeLift==='function')pose.y+=poiCompanionBridgeLift(a);
  return typeof poiCompanionSeamRender==='function'?poiCompanionSeamRender(a,pose):pose;
 }
 function poiCompanionWorldVisible(a){
@@ -20379,6 +20555,7 @@ function poiCompanionHostileChase(o,s,now,patrol){
   return true;
  }
  if(s.actorFree&&poiMonsterActorSettle(o,s,now))return true;
+ if(s.mineDetour&&poiMineHostileDetour(o,s,patrol,goal,now,false))return true;
  for(const [dx,dz] of poiCompanionDirection(s,goal)){
   const x=s.x+dx,z=s.z+dz;
   if((x===goal.x&&z===goal.z)||Math.hypot(x-goal.x,z-goal.z)>=Math.hypot(s.x-goal.x,s.z-goal.z)||
@@ -20389,7 +20566,7 @@ function poiCompanionHostileChase(o,s,now,patrol){
   s.fromX=s.x;s.fromZ=s.z;s.x=x;s.z=z;s.moveStarted=now;s.facing=dx?(dx>0?3:1):(dz<0?2:0);
   poiMonsterMeshDirty=true;return true;
  }
- return false;
+ return typeof poiMineHostileDetour==='function'&&poiMineHostileDetour(o,s,patrol,goal,now,true);
 }
 // BEGIN COMPANION DAVID
 const POI_COMPANION_DAVID_NOTICE=5.6,POI_COMPANION_DAVID_ENGAGE=7.5,POI_COMPANION_DAVID_RELEASE=9.2;
@@ -21964,13 +22141,14 @@ function poiRepeatableMonsterWeapon(type){return POI_REPEATABLE_MONSTER_WEAPONS.
 function poiDavidDepthGroundPoint(p){
  // Only the base/snow shared kit can create ordinary ground stacks. The
  // extension is a narrow base surface lobe, never an editor or snow region.
- return !!p&&p.region!=='snowpass'&&p.y===0&&p.x>=0&&p.z>=128&&p.z<182&&(p.x<48||typeof poiSnowSleeveOwn==='function'&&poiSnowSleeveOwn(p.x,p.z));
+ return !!p&&(typeof poiSquareFieldGroundPoint==='function'&&poiSquareFieldGroundPoint(p)||
+  p.region!=='snowpass'&&p.y===0&&p.x>=0&&p.z>=128&&p.z<182&&(p.x<48||typeof poiSnowSleeveOwn==='function'&&poiSnowSleeveOwn(p.x,p.z)));
 }
 function poiInventoryReadDrops(raw){
  if(!Array.isArray(raw))return [];
  const seen=new Set(),unique=new Set(),out=[];
  for(const d of raw.slice(0,POI_INVENTORY_LIMIT)){
-  if(!d||![d.x,d.z,d.y].every(Number.isInteger)||d.x<0||d.x>=MAX_MAP||d.z<0||(d.z>=MAX_MAP&&(typeof poiDavidDepthGroundPoint!=='function'||!poiDavidDepthGroundPoint(d)))||d.y< -1||d.y>9)continue;
+  if(!d||![d.x,d.z,d.y].every(Number.isInteger)||d.x<0||d.z<0||((d.x>=MAX_MAP||d.z>=MAX_MAP)&&(typeof poiDavidDepthGroundPoint!=='function'||!poiDavidDepthGroundPoint(d)))||d.y< -1||d.y>9)continue;
   const key=(d.region==='snowpass'?'s:':'')+d.x+','+d.z+','+d.y;
   const max=poiInventoryStack(d.type),count=Number.isInteger(d.count)?Math.max(1,Math.min(max,d.count)):1;
   const c=poiInventorySanitizeCell({...d,count}),isWeapon=poiHotbarWeaponForType(d.type)&&!poiRepeatableMonsterWeapon(d.type);
@@ -22150,7 +22328,7 @@ function poiGroundGoldDecode(raw){
  const seen=new Set(),out=[];
  if(!Array.isArray(raw))return out;
  for(const p of raw.slice(0,POI_INVENTORY_LIMIT)){
-  if(!p||![p.x,p.z,p.y,p.amount].every(Number.isSafeInteger)||p.x<0||p.x>=MAX_MAP||p.z<0||(p.z>=MAX_MAP&&(typeof poiDavidDepthGroundPoint!=='function'||!poiDavidDepthGroundPoint(p)))||p.y< -1||p.y>9||p.amount<1||p.amount>POI_ECONOMY_GOLD_MAX)continue;
+  if(!p||![p.x,p.z,p.y,p.amount].every(Number.isSafeInteger)||p.x<0||p.z<0||((p.x>=MAX_MAP||p.z>=MAX_MAP)&&(typeof poiDavidDepthGroundPoint!=='function'||!poiDavidDepthGroundPoint(p)))||p.y< -1||p.y>9||p.amount<1||p.amount>POI_ECONOMY_GOLD_MAX)continue;
   const key=(p.region==='snowpass'?'s:':'')+p.x+','+p.z+','+p.y;
   if(seen.has(key))continue;
   seen.add(key);out.push({x:p.x,z:p.z,y:p.y,amount:p.amount,...(p.region==='snowpass'?{region:p.region}:{})});
@@ -25800,6 +25978,7 @@ function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMo
  }
  if(obj.type==='monsterMineGuard'){if(poiMineGuardFrame(obj,state,now))changed=true;continue}
  if(dist>6.5){if(state.actorFree&&poiMonsterActorSettle(obj,state,now))continue;if(pineGameActive&&Math.random()<.32){const [rx,rz]=[[0,1],[0,-1],[1,0],[-1,0]][Math.floor(Math.random()*4)],nx=state.x+rx,nz=state.z+rz;if((state.wildSpawn||Math.max(Math.abs(nx-24),Math.abs(nz-24))>=10)&&poiMineEarlyMayMove(obj,nx,nz)&&poiMonsterCanMove(nx,nz,state)){state.fromX=state.x;state.fromZ=state.z;state.x=nx;state.z=nz;state.moveStarted=now;state.facing=rx?rx>0?3:1:rz<0?2:0;changed=true}}continue;}if(typeof poiEnemyAdjacent==='function'?poiEnemyAdjacent(obj,state,poiWalkX,poiWalkZ):Math.abs(dx)+Math.abs(dz)===1){if(state.actorFree&&poiMonsterActorSettle(obj,state,now))continue;if(now>=state.nextAttack)poiEnemyBeginPlayer(obj,state,now);continue}
+ if(state.mineDetour&&typeof poiMineHostileDetour==='function'&&poiMineHostileDetour(obj,state,patrol,{x:poiWalkX,z:poiWalkZ},now,false)){changed=true;continue}
  if(typeof poiMonsterChaseFree==='function'&&poiMonsterChaseFree(obj,state,now,patrol,armed)){changed=true;continue}
  if(state.actorFree&&poiMonsterActorSettle(obj,state,now))continue;
  const steps=[[Math.sign(dx),0],[0,Math.sign(dz)]].filter(([sx,sz])=>sx||sz).sort((a,b)=>Math.abs(a[0]*dx+a[1]*dz)>Math.abs(b[0]*dx+b[1]*dz)?-1:1);
@@ -25807,6 +25986,7 @@ function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMo
     (poiEnemyDiagonalType(obj)||armed&&!(typeof poiNorthWatchGuard==='function'&&poiNorthWatchGuard(obj))))
   steps.push([-Math.sign(dx),0],[0,-Math.sign(dz)]);
  for(const [sx,sz] of steps){const nx=state.x+sx,nz=state.z+sz;if((!pineGameActive||Math.max(Math.abs(nx-24),Math.abs(nz-24))>=10)&&poiMineEarlyMayMove(obj,nx,nz)&&(!patrol||poiDungeonPatrolCanFight(obj,nx,nz,patrol))&&(!armed||poiArmedBound(obj,nx,nz))&&(typeof poiOtherworldEnemyMayFight!=='function'||poiOtherworldEnemyMayFight(obj,nx,nz))&&poiMonsterCanMove(nx,nz,state)){state.fromX=state.x;state.fromZ=state.z;state.x=nx;state.z=nz;state.moveStarted=now;state.facing=sx?sx>0?3:1:sz<0?2:0;changed=true;break}}
+ if(state.moveStarted!==now&&typeof poiMineHostileDetour==='function'&&poiMineHostileDetour(obj,state,patrol,{x:poiWalkX,z:poiWalkZ},now,true))changed=true;
  if(state.moveStarted!==now&&typeof poiMonsterCrowdNormal==='function'&&poiMonsterCrowdNormal(obj)){
   if(!crowdRead){crowd=poiMonsterCrowdPrepare(now);crowdRead=true}
   if(crowd&&poiMonsterCrowdStep(obj,state,now,patrol,crowd))changed=true;
@@ -28030,7 +28210,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v313',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v317',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -28145,7 +28325,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v313';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v317';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -28360,7 +28540,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v313',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v317',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -31515,7 +31695,18 @@ function poiLocalCapture(x,z,y,site,realmKey,realm,concealed,quests){
  const map=poiLocalTopologyFor(site,concealed),row=map.levels.get(y);
  const bits=scope?poiLocalSurvey(scope):null; // Temporary editor preview is never recorded.
  const door=poiWalkDoorOpen;
- const access=(x,z)=>x>=0&&z>=0&&x<MAP_W&&z<MAP_H&&(!realm||x>=realm.x1&&x<=realm.x2&&z>=realm.z1&&z<=realm.z2);
+ const field=y===0&&!realm&&typeof poiSquareFieldSite==='function'&&poiSquareFieldSite(site);
+ let fieldBits=null;
+ const surface=(tx,tz,mark)=>{
+  const i=field?poiSquareFieldRank(tx,tz):-1;
+  if(i<0)return mark?poiLocalMark(bits,tx,tz):poiLocalKnown(bits,tx,tz);
+  if(!bits)return false;
+  fieldBits??=poiLocalSurvey('base:0:outerfield');
+  return mark?poiLocalMark(fieldBits,i%POI_LOCAL_W,Math.floor(i/POI_LOCAL_W)):
+   poiLocalKnown(fieldBits,i%POI_LOCAL_W,Math.floor(i/POI_LOCAL_W));
+ };
+ const access=(x,z)=>x>=0&&z>=0&&(field?poiOverlandSquareOwner(x,z)==='base':x<MAP_W&&z<MAP_H)&&
+  (!realm||x>=realm.x1&&x<=realm.x2&&z>=realm.z1&&z<=realm.z2);
  const temple=concealed&&site?.davidTemple,closed=(tx,tz)=>!access(tx,tz)||(temple&&poiSacredMiniEntrance(temple,tx,tz))||poiLocalBlocked(row,site,y,tx,tz);
  const indoor=poiWalkIndoor(),fog=typeof poiSacredFogStrength==='function'?poiSacredFogStrength(site,x,z,y):0,
   radius=poiLocalSightRadius(indoor,fog);
@@ -31526,32 +31717,113 @@ function poiLocalCapture(x,z,y,site,realmKey,realm,concealed,quests){
   for(let dz=-radius;dz<=radius;dz++)for(let dx=-radius;dx<=radius;dx++){
    const tx=x+dx,tz=z+dz;
    if(dx*dx+dz*dz>radius*radius||!access(tx,tz)||(temple&&poiSacredMiniEntrance(temple,tx,tz)))continue;
-   if(!poiLocalKnown(bits,tx,tz)&&poiLocalRay(x,z,tx,tz,closed))changed=poiLocalMark(bits,tx,tz)||changed;
+   if(!surface(tx,tz,false)&&poiLocalRay(x,z,tx,tz,closed))changed=surface(tx,tz,true)||changed;
   }
   if(changed)poiLocalDirty();
  }
  const marks=quests.filter(q=>access(q.x,q.z)&&q.x>=crop.x1&&q.x<=crop.x2&&q.z>=crop.z1&&q.z<=crop.z2&&
-  poiLocalKnown(bits,q.x,q.z)&&!(temple&&poiSacredMiniEntrance(temple,q.x,q.z)));
+  surface(q.x,q.z,false)&&!(temple&&poiSacredMiniEntrance(temple,q.x,q.z)));
+ // Both cropped views read the same already surveyed cells. The wider
+ // HUD wings do not call poiLocalMark or change the discovery radius.
+ const tile=(tx,tz)=>{
+  if(!access(tx,tz)||(temple&&poiSacredMiniEntrance(temple,tx,tz)))return 0;
+  return ((tx===x&&tz===z)||surface(tx,tz,false))?1+(row?.cats[poiLocalBit(tx,tz)]??0):0;
+ };
  const cells=new Uint8Array(POI_LOCAL_SIDE**2);
  for(let i=0;i<cells.length;i++){
   const tx=crop.x1+i%POI_LOCAL_SIDE,tz=crop.z1+Math.floor(i/POI_LOCAL_SIDE);
-  if(!access(tx,tz)||(temple&&poiSacredMiniEntrance(temple,tx,tz)))continue;
-  if((tx===x&&tz===z)||poiLocalKnown(bits,tx,tz))cells[i]=1+(row?.cats[poiLocalBit(tx,tz)]??0);
+  cells[i]=tile(tx,tz);
  }
- return {cells,crop,marks,x,z,y,scope,realm:realmKey,concealed,facing:poiWalkFacing};
+ return {cells,crop,marks,x,z,y,scope,realm:realmKey,concealed,facing:poiWalkFacing,tile};
 }
-function poiLocalPaint(cv,frame,v=poiLocalView()){
+// BEGIN WIDE HUD MAP
+function poiLocalHudMetrics(cssWidth,cssHeight,height){
+ const ratio=cssWidth>0&&cssHeight>0?Math.max(1,Math.min(2.5,cssWidth/cssHeight)):1;
+ const width=Math.round(height*ratio),shift=(width-height)/2,scale=height/POI_LOCAL_SIDE;
+ return {width,height,shift,scale,wing:Math.ceil(shift/scale)};
+}
+// END WIDE HUD MAP
+let poiLocalHudLayer=null,poiLocalHudLast=null;
+function poiLocalMotionPoint(frame){
+ const x=typeof poiWalkViewX==='number'?poiWalkViewX:frame.x;
+ const z=typeof poiWalkViewZ==='number'?poiWalkViewZ:frame.z;
+ const free=typeof poiFreePose!=='undefined'?poiFreePose:null;
+ const angle=free?.distance>0&&Number.isFinite(free.angle)?free.angle:null;
+ // On an actual reset/floor transition an obsolete interpolant must not
+ // drag this freshly captured map outside its own 41-tile local window.
+ return {x:Math.abs(x-frame.x)>1.01?frame.x:x,z:Math.abs(z-frame.z)>1.01?frame.z:z,angle};
+}
+function poiLocalHudProjection(frame,hud,pt){
+ const dx=(pt.x-frame.x)*hud.scale,dz=(pt.z-frame.z)*hud.scale;
+ return {x1:frame.crop.x1+pt.x-frame.x,z1:frame.crop.z1+pt.z-frame.z,dx,dz};
+}
+function poiLocalHudTerrain(cv,frame,hud){
+ const old=poiLocalHudLayer;
+ if(old?.frame===frame&&old.cv===cv&&old.w===hud.width&&old.h===hud.height)return old;
+ const margin=2,pad=Math.ceil(hud.scale*margin);
+ const layer=old?.cv===cv?old.layer:cv.ownerDocument.createElement('canvas');
+ layer.width=hud.width+pad*2;layer.height=hud.height+pad*2;
+ const ctx=layer.getContext('2d');if(!ctx)return null;
+ ctx.fillStyle='#000';ctx.fillRect(0,0,layer.width,layer.height);
+ const {scale,shift,wing}=hud,{crop,cells,tile}=frame;
+ for(let j=-margin;j<POI_LOCAL_SIDE+margin;j++)for(let i=-wing-margin;i<POI_LOCAL_SIDE+wing+margin;i++){
+  const tone=i>=0&&i<POI_LOCAL_SIDE&&j>=0&&j<POI_LOCAL_SIDE?cells[j*POI_LOCAL_SIDE+i]:tile?.(crop.x1+i,crop.z1+j)??0;
+  if(!tone)continue;
+  const x=pad+Math.round(shift+i*scale),z=pad+Math.round(j*scale);
+  ctx.fillStyle=poiLocalTones[tone-1];
+  ctx.fillRect(x,z,pad+Math.round(shift+(i+1)*scale)-x,pad+Math.round((j+1)*scale)-z);
+ }
+ return poiLocalHudLayer={layer,frame,cv,w:hud.width,h:hud.height,pad};
+}
+function poiMiniMotionFrame(){
+ if(!poiLocalFrame||!poiWalkActive||pineAIActive||poiLocalOverlay)return;
+ const last=poiLocalHudLast,pt=poiLocalMotionPoint(poiLocalFrame);
+ if(last?.frame===poiLocalFrame&&last.x===pt.x&&last.z===pt.z&&last.angle===pt.angle)return;
+ const cv=$('poiMiniMap');if(cv)poiLocalPaintHud(cv,poiLocalFrame);
+}
+function poiLocalPaintHud(cv,frame){
+ const hud=poiLocalHudMetrics(cv.clientWidth,cv.clientHeight,cv.height);
+ if(cv.width!==hud.width)cv.width=hud.width;
+ const g=cv.getContext('2d');
+ if(!g||!cv.ownerDocument||typeof g.drawImage!=='function')return poiLocalPaint(cv,frame,undefined,hud);
+ const pt=poiLocalMotionPoint(frame);
+ const last=poiLocalHudLast;if(last?.cv===cv&&last.frame===frame&&last.w===hud.width&&last.h===hud.height&&
+  last.x===pt.x&&last.z===pt.z&&last.angle===pt.angle)return;
+ const terrain=poiLocalHudTerrain(cv,frame,hud);
+ if(!terrain)return poiLocalPaint(cv,frame,undefined,hud);
+ const {x1,z1,dx,dz}=poiLocalHudProjection(frame,hud,pt),{width,height,scale,shift}=hud;
+ g.drawImage(terrain.layer,-terrain.pad-dx,-terrain.pad-dz);
+ poiLocalPaintInk(g,frame,pt,width,height,scale,shift,x1,z1);
+ poiLocalHudLast={cv,frame,w:width,h:height,...pt};
+}
+function poiLocalPaint(cv,frame,v=poiLocalView(),hud=null){
  const g=cv.getContext('2d');if(!g||!frame)return;
- const {width,height}=cv,{cells,crop,marks,x,z,y}=frame,{x1,z1}=poiLocalProject(crop,v),scale=width/POI_LOCAL_SIDE*v.zoom;
+ const {width,height}=cv,{cells,crop,marks,x,z,y}=frame,{x1,z1}=poiLocalProject(crop,v),
+  scale=(hud?.scale??width/POI_LOCAL_SIDE)*v.zoom,shift=hud?.shift??0;
  g.fillStyle='#000';g.fillRect(0,0,width,height);
  for(let i=0;i<cells.length;i++)if(cells[i]){
   const cx=crop.x1+i%POI_LOCAL_SIDE-x1,cz=crop.z1+Math.floor(i/POI_LOCAL_SIDE)-z1;
   if(cx<-1||cz<-1||cx>POI_LOCAL_SIDE/v.zoom||cz>POI_LOCAL_SIDE/v.zoom)continue;
-  const l=Math.round(cx*scale),t=Math.round(cz*scale);
-  g.fillStyle=poiLocalTones[cells[i]-1];g.fillRect(l,t,Math.round((cx+1)*scale)-l,Math.round((cz+1)*scale)-t);
+  const l=Math.round(shift+cx*scale),t=Math.round(cz*scale);
+  g.fillStyle=poiLocalTones[cells[i]-1];g.fillRect(l,t,Math.round(shift+(cx+1)*scale)-l,Math.round((cz+1)*scale)-t);
  }
- for(const q of marks)poiMiniQuestMark(g,(q.x+.5-x1)*scale,(q.z+.5-z1)*scale);
- const px=(x+.5-x1)*scale,pz=(z+.5-z1)*scale,[dx,dz]=[[0,-1],[1,0],[0,1],[-1,0]][frame.facing]||[0,-1];
+ if(hud?.wing&&frame.tile){
+  // Paint only exposed neighboring columns. Partial outer tiles are
+  // clipped by the canvas rather than stretched to fill its width.
+  for(let j=0;j<POI_LOCAL_SIDE;j++)for(let i=1;i<=hud.wing;i++)for(const cx of [-i,POI_LOCAL_SIDE+i-1]){
+   const tone=frame.tile(crop.x1+cx,crop.z1+j);if(!tone)continue;
+   const l=Math.round(shift+cx*scale),t=Math.round(j*scale);
+   g.fillStyle=poiLocalTones[tone-1];g.fillRect(l,t,Math.round(shift+(cx+1)*scale)-l,Math.round((j+1)*scale)-t);
+  }
+ }
+ poiLocalPaintInk(g,frame,frame.marker??{x,z},width,height,scale,shift,x1,z1);
+}
+function poiLocalPaintInk(g,frame,marker,width,height,scale,shift,x1,z1){
+ const {marks,y}=frame;
+ for(const q of marks)poiMiniQuestMark(g,shift+(q.x+.5-x1)*scale,(q.z+.5-z1)*scale);
+ const px=shift+(marker.x+.5-x1)*scale,pz=(marker.z+.5-z1)*scale;
+ const [dx,dz]=Number.isFinite(marker.angle)?[-Math.sin(marker.angle),Math.cos(marker.angle)]:
+  [[0,-1],[1,0],[0,1],[-1,0]][frame.facing]||[0,-1];
  g.fillStyle='#ffde7f';g.strokeStyle='#17241e';g.lineWidth=1.7;
  g.beginPath();g.arc(px+dx*4.2,pz+dz*4.2,1.55,0,Math.PI*2);g.fill();
  g.beginPath();g.arc(px,pz,3.25,0,Math.PI*2);g.fill();g.stroke();
@@ -31568,7 +31840,7 @@ function poiLocalOpen(){
  tapCandidate=null;multiGesture=null;
  const captured=[...touchPositions.keys()];touchPositions.clear();
  for(const id of captured)if(canvas.hasPointerCapture(id))canvas.releasePointerCapture(id);
- poiLocalOverlay={frame:poiLocalFrame,view:poiLocalView()};
+ poiLocalOverlay={frame:{...poiLocalFrame,marker:poiLocalMotionPoint(poiLocalFrame)},view:poiLocalView()};
  dialog.showModal();poiLocalOverlayDraw();
 }
 function poiLocalClose(){if(poiLocalModalOpen())$('poiLocalMapDialog').close()}
@@ -31593,6 +31865,11 @@ function poiLocalOverlayZoom(zoom,ax=.5,az=.5,base=poiLocalOverlay?.view){
 function poiLocalBind(){
  const dialog=$('poiLocalMapDialog'),cv=$('poiLocalMapLarge'),open=$('poiMiniOpen');
  open.addEventListener('click',poiLocalOpen);
+ if(typeof ResizeObserver==='function'){
+  const hud=$('poiMiniMap');
+  const observer=new ResizeObserver(()=>{if(poiLocalFrame&&hud.clientWidth>0)poiLocalPaintHud(hud,poiLocalFrame)});
+  observer.observe(hud);
+ }
  $('poiLocalMapClose').addEventListener('click',poiLocalClose);
  dialog.addEventListener('close',()=>{poiLocalOverlay=null;clear();if(poiWalkActive&&!$('poiMiniHud').hidden)open.focus({preventScroll:true})});
  dialog.addEventListener('click',e=>{if(e.target===dialog)poiLocalClose()});
@@ -31681,7 +31958,7 @@ function poiMiniUpdate(){
   stars.setAttribute('aria-label','危険度 '+area.difficulty+'／10');
  }
  poiLocalFrame=poiLocalCapture(poiWalkX,poiWalkZ,floor,facilitySite,dungeon,realm,concealed,quests);
- poiLocalPaint(cv,poiLocalFrame);
+ poiLocalPaintHud(cv,poiLocalFrame);
  // Preserve the public location/badge reporting seam; quest pins only draw
  // on tiles the player has seen inside this local frame.
  poiMiniLast={location:area.name,stars:area.stars,x:poiWalkX,z:poiWalkZ,level:floor,facing:poiWalkFacing,questKey};
@@ -31746,22 +32023,21 @@ function poiSnowFrostAmount(region,x,z){
  // Feather off naturally outside the owned Snow parcel as well.
  const smooth=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t)};
  const wobble=.75*Math.sin(x*.72+z*.33)+.45*Math.sin(z*1.03-x*.56);
- const distance=Math.min(x-48,z-139)+wobble;
- return smooth((distance+4)/11)*(1-smooth((x-72)/4))*(1-smooth((z-168)/4));
+ const distance=Math.min(x-48,72-x,z-139,168-z)+wobble;
+ return smooth((distance+4)/11);
 }
 function poiSnowGroundEdgeTint(region,x,z,kind,normal){
  if(!/^grass/.test(kind)&&kind!=='poiSnowGround')return normal;
- if(region==='base'&&(x<43||x>74||z<134||z>170))return normal;
- if(region==='snowpass'&&x>10&&z>10)return normal;
+ if(region==='base'&&(x<43||x>77||z<134||z>173))return normal;
+ if(region==='snowpass'&&Math.min(x,z,23-x,28-z)>10)return normal;
  if(region!=='base'&&region!=='snowpass')return normal;
  return (x,z,stock)=>{
   const t=poiSnowFrostAmount(region,x,z),gx=x+(region==='snowpass'?48:0),gz=z+(region==='snowpass'?139:0);
   const r=smoothSurfaceNoise(gx*.21,gz*.21);
   const green=[.38+r*.07,.54+r*.06,.34+r*.06],white=[.83+r*.08,.90+r*.05,.95+r*.035];
   const smooth=q=>{const v=Math.max(0,Math.min(1,q));return v*v*(3-2*v)};
-  const d=Math.min(gx-48,gz-139);
-  let edge=region==='snowpass'?1-smooth((d-5)/5):smooth((d+5)/5);
-  edge*=1-smooth((gz-168)/4);
+  const d=Math.min(gx-48,72-gx,gz-139,168-gz);
+  const edge=region==='snowpass'?1-smooth((d-5)/5):smooth((d+5)/5);
   const original=normal?normal(x,z):stock;
   return green.map((v,i)=>original[i]+(v+(white[i]-v)*t-original[i])*edge);
  };
@@ -31769,7 +32045,7 @@ function poiSnowGroundEdgeTint(region,x,z,kind,normal){
 function poiSnowBiomeLightWeight(x,z){
  // Zero at the exact two crossing planes, then gently settle over seven
  // tiles. The established deep snow light and geographic audio stay the same.
- const d=Math.max(0,Math.min(1,Math.min(x+.5,z+.5)/7));
+ const d=Math.max(0,Math.min(1,Math.min(x+.5,23.5-x,z+.5,28.5-z)/7));
  return d*d*(3-2*d);
 }
 function poiSacredTunnelLight(site,x,z,y,outside){
@@ -31974,6 +32250,7 @@ function poiWalkEnterCell(dx,dz,now,continuous=false,onDoorCue){
  if(facilitySite?.id==='base'&&poiWalkLevel===0&&typeof poiLookoutEnter==='function')poiLookoutEnter(poiWalkFromX,poiWalkFromZ,poiWalkX,poiWalkZ);
  if(facilitySite?.id==='base'){if(facilitySite.creek)poiCreekAudioSync();poiEconomyCollect(poiWalkX,poiWalkZ);if(typeof poiGroundGoldPickup==='function')poiGroundGoldPickup(poiWalkX,poiWalkZ);poiInventoryPickup(poiWalkX,poiWalkZ);poiMineFindExplore(poiWalkX,poiWalkZ);poiMineFindPickup(poiWalkX,poiWalkZ);poiArmedPickup(poiWalkX,poiWalkZ);if(typeof poiPortQuestVisit==='function')poiPortQuestVisit();if(typeof poiNorthTrailPickup==='function')poiNorthTrailPickup(poiWalkX,poiWalkZ)}
  if(facilitySite?.id==='snowpass'){poiGroundGoldPickup(poiWalkX,poiWalkZ);poiInventoryPickup(poiWalkX,poiWalkZ)}
+ if(typeof poiSoulFloorWalkover==='function')poiSoulFloorWalkover(poiWalkX,poiWalkZ,now);
  if(!poiWalkDoorFoley(door,fromLevel,onDoorCue)&&!continuous)poiWalkFootstep(wet);
  poiWalkRoof();if(!continuous)poiWalkAvatar(poiWalkStarted);poiWalkStatus();if(pineGameActive){workshopAdventureResumeQuiet=false;pineGameSave()}workshopResumeWrite();
  return dx?'x':'z';
@@ -34539,7 +34816,7 @@ function poiOrvasBossOpticalEnds(q,d,reach,base,eye,floor,front,b,pass){
   if(length<=.012)continue;
   const H=base+eye,landing=base+floor,dy=(landing-H)/length;
   const face=safe&&poiOrvasWallContact(x,H,z,d,length,dy);
-  const end={x,z,length,h:landing,face:null,floor:false};
+  const end={x,z,length,h:landing,face:null,floor:false,eyeSide:side};
   if(face&&face.at<=length+.15){
    end.length=face.at-.008;end.h=H+dy*end.length;end.face=face;
   }else if(ground){
@@ -35025,10 +35302,118 @@ function poiOrvasFloorMark(m,ground,x,z,d){
  return m.p.length>0;
 }
 // END ORVAS PHYSICAL TIP WITNESSES
+function poiOrvasSweepGroundSample(g,x,z,height){
+ const p=g(x,z);
+ return p&&Math.abs(p[1]-height)<=.105?p:null;
+}
+function poiOrvasSweepGroundEdge(g,a,b){
+ // Check each actual grid boundary, not only periodic samples. A diagonal
+ // corner can cross a missing cell for much less than one sample interval.
+ const cuts=[0,1];
+ for(const j of [0,2]){
+  const lo=Math.min(a[j],b[j]),hi=Math.max(a[j],b[j]),d=b[j]-a[j];
+  if(d)for(let k=Math.floor(lo)+1;k<hi;k++)cuts.push((k-a[j])/d);
+ }
+ cuts.sort((a,b)=>a-b);
+ for(let i=1;i<cuts.length;i++){
+  const t=(cuts[i-1]+cuts[i])*.5;
+  const x=a[0]+(b[0]-a[0])*t,z=a[2]+(b[2]-a[2])*t,y=a[1]+(b[1]-a[1])*t;
+  if(!poiOrvasSweepGroundSample(g,x-.5,z-.5,y-.008))return false;
+ }
+ return true;
+}
+function poiOrvasSweepWallSample(row,p,n){
+ const o=[p[0]-row.x+n[0]*.055,p[1]-row.y+n[1]*.055,p[2]-row.z+n[2]*.055],ray=n.map(v=>-v);
+ const at=row.s.tris?poiWallCameraTriangles(row.s.tris,o,ray,.11):poiWallCameraSlab(row.s,o,ray,.11);
+ return Number.isFinite(at)&&Math.abs(at-.055)<.015;
+}
+function poiOrvasSweepRibbon(m,g,last,next){
+ if(last.kind!==next.kind)return false;
+ const a=last.p,b=next.p,d=b.map((v,i)=>v-a[i]),len=Math.hypot(...d);
+ if(len<.008||len>.39)return false;
+ const at=t=>a.map((v,i)=>v+d[i]*t);
+ let sample,n;
+ if(next.kind==='floor'){
+  const flat=Math.hypot(d[0],d[2]);if(flat<.008||Math.abs(d[1])>.13)return false;
+  n=[-d[2]/flat,0,d[0]/flat];
+  sample=(p,w)=>{
+   const v=poiOrvasSweepGroundSample(g,p[0]+n[0]*w,p[2]+n[2]*w,p[1]);
+   return v&&[v[0],v[1]+.008,v[2]];
+  };
+ }else{
+  const f=next.face,k=last.face,N=f.normal;
+  if(Math.hypot(N[0],N[2])<.55||N.reduce((n,v,i)=>n+v*k.normal[i],0)<.997||
+     N.reduce((n,v,i)=>n+v*d[i],0)**2>.0001)return false;
+  const cross=[N[1]*d[2]-N[2]*d[1],N[2]*d[0]-N[0]*d[2],N[0]*d[1]-N[1]*d[0]],w=Math.hypot(...cross);
+  if(w<1e-6)return false;n=cross.map(x=>x/w);
+  sample=(p,r)=>{
+   const v=p.map((x,i)=>x+n[i]*r);
+   return (poiOrvasSweepWallSample(k.row,v,N)||poiOrvasSweepWallSample(f.row,v,N))?v.map((x,i)=>x+N[i]*.017):null;
+  };
+ }
+ const size=Math.max(1,Math.ceil(len/(next.kind==='wall'?.048:.076))),rows=[];
+ for(let i=0;i<=size;i++){
+  const p=at(i/size),width=.045+.009*Math.sin(p[0]*7.1+p[2]*6.7);
+  if(!sample(p,0))return false;
+  const l=sample(p,width),r=sample(p,-width);
+  if(!l||!r)return false;
+  rows.push([l,r]);
+ }
+ if(next.kind==='floor')for(let i=1;i<rows.length;i++){
+  const [l,r]=rows[i-1],[nl,nr]=rows[i];
+  const same=[r,nl,nr].every(p=>Math.floor(p[0])===Math.floor(l[0])&&Math.floor(p[2])===Math.floor(l[2]));
+  if(!same&&![[l,nl],[nl,nr],[nr,r],[r,l],[l,nr]].every(([p,q])=>poiOrvasSweepGroundEdge(g,p,q)))return false;
+ }
+ for(let i=1;i<rows.length;i++){
+  const [l,r]=rows[i-1],[nl,nr]=rows[i];
+  if(next.kind==='wall')quad(m,r,nr,nl,l,[.134,.066,.036]);
+  else quad(m,l,nl,nr,r,poiOrvasScorchPaint(g.material?.((a[0]+b[0])*.5,(a[2]+b[2])*.5),0));
+ }
+ return true;
+}
+function poiOrvasSweepOpticalSample(q,e,b,angle,pass,ground){
+ const d=poiDavidBeamRay(q,angle),reach=poiDavidBeamReach(q,b,d);
+ const base=terrainY(q.sx,q.sz)+q.y*1.4,eye=typeof POI_DAVID_EYE_Y==='number'?POI_DAVID_EYE_Y:4.75;
+ const front=typeof POI_DAVID_EYE_FRONT==='number'?POI_DAVID_EYE_FRONT:.29;
+ const tips=poiOrvasBossOpticalEnds(q,d,reach,base,eye,.68,front,b,pass),checked=new Map();
+ for(const tip of tips){
+  if(tip.face){
+   const f=tip.face;checked.set(tip.eyeSide,{kind:'wall',p:[f.wx,f.h,f.wz],face:f});
+  }else if(tip.floor){
+   const x=tip.x+d.x*tip.length,z=tip.z+d.z*tip.length,g=ground(x,z);
+   if(g)checked.set(tip.eyeSide,{kind:'floor',p:[x,g[1],z]});
+  }
+ }
+ return checked;
+}
+function poiOrvasSweepTrace(q,e,b,now,angle){
+ const from=e.sweepAngle??0,gap=angle-from;
+ if(Math.abs(gap)<1e-6)return false;
+ const pass=poiAimWall({y:q.y}),ground=poiOrvasTraceGround(q,e,b,pass);
+ const m=e.sweepMesh??=mesh(),before=m.p.length;
+ // A slow frame covers all traversed angles from the true straight start.
+ // Short spans and surface probes prevent a chord over an occluder or lip.
+ const steps=Math.min(80,Math.ceil(Math.abs(gap)/.021));
+ let tips=e.sweepTips??poiOrvasSweepOpticalSample(q,e,b,from,pass,ground);
+ for(let i=1;i<=steps;i++){
+  const next=poiOrvasSweepOpticalSample(q,e,b,from+gap*i/steps,pass,ground);
+  if(m.p.length<15500)for(const [side,p] of next){
+   const last=tips.get(side);if(last)poiOrvasSweepRibbon(m,ground,last,p);
+  }
+  tips=next;
+ }
+ e.sweepAngle=angle;e.sweepTips=tips;
+ if(m.p.length===before)return false;
+ if(!e.sweepPlaced){e.sweepPlaced=true;e.parts.push(m)}
+ e.seen=now;
+ if(!e.pushed){e.pushed=true;poiOrvasTracePush(e)}else poiOrvasGroundDirty=true;
+ return true;
+}
 function poiOrvasBeamTrace(q,b,now,angle=0){
  if(!q?.executed||q.kind!=='beam'||!poiWalkActive||q.y!==poiWalkLevel)return false;
  const fresh=!q.orvasBeamGround,e=q.orvasBeamGround??=poiOrvasTraceEvent(q,'beam',now);
  if(e.owner!==facilitySite||(e.pushed&&!poiOrvasGroundTraces.includes(e)))return false;
+ if(q.sweep)return q.sweep.start!==null&&poiOrvasSweepTrace(q,e,b,now,angle);
  if(!fresh&&Math.abs(angle-e.lastAngle)<.075&&!q.sweep?.done)return false;
  const d=poiDavidBeamRay(q,angle),reach=poiDavidBeamReach(q,b,d),pass=poiAimWall({y:q.y});
  const base=terrainY(q.sx,q.sz)+q.y*1.4,eye=typeof POI_DAVID_EYE_Y==='number'?POI_DAVID_EYE_Y:4.75;
@@ -35491,7 +35876,7 @@ function render(){
  // Keep the last presented WebGL frame; never clear/redraw or rebase the
  // real simulation clock during this very brief contact presentation.
  if(typeof poiHitstopHold==='function'&&poiHitstopHold(now))return;
- poiTownClockFrame(now);poiWalkFrame(now);poiMessageUpdate(now);
+ poiTownClockFrame(now);poiWalkFrame(now);if(typeof poiMiniMotionFrame==='function')poiMiniMotionFrame();poiMessageUpdate(now);
  if(typeof poiCompanionTick==='function')poiCompanionTick(now);
  if(typeof poiTownResidentsFrame==='function'&&
     !(typeof poiHitstopPending==='function'&&poiHitstopPending()))poiTownResidentsFrame(now);
@@ -40799,9 +41184,9 @@ const POI_OVERLAND_GPU_LIMIT=4*1024*1024;
 let poiOverlandMeshes=new Map(),poiOverlandIndexCache=new WeakMap(),poiOverlandSnow=null,poiOverlandMilda=null,poiOverlandCommands=[],poiOverlandDrawn=[],poiOverlandDrawing=false,poiOverlandEngaged=false,poiOverlandBake=null,poiOverlandStats={builds:0,maxBakeMs:0,frames:0};
 function poiOverlandScope(id,x,z,pad=0){
  const hasMilda=typeof poiMildaMap==='function';
- return id==='snowpass'&&(z<=17+pad||x<=12+pad||hasMilda&&z>=17-pad)||
+ return id==='snowpass'||
   id==='milda'&&hasMilda&&z<=12+pad||
-  id==='base'&&(x>=42-pad&&x<=77+pad&&z>=119-pad||
+  id==='base'&&(poiSquareFieldSite(facilitySite)&&poiSquareFieldNear(x,z,pad+10)||x>=42-pad&&x<=77+pad&&z>=119-pad||
     x>=38.5-pad&&x<48.5+pad&&z>=140-pad&&z<171+pad);
 }
 function poiOverlandSpecFor(id,layout,mapWorld,width,height){
@@ -40825,9 +41210,11 @@ function poiOverlandSpecFor(id,layout,mapWorld,width,height){
    const k=chunk(group[0]),row=roofGroups.get(k)||[];
    row.push(group);roofGroups.set(k,row);
   }
-  const owns=id==='base'&&width===128&&height===182||id==='snowpass'?
-   (x,z)=>poiOverlandSquareLocalOwn(id,x,z):null;
-  p={id,width,height,owns,layout,terrain,townCells,signs,index:poiOverlandIndex(mapWorld,isFloor),batches,roofGroups,
+  const square=poiSquareFieldSite(layout)&&width===128&&height===182;
+  const owns=square||id==='snowpass'?(x,z)=>poiOverlandSquareLocalOwn(id,x,z):
+   id==='base'&&width===128&&height===182?(x,z)=>poiOverlandBaseGroundOwn(x,z,width,height):null;
+  p={id,width:square?POI_SQUARE_FIELD_SIDE:width,height:square?POI_SQUARE_FIELD_SIDE:height,
+   square,owns,layout,terrain,townCells,signs,index:poiOverlandIndex(mapWorld,isFloor),batches,roofGroups,
    roofLookup:new Map(roofList.map(o=>[key(o),o])),bridges:new Map(statics.filter(o=>BRIDGE_IDS.has(o.type)).map(o=>[o.x+','+o.z,o])),
    walls:wallExteriorLookup(statics),lights:poiSacredGroundLights(layout,statics.filter(o=>!poiSacredInteriorSconce(layout,o)),true)};
   poiOverlandIndexCache.set(mapWorld,p);
@@ -41114,7 +41501,8 @@ function* poiOverlandChunkRows(q,region){
     tile=poiSacredInteriorGrade(region.layout,x,z,original,true),t=mesh();
    const oldTint=ambient&&(tile!==original||!floors.has(key)||x-offset>=72&&Object.hasOwn(PINE_EAST_NATURE_TONES,tile))?ambient:null;
    const tint=poiSnowGroundEdgeTint(region.id,x,z,tile,oldTint);
-   const area=region.id==='base'&&region.height===182&&z<128?region.width*128:region.width*region.height;
+   const generated=region.square&&poiSquareFieldAt(x,z);
+   const area=region.square&&!generated&&z<128?128*128:region.width*region.height;
    addFloorTile(t,x,z,tile,area,
     ROAD_DIAGONALS.has(tile)?roadDiagonalConnections(floors,x,z,tile):ROAD_IDS.has(tile)&&!tile.endsWith('Full')?roadConnections(floors,x,z,tile):0,tint,true);
    if(floors.has(key))shoreline(t,x,z,floors);
@@ -41184,9 +41572,9 @@ function poiOverlandBakeFrame(list,areas,boot=false){
 }
 const poiOverlandPrimedMusic=new WeakMap();
 function poiSnowNearFrontage(site,x,z,pad){
- return site==='snowpass'&&(x<=pad||z<=pad)||
-  site==='base'&&(x>=48-pad&&x<72+pad&&z>=138-pad&&z<139||
-   x>=47-pad&&x<48&&z>=139-pad&&z<168+pad);
+ return site==='snowpass'&&(x<=pad||z<=pad||x>=23-pad||z>=28-pad)||
+  site==='base'&&(x>=48-pad&&x<72+pad&&(z>=138-pad&&z<139||z>=168&&z<169+pad)||
+   z>=139-pad&&z<168+pad&&(x>=47-pad&&x<48||x>=72&&x<73+pad));
 }
 function poiOverlandPrimeMusic(site){
  if(!poiAudioContext||!poiAudioEnabled||!poiAudioAllowed()||poiAudioLevels.master<=0||poiAudioLevels.bgm<=0)return;
@@ -41244,9 +41632,10 @@ function poiOverlandPreviewTick(){
  poiOverlandCommands=[];poiOverlandDrawn=[];poiOverlandDrawing=false;poiSnowTempleNeighbor=[];
  const site=facilitySite?.id;
  const registered=site==='base'||site==='snowpass'||site==='milda'&&typeof poiMildaMap==='function';
- const templeGround=site==='base'&&!poiSnowTempleRim(poiWalkViewX,poiWalkViewZ)&&(poiWalkViewZ>=128&&poiWalkViewX<48||
+ const field=site==='base'&&poiSquareFieldPlayAt(poiWalkX,poiWalkZ);
+ const templeGround=site==='base'&&!field&&!poiSnowTempleRim(poiWalkViewX,poiWalkViewZ)&&(poiWalkViewZ>=128&&poiWalkViewX<48||
   typeof poiSacredTempleViewAmount==='function'&&poiSacredTempleViewAmount()>0);
- const outdoor=registered&&poiWalkActive&&poiWalkLevel===0&&!cameraTopDown&&!pineAIActive&&facilityVisibilityOwner()===null;
+ const outdoor=registered&&poiWalkActive&&poiWalkLevel===0&&(!cameraTopDown||field)&&!pineAIActive&&facilityVisibilityOwner()===null;
  if(outdoor&&templeGround&&poiSnowNearFrontage(site,poiWalkViewX,poiWalkViewZ,12)){
   poiOverlandPrimeMusic(site);poiSnowTempleNeighborTick();
   return null; // Ordinary temple renderer remains the only base-ground owner.
@@ -41385,11 +41774,35 @@ function poiOverlandResumeAnalog(c,old,now){
 
 // BEGIN SNOW PASS PROTOTYPE
 const POI_SNOW_PASS=Object.freeze({id:'snowpass',name:'白嶺峠',width:24,height:29,base:{x:60,z:138},snow:{x:12,z:0}});
+// BEGIN SQUARE FIELD
+const POI_SQUARE_FIELD_SIDE=184;
+function poiSquareFieldRank(x,z){
+ if(!Number.isInteger(x)||!Number.isInteger(z)||x<0||z<0||x>=184||z>=184)return -1;
+ if(z<128)return x>=128?z*56+x-128:-1;
+ if(z<168)return x>=72?7168+(z-128)*112+x-72:-1;
+ if(z<182)return x>=48?11648+(z-168)*136+x-48:-1;
+ return 13552+(z-182)*184+x;
+}
+function poiSquareFieldAt(x,z){return poiSquareFieldRank(x,z)>=0}
+function poiSquareFieldNear(x,z,pad=0){
+ return x>=-pad&&z>=-pad&&x<184+pad&&z<184+pad&&
+  (x>=128-pad||x>=72-pad&&z>=128-pad||x>=48-pad&&z>=168-pad||z>=182-pad);
+}
+function poiSquareFieldSite(site){
+ return site?.id==='base'&&site.map?.width===128&&site.map?.height===182&&site.davidTemple?.depth===1;
+}
+function poiSquareFieldPlayAt(x,z){
+ return poiWalkActive&&!pineAIActive&&poiWalkLevel===0&&poiSquareFieldSite(facilitySite)&&poiSquareFieldAt(x,z);
+}
+function poiSquareFieldGroundPoint(p){
+ return !!p&&p.region===undefined&&p.y===0&&poiSquareFieldAt(p.x,p.z);
+}
+// END SQUARE FIELD
 // BEGIN SPARSE OVERLAND SQUARE
 // Tile bounds are half-open in the shared frame. A global bin can contain
 // disjoint rows of different sites; region-local GPU bins and saves do not move.
 const POI_OVERLAND_PATCHES=Object.freeze([
- ['base',0,0,128,128],['base',0,128,48,182],['base',48,128,72,139],
+ ['base',0,0,184,139],['base',0,139,48,168],['base',72,139,184,168],['base',0,168,184,184],
  ['snowpass',48,139,48+POI_SNOW_PASS.width,139+POI_SNOW_PASS.height]
 ]);
 let poiOverlandSquare=null;
@@ -41457,12 +41870,12 @@ function poiSnowSleeveOwn(x,z){
  return x>=48&&x<72&&z>=128&&z<139;
 }
 function poiOverlandBaseGroundOwn(x,z,width,height){
- if(width===128&&height===182)return poiOverlandSquareLocalOwn('base',x,z);
+ if(width===128&&height===182)return x>=0&&x<poiOverlandBaseGroundColumns(z,width,height);
  return x>=0&&x<width&&z>=0&&z<height;
 }
 function poiOverlandBaseGroundColumns(z,width,height){
  if(z<0||z>=height)return 0;
- return width===128&&height===182?poiOverlandSquareIndex().baseRows[z]??0:width;
+ return width===128&&height===182?(z<128?128:z<139?72:48):width;
 }
 function poiSnowSleeveRoute(){
  const knots=[[49,128],[49,130],[52,130],[52,132],[57,132],[57,135],[60,135],[60,138]],out=[];
@@ -41503,17 +41916,21 @@ function poiSnowEdgeTiles(source){
  row=new Map();
  for(const o of source){
   if(o.y!==0)continue;
-  const onEdge=o.z===0||o.x===0||o.z===138||o.x===47&&o.z>=139&&o.z<168;
+  const onEdge=o.z===0||o.z===28||o.x===0||o.x===23||
+   (o.z===138||o.z===168)&&o.x>=48&&o.x<72||(o.x===47||o.x===72)&&o.z>=139&&o.z<168;
   if(!onEdge)continue;
   const k=o.x+','+o.z;
   let group=row.get(k);if(!group)row.set(k,group=[]);group.push(o);
  }
  poiSnowEdgeFloorCache.set(source,row);return row;
 }
-function poiSnowEdgeWalkable(source,x,z){
+function poiSnowEdgeWalkable(source,x,z,region){
  const group=poiSnowEdgeTiles(source).get(x+','+z);
- return !!group&&group.some(o=>isFloor(o.type)&&!/^(water|lake|river|sea)$/.test(o.type))&&
-  !group.some(o=>!isFloor(o.type)&&o.type!=='tallGrass'&&o.type!=='flowerField'&&o.type!=='bushFern');
+ const field=region==='base'&&poiSquareFieldAt(x,z);
+ if(!group)return field;
+ return !group.some(o=>/^(water|lake|river|sea)$/.test(o.type)||
+    !isFloor(o.type)&&o.type!=='tallGrass'&&o.type!=='flowerField'&&o.type!=='bushFern')&&
+  (field||group.some(o=>isFloor(o.type)));
 }
 function poiSnowPassDecode(d,p){
  const {id,width,height}=POI_SNOW_PASS;
@@ -41567,9 +41984,9 @@ function poiSnowPassSeam(site,world){
 function poiSnowPassEdge(nx,nz,fx,fz){
  if(!poiWalkActive||pineAIActive||!facilitySite||poiSnowPassPending)return null;
  const link=poiSnowPassLink(facilitySite.id,fx,fz,poiWalkLevel,nx,nz);
- if(!link||!poiSnowEdgeWalkable(world,fx,fz))return null;
+ if(!link||!poiSnowEdgeWalkable(world,fx,fz,facilitySite.id))return null;
  const other=link.region==='base'?poiSnowPassBase?.world:(poiOverlandSnow??=poiSnowPassMap()).map.world;
- return other&&poiSnowEdgeWalkable(other,link.x,link.z)?link:null;
+ return other&&poiSnowEdgeWalkable(other,link.x,link.z,link.region)?link:null;
 }
 function poiSnowPassPrepare(dest,cold=false){
  const onBase=facilitySite?.id==='base';
@@ -41579,7 +41996,7 @@ function poiSnowPassPrepare(dest,cold=false){
   width:MAP_W,height:MAP_H,terrainHeights,models,prefabs,checks:pineCheckMarks,maxLevel:worldMaxLevel,hasCellar:facilityHasCellar,
   ...(POI_OVERLAND_SPIKE?{overlandStatic:{floors:facilityFloorMasks,stairs:facilityStairOpenings,doors:facilityDoorTiles,creek:facilityCreekIndex,nav:poiTownNpcNav,mini:poiLocalTopology}}:{})}:poiSnowPassBase;
  const incoming=onBase?(POI_OVERLAND_SPIKE?(poiOverlandSnow??=poiSnowPassMap()):poiSnowPassMap()):base.site,map=onBase?incoming.map:null;
- if(!poiSnowEdgeWalkable(onBase?map.world:base.world,dest.x,dest.z))return null;
+ if(!poiSnowEdgeWalkable(onBase?map.world:base.world,dest.x,dest.z,dest.region))return null;
  if(onBase)try{pineValidateWorldData(facilityExportMap(map))}catch(_e){return null}
  return {onBase,base,incoming,map};
 }
@@ -41723,8 +42140,10 @@ function workshopResumeDecode(raw){
     top:v.top===true,third:v.third===true,orbitYaw:v.orbitYaw,orbitPitch:v.orbitPitch,orbitDistance:v.orbitDistance}:null;
  const p=d.position;
  const deep=d.route==='facility'&&d.id==='base'&&d.townLayout===5&&typeof POI_SACRED_DEPTH_H==='number'&&d.townMapHeight===POI_SACRED_DEPTH_H;
- const position=p&&Number.isInteger(p.x)&&p.x>=0&&p.x<MAX_MAP&&Number.isInteger(p.z)&&p.z>=0&&
-  (p.z<MAX_MAP||deep&&p.y>=0&&(p.x<POI_SACRED_DEPTH_W||typeof poiSnowSleeveOwn==='function'&&poiSnowSleeveOwn(p.x,p.z))&&p.z<POI_SACRED_DEPTH_H)&&
+ const field=deep&&d.play===true&&!Object.hasOwn(d,'region')&&p?.y===0&&
+  typeof poiSquareFieldAt==='function'&&poiSquareFieldAt(p.x,p.z);
+ const position=p&&Number.isInteger(p.x)&&p.x>=0&&Number.isInteger(p.z)&&p.z>=0&&
+  (field||p.x<MAX_MAP&&(p.z<MAX_MAP||deep&&p.y>=0&&(p.x<POI_SACRED_DEPTH_W||typeof poiSnowSleeveOwn==='function'&&poiSnowSleeveOwn(p.x,p.z))&&p.z<POI_SACRED_DEPTH_H))&&
   Number.isInteger(p.y)&&p.y>=-1&&p.y<=MAX_LEVEL&&Number.isInteger(p.facing)&&p.facing>=0&&p.facing<4
   ?{x:p.x,z:p.z,y:p.y,facing:p.facing}:null;
  return {version:1,route:d.route,id:d.route==='facility'?d.id:null,play:d.play===true,position,

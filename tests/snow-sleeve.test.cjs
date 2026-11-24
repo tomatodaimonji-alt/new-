@@ -41,6 +41,6 @@ test('stored snow local coordinates (including old west shoulder) and scoped new
  const f=vm.runInNewContext(cut(h,'const FACILITY_SITES=Object.freeze(','function workshopResumePermitted(')+';workshopResumeDecode',{MAX_MAP:128,MAX_LEVEL:9,POI_SACRED_DEPTH_H:182,POI_SACRED_DEPTH_W:48});
  const read=(x,z,region,y=0)=>f(JSON.stringify({version:1,route:'facility',id:'base',play:true,region,position:{x,z,y,facing:0},townLayout:5,townMapHeight:182}));
  a.equal(read(0,12,'snowpass').position.x,0);a.equal(read(0,12,'snowpass').region,'snowpass');
- for(const p of [[49,127],[60,138],[24,158]])a.equal(read(...p).position.z,p[1]);
- for(const p of [[72,138],[60,139],[48,140],[60,128,undefined,-1]])a.equal(read(...p).position,null);
+ for(const p of [[49,127],[60,138],[24,158],[72,138]])a.equal(read(...p).position.z,p[1]);
+ for(const p of [[60,139],[48,140],[60,128,undefined,-1]])a.equal(read(...p).position,null);
 });
