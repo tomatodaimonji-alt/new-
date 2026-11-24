@@ -260,7 +260,7 @@ try{
     const start=await page.evaluate(()=>{const s=window.__snowSeamProbe;s.active=true;s.frames=[];s.phases=[];s.switchPhases=[];s.palette=[];s.audio=[];s.longTasks=[];s.animation=[];s.npc=[];s.remote=[];s.paths=[];s.veils=[];s.samples=[];s.uploads=[];s.thumb=[];s.sceneCounts=[];s.masked=0;s.high=s.live;
      return {at:performance.now(),live:s.live,stream:window.__editorTest.westRepeatDetails().stream};});
     await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[input]});
-    await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...input,x:input.x+sign*36}]});
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...input,x:input.x-sign*36}]});
     // The input assertion is deliberately evaluated after crossing. No
     // re-press is allowed to rescue a cut, frozen, or cancelled thumb.
     const firstPointer=await get();
