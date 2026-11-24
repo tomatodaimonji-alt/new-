@@ -89,7 +89,7 @@ try{
   const b=await p.locator(sel).boundingBox();assert(b,sel);return {x:b.x+b.width/2,y:b.y+b.height/2,id,radiusX:4,radiusY:4,force:.7};
  };
  const touch=(type,pts)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints:pts});
- const tap=async(sel,held=[])=>{const pt=await point(sel,12);await touch('touchStart',[...held,pt]);await touch('touchEnd',held);return read();};
+ const tap=async(sel,held=[])=>{const pt=await point(sel,12);await touch('touchStart',[pt]);await touch('touchEnd',[pt]);return read();};
  const slot=n=>'#poiHotbar [data-hotbar-slot="'+n+'"]',command=m=>'#poiCompanionCommands [data-companion-command="'+m+'"]';
  const menu=(q,n)=>{assert.deepEqual(q.cursor,[n]);assert(q.open&&!q.modal&&q.role==='dialog');assert.deepEqual(q.labels,labels);};
  const initial=await until(q=>q.actor==='slimeSoul');assert.equal(initial.mode,'follow');assert.equal(initial.hp,22);assert.equal(initial.orvasHp,123);
