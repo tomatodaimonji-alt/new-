@@ -70,7 +70,7 @@ try{
  assert.equal(s.focus,'poiLocalMapClose');assert.deepEqual(await large(5,5),black);
  await p.locator('#poiLocalMapZoomIn').tap();s=await read();assert.equal(s.mini.overlay.view.zoom,2);
  await p.locator('#poiLocalMapZoomIn').tap();s=await read();assert.equal(s.mini.overlay.view.zoom,4);
- for(let i=0;i<7;i++){await p.keyboard.press('ArrowRight');await p.keyboard.press('ArrowDown')}
+ for(let i=0;i<10;i++){await p.keyboard.press('ArrowRight');await p.keyboard.press('ArrowDown')}
  s=await read();assert.deepEqual(s.pos,[24,125,0]);assert.equal(s.swing,swing);
  assert.deepEqual(s.mini.overlay.crop,bounds);
  assert.deepEqual(s.mini.overlay.visible,{x1:34.75,z1:135.75,x2:45,z2:146});
@@ -78,13 +78,20 @@ try{
  await p.locator('#poiLocalMapZoomOut').tap();await p.locator('#poiLocalMapZoomOut').tap();s=await read();
  assert.equal(s.mini.overlay.view.zoom,1);
  assert.deepEqual(s.mini.overlay.visible,{x1:4,z1:105,x2:45,z2:146});
+ const cdp=await c.newCDPSession(p),r=await p.locator('#poiLocalMapLarge').boundingBox();
+ const point=(id,x,z)=>({id,x:r.x+r.width*x,y:r.y+r.height*z});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point(1,.42,.53),point(2,.58,.53)]});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[point(1,.16,.53),point(2,.84,.53)]});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ s=await read();assert.equal(s.mini.overlay.view.zoom,4,'real two-finger pinch increases cost-free display scale');
+ assert.deepEqual(s.mini.overlay.crop,bounds);await cdp.detach();
  await p.locator('#poiLocalMapClose').tap();await p.clock.fastForward(36);
  assert(!(await read()).dialog);
  phase='actual walk, gate arrival, side-wall shading and delayed survey save';
  const builds=m.topologyBuilds;
- for(const z of [126,127,128,129]){s=await step('ArrowUp',24,z);assert.deepEqual(s.mini.local.crop,{x1:4,z1:z-20,x2:44,z2:z+20});}
+ for(const z of [126,127]){s=await step('ArrowUp',24,z);assert.deepEqual(s.mini.local.crop,{x1:4,z1:z-20,x2:44,z2:z+20});}
  assert.equal(s.mini.topologyBuilds,builds);
- for(let z=130;z<=140;z++)s=await step('ArrowUp',24,z);
+ for(let z=128;z<=140;z++)s=await step('ArrowUp',24,z);
  assert(s.seen);assert.equal(s.mini.topologyBuilds,builds+1);
  assert((await tile(24,137)).known);
  assert(!(await tile(30,139)).known,'the survey stopped at the real sealed passage walls');

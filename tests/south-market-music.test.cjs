@@ -10,7 +10,7 @@ function marketFixture(){
  f.f.facilitySite={...build('base'),id:'base'};
  Object.assign(f.f,{POI_SAFE_TOWN:[],POI_WILD_GATES:[],POI_WILD_LANDMARKS:[],
   validPos:()=>true,poiWildZone:()=>false,facilityFloorOwner:()=>null});
- f.run(slice('function poiRegionAt(','const poiMiniStatic=')+slice('function poiSouthTownContains(','function poiSouthMarketRole('));
+ f.run(slice('function poiRegionAt(','// BEGIN LOCAL MINI CORE')+slice('function poiSouthTownContains(','function poiSouthMarketRole('));
  return f;
 }
 test('quiet music in the market has both plucked and sustained voices within an independent bounded loop',()=>{
