@@ -31,8 +31,13 @@ jobs:
           sub('function workshopResumeDecode(raw){',(p/'region.js').read_text()+'\n'+(p/'activation.js').read_text()+'\nfunction workshopResumeDecode(raw){')
           sub("const c=kind==='earth'?[.43+r*.09,.35+r*.07,.25+r*.05]", "const c=kind==='poiSnowGround'?[.76+r*.14,.82+r*.12,.90+r*.08]:kind==='earth'?[.43+r*.09,.35+r*.07,.25+r*.05]")
           sub('function isFloor(t){return ROAD_IDS.has(t)||','function isFloor(t){return t===\'poiSnowGround\'||ROAD_IDS.has(t)||')
-          sub("function poiWalkCanStep(x,z,fromX,fromZ,exceptMonster,skipNpcTile=false){\n if(!validPos(x,z))return false;",
-          "function poiWalkCanStep(x,z,fromX,fromZ,exceptMonster,skipNpcTile=false){\n if(typeof poiSnowPassEdge==='function'&&poiSnowPassEdge(x,z,fromX,fromZ))return true;\n if(!validPos(x,z))return false;")
+          sub(" const canStep=(sx,sz)=>poiWalkCanStep(poiWalkX+sx,poiWalkZ+sz,poiWalkX,poiWalkZ,undefined,true)&&",
+          """ const canStep=(sx,sz)=>((typeof poiSnowPassEdge==='function'&&poiSnowPassEdge(poiWalkX+sx,poiWalkZ+sz,poiWalkX,poiWalkZ))||
+            poiWalkCanStep(poiWalkX+sx,poiWalkZ+sz,poiWalkX,poiWalkZ,undefined,true))&&""")
+          sub("    clear=poiWalkCanStep(x,z,fromX,fromZ,undefined,true);",
+          """    clear=(typeof poiSnowPassEdge==='function'&&!!poiSnowPassEdge(x,z,fromX,fromZ))||poiWalkCanStep(x,z,fromX,fromZ,undefined,true);""")
+          sub("  if(!poiWalkCanStep(x,z,fromX,fromZ,undefined,true))return false;",
+          """  if(!(typeof poiSnowPassEdge==='function'&&poiSnowPassEdge(x,z,fromX,fromZ))&&!poiWalkCanStep(x,z,fromX,fromZ,undefined,true))return false;""")
           sub("function poiWalkEnterCell(dx,dz,now,continuous=false,onDoorCue){",
           """function poiWalkEnterCell(dx,dz,now,continuous=false,onDoorCue){
            if(typeof poiSnowPassEdge==='function'&&poiSnowPassEdge(poiWalkX+dx,poiWalkZ+dz,poiWalkX,poiWalkZ)){
@@ -301,6 +306,17 @@ jobs:
           }
           // END SNOW GROUND NAMESPACE
           LOCAL_SOURCE
+          cat >.snow/stamp.py <<'LOCAL_SOURCE'
+          from pathlib import Path
+          from sys import argv
+          source,target=map(Path,argv[1:])
+          s=source.read_text()
+          for old,new in [('（v266）','（v267）'),("editorVersion:'v266'","editorVersion:'v267'"),("+'　v266';","+'　v267';")]:
+           assert s.count(old)==(2 if 'editorVersion' in old else 1),old
+           s=s.replace(old,new)
+          target.parent.mkdir(parents=True,exist_ok=True)
+          target.write_text(s)
+          LOCAL_SOURCE
           cat >.snow/tests/snow-pass-local.test.cjs <<'LOCAL_SOURCE'
           const {test}=require('node:test'),a=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
           const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
@@ -404,7 +420,8 @@ jobs:
            await send('touchStart',[press]);await send('touchMove',[{...press,y:press.y+36}]);
            await page.waitForFunction(()=>window.__snowRefused===true);
            await send('touchEnd',[]);
-           const refused=await state();assert.equal(refused.area.id,'base');assert.equal(refused.save.region,undefined);assert.equal(refused.kit,stock);
+           const refused=await state();assert.equal(refused.area.id,'base');
+           assert.equal(await page.evaluate(()=>window.__editorTest.canStep(49,128,49,127)),false,'ordinary map/path checks cannot pass through the special link');assert.equal(refused.save.region,undefined);assert.equal(refused.kit,stock);
            await page.evaluate(()=>{Storage.prototype.setItem=window.__snowStorageWrite});
            await page.waitForFunction(()=>window.__editorTest.snowPassRegion().field);
            await page.evaluate(()=>window.__editorTest.snowInventoryQA.markMusic());
@@ -461,7 +478,9 @@ jobs:
            console.log('PASS legacy save, actual walking both borders, one region, cold reopen, base and held kit untouched');
           }finally{await b?.close();await new Promise(r=>server.close(r))}
           LOCAL_SOURCE
-          python .snow/build.py world-editor.html .snow/world-editor.html
+          python .snow/build.py world-editor.html .snow/unstamped.html
+          python .snow/stamp.py .snow/unstamped.html .snow/world-editor.html
+          test "$(git hash-object .snow/world-editor.html)" = 2a8321d0b5b7e3c9be5ba29251f070018945fe97
           HTML=.snow/world-editor.html node --test .snow/tests/*.cjs
       - name: Touch seam, reload, return, and pick up a prior base drop
         shell: bash
