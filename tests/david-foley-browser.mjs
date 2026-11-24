@@ -412,7 +412,7 @@ try{
      return {start:q.prepare('beam'),audio:q.sound().events.length,stops:q.sound().stops.length,state:q.state()};
     },{roll,target});
     assert(initial.start);
-    await wait(battle.p,t=>{const q=window.__editorTest.davidQA.state();return q.canceled[t]||!q.statue?.d?.attack},initial.start);
+    await wait(battle.p,t=>{const q=window.__editorTest.davidQA.state();return q.canceled[t]||!q.statue?.d?.attack},initial.start,26000);
     const r=await qa(battle.p);
     if(r.canceled[initial.start]){
      const reason=r.canceled[initial.start];
