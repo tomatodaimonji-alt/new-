@@ -78,7 +78,7 @@ install(mark,`
    return {weapon,ready:poiAttackReady,clock:performance.now(),pending:!!a,cursor:a?.orvasCursor,
     used:slots.find(c=>c?.type===weapon)?.durability,hp:window.__orvas.targets?.map(s=>s.hp),
     beam:beam?{rays:beam.rays,draw:!!poiOrvasBeamGpu}:null,start:poiWalkActionStarted,
-    marks:poiOrvasGroundTraces.filter(e=>e.player).map(e=>({kind:e.kind,start:e.start,x:e.x,z:e.z,tiles:e.cells.size,points:e.parts.reduce((n,m)=>n+m.p.length/3,0),grass:e.parts.some(m=>m.c.some((c,i)=>i%3===0&&c===.18&&m.c[i+1]===.16)),soil:e.parts.some(m=>m.c.some((c,i)=>i%3===0&&c===.20&&m.c[i+1]===.112))})),
+    marks:poiOrvasGroundTraces.filter(e=>e.player).map(e=>({kind:e.kind,start:e.start,x:e.x,z:e.z,tiles:e.cells.size,surfaces:[...e.cells].map(k=>k.split(':')[0]),points:e.parts.reduce((n,m)=>n+m.p.length/3,0),grass:e.parts.some(m=>m.c.some((c,i)=>i%3===0&&c===.18&&m.c[i+1]===.16)),soil:e.parts.some(m=>m.c.some((c,i)=>i%3===0&&c===.20&&m.c[i+1]===.112))})),
     draws:window.__orvasPlayerTraceDraws??[],
     name:POI_ORVAS_NAME,items:slots.slice(2,5).map(c=>c?.type)};
   }
@@ -140,8 +140,10 @@ try{
  landed=await until(v=>!v.pending&&v.beam?.draw);
  const markWall=paint(landed,'beam',held.start),wallDrops=landed.beam.rays.filter(r=>r.groundDrop);
  assert.equal(markWall.length,1,'the actual struck surface receives one paired mark event');
- assert(wallDrops.length===0&&landed.beam.rays.every(r=>r.wallImpact>0&&r.visualEnd<r.wallImpact),
-  'both actual near wall faces receive marks instead of mid-route ground burns '+JSON.stringify(landed.beam.rays));
+ const wallHits=landed.beam.rays.filter(r=>r.wallImpact>0);
+ assert(wallHits.length===1&&wallDrops.length===1,'the exact corner independently lands one eye on wall and the other on floor '+JSON.stringify(landed.beam.rays));
+ assert(wallHits.every(r=>r.visualEnd<r.wallImpact&&!r.groundDrop)&&wallDrops.every(r=>r.groundDrop.h<r.h&&r.groundDrop.at<r.visualLimit&&!r.wallImpact));
+ assert(markWall[0].surfaces.includes('wall')&&markWall[0].surfaces.includes('floor'));
  const stripes=await p.evaluate(()=>window.__orvas.verifyStripes());
  assert(stripes&&stripes.left>35&&stripes.right>35&&stripes.center===0&&stripes.error===0,JSON.stringify(stripes));
  console.log('Actual portable split GPU stripe',JSON.stringify(stripes));
