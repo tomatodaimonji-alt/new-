@@ -56,14 +56,20 @@ try{
    await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...q,x:q.x,y:q.y+dy*36}]});
    const near=await (await p.waitForFunction(({axis,index})=>{const a=window.__editorTest?.snowFrontQA();
     return a&&a.pointer!==null&&Math.abs(a.global[axis]+.5-index)<.65&&a},v,{polling:18,timeout:9000})).jsonValue();
-   if(out)await p.screenshot({path:out+'/'+tag+'-across.png'});
+   if(out){
+    // Real screenshot readback can take several physical frames in software GPU.
+    // Recenter this same held contact while taking the across frame, then resume.
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[q]});
+    await p.screenshot({path:out+'/'+tag+'-across.png'});
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...q,y:q.y+dy*36}]});
+   }
    const after=await (await p.waitForFunction(({dst,axis,index,dir})=>{const a=window.__editorTest?.snowFrontQA();
     return a?.scene===dst&&dir[axis]*(a.global[axis]+.5-index)>.55&&a},v,{polling:18,timeout:9000})).jsonValue();
    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
    a.equal(after.error,0);a.equal(after.veil,false);a.equal(after.switches-start.switches,1);
    a.equal(near.pointer,after.pointer);a.notEqual(after.pointer,null);
    a(Math.abs(after.global[1-v.axis]-start.global[1-v.axis])<.12,'non-crossing axis stays fixed');
-   a(Math.max(...after.light.map((n,i)=>Math.abs(n-near.light[i])))<.10,'the same night clock hands off continuously');
+   a(Math.max(...after.light.map((n,i)=>Math.abs(n-near.light[i])))<.10,'the same night clock hands off continuously: '+JSON.stringify({v,near,after}));
    a.equal(after.kind,v.dst==='snowpass'?'snow':'outside');
    if(v.axis===0){
     a(near.exterior>.1&&after.exterior>.1,'real named shell covers both sides at the west view');
