@@ -47,6 +47,19 @@ jobs:
               " facilityDrawRoofs(p.vp);poiDrawGameRoofs(p.vp);}")
           sub(" facilityBuildRoofs();poiMiniInvalidate();",
               " if(!POI_OVERLAND_SPIKE||!poiOverlandScope(dest.region,dest.x,dest.z))facilityBuildRoofs();poiMiniInvalidate();")
+          sub(" width:MAP_W,height:MAP_H,terrainHeights,models,prefabs,checks:pineCheckMarks,maxLevel:worldMaxLevel,hasCellar:facilityHasCellar}:poiSnowPassBase;",
+              " width:MAP_W,height:MAP_H,terrainHeights,models,prefabs,checks:pineCheckMarks,maxLevel:worldMaxLevel,hasCellar:facilityHasCellar,\n  ...(POI_OVERLAND_SPIKE&&!cold?{overlandStatic:{floors:facilityFloorMasks,stairs:facilityStairOpenings,doors:facilityDoorTiles,creek:facilityCreekIndex,mini:new Map(poiMiniStatic)}}:{})}:poiSnowPassBase;")
+          sub(" facilityPrepareFloorMasks();facilitySurfaceEdited=onBase?false:base.edited;",
+              " const staticBase=!onBase?base.overlandStatic:null;\n if(staticBase){facilityFloorMasks=staticBase.floors;facilityStairOpenings=staticBase.stairs;facilityDoorTiles=staticBase.doors;facilityCreekIndex=staticBase.creek}\n else facilityPrepareFloorMasks();\n facilitySurfaceEdited=onBase?false:base.edited;\n poiMiniInvalidate();if(staticBase)for(const [key,value] of staticBase.mini)poiMiniStatic.set(key,value);")
+          sub("if(!POI_OVERLAND_SPIKE||!poiOverlandScope(dest.region,dest.x,dest.z))facilityBuildRoofs();poiMiniInvalidate();",
+              "if(!POI_OVERLAND_SPIKE||!poiOverlandScope(dest.region,dest.x,dest.z))facilityBuildRoofs();")
+          sub("function poiWalkReset(x,z){","function poiWalkReset(x,z,quietPresentation=false){")
+          sub("if(poiWalkActive){poiCreekAudioSync();poiWalkRoof();poiWalkAvatar();poiWalkCamera();poiWalkStatus()}",
+              "if(poiWalkActive){poiCreekAudioSync();if(!quietPresentation){poiWalkRoof();poiWalkAvatar();poiWalkCamera();poiWalkStatus()}}")
+          sub(" poiWalkReset(dest.x,dest.z);poiWalkFacing=dest.facing;",
+              " poiWalkReset(dest.x,dest.z,POI_OVERLAND_SPIKE&&poiOverlandScope(dest.region,dest.x,dest.z));poiWalkFacing=dest.facing;")
+          sub(" if(poiWalkActive){poiWalkAvatar(now);poiWalkCamera();poiWalkStatus();poiCombatHud();poiHotbarRender()}",
+              " if(poiWalkActive){if(!poiOverlandKeepAnalog)poiWalkAvatar(now);poiWalkCamera();poiWalkStatus();poiCombatHud();poiHotbarRender()}")
           sub(" if(dest.region!=='base')return poiSnowPassChange(dest,now);",
               " if(dest.region!=='base'||POI_OVERLAND_SPIKE&&poiOverlandCommands.some(q=>q.id==='base'))return poiSnowPassChange(dest,now);")
           sub("  snowPassRegion:()=>","  overlandStream:()=>poiOverlandInspect(),\n  snowPassRegion:()=>")
@@ -732,7 +745,7 @@ jobs:
             const r=await pad.boundingBox();assert(r);
             const p={x:Math.round(r.x+r.width*.5),y:Math.round(r.y+r.height*.5),id:7};
             await send('touchStart',[p]);await send('touchMove',[{...p,y:p.y+36*dir}]);
-            await at(next,z);
+            await page.waitForFunction(({id,z})=>{const qa=window.__editorTest;return qa?.snowPassRegion().id===id&&Math.round(qa.freeMovementPose().z)===z},{id:next,z});
             await send('touchEnd',[]);
            };
            // The actual switch must refuse a real storage failure rather than
@@ -930,6 +943,16 @@ jobs:
            }
            if(typeof poiHitstopMarkDrawn`);
            html=html.slice(0,from)+frame+html.slice(to);
+           const start=html.indexOf('function poiSnowPassApply('),end=html.indexOf('function poiSnowPassVeil(',start);
+           let apply=html.slice(start,end);
+           const stamps=[' if(!prepared)return false;',' facilitySite=incoming;',' const staticBase=',' facilitySurfaceEdited=',' facilityInitialMap=',' const spawn=',' if(!onBase&&!base.warm)poiEconomyStart();',' if(!cold){poiPlayerHP=',' mode=',' if(poiWalkActive){if(!poiOverlandKeepAnalog)',' poiSnowPassSwitches++;'];
+           for(const [i,k] of stamps.entries()){
+            assert(apply.includes(k),k);
+            apply=apply.replace(k,i===0?' const snowTimes=[performance.now()];'+k:' snowTimes.push(performance.now());'+k);
+           }
+           apply=apply.replace(' return true;',` window.__snowSeamProbe?.switchPhases?.push({region:dest.region,elapsed:snowTimes.map((q,i)=>i?q-snowTimes[i-1]:0)});
+           return true;`);
+           html=html.slice(0,start)+apply+html.slice(end);
           }
           if(process.env.SNOW_SEAM_SYNTAX_ONLY==='1'){
            for(const [,,body] of [...html.matchAll(/<script(?:\s+([^>]*))?>([\s\S]*?)<\/script>/gi)].filter(([,a])=>!a||!/\b(?:src|type)\s*=/.test(a)))new Script(body);
@@ -1053,7 +1076,7 @@ jobs:
              const bind=id=>({x:Math.round(pad.x+pad.width/2),y:Math.round(pad.y+pad.height/2),id,radiusX:4,radiusY:4,force:.7});
              async function cross(sign,label,id){
               const from=await get(),input=bind(id),dst=sign>0?'snowpass':'base';
-              const start=await page.evaluate(()=>{const s=window.__snowSeamProbe;s.active=true;s.frames=[];s.phases=[];s.veils=[];s.samples=[];s.uploads=[];s.thumb=[];s.sceneCounts=[];s.masked=0;s.high=s.live;
+              const start=await page.evaluate(()=>{const s=window.__snowSeamProbe;s.active=true;s.frames=[];s.phases=[];s.switchPhases=[];s.veils=[];s.samples=[];s.uploads=[];s.thumb=[];s.sceneCounts=[];s.masked=0;s.high=s.live;
                return {at:performance.now(),live:s.live};});
               await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[input]});
               await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...input,y:input.y+sign*36}]});
@@ -1078,7 +1101,7 @@ jobs:
               if(process.env.SNOW_PHASE_REPORT){
                const top=(q.phases||[]).toSorted((a,b)=>b.total-a.total).slice(0,5);
                const around=(q.phases||[]).filter((x,i,a)=>i&&x.region!==a[i-1].region).map((x,i)=>x);
-               console.log('Seam CPU phases',JSON.stringify({label,top,around}));
+               console.log('Seam CPU phases',JSON.stringify({label,top,around,switches:q.switchPhases}));
               }
               assert(sign*(position(end)-position(from))>.6,'global walking crosses the registered world edge');
               if(continued){
@@ -1105,7 +1128,7 @@ jobs:
           SOURCE
           python .spike/build.py world-editor.html .spike/stream.html --default
           python .spike/horizon-safe.py .spike/stream.html .spike/world-editor.html
-          test "$(git hash-object .spike/world-editor.html)" = ed87b5d8c84c55613b3ab306e62907ee09e968ec
+          test "$(git hash-object .spike/world-editor.html)" = 7afb933e32395b254120ec99e95905b7b0a984f0
           cd .spike && node --test tests/*.cjs
       - if: matrix.probe != 'regressions'
         run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
