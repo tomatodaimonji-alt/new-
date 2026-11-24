@@ -176,7 +176,10 @@ const install=()=>{
   renderTime(real){
    const c=this.returnClock||this.beamClock||this.fatalClock;if(!c)return real;
    const lead=c.first-c.now,cap=this.returnClock?86:this.fatalClock&&!this.beamClock?245:lead>0&&lead<=225?47:120;
-   c.now=Math.max(c.now,Math.min(real,c.now+cap));return c.now;
+   // Drop surplus host stalls; never repay old elapsed time on immediately
+   // adjacent frames. Logical contacts cannot outrun native WebAudio time.
+   const delta=Math.max(0,real-(c.lastReal??real));c.lastReal=real;
+   c.now+=Math.min(cap,delta);return c.now;
   },
   glCounters(){return [draws,vertices]},
   beamSubmission(start,kind,now,[priorDraws,priorVertices],extra={}){
@@ -390,7 +393,7 @@ try{
     const audio=(await battle.p.evaluate(()=>window.__editorTest.davidQA.sound())).events.slice(audioStart);
     assert.deepEqual(audio.map(a=>a.name),names);
     assert(audio.every(a=>a.linked&&a.state==='running'&&a.duration>.2&&a.gain>0));
-    if(kind==='double')assert(audio[1].when-audio[0].when>.29);
+    if(kind==='double')assert(audio[1].when-audio[0].when>.29,JSON.stringify({audio,contacts}));
     if(kind==='beam'){
      await wait(battle.p,()=>!window.__editorTest.davidQA.state().statue?.d?.attack);
      assert.equal((await battle.p.evaluate(()=>window.__editorTest.davidQA.sound())).events.length,audioStart+names.length);
