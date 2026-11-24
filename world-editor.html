@@ -16354,9 +16354,31 @@ function poiDavidMatch(o){
   Number.isInteger(b.y)&&r&&[r.minX,r.maxX,r.minZ,r.maxZ].every(Number.isInteger)&&
   r.minX<=b.x&&b.x<=r.maxX&&r.minZ<=b.z&&b.z<=r.maxZ?b:null;
 }
+const POI_DAVID_SWEEP_FORWARD=5.25,POI_DAVID_SWEEP_SIDE=4.2;
+function poiDavidArena(b){
+ const a=b?.room?.arena;
+ return a&&[a.x,a.z,a.radius,a.minZ].every(Number.isFinite)&&a.radius>0&&a.radius<=24&&
+  a.minZ>=a.z-a.radius&&a.minZ<=a.z&&Math.hypot(b.x-a.x,b.z-a.z)<a.radius&&b.z>=a.minZ?a:null;
+}
 function poiDavidIn(b,p){
  const r=b?.room;
- return !!r&&p?.y===b.y&&p.x>=r.minX-.5&&p.x<=r.maxX+.5&&p.z>=r.minZ-.5&&p.z<=r.maxZ+.5;
+ if(!r||p?.y!==b.y||!Number.isFinite(p.x)||!Number.isFinite(p.z))return false;
+ const a=poiDavidArena(b);
+ if(a)return p.z>=a.minZ&&Math.hypot(p.x-a.x,p.z-a.z)<a.radius;
+ return p.x>=r.minX-.5&&p.x<=r.maxX+.5&&p.z>=r.minZ-.5&&p.z<=r.maxZ+.5;
+}
+function poiDavidBoundary(q,b,ux,uz){
+ const {sx,sz}=q,a=poiDavidArena(b),r=b.room;
+ if(a){
+  const x=sx-a.x,z=sz-a.z,k=x*ux+z*uz;
+  const edge=-k+Math.sqrt(Math.max(0,k*k+a.radius*a.radius-x*x-z*z));
+  return Math.min(edge,uz< -1e-8?(a.minZ-sz)/uz:Infinity);
+ }
+ const lim=(v,u,lo,hi)=>Math.abs(u)<1e-8?Infinity:((u>0?hi:lo)-v)/u;
+ return Math.min(lim(sx,ux,r.minX-.5,r.maxX+.5),lim(sz,uz,r.minZ-.5,r.maxZ+.5));
+}
+function poiDavidSweepRadius(c,s){
+ return 1/Math.hypot(c/POI_DAVID_SWEEP_FORWARD,s/POI_DAVID_SWEEP_SIDE);
 }
 function poiDavidLine(src,p,b){
  const dx=p.x-src.x,dz=p.z-src.z,n=Math.hypot(dx,dz);
@@ -16371,8 +16393,7 @@ function poiDavidBeamRay(q,angle){
  return {x:q.dx*c-q.dz*s,z:q.dz*c+q.dx*s};
 }
 function poiDavidBeamReach(q,b,ray){
- const r=b.room,lim=(v,u,lo,hi)=>Math.abs(u)<1e-8?Infinity:((u>0?hi:lo)-v)/u;
- const top=Math.min(14,lim(q.sx,ray.x,r.minX-.5,r.maxX+.5),lim(q.sz,ray.z,r.minZ-.5,r.maxZ+.5));
+ const top=Math.min(14,poiDavidBoundary(q,b,ray.x,ray.z));
  return poiAimWallLimit({x:q.sx,z:q.sz},ray,Math.max(0,top),poiAimWall({y:q.y}));
 }
 function poiDavidBeamAdvance(o,s,d,q,p,b,now){
@@ -16407,7 +16428,7 @@ function poiDavidBeamAdvance(o,s,d,q,p,b,now){
 function poiDavidArea(q,p){
  if(!p||p.y!==q.y)return false;
  const x=p.x-q.sx,z=p.z-q.sz,f=x*q.dx+z*q.dz,s=x*q.dz-z*q.dx,n=Math.hypot(x,z),e=1e-6;
- if(q.kind==='sweep')return n<=4.2+e&&f>=-e;
+ if(q.kind==='sweep')return f>=-e&&Math.hypot(f/POI_DAVID_SWEEP_FORWARD,s/POI_DAVID_SWEEP_SIDE)<=1+e;
  if(q.kind==='double')return f>=.55-e&&f<=3.55+e&&Math.abs(s)<=1.5+e;
  if(q.kind==='stomp')return n<=6+e;
  if(q.kind==='beam')return f>=.28-e&&f<=14+e&&Math.abs(s)<=.56+e;
@@ -16535,8 +16556,9 @@ function poiDavidCombatFrame(now){
  if(q?.sweep&&poiDavidBeamAdvance(o,s,d,q,p,b,now))return true;
  if(q&&now>=q.until){d.attack=null;poiMonsterMeshDirty=true}
  if(now<d.next)return false;
- const distance=Math.hypot(p.x-s.x,p.z-s.z),near=distance<=4.15,mid=distance<=6;
+ const distance=Math.hypot(p.x-s.x,p.z-s.z),mid=distance<=6;
  let kind=POI_DAVID_ORDER[d.cycle%POI_DAVID_ORDER.length];
+ const near=distance<=(kind==='sweep'?POI_DAVID_SWEEP_FORWARD-.05:4.15);
  if(!near&&kind!=='beam'&&(kind!=='stomp'||!mid)){
   if(poiDavidApproach(o,s,b,p,now))return false;
   kind=mid?'stomp':'beam';
@@ -24758,7 +24780,8 @@ function poiDavidCuePairs(q,b){
   const angle=Math.atan2(half,n);
   for(const sign of [-1,1])for(let i=0;i<=12;i++)bearings.add(sign*i*angle/12);
  }
- for(let x=r.minX-.5;x<=r.maxX+.5;x++)for(let z=r.minZ-.5;z<=r.maxZ+.5;z++){
+ const convex=poiDavidArena(b),x0=convex?sx-14:r.minX,z0=convex?sz-14:r.minZ,x1=convex?sx+14:r.maxX,z1=convex?sz+14:r.maxZ;
+ for(let x=x0-.5;x<=x1+.5;x++)for(let z=z0-.5;z<=z1+.5;z++){
   const u=x-sx,v=z-sz;if(u*u+v*v>210)continue;
   const angle=Math.atan2(v*dx-u*dz,u*dx+v*dz);
   if(angle>=low&&angle<=high)for(const e of [-1e-6,0,1e-6])if(angle+e>=low&&angle+e<=high)bearings.add(angle+e);
@@ -24766,10 +24789,9 @@ function poiDavidCuePairs(q,b){
  const pass=poiAimWall({y}),o={x:sx,z:sz};
  return [...bearings].sort((a,b)=>a-b).map(t=>{
   const c=Math.cos(t),s=Math.sin(t),ux=dx*c-dz*s,uz=dz*c+dx*s;
-  const lim=(v,u,lo,hi)=>Math.abs(u)<1e-8?Infinity:((u>0?hi:lo)-v)/u;
-  const edge=Math.min(lim(sx,ux,r.minX-.5,r.maxX+.5),lim(sz,uz,r.minZ-.5,r.maxZ+.5));
+  const edge=poiDavidBoundary(q,b,ux,uz);
   const l=strip?near/Math.max(1e-7,c):0;
-  const rr=strip?Math.min(far/Math.max(1e-7,c),half/Math.max(1e-7,Math.abs(s))):fan?14:whole?6:4.2;
+  const rr=strip?Math.min(far/Math.max(1e-7,c),half/Math.max(1e-7,Math.abs(s))):fan?14:whole?6:poiDavidSweepRadius(c,s);
   const h=poiAimWallLimit(o,{x:ux,z:uz},Math.max(0,Math.min(rr,edge)),pass);
   return {ux,uz,lo:Math.min(l,h),hi:h,t};
  });
@@ -28305,10 +28327,38 @@ function extendTownWorldDavidTemple(site){
  prop(21,94,'poiDavidGatePier',0);prop(27,94,'poiDavidGatePier',2);
  for(const [x,z] of [[10,104],[38,104],[13,113],[35,113],[22,118],[26,118]])prop(x,z,'lantern');
  prop(boss.x,boss.z,boss.type,0);
+// Off-center copses in existing meadow, not a uniform hedge at the wall.
+// Coordinates deliberately spare the front look-through, walk-in, and arena.
+ const grove=[
+  // Broadleaf and sparse birch northwest of the old walking line.
+  [14,86,'treeOak',1],[17,85,'treeBirch',3],[12,87,'bushFern',2],[13,89,'tallGrass',1],
+  [16,84,'tallGrass',3],[19,85,'flowerField',1],[11,90,'tallGrass',0],
+  // The northeast shoulder opens back up toward the road; no high screen.
+  [42,91,'treeRound',3],[45,92,'treePine',0],[39,86,'tallGrass',2],[44,90,'bushFern',0],
+  [42,88,'tallGrass',1],[41,92,'flowerField',3],[43,94,'tallGrass',0],
+  // Rocky west and southwest ground with widely broken canopies.
+  [3,101,'treeRound',1],[4,111,'treePine',2],[5,106,'bush',3],[4,99,'tallGrass',0],
+  [2,104,'tallGrass',2],[3,108,'bush',0],[5,113,'flowerField',2],[6,112,'tallGrass',1],
+  // Loose shrubs and two saplings at the southeast edge; no hard visual ring.
+  [47,109,'treeRound',1],[19,124,'treePine',3],[45,104,'tallGrass',1],[44,109,'bush',2],
+  [45,111,'tallGrass',0],[48,108,'bush',3],[17,122,'tallGrass',2],
+  [22,124,'flowerField',1],[22,125,'bush',3]
+ ];
+ const taken=new Set([...world,...props].map(o=>o.x+','+o.z));
+ const plantedTrees=[];
+ for(const [x,z,type,rot] of grove){
+  const key=x+','+z,isTree=type.startsWith('tree');
+  if(x<0||z<0||x>=site.map.width||z>=site.map.height||taken.has(key)||grade.has(k(x,z,0))||
+     Math.hypot(x-ring.x,z-ring.z)<=ring.radius+.72||
+     approach.some(p=>Math.hypot(x-p.x,z-p.z)<=(isTree?3:1.2)))continue;
+  prop(x,z,type,rot);
+  if(isTree||type==='bush')plantedTrees.push(props.at(-1));
+  taken.add(key);
+ }
  world.push(...floor.values(),...props);
  site.buildings.push({id:'davidTemple',name,...bounds,footprint,floorFootprints:{0:footprint},openAir:true});
  return {name,difficulty:6,bounds,ring,approach,entrance:P(24,94),threshold:{minX:22,maxX:26,z:94,y},retreat:P(24,91),boss,
-  resumeSolid:props.filter(o=>o.y===0&&/^poiDavid/.test(o.type)),authored:{index,count:world.length-index}};
+  resumeSolid:[...props.filter(o=>o.y===0&&/^poiDavid/.test(o.type)),...plantedTrees],authored:{index,count:world.length-index}};
 }
 function poiDavidTempleContains(site,x,z,y,pad=0){
  const d=site?.id==='base'?site.davidTemple:null;
