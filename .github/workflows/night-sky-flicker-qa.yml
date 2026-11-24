@@ -1,0 +1,31 @@
+name: Independent white night sky flicker QA
+on:
+  push:
+    branches: ['dot/workshop-night-sky-flicker-qa']
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: git show ab24cd7f:world-editor.html > v287-original.html && test "$(git hash-object v287-original.html)" = 3355eac7bc93889420bc35b469ae7e1377f054e4
+      - run: test "$(git hash-object world-editor.html)" = 6e3817e6e683239cd3ac1679944ab886eaf8ec14
+      - run: npm install --no-save playwright@1.58.2 && npx playwright install chromium
+      - run: node tests/night-sky-wall-browser.mjs v287-original.html --expect-v287-white
+      - run: node tests/night-sky-wall-browser.mjs world-editor.html
+      - run: node tests/night-sky-pitch-browser.mjs world-editor.html
+  strict:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: |
+          code=0
+          node --test --test-reporter=tap tests/*.cjs >strict.log 2>&1 || code=$?
+          grep -E '^(not ok|# tests|# pass|# fail)' strict.log || true
+          exit "$code"
