@@ -21,7 +21,7 @@ if(process.env.OUTDOOR_PARSE_ONLY)process.exit(0);
 const {chromium}=createRequire(import.meta.url)('playwright');
 const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(req.url==='/seed'?'<title>seed</title>':h)});
 await new Promise(ok=>server.listen(0,'127.0.0.1',ok));const url='http://127.0.0.1:'+server.address().port;
-const enabled=process.env.UNIFORM_RAF_MODE==='prototype',dist=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
+const enabled=process.env.UNIFORM_RAF_MODE!=='published'&&!!process.env.UNIFORM_RAF_MODE,dist=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
 const quant=(samples)=>{const s=samples.filter(Number.isFinite).sort((a,b)=>a-b);return {n:s.length,p95:s[Math.floor((s.length-1)*.95)],p99:s[Math.floor((s.length-1)*.99)],max:s.at(-1)}};
 const metrics=(s,from,to)=>{const raw=s.raw.filter(a=>a>=from&&a<=to),f=s.frame.filter(a=>a[0]>=from&&a[0]<=to);return {
  raw:quant(raw.slice(1).map((n,i)=>n-raw[i])),frames:quant(f.slice(1).map((n,i)=>n[0]-f[i][0])),body:quant(f.map(n=>n[1]-n[0]))}};
@@ -39,7 +39,7 @@ try{
     ...(id==='snowpass'?{region:id,regionHp:100}:{}),position:{x,z,y:0,facing:2},townLayout:5,townMapHeight:182,templeDepth:1,
     view:{yaw:0,zoom:1,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:yaw,orbitPitch:.14,orbitDistance:5.6}}));
   },{id,x,z,yaw});
-  await p.goto(url+'/?resume=1&test=1'+(enabled?'&uniform-outdoor=1&uniform-shell=1':''));await p.bringToFront();
+  await p.goto(url+'/?resume=1&test=1'+(enabled?'&uniform-outdoor=1&uniform-shell=1':'')+(process.env.UNIFORM_RAF_MODE==='split'?'&uniform-split=1':''));await p.bringToFront();
   await p.locator('#pineStartupCover').waitFor({state:'hidden',timeout:45000});
   await p.waitForFunction(()=>window.__editorTest?.turnQA()?.frame?.length>=26,null,{timeout:15000,polling:90});
   const cdp=await c.newCDPSession(p),read=()=>p.evaluate(()=>window.__editorTest.turnQA());

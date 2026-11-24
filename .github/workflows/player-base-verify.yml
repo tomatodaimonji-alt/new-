@@ -1,16 +1,17 @@
-name: Private exact v319 repeated real turns, threshold, strict
+name: Private P2.1 split ground priority, opaque physical shell and RAF A/B
 on:
   push:
-    branches: [dot/workshop-player-base-verify-uniform-outdoor-v319-rc]
+    branches: [dot/workshop-player-base-verify-uniform-outdoor-p21-qa]
 jobs:
   native:
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        mode: [control-turn, prototype-turn, control-threshold, prototype-threshold, prototype-shell]
+        mode: [public, prototype, split, raster]
     env:
+      UNIFORM_RAF_MODE: ${{ matrix.mode }}
       FACILITY_SCREENSHOTS: screenshots
     steps:
       - uses: actions/checkout@v4
@@ -19,32 +20,19 @@ jobs:
           node-version: '22'
       - run: npm install --no-save playwright@1.58.2
       - run: npx playwright install chromium
-      - if: matrix.mode == 'control-turn'
-        run: node tests/uniform-turn-raf-browser.mjs exact-public-v319.html
-      - if: matrix.mode == 'prototype-turn'
-        run: UNIFORM_RAF_MODE=prototype node tests/uniform-turn-raf-browser.mjs
-      - if: matrix.mode == 'control-threshold'
-        run: node tests/uniform-threshold-raf-browser.mjs exact-public-v319.html
-      - if: matrix.mode == 'prototype-threshold'
-        run: UNIFORM_RAF_MODE=prototype UNIFORM_SHELL_MODE=threshold node tests/uniform-threshold-raf-browser.mjs
-      - if: matrix.mode == 'prototype-shell'
-        run: node tests/uniform-shell-browser.mjs
+      - if: matrix.mode == 'public'
+        run: UNIFORM_RAF_MODE=published node tests/uniform-turn-raf-browser.mjs exact-public-v319.html
+      - if: matrix.mode == 'prototype' || matrix.mode == 'split'
+        run: node tests/uniform-turn-raf-browser.mjs
+      - if: matrix.mode == 'raster'
+        run: node tests/uniform-split-raster-browser.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ${{ matrix.mode }}
+          name: p21-${{ matrix.mode }}
           path: screenshots
   unit:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: |
-          if node --test tests/*.cjs > "$RUNNER_TEMP/unit.out" 2>&1; then
-            tail -8 "$RUNNER_TEMP/unit.out"
-          else
-            grep -E '^not ok |^  location:|^  error:|^# (tests|pass|fail|duration)' "$RUNNER_TEMP/unit.out" | cut -c1-350 | tail -300
-            exit 1
-          fi
+      - run: node --test tests/uniform*.test.cjs

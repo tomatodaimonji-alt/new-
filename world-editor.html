@@ -6406,7 +6406,7 @@ function poiDavidTempleArchitecture(m,id,x,y,z,r){
 
 // BEGIN ROUND DAVID TEMPLE ART
 // The original radial wall survives as an exterior stone shell.
-function poiDavidRoundWall(m,x,y,z){
+function poiDavidRoundWall(m,x,y,z,low=false){
  const ring=facilitySite?.davidTemple?.ring;
  const theta=Math.atan2(z-(ring?.z??158)-.5,x-(ring?.x??24)-.5),rx=Math.cos(theta),rz=Math.sin(theta),tx=-rz,tz=rx;
  const ivory=[.86,.82,.73],base=[.57,.55,.50],trim=[.95,.90,.76],shade=[.70,.67,.61];
@@ -6415,6 +6415,7 @@ function poiDavidRoundWall(m,x,y,z){
    e=p(-w/2,low,d/2),f=p(w/2,low,d/2),A=p(-w/2,low+h,-d/2),B=p(w/2,low+h,-d/2),E=p(-w/2,low+h,d/2),F=p(w/2,low+h,d/2);
   for(const [v,w,q,s] of [[a,b,B,A],[f,e,E,F],[e,a,A,E],[b,f,F,B],[A,B,F,E]]){tri(m,v,w,q,c);tri(m,v,q,s,c)}
  };
+ if(low){block(7.68,1.37,.84,0,ivory);block(.24,1.40,.91,7.68,trim);return}
  block(.29,1.36,.94,0,base);block(.24,1.36,.84,.29,trim);
  block(5.72,1.33,.67,.53,ivory);block(.31,1.39,.90,6.25,trim);
  block(1.12,1.36,.76,6.56,shade);block(.24,1.4,.91,7.68,trim);
@@ -6455,8 +6456,8 @@ function poiDavidWingGeometry(m,x,y,z,turn,tall=false){
 }
 // END ROUND DAVID TEMPLE ART
 // BEGIN SACRED TEMPLE ART
-function poiDavidSacredRoofGeometry(m,x,z){
- const segments=40,bands=7,eaves=7.85,apex=14.3,tau=Math.PI*2;
+function poiDavidSacredRoofGeometry(m,x,z,low=false){
+ const segments=low?24:40,bands=low?4:7,eaves=7.85,apex=14.3,tau=Math.PI*2;
  const v=(i,j)=>{
   const a=tau*i/segments,t=j/bands,r=18.22*Math.cos(t*Math.PI*.5);
   return [x+Math.cos(a)*r,eaves+(apex-eaves)*Math.sin(t*Math.PI*.5),z+Math.sin(a)*r];
@@ -41442,14 +41443,33 @@ function poiUniformShellMember(site,o){
  return !!(b&&t.depth===1&&o&&POI_UNIFORM_SHELL_KINDS.has(o.type)&&o.y>=0&&o.y<=3&&
   o.x>=b.x1&&o.x<=b.x2&&o.z>=b.z1&&o.z<=b.z2);
 }
-function poiUniformShellMesh(m,site,o,h){
+function poiUniformShellMesh(m,site,o,h,low=false){
  const x=o.x+.5,z=o.z+.5,r=o.rot||0;
- if(o.type==='poiDavidSacredRoof')poiDavidSacredRoofGeometry(m,x,z);
+ if(o.type==='poiDavidSacredRoof')poiDavidSacredRoofGeometry(m,x,z,low);
+ else if(low&&o.type==='poiDavidWallRound')poiDavidRoundWall(m,x,h,z,true);
  else if(o.type==='poiDavidTunnelRoof'||o.type==='poiDavidWallHeader'||o.type==='poiDavidWallTunnel')
   poiDavidTunnelArt(m,o.type,x,h,z,r);
  else deco(m,o.type,x,h+o.y*1.4,z,r);
 }
 // END UNIFORM EXTERIOR SHELL
+// BEGIN UNIFORM SPLIT GROUND
+const POI_UNIFORM_SPLIT=POI_UNIFORM_SHELL&&facilityParams.get('uniform-split')==='1';
+function poiSplitOrder(a,b){
+ return Number(a.kind!=='ground')-Number(b.kind!=='ground')||a.d-b.d||a.key.localeCompare(b.key);
+}
+function poiSplitVictim(entries,kind,d){
+ let choice=null,best=-Infinity,rank=-1;
+ for(const [key,q] of entries){
+  if(!q?.gpu&&'gpu'in q)continue;
+  const optional=q.kind==='props';
+  if(!optional&&(kind==='props'||q.d<=d)||optional&&kind==='props'&&q.d<=d)continue;
+  const p=optional?1:0;
+  if(p>rank||p===rank&&q.d>best){choice=key;rank=p;best=q.d}
+ }
+ return choice;
+}
+// END UNIFORM SPLIT GROUND
+
 // BEGIN UNIFORM CONSTRUCTION
 function poiUniformBuildMember(site,o){
  return (site?.id==='base'||site?.id==='snowpass')&&o?.y>=0&&
@@ -41591,7 +41611,7 @@ function poiOutdoorCrown(m,spec,o,h){
  }
 }
 function poiOutdoorMesh(q){
- const m=mesh(),a=q.a,runs=poiOutdoorGroundRuns(q,a,q.uniformExtra);
+ const m=mesh(),a=q.a,runs=q.splitPart==='props'?[]:poiOutdoorGroundRuns(q,a,q.uniformExtra);
  let hi=0;
  for(const [x,x1,z,raw,kind] of runs){
   const h=raw*TERRAIN_STEP,y=h-.006,c=poiOutdoorGroundTone(a.id,x,z,kind);
@@ -41608,7 +41628,7 @@ function poiOutdoorMesh(q){
  }
  // Top and side use the same genuine indices; no raised geometry on
  // unowned padding. Current Base/Snow maps are flat, so this emits none.
- if(a.terrain.size)for(let z=q.z0;z<q.z1;z++)for(let x=q.x0;x<q.x1;x++){
+ if(q.splitPart!=='props'&&a.terrain.size)for(let z=q.z0;z<q.z1;z++)for(let x=q.x0;x<q.x1;x++){
   if(!a.owns(x,z)||q.uniformExtra&&!poiSquareFieldAt(x,z))continue;
   const h=a.terrain.get(x+','+z)||0;
   if(h)for(const [dx,dz,side] of [[-1,0,3],[1,0,1],[0,-1,0],[0,1,2]]){
@@ -41617,14 +41637,14 @@ function poiOutdoorMesh(q){
    if(below<h)terrainSide(m,x,z,h,below,side);
   }
  }
- const ground=m.p.length/3,objects=(a.props.get(q.i+','+q.j)||[]).filter(o=>
+ const ground=m.p.length/3,objects=(q.splitPart==='ground'?[]:a.props.get(q.i+','+q.j)||[]).filter(o=>
   !q.uniformGroundOnly||!q.uniformExtra&&(poiSharedCanopyMember(a.layout,o)||POI_UNIFORM_SHELL&&poiUniformShellMember(a.layout,o)));
  const outdoorBuild=POI_UNIFORM_SHELL?[]:null;
  const drawLandmark=o=>{
   const h=(a.terrain.get(o.x+','+o.z)||0)*TERRAIN_STEP;
   if(/^tree/.test(o.type))poiOutdoorCrown(m,a,o,h);
   else if(POI_UNIFORM_SHELL&&poiUniformShellMember(a.layout,o)){
-   const start=m.p.length/3;poiUniformShellMesh(m,a.layout,o,h);
+   const start=m.p.length/3;poiUniformShellMesh(m,a.layout,o,h,q.lowShell);
    poiUniformBuildRange(outdoorBuild,start,m.p.length/3);
   }else deco(m,o.type,o.x+.5,h,o.z+.5,o.rot||0);
  };
@@ -41648,7 +41668,8 @@ function poiOutdoorTrimForDetailed(bytes,held){
  if(!POI_OUTDOOR_LOD)return;
  // Detailed seam ownership always wins over optional geography.
  while(poiOutdoorFarBytes&&bytes+held+poiOutdoorFarBytes>POI_OVERLAND_GPU_LIMIT){
-  const k=poiOutdoorCaches.keys().next().value;if(k===undefined)break;poiOutdoorDrop(k);
+  const picked=POI_UNIFORM_SPLIT?poiSplitVictim(poiOutdoorCaches,'ground',-Infinity):null;
+  const k=picked??poiOutdoorCaches.keys().next().value;if(k===undefined)break;poiOutdoorDrop(k);
  }
 }
 function poiOutdoorSet(x,z,mode,match=0){
@@ -41671,7 +41692,74 @@ function poiOutdoorLodBegin(){
  const id=facilitySite.id,g=poiOverlandGlobal(id,poiWalkViewX,poiWalkViewZ);
  poiOutdoorFrame={id,g};if(POI_UNIFORM_OUTDOOR)poiUniformWarmUntil=performance.now()+8000;
 }
+function poiSplitOutdoorLate(vp,stream){
+ const frame=poiOutdoorFrame;if(!frame)return;
+ const {id,g}=frame,areas=poiOutdoorAreas(id),x0=Math.floor(g[0]),z0=Math.floor(g[1]);
+ if(poiOutdoorPlan?.x!==x0||poiOutdoorPlan.z!==z0||poiOutdoorPlan.id!==id||poiOutdoorPlan.stream!==!!stream||
+    poiOutdoorPlan.areas.length!==areas.length||areas.some((a,i)=>a!==poiOutdoorPlan.areas[i])){
+  const list=poiOutdoorCandidates(areas,x0,z0),parts=[];
+  for(const q of list){
+   const same=q.a.id===id,uniformExtra=same&&!stream;
+   if(uniformExtra&&(!poiSquareFieldSite(q.a.layout)||
+     !poiSquareFieldAt(q.x0,q.z1-1)&&!poiSquareFieldAt(q.x1-1,q.z1-1)))continue;
+   parts.push({...q,key:q.key+'/ground',slot:q.key,kind:'ground',uniformExtra,splitPart:'ground'});
+   if(!uniformExtra&&q.a.props.has(q.i+','+q.j))
+    parts.push({...q,key:q.key+'/props',slot:q.key,kind:'props',splitPart:'props',lowShell:true});
+  }
+  parts.sort(poiSplitOrder);
+  poiOutdoorPlan={id,x:x0,z:z0,stream:!!stream,areas,parts,keep:new Map(parts.map(q=>[q.key,q])),rejected:new Map()};
+ }
+ const {parts,keep,rejected}=poiOutdoorPlan;
+ for(const [k,e] of poiOutdoorCaches){
+  const q=keep.get(k);
+  if(q?.a.world!==e.source||e.extra!==!!q.uniformExtra)poiOutdoorDrop(k);else e.d=q.d;
+ }
+ const coverage=new Set(stream?poiOverlandGroundDrawn.keys():[]);
+ for(const m of poiSnowTempleNeighbor)if(m.outdoorKey)coverage.add(m.outdoorKey);
+ const held=[...poiOverlandMeshes.values()].reduce((n,m)=>n+m.bytes,0),budget=Math.max(0,Math.min(POI_OUTDOOR_FAR_PEAK,POI_OVERLAND_GPU_LIMIT-held));
+ const wall=typeof poiWallNow==='function'?poiWallNow:()=>performance.now(),start=wall();
+ let baked=0;
+ // Choose deterministic world positions for warming, not the current bearing.
+ // A transient detailed frustum absence won't prompt rebuilding an existing
+ // alternate representation. Ground is admitted ahead of every prop.
+ for(const q of parts){
+  if(baked>=4||baked&&wall()-start>=2)break;
+  if(poiOutdoorCaches.has(q.key)||rejected.has(q.key))continue;
+  if(q.d<=6&&coverage.has(q.slot))continue;
+  const {m,ground,canopy,outdoorBuild,bounds}=poiOutdoorMesh(q),bytes=m.p.length*12;baked++;
+  while(poiOutdoorFarBytes+bytes>budget){
+   const k=poiSplitVictim(poiOutdoorCaches,q.kind,q.d);if(k===null)break;
+   poiOutdoorDrop(k);
+  }
+  if(poiOutdoorFarBytes+bytes>budget){rejected.set(q.key,bytes);continue}
+  poiOutdoorCaches.set(q.key,{gpu:bytes?upload(m):null,ground,canopy,outdoorBuild,bounds,bytes,source:q.a.world,extra:!!q.uniformExtra,kind:q.kind,d:q.d});
+  poiOutdoorFarBytes+=bytes;poiOutdoorProbe.built++;
+ }
+ poiOutdoorProbe.maxBakeMs=Math.max(poiOutdoorProbe.maxBakeMs,wall()-start);poiOutdoorProbe.drawn=[];
+ const matrices=new Map(areas.map(q=>[q.id,poiOverlandNeighborVP(vp,id,q.id)]));
+ let fog=id;
+ try{
+  for(const q of parts){
+   const e=poiOutdoorCaches.get(q.key),view=matrices.get(q.a.id);
+   if(!e?.gpu||coverage.has(q.slot)||!poiOverlandBoxVisible(view,e.bounds))continue;
+   if(q.a.id!==fog){poiSacredFrontierFogRegion(q.a.id);fog=q.a.id}
+   const [x,z]=poiOverlandLocal(q.a.id,...g);
+   if(q.kind==='ground'){
+    poiOutdoorSet(0,0,0);
+    if(poiSplitGroundDraw(e.gpu,view))poiOutdoorProbe.drawn.push({key:q.key,ground:e.ground,props:0,backing:true});
+    continue;
+   }
+   poiOutdoorSet(x+.5,z+.5,3);
+   if(e.canopy)poiSharedCanopyDraw(x+.5,z+.5,()=>draw(e.gpu,view,0,e.canopy));
+   if(e.gpu.count>e.canopy)poiUniformBuildSend(e.outdoorBuild,e.canopy,e.gpu.count,x+.5,z+.5,'far-shell',(a,b)=>draw(e.gpu,view,a,b-a));
+   poiOutdoorProbe.drawn.push({key:q.key,ground:0,props:e.gpu.count,backing:false});
+  }
+ }finally{poiOutdoorSet(0,0,0);if(fog!==id)poiSacredFrontierFogRegion(id)}
+}
+function poiSplitGroundDraw(gpu,view){draw(gpu,view);return !!gpu.count}
+
 function poiOutdoorLate(vp,stream){
+ if(POI_UNIFORM_SPLIT)return poiSplitOutdoorLate(vp,stream);
  const frame=poiOutdoorFrame;if(!frame)return;
  const {id,g}=frame,areas=poiOutdoorAreas(id),x0=Math.floor(g[0]),z0=Math.floor(g[1]);
  if(poiOutdoorPlan?.x!==x0||poiOutdoorPlan.z!==z0||poiOutdoorPlan.id!==id||
@@ -42451,7 +42539,7 @@ function workshopResumePermitted(params){
  if(params.get('reset-camera')==='1'&&facilityPlayOnOpen(params,'base')&&
     [...params.keys()].every(k=>['facility','facility-play','reset-camera','test'].includes(k)))return true;
  if(params.has('facility')||params.has('facility-return')||params.has('editor'))return false;
- if(params.get('resume')==='1')return [...params.keys()].every(k=>k==='resume'||k==='test'||k==='outdoor-lod'&&params.get(k)==='0'||(k==='uniform-outdoor'||k==='uniform-shell')&&params.get(k)==='1');
+ if(params.get('resume')==='1')return [...params.keys()].every(k=>k==='resume'||k==='test'||k==='outdoor-lod'&&params.get(k)==='0'||(k==='uniform-outdoor'||k==='uniform-shell'||k==='uniform-split')&&params.get(k)==='1');
  if(![...params.keys()].length)return true;
  return [...params.keys()].every(k=>k==='revision')&&/^\d{1,20}$/.test(params.get('revision')||'');
 }
