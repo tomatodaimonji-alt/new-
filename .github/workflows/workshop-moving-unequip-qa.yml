@@ -1,0 +1,42 @@
+name: Isolated moving bare-hands shortcut QA
+on:
+  push:
+    branches: ['dot/workshop-moving-unequip-qa']
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [moving-unequip, movement-weapon-switch, movement-heal-multitouch, david-free-leap]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: |
+          test "$(git hash-object world-editor.html)" = 7db83b92dbc97a49f1d31d040b8a92c0d671f195
+          python .moving-qa/build.py world-editor.html .moving-qa/world-editor.html
+          test "$(git hash-object .moving-qa/world-editor.html)" = f93a72308eae579efd921bd66379eede857b72ea
+      - run: npm install --no-save playwright@1.58.2 && npx playwright install chromium
+      - run: |
+          if [ "${{ matrix.suite }}" = moving-unequip ]; then
+            node .moving-qa/tests/moving-unequip-browser.mjs .moving-qa/world-editor.html
+          else
+            node "tests/${{ matrix.suite }}-browser.mjs" .moving-qa/world-editor.html
+          fi
+  strict:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: |
+          python .moving-qa/build.py world-editor.html world-editor.html
+          node --test .moving-qa/tests/moving-unequip.test.cjs
+          code=0
+          node --test --test-reporter=tap tests/*.cjs >strict.log 2>&1 || code=$?
+          grep -E '^(not ok|# tests|# pass|# fail)' strict.log || true
+          exit "$code"
