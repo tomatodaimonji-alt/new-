@@ -46,11 +46,12 @@ try{
    const registry=()=>p.evaluate(()=>{
     const q=window.__editorTest,s=q.overlandSquare();
     return {...s,actualOwner:q.overlandSquareOwner(...s.player),
-     unsupported:[q.overlandSquareOwner(127,181),q.overlandSquareOwner(183,183)],
+     unsupported:[q.overlandSquareOwner(184,181),q.overlandSquareOwner(183,184)],
+     added:[q.overlandSquareOwner(127,181),q.overlandSquareOwner(183,183)],
      split:q.overlandSquareSlot(7,17)};
    });
    const square=await registry();
-   a.equal(square.side,184);a.equal(square.chunk,8);a(square.slots<23**2);
+   a.equal(square.side,184);a.equal(square.chunk,8);a.equal(square.slots,23**2);a.deepEqual(square.added,['base','base']);
    a.equal(square.site,v.id);a.equal(square.actualOwner,v.id);
    a.deepEqual(square.unsupported,[null,null]);
    a.deepEqual(square.split,[{id:'base',rows:[255,255,255,0,0,0,0,0]},

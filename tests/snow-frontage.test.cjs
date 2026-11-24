@@ -27,8 +27,10 @@ test('all genuinely walkable north and west landings are reciprocal, obstacles a
  a(open(snow.map.world,7,0),'real open Snow x7 is reachable straight across from Base x55');
  a(snow.map.world.some(o=>o.x===15&&o.z===0&&o.y===0&&o.type==='rockMossy'));
  a(!open(snow.map.world,15,0),'Base x63 points at an actual blocking Snow rock, not an invented entrance');
- for(const args of [['base',72,138,0,72,139],['base',47,168,0,48,168],['base',49,138,1,49,139],['snowpass',23,3,0,24,3],['snowpass',2,28,0,2,29],['base',48,138,0,49,139]])
+ for(const args of [['base',72,138,0,72,139],['base',47,168,0,48,168],['base',49,138,1,49,139],['base',48,138,0,49,139]])
   a.equal(link(...args),null);
+ a.deepEqual(JSON.parse(JSON.stringify(link('snowpass',23,3,0,24,3))),{region:'base',x:72,z:142,y:0,facing:1});
+ a.deepEqual(JSON.parse(JSON.stringify(link('snowpass',2,28,0,2,29))),{region:'base',x:50,z:168,y:0,facing:2});
  const custom=[{id:'a',ox:0,oz:0,owns:(x,z)=>x===0&&z===0},{id:'b',ox:0,oz:1,owns:(x,z)=>x===0&&z===0}];
  a.equal(q.neighbors(custom,'a',0,0,0,0,1).region,'b');
  a.equal(open([{type:'poiSnowGround',x:0,z:0,y:0},{type:'rockMossy',x:0,z:0,y:0}],0,0),false);
