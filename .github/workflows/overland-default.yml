@@ -1205,6 +1205,23 @@ jobs:
            apply=apply.replace(' return true;',` window.__snowSeamProbe?.switchPhases?.push({region:dest.region,elapsed:snowTimes.map((q,i)=>i?q-snowTimes[i-1]:0)});
            return true;`);
            html=html.slice(0,start)+apply+html.slice(end);
+           const n0=html.indexOf('function poiTownResidentsFrame(now){'),n1=html.indexOf('function poiTownResidentsSnapshot(',n0);
+           let npc=html.slice(n0,n1);
+           npc=npc.replace(' poiTownNpcInit(clock);',' const before=performance.now();poiTownNpcInit(clock);const initialized=performance.now();')
+            .replace(' const budget={plans:2};',' const synced=performance.now(),budget={plans:2},roles=[];')
+            .replace("for(const a of poiTownNpcActors)if(a!==speaker&&poiTownNpcRecover(a,now)&&\n    (typeof poiTownStreetHolds!=='function'||!poiTownStreetHolds(a)))poiTownNpcRoutine(a,clock,now,budget);",`
+            for(const a of poiTownNpcActors){
+             const tick=performance.now();
+             if(a!==speaker&&poiTownNpcRecover(a,now)&&(typeof poiTownStreetHolds!=='function'||!poiTownStreetHolds(a)))poiTownNpcRoutine(a,clock,now,budget);
+             const cost=performance.now()-tick;
+             if(cost>=1)roles.push({role:a.role.id,ms:cost});
+            }
+            const q=window.__snowSeamProbe;
+            if(q?.active&&q.npc.length<400)q.npc.push({at:performance.now(),init:initialized-before,port:synced-initialized,routine:performance.now()-synced,roles});
+            `);
+           if(!npc.includes('const synced=')||!npc.includes('roles.push'))throw new Error('exact NPC cost anchors');
+           html=html.slice(0,n0)+npc+html.slice(n1);
+
           }
           if(process.env.SNOW_SEAM_SYNTAX_ONLY==='1'){
            for(const [,,body] of [...html.matchAll(/<script(?:\s+([^>]*))?>([\s\S]*?)<\/script>/gi)].filter(([,a])=>!a||!/\b(?:src|type)\s*=/.test(a)))new Script(body);
@@ -1219,7 +1236,7 @@ jobs:
            groundGold:[{id:'pile-qa',x:12,z:2,y:0,amount:2}],drops:[{type:'healingHerb',x:12,z:2,y:0}]});
           function startProbe(){
            const p=WebGLRenderingContext.prototype,s=window.__snowSeamProbe={
-            frames:[],uploads:[],audio:[],longTasks:[],sceneCounts:[],masked:0,high:0,live:0,lost:0,veils:[],thumb:[],samples:[],active:false};
+            frames:[],uploads:[],audio:[],longTasks:[],npc:[],sceneCounts:[],masked:0,high:0,live:0,lost:0,veils:[],thumb:[],samples:[],active:false};
            const shapes=new WeakMap(),current=new WeakMap(),cap=4500;
            for(const [method,wrap] of Object.entries({
             bindBuffer(original,target,buffer){
@@ -1340,7 +1357,7 @@ jobs:
              const bind=id=>({x:Math.round(pad.x+pad.width/2),y:Math.round(pad.y+pad.height/2),id,radiusX:4,radiusY:4,force:.7});
              async function cross(sign,label,id){
               const from=await get(),input=bind(id),dst=sign>0?'snowpass':'base';
-              const start=await page.evaluate(()=>{const s=window.__snowSeamProbe;s.active=true;s.frames=[];s.phases=[];s.switchPhases=[];s.audio=[];s.longTasks=[];s.veils=[];s.samples=[];s.uploads=[];s.thumb=[];s.sceneCounts=[];s.masked=0;s.high=s.live;
+              const start=await page.evaluate(()=>{const s=window.__snowSeamProbe;s.active=true;s.frames=[];s.phases=[];s.switchPhases=[];s.audio=[];s.longTasks=[];s.npc=[];s.veils=[];s.samples=[];s.uploads=[];s.thumb=[];s.sceneCounts=[];s.masked=0;s.high=s.live;
                return {at:performance.now(),live:s.live};});
               await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[input]});
               await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...input,y:input.y+sign*36}]});
@@ -1372,7 +1389,7 @@ jobs:
                const top=(q.phases||[]).toSorted((a,b)=>b.total-a.total).slice(0,5);
                const around=(q.phases||[]).filter((x,i,a)=>i&&x.region!==a[i-1].region).map((x,i)=>x);
                const slow=Object.assign([],q.frames.slice(1).map((t,i)=>({t,start:q.frames[i],gap:t-q.frames[i]}))).toSorted((a,b)=>b.gap-a.gap).slice(0,3);
-               console.log('Seam CPU phases',JSON.stringify({label,top,around,slow,audio:q.audio,switches:q.switchPhases}));
+               console.log('Seam CPU phases',JSON.stringify({label,top,around,slow,audio:q.audio,npc:(q.npc||[]).toSorted((a,b)=>b.init+b.port+b.routine-a.init-a.port-a.routine).slice(0,4),switches:q.switchPhases}));
               }
               assert(sign*(position(end)-position(from))>.6,'global walking crosses the registered world edge');
               if(continued){
