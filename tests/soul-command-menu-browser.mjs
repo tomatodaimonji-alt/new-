@@ -13,7 +13,8 @@ inject(anchor,anchor+`
    const k=poiHotbarRead(),a=poiCompanionActor,node=$('poiCompanionCommands'),slots=poiInventorySlots(k);
    return {time:performance.now(),open:!node.hidden,modal:node.matches(':modal'),role:node.getAttribute('role'),title:$('poiCompanionCommandsTitle').textContent,
     cursor:[...document.querySelectorAll('#poiHotbar button[aria-pressed=true]')].map(b=>+b.dataset.hotbarSlot),
-    labels:[...node.querySelectorAll('button')].map(b=>b.textContent.trim()),disabled:node.querySelector('[data-companion-command="dismiss"]').disabled,
+    labels:[...node.querySelectorAll('button:not([hidden])')].map(b=>b.textContent.trim()),
+    hpLine:$('poiCompanionCommandsHP').hidden?null:$('poiCompanionCommandsHP').textContent,
     active:k.companionSoul?.active??null,mode:poiCompanionMode(k),savedMode:k.companionSoul?.mode??null,
     weapon:k.weapon,wand:poiArmedWandIndex(),hp:slots[2]?.durability??null,orvasHp:slots[5]?.durability??null,
     xy:[poiWalkViewX,poiWalkViewZ],contact:poiAnalogContact?.id??null,walking:!!poiFreePose?.walking,
@@ -91,7 +92,9 @@ try{
  const touch=(type,pts)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints:pts});
  const tap=async(sel,held=[])=>{const pt=await point(sel,12);await touch('touchStart',[pt]);await touch('touchEnd',[pt]);return read();};
  const slot=n=>'#poiHotbar [data-hotbar-slot="'+n+'"]',command=m=>'#poiCompanionCommands [data-companion-command="'+m+'"]';
- const menu=(q,n)=>{assert.deepEqual(q.cursor,[n]);assert(q.open&&!q.modal&&q.role==='dialog');assert.deepEqual(q.labels,labels);};
+ const menu=(q,n,inactive=null)=>{assert.deepEqual(q.cursor,[n]);assert(q.open&&!q.modal&&q.role==='dialog');
+  assert.deepEqual(q.labels,inactive?[inactive+'を呼ぶ','戻る']:labels);if(inactive)assert.equal(q.hpLine,null);
+ };
  const initial=await until(q=>q.actor==='slimeSoul');assert.equal(initial.mode,'follow');assert.equal(initial.hp,22);assert.equal(initial.orvasHp,123);
  const start=await point('#poiAnalogPad',1),held={...start,y:start.y-45};
  if(process.env.SOUL_BEHAVIOR_NATIVE!=='1'){
@@ -99,9 +102,9 @@ try{
  assert.equal((await tap(slot(4))).wand,4);
  await touch('touchStart',[start]);await touch('touchMove',[held]);
  const left=await until(q=>q.contact!==null&&q.walking);const picked=await tap(slot(5),[held]);
- menu(picked,5);
+ menu(picked,5,'オルヴァス');
  const anchor=await p.locator(slot(5)).boundingBox(),popup=await p.locator('#poiCompanionCommands').boundingBox();
- const rows=await p.locator('#poiCompanionCommands button').evaluateAll(nodes=>nodes.map(n=>{const r=n.getBoundingClientRect();return [r.x,r.y,r.width,r.height]}));
+ const rows=await p.locator('#poiCompanionCommands button:not([hidden])').evaluateAll(nodes=>nodes.map(n=>{const r=n.getBoundingClientRect();return [r.x,r.y,r.width,r.height]}));
  const style=await p.locator('#poiCompanionCommands').evaluate(n=>{const c=getComputedStyle(n);return {surface:c.backgroundColor,theme:c.getPropertyValue('--workshop-panel-surface').trim()}});
  assert(Math.abs(anchor.y-popup.y-popup.height-7)<1.6,JSON.stringify({anchor,popup}));
  assert(Math.abs(anchor.x+anchor.width/2-popup.x-popup.width/2)<1.6,JSON.stringify({anchor,popup}));
@@ -112,11 +115,16 @@ try{
   mkdirSync(process.env.FACILITY_SCREENSHOTS,{recursive:true});
   await p.screenshot({path:process.env.FACILITY_SCREENSHOTS+'/soul-slot-popup-actual.png',timeout:15000});
  }
- assert(picked.disabled);assert.equal(picked.active,'slimeSoul');assert.equal(picked.weapon,'equipWoodSword');assert.equal(picked.wand,4);
+ assert.equal(picked.active,'slimeSoul');assert.equal(picked.weapon,'equipWoodSword');assert.equal(picked.wand,4);
  const moving=await until(q=>Math.hypot(q.xy[0]-left.xy[0],q.xy[1]-left.xy[1])>.06,16);
  assert.equal(moving.contact,left.contact);
  const returned=await tap(command('back'),[held]);assert(!returned.open);assert.deepEqual(returned.cursor,[5]);assert.equal(returned.active,'slimeSoul');
- assert.equal(returned.contact,left.contact);await touch('touchEnd',[]);
+ assert.equal(returned.contact,left.contact);
+ menu(await tap(slot(5),[held]),5,'オルヴァス');
+ const outside={x:750,y:85,id:12,radiusX:4,radiusY:4,force:.7};
+ await touch('touchStart',[outside]);await touch('touchEnd',[outside]);
+ const noSummon=await read();assert(!noSummon.open&&noSummon.active==='slimeSoul'&&noSummon.contact===left.contact);
+ await touch('touchEnd',[]);
  }
  if(process.env.SOUL_BEHAVIOR_NATIVE==='1'){
   where='native analog pressure, ordinary companion species rate and four/two follow hysteresis';
@@ -153,7 +161,11 @@ try{
  const hp=await p.evaluate(()=>window.__editorTest.soulMenuQA.opponent());assert(hp);
  for(let i=0;i<25;i++){const q=await step();assert.equal(q.foe,hp);assert(!q.pending&&q.mode==='follow');}
  where='priority commits actual melee and switching to follow cancels the pending strike';
- menu(await tap(slot(2)),2);const fighting=await tap(command('fight'));assert(!fighting.open&&fighting.mode==='fight');
+ const livePanel=await tap(slot(2));menu(livePanel,2);assert.match(livePanel.hpLine,/^HP 22 \/ /);
+ const activeRows=await p.locator('#poiCompanionCommands button:not([hidden])').evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().y));
+ assert(activeRows.every((y,i)=>!i||y>activeRows[i-1]));
+ if(process.env.FACILITY_SCREENSHOTS)await p.screenshot({path:process.env.FACILITY_SCREENSHOTS+'/soul-slot-active-actual.png',timeout:15000});
+ const fighting=await tap(command('fight'));assert(!fighting.open&&fighting.mode==='fight');
  await until(q=>q.pending);
  menu(await tap(slot(2)),2);await tap(command('follow'));
  for(let i=0;i<12;i++){const q=await step();assert.equal(q.foe,hp);assert(!q.pending&&q.mode==='follow');}
@@ -163,8 +175,15 @@ try{
  where='dismiss retains precise token and hp; explicit inactive priority summons correct token';
  menu(await tap(slot(2)),2);const dismissed=await tap(command('dismiss'));
  assert(!dismissed.open);assert.equal(dismissed.active,null);assert.deepEqual(dismissed.cursor,[2]);assert.equal(dismissed.hp,22);
- menu(await tap(slot(5)),5);const summoned=await tap(command('follow'));
- assert.equal(summoned.active,'orvasSoul');assert.equal(summoned.savedMode,'follow');assert.equal(summoned.orvasHp,123);assert.equal(summoned.weapon,'equipWoodSword');
+ const next=await point('#poiAnalogPad',1),nextHeld={...next,y:next.y-42};
+ await touch('touchStart',[next]);await touch('touchMove',[nextHeld]);
+ const leftAgain=await until(q=>q.contact!==null&&q.walking);
+ menu(await tap(slot(5),[nextHeld]),5,'オルヴァス');const summoned=await tap(command('summon'),[nextHeld]);
+ assert(!summoned.open);assert.equal(summoned.contact,leftAgain.contact);assert.equal(summoned.active,'orvasSoul');assert.equal(summoned.savedMode,'fight');
+ assert.equal(summoned.orvasHp,123);assert.equal(summoned.weapon,'equipWoodSword');
+ const orvasMenu=await tap(slot(5),[nextHeld]);menu(orvasMenu,5);assert.match(orvasMenu.hpLine,/^HP 123 \/ /);
+ const following=await tap(command('follow'),[nextHeld]);assert(following.savedMode==='follow'&&following.contact===leftAgain.contact);
+ await touch('touchEnd',[]);
  await p.clock.resume();await load();
  const reload=await until(q=>q.actor==='orvasSoul');assert.equal(reload.mode,'follow');assert.equal(reload.orvasHp,123);assert.equal(reload.hp,22);
  where='real terminal soul damage closes stale menu and clears selection';

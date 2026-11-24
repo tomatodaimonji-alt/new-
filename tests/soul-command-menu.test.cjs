@@ -6,6 +6,7 @@ test('visible soul command vocabulary is exact and never uses a modal/dialog inp
  assert.deepEqual([...panel.matchAll(/data-companion-command="([^"]+)"[^>]*>([^<]+)<\/button>/g)].map(x=>x.slice(1,3)),
  [['fight','戦いを優先'],['follow','追尾優先'],['dismiss','魂に戻す'],['back','戻る']]);
  assert.match(panel,/aria-modal="false" hidden/);
+ assert.match(panel,/data-companion-command="summon" hidden/);
  const helpers=cut('function poiCompanionUiOpen(','function poiCompanionHudSync(');
  assert.doesNotMatch(helpers,/showModal|poiStopRepeat|poiWandDisarm/);
 });
@@ -29,10 +30,13 @@ test('old aliases normalize while no unrecognized command changes the active tok
  assert.equal(c.poiCompanionCommand('invalid',300,'orvasSoul').ok,false);
  assert.equal(c.p.companionSoul.active,'slimeSoul');
 });
-test('explicit priority summons exact selected token atomically, dismiss preserves equipment and durability',()=>{
+test('only explicit summon can activate exact selected token, dismiss preserves equipment and durability',()=>{
  const {c,base}=setup('slimeSoul','flee');
- assert.equal(c.poiCompanionCommand('follow',300,'orvasSoul').ok,true);
+ assert.equal(c.poiCompanionCommand('follow',300,'orvasSoul').ok,false);
+ assert.equal(c.poiCompanionCommand('summon',300,'orvasSoul').ok,true);
  assert.equal(c.p.companionSoul.active,'orvasSoul');
+ assert.equal(c.p.companionSoul.mode,'fight');
+ assert.equal(c.poiCompanionCommand('follow',300,'orvasSoul').ok,true);
  assert.equal(c.p.companionSoul.mode,'follow');
  assert.equal(c.p.companionSoul.pending,'skeletonSoul');
  assert.equal(c.p.weapon,'equipIronSword');assert.equal(c.p.slots,base.slots);

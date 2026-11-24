@@ -93,3 +93,12 @@ t.test('the production rubble emitter honors implicit outdoor terrain but not wa
  const water=new Map(Array.from({length:17*17},(_,i)=>[String(95+i%17)+','+String(85+(i/17|0)),'water']));
  a.equal(c.poiDavidRaisedStoneGeometry({...e,floors:water},e.arena).p.length,0);
 });
+t.test('follow/dismiss clear only ally-origin traces, not the old unrelated boss or player effects',()=>{
+ const {b,q}=battle();
+ const oldBoss={kind:'beam'},oldPlayer={kind:'double',player:true},own={kind:'beam',player:true,ally:true};
+ b.poiOrvasGroundTraces=[oldBoss,own,oldPlayer];b.poiOrvasGroundDirty=false;
+ b.poiOrvasAllyEngage(q,100);
+ b.poiOrvasAllyStop(q,130,true);
+ a.equal(q.david.attack,null);a.deepEqual(b.poiOrvasGroundTraces,[oldBoss,oldPlayer]);
+ a.equal(b.poiOrvasGroundDirty,true);
+});

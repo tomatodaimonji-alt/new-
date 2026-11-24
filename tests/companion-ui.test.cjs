@@ -13,10 +13,10 @@ test('single soul shortcut tap selects and opens without summoning; only explici
  const run=vm.runInNewContext(forTest[1]+";({press:poiCompanionShortcutTap,selected:poiCompanionSelectedShortcut,command:poiCompanionUiCommand,clear:poiCompanionClearShortcut})",c);
  assert(run.press(kit,1).ok);assert.equal(run.selected(kit),1);assert(!node.hidden);assert.deepEqual(choices,[]);
  run.command('back');assert(node.hidden);assert.equal(run.selected(kit),1);assert.equal(kit.companionSoul.active,undefined);
- assert(run.press(kit,1).ok);run.command('fight');assert(node.hidden);assert.equal(kit.companionSoul.active,'slimeSoul');
- assert(run.press(kit,3).ok);run.command('follow');assert(node.hidden);assert.equal(kit.companionSoul.active,'orvasSoul');assert.equal(run.selected(kit),3);
+ assert(run.press(kit,1).ok);run.command('summon');assert(node.hidden);assert.equal(kit.companionSoul.active,'slimeSoul');
+ assert(run.press(kit,3).ok);run.command('summon');assert(node.hidden);assert.equal(kit.companionSoul.active,'orvasSoul');assert.equal(run.selected(kit),3);
  assert(run.press(kit,3).ok);run.command('dismiss');assert(node.hidden);assert.equal(kit.companionSoul.active,null);
- assert.deepEqual(choices,[['fight','slimeSoul'],['follow','orvasSoul'],['dismiss','orvasSoul']]);
+ assert.deepEqual(choices,[['summon','slimeSoul'],['summon','orvasSoul'],['dismiss','orvasSoul']]);
  assert.equal(soul.durability,17);assert.equal(other.durability,87);assert.equal(kit.weapon,'equipIronSword');
  assert.equal(run.selected(kit),3);kit.slots[3]=null;assert.equal(run.selected(kit),null);
 });

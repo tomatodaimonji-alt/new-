@@ -101,8 +101,10 @@ try{
   const tap=slot=>p.locator('#poiHotbar [data-hotbar-slot="'+slot+'"]').tap();
   const summon=async slot=>{
    await tap(slot);
-   const follow=p.locator('#poiCompanionCommands [data-companion-command="follow"]');
-   if(await follow.isVisible())await p.locator('#poiCompanionCommands [data-companion-command="fight"]').tap();
+   const confirm=p.locator('#poiCompanionCommands [data-companion-command="summon"]');
+   const fight=p.locator('#poiCompanionCommands [data-companion-command="fight"]');
+   if(await confirm.isVisible())await confirm.tap();
+   else if(await fight.isVisible())await fight.tap();
   };
   return {c,p,open,tick,until,tap,summon,errors};
  }
@@ -158,6 +160,7 @@ try{
  for(const [x,z] of [[24,127],[24,128],[24,129],[25,129],[25,130],[25,131],[24,131],[23,131],[23,132]])await step(x,z);
  s=await q.until(v=>v.pose?.orvas&&v.actor.z>=128);
  assert(entryActor.z<128&&s.actor.z>=128);assert.equal(s.pose.scale,1);
+ if(screenshot)await q.p.screenshot({path:screenshot+'/orvas-full-size-tunnel.png'});
  assert(s.kit.some(c=>c.type==='orvasSoul'&&c.durability===1050));
  assert.equal(s.bossController,false);assert.deepEqual(q.errors,[]);
  await q.c.close();
