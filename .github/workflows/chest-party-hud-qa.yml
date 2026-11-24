@@ -1,0 +1,49 @@
+name: Isolated Chest Party HUD QA
+on:
+  push:
+    branches: [dot/workshop-chest-party-hud-qa]
+permissions:
+  contents: read
+jobs:
+  strict:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: |
+          test "$(git hash-object world-editor.html)" = "55f8bfc6161bd789eea5a8025a8e99d3331a3cd7"
+          python .qa-chest-hud/build.py world-editor.html checked.html
+          test "$(git hash-object checked.html)" = "7b0f02695fccec8c139e2b820e696a27156dff3e"
+          mv checked.html world-editor.html
+          if ! node --test tests/*.test.cjs > "$RUNNER_TEMP/strict.out" 2>&1; then
+            grep -E '^not ok |^  location:|^  error:|^# (tests|pass|fail|duration)' "$RUNNER_TEMP/strict.out" | tail -250
+            exit 1
+          fi
+          grep -E '^# (tests|pass|fail|duration)' "$RUNNER_TEMP/strict.out"
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      FACILITY_SCREENSHOTS: screenshots
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save playwright@1.56.1
+      - run: npx playwright install chromium
+      - run: |
+          test "$(git hash-object world-editor.html)" = "55f8bfc6161bd789eea5a8025a8e99d3331a3cd7"
+          python .qa-chest-hud/build.py world-editor.html checked.html
+          test "$(git hash-object checked.html)" = "7b0f02695fccec8c139e2b820e696a27156dff3e"
+          node tests/chest-party-hud-browser.mjs checked.html
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: star-corridor-chest-hud
+          path: screenshots
+          if-no-files-found: ignore
+          retention-days: 3
