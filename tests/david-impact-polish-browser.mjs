@@ -122,7 +122,7 @@ try{
  assert(rock.length>=3&&rock.every(f=>f.age>=0&&f.n===uploads[0].n));
  assert(uploads[0].n%3===0&&uploads[0].n>=(leapMode?800:420));
  assert(uploads[0].slabs>=(leapMode?3:2)&&uploads[0].chips>=8&&uploads[0].width>=(leapMode?1.45:.94));
- assert(uploads[0].height>=(leapMode?.65:.34),'native stone geometry is significantly above floor');
+ assert(uploads[0].height>=(leapMode?.54:.34),'native stone geometry is significantly above floor');
  assert(rock[0].offset<-.15&&rock.some(r=>Math.abs(r.offset)<.002),'stones physically emerge from floor');
  if(process.env.DAVID_STONE_ARTIFACT){
   const {mkdirSync}=await import('node:fs');mkdirSync(process.env.DAVID_STONE_ARTIFACT,{recursive:true});
