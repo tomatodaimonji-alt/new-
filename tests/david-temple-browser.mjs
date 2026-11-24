@@ -79,7 +79,9 @@ const wait=(p,fn,arg=null,timeout=9000)=>p.waitForFunction(fn,arg,{polling:35,ti
 async function start(browser){
  const ctx=await browser.newContext({viewport:{width:844,height:390},deviceScaleFactor:.7,isMobile:true,hasTouch:true});
  await ctx.addInitScript(install);const p=await ctx.newPage(),errors=[];
- p.on('pageerror',e=>errors.push(e.message));p.setDefaultTimeout(15000);
+ p.on('pageerror',e=>errors.push(e.stack||e.message));
+ p.on('console',m=>{if(m.type()==='error')m.args().at(-1)?.evaluate(e=>e?.stack||e?.message||String(e)).then(x=>errors.push(m.text()+' '+x),()=>errors.push(m.text()))});
+ p.setDefaultTimeout(15000);
  try{
   await p.goto(url+'/seed');
   await p.evaluate(({save,economy,editor})=>{
@@ -88,10 +90,14 @@ async function start(browser){
    localStorage.setItem('forest-world-editor-v1',JSON.stringify(editor));
   },{save,economy,editor});
   await p.goto(url+'/?resume=1&test=1',{waitUntil:'domcontentloaded',timeout:25000});
-  await p.locator('#pineStartupCover').waitFor({state:'hidden'});
+  await wait(p,()=>{const el=document.getElementById('pineStartupCover');return !!el&&(el.hidden||el.dataset.state==='failed')},null,21000);
+  if(!(await p.locator('#pineStartupCover').evaluate(el=>el.hidden)))throw Error('actual startup failed: '+JSON.stringify(errors));
   await wait(p,()=>window.__editorTest?.davidQA&&window.__editorTest.facility().active);
   return{p,ctx,errors};
- }catch(e){await ctx.close();throw e}
+ }catch(e){
+  console.error('david early boot',await p.locator('#pineStartupCover').evaluate(el=>({state:el.dataset.state,hidden:el.hidden,text:el.textContent})).catch(()=>null),errors);
+  await ctx.close();throw e
+ }
 }
 async function inside(browser){
  const session=await start(browser),p=session.p;
