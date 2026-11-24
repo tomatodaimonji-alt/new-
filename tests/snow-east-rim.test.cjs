@@ -11,7 +11,7 @@ const get=name=>{
 test('the continuous east-flank ownership retains the approach and every actual enclosed tile',()=>{
  const rim=h.includes('function poiSnowTempleRim(')?'poiSnowTempleRim':'poiSnowExteriorBaseRim';
  const site={id:'base',davidTemple:{interior:true,enclosure:new Set(['40,151','24,128','24,158'])}};
- const load=new Function('facilitySite',get('poiOverlandScope')+get('poiDavidTempleEnclosedAt')+get(rim)+
+ const load=new Function('facilitySite',get('poiOverlandScope')+get('poiSquareFieldSite')+get('poiSquareFieldNear')+get('poiDavidTempleEnclosedAt')+get(rim)+
   ';return [poiOverlandScope,'+rim+'];');
  const [scope,visible]=load(site);
  assert(visible(41.70,153)&&scope('base',41.70,153));

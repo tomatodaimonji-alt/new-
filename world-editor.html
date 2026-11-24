@@ -1689,7 +1689,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v314）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v315）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -2296,8 +2296,9 @@ const catalog=new Map(palette.map(p=>[p.id,p]));let selected='wall',mode='place'
 let pineObjectSelection=null,pineSelectedTile=null,pineMoveArmed=false;
 const byId=id=>catalog.get(id)||models.find(m=>m.id===id)||prefabs.find(p=>p.id===id);
 const cellKey=(x,z,y=0)=>x+','+z+','+y;
-const validPos=(x,z)=>Number.isInteger(x)&&Number.isInteger(z)&&x>=0&&z>=0&&x<MAP_W&&z<MAP_H&&
- (MAP_W!==128||MAP_H!==182||z<128||x<48||typeof poiSnowSleeveOwn==='function'&&poiSnowSleeveOwn(x,z));
+const validPos=(x,z)=>Number.isInteger(x)&&Number.isInteger(z)&&x>=0&&z>=0&&
+ ((x<MAP_W&&z<MAP_H&&(MAP_W!==128||MAP_H!==182||z<128||x<48||typeof poiSnowSleeveOwn==='function'&&poiSnowSleeveOwn(x,z)))||
+ typeof poiSquareFieldPlayAt==='function'&&poiSquareFieldPlayAt(x,z));
 const safeColor=s=>/^#[0-9a-f]{6}$/i.test(s);
 const hexRGB=s=>[1,3,5].map(i=>parseInt(s.slice(i,i+2),16)/255);
 const mesh=()=>({p:[],n:[],c:[]});
@@ -18879,10 +18880,10 @@ function poiSoulFloorDecode(raw){
  for(const p of raw.slice(0,32)){
   const spec=poiCompanionType(p?.type);
   if(!spec||seen.has(p.type)||![p.x,p.y,p.z,p.durability].every(Number.isSafeInteger)||
-   p.x<0||p.x>=MAX_MAP||p.z<0||p.y< -1||p.y>9||p.durability<1||p.durability>spec.hp||
+   p.x<0||p.z<0||p.y< -1||p.y>9||p.durability<1||p.durability>spec.hp||
    p.region!==undefined&&p.region!=='snowpass'||
    p.region==='snowpass'&&(typeof poiSnowGroundIn==='function'?!poiSnowGroundIn(p):p.y!==0||p.x>=24||p.z>=29)||
-   (p.z>=MAX_MAP&&(p.region||typeof poiDavidDepthGroundPoint!=='function'||!poiDavidDepthGroundPoint(p))))continue;
+   ((p.x>=MAX_MAP||p.z>=MAX_MAP)&&(p.region||typeof poiDavidDepthGroundPoint!=='function'||!poiDavidDepthGroundPoint(p))))continue;
   const key=[p.region??'base',p.x,p.z,p.y].join(',');
   if(cells.has(key))continue;
   seen.add(p.type);cells.add(key);
@@ -22004,13 +22005,14 @@ function poiRepeatableMonsterWeapon(type){return POI_REPEATABLE_MONSTER_WEAPONS.
 function poiDavidDepthGroundPoint(p){
  // Only the base/snow shared kit can create ordinary ground stacks. The
  // extension is a narrow base surface lobe, never an editor or snow region.
- return !!p&&p.region!=='snowpass'&&p.y===0&&p.x>=0&&p.z>=128&&p.z<182&&(p.x<48||typeof poiSnowSleeveOwn==='function'&&poiSnowSleeveOwn(p.x,p.z));
+ return !!p&&(typeof poiSquareFieldGroundPoint==='function'&&poiSquareFieldGroundPoint(p)||
+  p.region!=='snowpass'&&p.y===0&&p.x>=0&&p.z>=128&&p.z<182&&(p.x<48||typeof poiSnowSleeveOwn==='function'&&poiSnowSleeveOwn(p.x,p.z)));
 }
 function poiInventoryReadDrops(raw){
  if(!Array.isArray(raw))return [];
  const seen=new Set(),unique=new Set(),out=[];
  for(const d of raw.slice(0,POI_INVENTORY_LIMIT)){
-  if(!d||![d.x,d.z,d.y].every(Number.isInteger)||d.x<0||d.x>=MAX_MAP||d.z<0||(d.z>=MAX_MAP&&(typeof poiDavidDepthGroundPoint!=='function'||!poiDavidDepthGroundPoint(d)))||d.y< -1||d.y>9)continue;
+  if(!d||![d.x,d.z,d.y].every(Number.isInteger)||d.x<0||d.z<0||((d.x>=MAX_MAP||d.z>=MAX_MAP)&&(typeof poiDavidDepthGroundPoint!=='function'||!poiDavidDepthGroundPoint(d)))||d.y< -1||d.y>9)continue;
   const key=(d.region==='snowpass'?'s:':'')+d.x+','+d.z+','+d.y;
   const max=poiInventoryStack(d.type),count=Number.isInteger(d.count)?Math.max(1,Math.min(max,d.count)):1;
   const c=poiInventorySanitizeCell({...d,count}),isWeapon=poiHotbarWeaponForType(d.type)&&!poiRepeatableMonsterWeapon(d.type);
@@ -22190,7 +22192,7 @@ function poiGroundGoldDecode(raw){
  const seen=new Set(),out=[];
  if(!Array.isArray(raw))return out;
  for(const p of raw.slice(0,POI_INVENTORY_LIMIT)){
-  if(!p||![p.x,p.z,p.y,p.amount].every(Number.isSafeInteger)||p.x<0||p.x>=MAX_MAP||p.z<0||(p.z>=MAX_MAP&&(typeof poiDavidDepthGroundPoint!=='function'||!poiDavidDepthGroundPoint(p)))||p.y< -1||p.y>9||p.amount<1||p.amount>POI_ECONOMY_GOLD_MAX)continue;
+  if(!p||![p.x,p.z,p.y,p.amount].every(Number.isSafeInteger)||p.x<0||p.z<0||((p.x>=MAX_MAP||p.z>=MAX_MAP)&&(typeof poiDavidDepthGroundPoint!=='function'||!poiDavidDepthGroundPoint(p)))||p.y< -1||p.y>9||p.amount<1||p.amount>POI_ECONOMY_GOLD_MAX)continue;
   const key=(p.region==='snowpass'?'s:':'')+p.x+','+p.z+','+p.y;
   if(seen.has(key))continue;
   seen.add(key);out.push({x:p.x,z:p.z,y:p.y,amount:p.amount,...(p.region==='snowpass'?{region:p.region}:{})});
@@ -28070,7 +28072,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v314',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v315',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -28185,7 +28187,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v314';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v315';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -28400,7 +28402,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v314',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v315',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -31555,7 +31557,18 @@ function poiLocalCapture(x,z,y,site,realmKey,realm,concealed,quests){
  const map=poiLocalTopologyFor(site,concealed),row=map.levels.get(y);
  const bits=scope?poiLocalSurvey(scope):null; // Temporary editor preview is never recorded.
  const door=poiWalkDoorOpen;
- const access=(x,z)=>x>=0&&z>=0&&x<MAP_W&&z<MAP_H&&(!realm||x>=realm.x1&&x<=realm.x2&&z>=realm.z1&&z<=realm.z2);
+ const field=y===0&&!realm&&typeof poiSquareFieldSite==='function'&&poiSquareFieldSite(site);
+ let fieldBits=null;
+ const surface=(tx,tz,mark)=>{
+  const i=field?poiSquareFieldRank(tx,tz):-1;
+  if(i<0)return mark?poiLocalMark(bits,tx,tz):poiLocalKnown(bits,tx,tz);
+  if(!bits)return false;
+  fieldBits??=poiLocalSurvey('base:0:outerfield');
+  return mark?poiLocalMark(fieldBits,i%POI_LOCAL_W,Math.floor(i/POI_LOCAL_W)):
+   poiLocalKnown(fieldBits,i%POI_LOCAL_W,Math.floor(i/POI_LOCAL_W));
+ };
+ const access=(x,z)=>x>=0&&z>=0&&(field?poiOverlandSquareOwner(x,z)==='base':x<MAP_W&&z<MAP_H)&&
+  (!realm||x>=realm.x1&&x<=realm.x2&&z>=realm.z1&&z<=realm.z2);
  const temple=concealed&&site?.davidTemple,closed=(tx,tz)=>!access(tx,tz)||(temple&&poiSacredMiniEntrance(temple,tx,tz))||poiLocalBlocked(row,site,y,tx,tz);
  const indoor=poiWalkIndoor(),fog=typeof poiSacredFogStrength==='function'?poiSacredFogStrength(site,x,z,y):0,
   radius=poiLocalSightRadius(indoor,fog);
@@ -31566,17 +31579,17 @@ function poiLocalCapture(x,z,y,site,realmKey,realm,concealed,quests){
   for(let dz=-radius;dz<=radius;dz++)for(let dx=-radius;dx<=radius;dx++){
    const tx=x+dx,tz=z+dz;
    if(dx*dx+dz*dz>radius*radius||!access(tx,tz)||(temple&&poiSacredMiniEntrance(temple,tx,tz)))continue;
-   if(!poiLocalKnown(bits,tx,tz)&&poiLocalRay(x,z,tx,tz,closed))changed=poiLocalMark(bits,tx,tz)||changed;
+   if(!surface(tx,tz,false)&&poiLocalRay(x,z,tx,tz,closed))changed=surface(tx,tz,true)||changed;
   }
   if(changed)poiLocalDirty();
  }
  const marks=quests.filter(q=>access(q.x,q.z)&&q.x>=crop.x1&&q.x<=crop.x2&&q.z>=crop.z1&&q.z<=crop.z2&&
-  poiLocalKnown(bits,q.x,q.z)&&!(temple&&poiSacredMiniEntrance(temple,q.x,q.z)));
+  surface(q.x,q.z,false)&&!(temple&&poiSacredMiniEntrance(temple,q.x,q.z)));
  // Both cropped views read the same already surveyed cells. The wider
  // HUD wings do not call poiLocalMark or change the discovery radius.
  const tile=(tx,tz)=>{
   if(!access(tx,tz)||(temple&&poiSacredMiniEntrance(temple,tx,tz)))return 0;
-  return ((tx===x&&tz===z)||poiLocalKnown(bits,tx,tz))?1+(row?.cats[poiLocalBit(tx,tz)]??0):0;
+  return ((tx===x&&tz===z)||surface(tx,tz,false))?1+(row?.cats[poiLocalBit(tx,tz)]??0):0;
  };
  const cells=new Uint8Array(POI_LOCAL_SIDE**2);
  for(let i=0;i<cells.length;i++){
@@ -31818,22 +31831,21 @@ function poiSnowFrostAmount(region,x,z){
  // Feather off naturally outside the owned Snow parcel as well.
  const smooth=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t)};
  const wobble=.75*Math.sin(x*.72+z*.33)+.45*Math.sin(z*1.03-x*.56);
- const distance=Math.min(x-48,z-139)+wobble;
- return smooth((distance+4)/11)*(1-smooth((x-72)/4))*(1-smooth((z-168)/4));
+ const distance=Math.min(x-48,72-x,z-139,168-z)+wobble;
+ return smooth((distance+4)/11);
 }
 function poiSnowGroundEdgeTint(region,x,z,kind,normal){
  if(!/^grass/.test(kind)&&kind!=='poiSnowGround')return normal;
- if(region==='base'&&(x<43||x>74||z<134||z>170))return normal;
- if(region==='snowpass'&&x>10&&z>10)return normal;
+ if(region==='base'&&(x<43||x>77||z<134||z>173))return normal;
+ if(region==='snowpass'&&Math.min(x,z,23-x,28-z)>10)return normal;
  if(region!=='base'&&region!=='snowpass')return normal;
  return (x,z,stock)=>{
   const t=poiSnowFrostAmount(region,x,z),gx=x+(region==='snowpass'?48:0),gz=z+(region==='snowpass'?139:0);
   const r=smoothSurfaceNoise(gx*.21,gz*.21);
   const green=[.38+r*.07,.54+r*.06,.34+r*.06],white=[.83+r*.08,.90+r*.05,.95+r*.035];
   const smooth=q=>{const v=Math.max(0,Math.min(1,q));return v*v*(3-2*v)};
-  const d=Math.min(gx-48,gz-139);
-  let edge=region==='snowpass'?1-smooth((d-5)/5):smooth((d+5)/5);
-  edge*=1-smooth((gz-168)/4);
+  const d=Math.min(gx-48,72-gx,gz-139,168-gz);
+  const edge=region==='snowpass'?1-smooth((d-5)/5):smooth((d+5)/5);
   const original=normal?normal(x,z):stock;
   return green.map((v,i)=>original[i]+(v+(white[i]-v)*t-original[i])*edge);
  };
@@ -31841,7 +31853,7 @@ function poiSnowGroundEdgeTint(region,x,z,kind,normal){
 function poiSnowBiomeLightWeight(x,z){
  // Zero at the exact two crossing planes, then gently settle over seven
  // tiles. The established deep snow light and geographic audio stay the same.
- const d=Math.max(0,Math.min(1,Math.min(x+.5,z+.5)/7));
+ const d=Math.max(0,Math.min(1,Math.min(x+.5,23.5-x,z+.5,28.5-z)/7));
  return d*d*(3-2*d);
 }
 function poiSacredTunnelLight(site,x,z,y,outside){
@@ -40872,9 +40884,9 @@ const POI_OVERLAND_GPU_LIMIT=4*1024*1024;
 let poiOverlandMeshes=new Map(),poiOverlandIndexCache=new WeakMap(),poiOverlandSnow=null,poiOverlandMilda=null,poiOverlandCommands=[],poiOverlandDrawn=[],poiOverlandDrawing=false,poiOverlandEngaged=false,poiOverlandBake=null,poiOverlandStats={builds:0,maxBakeMs:0,frames:0};
 function poiOverlandScope(id,x,z,pad=0){
  const hasMilda=typeof poiMildaMap==='function';
- return id==='snowpass'&&(z<=17+pad||x<=12+pad||hasMilda&&z>=17-pad)||
+ return id==='snowpass'||
   id==='milda'&&hasMilda&&z<=12+pad||
-  id==='base'&&(x>=42-pad&&x<=77+pad&&z>=119-pad||
+  id==='base'&&(poiSquareFieldSite(facilitySite)&&poiSquareFieldNear(x,z,pad+10)||x>=42-pad&&x<=77+pad&&z>=119-pad||
     x>=38.5-pad&&x<48.5+pad&&z>=140-pad&&z<171+pad);
 }
 function poiOverlandSpecFor(id,layout,mapWorld,width,height){
@@ -40898,9 +40910,11 @@ function poiOverlandSpecFor(id,layout,mapWorld,width,height){
    const k=chunk(group[0]),row=roofGroups.get(k)||[];
    row.push(group);roofGroups.set(k,row);
   }
-  const owns=id==='base'&&width===128&&height===182||id==='snowpass'?
-   (x,z)=>poiOverlandSquareLocalOwn(id,x,z):null;
-  p={id,width,height,owns,layout,terrain,townCells,signs,index:poiOverlandIndex(mapWorld,isFloor),batches,roofGroups,
+  const square=poiSquareFieldSite(layout)&&width===128&&height===182;
+  const owns=square||id==='snowpass'?(x,z)=>poiOverlandSquareLocalOwn(id,x,z):
+   id==='base'&&width===128&&height===182?(x,z)=>poiOverlandBaseGroundOwn(x,z,width,height):null;
+  p={id,width:square?POI_SQUARE_FIELD_SIDE:width,height:square?POI_SQUARE_FIELD_SIDE:height,
+   square,owns,layout,terrain,townCells,signs,index:poiOverlandIndex(mapWorld,isFloor),batches,roofGroups,
    roofLookup:new Map(roofList.map(o=>[key(o),o])),bridges:new Map(statics.filter(o=>BRIDGE_IDS.has(o.type)).map(o=>[o.x+','+o.z,o])),
    walls:wallExteriorLookup(statics),lights:poiSacredGroundLights(layout,statics.filter(o=>!poiSacredInteriorSconce(layout,o)),true)};
   poiOverlandIndexCache.set(mapWorld,p);
@@ -41187,7 +41201,8 @@ function* poiOverlandChunkRows(q,region){
     tile=poiSacredInteriorGrade(region.layout,x,z,original,true),t=mesh();
    const oldTint=ambient&&(tile!==original||!floors.has(key)||x-offset>=72&&Object.hasOwn(PINE_EAST_NATURE_TONES,tile))?ambient:null;
    const tint=poiSnowGroundEdgeTint(region.id,x,z,tile,oldTint);
-   const area=region.id==='base'&&region.height===182&&z<128?region.width*128:region.width*region.height;
+   const generated=region.square&&poiSquareFieldAt(x,z);
+   const area=region.square&&!generated&&z<128?128*128:region.width*region.height;
    addFloorTile(t,x,z,tile,area,
     ROAD_DIAGONALS.has(tile)?roadDiagonalConnections(floors,x,z,tile):ROAD_IDS.has(tile)&&!tile.endsWith('Full')?roadConnections(floors,x,z,tile):0,tint,true);
    if(floors.has(key))shoreline(t,x,z,floors);
@@ -41257,9 +41272,9 @@ function poiOverlandBakeFrame(list,areas,boot=false){
 }
 const poiOverlandPrimedMusic=new WeakMap();
 function poiSnowNearFrontage(site,x,z,pad){
- return site==='snowpass'&&(x<=pad||z<=pad)||
-  site==='base'&&(x>=48-pad&&x<72+pad&&z>=138-pad&&z<139||
-   x>=47-pad&&x<48&&z>=139-pad&&z<168+pad);
+ return site==='snowpass'&&(x<=pad||z<=pad||x>=23-pad||z>=28-pad)||
+  site==='base'&&(x>=48-pad&&x<72+pad&&(z>=138-pad&&z<139||z>=168&&z<169+pad)||
+   z>=139-pad&&z<168+pad&&(x>=47-pad&&x<48||x>=72&&x<73+pad));
 }
 function poiOverlandPrimeMusic(site){
  if(!poiAudioContext||!poiAudioEnabled||!poiAudioAllowed()||poiAudioLevels.master<=0||poiAudioLevels.bgm<=0)return;
@@ -41317,9 +41332,10 @@ function poiOverlandPreviewTick(){
  poiOverlandCommands=[];poiOverlandDrawn=[];poiOverlandDrawing=false;poiSnowTempleNeighbor=[];
  const site=facilitySite?.id;
  const registered=site==='base'||site==='snowpass'||site==='milda'&&typeof poiMildaMap==='function';
- const templeGround=site==='base'&&!poiSnowTempleRim(poiWalkViewX,poiWalkViewZ)&&(poiWalkViewZ>=128&&poiWalkViewX<48||
+ const field=site==='base'&&poiSquareFieldPlayAt(poiWalkX,poiWalkZ);
+ const templeGround=site==='base'&&!field&&!poiSnowTempleRim(poiWalkViewX,poiWalkViewZ)&&(poiWalkViewZ>=128&&poiWalkViewX<48||
   typeof poiSacredTempleViewAmount==='function'&&poiSacredTempleViewAmount()>0);
- const outdoor=registered&&poiWalkActive&&poiWalkLevel===0&&!cameraTopDown&&!pineAIActive&&facilityVisibilityOwner()===null;
+ const outdoor=registered&&poiWalkActive&&poiWalkLevel===0&&(!cameraTopDown||field)&&!pineAIActive&&facilityVisibilityOwner()===null;
  if(outdoor&&templeGround&&poiSnowNearFrontage(site,poiWalkViewX,poiWalkViewZ,12)){
   poiOverlandPrimeMusic(site);poiSnowTempleNeighborTick();
   return null; // Ordinary temple renderer remains the only base-ground owner.
@@ -41458,11 +41474,35 @@ function poiOverlandResumeAnalog(c,old,now){
 
 // BEGIN SNOW PASS PROTOTYPE
 const POI_SNOW_PASS=Object.freeze({id:'snowpass',name:'白嶺峠',width:24,height:29,base:{x:60,z:138},snow:{x:12,z:0}});
+// BEGIN SQUARE FIELD
+const POI_SQUARE_FIELD_SIDE=184;
+function poiSquareFieldRank(x,z){
+ if(!Number.isInteger(x)||!Number.isInteger(z)||x<0||z<0||x>=184||z>=184)return -1;
+ if(z<128)return x>=128?z*56+x-128:-1;
+ if(z<168)return x>=72?7168+(z-128)*112+x-72:-1;
+ if(z<182)return x>=48?11648+(z-168)*136+x-48:-1;
+ return 13552+(z-182)*184+x;
+}
+function poiSquareFieldAt(x,z){return poiSquareFieldRank(x,z)>=0}
+function poiSquareFieldNear(x,z,pad=0){
+ return x>=-pad&&z>=-pad&&x<184+pad&&z<184+pad&&
+  (x>=128-pad||x>=72-pad&&z>=128-pad||x>=48-pad&&z>=168-pad||z>=182-pad);
+}
+function poiSquareFieldSite(site){
+ return site?.id==='base'&&site.map?.width===128&&site.map?.height===182&&site.davidTemple?.depth===1;
+}
+function poiSquareFieldPlayAt(x,z){
+ return poiWalkActive&&!pineAIActive&&poiWalkLevel===0&&poiSquareFieldSite(facilitySite)&&poiSquareFieldAt(x,z);
+}
+function poiSquareFieldGroundPoint(p){
+ return !!p&&p.region===undefined&&p.y===0&&poiSquareFieldAt(p.x,p.z);
+}
+// END SQUARE FIELD
 // BEGIN SPARSE OVERLAND SQUARE
 // Tile bounds are half-open in the shared frame. A global bin can contain
 // disjoint rows of different sites; region-local GPU bins and saves do not move.
 const POI_OVERLAND_PATCHES=Object.freeze([
- ['base',0,0,128,128],['base',0,128,48,182],['base',48,128,72,139],
+ ['base',0,0,184,139],['base',0,139,48,168],['base',72,139,184,168],['base',0,168,184,184],
  ['snowpass',48,139,48+POI_SNOW_PASS.width,139+POI_SNOW_PASS.height]
 ]);
 let poiOverlandSquare=null;
@@ -41530,12 +41570,12 @@ function poiSnowSleeveOwn(x,z){
  return x>=48&&x<72&&z>=128&&z<139;
 }
 function poiOverlandBaseGroundOwn(x,z,width,height){
- if(width===128&&height===182)return poiOverlandSquareLocalOwn('base',x,z);
+ if(width===128&&height===182)return x>=0&&x<poiOverlandBaseGroundColumns(z,width,height);
  return x>=0&&x<width&&z>=0&&z<height;
 }
 function poiOverlandBaseGroundColumns(z,width,height){
  if(z<0||z>=height)return 0;
- return width===128&&height===182?poiOverlandSquareIndex().baseRows[z]??0:width;
+ return width===128&&height===182?(z<128?128:z<139?72:48):width;
 }
 function poiSnowSleeveRoute(){
  const knots=[[49,128],[49,130],[52,130],[52,132],[57,132],[57,135],[60,135],[60,138]],out=[];
@@ -41576,17 +41616,21 @@ function poiSnowEdgeTiles(source){
  row=new Map();
  for(const o of source){
   if(o.y!==0)continue;
-  const onEdge=o.z===0||o.x===0||o.z===138||o.x===47&&o.z>=139&&o.z<168;
+  const onEdge=o.z===0||o.z===28||o.x===0||o.x===23||
+   (o.z===138||o.z===168)&&o.x>=48&&o.x<72||(o.x===47||o.x===72)&&o.z>=139&&o.z<168;
   if(!onEdge)continue;
   const k=o.x+','+o.z;
   let group=row.get(k);if(!group)row.set(k,group=[]);group.push(o);
  }
  poiSnowEdgeFloorCache.set(source,row);return row;
 }
-function poiSnowEdgeWalkable(source,x,z){
+function poiSnowEdgeWalkable(source,x,z,region){
  const group=poiSnowEdgeTiles(source).get(x+','+z);
- return !!group&&group.some(o=>isFloor(o.type)&&!/^(water|lake|river|sea)$/.test(o.type))&&
-  !group.some(o=>!isFloor(o.type)&&o.type!=='tallGrass'&&o.type!=='flowerField'&&o.type!=='bushFern');
+ const field=region==='base'&&poiSquareFieldAt(x,z);
+ if(!group)return field;
+ return !group.some(o=>/^(water|lake|river|sea)$/.test(o.type)||
+    !isFloor(o.type)&&o.type!=='tallGrass'&&o.type!=='flowerField'&&o.type!=='bushFern')&&
+  (field||group.some(o=>isFloor(o.type)));
 }
 function poiSnowPassDecode(d,p){
  const {id,width,height}=POI_SNOW_PASS;
@@ -41640,9 +41684,9 @@ function poiSnowPassSeam(site,world){
 function poiSnowPassEdge(nx,nz,fx,fz){
  if(!poiWalkActive||pineAIActive||!facilitySite||poiSnowPassPending)return null;
  const link=poiSnowPassLink(facilitySite.id,fx,fz,poiWalkLevel,nx,nz);
- if(!link||!poiSnowEdgeWalkable(world,fx,fz))return null;
+ if(!link||!poiSnowEdgeWalkable(world,fx,fz,facilitySite.id))return null;
  const other=link.region==='base'?poiSnowPassBase?.world:(poiOverlandSnow??=poiSnowPassMap()).map.world;
- return other&&poiSnowEdgeWalkable(other,link.x,link.z)?link:null;
+ return other&&poiSnowEdgeWalkable(other,link.x,link.z,link.region)?link:null;
 }
 function poiSnowPassPrepare(dest,cold=false){
  const onBase=facilitySite?.id==='base';
@@ -41652,7 +41696,7 @@ function poiSnowPassPrepare(dest,cold=false){
   width:MAP_W,height:MAP_H,terrainHeights,models,prefabs,checks:pineCheckMarks,maxLevel:worldMaxLevel,hasCellar:facilityHasCellar,
   ...(POI_OVERLAND_SPIKE?{overlandStatic:{floors:facilityFloorMasks,stairs:facilityStairOpenings,doors:facilityDoorTiles,creek:facilityCreekIndex,nav:poiTownNpcNav,mini:poiLocalTopology}}:{})}:poiSnowPassBase;
  const incoming=onBase?(POI_OVERLAND_SPIKE?(poiOverlandSnow??=poiSnowPassMap()):poiSnowPassMap()):base.site,map=onBase?incoming.map:null;
- if(!poiSnowEdgeWalkable(onBase?map.world:base.world,dest.x,dest.z))return null;
+ if(!poiSnowEdgeWalkable(onBase?map.world:base.world,dest.x,dest.z,dest.region))return null;
  if(onBase)try{pineValidateWorldData(facilityExportMap(map))}catch(_e){return null}
  return {onBase,base,incoming,map};
 }
@@ -41796,8 +41840,10 @@ function workshopResumeDecode(raw){
     top:v.top===true,third:v.third===true,orbitYaw:v.orbitYaw,orbitPitch:v.orbitPitch,orbitDistance:v.orbitDistance}:null;
  const p=d.position;
  const deep=d.route==='facility'&&d.id==='base'&&d.townLayout===5&&typeof POI_SACRED_DEPTH_H==='number'&&d.townMapHeight===POI_SACRED_DEPTH_H;
- const position=p&&Number.isInteger(p.x)&&p.x>=0&&p.x<MAX_MAP&&Number.isInteger(p.z)&&p.z>=0&&
-  (p.z<MAX_MAP||deep&&p.y>=0&&(p.x<POI_SACRED_DEPTH_W||typeof poiSnowSleeveOwn==='function'&&poiSnowSleeveOwn(p.x,p.z))&&p.z<POI_SACRED_DEPTH_H)&&
+ const field=deep&&d.play===true&&!Object.hasOwn(d,'region')&&p?.y===0&&
+  typeof poiSquareFieldAt==='function'&&poiSquareFieldAt(p.x,p.z);
+ const position=p&&Number.isInteger(p.x)&&p.x>=0&&Number.isInteger(p.z)&&p.z>=0&&
+  (field||p.x<MAX_MAP&&(p.z<MAX_MAP||deep&&p.y>=0&&(p.x<POI_SACRED_DEPTH_W||typeof poiSnowSleeveOwn==='function'&&poiSnowSleeveOwn(p.x,p.z))&&p.z<POI_SACRED_DEPTH_H))&&
   Number.isInteger(p.y)&&p.y>=-1&&p.y<=MAX_LEVEL&&Number.isInteger(p.facing)&&p.facing>=0&&p.facing<4
   ?{x:p.x,z:p.z,y:p.y,facing:p.facing}:null;
  return {version:1,route:d.route,id:d.route==='facility'?d.id:null,play:d.play===true,position,
