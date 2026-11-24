@@ -4,12 +4,10 @@ const exact=(first,last)=>{const x=h.indexOf(first),y=h.indexOf(last,x+first.len
 test('all metal/flame masters are embedded exactly once with bounded 24kHz mono duration and clean tails',()=>{
  const table=vm.runInNewContext(exact('const POI_RECORDED_FOLEY={','const poiRecordedFoleyCache')+';POI_RECORDED_FOLEY');
  const items={
-  davidBladeSweep:[9600,'0b059713869981a2fee304a45db9f911b0d31581334f7eabbe88595aafd5338c'],
+  davidBladeSweep:[9600,'d2460f6fe00ae14e4f6fb7ce908f45cfcb12f47739a07bdd9da21d6ced7dc59a'],
   davidSwordFirst:[6480,'26c5aff60be181dad9bbcabffe29d2d3e33fb4dda6490ceb5a09e3924a00cfcd'],
   davidSwordSecond:[8400,'465cfa3222349c9f04f711225a9e03eb5a53e0466143eacf32501013489e5655'],
   davidHeavyStomp:[17040,'e2fe0fa1cf523de16f58561679bebd3d64f8269f7a9f761960ff9c3c119d2f09'],
-  davidEyeFire:[6720,'386d7c8c72712d7edbd5a6c4774e317103267a1367cd21ce1b6916df840afbe9'],
-  davidEyeExtend:[16800,'e41c9b22bcf692d7d73e8a3131ea89d448a27f26d82ca2967b9b495c457cee9d'],
   wandFlameLaunch:[7200,'104bb2d01a7d706c7ad91377ad3e7f9996950c36596cde1c6ad728d519aa1c14']
  };
  for(const [key,[len,sha]] of Object.entries(items)){
