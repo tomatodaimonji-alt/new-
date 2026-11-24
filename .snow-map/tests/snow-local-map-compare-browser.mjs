@@ -113,6 +113,8 @@ try{
  assert(entry.area.activeScenes===1&&entry.area.actors===0,'only the active snow scene/actor set is submitted');
  const coldMap=await page.evaluate(()=>window.__snowMapProfile??[]);
  assert(coldMap.length>0&&coldMap.every(r=>r.rows>0&&r.concealed));
+ const expected=process.env.SNOW_MINI_CASE==='trial'?1:2;
+ assert.equal(coldMap.filter(r=>r.sw===1&&!r.reused).length,expected,'actual cold-return topology builds');
  console.log('Exact rAF switch timing/bytes',JSON.stringify({case:process.env.SNOW_MINI_CASE,coldMap,baseVertices:old.area.vertices,snowVertices:entry.area.vertices,entry:entry.area.timing,coldReturn:back.area.timing}));
  const setResume=(region,position)=>page.evaluate(([region,position])=>{
   const current=JSON.parse(localStorage.getItem('world-workshop-resume-v1'));
@@ -132,7 +134,9 @@ try{
  await page.waitForFunction(()=>window.__editorTest.snowPassRegion().timing?.firstFrameMs>0);
  const warm=(await state()).area.timing;
  assert(warm.veilFrames>=1&&warm.veilMs>0,'warm return also paints transition while keeping no inactive base VBO');
- console.log('Exact warm return timing/bytes',JSON.stringify({case:process.env.SNOW_MINI_CASE,warm,map:await page.evaluate(()=>window.__snowMapProfile??[])}));
+ const warmMap=await page.evaluate(()=>window.__snowMapProfile??[]);
+ assert.equal(warmMap.filter(r=>r.sw===1&&!r.reused).length,expected,'actual warm-return topology builds');
+ console.log('Exact warm return timing/bytes',JSON.stringify({case:process.env.SNOW_MINI_CASE,warm,map:warmMap}));
  await page.evaluate(()=>window.__editorTest.snowInventoryQA.markEditor());
  await roll(1,'snowpass');
  await page.evaluate(()=>window.__editorTest.snowInventoryQA.editor());
