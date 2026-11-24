@@ -11,7 +11,7 @@ const stars={textContent:null,labels:{},setAttribute(k,v){this.labels[k]=v}};
 vm.runInContext(snippet('const POI_SAFE_TOWN=','// BEGIN LOCATION PANEL MOTION')+
  snippet('function poiDavidTempleContains(','function poiDavidTempleRecoverPosition(')+
  'function updateStars(area){'+snippet('  const stars=$(\'poiLocationStars\')','\n }')+'\n}',c);
-const site={id:'base',davidTemple:{name:'白環の大神殿',difficulty:+tier[1],bounds:{y:0},ring:{x:24,z:158,radius:18}},
+const site={id:'base',davidTemple:{name:'オルヴァスの大神殿',difficulty:+tier[1],bounds:{y:0},ring:{x:24,z:158,radius:18}},
  northFort:{name:'北の古砦',difficulty:5}};
 const verify=(x,z,y,name,count)=>{
  const area=c.poiRegionAt(site,x,z,false,y);
@@ -20,7 +20,7 @@ const verify=(x,z,y,name,count)=>{
  assert.equal(stars.textContent,'★'.repeat(count)+'☆'.repeat(10-count));
  assert.equal(stars.labels['aria-label'],'危険度 '+count+'／10');
 };
-test('the Great Temple HUD renders ten filled stars and the correct accessibility value',()=>verify(24,158,0,'白環の大神殿',10));
+test('the Great Temple HUD renders ten filled stars and the correct accessibility value',()=>verify(24,158,0,'オルヴァスの大神殿',10));
 test('the real region selector and HUD retain town, open world and North Fort star counts',()=>{
  verify(24,158,-1,'外',1);verify(6,6,0,'拠点',0);verify(64,24,-1,'北の古砦',5);
 });
