@@ -3,7 +3,7 @@ const h=fs.readFileSync(process.env.HTML||path.join(__dirname,'..','world-editor
 function setup(){
  const mem=new Map(),feedback=[];
  let failed=false;
- const c=vm.createContext({facilitySite:{id:'base'},poiWalkActive:true,pineAIActive:false,poiWalkLevel:-1,
+ const c=vm.createContext({world:[],poiPlayerWeaponPending:null,poiPlayerWeaponCancel(){},poiDungeonEntranceSerial:0,poiOtherworldTravelSerial:0,performance:{now:()=>0},facilitySite:{id:'base'},poiWalkActive:true,pineAIActive:false,poiWalkLevel:-1,
   poiKitchenChestReachable:()=>true,poiChestIsOpen:()=>true,poiPlayerHP:10,POI_PLAYER_MAX_HP:100,$:()=>null,
   document:{querySelectorAll:()=>[]},poiWalkAvatar(){},poiCombatHud(){},poiHealPlayerFeedback:n=>feedback.push(n),toast(){},
   localStorage:{getItem:k=>mem.get(k),setItem(k,v){if(failed)throw Error('disk');mem.set(k,v)}}});
@@ -38,10 +38,10 @@ test('bag equip and use save atomically and are unavailable directly from chest'
  const {c,fail,feedback}=setup();
  c.poiQuickTransferStorage('chest',0);c.poiQuickTransferStorage('chest',1);
  fail(true);assert.equal(c.poiEquipBagItem(0).reason,'storage');assert.equal(at(c,'hotbar',2),null);
- assert.equal(c.poiUseBagItem(1).reason,'storage');assert.equal(c.poiPlayerHP,10);assert.deepEqual(feedback,[]);
+ assert.equal(c.poiUseBagItem(1).ok,true);assert.equal(c.poiPlayerHP,10);c.poiHealingCastFrame(1450);assert.equal(c.poiPlayerHP,10);assert.equal(at(c,'bag',1).count,1);assert.deepEqual(feedback,[]);
  fail(false);assert.equal(c.poiEquipBagItem(0).ok,true);assert.equal(at(c,'bag',0),null);
  assert.equal(at(c,'hotbar',2).type,'kitchenKnife');assert.equal(c.poiEquippedWeapon(),'kitchenKnife');
- assert.equal(c.poiUseBagItem(1).ok,true);assert.equal(c.poiPlayerHP,65);assert.deepEqual(feedback,[55]);assert.equal(at(c,'bag',1),null);
+ assert.equal(c.poiUseBagItem(1).ok,true);assert.equal(c.poiPlayerHP,10);c.poiHealingCastFrame(1450);assert.equal(c.poiPlayerHP,65);assert.deepEqual(feedback,[55]);assert.equal(at(c,'bag',1),null);
  assert.equal(c.poiEquipBagItem(18).reason,'locked');assert.equal(c.poiUseBagItem(18).reason,'locked');
 });
 test('full destinations do not swap, split, or write over equipment',()=>{
@@ -99,3 +99,4 @@ test('an open chest still receives equipment on bag double tap and closed-chest 
  assert.equal(c.poiDoubleTapStorage('bag',1).reason,'details');
  assert.equal(mem.get('world-workshop-hotbar-v1'),bytes);
 });
+

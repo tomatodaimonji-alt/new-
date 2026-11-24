@@ -10,7 +10,7 @@ function harness(saved=null){
  }));
  const log=[],art=[];
  const x=vm.createContext({
-  $:key=>uis[key]||null,poiWalkActive:true,pineAIActive:false,facilitySite:{id:'base'},poiPlayerHP:100,
+  world:[],poiWalkLevel:0,poiPlayerWeaponPending:null,poiPlayerWeaponCancel(){},poiDungeonEntranceSerial:0,poiOtherworldTravelSerial:0,performance:{now:()=>0},$:key=>uis[key]||null,poiWalkActive:true,pineAIActive:false,facilitySite:{id:'base'},poiPlayerHP:100,
   POI_PLAYER_MAX_HP:100,POI_PLAYER_ATTACK:20,poiWalkAvatar:()=>{},
   document:{querySelectorAll:()=>slots,createElement:tag=>({tag,dataset:{},style:{setProperty(){}},setAttribute(){},getContext:()=>({drawImage(){}})})},
   drawWallThumbnail:(cv,id,options)=>{art.push({cv,id,options});return true;},toast:s=>log.push(s),localStorage:{
@@ -44,6 +44,8 @@ test('heal is capped, cannot be wasted at full HP, retains the selected sword an
  assert.equal(run('poiEquippedWeapon()'),'equipWoodSword');
  assert.equal(run('poiPlayerAttackDamage()'),28);
  run('poiPlayerHP=84;poiHotbarUse(1)');
+ assert.equal(run('poiPlayerHP'),84);assert.equal(slots[1].count.textContent,'3');
+ run('poiHealingCastFrame(1450)');
  assert.equal(uis.poiPlayerHpValue.textContent,'100/100');
  assert.equal(slots[1].count.textContent,'2');
  assert.equal(slots[0].attrs['aria-pressed'],'true');
@@ -81,6 +83,7 @@ test('wooden sword uses one cached transparent rendering from the same catalogue
  assert.deepEqual([icon.width,icon.height],[96,96]);
  assert.equal(art[0].id,'equipWoodSword');
  assert.deepEqual({...art[0].options},{transparent:true,fit:true,rot:0});
- run('poiHotbarUse(0);poiHotbarUse(2);poiPlayerHP=50;poiHotbarUse(1)');
+ run('poiHotbarUse(0);poiHotbarUse(2);poiPlayerHP=50;poiHotbarUse(1);poiHealingCastFrame(1450)');
  assert.equal(art.filter(x=>x.id==='equipWoodSword').length,1);assert.equal(slots[0].icon.firstChild,icon);
 });
+

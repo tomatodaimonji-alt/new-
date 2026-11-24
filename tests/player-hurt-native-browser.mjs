@@ -10,8 +10,14 @@ const append=(src,anchor,extra)=>one(src,anchor,anchor+extra);
 let fixture=append(html,' poiRecordedFoleyCache.set(id,buffer);',`
  if(window.__hurtQA&&(id==='playerHurt'||id==='defeat'))window.__hurtQA.ids.set(buffer,id);
 `);
-fixture=append(fixture,"function poiPlayImpactBuffer(buffer,when,volume){",`
+fixture=append(fixture,"function poiPlayImpactBuffer(buffer,when,volume,onSource){",`
  if(window.__hurtQA)window.__hurtQA.effects=poiAudioEffects;
+`);
+fixture=append(fixture,'  const timely=now-a.hit<poiEnemyContactTolerance(a);',`
+  if(window.__hurtQA?.attack===a)window.__hurtQA.result={timely,late:now-a.hit,limit:poiEnemyContactTolerance(a),y:poiWalkLevel,visible:!document.hidden};
+`);
+fixture=append(fixture," poiPlayerDeath={phase:'pause',start:now,blackAt:null,relocated:false,opacity:0};",`
+ if(window.__hurtQA)window.__hurtQA.deathStart={hp:poiPlayerHP,phase:poiPlayerDeath.phase};
 `);
 fixture=one(fixture,' const p=poiWildPick(rng);',' const p=null;');
 fixture=append(fixture,'function poiWildRegionalFrame(now,rng){','if(window.__hurtQA)return;');
@@ -28,13 +34,13 @@ fixture=append(fixture,hook,`
     if(!poiWalkCanStep(obj.x,obj.z))throw new Error('Goblin fixture must be a clear adjacent tile');
     poiMonsterStates.set(obj,s);poiMonsterMeshDirty=true;
     const started=poiEnemyBeginPlayer(obj,s,now);
-    q.attack=s.playerAttack;
+    q.attack=s.playerAttack;q.result=null;q.deathStart=null;
     return {started,hp:poiPlayerHP,x:poiWalkX,z:poiWalkZ,windup:s.playerAttack?s.playerAttack.hit-now:null};
    },
    status(){
     const q=window.__hurtQA;
     return {hp:poiPlayerHP,x:poiWalkX,z:poiWalkZ,pending:q.attack?.pending??null,
-     defeat:!!poiPlayerDeath,recordings:q.recordings};
+     defeat:!!poiPlayerDeath,deathStart:q.deathStart,result:q.result,recordings:q.recordings};
    }
   },`);
 const scripts=[...fixture.matchAll(/<script(?:\s+([^>]*))?>([\s\S]*?)<\/script>/gi)]
@@ -96,11 +102,31 @@ try{
  const arm=(hp=null)=>page.evaluate(hp=>window.__editorTest.playerHurtNativeQA.arm(hp),hp);
  const read=()=>page.evaluate(()=>window.__editorTest.playerHurtNativeQA.status());
  const resolved=()=>page.waitForFunction(()=>window.__editorTest.playerHurtNativeQA.status().pending===false);
- let before=await arm();
- assert.deepEqual(before,{started:true,hp:100,x:102,z:93,windup:550});
- assert.deepEqual((await read()).recordings,[],'windup does not prematurely play impact');
- await resolved();
- let s=await read();
+ async function timelyCase(name,hp=null,dodge=false){
+  for(let attempt=0;attempt<5;attempt++){
+   const before=await arm(hp);
+   assert(before.started,name+' reached the original Goblin commit entry');
+   assert.equal(before.windup,550);
+   if(name==='ordinary'){
+    assert.deepEqual(before,{started:true,hp:100,x:102,z:93,windup:550});
+    assert.deepEqual((await read()).recordings,[],'windup does not prematurely play impact');
+   }
+   if(dodge){
+    const dz=before.z===93?1:-1;
+    await page.keyboard.press(dz>0?'ArrowDown':'ArrowUp');
+    await page.waitForFunction(z=>window.__editorTest.playerHurtNativeQA.status().z===z,before.z+dz);
+   }
+   await resolved();
+   const state=await read(),result=state.result;
+   assert(result,'production resolver saw this exact committed Goblin attack');
+   if(result.timely)return state;
+   assert(result.visible&&result.late>=result.limit&&state.hp===before.hp&&
+    !state.deathStart&&state.recordings.length===(name==='ordinary'?0:1),'only an actually expired visible frame may retry');
+   console.log('Retry',name,'after measured contact expiration',result.late,'ms /',result.limit,'ms');
+  }
+  assert.fail('No timely production frame after five attempts: '+name);
+ }
+ let s=await timelyCase('ordinary');
  assert.equal(s.hp,90,'real unarmored regular Goblin hit preserves the original ten HP damage');
  assert.deepEqual(s.recordings.map(c=>c.id),['playerHurt'],'one impact reached a native buffer source, not just a branch callback');
  const ordinary=s.recordings[0];
@@ -109,17 +135,14 @@ try{
  assert.equal(ordinary.rate,24000);assert.equal(ordinary.channels,1);assert.equal(ordinary.state,'running');
  assert(ordinary.effects&&Math.abs(ordinary.gain-.69)<.002,'native recording uses the same effects bus');
  assert(Math.abs(ordinary.when-ordinary.current)<.032,'contact clip is played without an artificial delay');
- before=await arm();
- assert(before.started,'second regular enemy attack committed');
- await page.keyboard.press('ArrowDown');
- await page.waitForFunction(z=>window.__editorTest.playerHurtNativeQA.status().z===z,before.z+1);
- await resolved();
- s=await read();assert.equal(s.hp,90);assert.deepEqual(s.recordings.map(c=>c.id),['playerHurt'],'one-tile native dodge neither hurts nor plays hurt audio');
- assert((await arm(10)).started,'one hit remains for the defeat case');
- await resolved();
- s=await read();assert.equal(s.hp,0);assert(s.defeat);
+ s=await timelyCase('native dodge',null,true);
+ assert.equal(s.hp,90);assert.deepEqual(s.recordings.map(c=>c.id),['playerHurt'],'one-tile native dodge neither hurts nor plays hurt audio');
+ s=await timelyCase('lethal',10);
+ assert.deepEqual(s.deathStart,{hp:0,phase:'pause'},'genuine knockout entered the staged death path at exactly zero HP');
+ if(s.defeat)assert.equal(s.hp,0);
  assert.deepEqual(s.recordings.map(c=>c.id),['playerHurt','defeat'],'defeat plays its own native transient, not layered hurt audio');
  assert(s.recordings[1].effects);
  assert.deepEqual(errors,[]);
  console.log('PASS real Goblin hit starts exactly one decoded playerHurt on WebAudio effects bus, native dodge silent, ten HP unchanged and defeat distinct');
 }finally{await ctx?.close();await browser?.close();await new Promise(r=>server.close(r))}
+

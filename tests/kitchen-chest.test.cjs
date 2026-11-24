@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),vm=require(
 const h=fs.readFileSync(process.env.HTML||path.join(__dirname,'..','world-editor.html'),'utf8');
 function fixture(initial=null){
  let raw=JSON.stringify(initial),fail=false;
- const c=vm.createContext({facilitySite:{id:'base'},poiWalkActive:true,poiWalkLevel:-1,poiWalkX:28,poiWalkZ:32,poiWalkFacing:3,
+ const c=vm.createContext({poiPlayerWeaponPending:null,poiPlayerWeaponCancel(){},poiDungeonEntranceSerial:0,poiOtherworldTravelSerial:0,performance:{now:()=>0},facilitySite:{id:'base'},poiWalkActive:true,poiWalkLevel:-1,poiWalkX:28,poiWalkZ:32,poiWalkFacing:3,
   poiPlayerHP:12,POI_PLAYER_MAX_HP:100,POI_PLAYER_ATTACK:20,pineAIActive:false,world:[],
   poiWalkCanStep:(x,z)=>x!==27,poiWalkAvatar(){},poiCombatHud(){},
   isFloor:()=>true,$:()=>null,toast(){},document:{querySelectorAll:()=>[]},localStorage:{getItem:()=>raw,setItem(_k,v){if(fail)throw Error('disk');raw=v}}});
@@ -31,6 +31,7 @@ test('knife wears on landed hit, can be stashed or dropped with durability, cann
  assert.equal(d.durability,39);assert.equal(c.poiEquippedWeapon(),null);assert.notEqual(d.x,27);
  assert.equal(c.poiInventoryPickup(d.x,d.z),true);
  assert.equal(c.poiMoveChestInventorySlot('chest',1,'inventory',3).ok,true);c.poiHotbarUse(3);
+ assert.equal(c.poiPlayerHP,12);assert.equal(c.poiInventorySnapshot().hotbar[3].count,1);c.poiHealingCastFrame(1450);
  assert.equal(c.poiPlayerHP,67);assert.equal(c.poiInventorySnapshot().hotbar[3],null);
 });
 test('durability save fails closed, final hit breaks the knife without re-rolling the chest',()=>{
@@ -59,3 +60,4 @@ test('only committed acquisition from chest plays one item cue (including quick 
  assert.equal(c.poiMoveChestInventorySlot('chest',1,'inventory',2).ok,true);
  assert.deepEqual(notes,[['chest-pickup','cannedFood']]);
 });
+

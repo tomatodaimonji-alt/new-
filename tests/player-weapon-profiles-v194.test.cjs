@@ -3,7 +3,7 @@ const html=fs.readFileSync('world-editor.html','utf8');
 function runtime(extra=''){
  const start=html.indexOf('// BEGIN PLAYER WEAPON PROFILES'),end=html.indexOf('// END PLAYER WEAPON PROFILES');
  assert.ok(start>=0&&end>start,'weapon runtime present');
- const c={world:[],mobs:new Map(),facilitySite:{id:'base'},poiWalkActive:true,poiWalkLevel:0,poiWalkFacing:1,poiWalkX:10,poiWalkZ:10,poiThirdPerson:false,poiWalkStarted:-10000,poiAttackReady:0,poiWalkActionStarted:0,poiWalkActionWeapon:null,now:100,validPos:()=>true,isWallId:s=>s==='wall',poiWalkPassableDoor:s=>s==='door',poiMonsterAt(x,z){return c.mobs.get(x+','+z)},terrainY:()=>0,performance:{now:()=>c.now},document:{hidden:false,querySelector:()=>null},poiWalkAvatar(){},poiSound(){},poiEquippedWeapon:()=>c.held,poiInventoryAllowed:()=>true,poiInventorySpendFireWand:()=>++c.debits>0,poiEquipmentSpendWeapon:()=>++c.wear>0,poiDamageNumber(){},poiMonsterBreak(){++c.kills},poiArmedEnemyLoot(){++c.loot},poiAnnounceDefeat(){},poiPlayerAttackDamage:()=>20,poiMonsterMeshDirty:false,pineGameActive:false,debits:0,wear:0,kills:0,loot:0,...extra};
+ const c={poiHealingCastActive:()=>false,world:[],mobs:new Map(),facilitySite:{id:'base'},poiWalkActive:true,poiWalkLevel:0,poiWalkFacing:1,poiWalkX:10,poiWalkZ:10,poiThirdPerson:false,poiWalkStarted:-10000,poiAttackReady:0,poiWalkActionStarted:0,poiWalkActionWeapon:null,now:100,validPos:()=>true,isWallId:s=>s==='wall',poiWalkPassableDoor:s=>s==='door',poiMonsterAt(x,z){return c.mobs.get(x+','+z)},terrainY:()=>0,performance:{now:()=>c.now},document:{hidden:false,querySelector:()=>null},poiWalkAvatar(){},poiSound(){},poiEquippedWeapon:()=>c.held,poiInventoryAllowed:()=>true,poiInventorySpendFireWand:()=>++c.debits>0,poiEquipmentSpendWeapon:()=>++c.wear>0,poiDamageNumber(){},poiMonsterBreak(){++c.kills},poiArmedEnemyLoot(){++c.loot},poiAnnounceDefeat(){},poiPlayerAttackDamage:()=>20,poiMonsterMeshDirty:false,pineGameActive:false,debits:0,wear:0,kills:0,loot:0,...extra};
  vm.createContext(c);vm.runInContext(html.slice(start,end),c);return c;
 }
 test('bow releases at draw completion, stops at first wall, and does not wear when blocked',()=>{
@@ -108,4 +108,5 @@ test('released arrows debit carried bow after switch, not an equipped sword or s
  assert.equal(c.poiEquipmentSpendWeapon('equipWoodBow',true),true);assert.equal(c.kit.slots[10],null);
  assert.equal(c.poiEquipmentSpendWeapon('equipWoodBow',true),false);assert.equal(c.kit.drops[0].durability,42);assert.equal(c.kit.weapon,'equipIronSword');
 });
+
 
