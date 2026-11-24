@@ -108,9 +108,12 @@ jobs:
           // Bounded real surface prototype; only enabled on explicit QA launch.
           const POI_OVERLAND_SPIKE=new URLSearchParams(location.search).get('overland-stream')==='1';
           const POI_OVERLAND_GPU_LIMIT=4*1024*1024;
-          let poiOverlandMeshes=new Map(),poiOverlandIndexCache=new WeakMap(),poiOverlandSnow=null,poiOverlandCommands=[],poiOverlandDrawing=false,poiOverlandEngaged=false,poiOverlandBake=null,poiOverlandStats={builds:0,maxBakeMs:0,frames:0};
+          let poiOverlandMeshes=new Map(),poiOverlandIndexCache=new WeakMap(),poiOverlandSnow=null,poiOverlandMilda=null,poiOverlandCommands=[],poiOverlandDrawn=[],poiOverlandDrawing=false,poiOverlandEngaged=false,poiOverlandBake=null,poiOverlandStats={builds:0,maxBakeMs:0,frames:0};
           function poiOverlandScope(id,x,z,pad=0){
-           return id==='snowpass'&&z<=17+pad || id==='base'&&x>=35-pad&&x<=63+pad&&z>=112-pad;
+           const hasMilda=typeof poiMildaMap==='function';
+           return id==='snowpass'&&(z<=17+pad||hasMilda&&z>=17-pad)||
+            id==='milda'&&hasMilda&&z<=12+pad||
+            id==='base'&&x>=35-pad&&x<=63+pad&&z>=112-pad;
           }
           function poiOverlandSpecFor(id,layout,mapWorld,width,height){
            if(!layout||!Array.isArray(mapWorld))return null;
@@ -136,18 +139,23 @@ jobs:
            return p;
           }
           function poiOverlandAreas(){
-           const id=facilitySite?.id;
-           if(id==='base'){
+           const id=facilitySite?.id,base=poiSnowPassBase,res=[];
+           const add=(id,site)=>{if(site?.map)res.push(poiOverlandSpecFor(id,site,site.map.world,site.map.width,site.map.height))};
+           res.push(poiOverlandSpecFor(id,facilitySite,world,MAP_W,MAP_H));
+           if(id==='base'||id==='milda'){
             if(!poiOverlandSnow)poiOverlandSnow=poiSnowPassMap();
-            return [poiOverlandSpecFor('base',facilitySite,world,MAP_W,MAP_H),
-             poiOverlandSpecFor('snowpass',poiOverlandSnow,poiOverlandSnow.map.world,poiOverlandSnow.map.width,poiOverlandSnow.map.height)];
+            add('snowpass',poiOverlandSnow);
            }
            if(id==='snowpass'){
-            const base=poiSnowPassBase;
-            return [poiOverlandSpecFor('base',base?.site,base?.world,base?.width,base?.height),
-             poiOverlandSpecFor('snowpass',facilitySite,world,MAP_W,MAP_H)].filter(Boolean);
+            if(base)res.push(poiOverlandSpecFor('base',base.site,base.world,base.width,base.height));
+            // Attach later authored regions only once, when close enough to matter,
+            // and never construct them in a build where their map is not registered.
+            if(poiWalkViewZ>=9&&typeof poiMildaMap==='function'){
+             if(!poiOverlandMilda)poiOverlandMilda=poiMildaMap();
+             add('milda',poiOverlandMilda);
+            }
            }
-           return [];
+           return res.filter(Boolean);
           }
           function poiOverlandClear(keep=new Set()){
            for(const [k,m] of poiOverlandMeshes)if(!keep.has(k)){gl.deleteBuffer(m.buf);poiOverlandMeshes.delete(k)}
@@ -169,8 +177,8 @@ jobs:
              const h=height(x,z);
              if(h)for(const [dx,dz,face] of [[-1,0,3],[1,0,1],[0,-1,0],[0,1,2]])
               if(height(x+dx,z+dz)<h)terrainSide(m,x,z,h,height(x+dx,z+dz),face);
+             yield;
             }
-            yield;
            }
            for(const o of region.batches.get(id)||[]){
             const t=o.type,y=o.y*1.4+height(o.x,o.z)*TERRAIN_STEP;
@@ -194,7 +202,13 @@ jobs:
           function poiOverlandUpload(q,m){
            const bytes=m.p.length*12,held=[...poiOverlandMeshes.values()].reduce((n,m)=>n+m.bytes,0);
            if(!bytes||held+bytes>POI_OVERLAND_GPU_LIMIT)return false;
-           const r=upload(m);r.bytes=bytes;poiOverlandMeshes.set(q.key,r);
+           const r=upload(m);r.bytes=bytes;
+           let x0=Infinity,y0=Infinity,z0=Infinity,x1=-Infinity,y1=-Infinity,z1=-Infinity;
+           for(let i=0;i<m.p.length;i+=3){
+            const x=m.p[i],y=m.p[i+1],z=m.p[i+2];
+            x0=Math.min(x0,x);y0=Math.min(y0,y);z0=Math.min(z0,z);x1=Math.max(x1,x);y1=Math.max(y1,y);z1=Math.max(z1,z);
+           }
+           r.bounds=[x0,y0,z0,x1,y1,z1];poiOverlandMeshes.set(q.key,r);
            poiOverlandStats.builds++;return true;
           }
           function poiOverlandBakeFrame(list,areas,boot=false){
@@ -216,20 +230,27 @@ jobs:
           }
           function poiOverlandPreviewTick(){
            if(!POI_OVERLAND_SPIKE)return null;
-           poiOverlandCommands=[];poiOverlandDrawing=false;
+           poiOverlandCommands=[];poiOverlandDrawn=[];poiOverlandDrawing=false;
            const site=facilitySite?.id;
-           const registered=site==='base'||site==='snowpass';
+           const registered=site==='base'||site==='snowpass'||site==='milda'&&typeof poiMildaMap==='function';
            const eligible=registered&&poiWalkActive&&poiWalkLevel===0&&!cameraTopDown&&!pineAIActive&&facilityVisibilityOwner()===null;
            if(!eligible){
             poiOverlandClear();poiOverlandBake=null;
             if(!poiWalkActive){poiOverlandEngaged=false;poiOverlandIndexCache=new WeakMap()}
             return null;
            }
-           if(poiOverlandScope(site,poiWalkViewX,poiWalkViewZ,6))poiOverlandEngaged=true;
-           if(!poiOverlandEngaged)return null;
+           const near=poiOverlandScope(site,poiWalkViewX,poiWalkViewZ),prewarm=poiOverlandScope(site,poiWalkViewX,poiWalkViewZ,8);
+           if(!poiOverlandEngaged&&!prewarm){poiOverlandClear();poiOverlandBake=null;return null}
            const areas=poiOverlandAreas(),g=poiOverlandGlobal(site,poiWalkViewX,poiWalkViewZ);
            const list=poiOverlandQueue(areas,...g),keep=new Set(list.map(q=>q.key));poiOverlandClear(keep);
-           poiOverlandBakeFrame(list,areas,poiOverlandMeshes.size===0);
+           const boot=poiOverlandMeshes.size===0&&facilityScenes.size===0;
+           poiOverlandBakeFrame(list,areas,boot);
+           if(!poiOverlandEngaged){
+            // An ordinary session already has a complete scene; leave it presented
+            // until the surrounded local chunks have been built over multiple RAFs.
+            if(!near||facilityScenes.size&&list.some(q=>q.d<=8&&!poiOverlandMeshes.has(q.key)))return null;
+            poiOverlandEngaged=true;
+           }
            for(const q of list){
             const m=poiOverlandMeshes.get(q.key);
             if(m)poiOverlandCommands.push({id:q.id,key:q.key,m});
@@ -247,11 +268,24 @@ jobs:
            const t=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,b[0]-a[0],0,b[1]-a[1],1]);
            return mult(vp,t);
           }
+          function poiOverlandBoxVisible(vp,b){
+           for(let a=0;a<3;a++)for(const dir of [-1,1]){
+            const x=vp[3]+dir*vp[a],y=vp[7]+dir*vp[4+a],z=vp[11]+dir*vp[8+a],w=vp[15]+dir*vp[12+a];
+            if(w+x*b[x>=0?3:0]+y*b[y>=0?4:1]+z*b[z>=0?5:2]<-.001)return false;
+           }
+           return true;
+          }
           function poiOverlandPresent(vp){
+           const all=poiOverlandCommands,active=facilitySite.id,matrices=new Map([[active,vp]]);
+           for(const o of all)if(!matrices.has(o.id))matrices.set(o.id,poiOverlandNeighborVP(vp,active,o.id));
+           poiOverlandCommands=all.filter(o=>poiOverlandBoxVisible(matrices.get(o.id),o.m.bounds));
+           poiOverlandDrawn=poiOverlandCommands;
+           try{
            for(const o of poiOverlandCommands)draw(o.m,poiOverlandNeighborVP(vp,facilitySite.id,o.id));
+           }finally{poiOverlandCommands=all}
           }
           function poiOverlandInspect(){
-           return {...poiOverlandStats,engaged:poiOverlandEngaged,active:facilitySite?.id,drawing:poiOverlandDrawing,effective:poiOverlandDrawing?poiOverlandCommands.length:0,contact:poiAnalogContact?.id??null,captured:!!poiAnalogContact&&poiAnalogPad.hasPointerCapture(poiAnalogContact.id),last:poiOverlandCommands.map(o=>({id:o.id,key:o.key,vertices:o.m.count})),
+           return {...poiOverlandStats,engaged:poiOverlandEngaged,active:facilitySite?.id,drawing:poiOverlandDrawing,effective:poiOverlandDrawing?poiOverlandDrawn.length:0,contact:poiAnalogContact?.id??null,captured:!!poiAnalogContact&&poiAnalogPad.hasPointerCapture(poiAnalogContact.id),last:poiOverlandDrawn.map(o=>({id:o.id,key:o.key,vertices:o.m.count})),
             bytes:[...poiOverlandMeshes.values()].reduce((n,m)=>n+m.bytes,0),oldVariants:facilityScenes.size};
           }
           let poiOverlandAnalogOffer=null,poiOverlandAnalogHandoff=null,poiOverlandKeepAnalog=false;
@@ -352,7 +386,7 @@ jobs:
           let h=game.replace(key,key+`
             overlandOutletQA:{mode:v=>{cameraTopDown=v;dirty=true;cursorDirty=true},
              read:()=>({x:poiWalkX,z:poiWalkZ,until:poiWalkNextReady,now:performance.now(),top:cameraTopDown,
-              scene:poiOverlandInspect(),position:{x:poiWalkViewX,z:poiWalkViewZ},legacy:facilityScenes.size})},`);
+              scene:poiOverlandInspect(),vertices:sceneMesh?.count||0,position:{x:poiWalkViewX,z:poiWalkViewZ},legacy:facilityScenes.size})},`);
           for(const [a,b] of [
            [' const p=poiWildPick(rng);',' const p=null;'],
            ['function poiWildRegionalFrame(now,rng){','function poiWildRegionalFrame(now,rng){return;']
@@ -371,22 +405,23 @@ jobs:
            page.setDefaultTimeout(14000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
            await page.goto(base+'/seed');await page.evaluate(()=>{
             localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,townLayout:5,townMapHeight:128,
-             position:{x:49,z:124,y:0,facing:0},view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.24,orbitDistance:5.5}}));
+             position:{x:83,z:107,y:0,facing:3},view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.24,orbitDistance:5.5}}));
            });
            await page.goto(base+'/?resume=1&test=1&overland-stream=1');
            await page.locator('#pineStartupCover').waitFor({state:'hidden'});
-           await page.waitForFunction(()=>window.__editorTest.overlandStream().drawing);
+           await page.waitForFunction(()=>{const q=window.__editorTest.overlandOutletQA.read();return q.legacy>0&&!q.scene.drawing});
            await page.evaluate(()=>{
             window.__outletFrames=[];
             function f(now){
              const q=window.__editorTest.overlandOutletQA.read();
-             window.__outletFrames.push({now,x:q.x,z:q.z,draw:q.scene.drawing,visible:q.scene.effective,old:q.legacy,bytes:q.scene.bytes});
+             window.__outletFrames.push({now,x:q.x,z:q.z,draw:q.scene.drawing,visible:q.scene.effective,old:q.legacy,bytes:q.scene.bytes,vertices:q.vertices});
              if(window.__outletFrames.length<4500)requestAnimationFrame(f);
             }
             requestAnimationFrame(f);
            });
-           let x=49,z=124;
-           for(const [tx,tz] of [[49,119],[54,119],[54,112],[65,112],[65,107],[83,107]]){
+           let x=83,z=107;
+           const path=async(corners)=>{
+           for(const [tx,tz] of corners){
             while(x!==tx||z!==tz){
              const dx=Math.sign(tx-x),dz=Math.sign(tz-z);x+=dx;z+=dz;
              checkpoint='actual outlet move '+x+','+z;
@@ -395,6 +430,17 @@ jobs:
              await page.waitForFunction(({x,z})=>{const q=window.__editorTest.overlandOutletQA.read();return q.x===x&&q.z===z},{x,z});
             }
            }
+           };
+           await path([[65,107],[65,112],[54,112],[54,119],[49,119],[49,124]]);
+           const start=await read();assert(start.scene.drawing&&!start.legacy,'pre-existing base enters warm chunk rendering on approach');
+           const inFrames=await page.evaluate(()=>window.__outletFrames);
+           assert(inFrames.some(q=>!q.draw&&q.old>0)&&inFrames.some(q=>q.draw&&q.old===0),'real loop exercises both atlas and chunk render paths');
+           assert(inFrames.every(q=>q.vertices>0&&q.bytes<=4*1024*1024),'approach never swaps to a blank or over-budget scene');
+           const enter=inFrames.findIndex(q=>q.draw);
+           const frameGap=enter>0?inFrames[enter].now-inFrames[enter-1].now:null;
+           console.log('Actual pre-existing base approach frame switch',JSON.stringify({frameGap,length:inFrames.length}));
+           await page.evaluate(()=>{window.__outletFrames.length=0});
+           await path([[49,119],[54,119],[54,112],[65,112],[65,107],[83,107]]);
            const end=await read();assert.deepEqual([end.x,end.z],[83,107]);
            const frames=await page.evaluate(()=>window.__outletFrames);
            assert(frames.filter(q=>q.x>=72&&q.z===107).length>=5,'real travel goes beyond the prior forced crop');
@@ -437,6 +483,15 @@ jobs:
            a.equal(p.floors.get('7,7'),floor.type);a.equal(p.bands.get('0,0')[0],floor);a.equal(p.bands.get('1,0')[0],tree);
            a.ok(![...p.bands.values()].flat().includes(underground));
           });
+
+          test('bounded local mesh is not culled when touching the camera clip and behind boxes are culled',()=>{
+           const whole=fs.readFileSync('surface.js','utf8'),i=whole.indexOf('function poiOverlandBoxVisible('),j=whole.indexOf('function poiOverlandPresent(',i);
+           const visible=vm.runInNewContext(whole.slice(i,j)+';poiOverlandBoxVisible');
+           const vp=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
+           a.ok(visible(vp,[.85,-.5,-.5,2,.5,.5]));
+           a.equal(visible(vp,[1.2,-.5,-.5,2,.5,.5]),false);
+           a.equal(visible(vp,[-2,-.5,-.5,-1.2,.5,.5]),false);
+          });
           SOURCE
           cat >.spike/horizon-build.py <<'SOURCE'
           from pathlib import Path
@@ -466,13 +521,14 @@ jobs:
           function poiSnowHorizonMesh(){
            const m=mesh(),profile=POI_SNOW_HORIZON.ridge;
            const foot=([x,,z])=>[x,-.65,Math.max(137,z-9-(x%3))];
-           const snowline=([x,y,z])=>[x,Math.min(y,.8+y*(.57+(x%5)*.038)),z-2.5];
+           const snowline=([x,y,z])=>[x,Math.min(y,.70+y*(.43+(x%5)*.031)),z-3.6];
            for(let i=1;i<profile.length;i++){
             const a=profile[i-1],b=profile[i],fa=foot(a),fb=foot(b),sa=snowline(a),sb=snowline(b);
             const rock=i%3===1?[.29,.38,.49]:[.31,.41,.52];
-            const ice=i%4===1?[.66,.76,.84]:[.76,.84,.90];
-            tri(m,fa,fb,sb,rock);tri(m,fa,sb,sa,rock);
-            tri(m,sa,sb,b,ice);tri(m,sa,b,a,ice);
+            const ice=i%4===1?[.73,.86,.96]:[.85,.94,.99];
+            // Wound to face upward/north: downward normals washed pale snow into shadow.
+            tri(m,fa,sb,fb,rock);tri(m,fa,sa,sb,rock);
+            tri(m,sa,b,sb,ice);tri(m,sa,a,b,ice);
            }
            return m;
           }
@@ -858,7 +914,7 @@ jobs:
           SOURCE
           python .spike/build.py world-editor.html .spike/stream.html
           python .spike/horizon-build.py .spike/stream.html .spike/world-editor.html
-          test "$(git hash-object .spike/world-editor.html)" = 53a2b78c9107844f474ba9cc76be13cbe4917685
+          test "$(git hash-object .spike/world-editor.html)" = c0d107298c27c17c52ea4bb911e17ff66522e4b1
           cd .spike && node --test tests/planning.test.cjs
       - run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
       - if: matrix.probe == 'engine'
