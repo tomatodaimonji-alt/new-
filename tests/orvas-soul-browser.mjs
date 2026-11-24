@@ -55,7 +55,7 @@ try{
    localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weaponDurabilityVersion:2,weapon:null,potions:0,slots,
     ...(already?{companionSoul:{version:1,active:'orvasSoul',pending:null}}:{})}));
    localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,position:{x,z,y:0,facing:2},
-    townLayout:5,townMapHeight:128,view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:0,orbitPitch:.24,orbitDistance:6.7}}));
+    townLayout:5,townMapHeight:182,templeDepth:1,view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:0,orbitPitch:.24,orbitDistance:6.7}}));
   },{hp,x,z,already});
   const open=async()=>{
    await p.goto(base+'/?resume=1&test=1',{waitUntil:'domcontentloaded',timeout:45000});
@@ -102,15 +102,15 @@ try{
  assert.equal(s.pose.scale,.205);assert.deepEqual([s.x,s.z,s.y],[56,33,0]);assert(s.kit.some(c=>c.type==='orvasSoul'&&c.durability===777));
  await q.c.close();
  phase='active Orvas actually follows through the original physical gate and corridor with HP unchanged';
- q=await load(1050,24,92,true);p=q.p;s=await q.until(v=>v.pose?.orvas);const entryActor={...s.actor};
+ q=await load(1050,24,126,true);p=q.p;s=await q.until(v=>v.pose?.orvas);const entryActor={...s.actor};
  const step=async(x,z)=>{
   const dx=x-s.x,dz=z-s.z,i=s.dir.findIndex(d=>d[0]===dx&&d[1]===dz);assert(i>=0);
   await p.keyboard.press(['ArrowUp','ArrowDown','ArrowRight','ArrowLeft'][i]);s=await q.tick(225);
   assert.deepEqual([s.x,s.z,s.y],[x,z,0]);
  };
- for(const [x,z] of [[24,93],[24,94],[24,95],[25,95],[25,96],[25,97],[24,97],[23,97],[23,98]])await step(x,z);
- s=await q.until(v=>v.pose?.orvas&&v.actor.z>=94);
- assert(entryActor.z<94&&s.actor.z>=94);assert.equal(s.pose.scale,.205);
+ for(const [x,z] of [[24,127],[24,128],[24,129],[25,129],[25,130],[25,131],[24,131],[23,131],[23,132]])await step(x,z);
+ s=await q.until(v=>v.pose?.orvas&&v.actor.z>=128);
+ assert(entryActor.z<128&&s.actor.z>=128);assert.equal(s.pose.scale,.205);
  assert(s.kit.some(c=>c.type==='orvasSoul'&&c.durability===1050));
  assert.equal(s.bossController,false);assert.deepEqual(q.errors,[]);
  await q.c.close();

@@ -65,7 +65,7 @@ try{
  await p.goto(url+'/seed');
  await p.evaluate(()=>{
   localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
-   position:{x:24,z:101,y:0,facing:2},townLayout:5,townMapHeight:128,
+   position:{x:24,z:155,y:0,facing:2},townLayout:5,townMapHeight:182,templeDepth:1,
    view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:0,orbitPitch:.16,orbitDistance:6.3}}));
   localStorage.setItem('world-workshop-town-clock-v1','{"version":1,"gameMs":360000}');
  });
@@ -73,7 +73,7 @@ try{
  const val=()=>p.evaluate(()=>window.__editorTest.wakeQA.data());
  await p.waitForFunction(()=>{const q=window.__editorTest?.wakeQA.data();return q?.frames.some(f=>f.phase==='dormant')});
  const old=await val();
- assert.deepEqual(old.player,[24,101,0]);assert.equal(old.started,false);assert(!old.d?.awake,"at three tiles the real statue remains dormant");
+ assert.deepEqual(old.player,[24,155,0]);assert.equal(old.started,false);assert(!old.d?.awake,"at three tiles the real statue remains dormant");
  if(screenshots)await capture(p,'david-awakening-01-dormant.png');
  // Pause only the test clock, not the production actor or motion. Each
  // small time step still calls the original world draw and gameplay loop.
@@ -82,14 +82,14 @@ try{
  const advance=async()=>{await p.clock.fastForward(56);await p.evaluate(()=>window.__editorTest.wakeQA.draw());return val()};
  // Trusted input in third person yaw 0: ArrowUp physically enters +z.
  let live=await val();
- for(let i=0;i<24&&live.player[1]===101;i++){
+ for(let i=0;i<24&&live.player[1]===155;i++){
   if(i%6===0&&live.now>=live.nextStep)await p.keyboard.press('ArrowUp');
   live=await advance();
  }
  for(let i=0;i<10&&!live.d?.awake;i++)live=await advance();
- assert(live.player[0]===24&&live.player[1]===102&&live.d?.awake,JSON.stringify({player:live.player,now:live.now,nextStep:live.nextStep,d:live.d}));
+ assert(live.player[0]===24&&live.player[1]===156&&live.d?.awake,JSON.stringify({player:live.player,now:live.now,nextStep:live.nextStep,d:live.d}));
  let pullShot=false;
- for(let i=0;i<64&&!(live.started&&(live.d?.attack||live.frames.some(f=>f.z!==104)));i++){
+ for(let i=0;i<64&&!(live.started&&(live.d?.attack||live.frames.some(f=>f.z!==158)));i++){
   live=await advance();
   if(screenshots&&!pullShot&&live.pulls.length===1){
    pullShot=true;await capture(p,'david-awakening-02-first-pull.png');
@@ -102,11 +102,11 @@ try{
  assert(dormant.visibleTips.every(v=>v<.011)&&dormant.tipY.every(y=>y<0),'both actual emitted ends laid into floor');
  const ignition=frames.find(f=>f.phase==='wake'&&f.power>.24&&f.tipY.every(y=>y<0));
  assert(ignition&&ignition.crystals.every((r,i)=>r>.65&&r-dormant.crystals[i]>.25),'both actual iris meshes brighten before any pull: '+JSON.stringify(frames.filter(f=>f.phase==='wake').map(f=>[f.t,f.power,f.crystals,f.tipY])));
- assert.deepEqual(q.pulls.map(x=>[x.n,Math.round(x.age),x.pos,x.battle]),[[0,920,[24,104],false],[1,1840,[24,104],false]]);
+ assert.deepEqual(q.pulls.map(x=>[x.n,Math.round(x.age),x.pos,x.battle]),[[0,920,[24,158],false],[1,1840,[24,158],false]]);
  assert(q.pulls[1].t-q.pulls[0].t>=920);
  assert(frames.some(f=>f.phase==='wake'&&f.tipY[0]>.15&&f.tipY[1]<0&&f.visibleTips.every(v=>v<.011)),'one real blade moves independently');
  assert(frames.some(f=>f.phase==='wake'&&f.tipY.every(y=>y>.15)),'both blades actually clear before combat');
- assert(frames.filter(f=>f.phase==='wake').every(f=>!f.battle&&f.x===24&&f.z===104),'physical boss is still until fully staged');
+ assert(frames.filter(f=>f.phase==='wake').every(f=>!f.battle&&f.x===24&&f.z===158),'physical boss is still until fully staged');
  assert(q.started);
  if(screenshots)await capture(p,'david-awakening-03-combat.png');
  console.log('PASS native distance, genuine planted blade vertices, eye brightening, individual authored pulls, and strict stance-to-real-combat gate',q.pulls);

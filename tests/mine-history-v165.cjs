@@ -15,7 +15,11 @@ function beforeMineDepths(world){
 // Project the independently authored west woodland out of earlier snapshots.
 function beforeSacredForest(site){
  if(!site.sacredForest)return site;
- const {sacredForest,...historical}=site,{index,count}=sacredForest.authored;
+ const {sacredForest,sacredDepth,...historical}=site,{index,count}=sacredForest.authored;
+ if(sacredDepth){
+  assert.deepEqual([sacredDepth.w,sacredDepth.oldH,sacredDepth.h,site.map.height],[48,128,182,182]);
+  assert(site.map.world.every(o=>o.z<128||o.x<48));
+ }
  const d=site.davidTemple?.authored;
  assert(d&&index===d.index+d.count&&count>0&&index+count===site.map.world.length,
   'only the declared post-temple west forest suffix is removed');
@@ -23,7 +27,7 @@ function beforeSacredForest(site){
  const append=site.map.world.slice(index);
  assert.equal(new Set(append.map(record)).size,count);
  assert(append.every(o=>!old.has(record(o))));
- return {...historical,map:{...site.map,world}};
+ return {...historical,map:{...site.map,...(sacredDepth?{height:sacredDepth.oldH}:{}),world}};
 }
 // The temple owns only the verified final v270 map suffix and one building.
 function beforeDavidTemple(site){
@@ -260,4 +264,3 @@ function beforeAbandonedMine(site){
  return {...other,map:{...map,world:world.slice(0,oldLength)}};
 }
 module.exports={beforeDavidTemple,beforeSouthForest,beforeSouthPort,beforeNorthFort,beforeSouthTown,beforeSouthCreek,beforeMineLongApproach,beforeSouthRoad,beforeArtisanPlant,beforeChapelApproach,beforeMinePrep,beforeChapelWest,beforeAbandonedMine,beforeMineDepths,beforeOtherworld,beforeMineEntry,beforeChapel,beforeArmedEncounters,beforeNorthTrail,beforeForestWatchPost,beforePondMarsh,beforeWayfarer,beforeOtherworldDepths};
-

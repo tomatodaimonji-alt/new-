@@ -12,7 +12,7 @@ install(mark,`
  window.__orvas={
   frame:()=>render(),
   drop:i=>{
-   if(!workshopResumeRestorePosition({x:24,z:108,y:0,facing:1}))return null;
+   if(!workshopResumeRestorePosition({x:24,z:162,y:0,facing:1}))return null;
    const type=poiInventorySlots(poiHotbarRead())[i]?.type;
    if(!type||!poiInventoryDrop(i).ok)return null;
    return poiHotbarRead().drops.find(d=>d.type===type);
@@ -29,7 +29,7 @@ install(mark,`
     poiDavidAttackFoley({kind,sx:b.x,sz:b.z,y:b.y},p,b,i,phase);
   },
   stage:index=>{
-   if(!workshopResumeRestorePosition({x:24,z:108,y:0,facing:1}))return false;
+   if(!workshopResumeRestorePosition({x:24,z:162,y:0,facing:1}))return false;
    poiMonsterStates.clear();poiCombatLockReset();
    return poiEquipHotbarItem(index)?.ok;
   },
@@ -123,7 +123,7 @@ try{
   assert.deepEqual(picked,{slot:i,ok:true});assert.equal((await read()).weapon,d.type);
  }
 
- let {q,held}=await start(2,[[32,108,0],[34,108,0]]);
+ let {q,held}=await start(2,[[32,162,0],[34,162,0]]);
  let landed=await until(v=>!v.pending&&v.beam?.draw);
  assert(landed.clock-held.start>=420);
  assert.deepEqual(landed.hp,[52,100]);assert.equal(landed.used,q.used-1);
@@ -132,11 +132,11 @@ try{
  assert(Math.abs(Math.abs(landed.beam.rays[0].z-landed.beam.rays[1].z)-.302)<.002);
  assert.deepEqual(landed.audio.map(x=>x.id),['boss-alien-beam']);
 
- ({q,held}=await start(3,[[28,108,0],[26,111,0],[23,108,0]]));
+ ({q,held}=await start(3,[[28,162,0],[26,165,0],[23,162,0]]));
  landed=await until(v=>!v.pending);
  assert(landed.clock-held.start>=560);
  assert.deepEqual(landed.hp,[54,54,100]);assert.equal(landed.used,q.used-1);
- ({q,held}=await start(4,[[27,108,0],[26,111,0],[23,108,0]]));
+ ({q,held}=await start(4,[[27,162,0],[26,165,0],[23,162,0]]));
  const first=await until(v=>v.cursor===1);
  assert(first.clock-held.start>=720);assert.deepEqual(first.hp,[72,100,100]);
  landed=await until(v=>!v.pending);

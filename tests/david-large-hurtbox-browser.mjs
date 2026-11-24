@@ -43,7 +43,7 @@ try{
   await p.goto(root+'/seed');await p.evaluate(()=>{const slots=Array(27).fill(null);slots[0]={type:'kitchenKnife',count:1,durability:40};slots[1]={type:'equipWoodSword',count:1};
    localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weaponDurabilityVersion:2,weapon:'kitchenKnife',potions:0,slots}));
    localStorage.setItem('world-workshop-resume-v1',JSON.stringify({
-   version:1,route:'facility',id:'base',play:true,position:{x:24,z:102,y:0,facing:2},townLayout:5,townMapHeight:128,
+   version:1,route:'facility',id:'base',play:true,position:{x:24,z:156,y:0,facing:2},townLayout:5,townMapHeight:182,templeDepth:1,
    view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.24,orbitDistance:5.5}
   }));});
   await p.goto(root+'/?resume=1&test=1',{waitUntil:'domcontentloaded'});await p.locator('#pineStartupCover').waitFor({state:'hidden'});

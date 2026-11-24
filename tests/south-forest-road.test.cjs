@@ -5,7 +5,7 @@ const build=vm.runInNewContext(cut('const FACILITY_SITES=Object.freeze(','functi
 const key=o=>[o.x,o.z,o.y].join(',');
 test('forest is a dry continuously walkable append without trading city or snow at this gate',()=>{
  const f=site.southForest;a.ok(f,'authored forest route missing');
- a.equal(f.name,'潮風の森');a.equal(site.map.width,128);a.equal(site.map.height,128);
+ a.equal(f.name,'潮風の森');a.equal(site.map.width,128);a.equal(site.map.height,site.sacredDepth?.h??128);
  a.equal(key(f.route[0]),key(site.southPort.market.public));a.equal(key(f.route.at(-1)),key(f.rest));
  a.ok(f.route.length>=42&&f.route.length<=58);
  for(const [i,p] of f.route.entries()){
@@ -54,4 +54,3 @@ test('old saves on newly solid forest props resume on the nearest unoccupied dry
  a.equal(c.poiWalkLevel,-1);
  a.match(h,/function workshopResumeRestorePosition\(p\)\{[^]*?p=poiSouthForestRecoverPosition\(p\);/);
 });
-

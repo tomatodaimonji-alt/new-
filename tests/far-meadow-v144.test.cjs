@@ -32,7 +32,9 @@ test('extension keeps every old Game World tile and all other POIs intact',()=>{
  const forestReturn=' return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad,northFort,southPort,southForest};';
  const westBuild=' const sacredForest=extendTownWorldSacredForest(expanded,davidTemple);\n return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad,northFort,southPort,southForest,davidTemple,sacredForest};';
  const westReturn=' return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad,northFort,southPort,southForest,davidTemple};';
- const preWest=html.replace(westBuild,westReturn);
+ const depthDeclaration=' // Only the stock base appends the southwestern lobe. Legacy coordinates,\n // 128-wide editor maps and the original z=127 snow outlet stay fixed.\n expanded.map.height=182;\n expanded.sacredDepth={w:48,oldH:128,h:182};\n';
+ if(html.includes('expanded.sacredDepth='))assert(html.includes(depthDeclaration),'strip only exact stock depth metadata');
+ const preWest=html.replace(depthDeclaration,'').replace(westBuild,westReturn);
  if(html.includes('const sacredForest=extendTownWorldSacredForest('))assert.notEqual(preWest,html,'strip only the exact final sacred forest authoring call');
  const preTemple=preWest.replace(templeBuild,forestReturn);
  if(preWest.includes('const davidTemple=extendTownWorldDavidTemple('))assert.notEqual(preTemple,preWest,'strip only the exact final temple authoring call');
@@ -86,4 +88,3 @@ test('the eastern river continuation is connected to the old outlet and leaves t
  assert(added.every(o=>found.has(k(o.x,o.z))&&byCell.get(k(o.x,o.z)).includes('river')));
  assert.deepEqual(added.filter(o=>o.x===127).map(o=>o.z),[78,79]);
 });
-
