@@ -4,7 +4,7 @@ const cut=(a,b)=>{const i=h.indexOf(a),j=h.indexOf(b,i+1);if(i<0||j<=i)throw Err
 function wasm(){
  const c=vm.createContext({terrainY:()=>0,facilitySite:{id:'base',davidTemple:{boss:{x:24,z:104,y:0,type:'monsterStoneDavid'}}}});
  vm.runInContext(cut('function tri(m,a,b,c,col){','function rot2(x,z,r)')+
-   cut('// BEGIN STONE DAVID VISUAL','// END STONE DAVID VISUAL')+
+   cut('// BEGIN STONE DAVID VISUAL','// END STONE DAVID VISUAL')+h.match(/^const POI_DAVID_AWAKENING=.*;/m)[0]+'\n'+
    cut('function poiMonsterPose(obj,s,now,locomotionOnly=false){','function poiMonsterFragmentTemplate(type)'),c);
  return c;
 }
@@ -36,3 +36,4 @@ test('only the sculpture head rotates along actual beam sweep; hand and sword co
  a.notDeepEqual(zero.m.p,side.m.p);
  a.ok(side.m.c.some((v,i)=>i%3===0&&v>.89&&side.m.c[i+1]<.30));
 });
+

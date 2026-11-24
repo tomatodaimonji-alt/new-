@@ -18,7 +18,7 @@ function game(){
  };
  const api=vm.runInNewContext(cut('// BEGIN DAVID TEMPLE COMBAT','// END DAVID TEMPLE COMBAT')+
   cut('function poiAimWallLimit(','function poiAimChooseLock(')+cut('// BEGIN DAVID TEMPLE CUES','// END DAVID TEMPLE CUES')+
-  ';({step:poiDavidMobFrame,tick:poiDavidCombatFrame,begin:poiDavidBegin,pose:poiDavidPose,draw:poiDrawDavidCue})',c);
+  ';({realStep:poiDavidMobFrame,step:(o,s,t)=>{const ok=poiDavidMobFrame(o,s,t);if(ok){const b=poiDavidMatch(o);for(const u of [POI_DAVID_AWAKENING.first,POI_DAVID_AWAKENING.second,POI_DAVID_AWAKENING.ready])poiDavidAwakeningTick(o,s,b,t+u);if(!s.david?.wakeDone)throw Error("post-awakening fixture unavailable");s.david.next=t+620;}return ok},tick:poiDavidCombatFrame,begin:poiDavidBegin,pose:poiDavidPose,draw:poiDrawDavidCue})',c);
  const frame=time=>{current=time;api.tick(time);draws.length=0;api.draw(time,[]);return draws.slice()};
  const begin=()=>{c.p.z=98;a(api.step(o,s,1000));c.p.z=97;a(api.begin(o,s,1700,'beam'));return s.david.attack.hits[0]};
  return {api,c,s,b,live,frame,begin,sounds,finishes,hits};

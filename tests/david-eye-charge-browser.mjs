@@ -13,6 +13,12 @@ let fixture=inject(html,key,key+`
    const begin=performance.now()+600;
    if(!s?.david?.awake)poiDavidMobFrame(o,s,begin-500);
    if(!s?.david?.awake)return {reason:'authored statue did not wake'};
+   // This renderer-only assay intentionally controls its private combat
+   // clock. Complete the actual intro stages before testing eye-BEAM pixels.
+   const wakeAt=s.david.wakeAt;
+   for(const t of [POI_DAVID_AWAKENING.first,POI_DAVID_AWAKENING.second,POI_DAVID_AWAKENING.ready])
+    poiDavidAwakeningTick(o,s,poiDavidMatch(o),wakeAt+t);
+   if(!s.david.wakeDone)return {reason:'authored intro did not complete'};
    s.david.attack=null;s.david.next=-Infinity;
    if(!poiDavidBegin(o,s,begin,'beam'))return {reason:'real beam could not start'};
    const q=s.david.attack,w=236,h=116;
