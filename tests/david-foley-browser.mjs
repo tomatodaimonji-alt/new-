@@ -59,6 +59,7 @@ let fixture=insert(html,anchor,`
     // Lock out only automatic follow-up selection in the isolated
     // battery. Original timing, hit shape, health and cues are untouched.
     window.__davidFrames.onlySelected=true;
+    if(window.__davidFrames.beamClock)window.__davidFrames.beamClock.first=s.david.attack.hits[0];
     return s.david.attack.start;
    },
    state:()=>{
@@ -141,7 +142,11 @@ const url='http://127.0.0.1:'+server.address().port;
 const install=()=>{
  let frame=0,draws=0,vertices=0;
  const summary=window.__davidFrames={coverShows:0,cue:{lane:0,beam:0,builds:0,byStart:{}},contacts:[],timing:{},canceled:{},audio:[],audioStops:[],fan:0,live:0,rays:[],beamDraws:{},beamClock:null,returnClock:null,bufferIds:new WeakMap(),nextBuffer:1,
-  renderTime(real){const c=this.returnClock||this.beamClock;if(!c)return real;c.now=Math.max(c.now,Math.min(real,c.now+(this.returnClock?86:47)));return c.now;},
+  renderTime(real){
+   const c=this.returnClock||this.beamClock;if(!c)return real;
+   const lead=c.first-c.now,cap=this.returnClock?86:lead>0&&lead<=225?47:120;
+   c.now=Math.max(c.now,Math.min(real,c.now+cap));return c.now;
+  },
   glCounters(){return [draws,vertices]},
   beamSubmission(start,kind,now,[priorDraws,priorVertices],extra={}){
    (this.beamDraws[start]??=[]).push({kind,now,draws:draws-priorDraws,vertices:vertices-priorVertices,...extra});
