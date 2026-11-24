@@ -298,7 +298,6 @@ try{
   });
   await wait(p,()=>window.__editorTest.davidQA.state().statue?.d?.awake);
   s=await qa(p);assert.equal(s.statue.hp,1050,'tuned David is deliberately beyond ordinary early-game weapons');
-  if(screenshots)await shot(p,"david-temple-wake.png");
   checkpoint='approach produces real boss displacement before physical retreat';
   await p.evaluate(()=>{window.__davidFrames.fatalClock={now:performance.now()}});
   await routeWalk(p,TEMPLE_NEAR);
@@ -426,7 +425,7 @@ try{
   const before=(await battle.p.evaluate(()=>window.__editorTest.davidQA.sound())).events.length;
   await battle.p.evaluate(()=>{window.__editorTest.davidQA.pokeSound('mute');window.__editorTest.davidQA.pokeSound('outside')});
   assert.equal((await battle.p.evaluate(()=>window.__editorTest.davidQA.sound())).events.length,before);
-  if(screenshots)await battle.p.screenshot({path:screenshots+'/david-temple-arena.png'});
+  if(screenshots)await shot(battle.p,"david-temple-arena.png");
   assert.deepEqual(battle.errors,[]);
  }catch(e){console.error(checkpoint,JSON.stringify(await qa(battle.p).catch(()=>null)),battle.errors);throw e}
  finally{await battle.ctx.close()}

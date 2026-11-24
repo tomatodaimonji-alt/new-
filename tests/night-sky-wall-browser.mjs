@@ -25,17 +25,21 @@ ${eyeAnchor}
   if(window.__wallSkyManual)window.__wallSkyWitness={clipped:eye!==desired,arm};`);
 fixture=inject(fixture,' poiScreenNoteCaptureFrame();',`
  if(window.__wallSkyManual){
-  const rect=canvas.getBoundingClientRect(),data=new Uint8Array(4),pts=[];let clearAlpha=0,canvasHits=0;
+  const rect=canvas.getBoundingClientRect(),data=new Uint8Array(4),pts=[];
+  // The wooded perimeter adds genuine transparent tint: empty sky pixels
+  // match the frame's actual clear alpha, still unlike opaque geology.
+  const clearByte=Math.round(gl.getParameter(gl.COLOR_CLEAR_VALUE)[3]*255);
+  let clearAlpha=0,canvasHits=0;
   for(const fy of [.021,.04,.075,.11,.15,.20,.245])for(const fx of [.30,.37,.44,.50,.56,.63,.70,.76]){
    const x=rect.x+rect.width*fx,y=rect.y+rect.height*fy;
    if(document.elementFromPoint(x,y)===canvas)canvasHits++;
    gl.readPixels(Math.round(canvas.width*fx),Math.round(canvas.height*(1-fy)),1,1,gl.RGBA,gl.UNSIGNED_BYTE,data);
-   if(data[3]===0){clearAlpha++;if(document.elementFromPoint(x,y)===canvas)pts.push({x,y})}
+   if(clearByte<220&&Math.abs(data[3]-clearByte)<=1){clearAlpha++;if(document.elementFromPoint(x,y)===canvas)pts.push({x,y})}
   }
   const stage=$('viewWrap');
   window.__wallSkyFrame={...window.__wallSkyWitness,state:[poiWalkX,poiWalkZ,poiWalkLevel],yaw:poiCameraYaw,
    pitch:poiCameraPitch,clock:poiTownClockSnapshot().minute,sky:stage.hasAttribute('data-poi-sky'),
-   raw:getComputedStyle(stage).backgroundImage,clearAlpha,canvasHits,pts,gl:gl.getError()};
+   raw:getComputedStyle(stage).backgroundImage,clearAlpha,clearByte,canvasHits,pts,gl:gl.getError()};
  }
  poiScreenNoteCaptureFrame();`);
 for(const [,source] of fixture.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(source);
