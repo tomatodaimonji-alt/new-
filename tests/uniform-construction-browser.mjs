@@ -16,6 +16,7 @@ let html=source.replace(a,a+`
  outdoorQA:{
   z:()=>poiWalkZ,
   town:()=>facilitySite.davidTemple?.entrance,
+  directions:()=>['n','s','e','w'].map(k=>poiCameraRelativeStep(k)),
   warm:()=>({z:poiWalkZ,x:poiWalkX,now:performance.now(),inside:poiDavidTempleEnclosedAt(facilitySite,poiWalkViewX,poiWalkViewZ,0),
     active:!!poiOutdoorFrame,saved:poiOutdoorCaches.size,drew:poiOutdoorProbe.drawn.length,built:poiOutdoorProbe.built}),
 
@@ -87,26 +88,31 @@ try{
   out.push({name,groups:[...new Set(last.calls.map(e=>e.phase))],calls:last.calls.length,near:last.nearBytes,far:last.farBytes});
   await shot(name);
  }
- phase='ordinary RAF and held thumb at real north tunnel threshold, preserving external cache without drawing it';
+ phase='ordinary RAF and true player input at real north tunnel threshold, preserving external cache without drawing it';
  const entrance=await p.evaluate(()=>window.__editorTest.outdoorQA.town());
  assert(entrance&&await set(entrance.x,entrance.z-2,0,690));
  await p.evaluate(()=>{for(let i=0;i<100;i++)window.__editorTest.outdoorQA.paint()});
  const warm=()=>p.evaluate(()=>window.__editorTest.outdoorQA.warm()), before=await warm();
  assert(before.active&&before.saved>3&&!before.inside,JSON.stringify(before));
  await p.evaluate(()=>{window.__outdoorManual=false;window.__editorTest.outdoorQA.paint()});
- const cdp=await c.newCDPSession(p),box=await p.locator('#poiAnalogPad').boundingBox();assert(box);
- const x=box.x+box.width*.45,y=box.y+box.height*.5,id=71;
- async function hold(south){
-  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y,id}]});
-  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:y+(south?-36:36),id}]});
-  try {await p.waitForFunction(south=>{
-    const q=window.__editorTest.outdoorQA.warm();return south?q.inside&&!q.active:!q.inside&&q.active;
-   },south,{timeout:7000,polling:40})}
-  finally{await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]})}
+ async function step(dz){
+  const start=await warm(), directions=await p.evaluate(()=>window.__editorTest.outdoorQA.directions());
+  const i=directions.findIndex(d=>d[0]===0&&d[1]===dz);
+  assert(i>=0,JSON.stringify(directions));const key=['ArrowUp','ArrowDown','ArrowRight','ArrowLeft'][i];
+  for(let attempt=0;attempt<4;attempt++){
+   await p.keyboard.press(key);
+   try{await p.waitForFunction(z=>window.__editorTest.outdoorQA.z()===z,start.z+dz,{timeout:320,polling:40});return}
+   catch(e){if(await p.evaluate(()=>window.__editorTest.outdoorQA.z())!==start.z)throw e}
+  }
+  throw Error(JSON.stringify({start,latest:await warm(),directions,dz}));
  }
- await hold(true);const inside=await warm();
+ for(let i=0;i<2;i++)await step(1);
+ await p.waitForFunction(()=>{const q=window.__editorTest.outdoorQA.warm();return q.inside&&!q.active},null,{timeout:3000,polling:40});
+ const inside=await warm();
  assert(inside.inside&&!inside.active&&inside.saved>3&&inside.drew===0,JSON.stringify({before,inside}));
- await hold(false);const exit=await warm();
+ await step(-1);
+ await p.waitForFunction(()=>{const q=window.__editorTest.outdoorQA.warm();return !q.inside&&q.active},null,{timeout:3000,polling:40});
+ const exit=await warm();
  assert(!exit.inside&&exit.active&&exit.saved>3&&exit.built>=inside.built,JSON.stringify({before,inside,exit}));
  assert.deepEqual(errors,[]);
  console.log(JSON.stringify({out,temple:{before,inside,exit}},null,1));
