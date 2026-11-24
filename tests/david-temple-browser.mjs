@@ -64,7 +64,7 @@ fixture=insert(fixture,'   const i=q.cursor++,late=now-q.hits[i];',"\n   { const
 fixture=insert(fixture,' if(q&&(poiDavidHidden()||q.interrupted||now-q.lastFrameAt>750)){',"\n  window.__davidFrames.canceled[q.start]={gap:now-q.lastFrameAt,hidden:poiDavidHidden(),interrupted:!!q.interrupted};");
 fixture=insert(fixture,' if(q&&now>=q.until){d.attack=null;poiMonsterMeshDirty=true}',"\n if(window.__davidFrames.onlySelected)return false;");
 fixture=insert(fixture,'draw(poiDavidCue.lane,vp)',';window.__davidFrames.cue.lane++;');
-fixture=insert(fixture,'draw(poiDavidCue.beam,vp)',';window.__davidFrames.cue.beam++;');
+fixture=insert(fixture,'draw(g,vp,0,g.coreCount);',"\n if(g===poiDavidCue?.beam)window.__davidFrames.cue.beam++;");
 fixture=insert(fixture,'function poiWildRegionalFrame(now,rng){','return;');
 fixture=insert(fixture,'function poiWildPick(rng){','return null;');
 for(const [,js] of fixture.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new vm.Script(js);
