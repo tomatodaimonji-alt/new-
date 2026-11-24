@@ -48,7 +48,7 @@ try{
  await p.goto(url+'/seed');
  await p.evaluate(()=>{
   localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
-   position:{x:24,z:101,y:0,facing:0},townLayout:5,townMapHeight:128,
+   position:{x:24,z:102,y:0,facing:0},townLayout:5,townMapHeight:128,
    view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.35,orbitDistance:5.5}}));
   localStorage.setItem('world-workshop-hotbar-v1','{"version":1,"weapon":"equipWoodSword","potions":0,"gold":0}');
  });
@@ -56,7 +56,7 @@ try{
  await p.locator('#pineStartupCover').waitFor({state:'hidden',timeout:23000});
  await p.waitForFunction(()=>window.__editorTest?.arenaQA&&window.__editorTest.facility().active,null,{timeout:12000});
  const initial=await log();
- assert.deepEqual(initial.player,[24,101,0]);assert.deepEqual(initial.boss,[24,104]);assert.equal(initial.hp,100);
+ assert.deepEqual(initial.player,[24,102,0]);assert.deepEqual(initial.boss,[24,104]);assert.equal(initial.hp,100);
  await p.evaluate(()=>window.__editorTest.arenaQA.manual());
  const wall=await p.evaluate(()=>Date.now());await p.clock.pauseAt(wall+1500);
  const advance=async(ms=48)=>{await p.clock.fastForward(ms);await p.evaluate(()=>window.__editorTest.arenaQA.draw());};

@@ -30,8 +30,12 @@ test('extension keeps every old Game World tile and all other POIs intact',()=>{
  const portReturn=' return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad,northFort,southPort};';
  const templeBuild=' const davidTemple=extendTownWorldDavidTemple(expanded);\n return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad,northFort,southPort,southForest,davidTemple};';
  const forestReturn=' return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad,northFort,southPort,southForest};';
- const preTemple=html.replace(templeBuild,forestReturn);
- if(html.includes('const davidTemple=extendTownWorldDavidTemple('))assert.notEqual(preTemple,html,'strip only the exact final temple authoring call');
+ const westBuild=' const sacredForest=extendTownWorldSacredForest(expanded,davidTemple);\n return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad,northFort,southPort,southForest,davidTemple,sacredForest};';
+ const westReturn=' return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad,northFort,southPort,southForest,davidTemple};';
+ const preWest=html.replace(westBuild,westReturn);
+ if(html.includes('const sacredForest=extendTownWorldSacredForest('))assert.notEqual(preWest,html,'strip only the exact final sacred forest authoring call');
+ const preTemple=preWest.replace(templeBuild,forestReturn);
+ if(preWest.includes('const davidTemple=extendTownWorldDavidTemple('))assert.notEqual(preTemple,preWest,'strip only the exact final temple authoring call');
  const preForest=preTemple.replace(forestBuild,portReturn);
  if(preTemple.includes('const southForest=extendTownWorldSouthForest('))assert.notEqual(preForest,preTemple,'strip only the exact final forest authoring call');
  const prePort=preForest.replace(portBuild,northReturn);
@@ -82,3 +86,4 @@ test('the eastern river continuation is connected to the old outlet and leaves t
  assert(added.every(o=>found.has(k(o.x,o.z))&&byCell.get(k(o.x,o.z)).includes('river')));
  assert.deepEqual(added.filter(o=>o.x===127).map(o=>o.z),[78,79]);
 });
+
