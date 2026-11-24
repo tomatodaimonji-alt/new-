@@ -32,7 +32,7 @@ inject(api,api+`
     bossProbe:authored?{x:authored[1].x,z:authored[1].z,hp:authored[1].hp,arena:poiDavidIn(site,at),
      threat:poiEnemyThreatEnabled(),los:site?poiDavidLine(authored[1],at,site):null,next:poiNextMobTick}:null,active:k.companionSoul?.active??null,pending:k.companionSoul?.pending??null,
     actor:a?{id:a.id,x:a.x,z:a.z}:null,slots:poiInventorySlots(k),saved,ground,worn:poiArmorWorn(k),defense:poiPlayerDefense(k),wear:window.__waistPoses??[],
-    draw:window.__orvasGroundVerts??[],hits:window.__orvasFinishLog??[],clock:performance.now(),
+    waistCondition:poiEquipmentDurabilityMax('armorOrvasWaistcloth'),draw:window.__orvasGroundVerts??[],hits:window.__orvasFinishLog??[],clock:performance.now(),
     swing:poiWalkActionStarted,hp:poiPlayerHP,atomic:window.__orvasWrites??[]};
   }
  },
@@ -175,7 +175,9 @@ try{
  await p.locator('#poiItemDetail [data-item-detail-action="unequip"]').tap();
  s=await q.until(v=>v.worn.legs===null);
  assert.equal(s.slots.filter(c=>c?.type==='armorOrvasWaistcloth').length,1);
- assert.equal(s.slots.find(c=>c?.type==='armorOrvasWaistcloth').durability,96);
+ // Native armor stores full un-worn durability implicitly after unequip.
+ const returned=s.slots.find(c=>c?.type==='armorOrvasWaistcloth');
+ assert.equal(s.waistCondition,96);assert.equal(returned.durability??s.waistCondition,96);
  assert(s.wear.at(-1).vertices===0);
  await p.locator('#poiBagClose').tap();
  phase='real confirmed reset does not grant waistcloth';
