@@ -1022,13 +1022,13 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  border:1px solid #a5baa581;border-radius:6px;background:rgba(65,103,82,.35);pointer-events:none}
 #poiItemDetailName{margin:0;font-size:17px;line-height:1.25;font-weight:800;overflow-wrap:anywhere}
 #poiItemDetailDescription,#poiItemDetailFeedback{margin:0 0 8px;font-size:12px;line-height:1.4;overflow-wrap:anywhere}
-#poiItemDetailWeaponStats{display:grid;gap:1px;margin:0 0 8px;padding:5px 8px;border:1px solid #aec5ac5e;
+:is(#poiItemDetailWeaponStats,#poiItemDetailSoulStats){display:grid;gap:1px;margin:0 0 8px;padding:5px 8px;border:1px solid #aec5ac5e;
  border-radius:6px;background:rgba(16,36,31,.27);font-size:12px;line-height:1.25}
-#poiItemDetailWeaponStats[hidden]{display:none}
-#poiItemDetailWeaponStats>div{display:grid;grid-template-columns:4.4em minmax(0,1fr);gap:2px}
-#poiItemDetailWeaponStats dt{color:#e6dbc4}
-#poiItemDetailWeaponStats dt::after{content:'：'}
-#poiItemDetailWeaponStats dd{margin:0;font-weight:750;font-variant-numeric:tabular-nums}
+:is(#poiItemDetailWeaponStats,#poiItemDetailSoulStats)[hidden]{display:none}
+:is(#poiItemDetailWeaponStats,#poiItemDetailSoulStats)>div{display:grid;grid-template-columns:4.4em minmax(0,1fr);gap:2px}
+:is(#poiItemDetailWeaponStats,#poiItemDetailSoulStats) dt{color:#e6dbc4}
+:is(#poiItemDetailWeaponStats,#poiItemDetailSoulStats) dt::after{content:'：'}
+:is(#poiItemDetailWeaponStats,#poiItemDetailSoulStats) dd{margin:0;font-weight:750;font-variant-numeric:tabular-nums}
 #poiItemDetailWeaponStats .poiItemDetailStars{color:#ebc87f;letter-spacing:.07em;white-space:nowrap}
 .poiItemDetailA11y{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 #poiItemDetailFeedback{color:#ffe2a5}
@@ -1823,6 +1823,11 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
   <div><dt>攻撃力</dt><dd id="poiItemDetailAttack"></dd></div>
   <div><dt>速度</dt><dd><span id="poiItemDetailWeaponSpeed" class="poiItemDetailStars" aria-hidden="true"></span><span id="poiItemDetailSpeedAnnounce" class="poiItemDetailA11y"></span></dd></div>
   <div><dt>リーチ</dt><dd><span id="poiItemDetailWeaponReach" class="poiItemDetailStars" aria-hidden="true"></span><span id="poiItemDetailReachAnnounce" class="poiItemDetailA11y"></span></dd></div>
+ </dl>
+ <dl id="poiItemDetailSoulStats" aria-label="仲間のステータス" hidden>
+  <div><dt>攻撃</dt><dd id="poiItemDetailSoulAttack"></dd></div>
+  <div><dt>防御</dt><dd id="poiItemDetailSoulDefense"></dd></div>
+  <div><dt>HP</dt><dd id="poiItemDetailSoulHP"></dd></div>
  </dl>
  <p id="poiItemDetailFeedback" role="status" aria-live="polite"></p>
  <div id="poiItemDetailActions" role="group" aria-label="アイテム操作">
@@ -19027,6 +19032,8 @@ function poiCompanionUse(kit,index){
  const pending=kit.companionSoul?.pending??null,next={...kit};
  if(active||pending)next.companionSoul={version:1,active,pending};else delete next.companionSoul;
  if(!poiEconomyWrite(next))return {ok:false,reason:'storage'};
+ if(!active&&poiCompanionActor?.id===cell.type&&typeof poiCompanionRecallDetach==='function')
+  poiCompanionRecallDetach(poiCompanionActor,typeof performance!=='undefined'?performance.now():0,'manual',kit);
  poiCompanionActor=null;poiCompanionTarget=null;poiEconomyRefresh();
  if(typeof toast==='function')toast(active?spec.name+'の仲間を呼んだ。':'仲間を魂に戻した。');
  return {ok:true,reason:null};
@@ -19299,7 +19306,10 @@ function poiCompanionTick(now){
  const where=poiCompanionPlace();
  if(!poiCompanionActor||poiCompanionActor.id!==id||!poiCompanionSame(poiCompanionActor,where)){
   poiCompanionActor=poiCompanionSpawn(id,now);poiCompanionTarget=null;
+  if(typeof poiCompanionRecallRejoin==='function')poiCompanionRecallRejoin(poiCompanionActor,now);
   if(poiCompanionActor&&typeof poiCompanionSummonAttach==='function')poiCompanionSummonAttach(poiCompanionActor,now);
+  // The defeat HUD sync happens under the fade, before any live ally can bind.
+  if(poiCompanionActor&&typeof poiCompanionHudSync==='function')poiCompanionHudSync();
   return;
  }
  const a=poiCompanionActor,mode=poiCompanionMode(kit);
@@ -19347,6 +19357,7 @@ function poiCompanionTick(now){
 }
 // BEGIN ORVAS ALLY BOSS RUNTIME
 // Team-owned state. Do not register the summoned instance as a hostile monster.
+const POI_ORVAS_ALLY_SWEEP_BEAM_DAMAGE=36;
 const POI_ORVAS_ALLY_NOTICE=14,POI_ORVAS_ALLY_TETHER=15;
 const poiOrvasAllyEffects={cue:null,impact:null,dust:null,fissure:null,fissureMesh:null,raised:null,bump:null};
 function poiOrvasAllyArena(p){
@@ -19532,7 +19543,7 @@ function poiOrvasAllyResolve(a,now,mode){
   sw.angle=sw.side*POI_DAVID_BEAM_ARC*(t-sw.start)/POI_DAVID_BEAM_SWEEP;
   if(t===sw.end){sw.done=true;sw.endedAt=now;d.next=q.until=now+POI_DAVID_BEAM_REST;poiDavidBeamAudioEnd(q)}
   poiOrvasBeamTrace(q,b,now,sw.angle);
-  poiOrvasAllyHits(a,q,now,36,[Math.min(last,sw.angle),Math.max(last,sw.angle)]);
+  poiOrvasAllyHits(a,q,now,POI_ORVAS_ALLY_SWEEP_BEAM_DAMAGE,[Math.min(last,sw.angle),Math.max(last,sw.angle)]);
  }
  if(now>=q.until){d.attack=null;return false}
  return true;
@@ -19740,6 +19751,161 @@ function poiDrawCompanionHealth(now,vp,layer){
  }
 }
 // END COMPANION WORLD VISUAL
+// BEGIN COMPANION RECALL VISUAL
+const POI_COMPANION_RECALL_MS=560;
+let poiCompanionRecallEvent=null,poiCompanionRecallGpu=null,poiCompanionRecallSpark=null;
+let poiCompanionRecallAudioCtx=null,poiCompanionRecallAudioBuffer=null;
+const poiCompanionRecallVp=new Float32Array(16),poiCompanionRecallSparkVp=new Float32Array(16);
+function poiCompanionRecallFrame(e,now){
+ const t=(now-e.start)/POI_COMPANION_RECALL_MS;
+ if(t<0||t>=1)return null;
+ const curve=x=>x*x*(3-2*x),clip=x=>Math.max(0,Math.min(1,x));
+ const fade=curve(clip((t-.055)/.69));
+ const inward=curve(clip((t-.05)/.80));
+ const spark=curve(clip((t-.24)/.25))*(1-curve(clip((t-.76)/.24)));
+ return {t,opacity:e.opacity*(1-fade),scale:1-.88*inward,rise:.26*inward,spark};
+}
+function poiCompanionRecallCancel(){
+ const e=poiCompanionRecallEvent;if(!e)return;
+ poiCompanionRecallEvent=null;
+ try{
+  if(e.source){const t=e.source.context.currentTime,g=e.gain?.gain;
+   if(g){g.cancelScheduledValues(t);g.setValueAtTime(g.value,t);g.linearRampToValueAtTime(0,t+.024)}
+   e.source.stop(t+.031);
+  }
+ }catch{}
+}
+function poiCompanionRecallBuffer(ctx){
+ if(poiCompanionRecallAudioCtx===ctx&&poiCompanionRecallAudioBuffer)return poiCompanionRecallAudioBuffer;
+ const src=poiCompanionSummonBuffer(ctx),raw=src.getChannelData(0),n=raw.length;
+ const dst=ctx.createBuffer(1,n,src.sampleRate),wave=dst.getChannelData(0);
+ for(let i=0;i<n;i++){
+  const t=i/src.sampleRate;
+  wave[i]=raw[n-1-i]*Math.min(1,t/.031)*Math.min(1,(n-1-i)/(src.sampleRate*.09))*(1-.64*i/n);
+ }
+ poiCompanionRecallAudioCtx=ctx;return poiCompanionRecallAudioBuffer=dst;
+}
+function poiCompanionRecallSound(e,now){
+ if(e.played)return;
+ if(now-e.start>105||typeof poiAudioAllowed!=='function'||!poiAudioAllowed()||
+    !poiAudioEnabled||poiAudioLevels.master<=0||poiAudioLevels.se<=0){e.played=true;return}
+ const ctx=poiAudioContext;if(ctx?.state!=='running')return;
+ e.played=true;
+ try{
+  poiPlayImpactBuffer(poiCompanionRecallBuffer(ctx),ctx.currentTime+.004,e.reason==='player-death'?.21:.29,(source,gain)=>{
+   e.source=source;e.gain=gain;
+   source.addEventListener?.('ended',()=>{e.source=null;},{once:true});
+  },.56);
+ }catch{}
+}
+function poiCompanionRecallMake(a,now,reason,kit){
+ if(!a||!['manual','player-death'].includes(reason)||kit?.companionSoul?.active!==a.id||
+    !poiCompanionSame(a,poiCompanionPlace())||
+    !poiInventorySlots(kit).some(c=>c?.type===a.id&&(c.durability??poiCompanionType(a.id).hp)>0)||
+    typeof mesh!=='function'||typeof upload!=='function'||typeof gl==='undefined'||!gl)return false;
+ if(typeof poiDungeonVisualVisible==='function'&&!poiDungeonVisualVisible(a.x,a.z,a.y))return false;
+ if(poiCompanionWorldActor!==a&&Math.hypot(a.x-poiWalkX,a.z-poiWalkZ)>17)return false;
+ const pose=poiCompanionWorldActor===a&&poiCompanionDrawPose?poiCompanionDrawPose:poiCompanionWorldPose(a,now);
+ if(!pose||![pose.x,pose.y,pose.z].every(Number.isFinite))return false;
+ const m=mesh();
+ if(pose.orvas)poiCompanionOrvasMesh(m,pose);
+ else{
+  if(!poiCompanionTemplate){poiCompanionTemplate=mesh();deco(poiCompanionTemplate,'monsterSlime',0,0,0,0)}
+  poiAppendWildSlimeVisual(m,poiCompanionTemplate,pose,pose.facing);
+ }
+ if(!m.p.length)return false;
+ const opacity=typeof poiCompanionSummonOpacity==='function'?poiCompanionSummonOpacity(a,now):1;
+ poiCompanionRecallCancel();
+ poiCompanionRecallGpu=upload(m,poiCompanionRecallGpu?.buf,gl.DYNAMIC_DRAW);
+ const height=pose.orvas?Math.min(3.4,5.2*pose.scale):.58;
+ const e=poiCompanionRecallEvent={id:a.id,reason,x:pose.x,y:pose.y+height*.38,z:pose.z,place:poiCompanionPlace(),
+  world,start:now,opacity,vertices:poiCompanionRecallGpu.count};
+ poiCompanionRecallSound(e,now);return true;
+}
+function poiCompanionRecallDetach(a,now,reason,kit){
+ if(!a||poiCompanionActor!==a)return false;
+ // FX errors never keep a genuinely detached ally alive or undo a successful save.
+ try{poiCompanionRecallMake(a,now,reason,kit)}catch{}
+ if(a.attackMotion)a.attackMotion.pending=false;
+ a.fightLatch=null;a.allyTarget=null;a.freeGoal=null;a.freeMoving=false;
+ poiCompanionTarget=null;poiCompanionActor=null;
+ if(a.id==='orvasSoul'&&typeof poiOrvasAllyStop==='function')poiOrvasAllyStop(a,now,true);
+ if(typeof poiCompanionSummonCancel==='function')poiCompanionSummonCancel();
+ return true;
+}
+let poiCompanionRejoinTicket=null;
+function poiCompanionPlayerDeathDetach(now){
+ const a=poiCompanionActor;
+ if(!a||typeof poiHotbarHasKit!=='function'||!poiHotbarHasKit())return false;
+ const kit=poiHotbarRead(),id=kit.companionSoul?.active;
+ if(id!==a.id||!poiInventorySlots(kit).some(c=>c?.type===id&&(c.durability??poiCompanionType(id).hp)>0))return false;
+ const place=poiCompanionPlace();
+ poiCompanionRejoinTicket={id,site:place.site,travel:place.travel,world,death:poiPlayerDeath};
+ return poiCompanionRecallDetach(a,now,'player-death',kit);
+}
+function poiCompanionRecallRejoin(a,now){
+ const t=poiCompanionRejoinTicket;
+ if(!t)return false;
+ const place=poiCompanionPlace();
+ if(t.site!==place.site||t.travel!==place.travel||t.world!==world||
+    (!poiPlayerDying()&&!t.death?.relocated)||now>(t.death?.blackAt??Infinity)+3100){
+  poiCompanionRejoinTicket=null;return false;
+ }
+ if(!a||poiPlayerDying())return false;
+ poiCompanionRejoinTicket=null;
+ if(a.id!==t.id)return false;
+ if(typeof poiCompanionSummonIntent==='function'&&(typeof poiCompanionSummonTicket==='undefined'||!poiCompanionSummonTicket))poiCompanionSummonIntent(a.id,now);
+ return true;
+}
+function poiCompanionRecallReset(){
+ poiCompanionRecallCancel();
+ const ticket=poiCompanionRejoinTicket;
+ if(ticket&&(poiPlayerDeath!==ticket.death||!ticket.death?.relocated))poiCompanionRejoinTicket=null;
+}
+function poiCompanionRecallTransform(q,vp,s,x,y,z){
+ for(let i=0;i<4;i++){
+  q[i]=vp[i]*s;q[4+i]=vp[4+i]*s;q[8+i]=vp[8+i]*s;
+  q[12+i]=vp[12+i]+vp[i]*x+vp[4+i]*y+vp[8+i]*z;
+ }
+ return q;
+}
+function poiCompanionRecallDraw(now,vp){
+ const e=poiCompanionRecallEvent;
+ if(!e)return;
+ const q=poiCompanionRecallFrame(e,now);
+ if(!q||!poiWalkActive||pineAIActive||e.world!==world||!poiCompanionSame(e.place,poiCompanionPlace())||
+    e.reason==='player-death'&&(!poiPlayerDying()||poiPlayerDeath?.relocated)){poiCompanionRecallCancel();return}
+ if(q.spark>0&&!poiCompanionRecallSpark){
+  const m=mesh();
+  for(const [x,y,z,s] of [[0,0,0,.13],[.18,-.07,-.092,.045],[-.17,-.11,.071,.034]]){
+   const u=[x,y+s*1.65,z],v=[x,y-s*1.12,z],ring=[[x+s,y,z],[x,y,z+s],[x-s,y,z],[x,y,z-s]];
+   for(let i=0;i<4;i++){
+    tri(m,u,ring[(i+1)%4],ring[i],i%2?[.89,.95,.78]:[.59,.88,.98]);
+    tri(m,v,ring[i],ring[(i+1)%4],[.38,.71,.87]);
+   }
+  }
+  poiCompanionRecallSpark=upload(m);
+ }
+ poiCompanionRecallSound(e,now);
+ gl.enable(gl.BLEND);gl.blendFunc(gl.CONSTANT_ALPHA,gl.ONE_MINUS_CONSTANT_ALPHA);gl.depthMask(false);
+ try{
+  if(q.opacity>.008){
+   const a=1-q.scale,body=poiCompanionRecallTransform(poiCompanionRecallVp,vp,q.scale,e.x*a,e.y*a+q.rise,e.z*a);
+   gl.blendColor(0,0,0,q.opacity);draw(poiCompanionRecallGpu,body);
+  }
+  if(q.spark>.008){
+   const size=.75+.34*q.spark;
+   const spark=poiCompanionRecallTransform(poiCompanionRecallSparkVp,vp,size,e.x,e.y+q.rise+.12*q.t,e.z);
+   gl.blendColor(0,0,0,q.spark*.80);poiDrawLootMesh(poiCompanionRecallSpark,spark,now);
+  }
+ }finally{
+  gl.depthMask(true);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.blendColor(0,0,0,0);gl.disable(gl.BLEND);
+ }
+}
+if(typeof window!=='undefined'&&typeof window.addEventListener==='function')
+ window.addEventListener('pagehide',()=>{poiCompanionRecallCancel();poiCompanionRejoinTicket=null});
+// END COMPANION RECALL VISUAL
+
 // BEGIN COMPANION V2 AI
 const POI_COMPANION_TETHER=5.6,POI_COMPANION_NOTICE=4.25;
 const POI_COMPANION_MODES=new Set(['fight','follow']);
@@ -22843,7 +23009,7 @@ function poiItemDetailActions(zone,cell,chestOpen,hasSplitSpace=true){
 function poiItemDetailDescription(cell,inlineWeapon=true){
  if(cell.type==='gold')return '金貨：'+cell.count+'G';
  const soul=typeof poiCompanionType==='function'?poiCompanionType(cell.type):null;
- if(soul)return '仲間を呼び出す魂。耐久は仲間の体力（'+cell.durability+' / '+soul.hp+'）。力尽きると魂も消える。';
+ if(soul)return '仲間を呼び出す魂。耐久は仲間のHPと同じで、力尽きると魂も消える。';
  const descriptions={
   equipWoodSword:'木でできた軽い剣。ショートカットに装備して使う。',
   kitchenKnife:'刃のある調理道具。敵に当てると耐久が減り、なくなると壊れる。',
@@ -22895,6 +23061,34 @@ function poiItemDetailRenderWeaponStats(type){
   $('poiItemDetail'+name+'Announce').textContent=value?'5段階中'+value:'';
  }
 }
+// BEGIN SOUL ITEM DETAIL STATS
+function poiItemDetailSoulStats(cell){
+ const spec=typeof poiCompanionType==='function'?poiCompanionType(cell?.type):null;
+ if(!spec)return null;
+ let attack=String(spec.attack);
+ if(cell.type==='orvasSoul'&&typeof POI_DAVID_ORDER!=='undefined'&&typeof POI_DAVID_PATTERNS!=='undefined'&&
+    typeof POI_DAVID_LEAP_DAMAGE==='number'&&typeof POI_ORVAS_ALLY_SWEEP_BEAM_DAMAGE==='number'){
+  // Match the summoned actor's actual damage per contact, before the
+  // target's own guard; a double strike counts as two distinct hits.
+  const damage=POI_DAVID_ORDER.flatMap(k=>POI_DAVID_PATTERNS[k].damage);
+  damage.push(POI_DAVID_LEAP_DAMAGE,POI_ORVAS_ALLY_SWEEP_BEAM_DAMAGE);
+  attack=Math.min(...damage)+'〜'+Math.max(...damage)+'（技による）';
+ }
+ const current=cell.durability??spec.hp;
+ // poiCompanionHurt always subtracts the incoming rounded damage directly.
+ return {attack,defense:'なし（ダメージ軽減なし）',hp:current+'／'+spec.hp};
+}
+function poiItemDetailRenderSoulStats(cell){
+ const panel=$('poiItemDetailSoulStats');
+ if(!panel)return;
+ const stats=poiItemDetailSoulStats(cell);
+ panel.hidden=!stats;
+ for(const [name,key] of [['Attack','attack'],['Defense','defense'],['HP','hp']]){
+  const el=$('poiItemDetailSoul'+name),text=stats?.[key]??'';
+  if(el&&el.textContent!==text)el.textContent=text;
+ }
+}
+// END SOUL ITEM DETAIL STATS
 function poiItemDetailClose(restore=true){
  const dialog=$('poiItemDetail'),old=poiItemDetailSelection;
  poiItemDetailSelection=null;
@@ -22949,6 +23143,7 @@ function poiItemDetailRender(){
  const description=poiItemDetailDescription(cell,false);
  $('poiItemDetailDescription').textContent=description||((typeof poiHotbarWeaponForType==='function'&&poiHotbarWeaponForType(cell.type))?'攻撃に使う武器。':'');
  poiItemDetailRenderWeaponStats(cell.type);
+ if(typeof poiItemDetailRenderSoulStats==='function')poiItemDetailRenderSoulStats(cell);
  for(const button of dialog.querySelectorAll('[data-item-detail-action]')){
   const action=button.dataset.itemDetailAction;
   if(action==='transfer')button.textContent=ref.zone==='chest'?'インベントリに入れる':'チェストに入れる';
@@ -30485,6 +30680,7 @@ function poiPlayerDeathBegin(now,killer){
  if(typeof poiPlayerWeaponCancel==='function')poiPlayerWeaponCancel();
  if(!poiDefeatSupported(facilitySite)||!poiWalkActive||poiPlayerHP!==0||poiPlayerDeath)return false;
  poiPlayerDeath={phase:'pause',start:now,blackAt:null,relocated:false,opacity:0,checkpoint:poiDefeatContext()};
+ if(typeof poiCompanionPlayerDeathDetach==='function')poiCompanionPlayerDeathDetach(now);
  if(typeof poiDavidDeathFrame==='function')poiDavidDeathFrame(now,killer);
  poiWalkAttackPosePending=false;poiWalkActionStarted=-10000;
  if(typeof poiStopRepeat==='function')poiStopRepeat();
@@ -31559,6 +31755,7 @@ function poiWalkAction(){
  // Interactions without an assigned action are intentionally silent.
 }
 function poiWalkReset(x,z,spawnY=0,spawnFacing=poiWalkFacing,quietPresentation=false){
+ if(typeof poiCompanionRecallReset==='function')poiCompanionRecallReset();
  if(typeof poiPlayerHitEdgeClear==='function')poiPlayerHitEdgeClear();
  if(typeof poiHealingCastCancel==="function")poiHealingCastCancel();
  if(typeof poiHitstopReset==='function')poiHitstopReset();
@@ -35041,6 +35238,7 @@ function render(){
   if(typeof poiCompanionSummonDraw==='function')poiCompanionSummonDraw(now,p.vp);
   if(typeof poiDrawCompanion==='function')poiDrawCompanion(now,p.vp);
   poiMonsterRender(now,p.vp);
+  if(typeof poiCompanionRecallDraw==='function')poiCompanionRecallDraw(now,p.vp);
   if(typeof poiDrawOrvasPlayerBeam==='function')poiDrawOrvasPlayerBeam(now,p.vp);
   if(typeof poiSoulFloorDraw==='function')poiSoulFloorDraw(now,p.vp);
   if(!poiPlayerDeath||poiPlayerDeath.relocated)poiDrawWalkAvatar(p.vp,now);
