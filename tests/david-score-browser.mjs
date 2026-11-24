@@ -44,7 +44,7 @@ try{
  await p.evaluate(()=>{
   localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weapon:'equipWoodSword',potions:3,gold:0}));
   localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
-   position:{x:24,z:87,y:0,facing:2},townLayout:5,townMapHeight:128,
+   position:{x:24,z:123,y:0,facing:2},townLayout:5,townMapHeight:182,templeDepth:1,
    view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.35,orbitDistance:5.5}}));
  });
  await p.goto(url+'/?resume=1&test=1',{waitUntil:'domcontentloaded'});
@@ -55,18 +55,27 @@ try{
   await wait(k=>{const t=window.__editorTest?.templeScoreQA?.();return t?.audio.active===k&&t.events.some(e=>e.key===k)},key);
   return state();
  };
- async function step(z,key){
+ async function step(z,key,x=24){
   await p.keyboard.press(key);
-  await wait(z=>{const s=window.__editorTest.templeScoreQA();return s.pos[0]===24&&s.pos[1]===z&&s.now>=s.pending},z);
+  await wait(([x,z])=>{const s=window.__editorTest.templeScoreQA();return s.pos[0]===x&&s.pos[1]===z&&s.now>=s.pending},[x,z]);
  }
- trace='existing field';let s=await audio('outside');assert.deepEqual(s.pos,[24,87,0]);assert(!s.battle);
- trace='physical forecourt before gate';await step(88,'ArrowDown');
- s=await audio('davidStill');assert.deepEqual(s.pos,[24,88,0]);assert(!s.battle);
- for(const z of [89,90,91,92,93,94])await step(z,'ArrowDown');
+ const path=Array.from({length:32},(_,i)=>[24,125+i]);
+ async function walkTrace(points){
+  for(const [x,z] of points){
+   const [cx,cz]= (await state()).pos;
+   if(x===cx&&z===cz)continue;
+   assert(Math.abs(x-cx)+Math.abs(z-cz)===1);
+   await step(z,x>cx?'ArrowRight':x<cx?'ArrowLeft':z>cz?'ArrowDown':'ArrowUp',x);
+  }
+ }
+ trace='existing field';let s=await audio('outside');assert.deepEqual(s.pos,[24,123,0]);assert(!s.battle);
+ trace='physical forecourt before gate';await step(124,'ArrowDown');
+ s=await audio('davidStill');assert.deepEqual(s.pos,[24,124,0]);assert(!s.battle);
+ for(const z of [125,126,127,128])await step(z,'ArrowDown');
  s=await state();assert.equal(s.audio.active,'davidStill');assert(!s.battle);
  assert.equal(s.events.filter(e=>e.key==='davidStill').length,1);
  trace='brief boundary retrace then actual wake';
- await step(95,'ArrowDown');await step(96,'ArrowDown');await step(97,'ArrowDown');await step(98,'ArrowDown');
+ await walkTrace(path.slice(4));
  s=await audio('davidAwake');assert(s.battle);
  const calm=s.events.find(e=>e.key==='davidStill'),dark=s.events.find(e=>e.key==='davidAwake');
  assert(calm.loop&&dark.loop&&calm.ready&&dark.ready&&calm.energy>10&&dark.energy>10);
@@ -74,12 +83,12 @@ try{
  assert(calm.offset<.015&&dark.offset>.10&&dark.offset<48);
  assert(s.audio.decks.length<=2);
  trace='real retreat beyond entrance';
- for(const z of [97,96,95,94,93,92,91])await step(z,'ArrowUp');
+ await walkTrace(path.slice().reverse());
  await wait(()=>{const r=window.__editorTest.templeScoreQA();return r.audio.active==='davidStill'&&r.events.filter(e=>e.key==='davidStill').length===2});
- for(const z of [90,89,88,87])await step(z,'ArrowUp');
+ for(const z of [124,123])await step(z,'ArrowUp');
  s=await audio('outside');
  await wait(()=>window.__editorTest.templeScoreQA().audio.decks.length===1);
- s=await state();assert(!s.battle);assert.deepEqual(s.pos,[24,87,0]);
+ s=await state();assert(!s.battle);assert.deepEqual(s.pos,[24,123,0]);
  assert(s.stops.includes('davidAwake')&&s.stops.includes('davidStill'));
  assert.equal(s.events.filter(e=>e.key==='davidAwake').length,1);
  assert.equal(s.events.filter(e=>e.key==='davidStill').length,2);
