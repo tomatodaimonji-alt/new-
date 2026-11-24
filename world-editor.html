@@ -31226,6 +31226,40 @@ function poiSkyBackdrop(p){
  if(before)stage.toggleAttribute('data-poi-sky',true);
 }
 // END OUTDOOR SKY
+// BEGIN SACRED THRESHOLD PORTRAIT
+let poiDavidRevealManualAt=-Infinity;
+function poiDavidRevealLane(site,x,z,y){
+ const t=site?.id==='base'?site.davidTemple:null;
+ return t?.interior&&y===t.boss.y&&Math.abs(x-t.boss.x)<1.05&&
+  z>=t.interior.exitZ-.40&&z<=t.interior.exitZ+1.62?t:null;
+}
+function poiDavidRevealManual(now){
+ if(poiDavidRevealLane(facilitySite,poiWalkViewX,poiWalkViewZ,poiWalkLevel)&&!Number.isFinite(poiDavidRevealManualAt))
+  poiDavidRevealManualAt=now;
+}
+function poiDavidRevealLook(eye,target,now){
+ const t=poiDavidRevealLane(facilitySite,poiWalkViewX,poiWalkViewZ,poiWalkLevel);
+ if(!t){poiDavidRevealManualAt=-Infinity;return target;}
+ if(cameraTopDown)return target;
+ const d=poiDavidActive?.s?.david;
+ if(d?.returning)return target;
+ const smooth=v=>{const u=Math.max(0,Math.min(1,v));return u*u*(3-2*u)};
+ const z=poiWalkViewZ-t.interior.exitZ,fromMouth=smooth((z+.40)/.40)*(1-smooth((z-1.02)/.60));
+ const manual=Number.isFinite(poiDavidRevealManualAt)?1-smooth((now-poiDavidRevealManualAt)/190):1;
+ const wake=Number.isFinite(d?.wakeAt)?1-smooth((now-d.wakeAt-2120)/710):1;
+ const vx=target[0]-eye[0],vz=target[2]-eye[2],ax=t.boss.x+.5-eye[0],az=t.boss.z+.5-eye[2];
+ const run=Math.hypot(vx,vz),range=Math.hypot(ax,az);
+ if(run<.02||range<.35)return target;
+ const alignment=(vx*ax+vz*az)/(run*range);
+ const weight=fromMouth*manual*wake*smooth((alignment-.78)/.20);
+ if(weight<1e-4)return target;
+ // Bias the lens, not movement, collision, zoom, yaw or saved camera.
+ // Aim slightly below the real stone eyes to place them in the upper third.
+ const face=terrainY(t.boss.x,t.boss.z)+t.boss.y*1.4+4.12;
+ const lift=Math.max(0,eye[1]+run*(face-eye[1])/range-target[1]);
+ return lift>1e-4?[target[0],target[1]+weight*lift,target[2]]:target;
+}
+// END SACRED THRESHOLD PORTRAIT
 function parameters(){
  const q=layout(),halfH=9/zoom,halfW=halfH*q.aspect;
  const centerX=MAP_W/2+panX,centerZ=MAP_H/2+panZ;
@@ -31270,7 +31304,8 @@ function parameters(){
    const stop=elevation=>50-scale*Math.tan(Math.min(Math.PI/3,tilt+elevation));
    sky={skyHorizon:stop(0),skyMiddle:stop(Math.PI/12),skyHigh:stop(Math.PI/6)};
   }
-  return{...q,halfH,halfW,centerX,centerZ,elev,targetY,...sky,vp:mult(perspective(fov,Math.max(.1,q.aspect),near,Math.max(90,sceneReach*1.6+18)),look(eye,target))};
+  const lensTarget=poiDavidRevealLook(eye,target,performance.now());
+  return{...q,halfH,halfW,centerX,centerZ,elev,targetY,...sky,vp:mult(perspective(fov,Math.max(.1,q.aspect),near,Math.max(90,sceneReach*1.6+18)),look(eye,lensTarget))};
  }
  const cameraDistance=Math.max(80,sceneReach*1.6+24);
  const eye=[centerX+cameraDistance*Math.sin(yaw)*Math.cos(elev),targetY+cameraDistance*Math.sin(elev),centerZ+cameraDistance*Math.cos(yaw)*Math.cos(elev)];
@@ -39485,6 +39520,7 @@ canvas.addEventListener('pointermove',e=>{
   if(now&&multiGesture){
    if(poiWalkActive&&poiThirdPerson){
     if(multiGesture.dist>1)poiCameraDistance=Math.max(2.5,Math.min(15,poiCameraDistance*multiGesture.dist/Math.max(1,now.dist)));
+    poiDavidRevealManual(performance.now());
     poiCameraYaw-=angleDifference(now.angle,multiGesture.angle);
     poiCameraPitch=poiOrbitPitchClamp(poiCameraPitch+(now.y-multiGesture.y)*.004);
     cursorDirty=true;
@@ -39503,6 +39539,7 @@ canvas.addEventListener('pointermove',e=>{
  if(Math.hypot(e.clientX-t.x,e.clientY-t.y)>TAP_SLOP)t.moved=true;
  if(t.moved){
   if(poiWalkActive&&poiThirdPerson){
+   poiDavidRevealManual(performance.now());
    poiCameraYaw-=(e.clientX-t.lastX)*.008;
    poiCameraPitch=poiOrbitPitchClamp(poiCameraPitch+(e.clientY-t.lastY)*.006);
    cursorDirty=true;
