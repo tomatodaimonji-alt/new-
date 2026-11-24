@@ -4,7 +4,7 @@ function harness(){
  const a=html.indexOf('const POI_MONSTER_BREAK_MS='),b=html.indexOf('function poiWalkFrame(',a);
  assert.ok(a>=0&&b>a,'death burst helper missing');
  const draws=[],renders=[],calls=[];
- const ctx=vm.createContext({renders,world:[],facilitySite:{id:'base'},poiWalkLevel:0,poiWalkActive:true,
+ const ctx=vm.createContext({renders,world:[],poiWalkViewX:0,poiWalkViewZ:0,facilitySite:{id:'base'},poiWalkLevel:0,poiWalkActive:true,
   poiMonsterStates:new Map(),poiMonsterMesh:null,poiMonsterMeshLast:-10000,poiMonsterMeshDirty:true,
   gl:{deleteBuffer(){}},mesh:()=>({p:[],n:[],c:[]}),terrainY:(x,z)=>z===22?.4:0,validPos:(x,z)=>x>=0&&z>=0&&x<96&&z<56,poiWalkCanStep:(x,z)=>x!==12,facilityCreekIndex:{water:new Set(['10,20'])},rot2:(x,z)=>[x,z],
   deco(m,id){
@@ -21,7 +21,9 @@ function harness(){
  assert.ok(attack,'slime attack pose is present');
  const hit=html.match(/\/\/ BEGIN GAME DAMAGE FLASH\n([\s\S]*?)\/\/ END GAME DAMAGE FLASH/);
  assert.ok(hit,'damage flash runtime used by the render batch is present');
- vm.runInContext(hit[1]+attack[1]+html.slice(a,b),ctx);
+ const enclosure=html.slice(html.indexOf('function poiDavidTempleEnclosedAt('),html.indexOf('function poiDavidTempleTunnelAt('));
+ const sacred=html.slice(html.indexOf('function poiSacredInteriorPlayer('),html.indexOf('let poiSacredInteriorVbo'));
+ vm.runInContext(enclosure+sacred+hit[1]+attack[1]+html.slice(a,b),ctx);
  return {ctx,renders,draws,calls,run:s=>vm.runInContext(s,ctx)};
 }
 test('a dying slime reuses its colored model triangles, scatters, and vanishes from the render batch',()=>{
