@@ -62,7 +62,9 @@ test('committed diagonal contact uses the same warning instead of damaging any p
  a.equal(e.poiEnemyRangedCovers(k,{}, {x:3,z:1,y:-1},area),true);
  a.equal(e.poiEnemyRangedCovers(k,{}, {x:3.01,z:1.004,y:-1},area),false);
  a.equal(e.poiEnemyRangedCovers(k,{}, {x:2.12,z:.705,y:0},area),false);
- a.match(h,/covered=poiEnemyRangedContact\(a,s,typeof poiAimOrigin/);
+ const resolver=cut('function poiEnemyResolvePlayer(','// END SLIME ATTACK');
+ a.match(resolver,/const p=a\.companionVictim[^\n]*\?allyPoint:[^\n]*poiAimOrigin\(now\)/);
+ a.match(resolver,/covered=!!p&&poiEnemyRangedContact\(a,s,p\)/);
 });
 test('authored archer stationary aim reaches exactly eight beyond its old roaming leash but neither safe territory nor blocked walls',()=>{
  const e={facilitySite:{id:'base'},poiWalkLevel:0,poiArmedBound:()=>false,poiWildExterior:(x,z)=>x>=e.safe, safe:-1,
