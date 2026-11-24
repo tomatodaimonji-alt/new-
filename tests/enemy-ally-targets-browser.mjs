@@ -12,7 +12,11 @@ put(head,head+`
   see:()=>{
    const a=poiCompanionActor,k=poiHotbarRead(),o=window.__foe,s=o&&poiMonsterStates.get(o),d=poiDavidActive?.s?.david,
      q=d?.attack??s?.playerAttack;
-   return {hero:[poiWalkX,poiWalkZ],hp:poiPlayerHP,now:performance.now(),a:a?{x:a.x,z:a.z,id:a.id,att:a.david?.attack?.kind}:null,
+   const canonical=[...poiMonsterStates].find(([id,state])=>poiDavidMatch(id)&&state.hp>0);
+   const view=poiAimOrigin(performance.now());
+   return {hero:[poiWalkX,poiWalkZ],hp:poiPlayerHP,now:performance.now(),
+    wakeProbe:{ready:poiNextMobTick,visual:[view.x,view.z,view.y],hidden:document.hidden,focus:document.hasFocus(),
+     authored:canonical?{x:canonical[1].x,z:canonical[1].z,hp:canonical[1].hp}:null},a:a?{x:a.x,z:a.z,id:a.id,att:a.david?.attack?.kind}:null,
     ahp:poiInventorySlots(k).find(c=>c?.type==='orvasSoul')?.durability,
     directions:['n','s','e','w'].map(k=>poiCameraRelativeStep(k)),original:!!d,awaken:!!d?.wakeDone,
     q:q?{kind:q.kind??o?.type,committed:(q.targetAlly??q.companionVictim)===a,pending:q.pending,
@@ -66,7 +70,12 @@ try{
  b=await chromium.launch({headless:true,args:['--autoplay-policy=no-user-gesture-required','--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
  async function load(x,z,mode='follow'){
   const c=await b.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.7}),p=await c.newPage(),errors=[];
-  p.on('pageerror',e=>errors.push(e.message));await p.goto(url+'/seed');
+  p.on('pageerror',e=>errors.push(e.message));
+  // A monotonic clock has to start before the first real game frame. If
+  // installed after the cover, it rewinds performance.now while the
+  // authored mob scheduler still keeps its pre-installation deadline.
+  await p.clock.install({time:new Date('2026-04-01T10:00:00Z')});
+  await p.goto(url+'/seed');
   await p.evaluate(({x,z,mode})=>{
    const slots=Array(27).fill(null);slots[0]={type:'equipWoodSword',count:1,durability:150};slots[1]={type:'orvasSoul',count:1,durability:1050};
    localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weaponDurabilityVersion:2,weapon:null,slots,potions:0,companionSoul:{version:1,active:'orvasSoul',mode}}));
@@ -74,7 +83,8 @@ try{
     townLayout:5,townMapHeight:182,templeDepth:1,view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:0,orbitPitch:.24,orbitDistance:6.7}}));
   },{x,z,mode});
   await p.goto(url+'/?resume=1&test=1',{waitUntil:'domcontentloaded'});await p.locator('#pineStartupCover').waitFor({state:'hidden',timeout:45000});
-  await p.clock.install();await p.clock.pauseAt(await p.evaluate(()=>Date.now()+200));await p.evaluate(()=>{window.__threatManual=true});
+  await p.bringToFront();
+  await p.clock.pauseAt(await p.evaluate(()=>Date.now()+175));await p.evaluate(()=>{window.__threatManual=true});
   const read=()=>p.evaluate(()=>window.__editorTest.threatAlly.see());
   const tick=async(ms=37)=>{await p.clock.fastForward(ms);await p.evaluate(()=>window.__editorTest.threatAlly.frame());return last=await read()};
   const until=async(fn,n=94)=>{for(let i=0;i<n;i++){const s=await tick();if(fn(s))return s}throw Error(JSON.stringify(last))};
@@ -91,14 +101,20 @@ try{
  assert.equal(s.q.start,attack.start);assert.deepEqual([s.q.dx,s.q.dz],[attack.dx,attack.dz]);
  assert.deepEqual(n.errors,[]);await n.c.close();
  phase='awakening stays tied to actual approach; original Orvas chooses different heading and displays hostile red';
- n=await load(24,154,'fight');s=await n.until(v=>v.a);
+ n=await load(24,154,'fight');
+ s=await n.until(v=>v.a&&v.wakeProbe.authored&&!v.wakeProbe.hidden);
+ assert.deepEqual(s.hero,[24,154]);
+ assert.deepEqual(s.wakeProbe.authored,{x:24,z:158,hp:1050});
+ assert.equal(s.original,false,'authored statue is present but has not been woken by test setup');
  for(const goal of [155,156,157]){
   const i=s.directions.findIndex(v=>v[0]===0&&v[1]===1);assert(i>=0);
   await n.p.keyboard.press(['ArrowUp','ArrowDown','ArrowRight','ArrowLeft'][i]);s=await n.tick(225);
   assert.deepEqual(s.hero,[24,goal]);
   if(s.original)break;
  }
- s=await n.until(v=>v.original,40);
+ // Keep rendering the real world through enough native mob scans to
+ // cover a pending cold/hydration deadline and interpolate the last step.
+ s=await n.until(v=>v.original,130);
  const bossTarget=await n.api('bossStage');assert(bossTarget);before=s.hp;
  s=await n.until(v=>v.awaken&&v.q?.committed&&v.cue.some(c=>!c.ally&&c.n>0),130);
  const original=s.q;
