@@ -6,10 +6,11 @@ import {Script} from 'node:vm';
 const html=readFileSync(process.argv[2]||'world-editor.html','utf8');
 function inject(s,a,b){assert.equal(s.split(a).length,2,a);return s.replace(a,b)}
 let fixture=inject(html,'function poiHotbarUse(slot){','function poiHotbarUse(slot){window.__qaShortcutCalls?.push({slot,contact:poiAnalogContact?.id});');
+fixture=inject(fixture,'function poiInventoryDrop(slot){','function poiInventoryDrop(slot){window.__qaShortcutDrops=(window.__qaShortcutDrops??0)+1;');
 fixture=inject(fixture,'function poiAnalogGeometryChange(){',`
 window.__qaShortcutStatus=()=>({contact:poiAnalogContact?.id??null, weapon:poiEquippedWeapon(),armed:poiArmedWandIndex(),
  walking:!!poiFreePose?.walking,x:poiWalkViewX,z:poiWalkViewZ,yaw:poiCameraYaw,attack:poiWalkActionStarted,attackWeapon:poiWalkActionWeapon??null,ready:poiAttackReady,
- slots:poiInventorySlots(poiHotbarRead()).slice(0,9),drops:poiHotbarRead().drops??[],gold:poiWalletGold(poiHotbarRead()),detail:poiItemDetailIsOpen()});
+ slots:poiInventorySlots(poiHotbarRead()).slice(0,9),drops:window.__qaShortcutDrops??0,gold:poiWalletGold(poiHotbarRead()),detail:poiItemDetailIsOpen()});
 function poiAnalogGeometryChange(){`);
 for(const [,body] of fixture.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(body);
 if(process.env.MOVING_UNEQUIP_PARSE_ONLY){console.log('exact moving-bare-hands browser fixture parses');process.exit(0)}
@@ -90,7 +91,7 @@ try{
   assert.equal(bare.contact,before.contact);assert.equal(bare.yaw,initial.yaw);assert.equal(bare.detail,false);
   assert.equal(bare.ready,initial.ready,'changing equipment cannot alter action cooldown');
   assert.deepEqual(bare.slots,initial.slots,'weapon and wand remain in their own inventory slots');
-  assert.deepEqual(bare.drops,initial.drops,'a second short tap cannot drop an item');
+  assert.equal(bare.drops,initial.drops,'a second short tap cannot invoke player item-drop');
   await p.waitForFunction(({x,z})=>{const s=window.__qaShortcutStatus();return s.walking&&Math.hypot(s.x-x,s.z-z)>.025},bare);
   await touch('touchStart',[action]);await touch('touchEnd',[action]);
   await p.waitForFunction(start=>window.__qaShortcutStatus().attack>start,initial.attack);
