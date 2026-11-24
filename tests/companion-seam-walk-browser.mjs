@@ -45,18 +45,19 @@ let browser,last,phase;
 try{
  browser=await chromium.launch({headless:true,args:['--autoplay-policy=no-user-gesture-required','--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
  const keys=['ArrowUp','ArrowDown','ArrowRight','ArrowLeft'];
+ const bx=+(process.env.ALLY_SEAM_FRONTAGE_X??(h.includes('function poiOverlandAdjacentEdge(')?65:60)),sx=bx-48;
  for(const [id,hp,rate] of [['orvasSoul',787,1/235],['slimeSoul',24,1/380]]){
   const context=await browser.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.65});
   const p=await context.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));
   await p.clock.install({time:new Date('2026-04-01T10:00:00Z')});
-  await p.goto(url+'/seed');await p.evaluate(({id,hp})=>{
+  await p.goto(url+'/seed');await p.evaluate(({id,hp,bx})=>{
    const slots=Array(27).fill(null);slots[0]={type:'equipWoodSword',count:1,durability:150};slots[1]={type:id,count:1,durability:hp};
    localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weaponDurabilityVersion:2,weapon:null,slots,potions:0,
     companionSoul:{version:1,active:id,mode:'follow'}}));
    localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
-    position:{x:60,z:138,y:0,facing:2},townLayout:5,townMapHeight:182,templeDepth:1,
+    position:{x:bx,z:138,y:0,facing:2},townLayout:5,townMapHeight:182,templeDepth:1,
     view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:0,orbitPitch:.24,orbitDistance:6.7}}));
-  },{id,hp});
+  },{id,hp,bx});
   await p.goto(url+'/?resume=1&test=1',{waitUntil:'domcontentloaded'});await p.locator('#pineStartupCover').waitFor({state:'hidden',timeout:45000});
   await p.bringToFront();await p.clock.pauseAt(await p.evaluate(()=>Date.now()+175));await p.evaluate(()=>{window.__allySeamManual=true;});
   const read=()=>p.evaluate(()=>window.__editorTest.seamlessAlly.where());
@@ -70,8 +71,8 @@ try{
    assert(s.scene===wantScene&&s.hero[1]===wantZ,JSON.stringify(s));
   };
   for(const [origin,to,start,entry,direction,inside] of [
-   ['base','snowpass',[60,134],0,1,[1,2,3]],
-   ['snowpass','base',[12,4],138,-1,[137,136,135]]
+   ['base','snowpass',[bx,134],0,1,[1,2,3]],
+   ['snowpass','base',[sx,4],138,-1,[137,136,135]]
   ]){
    phase=id+' '+origin+'→'+to;
    if(origin==='snowpass'){
@@ -84,6 +85,13 @@ try{
    // One real scene switch changes the hero, not the delayed ally.
    assert(s.seam&&s.owner===origin&&s.commits===before.commits+1,JSON.stringify(s));noGap(s);
    assert(Math.hypot(s.precise[0]-before.precise[0],s.precise[1]-before.precise[1])<.44,JSON.stringify(s));
+   const menu=p.locator('#poiCompanionCommands');
+   await p.locator('#poiHotbar [data-hotbar-slot="1"]').tap();
+   assert(await menu.isVisible());
+   assert.deepEqual(await menu.locator('button:visible').allTextContents(),['戦いを優先','追尾優先','魂に戻す','戻る']);
+   await menu.locator('[data-companion-command="back"]').tap();
+   s=await read();noGap(s);assert(s.seam&&s.owner===origin);
+
    for(const z of inside){await step(direction,to,z);noGap(s);}
    let old=s,n=0,observedOldMesh=false,liveDistances=[];
    while(s.seam&&n++<100){
