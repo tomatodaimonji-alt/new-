@@ -15,7 +15,7 @@ sub(exp,exp+`
       support:!!(poiOverlandGroundDrawn.get(s.id+':'+(a.x>>3)+','+(a.z>>3))?.[a.z&7]&(1<<(a.x&7))),
       legacy:Math.abs(a.x-poiWalkViewX)<=34&&Math.abs(a.z-poiWalkViewZ)<=34||
         poiOverlandBoxVisible(p.vp,[a.x-1.2,-1.4,a.z-1.2,a.x+2.2,4.3,a.z+2.2])}));
-   return {x:poiWalkX,z:poiWalkZ,yaw:p?.eye,id:s?.id,stream:poiOverlandDrawing,inside:poiSacredInteriorPlayer(),
+   return {x:poiWalkX,z:poiWalkZ,yaw:p?.eye,id:s?.id,stream:poiOverlandDrawing,inside:poiSacredInteriorPlayer(),peek:poiSacredTunnelSight(s,p?.eye,poiWalkViewX,poiWalkViewZ,poiWalkLevel),
     actualBoss:!!b&&poiSacredInteriorHostileVisible(b),bossDraws:window.__templeHostileDraws??0,
     ally:a?.id??null,allyMesh:poiCompanionWorldActor===a?(poiCompanionMesh?.count??0):0,actors,
     actualActors:window.__townRenderedIds??[],
@@ -53,8 +53,8 @@ sub(exp,exp+`
  },`);
 sub('if(art===\'monsterStoneDavid\')poiDavidGeometry(part,cx,y,cz,david);',
  "if(art==='monsterStoneDavid'){window.__templeHostileDraws=(window.__templeHostileDraws??0)+1;poiDavidGeometry(part,cx,y,cz,david);}");
-sub(' if(inside)for(const m of q.draws)if(poiOverlandBoxVisible(vp,m.bounds))draw(m,vp);',
- ' if(inside)for(const m of q.draws)if(poiOverlandBoxVisible(vp,m.bounds)){window.__templeFloorDraws=(window.__templeFloorDraws??0)+1;draw(m,vp);}');
+sub(' if(inside||peek)for(const m of q.draws)if(poiOverlandBoxVisible(vp,m.bounds))draw(m,vp);',
+ ' if(inside||peek)for(const m of q.draws)if(poiOverlandBoxVisible(vp,m.bounds)){window.__templeFloorDraws=(window.__templeFloorDraws??0)+1;draw(m,vp);}');
 sub(' const nearActors=actors.filter(a=>!a.recessed', ' window.__townRenderedIds=actors.filter(a=>!a.recessed&&!a.death&&a.y===poiWalkLevel).map(a=>a.role.id);\n const nearActors=actors.filter(a=>!a.recessed');
 for(const [,js] of h.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(js);
 if(process.env.GRADUAL_SYNTAX_ONLY){console.log('exact anchors and inline syntax');process.exit(0)}
@@ -99,7 +99,13 @@ try{
  {
   const {c,p,until,errors}=await load(24,127,0);
   const outside=await until(s=>!s.stream&&s.allyMesh>400);
-  assert(!outside.inside&&!outside.actualBoss&&outside.bossDraws===0&&outside.interiorDraws===0,JSON.stringify(outside));
+  // The new centered aperture may show stone and the dormant original
+  // ahead of the boundary, without admitting the player into the encounter.
+  assert(!outside.inside&&!outside.actualBoss,JSON.stringify(outside));
+  if(outside.peek){
+   const preview=await until(s=>s.peek&&s.bossDraws>0&&s.interiorDraws>0);
+   assert(!preview.inside&&!preview.actualBoss,JSON.stringify(preview));
+  }else assert(outside.bossDraws===0&&outside.interiorDraws===0,JSON.stringify(outside));
   await p.keyboard.press('ArrowUp');
   const inside=await until(s=>s.inside&&s.actualBoss&&s.interiorDraws>0);
   assert.equal(inside.z,128);

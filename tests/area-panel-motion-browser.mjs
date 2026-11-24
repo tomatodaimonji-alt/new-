@@ -104,6 +104,7 @@ async function trial(browser,reduced,viewport={width:320,height:740}){
     const rect=node=>{const {left,right,top,width}=node.getBoundingClientRect();return {left,right,top,width}};
     const clock=document.querySelector('#poiClockHud'),mini=document.querySelector('#poiMiniMap');
     const result={...rect(el),clock:rect(clock),map:rect(mini),origin:getComputedStyle(el).transformOrigin,duration};
+    result.peakShadow=getComputedStyle(el).boxShadow;
     a.currentTime=1050;result.afterOldDuration=rect(el);
     a.currentTime=duration;
     result.original={...rect(el),clock:rect(clock),map:rect(mini)};
@@ -111,10 +112,11 @@ async function trial(browser,reduced,viewport={width:320,height:740}){
     return result;
    });
    if(landscape){
-    assert(sizes.width>=sizes.original.width*1.45&&sizes.width<=sizes.original.width*1.55);
-    assert(sizes.left>=sizes.map.right+8&&sizes.right<=viewport.width-10,'enlarged label clears map/clock and viewport edge');
+    assert(Math.abs(sizes.width-sizes.original.width)<.2);
+    assert(Math.abs(sizes.left-sizes.original.left)<.2&&sizes.right<=viewport.width-10,'fixed area stays in its own lane');
     assert.equal(sizes.duration,1750);
-    assert(sizes.afterOldDuration.left>sizes.original.left+12,'it is still easing home when the previous animation would have ended');
+    assert.equal(sizes.afterOldDuration.left,sizes.original.left,'late animation also stays put');
+    assert.match(sizes.peakShadow,/inset/);
    }else assert(sizes.width>sizes.original.width*1.20&&sizes.left>sizes.original.left+4&&sizes.duration===1050);
    assert.deepEqual(sizes.clock,sizes.original.clock,'existing clock is never displaced by location transform');
    assert.deepEqual(sizes.map,sizes.original.map,'minimap is never displaced by location transform');
@@ -148,5 +150,6 @@ try{
  await trial(browser,false,{width:568,height:320});
  await trial(browser,false,{width:1120,height:500});
  await trial(browser,true,{width:844,height:390});
- console.log('PASS unchanged portrait and enlarged landscape area excursion, slow return against physical backdrop, and reduced motion');
+ console.log('PASS unchanged portrait and fixed landscape cue and safe surrounding layout, and reduced motion');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
+

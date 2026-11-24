@@ -41,13 +41,14 @@ if(html.includes('function poiOverlandPresent(vp)')){
  replace(' const r=upload(m);r.bytes=bytes;', ` const r=upload(m);r.bytes=bytes;
   r.qaSacredSeen=m.qaSacredSeen||0;r.qaSacredVertices=m.qaSacredVertices||0;
  `);
- replace(' try{\n for(const o of poiOverlandCommands){',`
+ replace(' try{\n let fogRegion=active;\n for(const o of poiOverlandCommands){',`
   const chunks=[...poiOverlandMeshes.values()];
   window.__nativeTempleSpans={stream:true,
    tested:chunks.reduce((n,m)=>n+m.qaSacredSeen,0),
    named:chunks.reduce((n,m)=>n+m.qaSacredVertices,0),
    ranges:[],draws:[],roof:false,count:poiOverlandCommands.reduce((n,q)=>n+q.m.count,0)};
   try{
+  let fogRegion=active;
   for(const o of poiOverlandCommands){
  `);
 }
