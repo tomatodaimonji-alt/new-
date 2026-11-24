@@ -32,7 +32,15 @@ test('actual threshold, piers and mirrored body wall meet one straight center, p
  a.deepEqual(JSON.parse(JSON.stringify(d.entrance)),{x:24,z:94,y:0});
  a.deepEqual(JSON.parse(JSON.stringify(d.retreat)),{x:24,z:91,y:0});
  a.deepEqual([d.boss.x,d.boss.z,d.boss.room.minZ],[24,104,93]);
- a.deepEqual(JSON.parse(JSON.stringify(d.boss.room.arena)),{x:24,z:104,radius:16.95,minZ:93.5});
+ const {cells,...arena}=d.boss.room.arena;
+ a.deepEqual(JSON.parse(JSON.stringify(arena)),{x:24,z:104,radius:16.95,minZ:93.5});
+ a.equal(Object.prototype.toString.call(cells),'[object Set]','physical enclosure publishes its actual reachable cells');
+ for(const key of ['24,104','24,119','40,109','12,93','34,92'])a(cells.has(key),key);
+ for(const key of ['29,88','34,89','40,122','20,94','21,94','27,94','28,94'])a(!cells.has(key),key);
+ for(let x=22;x<=26;x++){
+  a(cells.has(x+',94'),'door interior');
+  a(!cells.has(x+',93'),'gate separates the exterior trail from combat');
+ }
  const props=w.slice(d.authored.index),wings=props.filter(o=>o.type==='poiDavidWallWing'),c=env();
  a(wings.length>=22);
  const type=(x,z)=>props.find(o=>o.x===x&&o.z===z&&!c.isFloor(o.type))?.type;

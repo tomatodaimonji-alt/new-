@@ -1596,7 +1596,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v275）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v276）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -16354,9 +16354,36 @@ function poiDavidMatch(o){
   Number.isInteger(b.y)&&r&&[r.minX,r.maxX,r.minZ,r.maxZ].every(Number.isInteger)&&
   r.minX<=b.x&&b.x<=r.maxX&&r.minZ<=b.z&&b.z<=r.maxZ?b:null;
 }
+const POI_DAVID_SWEEP_FORWARD=5.25,POI_DAVID_SWEEP_SIDE=4.2;
+function poiDavidArena(b){
+ const a=b?.room?.arena;
+ return a&&[a.x,a.z,a.radius,a.minZ].every(Number.isFinite)&&a.radius>0&&a.radius<=24&&
+  a.minZ>=a.z-a.radius&&a.minZ<=a.z&&Math.hypot(b.x-a.x,b.z-a.z)<a.radius&&b.z>=a.minZ?a:null;
+}
 function poiDavidIn(b,p){
  const r=b?.room;
- return !!r&&p?.y===b.y&&p.x>=r.minX-.5&&p.x<=r.maxX+.5&&p.z>=r.minZ-.5&&p.z<=r.maxZ+.5;
+ if(!r||p?.y!==b.y||!Number.isFinite(p.x)||!Number.isFinite(p.z))return false;
+ const a=poiDavidArena(b);
+ if(a)return poiDavidArenaCell(a,Math.floor(p.x+.5),Math.floor(p.z+.5));
+ return p.x>=r.minX-.5&&p.x<=r.maxX+.5&&p.z>=r.minZ-.5&&p.z<=r.maxZ+.5;
+}
+function poiDavidArenaCell(a,x,z){
+ if(a.cells)return a.cells.has(x+','+z);
+ const dx=x-a.x,dz=z-a.z;
+ return z>=a.minZ&&dx*dx+dz*dz<a.radius*a.radius;
+}
+function poiDavidBoundary(q,b,ux,uz){
+ const {sx,sz}=q,r=b.room;
+ const lim=(v,u,lo,hi)=>Math.abs(u)<1e-8?Infinity:((u>0?hi:lo)-v)/u;
+ return Math.min(lim(sx,ux,r.minX-.5,r.maxX+.5),lim(sz,uz,r.minZ-.5,r.maxZ+.5));
+}
+function poiDavidRoomRay(q,b,ray,max,pass,arena=poiDavidArena(b)){
+ if(arena)return poiAimWallLimit({x:q.sx,z:q.sz},ray,max,(x,z,fx,fz)=>
+  poiDavidArenaCell(arena,x,z)&&pass(x,z,fx,fz));
+ return poiAimWallLimit({x:q.sx,z:q.sz},ray,Math.max(0,Math.min(max,poiDavidBoundary(q,b,ray.x,ray.z))),pass);
+}
+function poiDavidSweepRadius(c,s){
+ return 1/Math.hypot(c/POI_DAVID_SWEEP_FORWARD,s/POI_DAVID_SWEEP_SIDE);
 }
 function poiDavidLine(src,p,b){
  const dx=p.x-src.x,dz=p.z-src.z,n=Math.hypot(dx,dz);
@@ -16371,9 +16398,7 @@ function poiDavidBeamRay(q,angle){
  return {x:q.dx*c-q.dz*s,z:q.dz*c+q.dx*s};
 }
 function poiDavidBeamReach(q,b,ray){
- const r=b.room,lim=(v,u,lo,hi)=>Math.abs(u)<1e-8?Infinity:((u>0?hi:lo)-v)/u;
- const top=Math.min(14,lim(q.sx,ray.x,r.minX-.5,r.maxX+.5),lim(q.sz,ray.z,r.minZ-.5,r.maxZ+.5));
- return poiAimWallLimit({x:q.sx,z:q.sz},ray,Math.max(0,top),poiAimWall({y:q.y}));
+ return poiDavidRoomRay(q,b,ray,14,poiAimWall({y:q.y}));
 }
 function poiDavidBeamAdvance(o,s,d,q,p,b,now){
  const sw=q.sweep;
@@ -16407,7 +16432,7 @@ function poiDavidBeamAdvance(o,s,d,q,p,b,now){
 function poiDavidArea(q,p){
  if(!p||p.y!==q.y)return false;
  const x=p.x-q.sx,z=p.z-q.sz,f=x*q.dx+z*q.dz,s=x*q.dz-z*q.dx,n=Math.hypot(x,z),e=1e-6;
- if(q.kind==='sweep')return n<=4.2+e&&f>=-e;
+ if(q.kind==='sweep')return f>=-e&&Math.hypot(f/POI_DAVID_SWEEP_FORWARD,s/POI_DAVID_SWEEP_SIDE)<=1+e;
  if(q.kind==='double')return f>=.55-e&&f<=3.55+e&&Math.abs(s)<=1.5+e;
  if(q.kind==='stomp')return n<=6+e;
  if(q.kind==='beam')return f>=.28-e&&f<=14+e&&Math.abs(s)<=.56+e;
@@ -16535,8 +16560,9 @@ function poiDavidCombatFrame(now){
  if(q?.sweep&&poiDavidBeamAdvance(o,s,d,q,p,b,now))return true;
  if(q&&now>=q.until){d.attack=null;poiMonsterMeshDirty=true}
  if(now<d.next)return false;
- const distance=Math.hypot(p.x-s.x,p.z-s.z),near=distance<=4.15,mid=distance<=6;
+ const distance=Math.hypot(p.x-s.x,p.z-s.z),mid=distance<=6;
  let kind=POI_DAVID_ORDER[d.cycle%POI_DAVID_ORDER.length];
+ const near=distance<=(kind==='sweep'?POI_DAVID_SWEEP_FORWARD-.05:4.15);
  if(!near&&kind!=='beam'&&(kind!=='stomp'||!mid)){
   if(poiDavidApproach(o,s,b,p,now))return false;
   kind=mid?'stomp':'beam';
@@ -19526,7 +19552,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v275',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v276',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -19641,7 +19667,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v275';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v276';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -19856,7 +19882,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v275',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v276',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -24758,7 +24784,8 @@ function poiDavidCuePairs(q,b){
   const angle=Math.atan2(half,n);
   for(const sign of [-1,1])for(let i=0;i<=12;i++)bearings.add(sign*i*angle/12);
  }
- for(let x=r.minX-.5;x<=r.maxX+.5;x++)for(let z=r.minZ-.5;z<=r.maxZ+.5;z++){
+ const convex=poiDavidArena(b),x0=convex?sx-14:r.minX,z0=convex?sz-14:r.minZ,x1=convex?sx+14:r.maxX,z1=convex?sz+14:r.maxZ;
+ for(let x=x0-.5;x<=x1+.5;x++)for(let z=z0-.5;z<=z1+.5;z++){
   const u=x-sx,v=z-sz;if(u*u+v*v>210)continue;
   const angle=Math.atan2(v*dx-u*dz,u*dx+v*dz);
   if(angle>=low&&angle<=high)for(const e of [-1e-6,0,1e-6])if(angle+e>=low&&angle+e<=high)bearings.add(angle+e);
@@ -24766,11 +24793,10 @@ function poiDavidCuePairs(q,b){
  const pass=poiAimWall({y}),o={x:sx,z:sz};
  return [...bearings].sort((a,b)=>a-b).map(t=>{
   const c=Math.cos(t),s=Math.sin(t),ux=dx*c-dz*s,uz=dz*c+dx*s;
-  const lim=(v,u,lo,hi)=>Math.abs(u)<1e-8?Infinity:((u>0?hi:lo)-v)/u;
-  const edge=Math.min(lim(sx,ux,r.minX-.5,r.maxX+.5),lim(sz,uz,r.minZ-.5,r.maxZ+.5));
+
   const l=strip?near/Math.max(1e-7,c):0;
-  const rr=strip?Math.min(far/Math.max(1e-7,c),half/Math.max(1e-7,Math.abs(s))):fan?14:whole?6:4.2;
-  const h=poiAimWallLimit(o,{x:ux,z:uz},Math.max(0,Math.min(rr,edge)),pass);
+  const rr=strip?Math.min(far/Math.max(1e-7,c),half/Math.max(1e-7,Math.abs(s))):fan?14:whole?6:poiDavidSweepRadius(c,s);
+  const h=poiDavidRoomRay(q,b,{x:ux,z:uz},rr,pass,convex);
   return {ux,uz,lo:Math.min(l,h),hi:h,t};
  });
 }
@@ -28305,10 +28331,53 @@ function extendTownWorldDavidTemple(site){
  prop(21,94,'poiDavidGatePier',0);prop(27,94,'poiDavidGatePier',2);
  for(const [x,z] of [[10,104],[38,104],[13,113],[35,113],[22,118],[26,118]])prop(x,z,'lantern');
  prop(boss.x,boss.z,boss.type,0);
+// Off-center copses in existing meadow, not a uniform hedge at the wall.
+// Coordinates deliberately spare the front look-through, walk-in, and arena.
+ const grove=[
+  // Broadleaf and sparse birch northwest of the old walking line.
+  [14,86,'treeOak',1],[17,85,'treeBirch',3],[12,87,'bushFern',2],[13,89,'tallGrass',1],
+  [16,84,'tallGrass',3],[19,85,'flowerField',1],[11,90,'tallGrass',0],
+  // The northeast shoulder opens back up toward the road; no high screen.
+  [42,91,'treeRound',3],[45,92,'treePine',0],[39,86,'tallGrass',2],[44,90,'bushFern',0],
+  [42,88,'tallGrass',1],[41,92,'flowerField',3],[43,94,'tallGrass',0],
+  // Rocky west and southwest ground with widely broken canopies.
+  [3,101,'treeRound',1],[4,111,'treePine',2],[5,106,'bush',3],[4,99,'tallGrass',0],
+  [2,104,'tallGrass',2],[3,108,'bush',0],[5,113,'flowerField',2],[6,112,'tallGrass',1],
+  // Loose shrubs and two saplings at the southeast edge; no hard visual ring.
+  [47,109,'treeRound',1],[19,124,'treePine',3],[45,104,'tallGrass',1],[44,109,'bush',2],
+  [45,111,'tallGrass',0],[48,108,'bush',3],[17,122,'tallGrass',2],
+  [22,124,'flowerField',1],[22,125,'bush',3]
+ ];
+ const taken=new Set([...world,...props].map(o=>o.x+','+o.z));
+ const plantedTrees=[];
+ for(const [x,z,type,rot] of grove){
+  const key=x+','+z,isTree=type.startsWith('tree');
+  if(x<0||z<0||x>=site.map.width||z>=site.map.height||taken.has(key)||grade.has(k(x,z,0))||
+     Math.hypot(x-ring.x,z-ring.z)<=ring.radius+.72||
+     approach.some(p=>Math.hypot(x-p.x,z-p.z)<=(isTree?3:1.2)))continue;
+  prop(x,z,type,rot);
+  if(isTree||type==='bush')plantedTrees.push(props.at(-1));
+  taken.add(key);
+ }
  world.push(...floor.values(),...props);
+ // Close only the centered gateway for the enclosure flood. The physical
+ // doorway cells themselves remain walkable, with the exterior starting
+ // on the former trail side (z=93). North pockets behind wings stay inside.
+ const shell=new Set(props.filter(o=>/^poiDavid(?:Wall|GatePier|Waystone)/.test(o.type)).map(o=>o.x+','+o.z));
+ const cells=new Set([boss.x+','+boss.z]),pending=[[boss.x,boss.z]];
+ for(let i=0;i<pending.length;i++){
+  const [cx,cz]=pending[i];
+  for(const [dx,dz] of [[0,-1],[1,0],[0,1],[-1,0]]){
+   const x=cx+dx,z=cz+dz,key=x+','+z;
+   if(cells.has(key)||shell.has(key)||z===93&&x>=22&&x<=26||
+      Math.hypot(x-ring.x,z-ring.z)>ring.radius+.20)continue;
+   cells.add(key);pending.push([x,z]);
+  }
+ }
+ boss.room.arena.cells=cells;
  site.buildings.push({id:'davidTemple',name,...bounds,footprint,floorFootprints:{0:footprint},openAir:true});
  return {name,difficulty:6,bounds,ring,approach,entrance:P(24,94),threshold:{minX:22,maxX:26,z:94,y},retreat:P(24,91),boss,
-  resumeSolid:props.filter(o=>o.y===0&&/^poiDavid/.test(o.type)),authored:{index,count:world.length-index}};
+  resumeSolid:[...props.filter(o=>o.y===0&&/^poiDavid/.test(o.type)),...plantedTrees],authored:{index,count:world.length-index}};
 }
 function poiDavidTempleContains(site,x,z,y,pad=0){
  const d=site?.id==='base'?site.davidTemple:null;
