@@ -384,9 +384,10 @@ jobs:
           const game=readFileSync(process.argv[2]??'dynamic/world-editor.html','utf8');
           const key='  overlandStream:()=>poiOverlandInspect(),';assert.equal(game.split(key).length,2);
           let h=game.replace(key,key+`
-            overlandOutletQA:{mode:v=>{cameraTopDown=v;dirty=true;cursorDirty=true},
+            overlandOutletQA:{savedApproach:()=>workshopResumeRestorePosition({x:124,z:82,y:0,facing:0}),
+             mode:v=>{cameraTopDown=v;dirty=true;cursorDirty=true},
              read:()=>({x:poiWalkX,z:poiWalkZ,until:poiWalkNextReady,now:performance.now(),top:cameraTopDown,
-              scene:poiOverlandInspect(),vertices:sceneMesh?.count||0,position:{x:poiWalkViewX,z:poiWalkViewZ},legacy:facilityScenes.size})},`);
+              scene:poiOverlandInspect(),level:poiWalkLevel,vertices:sceneMesh?.count||0,position:{x:poiWalkViewX,z:poiWalkViewZ},legacy:facilityScenes.size})},`);
           for(const [a,b] of [
            [' const p=poiWildPick(rng);',' const p=null;'],
            ['function poiWildRegionalFrame(now,rng){','function poiWildRegionalFrame(now,rng){return;']
@@ -452,6 +453,14 @@ jobs:
            await page.waitForFunction(()=>{const q=window.__editorTest.overlandOutletQA.read();return q.top&&!q.scene.drawing&&q.legacy>0});
            await page.evaluate(()=>window.__editorTest.overlandOutletQA.mode(false));
            await page.waitForFunction(()=>{const q=window.__editorTest.overlandOutletQA.read();return !q.top&&q.scene.drawing&&q.legacy===0});
+           checkpoint='actual stock chapel path uses legacy cellar renderer';
+           assert.equal(await page.evaluate(()=>window.__editorTest.overlandOutletQA.savedApproach()),true,'use existing save restoration to reach distant chapel approach for this probe');
+           await page.waitForFunction(()=>{const q=window.__editorTest.overlandOutletQA.read();return q.x===124&&q.z===82&&q.level===0&&q.scene.drawing});
+           await page.keyboard.press('ArrowUp');
+           await page.waitForFunction(()=>{const q=window.__editorTest.overlandOutletQA.read();return q.level===-1&&q.legacy>0&&!q.scene.drawing&&q.vertices>0});
+           await page.waitForFunction(()=>{const q=window.__editorTest.overlandOutletQA.read();return q.now>=q.until});
+           await page.keyboard.press('ArrowDown');
+           await page.waitForFunction(()=>{const q=window.__editorTest.overlandOutletQA.read();return q.x===124&&q.z===82&&q.level===0&&q.scene.drawing&&!q.legacy});
            assert.deepEqual(errors,[]);
            console.log('PASS user-visible outlet leaves the prior crop, and explicit overhead renderer remains intact');
           }catch(e){console.error(checkpoint,JSON.stringify(await read().catch(()=>null)));throw e}
