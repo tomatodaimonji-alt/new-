@@ -1,8 +1,8 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const html=fs.readFileSync(process.env.HTML||path.join(__dirname,'../world-editor.html'),'utf8');
-test('nine native slots sit between numeric HP and the unchanged D-pad',()=>{
+test('nine native slots sit between the unified numeric HP card and the unchanged D-pad',()=>{
  const markup=html.slice(html.indexOf('<div id="poiWalkPad">'),html.indexOf('<div class="poiWalkDpad">'));
- assert.match(markup,/<span id="poiPlayerHpValue">100\/100<\/span>[\s\S]*<div id="poiHotbar"/);
+ assert.match(markup,/<span id="poiPlayerHpValue" class="poiHpValue">100\/100<\/span>[\s\S]*<div id="poiHotbar"/);
  assert.deepEqual([...markup.matchAll(/<button type="button" data-hotbar-slot="(\d)"[^>]*><span class="hotbar-icon"[^>]*><\/span><span class="hotbar-count"[^>]*><\/span><\/button>/g)].map(m=>m[1]),['0','1','2','3','4','5','6','7','8']);
  assert.match(html,/#poiHotbar\s*\{[^}]*bottom:calc\(100% \+ var\(--poi-hud-gap\)\)[^}]*grid-template-columns:repeat\(9,minmax\(0,1fr\)\)/);
  assert.match(html,/#poiPartyHud\s*\{[^}]*bottom:calc\(100% \+ var\(--poi-hud-gap\) \* 2 \+ var\(--poi-hotbar-size\)\)/);
@@ -23,3 +23,4 @@ test('hotbar uses the canvas width while preserving the D-pad and split desktop 
  assert.match(html,/#app:not\(\.gameWorldMode\) #viewWrap\{--poi-inventory-width:min\(480px,calc\(100vw - 528px\)\)\}/);
  assert.match(html,/\/\^\[1-9\]\$\/\.test\(k\)/);
 });
+

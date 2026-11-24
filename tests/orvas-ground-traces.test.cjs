@@ -59,8 +59,8 @@ test('player head optically continues beyond the first target but respects its l
   const verified={...ready,end:2,visualLimit:8};
   assert(c.poiOrvasPlayerGroundImpact({...o,x:-10},[verified],d,100));
   assert(verified.groundDrop?.at>=7.75&&verified.groundDrop.at<8&&verified.groundDrop.at>verified.end+2);
-  assert(verified.visualEnd<verified.groundDrop.at-.95);
-  const terminal={p:[],c:[],n:[]};c.poiOrvasPlayerTraceTerminalMesh(terminal,{rays:[verified],d});
+  assert.equal(verified.visualEnd,verified.groundDrop.at);
+  const terminal=c.poiDavidThermalBeam({sx:-10,sz:0,y:0,opticalRays:[verified],opticalCenter:8},d,8.3,0,true);
   assert(terminal.p.length>36);
   const low=Math.min(...terminal.p.filter((_,i)=>i%3===1));
   const high=Math.max(...terminal.p.filter((_,i)=>i%3===1));

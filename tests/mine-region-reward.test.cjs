@@ -4,7 +4,7 @@ function span(a,b){const i=h.indexOf(a),j=h.indexOf(b,i+1);assert(i>=0&&j>i,a);r
 test('mine area is a floor-aware named region with danger rank without changing open-field music',()=>{
  const animations=[];
  const c=vm.createContext({window:{},panel:{animate(){animations.push(1);return {cancel(){}}}}});
- vm.runInContext(span('const POI_SAFE_TOWN=','const poiMiniStatic='),c);
+ vm.runInContext(span('const POI_SAFE_TOWN=','// BEGIN LOCAL MINI CORE'),c);
  const site={id:'base',townOffset:22,buildings:[],mine:{entrance:{x:116,z:64,y:0},stairs:{x:116,z:62,y:0},bounds:{x1:112,z1:52,x2:123,z2:63,y:-1}}};
  const surface=c.poiRegionAt(site,116,64,false,0),stairs=c.poiRegionAt(site,116,62,false,0);
  const below=c.poiRegionAt(site,116,62,false,-1),deep=c.poiRegionAt(site,120,55,false,-1);

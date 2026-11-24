@@ -14,8 +14,8 @@ replace(testApi,testApi+`
   admission:(x,z)=>({passable:poiWalkCanStep(x,z,poiWalkX,poiWalkZ),next:poiWalkNextReady,now:performance.now(),hp:poiPlayerHP}),
   inspect:()=>{
    const f=facilitySite.sacredForest,at=poiAimOrigin(performance.now());
-   return {x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,name:poiRegionAt(facilitySite,poiWalkX,poiWalkZ,false,poiWalkLevel).name,
-    path:f.route,mapH:MAP_H,roofDraws:window.__depthRoofDraws??0,isConcealed:poiMiniStatic.get(0)?.concealed,seen:poiHotbarRead().sacredTempleSeen===true,reveal:f.reveal,tree:f.trees[10],fog:[...gl.getUniform(program,loc.sacredFog)],raster:window.__sacredRaster||null,
+   return {x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,name:poiRegionAt(facilitySite,poiWalkX,poiWalkZ,false,poiWalkLevel).name,locationName:$('poiLocationName').textContent,locationTitle:$('poiLocationName').title,stars:$('poiLocationStars').textContent,starLabel:$('poiLocationStars').getAttribute('aria-label'),
+    path:f.route,mapH:MAP_H,roofDraws:window.__depthRoofDraws??0,isConcealed:poiLocalFrame?.concealed,seen:poiHotbarRead().sacredTempleSeen===true,reveal:f.reveal,tree:f.trees[10],fog:[...gl.getUniform(program,loc.sacredFog)],raster:window.__sacredRaster||null,
     scene:poiSacredForestStatus(),err:gl.getError(),directions:['n','s','e','w'].map(k=>poiCameraRelativeStep(k)),
     nearTemple:poiDavidTempleContains(facilitySite,at.x,at.z,at.y)};
   }
@@ -25,21 +25,44 @@ const raf=' requestAnimationFrame(render);';
 replace(raf,' if(!window.__sacredManual)requestAnimationFrame(render);');
 const apply=" if(typeof poiSacredApplyFog==='function')poiSacredApplyFog(now,daylight);";
 replace(apply,apply+`
- if(window.__sacredCompareDry){gl.uniform3f(loc.sacredFog,0,0,0);gl.clearColor(0,0,0,0)}
+ // Use the same transparent background in both captures. Only real
+ // geometry, not sky/cleared pixels, can be credited for blended fog.
+ if(window.__sacredCapture)gl.clearColor(0,0,0,0);
+ if(window.__sacredCompareDry)gl.uniform3f(loc.sacredFog,0,0,0);
 `);
-const end=" if(typeof poiSacredDrawScene==='function')poiSacredDrawScene(p.vp);";
+const end=" if(!stream&&typeof poiSacredDrawScene==='function')poiSacredDrawScene(p.vp);";
 replace(end,end+`
  if(window.__sacredCapture){
   window.__sacredCapture=false;
   const w=gl.drawingBufferWidth,h=gl.drawingBufferHeight,pixels=new Uint8Array(w*h*4);
   gl.readPixels(0,0,w,h,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
-  const color=gl.getUniform(program,loc.sacredColor);let haze=0,textured=0;
+  const color=gl.getUniform(program,loc.sacredColor);
+  const dist=(data,i)=>Math.max(...[0,1,2].map(j=>Math.abs(data[i+j]-color[j]*255)));
+  let haze=0,textured=0;
   for(let i=0;i<pixels.length;i+=4){
    if(pixels[i+3]<252)continue;
-   const d=Math.max(...[0,1,2].map(j=>Math.abs(pixels[i+j]-color[j]*255)));
-   if(d<2.5)haze++;else if(d>14)textured++;
+   const d=dist(pixels,i);if(d<2.5)haze++;else if(d>14)textured++;
   }
-  window.__sacredRaster={haze,textured,total:w*h};
+  let pair=null;
+  if(!window.__sacredCompareDry)window.__sacredWetPixels={pixels,w,h,vp:Array.from(p.vp)};
+  else{
+   const raw=window.__sacredWetPixels;
+   let opaque=0,farBlend=0,near=0,nearStable=0,strength=0;
+   if(raw?.w===w&&raw.h===h){
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+     const i=(y*w+x)*4;
+     if(raw.pixels[i+3]<252||pixels[i+3]<252)continue;
+     opaque++;
+     const shift=Math.max(...[0,1,2].map(j=>Math.abs(raw.pixels[i+j]-pixels[i+j])));
+     const gain=dist(pixels,i)-dist(raw.pixels,i);
+     if(y>=h*.45&&dist(pixels,i)>=16&&gain>=7&&shift>=10){farBlend++;strength+=gain;}
+     if(y<h*.24){near++;if(shift<=4)nearStable++;}
+    }
+   }
+   pair={opaque,farBlend,near,nearStable,strength,aligned:raw?.vp.every((v,i)=>Math.abs(v-p.vp[i])<.00001)};
+   window.__sacredWetPixels=null;
+  }
+  window.__sacredRaster={haze,textured,total:w*h,pair};
  }
 `);
 replace(' for(const i of facilityVisibleRoofs()){',` for(const i of facilityVisibleRoofs()){
@@ -115,13 +138,18 @@ try{
  }
  assert.deepEqual([s.x,s.z,s.y],[24,125,0]);assert.equal(s.err,0);
  assert(peak>.85&&maxTrees>1800&&maxTrees<=96*180&&forests.length===3&&forests.every((v,i)=>!i||v>forests[i-1]),JSON.stringify({peak,maxTrees,forests}));
- assert(raw&&clear&&(raw.haze-clear.haze)>raw.total*.03&&raw.textured>raw.total*.04,JSON.stringify({raw,clear}));
+ const pair=clear?.pair;
+ assert(raw&&clear&&pair?.aligned&&pair.opaque>raw.total*.3&&raw.textured>raw.total*.04,JSON.stringify({raw,clear}));
+ // Distant drawn surfaces must move toward the actual fog hue, not just
+ // change in arbitrary directions. The ground/woods near the lens stay textured.
+ assert(pair.farBlend>=Math.max(70,Math.floor(raw.total*.0006))&&pair.strength>=pair.farBlend*8&&
+        pair.near>400&&pair.nearStable>pair.near*.55,JSON.stringify({raw,clear}));
  assert(s.fog[2]<.035&&s.roofDraws>0,'healthy close reveal of actual dome');assert.equal(s.isConcealed,true);
  if(process.env.FACILITY_SCREENSHOTS)await p.screenshot({path:process.env.FACILITY_SCREENSHOTS+'/depth-reveal.png'});
  phase='actual north forecourt and straight covered same-world crossing';
  for(let z=126;z<=127;z++){await step({x:24,z});assert.equal(last.isConcealed,true);assert.equal(last.seen,false);}
  for(let z=128;z<=132;z++){await step({x:24,z});assert.equal(last.isConcealed,false);assert.equal(last.seen,true);}
- assert.equal(last.fog[2],0);assert.equal(last.name,'白環の大神殿');
+ assert.equal(last.fog[2],0);assert.equal(last.name,'オルヴァスの大神殿');assert.equal(last.locationName,last.name);assert.equal(last.locationTitle,last.name);assert.equal(last.stars,'★'.repeat(10));assert.equal(last.starLabel,'危険度 10／10');
  for(let z=133;z<=143;z++)await step({x:24,z});
  assert.equal(last.isConcealed,false);assert.equal(last.seen,true);
  phase='old temple check-in migrates safe, new deep check-in resumes exactly';

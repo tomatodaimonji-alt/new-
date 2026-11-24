@@ -7,7 +7,7 @@ function fixture(){
  const site=Object.assign(build('base'),{id:'base'}),c={facilitySite:site,POI_SAFE_TOWN:[],POI_WILD_GATES:[],POI_WILD_LANDMARKS:[],validPos:()=>true,poiWildZone:()=>false,poiDungeonThemeAt:()=>null,
   poiWalkLevel:0,poiWalkX:101,poiWalkZ:112,facilityFloorOwner:()=>null,world:site.map.world};
  vm.createContext(c);
- vm.runInContext(sl(h,'function poiRegionAt(','const poiMiniStatic=')+(h.includes('function poiAudioSurfaceMusicZone(')?sl(h,'function poiAudioSurfaceMusicZone(','function poiOrchestraScene('):'')+sl(h,'function poiAudioMusicZone(','function poiAudioTownRegionMusic(')+sl(h,'function poiWildExterior(','function poiWildActive('),c);
+ vm.runInContext(sl(h,'function poiRegionAt(','// BEGIN LOCAL MINI CORE')+(h.includes('function poiAudioSurfaceMusicZone(')?sl(h,'function poiAudioSurfaceMusicZone(','function poiOrchestraScene('):'')+sl(h,'function poiAudioMusicZone(','function poiAudioTownRegionMusic(')+sl(h,'function poiWildExterior(','function poiWildActive('),c);
  const start=h.includes('const POI_SOUTH_MERCHANT_ID=')?'const POI_SOUTH_MERCHANT_ID=':'const POI_TOWN_RESIDENT_ROLES=Object.freeze(';
  vm.runInContext(sl(h,start,'const POI_TOWN_INN='),c);return c;
 }
@@ -52,3 +52,4 @@ test('keeper can physically walk from shop across the street to his own bed stan
  assert.ok(route?.length>10);assert.equal(route.at(-1).x,114);assert.equal(route.at(-1).z,117);
  assert(route.some(p=>p.x===102&&p.z===112));assert(route.some(p=>p.x===108&&p.z===116));
 });
+

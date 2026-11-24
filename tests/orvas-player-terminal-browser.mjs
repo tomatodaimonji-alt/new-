@@ -12,6 +12,23 @@ const mark="if(facilityParams.get('test')==='1')window.__editorTest={";
 install(mark,`
  window.__orvas={
   frame:()=>render(),
+  straightAxes:()=>{
+   const a=poiOrvasPlayerBeam,verts=window.__orvasBeamVertices;
+   if(!a||!verts||!poiOrvasBeamGpu)return null;
+   const d=a.d;
+   return a.rays.map(r=>{
+    const rows=new Map(),end=r.visualEnd??r.visualLimit,final=r.visualHeight??r.h;
+    for(let i=0;i<verts.length;i+=3){
+     const x=verts[i]-r.x-.5,z=verts[i+2]-r.z-.5;
+     const drift=x*d.z-z*d.x;if(Math.abs(drift)>.125)continue;
+     const at=x*d.x+z*d.z,k=at.toFixed(5),pair=rows.get(k)??[at,Infinity,-Infinity];
+     pair[1]=Math.min(pair[1],verts[i+1]);pair[2]=Math.max(pair[2],verts[i+1]);rows.set(k,pair);
+    }
+    const values=[...rows.values()];
+    return {n:values.length,first:Math.min(...values.map(r=>r[0])),last:Math.max(...values.map(r=>r[0])),
+     drop:r.h-final,end,error:Math.max(...values.map(([at,lo,hi])=>Math.abs((lo+hi)*.5-(r.h+(final-r.h)*at/end))))};
+   });
+  },
   verifyStripes:()=>{
    const a=poiOrvasPlayerBeam,rs=a?.rays;if(!rs?.length)return null;
    const d=a.d,g=poiOrvasBeamGpu,x=(rs[0].x+rs[1].x)*.5+.5,z=(rs[0].z+rs[1].z)*.5+.5;
@@ -86,6 +103,7 @@ install(mark,`
     name:POI_ORVAS_NAME,items:slots.slice(2,5).map(c=>c?.type)};
   }
  };`+mark);
+install('if(m.p.length)poiOrvasBeamGpu=upload(m);','if(m.p.length){window.__orvasBeamVertices=m.p.slice();poiOrvasBeamGpu=upload(m)}');
 install(' requestAnimationFrame(render);',' if(!window.__orvasManual)requestAnimationFrame(render);');
 // Only isolate the empty-material samples from autonomous spawns. Real
 // input, target selection, hit resolution, and weapon wear remain intact.
@@ -145,6 +163,12 @@ try{
  assert.equal(behind.length,1,'real terrain beyond first target receives one two-tip mark event');
  assert(landed.beam.rays.every(r=>r.groundDrop&&r.groundDrop.at>r.end+2&&r.groundDrop.at<r.visualLimit),
   JSON.stringify(landed.beam.rays));
+ const checkAxes=async(minDrop)=>{
+  const axes=await p.evaluate(()=>window.__orvas.straightAxes());
+  assert(axes?.length===2&&axes.every(a=>a.n>=3&&a.drop>minDrop&&Math.abs(a.first)<.0001&&Math.abs(a.last-a.end)<.0001&&a.error<.0001),JSON.stringify(axes));
+  return axes;
+ };
+ const enemyAxes=await checkAxes(.25);
  const firstStrike=landed.hp.slice();await frame(150);assert.deepEqual((await read()).hp,firstStrike,'no follow-up HP loss from visual continuation');
  ({q,held}=await start(2,[],'wall'));
  landed=await until(v=>!v.pending&&v.beam?.draw);
@@ -156,13 +180,14 @@ try{
  assert(markWall[0].surfaces.includes('wall')&&markWall[0].surfaces.includes('floor'));
  const stripes=await p.evaluate(()=>window.__orvas.verifyStripes());
  assert(stripes&&stripes.left>35&&stripes.right>35&&stripes.center===0&&stripes.error===0,JSON.stringify(stripes));
- console.log('Actual portable split GPU stripe',JSON.stringify(stripes));
+ const cornerAxes=await checkAxes(.045);
+ console.log('Actual portable split GPU stripe and straight uploaded axes',JSON.stringify({stripes,enemyAxes,cornerAxes}));
  ({q,held}=await start(2,[]));
  landed=await until(v=>!v.pending&&v.beam?.draw);
  const marks=paint(landed,'beam',held.start),drops=landed.beam.rays.filter(r=>r.groundDrop);
  assert.equal(marks.length,1);assert(marks[0].tiles>=1&&marks[0].tiles<=2);
  assert(drops.length===2&&drops.every(r=>r.groundEligible&&r.groundDrop.at<=r.end&&r.groundDrop.at>r.end-1.25));
- for(const r of drops)assert(r.h>r.groundDrop.h+.1&&r.visualEnd===r.groundDrop.blendStart);
+ for(const r of drops)assert(r.h>r.groundDrop.h+.1&&r.visualEnd===r.groundDrop.at&&r.visualHeight===r.groundDrop.h);
  assert(landed.beam.rays.length===2&&landed.beam.rays[0].z!==landed.beam.rays[1].z);
  ({q,held}=await start(3,[[28,108,0],[26,111,0],[23,108,0]]));
  landed=await until(v=>!v.pending);

@@ -5,7 +5,13 @@ function harness(){
  a.ok(i>=0&&j>i,'real companion core is present');
  let kit={slots:Array(27).fill(null)},write=true;
  const ctx={facilitySite:{id:'base'},poiWalkActive:true,poiWalkLevel:0,poiWalkX:20,poiWalkZ:20,pineAIActive:false,
-  POI_HOTBAR_SIZE:9,POI_BAG_UNLOCKED:9,
+  POI_HOTBAR_SIZE:9,POI_BAG_UNLOCKED:9,POI_MONSTER_FLIGHT_MS:760,poiWalkViewX:20,poiWalkViewZ:20,
+  validPos:()=>true,poiDungeonTravelKey:()=>0,poiOtherworldPortalAt:()=>false,facilityCreekIndex:null,
+  poiChapelWater:()=>false,poiLootFloorTop:()=>0,poiMonsterMeshDirty:false,poiInventoryAllowed:()=>true,
+  poiDropNearestCell:(x,z,_f,_r,step,free)=>{for(const n of [x+1,x-1])if(step(n,z,x,z)&&free(n,z))return {x:n,z};return null;},
+  poiInventoryAccept:(k,type,_count,source)=>{const slots=k.slots.slice();const i=slots.slice(9,18).findIndex(v=>!v);
+   if(i<0)return {slots,accepted:0};slots[i+9]={type,count:1,durability:source.durability};return {slots,accepted:1};},
+  poiInventoryItemName:type=>type,
   world:[],poiMonsterStates:new Map(),document:{hidden:false,querySelector:()=>null},
   poiHotbarHasKit:()=>true,poiHotbarRead:()=>kit,poiInventorySlots:k=>k.slots,poiGoldHotbarSlot:()=>null,
   poiInventoryEdited:(k,slots)=>({...k,slots}),poiEconomyRefresh(){},
@@ -17,26 +23,28 @@ function harness(){
  const kill=(now=1000,r=.05)=>run(`(()=>{let o={type:'monsterSlime',x:21,z:20,y:0},s={hp:0};poiMonsterStates.set(o,s);return poiCompanionMonsterDefeated(o,s,${now},{x:21.5,z:20.5,floor:0,start:${now}},()=>${r})})()`);
  return {run,ctx,kill,get kit(){return kit},set kit(v){kit=v},storage:v=>{write=v}};
 }
-test('eligible kill reserves once, visible flight commits one inventory soul and pickup only upon durable success',()=>{
+test('same kill odds and duplicate gate reserve durable floor only; only explicit accepted collection is audible',()=>{
  const f=harness();
  a.equal(f.kill(1000,.9),false);a.equal(f.kill(),true);a.equal(f.kill(),false);
- a.equal(f.kit.companionSoul.pending,'slimeSoul');a.equal(f.run('poiCompanionSoulFlight().arrives'),3420);
- f.run('poiCompanionTick(3419)');a.equal(f.kit.slots[9],null);f.storage(false);
- f.run('poiCompanionTick(3420)');a.equal(f.kit.slots[9],null);a.equal(f.ctx.sounds.length,0);
- f.storage(true);f.run('poiCompanionTick(4540)');f.run('poiCompanionTick(5700)');
+ a.equal(f.kit.soulDrops.length,1);a.equal(f.kit.slots[9],null);
+ f.run('poiCompanionTick(3500)');a.equal(f.kit.slots[9],null);
+ f.storage(false);a.equal(f.run('poiSoulFloorCollect(poiHotbarRead().soulDrops[0])'),false);
+ a.equal(f.kit.soulDrops.length,1);a.equal(f.ctx.sounds.length,0);
+ f.storage(true);a.equal(f.run('poiSoulFloorCollect(poiHotbarRead().soulDrops[0])'),true);
  a.deepEqual(f.kit.slots[9],{type:'slimeSoul',count:1,durability:36});a.equal(f.kit.companionSoul?.pending??null,null);
  a.deepEqual(f.ctx.sounds,[['item-pickup','slimeSoul']]);
 });
-test('full bag retains reserved soul through room changes and retries only when a real slot opens',()=>{
+test('full bag retains exact floor soul through room changes and requires another explicit pickup once there is room',()=>{
  const f=harness();for(let i=0;i<18;i++)f.kit.slots[i]={type:'healingHerb',count:1};
  a.equal(f.kill(),true);f.ctx.facilitySite={id:'snowpass'};
- f.run('poiCompanionTick(3500)');a.equal(f.kit.companionSoul.pending,'slimeSoul');
- f.run('poiCompanionTick(4400)');a.equal(f.ctx.sounds.length,0);
- f.kit.slots[12]=null;f.run('poiCompanionTick(5500)');
+ f.run('poiCompanionTick(3500)');a.equal(f.kit.soulDrops.length,1);a.equal(f.ctx.sounds.length,0);
+ f.ctx.facilitySite={id:'base'};a.equal(f.run('poiSoulFloorCollect(poiHotbarRead().soulDrops[0])'),false);
+ f.kit.slots[12]=null;f.run('poiCompanionTick(5500)');a.equal(f.kit.slots[12],null);
+ a.equal(f.run('poiSoulFloorCollect(poiHotbarRead().soulDrops[0])'),true);
  a.equal(f.kit.slots[12].type,'slimeSoul');a.equal(f.ctx.sounds.length,1);
 });
 test('actual own HP persists through resummon; committed legal covered attack wears token, zero atomically removes it',()=>{
- const f=harness();a.ok(f.kill());f.run('poiCompanionTick(3500)');
+ const f=harness();a.ok(f.kill());f.run('poiSoulFloorCollect(poiHotbarRead().soulDrops[0]);poiCompanionTick(3500)');
  a.ok(f.run("poiCompanionUse(poiHotbarRead(),9).ok"));
  f.run('poiCompanionTick(4000)');const p=JSON.parse(f.run('JSON.stringify(poiCompanionActor)'));
  a.ok(p&&(p.x!==20||p.z!==20));
@@ -48,7 +56,7 @@ test('actual own HP persists through resummon; committed legal covered attack we
  f.storage(true);a.equal(f.run('poiCompanionHurt(29,4900)'),true);a.equal(f.kit.slots[9],null);a.equal(f.kit.companionSoul?.active??null,null);
 });
 test('auto engages a visible hostile without player damaging it first; exact contact and floor/HP protection',()=>{
- const f=harness();a.ok(f.kill());f.run('poiCompanionTick(3500);poiCompanionUse(poiHotbarRead(),9);poiCompanionTick(4000);');
+ const f=harness();a.ok(f.kill());f.run('poiSoulFloorCollect(poiHotbarRead().soulDrops[0]);poiCompanionTick(3500);poiCompanionUse(poiHotbarRead(),9);poiCompanionTick(4000);');
  f.ctx.poiPlayerDamageTarget=(hit,x,z,amount,weapon,now,silent,contact,source)=>{
   a.equal(silent,true);a.equal(contact,true);a.equal(source.companion,true);hit[1].hp-=amount;
  };
@@ -66,7 +74,7 @@ test('auto engages a visible hostile without player damaging it first; exact con
 test('no award from a town-owned sparring actor or duplicate failed claims; one resolved strike cannot wear the same soul twice',()=>{
  const f=harness();
  a.equal(f.run("this.o={type:'monsterSlime',x:22,z:20,y:0};this.s={hp:0,townOwned:true};poiMonsterStates.set(o,s);poiCompanionMonsterDefeated(o,s,10,null,()=>0)"),false);
- a.ok(f.kill());f.run('poiCompanionTick(3500);poiCompanionUse(poiHotbarRead(),9);poiCompanionTick(4000);');
+ a.ok(f.kill());f.run('poiSoulFloorCollect(poiHotbarRead().soulDrops[0]);poiCompanionTick(3500);poiCompanionUse(poiHotbarRead(),9);poiCompanionTick(4000);');
  f.run("this.contact={obj:{type:'monsterSlime',x:18,z:20,y:0},sx:18,sz:20,x:19,z:20,y:0};");
  a.equal(f.run('poiCompanionEnemyContact(contact,{},4100)'),true);
  a.equal(f.run('poiCompanionEnemyContact(contact,{},4101)'),false);

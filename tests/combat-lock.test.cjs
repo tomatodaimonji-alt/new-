@@ -22,7 +22,7 @@ function setup(){
   poiCreekPlayerHeight:()=>0,gl:{deleteBuffer(){}},upload:()=>({buf:{}}),poiBuildPlayerMesh:(...args)=>{avatars.push(args);return {}}
  };
  vm.createContext(c);
- vm.runInContext(cut('// BEGIN ANGULAR COMBAT MATH','// BEGIN PLAYER WEAPON PROFILES')+
+ vm.runInContext(html.slice(html.indexOf('function poiSacredInteriorHostileVisible('),html.indexOf('let poiSacredInteriorVbo'))+cut('// BEGIN ANGULAR COMBAT MATH','// BEGIN PLAYER WEAPON PROFILES')+
   cut('// BEGIN PLAYER BARE HAND RIG','// END PLAYER BARE HAND RIG')+
   cut('function poiWalkAvatar(','const POI_MONSTER_BREAK_MS='),c);
  const enemy=(dx,dz,y=0)=>{

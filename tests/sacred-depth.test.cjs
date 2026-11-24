@@ -8,7 +8,7 @@ test('open meadow, known original terrain and continuous authored paths to the r
  a.deepEqual([site.map.width,site.map.height],[128,182]);
  a.deepEqual([d.entrance.x,d.entrance.z,d.boss.x,d.boss.z],[24,128,24,158]);
  a.equal(crypto.createHash('sha256').update(JSON.stringify(w.slice(0,d.authored.index))).digest('hex'),'15535689893b8a631827467885930d45d786e0d3b559b74d6a2544267d03439a');
- a(w.every(o=>o.z<128||o.x<48));
+ a(w.every(o=>o.z<128||o.x<48||o.x<72&&o.z<139));
  a.deepEqual([f.route[0].x,f.route[0].z,f.route.at(-1).x,f.route.at(-1).z],[12,49,24,125]);
  a(f.route.length>=100);
  a(f.trees.length>=72&&f.trees.length<=96&&f.trees.every(o=>o.z>=73));
@@ -43,11 +43,11 @@ test('foreground gameplay remains clear; depth steepens gradually and tall spars
 });
 test('deep stock save decoding accepts only the additional western lobe; public custom map height is unchanged',()=>{
  const c=vm.createContext({MAX_MAP:128,MAX_LEVEL:9,POI_SACRED_DEPTH_H:182,POI_SACRED_DEPTH_W:48});
- vm.runInContext(cut('function workshopResumeDecode(','function workshopResumePermitted(')+cut('function poiSacredDepthVoid(','function poiWalkCanStep('),c);
+ vm.runInContext(cut('function poiSnowSleeveOwn(','function poiSnowSleeveRoute(')+cut('function workshopResumeDecode(','function workshopResumePermitted(')+cut('function poiSacredDepthVoid(','function poiWalkCanStep('),c);
  const s=(x,z,hd,route='facility')=>c.workshopResumeDecode(JSON.stringify({version:1,route,id:'base',play:true,townLayout:5,townMapHeight:hd,
   position:{x,z,y:0,facing:2}})).position;
  a.equal(s(24,155,182).z,155);a.equal(s(49,155,182),null);a.equal(s(24,155,128),null);a.equal(s(24,155,182,'editor'),null);
- a.equal(s(49,127,128).x,49);a.equal(c.poiSacredDepthVoid(site,49,127),false);a.equal(c.poiSacredDepthVoid(site,49,128),true);
+ a.equal(s(49,127,128).x,49);a.equal(c.poiSacredDepthVoid(site,49,127),false);a.equal(c.poiSacredDepthVoid(site,49,128),false);a.equal(c.poiSacredDepthVoid(site,49,139),true);a.equal(s(60,138,182).z,138);
  a.match(h,/const MIN_MAP=12,MAX_MAP=128,POI_SACRED_DEPTH_H=182/);
 });
 

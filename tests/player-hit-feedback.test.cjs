@@ -3,7 +3,7 @@ const h=fs.readFileSync(process.env.WORLD_HTML||'world-editor.html','utf8');
 function fixture(reduced=false){
  let animations=[],styles={},listeners={};
  const node={style:styles,animate:(keyframes,timing)=>{
-  const output={keyframes,timing,cancelled:false,cancel(){this.cancelled=true}};
+  const output={keyframes,timing,cancelled:false,playState:'idle',pause(){this.playState='paused'},play(){this.playState='running'},cancel(){this.cancelled=true}};
   animations.push(output);return output;
  }};
  const c=vm.createContext({
@@ -40,7 +40,9 @@ test('hidden and outside modes cannot replay, reduced mode is softer and shorter
  std.hit(30,100);low.hit(30,100);
  assert(low.animations[0].timing.duration<std.animations[0].timing.duration);
  assert(low.animations[0].keyframes[0].opacity<std.animations[0].keyframes[0].opacity);
- low.c.document.hidden=true;low.listeners.visibilitychange();assert(low.animations[0].cancelled);
+ low.animations[0].play();low.c.document.hidden=true;low.c.poiPlayerHitEdgeLifecycle(true);
+ assert.equal(low.animations[0].playState,'paused');assert(!low.animations[0].cancelled);
  low.hit(20,1000);assert.equal(low.animations.length,1);
- low.c.document.hidden=false;low.c.poiWalkActive=false;low.hit(20,1500);assert.equal(low.animations.length,1);
+ low.c.document.hidden=false;low.c.poiPlayerHitEdgeLifecycle(false);
+ assert.equal(low.animations[0].playState,'running');low.c.poiWalkActive=false;low.hit(20,1500);assert.equal(low.animations.length,1);
 });

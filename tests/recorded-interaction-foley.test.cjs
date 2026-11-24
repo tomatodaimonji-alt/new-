@@ -36,7 +36,7 @@ test('only real metallic melee uses recorded attack air; bladed contact uses sep
  for(const type of ['equipWoodSword','equipWoodSpear','equipStoneMace','equipClub'])
   assert.ok(![...play('attack',type),...play('hit',type)].some(c=>c[0]==='recorded'),type);
 });
-test('successful pickup and chest route to cloth recording without stealing the separate gold cue or mixer mute',()=>{
+test('successful pickup and chest route to the shared picon without stealing the separate gold cue or mixer mute',()=>{
  const {env,play}=harness();
  assert.equal(play('item-pickup','ironOre')[0][2],10.068);
  assert.deepEqual(play('chest-pickup')[0].slice(0,3),['recorded','itemPickup',10]);

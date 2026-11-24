@@ -14,9 +14,12 @@ function setup(){
   quad:(m,...q)=>{m.c.push(q.pop());for(const p of q)m.p.push(...p)}
  
  };
- const api=vm.runInNewContext(cut('// BEGIN DAVID TEMPLE COMBAT','// END DAVID TEMPLE COMBAT')+
+ c.wallNow=0;
+ c.window={performance:{now:()=>c.wallNow},pineStartup:{},addEventListener:()=>{}};
+ const lifecycle=cut('// BEGIN WORKSHOP SUSPENDABLE GAME CLOCK','// END WORKSHOP SUSPENDABLE GAME CLOCK');
+ const api=vm.runInNewContext(lifecycle+cut('// BEGIN DAVID TEMPLE COMBAT','// END DAVID TEMPLE COMBAT')+
   cut('function poiAimWallLimit(','function poiAimChooseLock(')+cut('// BEGIN DAVID TEMPLE CUES','// END DAVID TEMPLE CUES')+
-  ';({realStep:poiDavidMobFrame,step:(o,s,t)=>{const prior=poiAimOrigin;let ok;try{poiAimOrigin=()=>({x:s.x,z:s.z-2,y:o.y});ok=poiDavidMobFrame(o,s,t)}finally{poiAimOrigin=prior};if(ok){const b=poiDavidMatch(o);for(const u of [POI_DAVID_AWAKENING.first,POI_DAVID_AWAKENING.second,POI_DAVID_AWAKENING.ready])poiDavidAwakeningTick(o,s,b,t+u);if(!s.david?.wakeDone)throw Error("post-awakening fixture unavailable");s.david.next=t+620;}return ok},tick:poiDavidCombatFrame,pose:poiDavidPose,area:poiDavidArea,begin:poiDavidBegin,match:poiDavidMatch,incoming:poiDavidIncoming,cue:(q,b)=>({...poiDavidCueGeometry(q,b),beam:poiDavidThermalBeam(q,{x:q.dx,z:q.dz},poiDavidBeamReach(q,b,{x:q.dx,z:q.dz}),0)})})',Object.assign(c,{POI_AIM_EPS:1e-7}));
+  ';({realStep:poiDavidMobFrame,step:(o,s,t)=>{const prior=poiAimOrigin;let ok;try{poiAimOrigin=()=>({x:s.x,z:s.z-2,y:o.y});ok=poiDavidMobFrame(o,s,t)}finally{poiAimOrigin=prior};if(ok){const b=poiDavidMatch(o);for(const u of [POI_DAVID_AWAKENING.first,POI_DAVID_AWAKENING.second,POI_DAVID_AWAKENING.ready])poiDavidAwakeningTick(o,s,b,t+u);if(!s.david?.wakeDone)throw Error("post-awakening fixture unavailable");s.david.next=t+620;}return ok},tick:poiDavidCombatFrame, frame:()=>{if(!poiGameFrozen())poiDavidCombatFrame(performance.now())},pose:poiDavidPose,area:poiDavidArea,begin:poiDavidBegin,match:poiDavidMatch,incoming:poiDavidIncoming,cue:(q,b)=>({...poiDavidCueGeometry(q,b),beam:poiDavidThermalBeam(q,{x:q.dx,z:q.dz},poiDavidBeamReach(q,b,{x:q.dx,z:q.dz}),0)})})',Object.assign(c,{POI_AIM_EPS:1e-7}));
  return {c,s,api,boss};
 }
 test('only canonical authored room enables dormant encounter; no damage or patrol through threshold',()=>{
@@ -61,14 +64,25 @@ test('real double contact resolves twice with actual dodge and wall; expired con
  for(const x of [run(false,true),run(false,false,true)])a.deepEqual(x.c.damage.map(z=>z.n),[28]);
  run(true);
 });
-test('hidden resume and long frame discontinuity cancel instead of replaying contacts',()=>{
- for(const hide of [true,false]){
-  const {c,s,api}=setup();api.step(o,s,1000);a(api.begin(o,s,1700,'double'));
-  for(const t of [1900,2100,2300])api.tick(t);
-  if(hide){c.document.hidden=true;c.visibility();c.document.hidden=false;c.visibility();}
-  api.tick(hide?2500:3400);
-  a.equal(c.damage.length,0);a.equal(s.david.attack,null);
+test('short frozen boss wind-up resumes with remaining time; truly stale foreground frames do not replay',()=>{
+ const normal=setup(),paused=setup();
+ for(const {c,s,api} of [normal,paused]){
+  api.step(o,s,1000);a(api.begin(o,s,1700,'double'));
+  for(const t of [1900,2100,2300]){c.wallNow=t;api.frame()}
  }
+ const {c,s,api}=paused;
+ c.document.hidden=true;c.visibility();c.wallNow=12300;api.frame();
+ a.equal(c.damage.length,0);a.equal(s.david.attack.executed,0);
+ c.document.hidden=false;c.visibility();api.frame();a.equal(c.damage.length,0);
+ for(const t of [2340,2390,2425]){
+  normal.c.wallNow=t;normal.api.frame();
+  c.wallNow=t+10000;api.frame();
+ }
+ a.deepEqual(c.damage.map(v=>v.n),[28]);
+ a.deepEqual(c.damage,normal.c.damage);
+ const stale=setup();stale.api.step(o,stale.s,1000);a(stale.api.begin(o,stale.s,1700,'double'));
+ for(const t of [1900,2100,2300,3400])stale.api.tick(t);
+ a.equal(stale.c.damage.length,0);a.equal(stale.s.david.attack,null);
 });
 test('beam cannot hit behind a wall, sweep is forward, retreat cancels an already declared attack',()=>{
  const {c,s,api}=setup();api.step(o,s,1100);
