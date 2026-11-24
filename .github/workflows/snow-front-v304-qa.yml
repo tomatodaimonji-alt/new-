@@ -9,7 +9,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [strict, frontage, preserves]
+        suite: [strict, frontage, audible-a, audible-b, preserves]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -19,9 +19,11 @@ jobs:
       - run: |
           test "$(git hash-object world-editor.html)" = bfa7d9aed030b117c1a4b9660ceeb4b872a4d287
           cp world-editor.html stock.html
-          python .snow-front/build.py stock.html world-editor.html
-          test "$(git hash-object world-editor.html)" = 4668399fa9cb20b195dd9db092a4dd607d3d2d3e
-          cp .snow-front/tests/* .snow-front/compat/* tests/
+          python .snow-front/build.py stock.html frontage.html
+          python .snow-front/shell.py frontage.html world-editor.html
+          cp .snow-front/compat/* tests/
+          test "$(git hash-object world-editor.html)" = 0ad0bb07c0e2d5846ebfc6537857075bf72dab6f
+          cp .snow-front/tests/* tests/
           STOCK=stock.html HTML=world-editor.html node --test tests/snow-frontage.test.cjs
       - if: matrix.suite == 'strict'
         run: |
@@ -32,7 +34,12 @@ jobs:
       - if: matrix.suite != 'strict'
         run: npm install --no-save playwright@1.58.2 && npx playwright install chromium
       - if: matrix.suite == 'frontage'
-        run: node tests/snow-frontage-browser.mjs world-editor.html
+        run: |
+          node tests/snow-frontage-browser.mjs world-editor.html
+          FACILITY_SCREENSHOTS=shots node tests/snow-frontage-shell-browser.mjs world-editor.html
+      - if: always() && matrix.suite == 'frontage'
+        uses: actions/upload-artifact@v4
+        with: {name: frontage-frames, path: shots}
       - if: startsWith(matrix.suite, 'audible-')
         run: node tests/snow-continuous-seam-browser.mjs world-editor.html
       - if: matrix.suite == 'preserves'
@@ -40,3 +47,4 @@ jobs:
           node tests/snow-pass-browser.mjs world-editor.html
           node tests/snow-neighbor-alignment-browser.mjs world-editor.html
           node tests/snow-new-sleeve-browser.mjs world-editor.html
+          node tests/sacred-coastal-sightline-browser.mjs world-editor.html
