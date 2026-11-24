@@ -5744,7 +5744,13 @@ function poiDavidRig(pose){
  });
  const elbows=hands.map((h,i)=>[(i?1:-1)*(1.25+Math.max(0,Math.abs(h[0])-1.1)*.42),
   h[1]>3.55?3.99:(3.67+h[1])*.50,kind==='sweep'&&i===1?-.04+.48*(h[2]-rest[i][2]):-.04]);
- return {doubleBladeRoll,doubleBladeHeading,feet,knees,shoulders,hands,elbows,swordTips,eyes:sights,glow,wakeGlow,leapCrouch};
+ // Lay the cutting edges above/below during travel. The tip and
+ // hand are untouched; carry the roll into only the first windup frames.
+ const travel=kind==null&&(phase==='ready'||phase==='idle'||phase==='return');
+ const carry=travel?1:kind&&phase==='windup'&&contact===0?
+  1-ease(Math.max(t/.18,(p.elapsed||0)/130)):0;
+ const walkBladeRoll=Math.PI*.5*ease(p.walkAmount||0)*carry;
+ return {walkBladeRoll,doubleBladeRoll,doubleBladeHeading,feet,knees,shoulders,hands,elbows,swordTips,eyes:sights,glow,wakeGlow,leapCrouch};
 }
 function poiDavidSkirt(r,T,Q,fold){
  // Sculpted diagonal split between the two unequal front lapels. The
@@ -5910,7 +5916,13 @@ function poiDavidGeometry(m,x,y,z,pose){
   // the downstroke plane. Width, taper and guard remain unscaled.
   const tangent=r.doubleBladeHeading?.[i];
   const cuttingBlade=roll&&tangent?unit(cross(axis,cross(tangent,axis))):usualBlade;
-  const blade=roll?unit(add(usualBlade.map(v=>v*(1-roll)),cuttingBlade,roll)):usualBlade,thick=cross(axis,blade);
+  let blade=roll?unit(add(usualBlade.map(v=>v*(1-roll)),cuttingBlade,roll)):usualBlade;
+  if(r.walkBladeRoll){
+   // Blade width rotates around the unchanged shaft; the broad face
+   // normal then points sideways rather than up.
+   blade=add(blade.map(v=>v*Math.cos(r.walkBladeRoll)),cross(axis,blade),Math.sin(r.walkBladeRoll));
+  }
+  const thick=cross(axis,blade);
   const point=(along,wide=0,deep=0)=>add(add(add(g,axis,along),blade,wide),thick,deep);
   prism(point(-.25),point(.205),.16,.146,.16,.146,fold,6);
   prism(point(-.37),point(-.25),.19,.155,.2,.151,stone,6);
