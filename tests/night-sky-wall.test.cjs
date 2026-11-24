@@ -13,7 +13,7 @@ function camera({clip=false,map='base',indoor=false,floor=0,ai=false,top=false,t
   perspective:()=>null,ortho:()=>null,look:()=>null,mult:()=>null,
   $:()=>({style:{setProperty:(k,v)=>style.set(k,v)},toggleAttribute:(_,v)=>{on=v}}),yaw:0,hideUpper:false,level:0
  });
- const read=vm.runInContext(cut('// BEGIN OUTDOOR SKY','function cursorAt(')+';()=>{const p=parameters();poiSkyBackdrop(p);return p}',c);
+ const read=vm.runInContext((h.includes('// BEGIN ORDINARY HOME CAMERA ARM')?cut('// BEGIN ORDINARY HOME CAMERA ARM','// END ORDINARY HOME CAMERA ARM'):'')+cut('// BEGIN OUTDOOR SKY','function cursorAt(')+';()=>{const p=parameters();poiSkyBackdrop(p);return p}',c);
  return {read,c,style,active:()=>on};
 }
 test('a camera-shortened above-ground outdoor view keeps time palette and projects the real clipped eye pitch',()=>{

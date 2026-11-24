@@ -16,7 +16,13 @@ test('main lodging crosses in a shared cut view: legacy exact geometry and no du
  const door=current.find(o=>o.name==='main-door'),oldDoor=old.find(o=>o.name==='main-door');
  assert.equal(door.building,'lodging');assert.equal(door.roof,'lodging');
  assert(oldDoor.bytes>20_000_000,'legacy opening scene actually duplicates large VBO');
- assert(door.bytes<50_000&&door.partialBytes<50_000&&door.partialBytes>0,'door only switches the localized tint');
+ // The warm multi-floor fix deliberately no longer re-tints the
+ // ground from the upper-storey lamp when the doorway owner changes.
+ assert(door.bytes>0&&door.bytes<50_000,'initial cut uses only small transient scene metadata, never another full town VBO');
+ assert.equal(door.partial+door.partialBytes,0,'no ground tint upload from an upper-storey lamp');
+ for(const crossing of current.filter(row=>row.name==='main-exit'||row.name==='main-repeat')){
+  assert.equal(crossing.uploads+crossing.bytes+crossing.partial+crossing.partialBytes,0,'cached doorway crossing never rebuilds or reuploads scene geometry');
+ }
  assert.equal(door.spans,5,'only a few span cuts, no temporary large index buffer');
  const south=current.find(o=>o.name==='south-door');
  assert.equal(south.roof,'southInn');assert.equal(south.building,null);assert.equal(south.uploads+south.partial,0);
