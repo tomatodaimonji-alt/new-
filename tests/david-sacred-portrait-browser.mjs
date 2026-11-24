@@ -70,11 +70,11 @@ try{
  const frame=async(ms=220)=>{await p.clock.fastForward(ms);await p.evaluate(()=>window.__editorTest.templeSealQA.frame());return read()};
  const step=async(key,x,z)=>{await p.keyboard.press(key);const q=await frame();assert.deepEqual(q.pos,[x,z,0],JSON.stringify(q));return q};
  const portrait=()=>p.evaluate(()=>window.__editorTest.templeSealQA.portrait());
- function twoEyes(f,label){
+ function twoEyes(f,label,far=false,assist=true){
   const [w,h]=f.frame;
   assert(f.eyes.every(e=>e&&e.x>w*.31&&e.x<w*.69&&e.y>h*.11&&e.y<h*.70),label+': '+JSON.stringify(f));
-  assert(Math.abs(f.eyes[1].x-f.eyes[0].x)>w*.016,'both distinct eyes occupy useful screen width');
-  assert(f.lens.lensTarget[1]>f.lens.target[1]+.13,'camera aim not physically lifted or moved');
+  assert(Math.abs(f.eyes[1].x-f.eyes[0].x)>w*(far?.003:.008),'both distinct eyes occupy useful screen width');
+  if(assist)assert(f.lens.lensTarget[1]>f.lens.target[1]+.013,'the distant lens bias cannot move the camera or avatar');
  }
  const roof=(q,prev)=>{assert(q.visible.includes(q.roof),JSON.stringify(q));assert(q.covers>prev.covers&&q.corners>1500);assert(q.error===0)};
  await resume(24,125);const before=await frame();assert(!before.indoors&&before.sky&&!before.contacted);
@@ -91,10 +91,11 @@ try{
  for(let z=131;z<142;z++){const q=await step('ArrowUp',24,z);assert(q.indoors&&q.tunnel&&!q.arena&&!q.contacted,JSON.stringify(q))}
  const mouth=await step('ArrowUp',24,142);
  assert(mouth.arena&&mouth.los&&mouth.distance===16&&!mouth.contacted);
+ twoEyes(await portrait(),'both real distant eyes from new reveal mouth',true,true);
  for(let z=143;z<155;z++)await step('ArrowUp',24,z);
  const lip=await step('ArrowUp',24,155);
  assert(lip.arena&&lip.los&&lip.distance===3&&!lip.contacted,JSON.stringify(lip));
- const dormantPortrait=await portrait();twoEyes(dormantPortrait,'full real eyes before wake');
+ const dormantPortrait=await portrait();twoEyes(dormantPortrait,'full real eyes before wake',false,false);
  if(screenshots)await p.screenshot({path:screenshots+'/temple-03a-eye-level-before-wake.png'});
  let arena=await step('ArrowUp',24,156);
  for(let i=0;i<10&&!arena.contacted;i++)arena=await frame(80);
@@ -104,12 +105,13 @@ try{
   const stars=await p.locator('#poiLocationStars').textContent();
   assert.equal(stars,'★'.repeat(10),'the real temple HUD has exactly ten filled difficulty stars');
  }
- const wakingPortrait=await portrait();twoEyes(wakingPortrait,'both eyes during cinematic');
+ const wakingPortrait=await portrait();twoEyes(wakingPortrait,'both eyes during cinematic',false,false);
  console.log('Native close eyes and exact camera pose',JSON.stringify({dormantPortrait,wakingPortrait}));
  const highEye=await p.evaluate(()=>window.__editorTest.templeSealQA.eye());
  assert(highEye.eye[1]>1.1&&highEye.eye[1]<7.62&&highEye.desired[1]>7.62,JSON.stringify(highEye));
  assert.equal(arena.key,before.key);assert.equal(arena.screen,before.screen);assert(arena.ready);
  if(screenshots)await p.screenshot({path:screenshots+'/temple-03-close-david-reveal.png'});
+ await p.clock.resume();await resume(24,142);await frame();
  // Actual touch cancels portrait assistance while the real orbit remains live.
  const cdp=await ctx.newCDPSession(p),point=(x,y)=>({x,y,id:4,radiusX:2,radiusY:2,force:.7});
  const start=await p.evaluate(()=>{

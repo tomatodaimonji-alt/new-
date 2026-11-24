@@ -14,7 +14,7 @@ replace(testApi,testApi+`
    const map=poiMiniStatic.get(0),minictx=map?.layer.getContext('2d');
    const pixel=(x,z)=>map?[...minictx.getImageData(Math.round(map.ox+x*map.scale),Math.round(map.oy+z*map.scale),1,1).data]:null;
    const mini=map?{concealed:map.concealed,temple:[pixel(22,158),pixel(28,158),pixel(24,164)],
-    trail:pixel(9,53),town:pixel(42,49),builds:poiMiniBuilds,saved:JSON.parse(localStorage.getItem(POI_HOTBAR_KEY)||'{}').sacredTempleSeen===true}:null;
+    trail:pixel(12,53),town:pixel(42,49),builds:poiMiniBuilds,saved:JSON.parse(localStorage.getItem(POI_HOTBAR_KEY)||'{}').sacredTempleSeen===true}:null;
    return {x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,name:poiRegionAt(facilitySite,poiWalkX,poiWalkZ,false,poiWalkLevel).name,
     path:f.route,reveal:f.reveal,tree:f.trees[10],fog:[...gl.getUniform(program,loc.sacredFog)],raster:window.__sacredRaster||null,
     scene:poiSacredForestStatus(),err:gl.getError(),directions:['n','s','e','w'].map(k=>poiCameraRelativeStep(k)),

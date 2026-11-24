@@ -217,6 +217,7 @@ try{
   s=await qa(p);assert.equal(s.statue.hp,1050,'tuned David is deliberately beyond ordinary early-game weapons');
   if(screenshots)await p.screenshot({path:screenshots+'/david-temple-wake.png'});
   checkpoint='approach produces real boss displacement before physical retreat';
+  await p.evaluate(()=>{window.__davidFrames.stableClock={now:performance.now()}});
   await routeWalk(p,TEMPLE_NEAR);
   await wait(p,()=>{const s=window.__editorTest.davidQA.state().statue;return s?.d?.awake&&(s.x!==24||s.z!==158)},null,25000);
   checkpoint='physical retreat cancels any chase or threat into exterior';
