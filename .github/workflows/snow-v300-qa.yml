@@ -1,0 +1,63 @@
+name: Isolated disjoint snowy corridor native QA
+on:
+  push:
+    branches: ['dot/workshop-v300-disjoint-snow-qa']
+permissions:
+  contents: read
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [strict, geometry, pixels, routes, audible-a, audible-b, controls-a, controls-b]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: |
+          test "$(git hash-object world-editor.html)" = f3a618915de7ec9f29c019cd76c7f91b8379408d
+          cp world-editor.html .snow-v300/stock.html
+          cd .snow-v300
+          python sleeve.py stock.html sleeve.html
+          test "$(git hash-object sleeve.html)" = 97413660a11d45805bb70a4cd2b47879bb757f2d
+          python build.py sleeve.html stream.html --default
+          python horizon-safe.py stream.html horizon.html
+          python path-ast-trial.py horizon.html paths.html
+          python cold-palette-reuse.py paths.html palette.html
+          python forest-stream-bridge.py palette.html world-editor.html
+          test "$(git hash-object world-editor.html)" = 7349cc2e52119afcd9d7693272ed62b9d36fa513
+          STOCK=stock.html HTML=world-editor.html node --test tests/*.test.cjs
+      - if: matrix.suite == 'strict'
+        run: |
+          cp .snow-v300/world-editor.html world-editor.html
+          c=0
+          node --test --test-reporter=tap tests/*.test.cjs >strict.log 2>&1 || c=$?
+          grep -E '^(not ok|# tests|# pass|# fail)' strict.log || true
+          exit "$c"
+      - if: matrix.suite != 'strict'
+        run: npm install --no-save playwright@1.58.2 && npx playwright install chromium
+      - if: matrix.suite == 'geometry'
+        run: node .snow-v300/tests/snow-new-sleeve-browser.mjs .snow-v300/world-editor.html
+      - if: matrix.suite == 'pixels'
+        run: |
+          node .snow-v300/tests/snow-neighbor-alignment-browser.mjs .snow-v300/world-editor.html
+          node .snow-v300/tests/snow-visible-from-forest-browser.mjs .snow-v300/world-editor.html
+      - if: matrix.suite == 'routes'
+        run: node .snow-v300/tests/snow-pass-browser.mjs .snow-v300/world-editor.html
+      - if: startsWith(matrix.suite, 'audible-')
+        shell: bash
+        run: |
+          code=0
+          for repetition in 1 2; do
+            echo "Unchanged audible held drag gate, physically translated coordinates, repetition $repetition"
+            SNOW_PHASE_REPORT=1 SNOW_PALETTE_REPORT=1 node .snow-v300/tests/snow-continuous-seam-browser.mjs .snow-v300/world-editor.html || code=1
+          done
+          exit "$code"
+      - if: startsWith(matrix.suite, 'controls-')
+        shell: bash
+        run: |
+          stock(){ SNOW_MATCHED_STOCK_ONLY=1 node .snow-v300/tests/snow-matched-gpu-browser.mjs .snow-v300/sleeve.html; }
+          trial(){ node .snow-v300/tests/snow-matched-gpu-browser.mjs .snow-v300/world-editor.html; }
+          if [ "${{ matrix.suite }}" = controls-a ]; then stock && trial; else trial && stock; fi
