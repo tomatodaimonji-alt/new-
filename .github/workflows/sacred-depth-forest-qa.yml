@@ -1,29 +1,51 @@
-name: Isolated sacred forest depth and sightline QA
+name: Isolated sacred depth QA over exact v294
 on:
   push:
     branches: ['dot/workshop-sacred-depth-forest-qa']
 permissions:
   contents: read
 jobs:
-  sightline:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [strict, sightline, temple, fire-hit, snow]
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 14
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: fd08a2d08e872661871528e6087cb065a06e53e4
+          path: exact
       - uses: actions/setup-node@v4
         with: {node-version: '22'}
       - run: |
-          test "$(git hash-object world-editor.html)" = aa855e8ed66395458f8f431d03c24d53168a304e
-          python .sacred-depth/forest/build.py world-editor.html .sacred-depth/forest.html
-          python .sacred-depth/temple/build.py .sacred-depth/forest.html .sacred-depth/world-editor.html
-          test "$(git hash-object .sacred-depth/world-editor.html)" = fec981673a33ee847e928a039612ecb93d40d82e
-          HTML=.sacred-depth/world-editor.html node --test .sacred-depth/forest/tests/*.cjs .sacred-depth/temple/tests/*.cjs
-      - run: npm install --no-save playwright@1.58.2 && npx playwright install chromium
-      - run: FACILITY_SCREENSHOTS=.sacred-depth/output node .sacred-depth/forest/tests/sacred-depth-browser.mjs .sacred-depth/world-editor.html
-      - if: always()
+          test "$(git hash-object exact/world-editor.html)" = bb4f17f53155553b710d9b599ba8bf91bf5ac389
+          python .sacred-depth/forest/build.py exact/world-editor.html .sacred-depth/forest.html
+          python .sacred-depth/temple/build.py .sacred-depth/forest.html exact/world-editor.html
+          test "$(git hash-object exact/world-editor.html)" = 35cb8ab949626aa8b48734b2ae4bd3f6e2085a3b
+          cp .sacred-depth/forest/tests/* .sacred-depth/temple/tests/* exact/tests/
+      - if: matrix.suite == 'strict'
+        working-directory: exact
+        run: node --test tests/*.test.cjs
+      - if: matrix.suite != 'strict'
+        working-directory: exact
+        run: npm install --no-save playwright@1.58.2 && npx playwright install chromium
+      - if: matrix.suite == 'sightline'
+        working-directory: exact
+        run: mkdir -p output && FACILITY_SCREENSHOTS=output node tests/sacred-depth-browser.mjs world-editor.html
+      - if: matrix.suite == 'temple'
+        working-directory: exact
+        run: node tests/depth-temple-browser.mjs
+      - if: matrix.suite == 'fire-hit'
+        working-directory: exact
+        run: node tests/fire-wand-flare-browser.mjs && node tests/player-hit-feedback-browser.mjs
+      - if: matrix.suite == 'snow'
+        working-directory: exact
+        run: node tests/snow-pass-browser.mjs
+      - if: always() && matrix.suite == 'sightline'
         uses: actions/upload-artifact@v4
         with:
-          name: sacred-depth-exact-sightlines
-          path: .sacred-depth/output
-          include-hidden-files: true
-          if-no-files-found: ignore
+          name: sacred-depth-v294-exact-sightlines
+          path: exact/output
