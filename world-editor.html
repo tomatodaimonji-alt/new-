@@ -1536,6 +1536,8 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 #poiCompanionCommands h2{font-size:11px;line-height:1.2;color:#decba5;margin:1px 5px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .poiCompanionCommandButtons{display:grid;grid-template-columns:minmax(0,1fr);gap:3px}
 .poiCompanionCommandButtons button{min-height:35px;padding:4px 8px;font-size:13px;text-align:left;white-space:nowrap;touch-action:manipulation}
+.poiCompanionCommandButtons button[hidden],#poiCompanionCommandsHP[hidden]{display:none}
+#poiCompanionCommandsHP{display:block;color:#ecdfc6;font-size:11px;line-height:1.15;margin:0 5px 4px;font-variant-numeric:tabular-nums}
 .poiCompanionCommandButtons button[aria-pressed="true"]{outline:1px solid #8fd4dc}
 #poiCompanionCommandsStatus:not(:empty){margin-top:8px;font-size:13px}
 </style></head><body>
@@ -1773,7 +1775,9 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 <div id="mobileTabs"><button id="showPalette">エディター</button><button id="pineCheckMode" type="button" aria-pressed="false">チェック</button><button id="enterGameWorld" type="button">ゲーム世界へ</button></div><footer><span>ORIGINAL WORLD EDITOR · WebGL / OFFLINE</span><span>配置 → JSONで書き出し → ChatGPTに共有</span></footer></div>
 <section id="poiCompanionCommands" role="dialog" aria-labelledby="poiCompanionCommandsTitle" aria-modal="false" hidden>
   <h2 id="poiCompanionCommandsTitle"></h2>
+  <span id="poiCompanionCommandsHP" hidden></span>
   <div class="poiCompanionCommandButtons">
+   <button type="button" data-companion-command="summon" hidden></button>
    <button type="button" data-companion-command="fight">戦いを優先</button>
    <button type="button" data-companion-command="follow">追尾優先</button>
    <button type="button" data-companion-command="dismiss">魂に戻す</button>
@@ -19325,9 +19329,10 @@ function poiCompanionCommand(mode,now=performance.now(),token=null){
  const index=spec?poiInventorySlots(kit).findIndex(c=>c?.type===id&&!(c.durability<=0)):-1;
  if(index<0)return {ok:false,reason:'inactive'};
  if(mode==='dismiss')return active===id?poiCompanionUse(kit,index):{ok:false,reason:'inactive'};
- mode=poiCompanionNormalizeMode(mode);
+ const summon=mode==='summon',change=active!==id;
+ if(summon&&!change||!summon&&change)return {ok:false,reason:'inactive'};
+ mode=summon?'fight':poiCompanionNormalizeMode(mode);
  if(!POI_COMPANION_MODES.has(mode))return {ok:false,reason:'type'};
- const change=active!==id;
  if((change||mode!==poiCompanionMode(kit))&&!poiEconomyWrite({...kit,companionSoul:{
     ...kit.companionSoul,version:1,active:id,pending:kit.companionSoul?.pending??null,mode}}))
   return {ok:false,reason:'storage'};
@@ -20879,6 +20884,15 @@ function poiCompanionUiPosition(){
   node.style.removeProperty('--soul-slot-x');node.style.removeProperty('--soul-slot-top');
  }
 }
+function poiCompanionUiHealth(cell,spec,active){
+ const node=$('poiCompanionCommandsHP');
+ if(!node)return;
+ node.hidden=!active;
+ if(active){
+  const value='HP '+(cell.durability??spec.hp)+' / '+spec.hp;
+  if(node.textContent!==value)node.textContent=value;
+ }
+}
 function poiCompanionUiOpen(kit,index,focus=null){
  const node=$('poiCompanionCommands'),cell=poiInventorySlots(kit)[index],spec=poiCompanionType(cell?.type);
  if(!node||!spec||cell.durability<=0||!poiCompanionAllowed()||document.querySelector('dialog[open],.modal.open'))
@@ -20888,10 +20902,13 @@ function poiCompanionUiOpen(kit,index,focus=null){
  if(title)title.textContent=spec.name.replace(/の魂$/,'');
  if(status)status.textContent='';
  const active=kit.companionSoul?.active===cell.type,mode=active?poiCompanionMode(kit):null;
- for(const button of node.querySelectorAll?.('[data-companion-command="fight"],[data-companion-command="follow"]')??[])
-  button.setAttribute('aria-pressed',String(button.dataset.companionCommand===mode));
- const dismiss=node.querySelector('[data-companion-command="dismiss"]');
- if(dismiss)dismiss.disabled=!active;
+ for(const button of node.querySelectorAll?.('[data-companion-command]')??[]){
+  const command=button.dataset.companionCommand;
+  button.hidden=command==='summon'?active:command!=='back'&&!active;
+  if(command==='summon')button.textContent=spec.name.replace(/の魂$/,'')+'を呼ぶ';
+  if(command==='fight'||command==='follow')button.setAttribute('aria-pressed',String(command===mode));
+ }
+ poiCompanionUiHealth(cell,spec,active);
  // No modal capture or analog cancel: the left thumb keeps its original pointer.
  poiCompanionUiPosition();node.hidden=false;
  if(focus?.matches?.(':focus-visible'))node.querySelector('[data-companion-command="back"]')?.focus({preventScroll:true});
@@ -20907,7 +20924,7 @@ function poiCompanionShortcutTap(kit,index){
 }
 function poiCompanionUiCommand(mode){
  if(mode==='back'){poiCompanionUiClose();return}
- if(!['fight','follow','dismiss'].includes(mode))return;
+ if(!['fight','follow','dismiss','summon'].includes(mode))return;
  const kit=poiHotbarRead(),index=poiCompanionCommandSlot,type=poiCompanionCommandType;
  const cell=poiInventorySlots(kit)[index];
  if(!type||cell?.type!==type||!poiCompanionAllowed()){poiCompanionUiClose();return}
@@ -20927,6 +20944,7 @@ function poiCompanionHudSync(){
  const visible=!!(spec&&Number.isFinite(hp)&&hp>0&&poiCompanionAllowed()&&!(typeof poiPlayerHP==='number'&&poiPlayerHP<=0));
  if(poiCompanionCommandType&&(!kit||!poiCompanionAllowed()||typeof poiPlayerHP==='number'&&poiPlayerHP<=0||
    poiInventorySlots(kit)[poiCompanionCommandSlot]?.type!==poiCompanionCommandType))poiCompanionUiClose(false);
+ if(poiCompanionCommandType===type&&visible)poiCompanionUiHealth(cell,spec,true);
  root.hidden=!visible;if(!visible)return;
  const label=spec.name.replace(/の魂$/,'');
  if(root.dataset.companion!==type){
@@ -42084,22 +42102,25 @@ document.addEventListener('keydown',e=>{
  window.addEventListener('resize',reposition);window.visualViewport?.addEventListener('resize',reposition);
  const command=target=>target?.closest?.('[data-companion-command]');
  let right=null,handled=null;
+ document.addEventListener('pointerdown',e=>{
+  if(!panel.hidden&&!panel.contains(e.target)){right=null;poiCompanionUiClose(false)}
+ },true);
  panel.addEventListener('pointerdown',e=>{
   const button=command(e.target);
-  if(!right&&!panel.hidden&&button&&!button.disabled&&e.pointerType==='touch'&&!e.isPrimary&&e.button===0&&poiAnalogContact)
+  if(!right&&!panel.hidden&&button&&!button.disabled&&!button.hidden&&e.pointerType==='touch'&&!e.isPrimary&&e.button===0&&poiAnalogContact)
    right={button,id:e.pointerId,x:e.clientX,y:e.clientY};
  });
  panel.addEventListener('pointerup',e=>{
   if(right?.id!==e.pointerId)return;
   const {button,x,y}=right;right=null;
-  if(panel.hidden||button.disabled||command(e.target)!==button||Math.hypot(x-e.clientX,y-e.clientY)>=10)return;
+  if(panel.hidden||button.disabled||button.hidden||command(e.target)!==button||Math.hypot(x-e.clientX,y-e.clientY)>=10)return;
   handled={button,id:e.pointerId,until:performance.now()+650};
   e.preventDefault();poiCompanionUiCommand(button.dataset.companionCommand);
  });
  panel.addEventListener('pointercancel',e=>{if(right?.id===e.pointerId)right=null});
  panel.addEventListener('click',e=>{
   const button=command(e.target);
-  if(!button||button.disabled||panel.hidden)return;
+  if(!button||button.disabled||button.hidden||panel.hidden)return;
   if(handled?.id===e.pointerId&&handled.button===button&&performance.now()<handled.until){handled=null;return}
   poiCompanionUiCommand(button.dataset.companionCommand);
  });
