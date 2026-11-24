@@ -2,7 +2,9 @@ const {test}=require('node:test'),a=require('node:assert/strict'),fs=require('no
 const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const i=h.indexOf('// BEGIN SNOW PASS PROTOTYPE'),j=h.indexOf('// END SNOW PASS PROTOTYPE',i);
 a.ok(i>=0&&j>i,'sector contract is installed');
-const c=vm.runInNewContext(h.slice(i,j)+';({link:poiSnowPassLink,decode:poiSnowPassDecode,map:poiSnowPassMap})'),plain=v=>JSON.parse(JSON.stringify(v));
+const p=h.indexOf('// BEGIN OVERLAND STREAM PLANNING'),q=h.indexOf('// END OVERLAND STREAM PLANNING',p);
+a.ok(p>=0&&q>p,'global surface coordinate helpers are installed');
+const c=vm.runInNewContext(h.slice(p,q)+h.slice(i,j)+';({link:poiSnowPassLink,decode:poiSnowPassDecode,map:poiSnowPassMap})'),plain=v=>JSON.parse(JSON.stringify(v));
 test('only genuine adjacent owned cardinal edges can activate another local region',()=>{
  a.deepEqual(plain(c.link('base',60,138,0,60,139)),{region:'snowpass',x:12,z:0,y:0,facing:2});
  a.deepEqual(plain(c.link('snowpass',12,0,0,12,-1)),{region:'base',x:60,z:138,y:0,facing:0});
