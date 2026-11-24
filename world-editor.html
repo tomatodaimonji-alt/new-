@@ -1596,7 +1596,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v273）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v274）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -12116,6 +12116,278 @@ let poiDamageLabels=[];
 let poiMonsterMesh=null,poiMonsterMeshLast=-10000,poiMonsterMeshDirty=true;
 function poiIsMonster(type){return Object.prototype.hasOwnProperty.call(POI_MONSTER_STATS,type)}
 // Quick inventory belongs to Game World play; never change a map or a POI to store it.
+// BEGIN MONSTER COMPANION CORE
+const POI_COMPANION_SPEC=Object.freeze({
+ slimeSoul:Object.freeze({enemy:'monsterSlime',name:'スライムの魂',hp:36,attack:6,roll:.22,icon:'◈'})
+});
+const POI_COMPANION_FLIGHT_MS=2420,POI_COMPANION_MELEE=new Set(['monsterSlime','monsterGoblin','monsterSkeleton']);
+let poiCompanionFlight=null,poiCompanionClaimAt=0,poiCompanionClaimNotified=false,poiCompanionActor=null,poiCompanionTarget=null;
+let poiCompanionMesh=null,poiCompanionMeshKey='',poiCompanionTemplate=null;
+const poiCompanionSeenContacts=new WeakSet();
+function poiCompanionType(id){return Object.hasOwn(POI_COMPANION_SPEC,id)?POI_COMPANION_SPEC[id]:null}
+function poiCompanionDecode(raw){
+ if(raw?.version!==1)return null;
+ const pending=poiCompanionType(raw.pending)?raw.pending:null,active=poiCompanionType(raw.active)?raw.active:null;
+ return pending||active?{version:1,pending,active}:null;
+}
+function poiCompanionReconcile(kit){
+ const record=poiCompanionDecode(kit?.companionSoul);
+ const slots=poiInventorySlots(kit);
+ const seen=new Set();
+ let changed=false;
+ const cells=slots.map(cell=>{
+  if(!poiCompanionType(cell?.type))return cell;
+  if(seen.has(cell.type)){changed=true;return null}
+  seen.add(cell.type);return cell;
+ });
+ if(changed)kit=poiInventoryEdited(kit,cells);
+ const pending=record?.pending&&!seen.has(record.pending)?record.pending:null;
+ const active=record?.active&&seen.has(record.active)?record.active:null;
+ if(pending||active)return {...kit,companionSoul:{version:1,pending,active}};
+ if(Object.hasOwn(kit,'companionSoul')){const next={...kit};delete next.companionSoul;return next}
+ return kit;
+}
+function poiCompanionAllowed(){
+ return !!(poiWalkActive&&poiHotbarHasKit()&&!pineAIActive&&
+   !(typeof poiPlayerDying==='function'&&poiPlayerDying())&&
+   !(typeof document!=='undefined'&&document.hidden));
+}
+function poiCompanionPlace(){
+ return {site:facilitySite,y:poiWalkLevel,travel:typeof poiOtherworldTravelSerial==='number'?poiOtherworldTravelSerial:0};
+}
+function poiCompanionSame(a,b){return a?.site===b?.site&&a?.y===b?.y&&a?.travel===b?.travel}
+function poiCompanionSoulFlight(){return poiCompanionFlight}
+function poiCompanionMonsterDefeated(o,s,now,debris,rng=Math.random){
+ if(!poiCompanionAllowed()||facilitySite?.id!=='base'||s?.hp!==0||s.townOwned||s.townHunt||o?.y!==poiWalkLevel||
+    poiMonsterStates.get(o)!==s)return false;
+ const id=Object.keys(POI_COMPANION_SPEC).find(key=>POI_COMPANION_SPEC[key].enemy===o.type&&rng()<POI_COMPANION_SPEC[key].roll);
+ if(!id)return false;
+ const kit=poiHotbarRead();
+ if(kit.companionSoul?.pending||poiInventorySlots(kit).some(c=>c?.type===id))return false;
+ if(!poiEconomyWrite({...kit,companionSoul:{version:1,pending:id,active:kit.companionSoul?.active??null}}))return false;
+ poiCompanionClaimAt=0;poiCompanionClaimNotified=false;
+ if(debris){
+  const start=debris.start??now;
+  poiCompanionFlight={...poiCompanionPlace(),x:debris.x,z:debris.z,y:debris.floor,start,arrives:start+POI_COMPANION_FLIGHT_MS,type:o.type};
+  if(typeof poiCompanionFxAttach==='function')poiCompanionFxAttach(debris,poiCompanionFlight);
+ }
+ return true;
+}
+function poiCompanionClaim(now){
+ const kit=poiHotbarRead(),id=kit.companionSoul?.pending,spec=poiCompanionType(id);
+ if(!spec){poiCompanionFlight=null;return}
+ if(poiCompanionFlight){
+  if(poiCompanionSame(poiCompanionFlight,poiCompanionPlace())&&now<poiCompanionFlight.arrives)return;
+  poiCompanionClaimAt=Math.max(poiCompanionClaimAt,poiCompanionFlight.arrives);
+  poiCompanionFlight=null;
+ }
+ if(now<poiCompanionClaimAt)return;
+ poiCompanionClaimAt=now+950;
+ const cells=poiInventorySlots(kit).slice(),reserved=poiGoldHotbarSlot(kit);
+ const bag=Array.from({length:POI_BAG_UNLOCKED},(_,i)=>i+POI_HOTBAR_SIZE);
+ const hot=Array.from({length:POI_HOTBAR_SIZE},(_,i)=>i);
+ const index=[...bag,...hot].find(i=>!cells[i]&&i!==reserved);
+ if(index===undefined){
+  if(!poiCompanionClaimNotified&&typeof toast==='function'){
+   poiCompanionClaimNotified=true;toast('魂が待っています。持ち物を一枠空けると受け取れます。');
+  }
+  return;
+ }
+ cells[index]={type:id,count:1,durability:spec.hp};
+ const next=poiInventoryEdited(kit,cells),active=kit.companionSoul?.active;
+ if(active)next.companionSoul={version:1,pending:null,active};else delete next.companionSoul;
+ if(!poiEconomyWrite(next))return;
+ poiCompanionClaimNotified=false;poiEconomyRefresh();
+ if(typeof poiSound==='function')poiSound('item-pickup',id);
+ if(typeof toast==='function')toast(spec.name+'を手に入れた。');
+}
+function poiCompanionUse(kit,index){
+ if(!poiCompanionAllowed())return {ok:false,reason:'unavailable'};
+ const cell=poiInventorySlots(kit)[index],spec=poiCompanionType(cell?.type);
+ if(!spec)return {ok:false,reason:'type'};
+ const active=kit.companionSoul?.active===cell.type?null:cell.type;
+ const pending=kit.companionSoul?.pending??null,next={...kit};
+ if(active||pending)next.companionSoul={version:1,active,pending};else delete next.companionSoul;
+ if(!poiEconomyWrite(next))return {ok:false,reason:'storage'};
+ poiCompanionActor=null;poiCompanionTarget=null;poiEconomyRefresh();
+ if(typeof toast==='function')toast(active?spec.name+'の仲間を呼んだ。':'仲間を魂に戻した。');
+ return {ok:true,reason:null};
+}
+function poiCompanionNormal(o,s){
+ return !!(o&&s&&!s.townOwned&&!s.townHunt&&!s.northReturnFoe&&POI_COMPANION_MELEE.has(o.type)&&
+  !(typeof poiChapelEliteMatch==='function'&&poiChapelEliteMatch(o)));
+}
+function poiCompanionPlayerContact(o,s,now){
+ if(!poiCompanionActor||!poiCompanionNormal(o,s)||s.hp<=0)return;
+ poiCompanionTarget={o,s,until:now+2100};
+}
+function poiCompanionPose(a,now){
+ if(!a)return null;
+ const t=Math.max(0,Math.min(1,(now-a.stepAt)/a.stepMs)),e=t*t*(3-2*t);
+ return {x:a.fx+(a.x-a.fx)*e,z:a.fz+(a.z-a.fz)*e,y:a.y,t,hop:Math.sin(t*Math.PI)*.19};
+}
+function poiCompanionCell(x,z,y,fx,fz){
+ if(poiWalkX===x&&poiWalkZ===z||!poiWalkCanStep(x,z,fx,fz))return false;
+ return !(typeof poiTownNpcActorOccupied==='function'&&poiTownNpcActorOccupied(x,z,y));
+}
+function poiCompanionDirection(from,to){
+ const dx=to.x-from.x,dz=to.z-from.z;
+ return Math.abs(dx)>=Math.abs(dz)?[[Math.sign(dx)||1,0],[0,Math.sign(dz)||1],[0,-(Math.sign(dz)||1)],[-(Math.sign(dx)||1),0]]:
+  [[0,Math.sign(dz)||1],[Math.sign(dx)||1,0],[-(Math.sign(dx)||1),0],[0,-(Math.sign(dz)||1)]];
+}
+function poiCompanionPlan(a,to,now){
+ const distance=Math.abs(a.x-to.x)+Math.abs(a.z-to.z);
+ for(const [dx,dz] of poiCompanionDirection(a,to)){
+  const x=a.x+dx,z=a.z+dz;
+  if(Math.abs(x-to.x)+Math.abs(z-to.z)<distance&&poiCompanionCell(x,z,a.y,a.x,a.z))return {x,z};
+ }
+ if(now<(a.planAt||0))return null;
+ a.planAt=now+320;
+ const todo=[{x:a.x,z:a.z,first:null}],seen=new Set([a.x+','+a.z]);
+ let best=null,score=Math.abs(a.x-to.x)+Math.abs(a.z-to.z),plans=26;
+ for(let i=0;i<todo.length&&plans>0;i++){
+  const p=todo[i];
+  for(const [dx,dz] of poiCompanionDirection(p,to)){
+   const x=p.x+dx,z=p.z+dz,k=x+','+z;if(seen.has(k))continue;
+   seen.add(k);if(plans--<=0)break;
+   if(!poiCompanionCell(x,z,a.y,p.x,p.z))continue;
+   const first=p.first||{x,z},d=Math.abs(x-to.x)+Math.abs(z-to.z);
+   if(d<=1)return first;
+   if(d<score){score=d;best=first}
+   todo.push({x,z,first});
+  }
+ }
+ return best;
+}
+function poiCompanionSpawn(id,now){
+ const where=poiCompanionPlace(),x=poiWalkX,z=poiWalkZ,p={x,z};
+ const dirs=poiCompanionDirection(p,{x:typeof poiWalkFromX==='number'?poiWalkFromX:x-1,z:typeof poiWalkFromZ==='number'?poiWalkFromZ:z});
+ for(const [dx,dz] of dirs){
+  const tx=x+dx,tz=z+dz;
+  if(!poiCompanionCell(tx,tz,where.y,x,z))continue;
+  return {...where,id,x:tx,z:tz,fx:tx,fz:tz,stepAt:now-1,stepMs:1,next:now+120,nextHit:now+620,swingAt:-Infinity,hurtAt:-Infinity};
+ }
+ return null;
+}
+function poiCompanionEngage(a,now){
+ const t=poiCompanionTarget;
+ if(!t||t.until<now||t.o.y!==a.y||t.s.hp<=0||poiMonsterStates.get(t.o)!==t.s||
+    Math.hypot(t.s.x-poiWalkX,t.s.z-poiWalkZ)>5){poiCompanionTarget=null;return null}
+ const d=Math.hypot(t.s.x-a.x,t.s.z-a.z);
+ if(d<1.48){
+  if(now>=a.nextHit&&poiCompanionAttackClear(a,t.s,a.y)&&typeof poiPlayerDamageTarget==='function'){
+   a.nextHit=now+850;a.swingAt=now;
+   poiPlayerDamageTarget([t.o,t.s],t.s.x,t.s.z,poiCompanionType(a.id).attack,null,now,true,true,{companion:true});
+  }
+  return a;
+ }
+ return t.s;
+}
+function poiCompanionTick(now){
+ if(typeof document!=='undefined'&&document.hidden)return;
+ if(!poiCompanionAllowed()){
+  poiCompanionActor=null;poiCompanionTarget=null;
+  if(poiCompanionFlight&&!poiCompanionSame(poiCompanionFlight,poiCompanionPlace())){
+   poiCompanionClaimAt=Math.max(poiCompanionClaimAt,poiCompanionFlight.arrives);poiCompanionFlight=null;
+  }
+  return;
+ }
+ poiCompanionClaim(now);
+ const kit=poiHotbarRead(),id=kit.companionSoul?.active;
+ if(!poiCompanionType(id)||!poiInventorySlots(kit).some(c=>c?.type===id)){poiCompanionActor=null;poiCompanionTarget=null;return}
+ const where=poiCompanionPlace();
+ if(!poiCompanionActor||poiCompanionActor.id!==id||!poiCompanionSame(poiCompanionActor,where)){
+  poiCompanionActor=poiCompanionSpawn(id,now);poiCompanionTarget=null;return;
+ }
+ const a=poiCompanionActor;
+ if(now<a.next||typeof document!=='undefined'&&
+    document.querySelector('dialog[open],.modal.open,:is(#poiBagPanel,#poiLandscapeMenu,#poiNpcMenu,#poiScreenNoteLayer):not([hidden])'))return;
+ a.next=now+155;
+ const player={x:poiWalkX,z:poiWalkZ},distance=Math.hypot(a.x-player.x,a.z-player.z);
+ if(distance>18){a.next=now+320;return}
+ let to=distance<=6?poiCompanionEngage(a,now):null;
+ if(!to&&distance<1.8||to===a)return;
+ to=to||player;
+ // When far away, cheaply keep walking toward the player rather than
+ // simulate open-ended pathfinding or teleport into the current room.
+ const p=distance<=10?poiCompanionPlan(a,to,now):poiCompanionDirection(a,to).map(([dx,dz])=>({x:a.x+dx,z:a.z+dz}))
+  .find(p=>poiCompanionCell(p.x,p.z,a.y,a.x,a.z)&&Math.hypot(p.x-to.x,p.z-to.z)<distance);
+ if(!p)return;
+ a.fx=a.x;a.fz=a.z;a.x=p.x;a.z=p.z;a.stepAt=now;a.stepMs=146;
+}
+function poiCompanionAttackClear(src,dst,y){
+ const dx=dst.x-src.x,dz=dst.z-src.z,d=Math.hypot(dx,dz);
+ if(d<.01)return true;
+ if(typeof poiAimWallLimit==='function'&&typeof poiAimWall==='function'){
+  const o={x:src.x,z:src.z,y};
+  return poiAimWallLimit(o,{x:dx/d,z:dz/d},d,poiAimWall(o))+.015>=d;
+ }
+ return typeof poiPlayerRayClear==='function'&&poiPlayerRayClear(Math.round(dst.x),Math.round(dst.z),y,Math.round(src.x),Math.round(src.z));
+}
+function poiCompanionHurt(damage,now){
+ const a=poiCompanionActor,kit=poiHotbarRead();
+ if(!a||!Number.isFinite(damage)||damage<=0||kit.companionSoul?.active!==a.id)return false;
+ const slots=poiInventorySlots(kit).slice(),index=slots.findIndex(c=>c?.type===a.id),cell=slots[index];
+ if(!cell)return false;
+ const hp=Math.max(0,(cell.durability??poiCompanionType(a.id).hp)-Math.max(1,Math.round(damage)));
+ slots[index]=hp?{...cell,durability:hp}:null;
+ const next=poiInventoryEdited(kit,slots);
+ if(!hp){
+  if(kit.companionSoul?.pending)next.companionSoul={version:1,pending:kit.companionSoul.pending,active:null};
+  else delete next.companionSoul;
+ }
+ if(!poiEconomyWrite(next))return false;
+ if(!hp){
+  poiCompanionActor=null;poiCompanionTarget=null;
+  if(typeof toast==='function')toast('仲間の'+poiCompanionType(a.id).name+'が消えた。');
+ }else a.hurtAt=now;
+ poiEconomyRefresh();return true;
+}
+function poiCompanionEnemyContact(hit,state,now){
+ const a=poiCompanionActor;
+ if(!a||!hit||poiCompanionSeenContacts.has(hit)||!poiCompanionSame(a,poiCompanionPlace())||
+    !poiCompanionNormal(hit.obj,state)||hit.y!==a.y||
+    hit.northAttack||hit.guardTrial||state.wildSpawn&&typeof poiWildPlayerOutside==='function'&&!poiWildPlayerOutside())return false;
+ const p=poiCompanionPose(a,now),x=Math.floor(p.x+.5),z=Math.floor(p.z+.5);
+ if(!(hit.tiles?hit.tiles.some(c=>c.x===x&&c.z===z):hit.x===x&&hit.z===z)||
+    !poiCompanionAttackClear({x:hit.sx,z:hit.sz},p,a.y))return false;
+ poiCompanionSeenContacts.add(hit);
+ const amount=typeof poiMonsterStatsAt==='function'?poiMonsterStatsAt(hit.obj).attack:POI_MONSTER_STATS[hit.obj.type]?.attack;
+ return poiCompanionHurt(amount,now);
+}
+function poiCompanionSnapshot(now){
+ const a=poiCompanionActor,f=poiCompanionFlight,kit=poiHotbarHasKit()?poiHotbarRead():null;
+ const claimed=kit&&poiInventorySlots(kit).find(c=>poiCompanionType(c?.type));
+ return {token:claimed?.type??null,hp:claimed?.durability??null,active:kit?.companionSoul?.active??null,
+  pending:kit?.companionSoul?.pending??null,flight:f?{x:f.x,z:f.z,y:f.y,start:f.start,arrives:f.arrives,type:f.type}:null,
+  actor:a?{x:a.x,z:a.z,y:a.y,pose:poiCompanionPose(a,now),target:poiCompanionTarget?.o?.type??null}:null};
+}
+function poiDrawCompanion(now,vp){
+ const a=poiCompanionActor;
+ if(!a||!poiCompanionSame(a,poiCompanionPlace())||!poiCompanionAllowed()||
+    Math.hypot(poiWalkX-a.x,poiWalkZ-a.z)>15||
+    typeof poiDungeonVisualVisible==='function'&&!poiDungeonVisualVisible(a.x,a.z,a.y))return;
+ const moving=now-a.stepAt<a.stepMs,emoting=now-a.swingAt<240||now-a.hurtAt<200;
+ const bucket=moving||emoting?Math.floor(now/48):'idle';
+ const key=a.id+':'+a.x+':'+a.z+':'+a.y+':'+bucket;
+ if(!poiCompanionMesh||key!==poiCompanionMeshKey){
+  const p=poiCompanionPose(a,now),m=mesh(),x=p.x+.5,z=p.z+.5;
+  const swing=Math.max(0,1-(now-a.swingAt)/240),hurt=Math.max(0,1-(now-a.hurtAt)/200);
+  const y=terrainY(Math.floor(x),Math.floor(z))+a.y*1.4+p.hop+.027;
+  if(!poiCompanionTemplate){poiCompanionTemplate=mesh();decoBase(poiCompanionTemplate,'monsterSlime',0,0,0)}
+  const raw=poiCompanionTemplate;
+  for(let i=0;i<raw.p.length;i+=3){
+   m.p.push(x+raw.p[i]*(.86+swing*.07),y+raw.p[i+1]*(.82-swing*.10),z+raw.p[i+2]*(.86+swing*.07));
+   m.n.push(raw.n[i],raw.n[i+1],raw.n[i+2]);m.c.push(Math.min(1,.14+raw.c[i]*.66+hurt*.60),.32+raw.c[i+1]*.54,.53+raw.c[i+2]*.41);
+  }
+  diamond(m,x,y+1.025,z,.106,[.42,.90,.98]);
+  if(m.p.length)poiCompanionMesh=upload(m,poiCompanionMesh?.buf,gl.DYNAMIC_DRAW);
+  poiCompanionMeshKey=key;
+ }
+ if(poiCompanionMesh)draw(poiCompanionMesh,vp);
+}
+// END MONSTER COMPANION CORE
+
 const POI_HOTBAR_KEY='world-workshop-hotbar-v1';
 // Preserve all eighteen serialized bag cells from the former 9×5 visual layout.
 const POI_HOTBAR_SIZE=9,POI_BAG_COLUMNS=5,POI_BAG_UNLOCKED=9,POI_BAG_SIZE=POI_BAG_COLUMNS*5;
@@ -12472,6 +12744,8 @@ function poiHotbarRead(){
  if(!valid)return poiHotbarState={weapon:null,potions:POI_HOTBAR_POTION_START,...(raw===null?{worn:{...POI_FRESH_ARMOR}}:{})};
  poiMigrateWeaponDurability(saved);
  const kit={weapon:saved.weapon,potions:saved.potions};
+ const companion=typeof poiCompanionDecode==='function'?poiCompanionDecode(saved.companionSoul):null;
+ if(companion)kit.companionSoul=companion;
  const pv=typeof poiPortQuestDecode==='function'?poiPortQuestDecode(saved.portQuests):null;
  if(pv)kit.portQuests=pv;
  const worn=poiArmorDecode(saved.worn);if(worn)kit.worn=worn;
@@ -12552,7 +12826,8 @@ function poiHotbarRead(){
  const restored=typeof poiNorthMinotaurRewardRestore==='function'&&
   (saved.dungeonPopulation?.dead?.['northFort.minotaur']!==undefined||result.armedDrops?.some(d=>d.id==='north-minotaur-axe'))?
   poiNorthMinotaurRewardRestore(result,saved.dungeonPopulation):result;
- return poiHotbarState=typeof poiArmedWithoutDuplicateWeapons==='function'?poiArmedWithoutDuplicateWeapons(restored):restored;
+ const final=typeof poiCompanionReconcile==='function'?poiCompanionReconcile(restored):restored;
+ return poiHotbarState=typeof poiArmedWithoutDuplicateWeapons==='function'?poiArmedWithoutDuplicateWeapons(final):final;
 }
 function poiHotbarSave(kit=poiHotbarState){
  if(typeof poiGameResetDeparture!=='undefined'&&(poiGameResetDeparture||poiGameResetBlocked))return false;
@@ -12563,6 +12838,7 @@ function poiHotbarSave(kit=poiHotbarState){
   const {weapon,potions,gold,claimedCaches,sword,drops,slots,towerFind,kitchenChest,worn,wornDurability,woodSwordBroken,npcTrade,goldBagOrder,quests,mineSurvey,mineGateCleared,mineTreasureChest,mineFindClaims,mineFindRolls,otherworldCleared,otherworldChest,chapelCleared,chapelChest,toolshopSupply}=kit;
   localStorage.setItem(POI_HOTBAR_KEY,JSON.stringify({version:1,weapon,potions:Math.min(potions,POI_HOTBAR_POTION_MAX),
    ...(poiHasExplicitWeaponDurability(kit)?{weaponDurabilityVersion:2}:{}),...(toolshopSupply?{toolshopSupply}:{}),...(kit.southShipment?{southShipment:kit.southShipment}:{}),...(kit.armedDrops?.length?{armedDrops:kit.armedDrops}:{}),...(kit.fireWandFound?{fireWandFound:true}:{}),...(kit.northTrailCampSupplies===true?{northTrailCampSupplies:true}:{}),...(kit.northWatchPostSupplies===true?{northWatchPostSupplies:true}:{}),...(kit.otherworldEastSupplyFound===true?{otherworldEastSupplyFound:true}:{}),...(kit.chapelWestSupplyFound===true?{chapelWestSupplyFound:true}:{}),...(kit.northMarshHerbFound===true?{northMarshHerbFound:true}:{}),...(kit.northWatchPostGuardLoot===true?{northWatchPostGuardLoot:true}:{}),...(kit.northMinotaurAxeAwarded===true?{northMinotaurAxeAwarded:true}:{}),...(Number.isInteger(kit.northFortReturn)&&kit.northFortReturn>=0&&kit.northFortReturn<=7?{northFortReturn:kit.northFortReturn}:{}),
+   ...(typeof poiCompanionDecode==='function'&&poiCompanionDecode(kit.companionSoul)?{companionSoul:poiCompanionDecode(kit.companionSoul)}:{}),
    ...(typeof poiPortQuestDecode==='function'&&poiPortQuestDecode(kit.portQuests)?{portQuests:poiPortQuestDecode(kit.portQuests)}:{}),
    ...(gold?{gold}:{}),...(claimedCaches?.length?{claimedCaches}:{}),...(towerFind?{towerFind}:{}),...(kitchenChest?{kitchenChest}:{}),...(worn?{worn}:{}),...(wornDurability?{wornDurability}:{}),...(woodSwordBroken?{woodSwordBroken}:{}),...(npcTrade?{npcTrade}:{}),...(goldBagOrder?{goldBagOrder}:{}),...(goldHotbarSlot!==null?{goldHotbarSlot}:{}),...(quests?.length?{quests}:{}),...(mineSurvey?{mineSurvey}:{}),...(mineGateCleared?{mineGateCleared}:{}),...(mineTreasureChest?{mineTreasureChest}:{}),...(mineFindClaims?.length?{mineFindClaims}:{}),...(mineFindRolls?{mineFindRolls}:{}),...(otherworldCleared?{otherworldCleared}:{}),...(otherworldChest?{otherworldChest}:{}),...(chapelCleared?{chapelCleared}:{}),...(chapelChest?{chapelChest}:{}),
    ...(dungeonPopulation?{dungeonPopulation}:{}),...(sword===false?{sword}:{}),...(typeof poiSnowGroundSave==='function'?poiSnowGroundSave(drops,kit.groundGold):{...(drops?.length?{drops}:{}),...(kit.groundGold?.length?{groundGold:kit.groundGold}:{})}),...(kit.goldStacks?.length?{goldStacks:kit.goldStacks}:{}),...(slots?{slots}:{})}));
@@ -12935,6 +13211,8 @@ const POI_EQUIPMENT_DURABILITY=Object.freeze({equipWoodSword:160,kitchenKnife:PO
  equipFryingPan:72,equipLadle:45,equipBallpointPen:18});
 const POI_ARMOR_WEAR_ORDER=Object.freeze(['torso','legs','head','feet']);
 function poiEquipmentDurabilityMax(type){
+ const soul=typeof poiCompanionType==='function'?poiCompanionType(type):null;
+ if(soul)return soul.hp;
  return Object.prototype.hasOwnProperty.call(POI_EQUIPMENT_DURABILITY,type)?POI_EQUIPMENT_DURABILITY[type]:0;
 }
 function poiEquipmentDurabilityPercent(cell){
@@ -13013,15 +13291,19 @@ function poiUnequipArmor(part){
 }
 
 function poiHotbarWeaponForType(type){return Object.prototype.hasOwnProperty.call(POI_GAME_WEAPON_NAMES,type)?type:null}
-function poiInventoryItemName(type){return POI_GAME_WEAPON_NAMES[type]||{gold:'金貨',healingHerb:'薬草',cannedFood:'缶詰',fireWand:'火の杖'}[type]||POI_STARTER_ARMOR_NAMES[type]||''}
+function poiInventoryItemName(type){return (typeof poiCompanionType==='function'?poiCompanionType(type)?.name:null)||POI_GAME_WEAPON_NAMES[type]||{gold:'金貨',healingHerb:'薬草',cannedFood:'缶詰',fireWand:'火の杖'}[type]||POI_STARTER_ARMOR_NAMES[type]||''}
 function poiInventoryCellName(cell){
  const name=poiInventoryItemName(cell?.type);
  return cell?.type===POI_FIRE_WAND?name+'（'+cell.charges+'）':name;
 }
-function poiInventoryStack(type){return poiHotbarWeaponForType(type)||poiArmorCategory(type)||type===POI_FIRE_WAND?1:type===POI_INVENTORY_HERB||type===POI_CANNED?POI_HOTBAR_POTION_MAX:0}
+function poiInventoryStack(type){if(typeof poiCompanionType==='function'&&poiCompanionType(type))return 1;return poiHotbarWeaponForType(type)||poiArmorCategory(type)||type===POI_FIRE_WAND?1:type===POI_INVENTORY_HERB||type===POI_CANNED?POI_HOTBAR_POTION_MAX:0}
 function poiInventorySanitizeCell(cell){
  const {type,count,durability,charges}=cell||{},max=poiInventoryStack(type);
  if(!max||!Number.isInteger(count)||count<1||count>max)return null;
+ if(typeof poiCompanionType==='function'&&poiCompanionType(type)){
+  const hp=poiCompanionType(type).hp;
+  return Number.isInteger(durability)&&durability>=1&&durability<=hp?{type,count,durability}:null;
+ }
  if(type===POI_FIRE_WAND)return Number.isInteger(charges)&&charges>=1&&charges<=POI_FIRE_WAND_MAX_CHARGES?{type,count,charges}:null;
  const limit=poiEquipmentDurabilityMax(type);
  if(!limit||durability===undefined&&type!==POI_KNIFE)return {type,count};
@@ -13032,7 +13314,7 @@ function poiAnyChestHas(kit,type){return POI_CHEST_STORE_KEYS.some(key=>kit[key]
 function poiChestDecode(raw){
  if(!raw||raw.version!==1||!Array.isArray(raw.slots)||raw.slots.length!==POI_CHEST_SIZE)return null;
  const unique=new Set(),slots=raw.slots.map(cell=>{
-  const c=poiInventorySanitizeCell(cell);if(!c)return null;
+  const c=poiInventorySanitizeCell(cell);if(!c||typeof poiCompanionType==='function'&&poiCompanionType(c.type))return null;
   if(poiHotbarWeaponForType(c.type)){if(unique.has(c.type))return null;unique.add(c.type)}
   return c;
  });
@@ -13086,6 +13368,7 @@ function poiMoveChestInventorySlot(fromArea,fromIndex,toArea,toIndex){
  if(a===b&&fromIndex===toIndex)return result('same');
  if(!a[fromIndex])return result('empty');
  if(a[fromIndex]?.type==='gold'||b[toIndex]?.type==='gold')return result('type');
+ if(a!==b&&typeof poiCompanionType==='function'&&(poiCompanionType(a[fromIndex]?.type)||poiCompanionType(b[toIndex]?.type)))return result('type');
  if(b===slots&&toIndex===poiGoldHotbarSlot(kit))return result('occupied');
  const liveEnd=POI_HOTBAR_SIZE+POI_BAG_UNLOCKED;
  if(b===slots&&toIndex>=liveEnd||
@@ -13353,6 +13636,7 @@ function poiHealingCastDraw(now,vp){
 function poiUseStorageConsumable(kit,index){
  const result=poiStorageActionResult,cell=poiInventorySlots(kit)[index];
  if(!cell)return result('empty');
+ if(typeof poiCompanionType==='function'&&poiCompanionType(cell.type))return poiCompanionUse(kit,index);
  if(cell.type===POI_FIRE_WAND)return poiHealingCastActive()?result('healing'):
   typeof poiWandArm==='function'?poiWandArm(index):result('unavailable');
  if(cell.type!==POI_INVENTORY_HERB&&cell.type!==POI_CANNED)return result('type');
@@ -13457,7 +13741,12 @@ function poiInventoryReadSlots(raw,kit){
  const out=[];
  for(const cell of raw){
   if(cell===null){out.push(null);continue}
-  const c=poiInventorySanitizeCell(cell);if(!c)return null;
+  const c=poiInventorySanitizeCell(cell);
+  if(!c){
+   // A corrupt new optional token must not discard the player's entire bag.
+   if(typeof poiCompanionType==='function'&&poiCompanionType(cell?.type)){out.push(null);continue}
+   return null;
+  }
   if(c.type===POI_INVENTORY_SWORD)swords++;
   if(c.type!==POI_INVENTORY_SWORD&&poiHotbarWeaponForType(c.type)){
    if(weapons.has(c.type)||!poiRepeatableMonsterWeapon(c.type)&&kit.drops?.some(d=>d.type===c.type)||poiAnyChestHas(kit,c.type))return null;
@@ -13636,6 +13925,7 @@ function poiDropGroundLocation(kit){
  return location?{location:{...location,y,...(snow?{region:'snowpass'}:{})}}:{reason:'blocked'};
 }
 function poiInventoryDropResult(kit,cell){
+ if(typeof poiCompanionType==='function'&&poiCompanionType(cell.type))return {reason:'bound'};
  const {location,reason}=poiDropGroundLocation(kit);
  if(!location)return {reason};
  return {drops:[...(kit.drops||[]),{type:cell.type,...location,...(cell.durability?{durability:cell.durability}:null),...(cell.charges?{charges:cell.charges}:null)}]};
@@ -14710,6 +15000,7 @@ function poiItemDetailCell(ref){
 }
 function poiItemDetailActions(zone,cell,chestOpen,hasSplitSpace=true){
  if(zone==='npc')return ['back'];
+ if(typeof poiCompanionType==='function'&&poiCompanionType(cell.type))return zone==='bag'||zone==='hotbar'?['use','back']:['back'];
  if(cell.type==='gold')return [...(cell.count>1&&hasSplitSpace?['split']:[]),'back'];
  if(zone==='armor')return ['unequip','back'];
  const actions=[];
@@ -14723,6 +15014,8 @@ function poiItemDetailActions(zone,cell,chestOpen,hasSplitSpace=true){
 }
 function poiItemDetailDescription(cell,inlineWeapon=true){
  if(cell.type==='gold')return '金貨：'+cell.count+'G';
+ const soul=typeof poiCompanionType==='function'?poiCompanionType(cell.type):null;
+ if(soul)return '仲間を呼び出す魂。耐久は仲間の体力（'+cell.durability+' / '+soul.hp+'）。力尽きると魂も消える。';
  const descriptions={
   equipWoodSword:'木でできた軽い剣。ショートカットに装備して使う。',
   kitchenKnife:'刃のある調理道具。敵に当てると耐久が減り、なくなると壊れる。',
@@ -14804,7 +15097,7 @@ function poiInventoryPresentItem(host,cell,durability=false){
   if(g){
    if(preview.dataset.itemModel)copy.dataset.itemModel=preview.dataset.itemModel;
    g.drawImage(preview,0,0);icon.replaceChildren(copy);
-  }else if(!coin)icon.textContent={gold:'●',equipWoodSword:'⚔︎',healingHerb:'🌿',kitchenKnife:'🔪',cannedFood:'🥫'}[type]||'';
+  }else if(!coin)icon.textContent=(typeof poiCompanionType==='function'?poiCompanionType(type)?.icon:null)||{gold:'●',equipWoodSword:'⚔︎',healingHerb:'🌿',kitchenKnife:'🔪',cannedFood:'🥫'}[type]||'';
  }
  if(amount)amount.textContent=type==='fireWand'?String(cell.charges):
   (type==='gold'||type==='healingHerb'||type==='cannedFood')&&cell.count>0?String(cell.count):'';
@@ -14831,7 +15124,8 @@ function poiItemDetailRender(){
  for(const button of dialog.querySelectorAll('[data-item-detail-action]')){
   const action=button.dataset.itemDetailAction;
   if(action==='transfer')button.textContent=ref.zone==='chest'?'インベントリに入れる':'チェストに入れる';
-  if(action==='use')button.textContent=cell.type==='fireWand'?(typeof poiArmedWandIndex==='function'&&poiArmedWandIndex()===poiInventoryIndex(ref)?'構えを解く':'構える'):'使う';
+  if(action==='use')button.textContent=typeof poiCompanionType==='function'&&poiCompanionType(cell.type)?
+   (poiHotbarRead().companionSoul?.active===cell.type?'魂に戻す':'仲間を呼ぶ'):cell.type==='fireWand'?(typeof poiArmedWandIndex==='function'&&poiArmedWandIndex()===poiInventoryIndex(ref)?'構えを解く':'構える'):'使う';
   button.hidden=!actions.includes(action);
  }
  if(document.activeElement?.hidden&&dialog.contains(document.activeElement))
@@ -14851,7 +15145,7 @@ function poiItemDetailOpen(button,npcCell=null,directShortcut=false){
 }
 function poiItemDetailReason(reason){
  return {full:'空き枠がありません。',blocked:'近くの地面に置けません。',healthy:'HPは満タンです。',
-  healing:'回復アイテムを使用中です。',storage:'保存できなかったため、アイテムは移動していません。',single:'これ以上分割できません。'}[reason]||'その操作はできません。';
+  healing:'回復アイテムを使用中です。',storage:'保存できなかったため、アイテムは移動していません。',single:'これ以上分割できません。',bound:'仲間の魂は地面やチェストに置けません。'}[reason]||'その操作はできません。';
 }
 function poiItemDetailAction(action){
  if(action==='back'){poiItemDetailClose();return}
@@ -15175,6 +15469,9 @@ function poiHotbarUse(slot){
  const kit=poiHotbarRead();if(slot===poiGoldHotbarSlot(kit))return;
  const item=poiInventorySlot(kit,slot);
  if(item==='gold')return;
+ if(typeof poiCompanionType==='function'&&poiCompanionType(item)){
+  const use=poiCompanionUse(kit,slot);if(use.reason==='storage')toast('仲間の状態を保存できませんでした');return;
+ }
  if(item!==POI_INVENTORY_HERB&&item!==POI_CANNED&&item!==POI_FIRE_WAND){
   const weapon=poiHotbarWeaponForType(item);
   if(kit.weapon!==weapon&&!poiEconomyWrite({...kit,weapon})){toast('装備を保存できませんでした');return}
@@ -16387,6 +16684,7 @@ function poiEnemyResolvePlayer(now){
   }else if(typeof poiEnemyCueRanged==='function'&&poiEnemyCueRanged(a)){
    covered=poiEnemyRangedContact(a,s,typeof poiAimOrigin==='function'?poiAimOrigin(now):{x:poiWalkX,z:poiWalkZ,y:poiWalkLevel});
   }else if(covered&&a.angular&&typeof poiEnemyAngleHitClear==='function')covered=poiEnemyAngleHitClear(a,poiWalkX,poiWalkZ,s);
+  if(timely&&poiWalkLevel===a.y&&typeof poiCompanionEnemyContact==='function')poiCompanionEnemyContact(a,s,now);
   if(!timely||!covered||poiWalkLevel!==a.y||
      (typeof poiDungeonPatrolCanFight==='function'&&!poiDungeonPatrolCanFight(a.obj,poiWalkX,poiWalkZ))||
      (s.wildSpawn&&!poiWildPlayerOutside()))continue;
@@ -18934,7 +19232,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v273',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v274',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -19049,7 +19347,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v273';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v274';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -19264,7 +19562,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v273',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v274',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -20303,13 +20601,14 @@ function poiPlayerDamageTarget(monster,x,z,amount,weapon,now,silent=false,atCont
   else poiSound('hit',weapon,state.hp===0);
  }
  if(state.hp<before&&typeof poiOrchestraCombat==='function')poiOrchestraCombat();
- if(state.hp<before&&typeof poiHitstopRequest==='function')poiHitstopRequest(now,weapon);
+ if(state.hp<before&&!source?.companion&&typeof poiHitstopRequest==='function')poiHitstopRequest(now,weapon);
+ if(state.hp<before&&!source?.companion&&typeof poiCompanionPlayerContact==='function')poiCompanionPlayerContact(obj,state,now);
  const contact=obj.type==='monsterMineGuard'||state.actorFree;
  const hx=contact?x:state.x,hz=contact?z:state.z;
  poiDamageNumber(hx+.5,hz+.5,terrainY(hx,hz)+(guarded?2.22:1.8)+(facilitySite?poiWalkLevel*1.4:0),amount,
   ...(guarded?[false,false,true]:[]));
  if(!state.hp){
-  poiMonsterBreak(obj,state,now);
+  const debris=poiMonsterBreak(obj,state,now);
   if(obj.type==='monsterSlime'&&state.wildSpawn)poiEconomyDrop(obj,state);
   if(obj.type==='monsterSkeleton'&&typeof poiChapelRecordDefeat==='function')poiChapelRecordDefeat(obj,state);
   if(obj.type==='monsterDragon'&&typeof poiOtherworldRecordDefeat==='function')poiOtherworldRecordDefeat(obj,state);
@@ -20319,6 +20618,7 @@ function poiPlayerDamageTarget(monster,x,z,amount,weapon,now,silent=false,atCont
   }
   if(typeof poiArmedEnemyLoot==='function')poiArmedEnemyLoot(obj,state);
   if(typeof poiDungeonRememberDefeat==='function')poiDungeonRememberDefeat(obj,state);
+  if(before>0&&!source?.companion&&typeof poiCompanionMonsterDefeated==='function')poiCompanionMonsterDefeated(obj,state,now,debris);
   if(typeof poiAnnounceDefeat==='function')poiAnnounceDefeat(obj.type,now);else toast('モンスターを倒した');
  }
  poiMonsterMeshDirty=true;
@@ -21257,12 +21557,14 @@ function poiMonsterBreak(obj,state,now,random=Math.random,actorEffect=null){
    restScale,yaw,tilt,lift:.35+random()*.38,bounce:.04+random()*.09};
  });
  if(poiMonsterBreaks.length>=POI_MONSTER_BREAK_LIMIT)poiMonsterBreaks.shift();
- poiMonsterBreaks.push({...pose,type:obj.type,parts,start:now,floor:obj.y,facing,settled:null,
+ const effect={...pose,type:obj.type,parts,start:now,floor:obj.y,facing,settled:null,
   hitFlashAt:actorEffect?.hitFlashAt??state.hitFlashAt,
-  ...(actorEffect?{actor:actorEffect.actor,actorId:actorEffect.actorId}:null)});
- poiMonsterMeshDirty=true;
+  ...(actorEffect?{actor:actorEffect.actor,actorId:actorEffect.actorId}:null)};
+ poiMonsterBreaks.push(effect);poiMonsterMeshDirty=true;
+ return effect;
 }
 function poiMonsterClearBreaks(){
+ poiCompanionFxCancel();
  if(!poiMonsterBreaks.length)return;
  poiMonsterBreaks.length=0;poiMonsterMeshDirty=true;
 }
@@ -21299,7 +21601,7 @@ function poiMonsterAppendDebris(m,e,t,fade=1){
 }
 function poiMonsterDrawBreaks(m,now,hitFlashSpans){
  for(const effect of poiMonsterBreaks){
-  if((facilitySite&&effect.floor!==poiWalkLevel)||
+  if(effect.soulFx||(facilitySite&&effect.floor!==poiWalkLevel)||
    (typeof poiDungeonVisualVisible==='function'&&!poiDungeonVisualVisible(Math.floor(effect.x),Math.floor(effect.z),effect.floor)))continue;
   const age=now-effect.start,phase=poiMonsterBreakPhase(age,effect),first=m.p.length/3;
   if(age>=POI_MONSTER_FLIGHT_MS&&!effect.settled){
@@ -21313,6 +21615,83 @@ function poiMonsterDrawBreaks(m,now,hitFlashSpans){
    hitFlashSpans.push({first,end:m.p.length/3,source:effect});
  }
 }
+// BEGIN COMPANION SOUL FX
+const POI_COMPANION_FX_GATHER_MS=500,POI_COMPANION_FX_SILHOUETTE_MS=280;
+let poiCompanionFx=null,poiCompanionFxGpu=null;
+function poiCompanionFxAttach(debris,flight){
+ if(!debris||debris.type!=='monsterSlime'||!debris.parts?.length||!flight||
+    (typeof poiCompanionSoulFlight==='function'&&poiCompanionSoulFlight()!==flight))return false;
+ if(poiCompanionFx?.flight===flight)return false;
+ debris.soulFx=true;poiMonsterMeshDirty=true;
+ poiCompanionFx={debris,flight,site:facilitySite,world,last: -Infinity,stage:'fracture',position:null};
+ return true;
+}
+function poiCompanionFxCancel(){poiCompanionFx=null}
+function poiCompanionFxFrame(e,f,now,p){
+ const age=Math.max(0,now-e.start),fracture=POI_MONSTER_FLIGHT_MS;
+ const gather=fracture+POI_COMPANION_FX_GATHER_MS,form=gather+POI_COMPANION_FX_SILHOUETTE_MS;
+ const smooth=t=>t*t*(3-2*t);
+ if(age<fracture)return {stage:'fracture',debris:age/fracture};
+ if(age<gather)return {stage:'gather',debris:1-smooth((age-fracture)/POI_COMPANION_FX_GATHER_MS)};
+ if(age<form)return {stage:'silhouette',debris:0,elapsed:age-gather};
+ const t=Math.min(1,(age-form)/Math.max(1,f.arrives-e.start-form)),q=t*t*(2-t),s=[e.x,e.y+.55,e.z];
+ const position=s.map((v,i)=>v+(p[i]-v)*q);
+ position[1]+=.33*Math.sin(Math.PI*t);
+ return {stage:t>=1?'absorbed':'flight',position,t,q,source:s};
+}
+function poiCompanionFxOrb(m,x,y,z,r,col){
+ const top=[x,y+r,z],low=[x,y-r,z],side=[[x+r,y,z],[x,y,z+r],[x-r,y,z],[x,y,z-r]];
+ for(let i=0;i<4;i++){const a=side[i],b=side[(i+1)%4];tri(m,top,b,a,col);tri(m,low,a,b,col)}
+}
+function poiCompanionFxDraw(now,vp){
+ const fx=poiCompanionFx;
+ if(!fx)return;
+ if(!poiWalkActive||fx.site!==facilitySite||fx.world!==world||fx.debris.floor!==poiWalkLevel||
+    (typeof poiCompanionSoulFlight==='function'&&poiCompanionSoulFlight()!==fx.flight)){
+  poiCompanionFx=null;return;
+ }
+ if(typeof poiAudioAllowed==='function'&&!poiAudioAllowed())return;
+ if(typeof poiDungeonVisualVisible==='function'&&!poiDungeonVisualVisible(Math.floor(fx.debris.x),Math.floor(fx.debris.z),fx.debris.floor))return;
+ const e=fx.debris,p=[poiWalkViewX+.5,poiCreekPlayerHeight(now)+(facilitySite?poiWalkLevel*1.4:0)+.92,poiWalkViewZ+.5];
+ const f=poiCompanionFxFrame(e,fx.flight,now,p);
+ if(f.stage==='absorbed'){fx.stage=f.stage;fx.position=f.position;return}
+ if(now-fx.last>=32||fx.stage!==f.stage||!poiCompanionFxGpu){
+  const m=mesh();
+  if(f.debris!==undefined){
+   poiMonsterAppendDebris(m,e,f.debris);
+   if(f.stage==='silhouette'){
+    // The exact original model's assembled fragments briefly darken into
+    // a soft cool silhouette before the point of light leaves its center.
+    const q=Math.min(1,f.elapsed/POI_COMPANION_FX_SILHOUETTE_MS);
+    for(let i=0;i<m.c.length;i+=3){m.c[i]=.12+m.c[i]*(.48-q*.19);m.c[i+1]=.26+m.c[i+1]*.34;m.c[i+2]=.41+m.c[i+2]*.42}
+   }
+  }else{
+   const [x,y,z]=f.position,r=.176*(1-f.t*.32)+.013*Math.sin(now*.014);
+   poiCompanionFxOrb(m,x,y,z,r,[.32,.56,.67]);
+   poiCompanionFxOrb(m,x+.019,y+.047,z-.02,r*.52,[.63,.78,.86]);
+   for(let i=1;i<=3;i++){
+    const q=Math.max(0,f.q-i*.045),from=f.source;
+    poiCompanionFxOrb(m,from[0]+(p[0]-from[0])*q,from[1]+(p[1]-from[1])*q+.22*Math.sin(Math.PI*q),
+     from[2]+(p[2]-from[2])*q,r*(.54-i*.098),[.28,.48,.53]);
+   }
+  }
+  poiCompanionFxGpu=upload(m,poiCompanionFxGpu?.buf,gl.DYNAMIC_DRAW);
+  fx.stage=f.stage;fx.position=f.position??null;fx.last=now;
+ }
+ if(f.stage!=='flight'){draw(poiCompanionFxGpu,vp);return}
+ gl.enable(gl.BLEND);gl.blendFunc(gl.CONSTANT_ALPHA,gl.ONE_MINUS_CONSTANT_ALPHA);gl.depthMask(false);
+ try{gl.blendColor(0,0,0,.68);draw(poiCompanionFxGpu,vp)}
+ finally{
+  gl.depthMask(true);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.blendColor(0,0,0,0);gl.disable(gl.BLEND);
+ }
+}
+// Read-only instrumentation for native QA, never a claim signal.
+function poiCompanionFxSnapshot(){
+ const f=poiCompanionFx;
+ return f?{stage:f.stage,position:f.position,source:[f.debris.x,f.debris.y,f.debris.z],fragments:f.debris.parts.length,vertices:poiCompanionFxGpu?.count??0}:null;
+}
+// END COMPANION SOUL FX
+
 let poiSlimeMeshAnimating=false;
 function poiMonsterRender(now,vp){
  if(!poiWalkActive)return;
@@ -21321,7 +21700,7 @@ function poiMonsterRender(now,vp){
  }
  const onSlice=(o)=>!(facilitySite&&o.y!==poiWalkLevel)&&
   (typeof poiDungeonVisualVisible!=='function'||poiDungeonVisualVisible(o.x,o.z,o.y));
- const animate=poiMonsterBreaks.some(effect=>(!facilitySite||effect.floor===poiWalkLevel)&&
+ const animate=poiMonsterBreaks.some(effect=>!effect.soulFx&&(!facilitySite||effect.floor===poiWalkLevel)&&
   (typeof poiDungeonVisualVisible!=='function'||poiDungeonVisualVisible(Math.floor(effect.x),Math.floor(effect.z),effect.floor))&&
   (!effect.settled||poiMonsterBreakPhase(now-effect.start,effect)==='fade'))||
   [...poiMonsterStates].some(([o,s])=>onSlice(o)&&s.hp>0&&(now-s.moveStarted<(s.guardMoveMs||380)+70||
@@ -24336,6 +24715,7 @@ function render(){
  // real simulation clock during this very brief contact presentation.
  if(typeof poiHitstopHold==='function'&&poiHitstopHold(now))return;
  poiTownClockFrame(now);poiWalkFrame(now);poiMessageUpdate(now);
+ if(typeof poiCompanionTick==='function')poiCompanionTick(now);
  if(typeof poiTownResidentsFrame==='function'&&
     !(typeof poiHitstopPending==='function'&&poiHitstopPending()))poiTownResidentsFrame(now);
  const p=parameters();poiSkyBackdrop(p);
@@ -24376,7 +24756,9 @@ function render(){
  if(poiWalkActive){
   poiEconomyDraw(p.vp,now);poiInventoryDraw(p.vp,now);
   if(typeof poiTownResidentsDraw==='function')poiTownResidentsDraw(now,p.vp);
+  if(typeof poiDrawCompanion==='function')poiDrawCompanion(now,p.vp);
   poiMonsterRender(now,p.vp);
+  if(typeof poiCompanionFxDraw==='function')poiCompanionFxDraw(now,p.vp);
   if(!poiPlayerDeath||poiPlayerDeath.relocated)poiDrawWalkAvatar(p.vp,now);
   poiPlayerWeaponDraw(now,p.vp);
  }
@@ -30547,6 +30929,7 @@ function facilityBoot(resume,playOnOpen=false){
   setOverheadWallFade:enabled=>{poiAngledWallDisabled=!enabled},
   setUpperStoreyFade:enabled=>{poiAngledStoreyDisabled=!enabled;poiAngledWallPrevious=null},
   townResidents:()=>typeof poiTownResidentsSnapshot==='function'?poiTownResidentsSnapshot():null,
+  companion:()=>typeof poiCompanionSnapshot==='function'?poiCompanionSnapshot(performance.now()):null,
   facility:()=>({id:facilitySite.id,mode:poiWalkActive?'play':'editor',editorLevel:level,
    spawn:{...facilitySite.spawn},buildings:facilitySite.buildings.map(r=>({...r})),
    position:{x:poiWalkX,z:poiWalkZ,level:poiWalkLevel},hiddenRoof:facilityHiddenRoof(),

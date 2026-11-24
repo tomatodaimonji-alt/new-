@@ -29,7 +29,11 @@ const anchor='  freeMovementPose:()=>({x:poiWalkViewX,z:poiWalkViewZ,level:poiWa
 const insert=(s,k,v)=>{assert.equal(s.split(k).length,2,k);return s.replace(k,k+v)};
 let fixture=insert(html,anchor,`
   davidQA:{
-   aimTest:(roll,target)=>{window.__davidFrames.roll=roll;window.__davidFrames.aimTarget=target},
+   aimTest:(roll,target)=>{
+    const f=window.__davidFrames;
+    f.roll=roll;f.aimTarget=target;f.beamClock={now:performance.now()};
+   },
+   releaseBeamClock:()=>{window.__davidFrames.beamClock=null},
    sound:()=>({running:poiAudioContext?.state==='running',events:window.__davidFrames.audio,stops:window.__davidFrames.audioStops}),
    pokeSound:(mode)=>{
     const {o,s}=poiDavidActive??{};
@@ -62,18 +66,28 @@ let fixture=insert(html,anchor,`
     return {pos:[poiWalkX,poiWalkZ,poiWalkLevel],url:location.href,
      status:$('pineStartupCover').dataset.state,opens:f.coverShows,travel:poiDungeonEntranceSerial,step:poiWalkNextReady,
      now:performance.now(),hp:poiPlayerHP,death:poiPlayerDeath?.phase??null,returnFrames:f.returnFrames,returnAnchor:f.returnAnchor,scene:facilityViewLevel()<0?'cellar':'surface',
-     draw:f.last,cue:f.cue,contacts:f.contacts,timing:f.timing,canceled:f.canceled,fan:f.fan,live:f.live,rays:f.rays,statue:id?{x:s.x,z:s.z,hp:s.hp,d:s.david??null,pose:poiDavidPose(s,performance.now())}:null};
+     draw:f.last,cue:f.cue,contacts:f.contacts,timing:f.timing,canceled:f.canceled,fan:f.fan,live:f.live,rays:f.rays,beamDraws:f.beamDraws,statue:id?{x:s.x,z:s.z,hp:s.hp,d:s.david??null,pose:poiDavidPose(s,performance.now())}:null};
    }
   },`);
 fixture=fixture.replace('function poiDavidBeamSide(roll=Math.random())','function poiDavidBeamSide(roll=window.__davidFrames.roll??.8)');
 fixture=insert(fixture,' source.connect(gain).connect(poiAudioEffects);',"\n const sample=[...poiRecordedFoleyCache].find(([k,b])=>b===buffer&&k.startsWith('david'));if(sample){source.__davidSample={name:sample[0],duration:buffer.duration,gain:gain.gain.value,linked:poiAudioEffects.context===ctx};}");
 fixture=insert(fixture,'q.sweep={side,tell:now,start:null,end:null,angle:0,hit:false};',"\n     if(window.__davidFrames.aimTarget)workshopResumeRestorePosition({x:24+window.__davidFrames.aimTarget*2,z:101,y:0,facing:2});");
-fixture=insert(fixture,'draw(poiDavidCue.fan,vp)',";window.__davidFrames.fan++;");
-fixture=insert(fixture,'draw(poiDavidCue.live,vp)',";window.__davidFrames.live++;");
+fixture=fixture.replace('draw(poiDavidCue.fan,vp)','{const f=window.__davidFrames,c=f.glCounters();draw(poiDavidCue.fan,vp);f.fan++;f.beamSubmission(q.start,"fan",now,c);}');
+fixture=fixture.replace('draw(poiDavidCue.live,vp)','{const f=window.__davidFrames,c=f.glCounters();draw(poiDavidCue.live,vp);f.live++;f.beamSubmission(q.start,"live",now,c);}');
 fixture=insert(fixture,'const m=poiDavidSweepBeamMesh(q,b);', "\n   if(m.p.length){const ray=poiDavidBeamRay(q,q.sweep.angle);window.__davidFrames.rays.push({start:q.start,side:q.sweep.side,angle:q.sweep.angle,x:ray.x,z:ray.z,vertices:m.p.length/3});}");
 fixture=insert(fixture,'   const {x:cx,y,z:cz,attack,heading,david}=poiMonsterPose(obj,s,now),part=mesh();', "\n   if(obj.type==='monsterStoneDavid'&&s.david?.returning){const f=window.__davidFrames;f.returnFrames.push([s.x,s.z,cx-.5,cz-.5]);}");
 fixture=insert(fixture,'function poiDavidCease(o,s,b,now){', "\n if(s.david?.awake&&!s.david.returning)window.__davidFrames.returnAnchor=[s.x,s.z];");
 fixture=insert(fixture,'function render(){','\n window.__davidFrames?.next();');
+// Bound the shared update/renderer clock only for directional-beam samples:
+// a software-WebGL host can skip the entire (110,450) ms telegraph even
+// without meeting the game's separate 750 ms anti-replay cancellation. The
+// same production function still generates, uploads and submits every mesh.
+const renderStart=fixture.indexOf('function render(){');
+assert(renderStart>=0);
+const renderClock=' const now=performance.now();', clockAt=fixture.indexOf(renderClock,renderStart);
+assert(clockAt>renderStart&&clockAt-renderStart<400);
+fixture=fixture.slice(0,clockAt)+" const now=window.__davidFrames.renderTime(performance.now());"+fixture.slice(clockAt+renderClock.length);
+
 fixture=insert(fixture,' if(!poiDavidCue){','window.__davidFrames.cue.builds++;window.__davidFrames.cue.byStart[q.start]=(window.__davidFrames.cue.byStart[q.start]||0)+1;');
 fixture=insert(fixture,' const priorHP=poiPlayerHP;',"\n if(obj.type==='monsterStoneDavid')window.__davidFrames.contacts.push({start:poiDavidActive?.s?.david?.attack?.start,raw,amount,now,hp:Math.max(0,priorHP-amount)});");
 fixture=insert(fixture,'   const i=q.cursor++,late=now-q.hits[i];',"\n   { const impact=window.__davidFrames; (impact.timing[q.start]??=[]).push({i,late:now-q.hits[i],inside:poiDavidArea(q,p),clear:poiDavidLine({x:q.sx,z:q.sz},p,b)}); }");
@@ -95,7 +109,12 @@ await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',resolve).once('e
 const url='http://127.0.0.1:'+server.address().port;
 const install=()=>{
  let frame=0,draws=0,vertices=0;
- const summary=window.__davidFrames={coverShows:0,cue:{lane:0,beam:0,builds:0,byStart:{}},contacts:[],timing:{},canceled:{},audio:[],audioStops:[],fan:0,live:0,rays:[],returnFrames:[],returnAnchor:null,last:null,next(){
+ const summary=window.__davidFrames={coverShows:0,cue:{lane:0,beam:0,builds:0,byStart:{}},contacts:[],timing:{},canceled:{},audio:[],audioStops:[],fan:0,live:0,rays:[],beamDraws:{},beamClock:null,
+  renderTime(real){const c=this.beamClock;if(!c)return real;c.now=Math.max(c.now,Math.min(real,c.now+120));return c.now;},
+  glCounters(){return [draws,vertices]},
+  beamSubmission(start,kind,now,[priorDraws,priorVertices]){
+   (this.beamDraws[start]??=[]).push({kind,now,draws:draws-priorDraws,vertices:vertices-priorVertices});
+  },returnFrames:[],returnAnchor:null,last:null,next(){
   if(frame>0)this.last={frame,draws,vertices};frame++;draws=0;vertices=0;
  }};
  for(const Proto of [globalThis.WebGLRenderingContext?.prototype,globalThis.WebGL2RenderingContext?.prototype].filter(Boolean)){
@@ -286,7 +305,12 @@ try{
      continue;
     }
     const rays=r.rays.filter(a=>a.start===initial.start);
-    assert(r.fan>initial.state.fan&&r.live>initial.state.live,'ground wedge and red-eye beam submitted to real GL');
+    const drawSamples=r.beamDraws[initial.start]??[];
+    const fan=drawSamples.filter(d=>d.kind==='fan'),red=drawSamples.filter(d=>d.kind==='live');
+    assert(fan.length>0&&red.length>0&&fan[0].now<red[0].now,
+     'same committed attack submits native ground wedge before red-eye beam: '+JSON.stringify(drawSamples));
+    assert(drawSamples.every(d=>d.draws>0&&d.vertices>0),'actual WebGL draw calls');
+
     assert(rays.some(a=>a.side===side&&Math.sign(a.x)===side&&Math.abs(a.angle)>.20&&a.vertices>=12),JSON.stringify(rays));
     const contacts=r.contacts.filter(c=>c.start===initial.start);
     assert.deepEqual(contacts.map(c=>c.raw),shouldHit?[47,36]:[47],'only live sweeping ray can apply the extra contact once');
@@ -296,6 +320,7 @@ try{
     complete=true;
    }
    assert(complete,'no real native frame sequence for extended beam '+side);
+   await battle.p.evaluate(()=>window.__editorTest.davidQA.releaseBeamClock());
   }
   const before=(await battle.p.evaluate(()=>window.__editorTest.davidQA.sound())).events.length;
   await battle.p.evaluate(()=>{window.__editorTest.davidQA.pokeSound('mute');window.__editorTest.davidQA.pokeSound('outside')});
