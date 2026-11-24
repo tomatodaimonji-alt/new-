@@ -23,26 +23,26 @@ try{
  const stock=await page.evaluate(()=>{
   const slots=Array(27).fill(null);slots[0]={type:'equipWoodSword',count:1,durability:77};slots[1]={type:'healingHerb',count:1};
   const kit=JSON.stringify({version:1,weaponDurabilityVersion:2,weapon:'equipWoodSword',potions:1,gold:9,slots,
-   drops:[{type:'healingHerb',x:50,z:126,y:0},{type:'healingHerb',x:12,z:2,y:0}]});
+   drops:[{type:'healingHerb',x:61,z:137,y:0},{type:'healingHerb',x:12,z:2,y:0}]});
   localStorage.setItem('world-workshop-hotbar-v1',kit);
   localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
-   position:{x:49,z:126,y:0,facing:2},townLayout:5,townMapHeight:128,view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.24,orbitDistance:5.5}}));
+   position:{x:60,z:137,y:0,facing:2},townLayout:5,townMapHeight:182,templeDepth:1,view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.24,orbitDistance:5.5}}));
   return kit;
  });
  await page.goto(root+'/?resume=1&test=1');
- const state=()=>page.evaluate(()=>({area:window.__editorTest?.snowPassRegion(),p:window.__editorTest?.freeMovementPose(),
+ const state=()=>page.evaluate(()=>({area:window.__editorTest?.snowPassRegion(),p:window.__editorTest?.freeMovementPose(),stream:window.__editorTest?.overlandStream(),
   save:JSON.parse(localStorage.getItem('world-workshop-resume-v1')),kit:localStorage.getItem('world-workshop-hotbar-v1')}));
  const at=(id,z)=>page.waitForFunction(({id,z})=>{const qa=window.__editorTest;return qa?.snowPassRegion().id===id&&Math.abs(qa.freeMovementPose().z-z)<.08},{id,z});
- await page.locator('#pineStartupCover').waitFor({state:'hidden'});await at('base',126);
+ await page.locator('#pineStartupCover').waitFor({state:'hidden'});await at('base',137);
  const old=await state();assert.equal(old.area.width,128);assert.equal(old.save.region,undefined);
  await page.evaluate(()=>window.__editorTest.testWound(31));
  const pad=page.locator('#poiAnalogPad'),cdp=await page.context().newCDPSession(page);
  const send=(type,touchPoints)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints});
- const roll=async(dir,next,z=dir>0?0:127)=>{
+ const roll=async(dir,next,z=dir>0?0:138)=>{
   const r=await pad.boundingBox();assert(r);
   const p={x:Math.round(r.x+r.width*.5),y:Math.round(r.y+r.height*.5),id:7};
   await send('touchStart',[p]);await send('touchMove',[{...p,y:p.y+36*dir}]);
-  await at(next,z);
+  await page.waitForFunction(({id,z})=>{const qa=window.__editorTest;return qa?.snowPassRegion().id===id&&Math.round(qa.freeMovementPose().z)===z},{id:next,z});
   await send('touchEnd',[]);
  };
  // The actual switch must refuse a real storage failure rather than
@@ -56,14 +56,14 @@ try{
    return window.__snowStorageWrite.call(this,k,v);
   };
  });
- await roll(1,'base',127);
+ await roll(1,'base',138);
  // At the edge, hold a new actual drag until the resolver attempts the write.
  const rect=await pad.boundingBox(),press={x:Math.round(rect.x+rect.width/2),y:Math.round(rect.y+rect.height/2),id:8};
  await send('touchStart',[press]);await send('touchMove',[{...press,y:press.y+36}]);
  await page.waitForFunction(()=>window.__snowRefused===true);
  await send('touchEnd',[]);
  const refused=await state();assert.equal(refused.area.id,'base');
- assert.equal(await page.evaluate(()=>window.__editorTest.canStep(49,128,49,127)),false,'ordinary map/path checks cannot pass through the special link');assert.equal(refused.save.region,undefined);assert.equal(refused.kit,stock);
+ assert.equal(await page.evaluate(()=>window.__editorTest.canStep(60,139,60,138)),false,'ordinary map/path checks cannot pass through the special link');assert.equal(refused.save.region,undefined);assert.equal(refused.kit,stock);
  await page.evaluate(()=>{Storage.prototype.setItem=window.__snowStorageWrite});
  await page.waitForFunction(()=>window.__editorTest.snowPassRegion().field);
  await roll(1,'snowpass');
@@ -87,17 +87,17 @@ try{
  await roll(-1,'base');
  await page.waitForFunction(()=>window.__editorTest.snowPassRegion().timing?.firstFrameMs>0);
  const back=await state();
- assert.equal(back.area.width,128);assert.equal(back.p.x,49);assert.equal(back.save.region,undefined);
+ assert.equal(back.area.width,128);assert.equal(back.p.x,60);assert.equal(back.save.region,undefined);
  assert.equal(back.area.hp,69);assert.deepEqual(JSON.parse(back.kit).snowGroundGold,saved.snowGroundGold);assert(back.area.actors>0);assert.deepEqual(back.area.spawn,old.area.spawn,'base death respawn does not use local snow coordinates');assert(back.area.forest,'same loaded base still has normal forest');
  assert.deepEqual(JSON.parse(back.kit).drops,saved.drops);
- await page.waitForTimeout(225);await page.keyboard.press('ArrowUp');await at('base',126);
+ await page.waitForTimeout(225);await page.keyboard.press('ArrowUp');await at('base',137);
  await page.waitForTimeout(225);await page.keyboard.press('ArrowRight');
- await page.waitForFunction(()=>window.__editorTest.freeMovementPose().x>49.92);
+ await page.waitForFunction(()=>window.__editorTest.freeMovementPose().x>60.92);
  const picked=JSON.parse((await state()).kit);
  assert.deepEqual(picked.drops,[{type:'healingHerb',x:12,z:2,y:0}],'only base local ground item is collected after return');
  assert(picked.potions===2||picked.slots?.some(d=>d?.type==='healingHerb'&&d.count===2),'real base ground pickup still transfers into the same inventory');
- assert(back.area.timing.veilFrames>=1&&back.area.timing.veilMs>0,'cold return paints a visible transition before rebuilding the full world');
- assert(entry.area.activeScenes===1&&entry.area.actors===0,'only the active snow scene/actor set is submitted');
+ assert(back.area.timing.veilFrames===0&&back.area.timing.veilMs===0&&back.stream.drawing,'cold return draws prefetched ground without a curtain');
+ assert(entry.area.activeScenes===0&&entry.stream.drawing&&entry.stream.effective>0&&entry.area.actors===0,'live chunk draws avoid a regional atlas or remote actor simulation');
  console.log('Exact rAF switch timing/bytes',JSON.stringify({baseVertices:old.area.vertices,snowVertices:entry.area.vertices,entry:entry.area.timing,coldReturn:back.area.timing}));
  const setResume=(region,position)=>page.evaluate(([region,position])=>{
   const current=JSON.parse(localStorage.getItem('world-workshop-resume-v1'));
@@ -109,14 +109,14 @@ try{
  await page.reload();await page.locator('#pineStartupCover').waitFor({state:'hidden'});
  await at('base',old.area.spawn[1]);
  assert.equal((await state()).p.x,old.area.spawn[0],'unknown region never reuses its local position on base');
- await setResume(null,{x:49,z:126,y:0,facing:2});
- await page.reload();await page.locator('#pineStartupCover').waitFor({state:'hidden'});await at('base',126);
+ await setResume(null,{x:60,z:137,y:0,facing:2});
+ await page.reload();await page.locator('#pineStartupCover').waitFor({state:'hidden'});await at('base',137);
  await roll(1,'snowpass');
  await page.waitForFunction(()=>window.__editorTest.snowPassRegion().timing?.firstFrameMs>0);
  await roll(-1,'base');
  await page.waitForFunction(()=>window.__editorTest.snowPassRegion().timing?.firstFrameMs>0);
  const warm=(await state()).area.timing;
- assert(warm.veilFrames>=1&&warm.veilMs>0,'warm return also paints transition while keeping no inactive base VBO');
+ assert(warm.veilFrames===0&&warm.veilMs===0,'warm return has no curtain and uses prefetched ground');
  console.log('Exact warm return timing/bytes',JSON.stringify({warm}));
  await page.evaluate(()=>window.__editorTest.snowInventoryQA.markEditor());
  await roll(1,'snowpass');

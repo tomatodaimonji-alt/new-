@@ -4,9 +4,9 @@ const i=h.indexOf('// BEGIN SNOW PASS PROTOTYPE'),j=h.indexOf('// END SNOW PASS 
 a.ok(i>=0&&j>i,'sector contract is installed');
 const c=vm.runInNewContext(h.slice(i,j)+';({link:poiSnowPassLink,decode:poiSnowPassDecode,map:poiSnowPassMap})'),plain=v=>JSON.parse(JSON.stringify(v));
 test('only exact directed edge can activate another local region and land in bounds',()=>{
- a.deepEqual(plain(c.link('base',49,127,0,49,128)),{region:'snowpass',x:12,z:0,y:0,facing:2});
- a.deepEqual(plain(c.link('snowpass',12,0,0,12,-1)),{region:'base',x:49,z:127,y:0,facing:0});
- for(const q of [['base',48,127,0,48,128],['base',49,127,-1,49,128],['base',48,127,0,49,128],['base',49,127,0,49,126],['snowpass',12,0,0,12,1],['unknown',12,0,0,12,-1]])a.equal(c.link(...q),null);
+ a.deepEqual(plain(c.link('base',60,138,0,60,139)),{region:'snowpass',x:12,z:0,y:0,facing:2});
+ a.deepEqual(plain(c.link('snowpass',12,0,0,12,-1)),{region:'base',x:60,z:138,y:0,facing:0});
+ for(const q of [['base',59,138,0,59,139],['base',60,138,-1,60,139],['base',59,138,0,60,139],['base',60,138,0,60,137],['base',49,127,0,49,128],['snowpass',12,0,0,12,1],['unknown',12,0,0,12,-1]])a.equal(c.link(...q),null);
 });
 test('legacy/unknown/invalid version-1 resumes do not activate the snow sector',()=>{
  const initial={version:1,route:'facility',id:'base',play:true},p={x:14,z:12,y:0,facing:2},snow={...initial,region:'snowpass',regionHp:41};

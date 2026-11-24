@@ -6,7 +6,7 @@ import {Script} from 'node:vm';
 let html=readFileSync(process.argv[2]??'world-editor.html','utf8');
 const replace=(a,b)=>{assert.equal(html.split(a).length,2,a);html=html.replace(a,b)};
 const testApi="if(facilityParams.get('test')==='1')window.__editorTest={";
-const worldDraw=' draw(sceneMesh?.ground,p.vp);poiDrawSceneOcclusion(sceneMesh,p.vp);';
+const worldDraw='draw(sceneMesh?.ground,p.vp);poiDrawSceneOcclusion(sceneMesh,p.vp);';
 replace(worldDraw,`
  draw(sceneMesh?.ground,p.vp);
  const native=gl.drawArrays,prior=gl.drawElements,record=[];
@@ -24,9 +24,45 @@ replace(worldDraw,`
   owner:facilityVisibilityOwner(),count:sceneMesh?.count,
   roof:facilityVisibleRoofs().includes(facilitySite.buildings.findIndex(b=>b.id==='davidTemple'))};
 `);
+// The held candidate has a real regional stream path for the eastern
+// forest. Count authored named geometry on actual baked and submitted data.
+if(html.includes('function poiOverlandPresent(vp)')){
+ replace(" for(const o of region.batches.get(id)||[]){", ` for(const o of region.batches.get(id)||[]){
+  const tagged=typeof poiSacredTempleVisualMember==='function'&&poiSacredTempleVisualMember(region.layout,o);
+  const beforeNamed=m.p.length;
+  if(tagged)m.qaSacredSeen=(m.qaSacredSeen||0)+1;
+ `);
+ replace('  yield;\n }\n for(const group of region.roofGroups.get(id)||[]){',`
+  if(tagged&&m.p.length>beforeNamed)m.qaSacredVertices=(m.qaSacredVertices||0)+(m.p.length-beforeNamed)/3;
+  yield;
+ }
+ for(const group of region.roofGroups.get(id)||[]){
+ `);
+ replace(' const r=upload(m);r.bytes=bytes;', ` const r=upload(m);r.bytes=bytes;
+  r.qaSacredSeen=m.qaSacredSeen||0;r.qaSacredVertices=m.qaSacredVertices||0;
+ `);
+ replace(' for(const o of poiOverlandCommands)draw(o.m,poiOverlandNeighborVP(vp,facilitySite.id,o.id));',`
+  const chunks=[...poiOverlandMeshes.values()];
+  window.__nativeTempleSpans={stream:true,
+   tested:chunks.reduce((n,m)=>n+m.qaSacredSeen,0),
+   named:chunks.reduce((n,m)=>n+m.qaSacredVertices,0),
+   ranges:[],draws:[],roof:false,count:poiOverlandCommands.reduce((n,q)=>n+q.m.count,0)};
+  for(const o of poiOverlandCommands)draw(o.m,poiOverlandNeighborVP(vp,facilitySite.id,o.id));
+ `);
+}
 replace(testApi,testApi+`
  sacredQA:{
   frame:()=>{window.__depthRoofDraws=0;render()},
+  streamFilterProbe:()=>{
+   if(typeof poiOverlandChunkRows!=='function')return null;
+   const o=world.find(t=>t.y===0&&/^poiDavidWall/.test(t.type)&&poiSacredTempleVisualMember(facilitySite,t));
+   if(!o)return null;
+   const i=Math.floor(o.x/8),j=Math.floor(o.z/8),x0=i*8,z0=j*8;
+   const region=poiOverlandSpecFor('base',facilitySite,world,MAP_W,MAP_H);
+   const gen=poiOverlandChunkRows({i,j,x0,z0,x1:x0+8,z1:z0+8},region);
+   let r;while(!(r=gen.next()).done){}
+   return {x:o.x,z:o.z,seen:r.value.qaSacredSeen||0,emitted:r.value.qaSacredVertices||0,total:r.value.p.length/3};
+  },
   details:()=>({port:facilitySite.southPort.market.public,portName:facilitySite.southPort.name,forest:facilitySite.southForest.rest,
     town:facilitySite.town,temple:facilitySite.davidTemple.entrance,day:poiTownClockGameMs}),
   gate:(x,z,yaw,pitch,minute)=>{const ok=workshopResumeRestorePosition({x,z,y:0,facing:2});poiCameraYaw=yaw;poiCameraPitch=pitch;poiCameraDistance=6;poiTownClockGameMs=minute*POI_TOWN_MINUTE_MS;return ok},
@@ -81,7 +117,7 @@ try{
  };
  const detail=await p.evaluate(()=>window.__editorTest.sacredQA.details());
  console.log('COASTAL MAP ANCHORS',JSON.stringify(detail));
- const samples=[];
+ const samples=[];let observedStream=false,observedNames=0;
  function overlap(r,d){return Math.max(0,Math.min(r[1],d[0]+d[1])-Math.max(r[0],d[0]));}
  function draws(s){return s.native.ranges.reduce((n,r)=>n+s.native.draws.reduce((k,d)=>k+overlap(r,d),0),0);}
  const cases=[
@@ -90,6 +126,8 @@ try{
   ['forest-other-angle',54,117,-.78,.25,690],
   ['port',detail.port.x,detail.port.z,-1.08,.20,690],
   ['port-other-angle',detail.port.x,detail.port.z,-.95,.30,52],
+  ...(!baseline&&html.includes('function poiOverlandPresent(vp)')?
+   [['snow-neck-lookback',49,134,-.33,.21,690],['snow-neck-far',53,135,-.45,.19,52]]:[]),
   ['approach-hidden',24,114,0,.12,690],['approach-fade',24,119,0,.12,690],
   ['entry',24,125,0,.12,690],['tunnel',24,131,0,.12,52]
  ];
@@ -98,7 +136,10 @@ try{
   samples.push({key,name:s.name,amount:s.parts,v,roof:s.native.roof,buffers:s.scene.sections,vertices:s.scene.vertices,ranges:s.native.ranges,owner:s.native.owner,submitted:s.native.draws.reduce((n,d)=>n+d[1],0)});
   assert.equal(s.mapH,182);assert(s.scene.sections<=9);assert.equal(s.seen,key==='tunnel');
   if(!baseline){
-   assert(s.native.ranges.length>0);
+   if(s.native.stream){
+    assert(s.native.count>0);assert.equal(s.native.named,0);
+    observedStream=true;observedNames+=s.native.tested;
+   }else assert(s.native.ranges.length>0);
    if(key==='entry'||key==='tunnel'){assert.equal(s.parts,1);assert(s.native.roof);assert(v>1e3);}
    else if(key==='approach-fade'){assert(s.parts>0&&s.parts<1);assert(s.native.roof);assert(v>1e3);assert(s.native.draws.some(d=>d[2]>0&&d[2]<1));}
    else{assert.equal(s.parts,0);assert(!s.native.roof);assert.equal(v,0);}
@@ -121,6 +162,13 @@ try{
   assert(history.some(([,u])=>u>0&&u<1));
   assert.equal((await p.evaluate(()=>window.__editorTest.sacredQA.admission(22,129))).passable,false);
   console.log('COASTAL AUTHENTIC APPROACH',JSON.stringify(history));
+ }
+ if(!baseline&&html.includes('function poiOverlandPresent(vp)')){
+  assert(observedStream,'actual chunk rendering used near the snow neck');
+  const exactBake=await p.evaluate(()=>window.__editorTest.sacredQA.streamFilterProbe());
+  assert(exactBake?.seen>0&&exactBake.total>0,'real authored wall patch is exercised through the actual chunk baker');
+  assert.equal(exactBake.emitted,0,'the streamed wall patch emits ground but no named temple geometry');
+  console.log('STREAMED ACTUAL HIDDEN STONE',JSON.stringify({fromVisibleNeighborhood:observedNames,exactBake}));
  }
  if(baseline)assert(samples.find(s=>s.key==='forest').roof,'stock dome is submitted from the reported coastal forest');
  assert.deepEqual(errors,[]);
