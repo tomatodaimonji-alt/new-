@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        probe: [seam]
+        probe: [seam, outlet, visuals, audio, persistence, temple, path-parity, regressions]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -509,34 +509,81 @@ jobs:
           }
           // END SOUTH SNOW HORIZON
           SOURCE
-          cat >.spike/path-trial.py <<'SOURCE'
+          cat >.spike/path-ast-trial.py <<'SOURCE'
           from pathlib import Path
           import sys
           src,dst=map(Path,sys.argv[1:3]);s=src.read_text()
-          a='function poiTownFindPath(from,target,blocked){'
+          a='function poiTownFindPath(from,target,blocked){\n const g=poiTownNpcGraph();'
           assert s.count(a)==1
-          s=s.replace(a,"""// BEGIN STREAMED NPC PURE EDGE CACHE
-          // Reuse only terrain topology from the exact current navigation graph.
-          // Detours and swept player/NPC collision remain checked by the live caller.
-          const poiOverlandNpcEdges=new WeakMap();
-          function poiOverlandNpcPathStep(graph,from,x,z){
-           if(typeof poiOverlandEngaged==='undefined'||!poiOverlandEngaged)return poiTownNpcNextTile(from,x,z,graph);
-           let memo=poiOverlandNpcEdges.get(graph);
-           if(!memo){memo=new Map();poiOverlandNpcEdges.set(graph,memo)}
-           const dir=x!==from.x?(x>from.x?0:1):(z>from.z?2:3);
-           const key=(((from.y+1)*MAP_H+from.z)*MAP_W+from.x)*4+dir;
-           if(memo.has(key))return memo.get(key);
-           const next=poiTownNpcNextTile(from,x,z,graph);
-           if(memo.size<8192)memo.set(key,next?Object.freeze(next):null);
-           return next;
+          s=s.replace(a,"""// BEGIN STREAMED CERTIFIED TOWN PATH
+          // Two verified unedited-base routes: establish a shortest-distance bound,
+          // then preserve the historical FIFO route ordering and every legal edge.
+          function poiOverlandTownCertified(from,target,blocked){
+           if(typeof poiOverlandEngaged==='undefined'||!poiOverlandEngaged||blocked||
+              facilitySite?.id!=='base'||facilitySite.townOffset!==22||facilitySurfaceEdited||from?.y!==0||target?.y!==0)return false;
+           return from.role?.id==='resadventurer'&&from.x===58&&from.z===40&&target.x===45&&target.z===72||
+            from.role?.id==='guestadventurer'&&from.x===54&&from.z===40&&target.x===88&&target.z===67;
           }
-          // END STREAMED NPC PURE EDGE CACHE
-          """+a,1)
-          start=s.index(a);end=s.index('function poiTownNpcExistsBed',start)
-          region=s[start:end];line='const next=poiTownNpcNextTile(p,p.x+dx,p.z+dz,g);if(!next)continue;'
-          assert region.count(line)==1
-          region=region.replace(line,"const next=typeof poiOverlandNpcPathStep==='function'?poiOverlandNpcPathStep(g,p,p.x+dx,p.z+dz):poiTownNpcNextTile(p,p.x+dx,p.z+dz,g);if(!next)continue;")
-          s=s[:start]+region+s[end:]
+          function poiOverlandTownOrderedPath(from,target,g){
+           if(!poiTownNpcStance(target,g))return null;
+           const w=MAP_W,area=w*MAP_H,pack=o=>(o.y+1)*area+o.z*w+o.x;
+           const id=pack(from),goal=pack(target);
+           const h=o=>Math.max(Math.abs(target.x-o.x)+Math.abs(target.z-o.z),Math.abs(target.y-o.y));
+           const first={...from,depth:0,f:h(from)},score=new Map([[id,0]]),heap=[];
+           const above=(a,b)=>a.f<b.f||a.f===b.f&&a.depth>b.depth;
+           function push(node){
+            let i=heap.length;heap.push(node);
+            while(i){const p=(i-1)>>1;if(!above(node,heap[p]))break;heap[i]=heap[p];i=p}heap[i]=node;
+           }
+           function pop(){
+            const root=heap[0],last=heap.pop();
+            if(heap.length){
+             let i=0;
+             for(;;){const l=i*2+1;if(l>=heap.length)break;
+              const r=l+1,n=r<heap.length&&above(heap[r],heap[l])?r:l;
+              if(!above(heap[n],last))break;heap[i]=heap[n];i=n;
+             }
+             heap[i]=last;
+            }
+            return root;
+           }
+           const get=(p,d,sx,sz)=>poiTownNpcNextTile(p,p.x+(d===0?sx:d===2?-sx:0),p.z+(d===1?sz:d===3?-sz:0),g);
+           let maxDepth=null;push(first);
+           for(let i=0;heap.length&&i<1600;i++){
+            const p=pop(),d=pack(p);
+            if(score.get(d)!==p.depth)continue;
+            if(d===goal){maxDepth=p.depth;break}
+            const depth=p.depth+1,sx=Math.sign(target.x-p.x)||1,sz=Math.sign(target.z-p.z)||1;
+            for(let dir=0;dir<4;dir++){
+             const next=get(p,dir,sx,sz);if(!next)continue;
+             const key=pack(next);
+             if((score.get(key)??Infinity)<=depth)continue;
+             score.set(key,depth);push({...next,depth,f:depth+h(next)});
+            }
+           }
+           if(maxDepth===null)return null;
+           const q=[{tile:from,depth:0}],visited=new Map([[id,null]]);
+           for(let i=0;i<q.length&&i<4000;i++){
+            const {tile:p,depth:old}=q[i],at=pack(p),depth=old+1,sx=Math.sign(target.x-p.x)||1,sz=Math.sign(target.z-p.z)||1;
+            for(let dir=0;dir<4;dir++){
+             const next=get(p,dir,sx,sz);if(!next||depth+h(next)>maxDepth)continue;
+             const key=pack(next);if(visited.has(key))continue;
+             visited.set(key,{from:at,tile:next});
+             if(key===goal){
+              const path=[];for(let p=visited.get(key);p;p=visited.get(p.from))path.push(p.tile);
+              return path.reverse();
+             }
+             q.push({tile:next,depth});
+            }
+           }
+           return null;
+          }
+          // END STREAMED CERTIFIED TOWN PATH
+          function poiTownFindPath(from,target,blocked){
+           const g=poiTownNpcGraph();
+           if(typeof poiOverlandTownCertified==='function'&&poiOverlandTownCertified(from,target,blocked)){
+            const ordered=poiOverlandTownOrderedPath(from,target,g);if(ordered)return ordered;
+           }""",1)
           dst.parent.mkdir(parents=True,exist_ok=True);dst.write_text(s)
           SOURCE
           cat >.spike/tests/overland-browser.mjs <<'SOURCE'
@@ -856,6 +903,62 @@ jobs:
              assert.deepEqual(errors,[]);assert(requests.every(url=>url.startsWith(origin)));
              console.log('Visible native snow framebuffer',label,JSON.stringify(result));
             }finally{await ctx.close()}
+           }
+          }finally{await browser?.close();await new Promise(r=>server.close(r))}
+          SOURCE
+          cat >.spike/tests/snow-authored-npc-path-parity-browser.mjs <<'SOURCE'
+          import assert from 'node:assert/strict';
+          import {createServer} from 'node:http';
+          import {createRequire} from 'node:module';
+          import {readFileSync} from 'node:fs';
+          import {Script} from 'node:vm';
+          const source=readFileSync(process.argv[2]??'world-editor.html','utf8');
+          const anchor='  overlandStream:()=>poiOverlandInspect(),';assert.equal(source.split(anchor).length,2);
+          let html=source.replace(anchor,anchor+`
+            seamPathParity:()=>{
+             const pairs=[['resadventurer',58,40,45,72],['guestadventurer',54,40,88,67]];
+             const g=poiTownNpcGraph(),engaged=poiOverlandEngaged,edited=facilitySurfaceEdited,
+              count=window.__pathSteps,base=facilitySite?.id;
+             return {engaged,base,results:pairs.map(([role,x,z,tx,tz])=>{
+              const from={x,z,y:0,role:{id:role}},to={x:tx,z:tz,y:0};
+              const guard=poiOverlandTownCertified(from,to,null),fallback=poiOverlandTownCertified(from,to,()=>false);
+              facilitySurfaceEdited=true;
+              const editGuard=poiOverlandTownCertified(from,to,null);
+              facilitySurfaceEdited=edited;
+              const initial=count.value,actual=poiOverlandTownOrderedPath(from,to,g),after=count.value;
+              poiOverlandEngaged=false;
+              let legacy;
+              try{legacy=poiTownFindPath(from,to)}finally{poiOverlandEngaged=engaged}
+              const coords=xs=>xs?.map(p=>[p.x,p.z,p.y]);
+              return {role,guard,fallback,editGuard,actual:coords(actual),legacy:coords(legacy),checks:after-initial,baseChecks:count.value-after};
+             })};
+            },`);
+          const fn='function poiTownNpcNextTile(from,x,z,g){';assert.equal(html.split(fn).length,2);
+          html=html.replace(fn,fn+'window.__pathSteps.value++;');
+          for(const [,js] of html.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(js);
+          if(process.env.PATH_PARITY_PARSE_ONLY==='1'){console.log('exact real path parity instrumentation parses');process.exit(0)}
+          const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
+          const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(req.url==='/seed'?'<!doctype html><title>Local test seed</title>':html)});
+          await new Promise(r=>server.listen(0,'127.0.0.1',r));
+          let browser;
+          try{
+           browser=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
+           const page=await (await browser.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.65})).newPage();
+           await page.addInitScript(()=>{window.__pathSteps={value:0}});
+           const root='http://127.0.0.1:'+server.address().port;
+           await page.goto(root+'/seed');await page.evaluate(()=>localStorage.setItem('world-workshop-resume-v1',JSON.stringify({
+            version:1,route:'facility',id:'base',play:true,position:{x:49,z:119,y:0,facing:2},townLayout:5,townMapHeight:128
+           })));
+           await page.goto(root+'/?resume=1&test=1');
+           await page.locator('#pineStartupCover').waitFor({state:'hidden'});
+           await page.waitForFunction(()=>window.__editorTest?.overlandStream().drawing);
+           const data=await page.evaluate(()=>window.__editorTest.seamPathParity());assert(data.engaged&&data.base==='base');
+           for(const [i,r] of data.results.entries()){
+            assert(r.guard&&!r.fallback&&!r.editGuard);
+            assert.deepEqual(r.actual,r.legacy,'same exact shortest historical path and ordering through real authored terrain');
+            assert.equal(r.legacy.length,[51,61][i]);
+            assert(r.checks<r.baseChecks*.6,'avoid a substantial number of true edge evaluations');
+            console.log('Path parity and actual edge counts',JSON.stringify({role:r.role,length:r.actual.length,checks:r.checks,prior:r.baseChecks}));
            }
           }finally{await browser?.close();await new Promise(r=>server.close(r))}
           SOURCE
@@ -1717,13 +1820,22 @@ jobs:
           python .spike/build.py world-editor.html .spike/stream.html --default
           python .spike/horizon-safe.py .spike/stream.html .spike/world-editor.html
           test "$(git hash-object .spike/world-editor.html)" = 92470b9b0ecc897db882455d3b701ace68f3c306
+          cp .spike/world-editor.html .spike/base-stream.html
+          python .spike/path-ast-trial.py .spike/base-stream.html .spike/world-editor.html
+          test "$(git hash-object .spike/world-editor.html)" = 01b0505aaf00197244638ff8838b41af7104d43a
           cd .spike && node --test tests/*.cjs
       - if: matrix.probe != 'regressions'
         run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
       - if: matrix.probe == 'seam'
         run: |
           USE_STREAM_DEFAULT=1 node .spike/tests/overland-browser.mjs .spike/world-editor.html
-          SNOW_PATH_PROFILE=1 SNOW_PHASE_REPORT=1 SNOW_SEAM_REPORT_ONLY=1 node .spike/tests/snow-continuous-seam-browser.mjs .spike/world-editor.html
+          echo 'BASELINE QUIET NO NPC CACHE'
+          SNOW_PHASE_REPORT=1 SNOW_SEAM_REPORT_ONLY=1 node .spike/tests/snow-continuous-seam-browser.mjs .spike/base-stream.html
+          echo 'EXACT-TIE BOUNDED A* TRIAL'
+          gate=0
+          SNOW_PHASE_REPORT=1 node .spike/tests/snow-continuous-seam-browser.mjs .spike/world-editor.html || gate=$?
+          SNOW_PHASE_REPORT=1 node .spike/tests/snow-continuous-seam-browser.mjs .spike/world-editor.html || gate=$?
+          exit "$gate"
       - if: matrix.probe == 'outlet'
         run: |
           USE_STREAM_DEFAULT=1 USE_STREAM_SIGN_PROOF=1 node .spike/tests/overland-outlet-browser.mjs .spike/world-editor.html
@@ -1743,6 +1855,8 @@ jobs:
         run: |
           node tests/david-temple-browser.mjs .spike/world-editor.html
           node .spike/tests/david-streamed-browser.mjs .spike/world-editor.html
+      - if: matrix.probe == 'path-parity'
+        run: node .spike/tests/snow-authored-npc-path-parity-browser.mjs .spike/world-editor.html
       - if: matrix.probe == 'regressions'
         run: |
           cp .spike/world-editor.html world-editor.html
