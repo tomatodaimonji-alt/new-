@@ -509,6 +509,57 @@ jobs:
           }
           // END SOUTH SNOW HORIZON
           SOURCE
+          cat >.spike/npc-boot-trial.py <<'SOURCE'
+          from pathlib import Path
+          import sys
+          src,dst=map(Path,sys.argv[1:3]);s=src.read_text()
+          def sub(a,b):
+           global s
+           assert s.count(a)==1,(a,s.count(a))
+           s=s.replace(a,b,1)
+          sub("function poiTownResidentsFrame(now){","""// BEGIN REMOTE PATH SPLIT TRIAL
+          // Only an existing offscreen town adventurer can defer its first hunt tick
+          // by one render. No NPC path/goal/clock is evaluated from inactive snow.
+          let poiOverlandResidentEntry=null;
+          function poiOverlandFarResident(view,a){
+           if(!a||!view||Math.hypot(a.x-poiWalkViewX,a.z-poiWalkViewZ)<44||a.y!==poiWalkLevel)return false;
+           const y=terrainY(a.x,a.z)+1.4*a.y;
+           return !poiOverlandBoxVisible(view,[a.x-2,y-2,a.z-2,a.x+3,y+5,a.z+3]);
+          }
+          function poiOverlandTryAdventurer(entry,a,clock,now,budget){
+           if(!entry||entry.npc||budget.plans!==1||a.role?.id!=='guestadventurer'||a.role.role!=='adventurer'||
+              a.target||a.actorLeg||a.death||a.bedId||a.goal||a.path?.length||a.recessed||a.hp<100||
+              clock.minute<7*60||clock.minute>=17*60||poiTownNpcHere(a,a.role.work)||
+              !poiOverlandFarResident(entry.view,a))return false;
+           entry.npc={a,clock,now,world};budget.plans--;
+           return true;
+          }
+          function poiOverlandResidentCarry(frame){
+           const p=frame?.npc;
+           if(!p||p.world!==world||facilitySite?.id!=='base'||!poiTownNpcActors.includes(p.a)||
+              p.a===poiTownDialogue?.actor||!poiTownNpcRecover(p.a,p.now)||
+              (typeof poiTownStreetHolds==='function'&&poiTownStreetHolds(p.a)))return;
+           poiTownNpcRoutine(p.a,p.clock,p.now,{plans:1});
+          }
+          // END REMOTE PATH SPLIT TRIAL
+          function poiTownResidentsFrame(now){""")
+          sub(" if(!poiTownNpcActive()){poiTownDialogueClose();poiTownAmbientClose();return}\n poiTownMotionClock=now;",
+          """ if(!poiTownNpcActive()){poiOverlandResidentEntry=null;poiTownDialogueClose();poiTownAmbientClose();return}
+           const entry=poiOverlandResidentEntry;
+           if(entry?.npc){poiOverlandResidentEntry=null;poiOverlandResidentCarry(entry)}
+           poiTownMotionClock=now;""")
+          sub("    (typeof poiTownStreetHolds!=='function'||!poiTownStreetHolds(a)))poiTownNpcRoutine(a,clock,now,budget);",
+          """    (typeof poiTownStreetHolds!=='function'||!poiTownStreetHolds(a))&&
+              !poiOverlandTryAdventurer(entry===poiOverlandResidentEntry?entry:null,a,clock,now,budget))poiTownNpcRoutine(a,clock,now,budget);
+           if(entry===poiOverlandResidentEntry&&!entry?.npc)poiOverlandResidentEntry=null;""")
+          sub(" if(!onBase)poiSnowPassBase=null;",
+          """ if(!onBase){
+            poiSnowPassBase=null;
+            if(POI_OVERLAND_SPIKE&&poiWalkActive&&poiOverlandScope(dest.region,dest.x,dest.z)&&!cameraTopDown&&!pineAIActive)
+             poiOverlandResidentEntry={npc:null,view:parameters().vp};
+           }""")
+          dst.parent.mkdir(parents=True,exist_ok=True);dst.write_text(s)
+          SOURCE
           cat >.spike/tests/overland-browser.mjs <<'SOURCE'
           import assert from 'node:assert/strict';
           import {createServer} from 'node:http';
@@ -1180,6 +1231,12 @@ jobs:
               timestamp:performance.now(),uploads:s?.uploads.length,live:s?.live,contextLost:s?.lost};
             },
           `);
+          if(process.env.SNOW_REMOTE_SPLIT==='1'){
+           const mark=(a,b)=>{assert.equal(html.split(a).length,2,a);html=html.replace(a,b)};
+           const log=kind=>`if(window.__snowSeamProbe?.active){const q=window.__snowSeamProbe;q.remote.push({kind:'${kind}',frames:q.samples.length,region:facilitySite?.id,at:performance.now()})}`;
+           mark(' entry.npc={a,clock,now,world};budget.plans--;',' entry.npc={a,clock,now,world};budget.plans--;'+log('queue'));
+           mark(' poiTownNpcRoutine(p.a,p.clock,p.now,{plans:1});',' '+log('run')+'poiTownNpcRoutine(p.a,p.clock,p.now,{plans:1});');
+          }
           if(process.env.SNOW_PHASE_REPORT){
            const from=html.indexOf('function render(){'),to=html.indexOf('let savedMapRestoreFailed',from);
            assert(from>0&&to>from);
@@ -1205,6 +1262,7 @@ jobs:
            apply=apply.replace(' return true;',` window.__snowSeamProbe?.switchPhases?.push({region:dest.region,elapsed:snowTimes.map((q,i)=>i?q-snowTimes[i-1]:0)});
            return true;`);
            html=html.slice(0,start)+apply+html.slice(end);
+           if(process.env.SNOW_REMOTE_SPLIT!=='1'){
            const n0=html.indexOf('function poiTownResidentsFrame(now){'),n1=html.indexOf('function poiTownResidentsSnapshot(',n0);
            let npc=html.slice(n0,n1);
            npc=npc.replace(' poiTownNpcInit(clock);',' const before=performance.now();poiTownNpcInit(clock);const initialized=performance.now();')
@@ -1221,6 +1279,7 @@ jobs:
             `);
            if(!npc.includes('const synced=')||!npc.includes('roles.push'))throw new Error('exact NPC cost anchors');
            html=html.slice(0,n0)+npc+html.slice(n1);
+           }
 
           }
           if(process.env.SNOW_SEAM_SYNTAX_ONLY==='1'){
@@ -1236,7 +1295,7 @@ jobs:
            groundGold:[{id:'pile-qa',x:12,z:2,y:0,amount:2}],drops:[{type:'healingHerb',x:12,z:2,y:0}]});
           function startProbe(){
            const p=WebGLRenderingContext.prototype,s=window.__snowSeamProbe={
-            frames:[],uploads:[],audio:[],longTasks:[],npc:[],sceneCounts:[],masked:0,high:0,live:0,lost:0,veils:[],thumb:[],samples:[],active:false};
+            frames:[],uploads:[],audio:[],longTasks:[],npc:[],remote:[],sceneCounts:[],masked:0,high:0,live:0,lost:0,veils:[],thumb:[],samples:[],active:false};
            const shapes=new WeakMap(),current=new WeakMap(),cap=4500;
            for(const [method,wrap] of Object.entries({
             bindBuffer(original,target,buffer){
@@ -1357,7 +1416,7 @@ jobs:
              const bind=id=>({x:Math.round(pad.x+pad.width/2),y:Math.round(pad.y+pad.height/2),id,radiusX:4,radiusY:4,force:.7});
              async function cross(sign,label,id){
               const from=await get(),input=bind(id),dst=sign>0?'snowpass':'base';
-              const start=await page.evaluate(()=>{const s=window.__snowSeamProbe;s.active=true;s.frames=[];s.phases=[];s.switchPhases=[];s.audio=[];s.longTasks=[];s.npc=[];s.veils=[];s.samples=[];s.uploads=[];s.thumb=[];s.sceneCounts=[];s.masked=0;s.high=s.live;
+              const start=await page.evaluate(()=>{const s=window.__snowSeamProbe;s.active=true;s.frames=[];s.phases=[];s.switchPhases=[];s.audio=[];s.longTasks=[];s.npc=[];s.remote=[];s.veils=[];s.samples=[];s.uploads=[];s.thumb=[];s.sceneCounts=[];s.masked=0;s.high=s.live;
                return {at:performance.now(),live:s.live};});
               await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[input]});
               await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...input,y:input.y+sign*36}]});
@@ -1378,6 +1437,11 @@ jobs:
                elapsed:(continued??end).timestamp-start.at,frames:q.frames.length,sceneCounts:q.sceneCounts,veils:q.veils,lost:q.lost,
                liveAtStart:start.live,peak:q.high,settled:q.live,largestUpload:Math.max(0,...q.uploads.map(u=>u.bytes)),
                gap:frameGaps(q.frames),away,thumb:q.thumb};
+              if(process.env.SNOW_REMOTE_SPLIT==='1'&&dst==='base'){
+               const queued=q.remote.find(x=>x.kind==='queue'),run=q.remote.find(x=>x.kind==='run');
+               assert(queued&&run&&run.region==='base'&&run.frames===queued.frames+1,'distant second hunt must run on exactly the next actual presented frame');
+               summary.remotePath=q.remote;
+              }
               const seam=q.samples.findIndex((sample,i)=>i>0&&sample.region!==q.samples[i-1].region);
               if(seam>0){
                const frame=q.samples[seam].t,previous=q.samples[seam-1].t,next=q.samples[seam+1]?.t;
@@ -1417,6 +1481,9 @@ jobs:
           python .spike/build.py world-editor.html .spike/stream.html --default
           python .spike/horizon-safe.py .spike/stream.html .spike/world-editor.html
           test "$(git hash-object .spike/world-editor.html)" = ec0823919f02c674a1a83a4d9557057cc20f1af0
+          python .spike/npc-boot-trial.py .spike/world-editor.html .spike/trial.html
+          mv .spike/trial.html .spike/world-editor.html
+          test "$(git hash-object .spike/world-editor.html)" = a271e4e975dc53b27db752b16724bb2fa822a0ea
           cd .spike && node --test tests/*.cjs
       - if: matrix.probe != 'regressions'
         run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
@@ -1424,8 +1491,8 @@ jobs:
         run: |
           USE_STREAM_DEFAULT=1 node .spike/tests/overland-browser.mjs .spike/world-editor.html
           gate=0
-          SNOW_PHASE_REPORT=1 node .spike/tests/snow-continuous-seam-browser.mjs .spike/world-editor.html || gate=$?
-          SNOW_PHASE_REPORT=1 node .spike/tests/snow-continuous-seam-browser.mjs .spike/world-editor.html || gate=$?
+          SNOW_REMOTE_SPLIT=1 SNOW_PHASE_REPORT=1 node .spike/tests/snow-continuous-seam-browser.mjs .spike/world-editor.html || gate=$?
+          SNOW_REMOTE_SPLIT=1 SNOW_PHASE_REPORT=1 node .spike/tests/snow-continuous-seam-browser.mjs .spike/world-editor.html || gate=$?
           exit "$gate"
       - if: matrix.probe == 'outlet'
         run: |
