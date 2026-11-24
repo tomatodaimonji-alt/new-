@@ -19,7 +19,7 @@ put(marker,marker+`
    peek:poiSacredTunnelSight(facilitySite,p.eye,x,z,poiWalkLevel),
    admitted:o&&poiSacredInteriorHostileVisible(o),phase:s&&poiDavidPose(s,performance.now()).phase,
    visibleArea:poiRegionAt(facilitySite,poiWalkX,poiWalkZ,false,0).name,
-   light:[...gl.getUniform(program,loc.daylight)],fog:gl.getUniform(program,loc.sacredFog)[2],bar:$('poiEnemyHealthLayer')?.textContent,error:gl.getError()};
+   sky:$('viewWrap').hasAttribute('data-poi-sky'),light:[...gl.getUniform(program,loc.daylight)],fog:gl.getUniform(program,loc.sacredFog)[2],bar:$('poiEnemyHealthLayer')?.textContent,error:gl.getError()};
   }
  },
 `);
@@ -63,7 +63,7 @@ try{
  }
  await scene({x:24,z:125,angle:0,minute:1330},async(p,snap,image)=>{
   await p.waitForFunction(()=>{const s=window.__editorTest.testFrontierGrade.snap();return s.floor>0&&s.peek&&s.visual},null,{polling:50,timeout:12000});
-  const outside=await snap();a(outside.floor>0&&outside.visual&&!outside.inside&&!outside.admitted);a.equal(outside.phase,'dormant');
+  const outside=await snap();a(outside.floor>0&&outside.visual&&!outside.inside&&!outside.admitted);a.equal(outside.phase,'dormant');a(outside.sky,'actual night palette before the door');
   await image('north-aperture-visible');
   await p.evaluate(()=>window.__editorTest.testFrontierGrade.yaw(1.27));
   await p.waitForFunction(()=>!window.__editorTest.testFrontierGrade.snap().peek,null,{polling:50,timeout:5000});
@@ -82,7 +82,7 @@ try{
   for(let z=126;z<=135;z++){
    const s=await realStep(z);a(s.floor>0&&s.visual,'no sudden replacement of real visible interior');
    a(Math.max(...s.light.map((n,i)=>Math.abs(n-last.light[i])))<.065,'real tunnel color transfers without a binary pop');
-   a.equal(s.phase,'dormant');last=s;
+   a.equal(s.phase,'dormant');a(s.sky,'real time-of-day portal backdrop must not turn into editor sky');last=s;
    if(z===128||z===135)await image('tunnel-'+z);
   }
   a.equal(last.error,0);

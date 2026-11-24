@@ -30,10 +30,11 @@ test('only the named far dome is withheld from ordinary far ground view; near vi
  const {site}=boot(),ctx={facilitySite:site,facilityRoofMeshes:[{count:8}],facilityHiddenRoof:()=>0,poiWalkActive:true,
   poiWalkLevel:0,cameraTopDown:false,pineAIActive:false,poiWalkViewX:24,poiWalkViewZ:49};
  const i=h.indexOf('// BEGIN SACRED TEMPLE SIGHTLINE'),j=h.indexOf('// END SACRED TEMPLE SIGHTLINE',i);
- const r=vm.runInNewContext((i<0?'':h.slice(i,j))+h.slice(first,end)+';facilityVisibleRoofs',ctx);
+ const r=vm.runInNewContext((i<0?'':h.slice(i,j))+h.slice(h.indexOf('function poiDavidTempleEnclosedAt('),h.indexOf('function poiDavidTempleTunnelAt('))+h.slice(first,end)+';facilityVisibleRoofs',ctx);
  a.equal(r().length,0);ctx.cameraTopDown=true;a.deepEqual(Array.from(r()),[0]);
  ctx.cameraTopDown=false;ctx.poiWalkViewZ=120;a.deepEqual(Array.from(r()),[0]);
  ctx.poiWalkViewZ=151;a.deepEqual(Array.from(r()),[0]);
+ ctx.poiWalkViewX=47;a.deepEqual(Array.from(r()),[]);
 });
 test('new deep ground item and gold save coordinates are scoped to the base extension',()=>{
  const i=h.indexOf('function poiDavidDepthGroundPoint('),j=h.indexOf('function poiInventoryReadDrops(',i);
