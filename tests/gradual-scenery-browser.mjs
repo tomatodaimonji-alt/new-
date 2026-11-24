@@ -15,7 +15,7 @@ sub(exp,exp+`
       support:!!(poiOverlandGroundDrawn.get(s.id+':'+(a.x>>3)+','+(a.z>>3))?.[a.z&7]&(1<<(a.x&7))),
       legacy:Math.abs(a.x-poiWalkViewX)<=34&&Math.abs(a.z-poiWalkViewZ)<=34||
         poiOverlandBoxVisible(p.vp,[a.x-1.2,-1.4,a.z-1.2,a.x+2.2,4.3,a.z+2.2])}));
-   return {x:poiWalkX,z:poiWalkZ,yaw:p?.eye,id:s?.id,stream:poiOverlandDrawing,inside:poiSacredInteriorPlayer(),peek:poiSacredTunnelSight(s,p?.eye,poiWalkViewX,poiWalkViewZ,poiWalkLevel),
+   return {x:poiWalkX,z:poiWalkZ,yaw:p?.eye,id:s?.id,stream:poiOverlandDrawing,inside:poiSacredInteriorPlayer(),peek:poiWalkActive&&!pineAIActive&&poiSacredTunnelPresentation(s,poiWalkViewX,poiWalkViewZ,poiWalkLevel),
     actualBoss:!!b&&poiSacredInteriorHostileVisible(b),bossDraws:window.__templeHostileDraws??0,
     ally:a?.id??null,allyMesh:poiCompanionWorldActor===a?(poiCompanionMesh?.count??0):0,actors,
     actualActors:window.__townRenderedIds??[],
@@ -87,7 +87,7 @@ try{
  {
   const {c,p,until,errors}=await load(60,133,Math.PI);
   const start=await until(s=>s.stream&&s.submits.length>=4&&s.allyMesh>400);
-  assert(!start.inside&&!start.actualBoss&&start.bossDraws===0&&start.interiorDraws===0);
+  assert(!start.inside&&!start.peek&&!start.actualBoss&&start.bossDraws===0&&start.interiorDraws===0);
   assert(start.actors.some(a=>a.legacy&&!a.support),JSON.stringify(start));
   assert(start.actors.filter(a=>!a.support).every(a=>!a.visible&&!start.actualActors.includes(a.id)),JSON.stringify(start));
   const got=await p.evaluate(()=>window.__editorTest.sceneryQA.pixelProbe());
@@ -98,16 +98,12 @@ try{
  }
  {
   const {c,p,until,errors}=await load(24,127,0);
-  const outside=await until(s=>!s.stream&&s.allyMesh>400);
-  // The new centered aperture may show stone and the dormant original
-  // ahead of the boundary, without admitting the player into the encounter.
-  assert(!outside.inside&&!outside.actualBoss,JSON.stringify(outside));
-  if(outside.peek){
-   const preview=await until(s=>s.peek&&s.bossDraws>0&&s.interiorDraws>0);
-   assert(!preview.inside&&!preview.actualBoss,JSON.stringify(preview));
-  }else assert(outside.bossDraws===0&&outside.interiorDraws===0,JSON.stringify(outside));
+  // The physical central porch submits the dormant original and floor
+  // before gameplay admission. Wait for actual visible meshes, not a timer.
+  const outside=await until(s=>!s.stream&&s.allyMesh>400&&s.peek&&s.bossDraws>0&&s.interiorDraws>0);
+  assert.equal(outside.z,127);assert(!outside.inside&&!outside.actualBoss,JSON.stringify(outside));
   await p.keyboard.press('ArrowUp');
-  const inside=await until(s=>s.inside&&s.actualBoss&&s.interiorDraws>0);
+  const inside=await until(s=>s.inside&&s.actualBoss&&s.interiorDraws>outside.interiorDraws);
   assert.equal(inside.z,128);
   assert(inside.bossDraws>0&&inside.interiorMeshes>=1&&inside.allyMesh>400,JSON.stringify(inside));
   assert.deepEqual(errors,[]);console.log('Genuine threshold walk reveals original interior and authored hostile, not allied visibility', JSON.stringify({outside:outside.z,inside:inside.z,meshes:inside.interiorMeshes}));

@@ -16,7 +16,7 @@ test('a hidden Orvas wall cannot bake its circular outline into exterior floor l
 });
 test('only the real northern approach, inside and inspector may reveal temple architecture',()=>{
  const c=vm.createContext({});
- vm.runInContext(cut('function poiDavidTempleEnclosedAt(','function poiDavidTempleTunnelAt(')+cut('function poiSacredTempleVisibleAmount(','function poiSacredTempleViewAmount('),c);
+ vm.runInContext(cut('function poiDavidTempleEnclosedAt(','function poiDavidTempleTunnelAt(')+cut('function poiSacredTunnelPresentation(','function poiSacredInteriorPlayer(')+cut('function poiSacredTempleVisibleAmount(','function poiSacredTempleViewAmount('),c);
  const site={id:'base',davidTemple:{depth:1,entrance:{x:24,z:128},ring:{x:24,z:158,radius:18},interior:{exitZ:142},enclosure:new Set(['24,129','24,158'])}};
  const seen=(x,z,inspect=false)=>c.poiSacredTempleVisibleAmount(site,x,z,0,inspect);
  a.equal(seen(46,153),0,'outside on the west seam cannot reveal a side wall');
@@ -44,18 +44,13 @@ test('sacred atmosphere wraps Base temple on four sides without relabelling Snow
  a.equal(c.poiSacredFogStrength(site,24,127,0),0,'clear authentic entrance');
  a.equal(c.poiSacredFogStrength(site,24,158,0),0,'do not plume fog across true interior');
 });
-test('real eye aligns with both apertures before encounter and no off-axis view leaks',()=>{
+test('northern world access stays mounted regardless of eye; side walls still seal elsewhere',()=>{
  const c=vm.createContext({});
- const helper=source.includes('function poiSacredTunnelSight(')?cut('function poiSacredTunnelSight(','function poiSacredInteriorPlayer('):'function poiSacredTunnelSight(){return false}';
- vm.runInContext(helper,c);
+ vm.runInContext(cut('function poiSacredTunnelPresentation(','function poiSacredInteriorPlayer('),c);
  const site={id:'base',davidTemple:{depth:1,entrance:{x:24,z:128},ring:{x:24,z:158,radius:18},interior:{minX:23,maxX:25,exitZ:142}}};
- const visible=(eye,x=24,z=125,y=0)=>c.poiSacredTunnelSight(site,eye,x,z,y);
- a(visible([24.5,2,123]),'center line from porch can see the feet/torso through the true passage');
- a(!visible([33,2,123]),'actual east stone wall blocks even if player position is centered');
- a(!visible([24.5,15,123]),'cannot look down through the roof from above');
- a(!visible([24.5,2,145]),'cannot peek backwards from the chamber towards modeled boss');
- a(!visible([24.5,2,123],24,124,1));
- a(!visible([24.5,2,123],24,114,0),'cannot see structure while far along wooded path');
+ const visible=(x,z,y=0)=>c.poiSacredTunnelPresentation(site,x,z,y);
+ a(visible(24,125),'real porch already owns its interior render');
+ a(!visible(33,123));a(!visible(24,145));a(!visible(24,128,1));a(!visible(24,114));
 });
 test('outdoor and interior lighting blend over actual fractional tunnel travel',()=>{
  const c=vm.createContext({});
