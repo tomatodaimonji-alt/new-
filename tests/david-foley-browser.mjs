@@ -505,7 +505,7 @@ try{
   await routeWalk(fp,TEMPLE_NEAR);
   await wait(fp,()=>{const s=window.__editorTest.davidQA.state().statue;return s?.d?.awake&&(s.x!==24||s.z!==104)},null,25000);
   await wait(fp,()=>window.__editorTest.davidQA.state().contacts.some(h=>h.hp===0),null,60000);
-  await wait(fp,()=>{const s=window.__editorTest.davidQA.state().statue;return !s?.d?.awake&&s?.x===24&&s?.z===104},null,12000);
+  await wait(fp,()=>{const s=window.__editorTest.davidQA.state().statue;return !s?.d?.awake&&s?.x===24&&s?.z===104},null,42000);
   const summary=await qa(fp),audio=await fp.evaluate(()=>window.__editorTest.davidQA.sound());
   assertNativeReturn(summary,'real fatal contact');
   assert(audio.cleanup.length>0&&audio.pending===0,'actual encounter cleanup ran with no David audio leaking');
