@@ -32,7 +32,7 @@ test('after initialization but through the first-frame cover: no score timer, sc
  await f.ready();
  a(f.el.pineStartupCover.hidden);a(f.c.window.pineStartup.ready);a.equal(f.intervals.size,1);
  a.equal(f.run('poiOrchestraSnapshot().active'),'town');a(f.sounds.length>0);
- a.deepEqual(f.run('poiOrchestraDecks.get("town").bus.gain.events.at(-1)'),[1,3,.30]);
+ a.deepEqual(f.run('poiOrchestraDecks.get("town").output.gain.events.at(-1)'),[1,3,.30]);
  const count=f.sounds.length;f.run('poiAudioStart();poiAudioStart(true)');f.fire('pineWorkshopReady');
  a.equal(f.sounds.length,count);a.equal(f.intervals.size,1);
 });
@@ -41,9 +41,9 @@ test('cold ready while backgrounded cannot play; first actual foreground unlock 
  f.c.document.hidden=true;await f.ready();
  a.equal(f.intervals.size,0);a.equal(f.sounds.length,0);
  f.c.document.hidden=false;f.run('poiAudioStart(true)');a.equal(f.intervals.size,1);
- a.deepEqual(f.run('poiOrchestraDecks.get("town").bus.gain.events.at(-1)'),[1,3,.30]);
+ a.deepEqual(f.run('poiOrchestraDecks.get("town").output.gain.events.at(-1)'),[1,3,.30]);
  f.run('poiAudioStop(true)');f.ctx.state='running';f.ctx.currentTime=5;f.run('poiAudioStart(true)');
- a.deepEqual(f.run('poiOrchestraDecks.get("town").bus.gain.events.at(-1)'),[1,5,.10]);
+ a.deepEqual(f.run('poiOrchestraDecks.get("town").output.gain.events.at(-1)'),[1,5,.10]);
 });
 test('failed cover stays muted; readiness without running AudioContext does not fake an unlock',async()=>{
  const f=harness({running:false});await f.initialized();await f.ready();
@@ -55,3 +55,4 @@ test('failed cover stays muted; readiness without running AudioContext does not 
  a(failed.c.window.pineStartup.failed);a.equal(failed.el.pineStartupCover.hidden,false);
  a.equal(failed.intervals.size,0);a.equal(failed.sounds.length,0);
 });
+

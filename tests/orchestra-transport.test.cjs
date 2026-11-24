@@ -17,22 +17,25 @@ function harness(){
   cut('// BEGIN ORCHESTRAL TRANSPORT','// END ORCHESTRAL TRANSPORT')+';({tick:poiOrchestraTick,reset:poiOrchestraReset,pulse:poiOrchestraCombat,scene:poiOrchestraScene,snapshot:poiOrchestraSnapshot})',c);
  return {c,recorded,nodes,ctx,api};
 }
-test('all maps emit native timbre nodes, with a short crossfade and only two live score buses',()=>{
+test('all maps emit native timbre nodes, with a full fade to silence and only one live score deck',()=>{
  const {c,recorded,ctx,api}=harness();api.tick(0);
  a.equal(api.snapshot().active,'town');a(recorded.length>1);
  a(recorded.every(e=>e.t>=0&&e.t<.5));a(recorded.some(e=>!!e.n.wave));
  c.indoors=true;ctx.currentTime=.3;api.tick(.3);
  a.equal(api.snapshot().active,'town');a.equal(api.snapshot().decks.length,1);
  c.zone='mine';ctx.currentTime=.5;api.tick(.5);
- a.equal(api.snapshot().active,'mine');a.equal(api.snapshot().decks.length,2);
+ a.equal(api.snapshot().active,'town');a.equal(api.snapshot().decks.length,1);
+ ctx.currentTime=1.23;api.tick(1.23);a.equal(api.snapshot().active,'mine');
  ctx.currentTime=1.6;api.tick(1.6);a.equal(api.snapshot().decks.length,1);
 });
 test('combat uses nearby committed attacks and fades back, never a transparent idle lock',()=>{
  const {c,api,ctx}=harness();api.tick(0);a.equal(api.snapshot().active,'town');
  c.poiEnemyPending.add({playerAttack:{pending:true,y:0,sx:23,sz:21}});ctx.currentTime=.5;api.tick(.5);
- a.equal(api.snapshot().active,'battle');
+ a.equal(api.snapshot().active,'town');
+ ctx.currentTime=1.23;api.tick(1.23);a.equal(api.snapshot().active,'battle');
  c.poiEnemyPending.clear();ctx.currentTime=2;api.tick(2);a.equal(api.snapshot().active,'battle');
- ctx.currentTime=10;api.tick(10);a.equal(api.snapshot().active,'town');
+ ctx.currentTime=10;api.tick(10);a.equal(api.snapshot().active,'battle');
+ ctx.currentTime=10.74;api.tick(10.74);a.equal(api.snapshot().active,'town');
 });
 test('suspend/reset cancels every scheduled score voice and restarts fresh; stalled frames do not replay past events',()=>{
  const {c,api,ctx,recorded}=harness();api.tick(0);
@@ -74,3 +77,4 @@ test('muted BGM and background conditions schedule no new sound, with effects ba
  a.equal(recorded.length,0);
  c.poiAudioEnabled=true;ctx.currentTime=1;api.tick(1);a(recorded.length>0);
 });
+

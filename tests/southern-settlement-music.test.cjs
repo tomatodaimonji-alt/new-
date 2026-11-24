@@ -17,7 +17,8 @@ function runtime(){
  run(geo+cut('const PINE_AUDIO_SETTINGS_KEY','const POI_PLAYER_MAX_HP')+';this.facilitySite={...buildFacilitySite("base"),id:"base"};poiAudioMusic=music;poiAudioContext=ctx;');
  function set(x,z,y=0){Object.assign(c,{poiWalkX:x,poiWalkZ:z,poiWalkLevel:y})}
  const tick=(x,z,y=0)=>{set(x,z,y);ctx.currentTime+=.19;return run('poiAudioMusicPhrase();poiOrchestraSnapshot()')};
- return {run,c,tick,params,starts};
+ const settled=(...p)=>{tick(...p);ctx.currentTime+=.56;return tick(...p)};
+ return {run,c,tick,settled,params,starts};
 }
 test('real town, screenshot seam, fishing port, and southern road use the same uninterrupted calm deck',()=>{
  const r=runtime();
@@ -39,9 +40,9 @@ test('seam audio does not alter geographic/danger metadata or consume forest, fi
  a.equal(r.run('poiRegionAt(facilitySite,93,108,false,0).name'),'外');
  a.equal(r.run('poiRegionAt(facilitySite,93,108,false,0).difficulty'),1);
  for(const [x,z] of [[83,108],[87,2],[93,103],[104,126],[105,125],[96,104]])
-  a.equal(r.tick(x,z).active,'outside',x+','+z);
- a.equal(r.tick(45,41).active,'town');
- a.equal(r.tick(118,60,-1).active,'mine');
+  a.equal(r.settled(x,z).active,'outside',x+','+z);
+ a.equal(r.settled(45,41).active,'town');
+ a.equal(r.settled(118,60,-1).active,'mine');
 });
 test('a seam or market fight does not replace the calm deck or spill its cue into the next area',()=>{
  const r=runtime();r.tick(93,110);
@@ -49,7 +50,8 @@ test('a seam or market fight does not replace the calm deck or spill its cue int
  r.c.poiEnemyPending.add(pending);r.run('poiOrchestraCombat()');
  a.equal(r.tick(93,110).active,'southSettlement');
  r.c.poiEnemyPending.clear();r.run('poiOrchestraCombat()');
- a.equal(r.tick(118,60,-1).active,'mine');
+ a.equal(r.settled(118,60,-1).active,'mine');
  pending.playerAttack={pending:true,sx:118,sz:60,y:-1};r.c.poiEnemyPending.add(pending);
- a.equal(r.tick(118,60,-1).active,'battle');
+ a.equal(r.settled(118,60,-1).active,'battle');
 });
+

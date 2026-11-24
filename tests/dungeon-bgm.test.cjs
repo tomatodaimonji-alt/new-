@@ -3,18 +3,20 @@ test('authored cave regions have separate motifs and short native bus fade; surf
  const f=fixture();
  a.equal(f.tick(10,118,88,0).active,'outside');
  const outdoor=f.deck('outside');
- a.equal(f.tick(10.2,100,90,-1).active,'otherworld');
- a(f.calls.some(([gain,v,t,d])=>gain===outdoor.bus.gain&&v===0&&t===10.2&&d>0));
+ a.equal(f.tick(10.2,100,90,-1).active,'outside');
+ a(f.calls.some(([gain,v,t,d])=>gain===outdoor.output.gain&&v===0&&Math.abs(t-10.92)<1e-9&&d==='linear'));
+ a.equal(f.tick(10.94).active,'otherworld');
+ const settle=(t,...p)=>{f.tick(t,...p);return f.tick(t+.74);};
  const signature=name=>JSON.stringify(f.deck(name).score.events.slice(0,12));
  const A=signature('otherworld');
- a.equal(f.tick(10.5,116,62,-1).active,'mine');
+ a.equal(settle(11.3,116,62,-1).active,'mine');
  a.notEqual(signature('mine'),A);
- a.equal(f.tick(10.6,70,80,-1).active,'chapel');
+ a.equal(settle(12.3,70,80,-1).active,'chapel');
  a.notEqual(signature('chapel'),A);
- a.equal(f.tick(10.8,64,13,-1).active,'northFort');
+ a.equal(settle(13.3,64,13,-1).active,'northFort');
  a.notEqual(signature('northFort'),A);
- a.equal(f.tick(11,27,32,-1).active,'town','town basement is not a dungeon');
- a.equal(f.tick(11.1,118,88,0).active,'outside');
+ a.equal(settle(14.3,27,32,-1).active,'town','town basement is not a dungeon');
+ a.equal(settle(15.3,118,88,0).active,'outside');
 });
 test('inaudible cave decks retire, stop clears all clocks, and hidden cannot restart music',()=>{
  const f=fixture();f.tick(10,116,62,-1);
@@ -28,3 +30,4 @@ test('inaudible cave decks retire, stop clears all clocks, and hidden cannot res
  a.equal(f.tick(15,64,13,-1).active,'northFort');
  a.equal(f.tick(15.2,64,13,-1).decks.length,1);
 });
+

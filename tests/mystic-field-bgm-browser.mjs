@@ -54,6 +54,11 @@ async function launch(rejectDecode){
   BaseAudioContext.prototype.createGain=function(...a){
    const node=gain.apply(this,a);byParam.set(node.gain,node);return node;
   };
+  const linear=AudioParam.prototype.linearRampToValueAtTime;
+  AudioParam.prototype.linearRampToValueAtTime=function(level,now){
+   const node=byParam.get(this);if(node){const log=targets.get(node)||[];log.push({level,now,linear:true});targets.set(node,log.slice(-12));}
+   return linear.apply(this,arguments);
+  };
   const target=AudioParam.prototype.setTargetAtTime;
   AudioParam.prototype.setTargetAtTime=function(level,now,decay){
    const node=byParam.get(this);if(node){
@@ -155,7 +160,7 @@ try{
    await position(p,pin);await instrumental(p,scene);assert.equal(await fieldCount(p),n);
    assert.equal((await get(p)).synth.battle??0,0,'no hostile outdoor hold leaks into the next region');
   }
-  assert((await get(p)).loop[0].stages.some(g=>g.targets.some(t=>t.level===0&&t.decay>=.05)),'real gain fades on geographical exit');
+  assert((await get(p)).loop[0].stages.some(g=>g.targets.some(t=>t.level===0&&t.linear)),'real gain fades on geographical exit');
   checkpoint='actual North Fort attack retains existing battle instruments';
   await position(p,[64,17,-1]);await instrumental(p,'battle');assert.equal(await fieldCount(p),n);
   checkpoint='native mute, background, and foreground controls';
@@ -188,3 +193,4 @@ try{
  finally{await b.context.close()}
  console.log('PASS native field-only loop through real hits, silent undecoded outdoors, unchanged indoor/dungeon battle, mixer and Activity lifecycle');
 }finally{await browser?.close();await new Promise(r=>server.close(r))}
+
