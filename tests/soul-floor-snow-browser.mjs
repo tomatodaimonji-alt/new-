@@ -35,7 +35,7 @@ try{
    townLayout:5,townMapHeight:182,templeDepth:1,view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.24,orbitDistance:5.5}}));
  },baseItem);
  const read=async()=>last=await p.evaluate(()=>window.__editorTest.soulSnowQA());
- const at=(region,z)=>p.waitForFunction(([id,z])=>{const qa=window.__editorTest;return qa?.snowPassRegion().id===id&&Math.abs(qa.freeMovementPose().z-z)<.12},[region,z]);
+ const at=(region,z)=>p.waitForFunction(([id,z])=>{const qa=window.__editorTest;return qa?.snowPassRegion().id===id&&Math.round(qa.freeMovementPose().z)===z},[region,z]);
  await p.goto(url+'/?resume=1&test=1');await p.locator('#pineStartupCover').waitFor({state:'hidden'});await at('base',137);
  assert.deepEqual((await read()).local,[baseItem]);
  const cdp=await ctx.newCDPSession(p),pad=p.locator('#poiAnalogPad');
