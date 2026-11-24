@@ -42,7 +42,7 @@ rep('function poiSacredApplyFog(now,light){',
  if(!poiSacredForestOf(site)||y!==0)return 0;
  const sm=(a,b,t)=>{const v=Math.max(0,Math.min(1,(t-a)/(b-a)));return v*v*(3-2*v)};
  // Start in the OUTSIDE segment past the meadow, not on crossing a HUD region.
- return .988*sm(24,37,x)*(1-sm(45,53,x))*sm(66,74,z)*(1-sm(96,116,z));
+ return .988*sm(24,37,x)*(1-sm(45,53,x))*sm(69,74,z)*(1-sm(96,116,z));
 }
 let poiSacredEdgeMinute=-1,poiSacredEdgeColor=null,poiSacredEdgeOn=false;
 function poiSacredEdgeHorizon(minute){

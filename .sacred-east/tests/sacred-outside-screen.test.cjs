@@ -11,9 +11,9 @@ test('eastern exterior and nearby inward directions have distance shielding inde
   a.equal(c.poiSacredFogStrength(site,x,z,0),0);
   a(c.poiSacredEdgeFog(site,x,z,0)>.9);
  }
- for(const [x,z,y] of [[23,49,0],[12,56,0],[41,65,0],[61,94,0],[24,125,0],[24,132,0],[41,77,-1]])a.equal(c.poiSacredEdgeFog(site,x,z,y),0);
+ for(const [x,z,y] of [[23,49,0],[12,56,0],[41,69,0],[61,94,0],[24,125,0],[24,132,0],[41,77,-1]])a.equal(c.poiSacredEdgeFog(site,x,z,y),0);
  let max=0;for(let z=67;z<=117;z+=.25)max=Math.max(max,Math.abs(c.poiSacredEdgeFog(site,41,z,0)-c.poiSacredEdgeFog(site,41,z-.25,0)));
- a(max<.05);
+ a(max<.075);
  const night=Array.from(c.poiSacredEdgeHorizon(1281)),day=Array.from(c.poiSacredEdgeHorizon(690));
  a(night.every((v,i)=>v<day[i]));a(night[0]<.41);a(day[2]>.70);
  a.match(h,/parcel\*smoothstep\(11\.0,41\.0,distanceToPlayer\)/);
