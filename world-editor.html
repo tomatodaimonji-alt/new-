@@ -6698,7 +6698,7 @@ const x0=x+inset,x1=x+1-inset,z0=z+inset,z1=z+1-inset;
 quad(m,[x0,0,z0],[x0,0,z1],[x1,0,z1],[x1,0,z0],c);
 // Same quad and vertex count: neighboring ambient grass tiles share edge colors.
 if(ambientTint){
- const a=ambientTint(x0,z0),b=ambientTint(x0,z1),d=ambientTint(x1,z0),e=ambientTint(x1,z1);
+ const a=ambientTint(x0,z0,c),b=ambientTint(x0,z1,c),d=ambientTint(x1,z0,c),e=ambientTint(x1,z1,c);
  const offset=m.c.length-18,colors=[a,b,e,a,e,d];
  for(let i=0;i<6;i++)for(let j=0;j<3;j++)m.c[offset+i*3+j]=colors[i][j];
 }
@@ -31433,18 +31433,54 @@ const POI_TOWN_LIGHT=[
  [930,POI_TOWN_LIGHT_NEUTRAL],[1070,[.92,.80,.70]],[1160,[.68,.65,.76]],
  [1260,POI_TOWN_LIGHT_NIGHT],[1440,POI_TOWN_LIGHT_NIGHT]
 ];
+function poiSnowFrostAmount(region,x,z){
+ if(region!=='base'&&region!=='snowpass')return 0;
+ if(region==='snowpass'){x+=48;z+=139}
+ // North and west are real shared edges, not a sphere around a portal.
+ // Feather off naturally outside the owned Snow parcel as well.
+ const smooth=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t)};
+ const wobble=.75*Math.sin(x*.72+z*.33)+.45*Math.sin(z*1.03-x*.56);
+ const distance=Math.min(x-48,z-139)+wobble;
+ return smooth((distance+4)/11)*(1-smooth((x-72)/4))*(1-smooth((z-168)/4));
+}
+function poiSnowGroundEdgeTint(region,x,z,kind,normal){
+ if(!/^grass/.test(kind)&&kind!=='poiSnowGround')return normal;
+ if(region==='base'&&(x<43||x>74||z<134||z>170))return normal;
+ if(region==='snowpass'&&x>10&&z>10)return normal;
+ if(region!=='base'&&region!=='snowpass')return normal;
+ return (x,z,stock)=>{
+  const t=poiSnowFrostAmount(region,x,z),gx=x+(region==='snowpass'?48:0),gz=z+(region==='snowpass'?139:0);
+  const r=smoothSurfaceNoise(gx*.21,gz*.21);
+  const green=[.38+r*.07,.54+r*.06,.34+r*.06],white=[.83+r*.08,.90+r*.05,.95+r*.035];
+  const smooth=q=>{const v=Math.max(0,Math.min(1,q));return v*v*(3-2*v)};
+  const d=Math.min(gx-48,gz-139);
+  let edge=region==='snowpass'?1-smooth((d-5)/5):smooth((d+5)/5);
+  edge*=1-smooth((gz-168)/4);
+  const original=normal?normal(x,z):stock;
+  return green.map((v,i)=>original[i]+(v+(white[i]-v)*t-original[i])*edge);
+ };
+}
+function poiSnowBiomeLightWeight(x,z){
+ // Zero at the exact two crossing planes, then gently settle over seven
+ // tiles. The established deep snow light and geographic audio stay the same.
+ const d=Math.max(0,Math.min(1,Math.min(x+.5,z+.5)/7));
+ return d*d*(3-2*d);
+}
 function poiTownSceneLight(){
- if(facilitySite?.id!=='base'||!poiWalkActive||pineAIActive||poiWalkLevel<0)return POI_TOWN_LIGHT_NEUTRAL;
+ const snow=facilitySite?.id==='snowpass'&&typeof poiSnowBiomeLightWeight==='function';
+ if(facilitySite?.id!=='base'&&!snow||!poiWalkActive||pineAIActive||poiWalkLevel<0)return POI_TOWN_LIGHT_NEUTRAL;
+ const white=snow?poiSnowBiomeLightWeight(poiWalkViewX,poiWalkViewZ):0;
+ const field=v=>white>0?v.map(c=>c+(1-c)*white):v;
  if(typeof poiDavidTempleEnclosedAt==='function'&&poiDavidTempleEnclosedAt(facilitySite,poiWalkX,poiWalkZ,poiWalkLevel))
   return poiDavidTempleTunnelAt(facilitySite,poiWalkX,poiWalkZ,poiWalkLevel)?[.76,.65,.54]:[.77,.70,.62];
  const minute=poiTownClockGameMs/POI_TOWN_MINUTE_MS%1440;
  for(let i=1;i<POI_TOWN_LIGHT.length;i++){
   const [end,b]=POI_TOWN_LIGHT[i];if(minute>=end)continue;
-  const [start,a]=POI_TOWN_LIGHT[i-1];if(a===b)return a;
+  const [start,a]=POI_TOWN_LIGHT[i-1];if(a===b)return field(a);
   const f=(minute-start)/(end-start),t=f*f*(3-2*f);
-  return a.map((v,j)=>v+(b[j]-v)*t);
+  return field(a.map((v,j)=>v+(b[j]-v)*t));
  }
- return POI_TOWN_LIGHT_NIGHT;
+ return field(POI_TOWN_LIGHT_NIGHT);
 }
 function poiTownClockSetTest(absoluteMinute){
  if(facilitySite?.id!=='base'||!Number.isInteger(absoluteMinute)||absoluteMinute<0||absoluteMinute>1e7)return false;
@@ -32636,7 +32672,7 @@ function makeScene(){
  }:null;
  if(!cachedGrade&&!localBatch){
  if(!facilitySite||facilityViewLevel()>=0)for(let z=0;z<MAP_H;z++)
-  for(let x=0,cols=MAP_W===128&&MAP_H===182&&z>=128?(z<139?64:48):MAP_W;x<cols;x++){
+  for(let x=0,cols=MAP_W===128&&MAP_H===182&&z>=128?(z<139?72:48):MAP_W;x<cols;x++){
   if(facilitySite&&facilityStairOpenings.has(facilityCellKey(x,z,0))){
    const h=terrainY(x,z);
    if(facilityUsesOpenCellarStair()){
@@ -32657,7 +32693,7 @@ function makeScene(){
   if(woodlandRiver(x,z))facilityWoodlandWater(tmp,x,z,floors,creekWater,creekShoals,canalWater.has(x+','+z),x-baseOffset);
   else{
    if(townGuildWood(x,z,kind))pineDrawTownGuildFloor(tmp,x,z,kind);
-   else addFloorTile(tmp,x,z,kind,poiSacredPaintArea(facilitySite,z,MAP_W,MAP_H),ROAD_DIAGONALS.has(kind)?roadDiagonalConnections(floors,x,z,kind):ROAD_IDS.has(kind)&&!kind.endsWith('Full')?roadConnections(floors,x,z,kind):0,ambientTint||eastBlend,pinePlayJoinedNaturalGrade(kind,facilitySite,poiWalkActive));
+   else addFloorTile(tmp,x,z,kind,poiSacredPaintArea(facilitySite,z,MAP_W,MAP_H),ROAD_DIAGONALS.has(kind)?roadDiagonalConnections(floors,x,z,kind):ROAD_IDS.has(kind)&&!kind.endsWith('Full')?roadConnections(floors,x,z,kind):0,(typeof poiSnowGroundEdgeTint==='function'?poiSnowGroundEdgeTint(facilitySite?.id,x,z,kind,ambientTint||eastBlend):ambientTint||eastBlend),pinePlayJoinedNaturalGrade(kind,facilitySite,poiWalkActive));
    if(!canalQuays.has(x+','+z)&&!(creekWater&&x-baseOffset>=67&&facilityWoodlandBank(tmp,x,z,kind,woodlandRiver,groundCorner))&&floors.has(x+','+z))shoreline(tmp,x,z,floors);
   }
   pineBakeFloorLighting(tmp,x,z,0,pineShadows,pineWarmLamps);
@@ -33325,7 +33361,7 @@ function facilityWatchtowerCloseFov(distance){
 // BEGIN OUTDOOR SKY
 function poiSkyCanLookUp(){
  return poiWalkActive&&poiThirdPerson&&!cameraTopDown&&!pineAIActive&&
-  facilitySite?.id==='base'&&poiWalkLevel===0&&!poiWalkIndoor();
+  (facilitySite?.id==='base'||facilitySite?.id==='snowpass')&&poiWalkLevel===0&&!poiWalkIndoor();
 }
 const POI_ORBIT_LOOKUP_LIMIT=-1.02,POI_ORBIT_LOW_EYE=-.16;
 function poiOrbitHigherDome(){
@@ -35102,65 +35138,6 @@ function poiDrawNorthAxeCue(now,vp){
 
 // END NORTH AXE FOOTPRINT
 
-// BEGIN SOUTH SNOW HORIZON
-// Painted LOD in global tile units, aligned to the physical white-sided
-// pass (48,139) and its converging path (60,138)->(60,139).
-const POI_SNOW_HORIZON=Object.freeze({
- bounds:[44,-1,148,78,15,165],
- ridge:[[28,1.1,153],[32,3.8,151],[35,4.8,149],[38,7.7,147],[41,7.2,148],
-  [44,9.8,148],[46,8.6,147],[49,13.2,145],[52,10.9,146],[54,11.8,148],
-  [58,7.5,147],[61,8.4,148],[64,5.9,150],[68,3.2,152],[71,1.2,154]].map(([x,y,z])=>[60+(x-49)*.73,y,z+11])
-});
-let poiSnowHorizonGpu=null,poiSnowHorizonLast=0;
-function poiSnowHorizonMesh(){
- const m=mesh(),profile=POI_SNOW_HORIZON.ridge;
- const foot=([x,,z])=>[x,-.65,Math.max(148,z-9-(x%3))];
- const snowline=([x,y,z])=>[x,Math.min(y,.70+y*(.43+(x%5)*.031)),z-3.6];
- for(let i=1;i<profile.length;i++){
-  const a=profile[i-1],b=profile[i],fa=foot(a),fb=foot(b),sa=snowline(a),sb=snowline(b);
-  const rock=i%3===1?[.29,.38,.49]:[.31,.41,.52];
-  const ice=i%4===1?[.73,.86,.96]:[.85,.94,.99];
-  // Wound to face upward/north: downward normals washed pale snow into shadow.
-  tri(m,fa,sb,fb,rock);tri(m,fa,sa,sb,rock);
-  tri(m,sa,b,sb,ice);tri(m,sa,a,b,ice);
- }
- return m;
-}
-function poiSnowHorizonOpacity(region,floor,outdoor,x,z){
- if(region!=='base'||floor!==0||!outdoor)return 0;
- // Keep the main-world approach readable; replace no neighboring tiles.
- // Leave the last six tiles of the authored route clear for real neighbor LOD.
- const smooth=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t)};
- return .87*smooth((136-z)/14)*smooth((150-Math.hypot(x-60,z-154))/30);
-}
-function poiSnowHorizonInFrame(vp){
- const [x0,y0,z0,x1,y1,z1]=POI_SNOW_HORIZON.bounds;
- let reject=63;
- for(let i=0;i<8&&reject;i++){
-  const x=i&1?x1:x0,y=i&2?y1:y0,z=i&4?z1:z0;
-  const cx=vp[0]*x+vp[4]*y+vp[8]*z+vp[12],cy=vp[1]*x+vp[5]*y+vp[9]*z+vp[13],
-   cz=vp[2]*x+vp[6]*y+vp[10]*z+vp[14],w=vp[3]*x+vp[7]*y+vp[11]*z+vp[15];
-  reject&=(cx< -w?1:0)|(cx>w?2:0)|(cy< -w?4:0)|(cy>w?8:0)|(cz< -w?16:0)|(cz>w?32:0);
- }
- return reject===0;
-}
-function facilitySnowHorizonStatus(){
- return {visible:poiSnowHorizonLast>0,opacity:poiSnowHorizonLast,vertices:poiSnowHorizonGpu?.count??0};
-}
-function facilityDrawSnowHorizon(p){
- const {vp,skyHorizon}=p;
- const opacity=poiSnowHorizonOpacity(facilitySite?.id,poiWalkLevel,Number.isFinite(skyHorizon),poiWalkViewX,poiWalkViewZ);
- poiSnowHorizonLast=0;
- if(opacity<.005||!poiSnowHorizonInFrame(vp))return;
- if(!poiSnowHorizonGpu)poiSnowHorizonGpu=upload(poiSnowHorizonMesh());
- if(!poiSnowHorizonGpu?.count)return;
- gl.enable(gl.BLEND);gl.blendFunc(gl.CONSTANT_ALPHA,gl.ONE_MINUS_CONSTANT_ALPHA);gl.depthMask(false);
- try{gl.blendColor(0,0,0,opacity);draw(poiSnowHorizonGpu,vp);poiSnowHorizonLast=opacity}
- finally{
-  gl.depthMask(true);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.blendColor(0,0,0,0);gl.disable(gl.BLEND);
- }
-}
-// END SOUTH SNOW HORIZON
 
 function render(){
  if(window.pineStartup.failed)return;
@@ -35211,11 +35188,9 @@ function render(){
  }else{draw(sceneMesh?.ground,p.vp);poiDrawSceneOcclusion(sceneMesh,p.vp);
  if(typeof facilityDrawLocalScene==='function')facilityDrawLocalScene(p.vp);
  if(typeof facilityDrawForestScene==='function')facilityDrawForestScene(p.vp);
- facilityDrawRoofs(p.vp);poiDrawGameRoofs(p.vp);}
+ facilityDrawRoofs(p.vp);poiDrawGameRoofs(p.vp);if(typeof poiSnowTempleNeighborDraw==='function')poiSnowTempleNeighborDraw(p.vp);}
  if(typeof poiSacredDrawScene==='function')poiSacredDrawScene(p.vp);
  poiOcclusionEnd();
- if(typeof facilityDrawSnowHorizon==='function')
-  facilityDrawSnowHorizon(p);
  poiDrawEditorGhostRoof(p.vp);
  drawSignOverlays(p.vp,daylight);pineDrawEditCursor(p.vp);
  poiDrawNorthAxeCue(now,p.vp);
@@ -35274,7 +35249,7 @@ let pineStockDepthExportOffset=0;
 function data(){return{format:'forest-world-v1',version:1,size:MAP_W,width:MAP_W,height:MAP_H,
  ...(MAP_W===128&&MAP_H===182?{workshopFacility:{version:1,floorOffset:pineStockDepthExportOffset,groundY:pineStockDepthExportOffset,stockDepth:1}}:{}),terrainHeights:[...terrainHeights.entries()].map(([key,h])=>{const [x,z]=key.split(',').map(Number);return{x,z,h}}),world:world.map(o=>({...o})),models:models.map(m=>({id:m.id,name:m.name,parts:m.parts.map(p=>({...p}))})),prefabs:prefabs.map(p=>({id:p.id,name:p.name,w:p.w,h:p.h,tiles:p.tiles.map(t=>({...t}))})),checks:pineCheckMarks.map(p=>({...p}))}}
 function snapshot(){undoStack.push(JSON.stringify(data()));if(undoStack.length>45)undoStack.shift();redoStack.length=0}
-function commit(){poiWildInvalidate();poiMiniInvalidate();if(facilitySite){facilityRefreshStairs();facilityInvalidateScenes();facilitySurfaceEdited=true;if(typeof poiTownNpcLightInvalidate==='function')poiTownNpcLightInvalidate()}worldMaxLevel=world.reduce((top,o)=>Math.max(top,o.y),0);dirty=true;cursorDirty=true;saveLocal();updateStats();workshopResumeWrite();if(poiWalkActive)poiMiniUpdate()}
+function commit(){poiSnowEdgeFloorCache.delete(world);poiWildInvalidate();poiMiniInvalidate();if(facilitySite){facilityRefreshStairs();facilityInvalidateScenes();facilitySurfaceEdited=true;if(typeof poiTownNpcLightInvalidate==='function')poiTownNpcLightInvalidate()}worldMaxLevel=world.reduce((top,o)=>Math.max(top,o.y),0);dirty=true;cursorDirty=true;saveLocal();updateStats();workshopResumeWrite();if(poiWalkActive)poiMiniUpdate()}
 function restore(json){
  if(facilitySite){const y=level;facilityLoadMap(JSON.parse(json));facilitySetEditLevel(y);}
  else loadData(JSON.parse(json));
@@ -40475,9 +40450,9 @@ const POI_OVERLAND_GPU_LIMIT=4*1024*1024;
 let poiOverlandMeshes=new Map(),poiOverlandIndexCache=new WeakMap(),poiOverlandSnow=null,poiOverlandMilda=null,poiOverlandCommands=[],poiOverlandDrawn=[],poiOverlandDrawing=false,poiOverlandEngaged=false,poiOverlandBake=null,poiOverlandStats={builds:0,maxBakeMs:0,frames:0};
 function poiOverlandScope(id,x,z,pad=0){
  const hasMilda=typeof poiMildaMap==='function';
- return id==='snowpass'&&(z<=17+pad||hasMilda&&z>=17-pad)||
+ return id==='snowpass'&&(z<=17+pad||x<=12+pad||hasMilda&&z>=17-pad)||
   id==='milda'&&hasMilda&&z<=12+pad||
-  id==='base'&&x>=45-pad&&x<=74+pad&&z>=119-pad;
+  id==='base'&&x>=42-pad&&x<=77+pad&&z>=119-pad;
 }
 function poiOverlandSpecFor(id,layout,mapWorld,width,height){
  if(!layout||!Array.isArray(mapWorld))return null;
@@ -40543,7 +40518,8 @@ function* poiOverlandChunkRows(q,region){
   for(let x=q.x0;x<q.x1;x++){
    if(region.owns&&!region.owns(x,z))continue;
    const key=x+','+z,tile=floors.get(key)|| (region.id==='snowpass'?'poiSnowGround':'grass'),t=mesh();
-   const tint=ambient&&(!floors.has(key)||x-offset>=72&&Object.hasOwn(PINE_EAST_NATURE_TONES,tile))?ambient:null;
+   const oldTint=ambient&&(!floors.has(key)||x-offset>=72&&Object.hasOwn(PINE_EAST_NATURE_TONES,tile))?ambient:null;
+   const tint=poiSnowGroundEdgeTint(region.id,x,z,tile,oldTint);
    const area=region.id==='base'&&region.height===182&&z<128?region.width*128:region.width*region.height;
    addFloorTile(t,x,z,tile,area,
     ROAD_DIAGONALS.has(tile)?roadDiagonalConnections(floors,x,z,tile):ROAD_IDS.has(tile)&&!tile.endsWith('Full')?roadConnections(floors,x,z,tile):0,tint,true);
@@ -40610,19 +40586,22 @@ function poiOverlandBakeFrame(list,areas,boot=false){
  poiOverlandStats.maxBakeMs=Math.max(poiOverlandStats.maxBakeMs,performance.now()-start);
 }
 const poiOverlandPrimedMusic=new WeakMap();
+function poiSnowNearFrontage(site,x,z,pad){
+ return site==='snowpass'&&(x<=pad||z<=pad)||
+  site==='base'&&(x>=48-pad&&x<72+pad&&z>=138-pad&&z<139||
+   x>=47-pad&&x<48&&z>=139-pad&&z<168+pad);
+}
 function poiOverlandPrimeMusic(site){
  if(!poiAudioContext||!poiAudioEnabled||!poiAudioAllowed()||poiAudioLevels.master<=0||poiAudioLevels.bgm<=0)return;
  const x=poiWalkViewX,z=poiWalkViewZ;
- const target=site==='base'&&Math.abs(x-60)<=4&&z>=132?'snowpass':
-  site==='snowpass'&&Math.abs(x-12)<=3&&z<=6?'base':null;
+ const target=poiSnowNearFrontage(site,x,z,7)?(site==='base'?'snowpass':'base'):null;
  if(!target)return;
  const ctx=poiAudioContext,mask=poiOverlandPrimedMusic.get(ctx)||0,bit=target==='base'?1:2;
  if(mask&bit)return;
  poiOverlandPrimedMusic.set(ctx,mask|bit);
  const go=()=>{
   const region=facilitySite?.id,currentX=poiWalkViewX,currentZ=poiWalkViewZ;
-  const stillNear=region===target||region===site&&(target==='snowpass'?
-   Math.abs(currentX-60)<=4&&currentZ>=132:Math.abs(currentX-12)<=3&&currentZ<=6);
+  const stillNear=region===target||region===site&&poiSnowNearFrontage(site,currentX,currentZ,7);
   if(ctx!==poiAudioContext||!poiWalkActive||!stillNear||!poiAudioAllowed()||!poiAudioEnabled||poiAudioLevels.master<=0||poiAudioLevels.bgm<=0){
    poiOverlandPrimedMusic.set(ctx,(poiOverlandPrimedMusic.get(ctx)||0)&~bit);return;
   }
@@ -40634,14 +40613,33 @@ function poiOverlandPrimeMusic(site){
  if(typeof requestIdleCallback==='function')requestIdleCallback(go);
  else setTimeout(go,35);
 }
+let poiSnowTempleNeighbor=[];
+function poiSnowTempleNeighborTick(){
+ const snow=poiOverlandSnow??=poiSnowPassMap(),map=snow.map;
+ const area=poiOverlandSpecFor('snowpass',snow,map.world,map.width,map.height);
+ const list=poiOverlandQueue([area],poiWalkViewX,poiWalkViewZ,17,9);
+ poiOverlandClear(new Set(list.map(q=>q.key)));
+ poiOverlandBakeFrame(list,[area],false);
+ for(const q of list){const m=poiOverlandMeshes.get(q.key);if(m)poiSnowTempleNeighbor.push(m)}
+}
+function poiSnowTempleNeighborDraw(vp){
+ if(!poiSnowTempleNeighbor.length)return;
+ const view=poiOverlandNeighborVP(vp,'base','snowpass');
+ for(const m of poiSnowTempleNeighbor)if(poiOverlandBoxVisible(view,m.bounds))draw(m,view);
+}
 function poiOverlandPreviewTick(){
  if(!POI_OVERLAND_SPIKE)return null;
- poiOverlandCommands=[];poiOverlandDrawn=[];poiOverlandDrawing=false;
+ poiOverlandCommands=[];poiOverlandDrawn=[];poiOverlandDrawing=false;poiSnowTempleNeighbor=[];
  const site=facilitySite?.id;
  const registered=site==='base'||site==='snowpass'||site==='milda'&&typeof poiMildaMap==='function';
  const templeGround=site==='base'&&(poiWalkViewZ>=128&&poiWalkViewX<48||
   typeof poiSacredTempleViewAmount==='function'&&poiSacredTempleViewAmount()>0);
- const eligible=registered&&!templeGround&&poiWalkActive&&poiWalkLevel===0&&!cameraTopDown&&!pineAIActive&&facilityVisibilityOwner()===null;
+ const outdoor=registered&&poiWalkActive&&poiWalkLevel===0&&!cameraTopDown&&!pineAIActive&&facilityVisibilityOwner()===null;
+ if(outdoor&&templeGround&&poiSnowNearFrontage(site,poiWalkViewX,poiWalkViewZ,12)){
+  poiOverlandPrimeMusic(site);poiSnowTempleNeighborTick();
+  return null; // Ordinary temple renderer remains the only base-ground owner.
+ }
+ const eligible=outdoor&&!templeGround;
  if(!eligible){
   poiOverlandSignClear();poiOverlandClear();poiOverlandBake=null;
   if(!poiWalkActive){poiOverlandEngaged=false;poiOverlandIndexCache=new WeakMap()}
@@ -40760,7 +40758,7 @@ function poiOverlandResumeAnalog(c,old,now){
 // BEGIN SNOW PASS PROTOTYPE
 const POI_SNOW_PASS=Object.freeze({id:'snowpass',name:'白嶺峠',width:24,height:29,base:{x:60,z:138},snow:{x:12,z:0}});
 function poiSnowSleeveOwn(x,z){
- return x>=48&&x<64&&z>=128&&z<139;
+ return x>=48&&x<72&&z>=128&&z<139;
 }
 function poiSnowSleeveRoute(){
  const knots=[[49,128],[49,130],[52,130],[52,132],[57,132],[57,135],[60,135],[60,138]],out=[];
@@ -40770,12 +40768,43 @@ function poiSnowSleeveRoute(){
  }
  return out;
 }
-function poiSnowPassLink(region,x,z,y,nx,nz){
- if(y!==0)return null;
- const s=POI_SNOW_PASS;
- if(region==='base'&&x===s.base.x&&z===s.base.z&&nx===x&&nz===z+1)return {region:s.id,...s.snow,y:0,facing:2};
- if(region===s.id&&x===s.snow.x&&z===s.snow.z&&nx===x&&nz===z-1)return {region:'base',...s.base,y:0,facing:0};
+function poiOverlandAdjacentEdge(regions,region,x,z,y,nx,nz){
+ if(y!==0||![x,z,nx,nz].every(Number.isInteger)||Math.abs(nx-x)+Math.abs(nz-z)!==1)return null;
+ const from=regions.find(r=>r.id===region);
+ if(!from?.owns(x,z)||from.owns(nx,nz))return null;
+ const tx=nx+from.ox,tz=nz+from.oz,facing=nx>x?1:nx<x?3:nz>z?2:0;
+ for(const to of regions){
+  if(to===from)continue;
+  const x=tx-to.ox,z=tz-to.oz;
+  if(to.owns(x,z))return {region:to.id,x,z,y,facing};
+ }
  return null;
+}
+const POI_SNOW_FRONTAGE=Object.freeze([
+ {id:'base',ox:0,oz:0,owns:(x,z)=>x>=0&&x<128&&z>=0&&z<182&&(z<128||x<48||poiSnowSleeveOwn(x,z))},
+ {id:'snowpass',ox:48,oz:139,owns:(x,z)=>x>=0&&x<POI_SNOW_PASS.width&&z>=0&&z<POI_SNOW_PASS.height}
+]);
+function poiSnowPassLink(region,x,z,y,nx,nz){
+ return poiOverlandAdjacentEdge(POI_SNOW_FRONTAGE,region,x,z,y,nx,nz);
+}
+const poiSnowEdgeFloorCache=new WeakMap();
+function poiSnowEdgeTiles(source){
+ let row=poiSnowEdgeFloorCache.get(source);
+ if(row)return row;
+ row=new Map();
+ for(const o of source){
+  if(o.y!==0)continue;
+  const onEdge=o.z===0||o.x===0||o.z===138||o.x===47&&o.z>=139&&o.z<168;
+  if(!onEdge)continue;
+  const k=o.x+','+o.z;
+  let group=row.get(k);if(!group)row.set(k,group=[]);group.push(o);
+ }
+ poiSnowEdgeFloorCache.set(source,row);return row;
+}
+function poiSnowEdgeWalkable(source,x,z){
+ const group=poiSnowEdgeTiles(source).get(x+','+z);
+ return !!group&&group.some(o=>isFloor(o.type)&&!/^(water|lake|river|sea)$/.test(o.type))&&
+  !group.some(o=>!isFloor(o.type)&&o.type!=='tallGrass'&&o.type!=='flowerField'&&o.type!=='bushFern');
 }
 function poiSnowPassDecode(d,p){
  const {id,width,height}=POI_SNOW_PASS;
@@ -40815,19 +40844,23 @@ function poiSnowPassSeam(site,world){
  // Shape the uphill approach on the empty east side of the sacred lobe.
  // A separate region is not created; the original road remains traversable.
  const lane=new Set(poiSnowSleeveRoute().map(p=>p.x+','+p.z));
- for(let z=128;z<=138;z++)for(let x=48;x<64;x++){
+ for(let z=128;z<=138;z++)for(let x=48;x<72;x++){
   const key=x+','+z;
   if(own.has(key))continue;
-  const type=lane.has(key)?'roadGravelFull':z>=136?'poiSnowGround':(x*7+z*17)%9<3?'grassPebbles':'grass';
+  const type=lane.has(key)?'roadGravelFull':(x*7+z*17)%9<3?'grassPebbles':'grass';
   world.push({x,z,y:0,type,rot:0});own.add(key);
  }
+ // A real authored walkable lip on the sacred map's eastern ground.
+ // Its previously empty natural-grade cells retain the same legal positions.
+ for(let z=139;z<168;z++)if(!own.has('47,'+z))world.push({x:47,z,y:0,type:'grass',rot:0});
  return world.some(o=>o.x===60&&o.z===138&&o.y===0&&o.type==='roadGravelFull');
 }
 function poiSnowPassEdge(nx,nz,fx,fz){
  if(!poiWalkActive||pineAIActive||!facilitySite||poiSnowPassPending)return null;
  const link=poiSnowPassLink(facilitySite.id,fx,fz,poiWalkLevel,nx,nz);
- if(!link||!world.some(o=>o.x===fx&&o.z===fz&&o.y===0&&o.type==='roadGravelFull'))return null;
- return link;
+ if(!link||!poiSnowEdgeWalkable(world,fx,fz))return null;
+ const other=link.region==='base'?poiSnowPassBase?.world:(poiOverlandSnow??=poiSnowPassMap()).map.world;
+ return other&&poiSnowEdgeWalkable(other,link.x,link.z)?link:null;
 }
 function poiSnowPassPrepare(dest,cold=false){
  const onBase=facilitySite?.id==='base';
@@ -40837,8 +40870,7 @@ function poiSnowPassPrepare(dest,cold=false){
   width:MAP_W,height:MAP_H,terrainHeights,models,prefabs,checks:pineCheckMarks,maxLevel:worldMaxLevel,hasCellar:facilityHasCellar,
   ...(POI_OVERLAND_SPIKE?{overlandStatic:{floors:facilityFloorMasks,stairs:facilityStairOpenings,doors:facilityDoorTiles,creek:facilityCreekIndex,nav:poiTownNpcNav,mini:poiLocalTopology}}:{})}:poiSnowPassBase;
  const incoming=onBase?(POI_OVERLAND_SPIKE?(poiOverlandSnow??=poiSnowPassMap()):poiSnowPassMap()):base.site,map=onBase?incoming.map:null;
- const cells=(onBase?map.world:base.world).filter(o=>o.x===dest.x&&o.z===dest.z&&o.y===0);
- if(!cells.some(o=>o.type==='roadGravelFull')||cells.some(o=>isWallId(o.type)))return null;
+ if(!poiSnowEdgeWalkable(onBase?map.world:base.world,dest.x,dest.z))return null;
  if(onBase)try{pineValidateWorldData(facilityExportMap(map))}catch(_e){return null}
  return {onBase,base,incoming,map};
 }
