@@ -60,7 +60,7 @@ if(process.env.SNOW_PHASE_REPORT){
  let frame=html.slice(from,to);
  const phase=(a,b)=>{assert.equal(frame.split(a).length,2,a);frame=frame.replace(a,b)};
  phase('function render(){','function render(){const snowT0=performance.now();');
- phase('poiTownClockFrame(now);poiWalkFrame(now);poiMessageUpdate(now);','poiTownClockFrame(now);const snowClock=performance.now();poiWalkFrame(now);const snowWalk=performance.now();poiMessageUpdate(now);');
+ phase('poiTownClockFrame(now);poiWalkFrame(now);if(typeof poiMiniMotionFrame===\'function\')poiMiniMotionFrame();poiMessageUpdate(now);','poiTownClockFrame(now);const snowClock=performance.now();poiWalkFrame(now);if(typeof poiMiniMotionFrame===\'function\')poiMiniMotionFrame();const snowWalk=performance.now();poiMessageUpdate(now);');
  phase(' const p=parameters();poiSkyBackdrop(p);',' const snowT1=performance.now();const p=parameters();poiSkyBackdrop(p);');
  phase(' if(cursorDirty){',' const snowT2=performance.now();if(cursorDirty){');
  phase(' if(typeof poiHitstopMarkDrawn',` if(window.__snowSeamProbe?.active){
