@@ -110,8 +110,9 @@ try{
  assert(s.fog[2]<.035&&s.roofDraws>0,'healthy close reveal of actual dome');assert.equal(s.isConcealed,true);
  if(process.env.FACILITY_SCREENSHOTS)await p.screenshot({path:process.env.FACILITY_SCREENSHOTS+'/depth-reveal.png'});
  phase='actual north forecourt and straight covered same-world crossing';
- for(let z=126;z<=132;z++)await step({x:24,z});
- assert.equal(last.fog[2],0);assert.equal(last.name,'白環の大神殿');assert.equal(last.isConcealed,true);
+ for(let z=126;z<=127;z++){await step({x:24,z});assert.equal(last.isConcealed,true);assert.equal(last.seen,false);}
+ for(let z=128;z<=132;z++){await step({x:24,z});assert.equal(last.isConcealed,false);assert.equal(last.seen,true);}
+ assert.equal(last.fog[2],0);assert.equal(last.name,'白環の大神殿');
  for(let z=133;z<=143;z++)await step({x:24,z});
  assert.equal(last.isConcealed,false);assert.equal(last.seen,true);
  phase='old temple check-in migrates safe, new deep check-in resumes exactly';
