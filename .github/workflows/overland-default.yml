@@ -39,8 +39,12 @@ jobs:
           sub('// BEGIN SNOW PASS PROTOTYPE',(p/'core.js').read_text()+'\n'+runtime+'\n// BEGIN SNOW PASS PROTOTYPE')
           if not default:sub("if(params.get('resume')==='1')return [...params.keys()].every(k=>k==='resume'||k==='test');",
               "if(params.get('resume')==='1')return [...params.keys()].every(k=>k==='resume'||k==='test'||k==='overland-stream'&&params.get('test')==='1');")
+          sub("function buildSignOverlay(){\n const groups=new Map(SIGN_TYPES.map(id=>[id,[]]));\n for(const o of world){",
+              "function buildSignOverlay(){\n const groups=new Map(SIGN_TYPES.map(id=>[id,[]]));\n const nearby=typeof poiOverlandSignInput!=='undefined'?poiOverlandSignInput:null;\n for(const o of nearby||world){")
+          sub(" const guild=guildBounds();\n if(guild&&world.some(o=>o.y===0&&o.type==='counterWood'",
+              " const guild=nearby?null:guildBounds();\n if(guild&&world.some(o=>o.y===0&&o.type==='counterWood'")
           sub(" if(facilitySite&&poiWalkActive){\n  if(facilitySite.id!=='snowpass'&&!facilityRoofMeshes.length)facilityBuildRoofs();",
-              " const stream=typeof poiOverlandPreviewTick==='function'?poiOverlandPreviewTick():null;\n if(stream){sceneMesh=stream;signOverlays=[];dirty=false}\n else if(facilitySite&&poiWalkActive){\n  if(facilitySite.id!=='snowpass'&&!facilityRoofMeshes.length)facilityBuildRoofs();")
+              " const stream=typeof poiOverlandPreviewTick==='function'?poiOverlandPreviewTick():null;\n if(stream){sceneMesh=stream;signOverlays=poiOverlandSignOverlay();dirty=false}\n else if(facilitySite&&poiWalkActive){\n  if(facilitySite.id!=='snowpass'&&!facilityRoofMeshes.length)facilityBuildRoofs();")
           sub(" const nearActors=poiTownNpcActors.filter(a=>!a.recessed&&!a.death&&poiTownNpcMotionNear(a));",
               " const actors=typeof poiOverlandActorVisible==='function'?poiTownNpcActors.filter(a=>poiOverlandActorVisible(vp,a.x,a.z,a.y)):poiTownNpcActors;\n const nearActors=actors.filter(a=>!a.recessed&&!a.death&&poiTownNpcMotionNear(a));")
           sub(" const outfits=poiTownNpcActors.filter(a=>!a.recessed&&!a.death&&a.y===poiWalkLevel)",
@@ -167,9 +171,10 @@ jobs:
             const terrain=new Map((layout.map?.terrainHeights||[]).map(o=>[o.x+','+o.z,o.h]));
             const statics=mapWorld.filter(o=>o.y>=0),roofList=statics.filter(o=>facilityIsRoofPiece(o));
             const key=o=>o.x+','+o.z+','+o.y,chunk=o=>Math.floor(o.x/8)+','+Math.floor(o.z/8);
-            const batches=new Map(),roofGroups=new Map(),townCells=id==='base'?new Map():null;
+            const signs=new Map(),batches=new Map(),roofGroups=new Map(),townCells=id==='base'?new Map():null;
             for(const o of statics){
              const k=chunk(o),row=batches.get(k)||[];
+             if(SIGN_TYPES.includes(o.type)){const list=signs.get(k)||[];list.push(o);signs.set(k,list)}
              row.push(o);batches.set(k,row);
             }
             if(townCells)for(const o of mapWorld){
@@ -180,7 +185,7 @@ jobs:
              const k=chunk(group[0]),row=roofGroups.get(k)||[];
              row.push(group);roofGroups.set(k,row);
             }
-            p={id,width,height,terrain,townCells,index:poiOverlandIndex(mapWorld,isFloor),batches,roofGroups,
+            p={id,width,height,terrain,townCells,signs,index:poiOverlandIndex(mapWorld,isFloor),batches,roofGroups,
              roofLookup:new Map(roofList.map(o=>[key(o),o])),bridges:new Map(statics.filter(o=>BRIDGE_IDS.has(o.type)).map(o=>[o.x+','+o.z,o])),
              walls:wallExteriorLookup(statics),lights:pineFloorLightingSources(statics)};
             poiOverlandIndexCache.set(mapWorld,p);
@@ -281,6 +286,26 @@ jobs:
            }
            poiOverlandStats.maxBakeMs=Math.max(poiOverlandStats.maxBakeMs,performance.now()-start);
           }
+          const poiOverlandPrimedMusic=new WeakMap();
+          function poiOverlandPrimeMusic(site){
+           if(!poiAudioContext||!poiAudioEnabled||!poiAudioAllowed()||poiAudioLevels.master<=0||poiAudioLevels.bgm<=0)return;
+           const x=poiWalkViewX,z=poiWalkViewZ;
+           const target=site==='base'&&Math.abs(x-49)<=3&&z>=121?'snowpass':
+            site==='snowpass'&&Math.abs(x-12)<=3&&z<=6?'base':null;
+           if(!target)return;
+           const ctx=poiAudioContext,mask=poiOverlandPrimedMusic.get(ctx)||0,bit=target==='base'?1:2;
+           if(mask&bit)return;
+           poiOverlandPrimedMusic.set(ctx,mask|bit);
+           const go=()=>{
+            if(ctx!==poiAudioContext||!poiAudioAllowed()||!poiAudioEnabled){poiOverlandPrimedMusic.set(ctx,(poiOverlandPrimedMusic.get(ctx)||0)&~bit);return}
+            // Decode only, with the existing caches. Scene ownership still selects
+            // playback after the real crossing, never while a neighbor is drawn.
+            if(target==='base'&&typeof poiMysticFieldDecode==='function')poiMysticFieldDecode(ctx);
+            if(target==='snowpass'&&typeof poiSnowClip==='function')poiSnowClip(ctx,false);
+           };
+           if(typeof requestIdleCallback==='function')requestIdleCallback(go);
+           else setTimeout(go,35);
+          }
           function poiOverlandPreviewTick(){
            if(!POI_OVERLAND_SPIKE)return null;
            poiOverlandCommands=[];poiOverlandDrawn=[];poiOverlandDrawing=false;
@@ -288,12 +313,13 @@ jobs:
            const registered=site==='base'||site==='snowpass'||site==='milda'&&typeof poiMildaMap==='function';
            const eligible=registered&&poiWalkActive&&poiWalkLevel===0&&!cameraTopDown&&!pineAIActive&&facilityVisibilityOwner()===null;
            if(!eligible){
-            poiOverlandClear();poiOverlandBake=null;
+            poiOverlandSignClear();poiOverlandClear();poiOverlandBake=null;
             if(!poiWalkActive){poiOverlandEngaged=false;poiOverlandIndexCache=new WeakMap()}
             return null;
            }
            const near=poiOverlandScope(site,poiWalkViewX,poiWalkViewZ),prewarm=poiOverlandScope(site,poiWalkViewX,poiWalkViewZ,8);
            if(!poiOverlandEngaged&&!prewarm){poiOverlandClear();poiOverlandBake=null;return null}
+           poiOverlandPrimeMusic(site);
            const areas=poiOverlandAreas(),g=poiOverlandGlobal(site,poiWalkViewX,poiWalkViewZ);
            const list=poiOverlandQueue(areas,...g),keep=new Set(list.map(q=>q.key));poiOverlandClear(keep);
            const boot=poiOverlandMeshes.size===0&&facilityScenes.size===0;
@@ -314,6 +340,29 @@ jobs:
            if(facilityScenes.size||facilityRoofMeshes.length)facilityInvalidateScenes();
            poiOverlandStats.frames++;poiOverlandDrawing=true;
            return poiOverlandCommands[0]?.m??null;
+          }
+          // Only a few texture quads per active region; no duplicate town atlas.
+          let poiOverlandSignsWorld=null,poiOverlandSignsKey=null,poiOverlandSigns=null,poiOverlandSignInput=null;
+          function poiOverlandSignClear(){
+           if(poiOverlandSigns){
+            for(const o of poiOverlandSigns)gl.deleteBuffer(o.buf);
+            if(signOverlays===poiOverlandSigns)signOverlays=[];
+           }
+           poiOverlandSignsKey=poiOverlandSignsWorld=poiOverlandSigns=null;
+          }
+          function poiOverlandSignOverlay(){
+           if(!signProgram)return [];
+           const spec=poiOverlandIndexCache.get(world)||poiOverlandIndexCache.get(facilitySite?.map?.world);
+           const origin=facilitySite?.id,signs=spec?poiOverlandCommands.filter(q=>q.id===origin)
+            .flatMap(q=>spec.signs.get(q.key.split(':')[1])||[]):[];
+           const key=signs.map(o=>o.x+','+o.z+','+o.y+','+o.rot+','+o.type).sort().join(':');
+           if(poiOverlandSignsWorld===world&&poiOverlandSignsKey===key)return poiOverlandSigns;
+           poiOverlandSignClear();poiOverlandSignsWorld=world;poiOverlandSignsKey=key;
+           if(!signs.length)return poiOverlandSigns=[];
+           poiOverlandSignInput=signs;
+           try{poiOverlandSigns=buildSignOverlay()}
+           finally{poiOverlandSignInput=null}
+           return poiOverlandSigns;
           }
           // The streamed perspective only draws nearby terrain. Leave simulation and
           // collision untouched; don't rebuild models whose positions cannot be in it.
@@ -521,9 +570,19 @@ jobs:
           const key='  overlandStream:()=>poiOverlandInspect(),';assert.equal(game.split(key).length,2);
           let h=game.replace(key,key+`
             overlandOutletQA:{savedApproach:()=>workshopResumeRestorePosition({x:124,z:82,y:0,facing:0}),
+             signedRoad:()=>{
+              for(const o of world.filter(o=>o.type==='innSign'&&o.y===0)){
+               for(const [dx,dz] of [[0,3],[3,0],[0,-3],[-3,0],[0,5],[5,0],[-5,0],[0,-5]]){
+                const x=o.x+dx,z=o.z+dz;
+                if(validPos(x,z)&&facilityFloorOwner(x,z,0)===null&&poiWalkCanStep(x,z)&&workshopResumeRestorePosition({x,z,y:0,facing:0}))
+                 return {x,z,sign:{x:o.x,z:o.z,id:o.type}};
+               }
+              }
+              return null;
+             },
              mode:v=>{cameraTopDown=v;dirty=true;cursorDirty=true},
              read:()=>({x:poiWalkX,z:poiWalkZ,until:poiWalkNextReady,now:performance.now(),top:cameraTopDown,
-              scene:poiOverlandInspect(),level:poiWalkLevel,vertices:sceneMesh?.count||0,position:{x:poiWalkViewX,z:poiWalkViewZ},legacy:facilityScenes.size})},`);
+              scene:poiOverlandInspect(),signIds:signOverlays.map(o=>o.id),level:poiWalkLevel,vertices:sceneMesh?.count||0,position:{x:poiWalkViewX,z:poiWalkViewZ},legacy:facilityScenes.size})},`);
           for(const [a,b] of [
            [' const p=poiWildPick(rng);',' const p=null;'],
            ['function poiWildRegionalFrame(now,rng){','function poiWildRegionalFrame(now,rng){return;']
@@ -589,6 +648,13 @@ jobs:
            await page.waitForFunction(()=>{const q=window.__editorTest.overlandOutletQA.read();return q.top&&!q.scene.drawing&&q.legacy>0});
            await page.evaluate(()=>window.__editorTest.overlandOutletQA.mode(false));
            await page.waitForFunction(()=>{const q=window.__editorTest.overlandOutletQA.read();return !q.top&&q.scene.drawing&&q.legacy===0});
+           if(process.env.USE_STREAM_SIGN_PROOF){
+            checkpoint='authored lodging sign keeps real texture buffer in streamed perspective';
+            const nearby=await page.evaluate(()=>window.__editorTest.overlandOutletQA.signedRoad());
+            assert(nearby?.sign?.id==='innSign','select an actual stock outdoor inn sign approach');
+            await page.waitForFunction(()=>{const q=window.__editorTest.overlandOutletQA.read();return q.scene.drawing&&!q.legacy&&q.signIds.includes('innSign')});
+            console.log('Actual authored inn sign drawn after streamed travel',JSON.stringify({nearby,signIds:(await read()).signIds}));
+           }
            checkpoint='actual stock chapel path uses legacy cellar renderer';
            assert.equal(await page.evaluate(()=>window.__editorTest.overlandOutletQA.savedApproach()),true,'use existing save restoration to reach distant chapel approach for this probe');
            await page.waitForFunction(()=>{const q=window.__editorTest.overlandOutletQA.read();return q.x===124&&q.z===82&&q.level===0&&q.scene.drawing});
@@ -1190,7 +1256,7 @@ jobs:
           SOURCE
           python .spike/build.py world-editor.html .spike/stream.html --default
           python .spike/horizon-safe.py .spike/stream.html .spike/world-editor.html
-          test "$(git hash-object .spike/world-editor.html)" = 4c4db37e03d535a348bdb12b5903517aad24f3b1
+          test "$(git hash-object .spike/world-editor.html)" = ff7e0661a722054fca4a5a9f37609ec8333c0ccb
           cd .spike && node --test tests/*.cjs
       - if: matrix.probe != 'regressions'
         run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
@@ -1202,7 +1268,7 @@ jobs:
           SNOW_PHASE_REPORT=1 SNOW_PROFILE_MUTED=1 SNOW_SEAM_REPORT_ONLY=1 node .spike/tests/snow-continuous-seam-browser.mjs .spike/world-editor.html
           exit "$gate"
       - if: matrix.probe == 'outlet'
-        run: USE_STREAM_DEFAULT=1 node .spike/tests/overland-outlet-browser.mjs .spike/world-editor.html
+        run: USE_STREAM_DEFAULT=1 USE_STREAM_SIGN_PROOF=1 node .spike/tests/overland-outlet-browser.mjs .spike/world-editor.html
       - if: matrix.probe == 'visuals'
         run: |
           node .spike/tests/snow-neighbor-alignment-browser.mjs .spike/world-editor.html
