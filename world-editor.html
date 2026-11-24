@@ -31898,6 +31898,78 @@ function poiDrawDavidFissure(now,vp){
  finally{gl.depthMask(true);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.blendColor(0,0,0,0);gl.disable(gl.BLEND)}
 }
 // END DAVID GROUND FISSURE
+// BEGIN DAVID RAISED STONE
+let poiDavidRaisedStoneMesh=null;
+function poiDavidRaisedStoneGeometry(e,b){
+ const m=mesh(),pass=poiAimWall({y:e.y}),arena=poiDavidArena(b),q={sx:e.sx,sz:e.sz};
+ const near=(wx,wz)=>{
+  const x=wx-.5,z=wz-.5,dx=x-q.sx,dz=z-q.sz,r=Math.hypot(dx,dz);
+  return r<=e.radius&&poiDavidIn(b,{x,z,y:e.y})&&(r<1e-5||
+   poiDavidRoomRay(q,b,{x:dx/r,z:dz/r},r,pass,arena)+1e-6>=r);
+ };
+ const seed=(n)=>.5+.5*Math.sin(n*77.17+2.43);
+ const rings=e.leap?[[1.38,8],[2.82,11],[4.40,12]]:[[1.18,6],[2.28,7],[3.50,5]];
+ const phase=Math.atan2(e.z-.5-e.sz,e.x-.5-e.sx);
+ for(let j=0,id=0;j<rings.length;j++){
+  const [ring,count]=rings[j];
+  for(let i=0;i<count;i++,id++){
+   const angle=phase+i*Math.PI*2/count+.34*j+(seed(id)-.5)*.42;
+   const dx=Math.cos(angle),dz=Math.sin(angle),reach=ring+(seed(id+19)-.5)*.64;
+   const x=e.x+dx*reach,z=e.z+dz*reach;
+   const weight=(.58+.42*seed(id+44))*(1-j*.22);
+   const w=(e.leap?.281:.199)*weight+.055,h=(e.leap?.74:.41)*weight+.05;
+   const tilt=.32*w,rot=angle+seed(id+23)*1.55,foot=[],crown=[];
+   const ground=terrainY(Math.floor(x),Math.floor(z))+1.4*e.y;
+   if(!near(x,z))continue;
+   for(let f=0;f<5;f++){
+    const theta=rot+f*Math.PI*2/5,px=Math.cos(theta),pz=Math.sin(theta);
+    const rr=w*(.86+.26*seed(id+f*7)),tt=.50+.18*seed(id+f*9+11);
+    foot.push([x+px*rr,ground-.065,z+pz*rr]);
+    crown.push([x+px*rr*tt+dx*tilt,ground+h*(.65+.27*seed(id+f*4+47)),z+pz*rr*tt+dz*tilt]);
+   }
+   const tip=[x+dx*tilt,ground+h,z+dz*tilt];
+   const footprint=[...foot,...crown,tip];
+   for(let f=0;f<5;f++){
+    const p=foot[f],n=foot[(f+1)%5];
+    footprint.push([(p[0]+n[0])*.5,ground,(p[2]+n[2])*.5]);
+   }
+   if(!footprint.every(p=>near(p[0],p[2])&&Math.abs(terrainY(Math.floor(p[0]),Math.floor(p[2]))+1.4*e.y-ground)<.065))continue;
+   const tint=.83+.20*seed(id+59),stone=[.48,.423,.355].map(v=>v*tint),top=[.62,.555,.465].map(v=>v*tint);
+   for(let f=0;f<5;f++){
+    const next=(f+1)%5,dark=f%2?.90:1.03;
+    quad(m,foot[f],crown[f],crown[next],foot[next],stone.map(v=>v*dark));
+    tri(m,tip,crown[next],crown[f],top);
+   }
+  }
+ }
+ return m;
+}
+function poiDrawDavidRaisedStone(now,vp){
+ const e=poiDavidFissure,age=e?now-e.start:Infinity,span=e?(e.fissureMs??POI_DAVID_FISSURE_MS):0;
+ if(!e||e.owner!==facilitySite||age>=span){
+  if(poiDavidRaisedStoneMesh?.gpu)gl.deleteBuffer(poiDavidRaisedStoneMesh.gpu.buf);
+  poiDavidRaisedStoneMesh=null;return;
+ }
+ if(age<0||!poiDavidImpactVisible(e,now,span))return;
+ if(poiDavidRaisedStoneMesh?.e!==e){
+  const geometry=poiDavidRaisedStoneGeometry(e,e.owner.davidTemple.boss),prior=poiDavidRaisedStoneMesh?.gpu;
+  if(!geometry.p.length){
+   if(prior)gl.deleteBuffer(prior.buf);
+   poiDavidRaisedStoneMesh={e,gpu:null};return;
+  }
+  poiDavidRaisedStoneMesh={e,gpu:upload(geometry,prior?.buf??null,gl.STATIC_DRAW)};
+ }
+ if(!poiDavidRaisedStoneMesh.gpu)return;
+ const bury=e.leap?.82:.49,rise=e.leap?290:232,hold=e.leap?620:480;
+ const smooth=t=>t*t*(3-2*t);
+ const offset=-bury*(1-smooth(Math.min(1,age/rise))+smooth(Math.max(0,(age-hold)/(span-hold))));
+ // Translate just this mesh vertically in world space. Terrain depth clips
+ // the buried rock; the physical map, camera and attack never move.
+ const lifted=new Float32Array(vp);
+ for(let i=0;i<4;i++)lifted[12+i]+=offset*vp[4+i];
+ draw(poiDavidRaisedStoneMesh.gpu,lifted);
+}
+// END DAVID RAISED STONE
 
 function poiDrawDavidCue(now,vp){
  const s=poiDavidActive?.s,q=s?.david?.attack,o=poiDavidActive?.o,b=poiDavidMatch(o);
@@ -32070,6 +32142,7 @@ function render(){
  poiDrawNorthAxeCue(now,p.vp);
  const davidBeam=typeof poiDrawDavidCue==='function'?poiDrawDavidCue(now,p.vp):null;
  if(typeof poiDrawDavidFissure==='function')poiDrawDavidFissure(now,p.vp);
+ if(typeof poiDrawDavidRaisedStone==='function')poiDrawDavidRaisedStone(now,p.vp);
  if(typeof poiDrawDavidImpact==='function')poiDrawDavidImpact(now,p.vp);
  if(poiWalkActive){
   poiEconomyDraw(p.vp,now);poiInventoryDraw(p.vp,now);
