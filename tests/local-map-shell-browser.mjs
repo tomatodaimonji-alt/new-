@@ -41,16 +41,24 @@ try{
   const snapshot=()=>p.evaluate(()=>{
    const node=id=>document.getElementById(id),r=id=>node(id).getBoundingClientRect().toJSON();
    const dialog=node('poiLocalMapDialog'),cv=node('poiLocalMapLarge'),ctx=cv.getContext('2d'),state=window.__editorTest.facility(),rect=r('poiLocalMapDialog');
+   // Compare the actual color of every tile, away from possible font/arrow
+   // antialias. The before/after renders at matched zoom still compare all PNG bytes.
+   const raw=ctx.getImageData(0,0,cv.width,cv.height).data,samples=[];
+   for(let z=0;z<41;z++)for(let x=0;x<41;x++){
+    if(z===0&&x>=39||Math.abs(x-20)<=1&&Math.abs(z-20)<=1)continue;
+    const i=(Math.floor((z+.5)*cv.height/41)*cv.width+Math.floor((x+.5)*cv.width/41))*4;
+    samples.push(raw[i],raw[i+1],raw[i+2],raw[i+3]);
+   }
    return {d:rect,c:r('poiLocalMapLarge'),head:r('poiLocalMapHeader'),zoom:r('poiLocalMapControls'),close:r('poiLocalMapClose'),
     bg:getComputedStyle(dialog).backgroundColor,ref:getComputedStyle(node('poiLocationPanel')).backgroundColor,
     scrim:getComputedStyle(dialog,'::backdrop').backgroundColor,cv:[cv.width,cv.height],
     focus:document.activeElement?.id,pos:state.position,frame:state.miniMap,
-    corner:Array.from(ctx.getImageData(5,32,1,1).data),raster:cv.toDataURL()};
+    corner:Array.from(ctx.getImageData(5,32,1,1).data),samples,raster:cv.toDataURL()};
   });
   await p.locator('#poiMiniOpen').tap();await dialog.waitFor({state:'visible'});
   return {c,p,errors,dialog,snapshot};
  }
- let before,oldZoom;
+ let before,oldZoom,oldReset;
  if(old){
   phase='before screenshot of the exact released WebGL map';
   const q=await open('before');before=await q.snapshot();
@@ -58,6 +66,7 @@ try{
   assert(before.d.width<before.d.height,'the old ordinary landscape shell was tall');
   if(out)await q.p.screenshot({path:out+'/expanded-map-before.png'});
   await q.p.locator('#poiLocalMapZoomIn').tap();oldZoom=await q.snapshot();
+  await q.p.locator('#poiLocalMapZoomOut').tap();oldReset=await q.snapshot();
   assert.deepEqual(q.errors,[]);await q.c.close();
  }
  phase='ordinary landscape same geographic sample and matching glass';
@@ -83,7 +92,9 @@ try{
  await p.locator('#poiLocalMapZoomIn').tap();const zoom=await q.snapshot();
  assert.equal(zoom.frame.overlay.view.zoom,2);
  if(oldZoom){assert.deepEqual(zoom.frame.overlay,oldZoom.frame.overlay);assert.equal(hash(zoom.raster),hash(oldZoom.raster));}
- await p.locator('#poiLocalMapZoomOut').tap();assert.equal(hash((await q.snapshot()).raster),hash(s.raster));
+ await p.locator('#poiLocalMapZoomOut').tap();const reset=await q.snapshot();
+ assert.deepEqual(reset.frame.overlay,s.frame.overlay);
+ assert.deepEqual(reset.samples,oldReset?.samples??s.samples);
  phase='genuine touch pinch, same frozen geographic bounds and no gameplay movement';
  const a=await p.locator('#poiLocalMapLarge').boundingBox(),cdp=await q.c.newCDPSession(p);
  const point=(id,x,y)=>({id,x:a.x+a.width*x,y:a.y+a.height*y});
@@ -96,14 +107,14 @@ try{
  assert.deepEqual(v.pos,s.pos);assert(v.frame.overlay.visible.x2<=s.frame.overlay.crop.x2+1);
  await cdp.detach();
  await p.locator('#poiLocalMapZoomOut').tap();await p.locator('#poiLocalMapZoomOut').tap();
- assert.equal(hash((await q.snapshot()).raster),hash(s.raster));
+ assert.deepEqual((await q.snapshot()).samples,s.samples);
  phase='short landscape, portrait fallback and original touch close';
  await p.setViewportSize({width:568,height:320});const narrow=await q.snapshot();land(narrow,568,320);
- assert.equal(hash(narrow.raster),hash(s.raster));
+ assert.deepEqual(narrow.samples,s.samples);
  if(out)await p.screenshot({path:out+'/expanded-map-after-narrow.png'});
  await p.setViewportSize({width:390,height:844});const portrait=await q.snapshot();square(portrait,390,844);
  assert(portrait.head.bottom<portrait.c.top&&portrait.zoom.top>portrait.c.bottom);
- assert.equal(hash(portrait.raster),hash(s.raster));
+ assert.deepEqual(portrait.samples,s.samples);
  await p.locator('#poiLocalMapClose').tap();await q.dialog.waitFor({state:'hidden'});
  await p.locator('#poiMiniOpen').tap();await q.dialog.waitFor({state:'visible'});
  await p.keyboard.press('Escape');await q.dialog.waitFor({state:'hidden'});
