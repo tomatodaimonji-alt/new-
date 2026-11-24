@@ -34,7 +34,7 @@ try{
  await p.evaluate(()=>localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
   position:{x:24,z:125,y:0,facing:2},townLayout:5,townMapHeight:182,templeDepth:1,
   view:{yaw:0,zoom:1,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:0,orbitPitch:.14,orbitDistance:5.6}})));
- await p.goto(url+'/?resume=1&test=1'+(enabled?'&uniform-outdoor=1':''));await p.bringToFront();
+ await p.goto(url+'/?resume=1&test=1'+(enabled?'&uniform-outdoor=1':'')+(process.env.UNIFORM_SHELL_MODE==='threshold'?'&uniform-shell=1':''));await p.bringToFront();
  await p.locator('#pineStartupCover').waitFor({state:'hidden',timeout:40000});
  read=()=>p.evaluate(()=>window.__editorTest.uniformRAF());
  await p.waitForFunction(()=>window.__editorTest?.uniformRAF()?.records?.length>10,null,{timeout:12000,polling:80});
