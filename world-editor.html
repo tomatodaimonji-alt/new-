@@ -1573,6 +1573,11 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  --poi-v230-pad-top-reserve:calc(var(--poi-mini-size) + 76px + clamp(0px,(118px - var(--poi-area-width)) * .62,20px));
 }
 /* END FIXED AREA CARD */
+/* BEGIN WIDE HUD MAP */
+#poiMiniOpen{width:var(--poi-area-width)}
+#poiMiniMap{width:100%;height:var(--poi-mini-size);aspect-ratio:auto}
+/* END WIDE HUD MAP */
+
 
 #poiWalkPad:has(:is(#poiNpcInventory,#poiBagPanel,#poiNpcTradePanel):not([hidden])) #poiCompanionHud{visibility:hidden}
 #poiPartyHud #poiCompanionHud[hidden]{display:none!important}
@@ -1684,7 +1689,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v313）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v314）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -18987,12 +18992,19 @@ function poiSoulFloorReachable(now){
  }
  return best;
 }
-function poiSoulFloorCollect(item){
+function poiSoulFloorWalkover(x,z,now){
+ if(!poiInventoryAllowed()||!poiCompanionAllowed())return false;
+ const list=poiHotbarRead().soulDrops;
+ const item=list?.find(d=>d.x===x&&d.z===z&&d.y===poiWalkLevel&&poiSoulFloorWorld(d));
+ if(!item||poiSoulFloorMotion.get(item.type)?.end>now)return false;
+ return poiSoulFloorCollect(item,true);
+}
+function poiSoulFloorCollect(item,walkover=false){
  if(!poiInventoryAllowed())return false;
  const kit=poiHotbarRead(),list=kit.soulDrops??[];
  if(!list.includes(item)||kit.companionSoul?.active===item.type||poiInventorySlots(kit).some(c=>c?.type===item.type))return false;
  const {slots,accepted}=poiInventoryAccept(kit,item.type,1,item);
- if(accepted!==1){toast('持ち物に空きがありません。');return false}
+ if(accepted!==1){if(!walkover)toast('持ち物に空きがありません。');return false}
  const next=poiInventoryEdited({...kit,soulDrops:list.filter(d=>d!==item)},slots);
  if(!poiEconomyWrite(next)){toast('魂を保存できませんでした。');return false}
  poiSoulFloorMotion.delete(item.type);poiEconomyRefresh();
@@ -19717,6 +19729,31 @@ function poiOrvasAllyLeapPath(a,src,target,dx,dz){
  }
  return null;
 }
+function poiOrvasAllyLanding(a,q){
+ const l=q.leap,o={x:l.x0,z:l.z0,y:q.y},vx=l.x-o.x,vz=l.z-o.z,n=Math.hypot(vx,vz);
+ const steps=Math.max(1,Math.ceil(n*5)),pass=poiAimWall(o),r=POI_COMPANION_FREE_RADIUS;
+ let last=null;
+ // The launch already checked the walking footprint. During flight, other
+ // actors under the arc don't veto it; the landing tile must remain free.
+ // Real walls still clip the sweep, with fallbacks on this same trajectory.
+ for(let i=steps;i>0;i--){
+  const x=Math.round(o.x+vx*i/steps),z=Math.round(o.z+vz*i/steps);
+  if(last?.x===x&&last.z===z)continue;
+  last={x,z};let px=x,pz=z;
+  for(let j=i-1;j>=0;j--){
+   px=Math.round(o.x+vx*j/steps);pz=Math.round(o.z+vz*j/steps);
+   if(px!==x||pz!==z)break;
+  }
+  if(x===a.x&&z===a.z||!poiCompanionCell(x,z,a.y,px,pz)||
+     typeof poiActorSameGrade==='function'&&!poiActorSameGrade(x,z,a.x,a.z))continue;
+  const dx=x-o.x,dz=z-o.z,len=Math.hypot(dx,dz);
+  if(len<1e-6)continue;
+  const d={x:dx/len,z:dz/len};
+  if([-r,0,r].every(k=>poiAimWallLimit({x:o.x-d.z*k,z:o.z+d.x*k},d,len,pass)+1e-6>=len))
+   return last;
+ }
+ return null;
+}
 function poiOrvasAllyEngage(a,now){
  if(now<(a.david?.next??a.nextHit??0))return a;
  if(now<(a.allyScanAt||0))return null;
@@ -19741,7 +19778,7 @@ function poiOrvasAllyEngage(a,now){
  d.attack={kind,start:now,hits,sx:leap?.x??src.x,sz:leap?.z??src.z,y:a.y,dx,dz,cursor:0,executed:0,landed:0,
   lastFrameAt:now,lastContactAt:null,until,ally:true,allyArena:b,
   ...(kind==='beam'&&typeof terrainY==='function'?{beamBase:terrainY(a.x,a.z)+a.y*1.4}:{}),
-  ...(leap?{leap:{...leap,x0:src.x,z0:src.z,launch,land}}:{})};
+  ...(leap?{leap:{...leap,x0:src.x,z0:src.z,launch,land,boss:t.o.type==='monsterStoneDavid'?poiDavidMatch(t.o):null}}:{})};
  if(leap)d.leapReady=now+POI_DAVID_LEAP_COOL;
  return a;
 }
@@ -19793,9 +19830,12 @@ function poiOrvasAllyRouteFrame(now){
 }
 function poiOrvasAllyResolve(a,now,mode){
  const d=a.david,q=d?.attack;if(!q)return false;
+ const leapBoss=q.leap?.boss,boss=poiOrvasAllyBossLatch(a,now);
+ const sameArena=leapBoss&&poiDavidIn(leapBoss,poiAimOrigin(now))&&
+    poiDavidIn(leapBoss,{...poiCompanionPosition(a),y:a.y});
  if((mode==='flee'||mode==='follow')||!poiEnemyThreatEnabled()||now-q.lastFrameAt>750||poiDavidHidden()||
-    (!poiOrvasAllyBossLatch(a,now)&&!(a.fightLatch&&poiOrvasAllyTarget(a,a.fightLatch.o,a.fightLatch.s,now))&&Math.hypot(a.x-poiWalkX,a.z-poiWalkZ)>POI_ORVAS_ALLY_TETHER)||
-    (a.allyTarget?.o.type==='monsterStoneDavid'&&!poiOrvasAllyBossLatch(a,now))){
+    (!boss&&!sameArena&&!(a.fightLatch&&poiOrvasAllyTarget(a,a.fightLatch.o,a.fightLatch.s,now))&&Math.hypot(a.x-poiWalkX,a.z-poiWalkZ)>POI_ORVAS_ALLY_TETHER)||
+    (q.kind==='leap'?(leapBoss&&!sameArena):a.allyTarget?.o.type==='monsterStoneDavid'&&!boss)){
   poiOrvasAllyStop(a,now,true);return false;
  }
  q.lastFrameAt=now;
@@ -19809,9 +19849,9 @@ function poiOrvasAllyResolve(a,now,mode){
   const i=q.cursor,late=now-q.hits[i];
   if(q.kind==='leap'){
    const l=q.leap;
-   // A changed door or new occupant cancels landing rather than teleporting.
-   const path=poiOrvasAllyLeapPath(a,{x:l.x0,z:l.z0},{x:l.x+q.dx*1.25,z:l.z+q.dz*1.25},q.dx,q.dz);
-   if(!path||path.x!==l.x||path.z!==l.z){poiOrvasAllyStop(a,now);return false}
+   const path=poiOrvasAllyLanding(a,q);
+   if(!path){poiOrvasAllyStop(a,now);d.next=Math.max(d.next,q.until);return false}
+   q.sx=l.x=path.x;q.sz=l.z=path.z;
    a.x=a.fx=l.x;a.z=a.fz=l.z;a.px=l.x;a.pz=l.z;a.freeRoute=null;a.freeGoal=null;
   }
   for(let j=i;j<q.hits.length;j++)q.hits[j]+=late;
@@ -28030,7 +28070,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v313',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v314',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -28145,7 +28185,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v313';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v314';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -28360,7 +28400,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v313',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v314',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -31532,26 +31572,53 @@ function poiLocalCapture(x,z,y,site,realmKey,realm,concealed,quests){
  }
  const marks=quests.filter(q=>access(q.x,q.z)&&q.x>=crop.x1&&q.x<=crop.x2&&q.z>=crop.z1&&q.z<=crop.z2&&
   poiLocalKnown(bits,q.x,q.z)&&!(temple&&poiSacredMiniEntrance(temple,q.x,q.z)));
+ // Both cropped views read the same already surveyed cells. The wider
+ // HUD wings do not call poiLocalMark or change the discovery radius.
+ const tile=(tx,tz)=>{
+  if(!access(tx,tz)||(temple&&poiSacredMiniEntrance(temple,tx,tz)))return 0;
+  return ((tx===x&&tz===z)||poiLocalKnown(bits,tx,tz))?1+(row?.cats[poiLocalBit(tx,tz)]??0):0;
+ };
  const cells=new Uint8Array(POI_LOCAL_SIDE**2);
  for(let i=0;i<cells.length;i++){
   const tx=crop.x1+i%POI_LOCAL_SIDE,tz=crop.z1+Math.floor(i/POI_LOCAL_SIDE);
-  if(!access(tx,tz)||(temple&&poiSacredMiniEntrance(temple,tx,tz)))continue;
-  if((tx===x&&tz===z)||poiLocalKnown(bits,tx,tz))cells[i]=1+(row?.cats[poiLocalBit(tx,tz)]??0);
+  cells[i]=tile(tx,tz);
  }
- return {cells,crop,marks,x,z,y,scope,realm:realmKey,concealed,facing:poiWalkFacing};
+ return {cells,crop,marks,x,z,y,scope,realm:realmKey,concealed,facing:poiWalkFacing,tile};
 }
-function poiLocalPaint(cv,frame,v=poiLocalView()){
+// BEGIN WIDE HUD MAP
+function poiLocalHudMetrics(cssWidth,cssHeight,height){
+ const ratio=cssWidth>0&&cssHeight>0?Math.max(1,Math.min(2.5,cssWidth/cssHeight)):1;
+ const width=Math.round(height*ratio),shift=(width-height)/2,scale=height/POI_LOCAL_SIDE;
+ return {width,height,shift,scale,wing:Math.ceil(shift/scale)};
+}
+// END WIDE HUD MAP
+function poiLocalPaintHud(cv,frame){
+ const hud=poiLocalHudMetrics(cv.clientWidth,cv.clientHeight,cv.height);
+ if(cv.width!==hud.width)cv.width=hud.width;
+ poiLocalPaint(cv,frame,undefined,hud);
+}
+function poiLocalPaint(cv,frame,v=poiLocalView(),hud=null){
  const g=cv.getContext('2d');if(!g||!frame)return;
- const {width,height}=cv,{cells,crop,marks,x,z,y}=frame,{x1,z1}=poiLocalProject(crop,v),scale=width/POI_LOCAL_SIDE*v.zoom;
+ const {width,height}=cv,{cells,crop,marks,x,z,y}=frame,{x1,z1}=poiLocalProject(crop,v),
+  scale=(hud?.scale??width/POI_LOCAL_SIDE)*v.zoom,shift=hud?.shift??0;
  g.fillStyle='#000';g.fillRect(0,0,width,height);
  for(let i=0;i<cells.length;i++)if(cells[i]){
   const cx=crop.x1+i%POI_LOCAL_SIDE-x1,cz=crop.z1+Math.floor(i/POI_LOCAL_SIDE)-z1;
   if(cx<-1||cz<-1||cx>POI_LOCAL_SIDE/v.zoom||cz>POI_LOCAL_SIDE/v.zoom)continue;
-  const l=Math.round(cx*scale),t=Math.round(cz*scale);
-  g.fillStyle=poiLocalTones[cells[i]-1];g.fillRect(l,t,Math.round((cx+1)*scale)-l,Math.round((cz+1)*scale)-t);
+  const l=Math.round(shift+cx*scale),t=Math.round(cz*scale);
+  g.fillStyle=poiLocalTones[cells[i]-1];g.fillRect(l,t,Math.round(shift+(cx+1)*scale)-l,Math.round((cz+1)*scale)-t);
  }
- for(const q of marks)poiMiniQuestMark(g,(q.x+.5-x1)*scale,(q.z+.5-z1)*scale);
- const px=(x+.5-x1)*scale,pz=(z+.5-z1)*scale,[dx,dz]=[[0,-1],[1,0],[0,1],[-1,0]][frame.facing]||[0,-1];
+ if(hud?.wing&&frame.tile){
+  // Paint only exposed neighboring columns. Partial outer tiles are
+  // clipped by the canvas rather than stretched to fill its width.
+  for(let j=0;j<POI_LOCAL_SIDE;j++)for(let i=1;i<=hud.wing;i++)for(const cx of [-i,POI_LOCAL_SIDE+i-1]){
+   const tone=frame.tile(crop.x1+cx,crop.z1+j);if(!tone)continue;
+   const l=Math.round(shift+cx*scale),t=Math.round(j*scale);
+   g.fillStyle=poiLocalTones[tone-1];g.fillRect(l,t,Math.round(shift+(cx+1)*scale)-l,Math.round((j+1)*scale)-t);
+  }
+ }
+ for(const q of marks)poiMiniQuestMark(g,shift+(q.x+.5-x1)*scale,(q.z+.5-z1)*scale);
+ const px=shift+(x+.5-x1)*scale,pz=(z+.5-z1)*scale,[dx,dz]=[[0,-1],[1,0],[0,1],[-1,0]][frame.facing]||[0,-1];
  g.fillStyle='#ffde7f';g.strokeStyle='#17241e';g.lineWidth=1.7;
  g.beginPath();g.arc(px+dx*4.2,pz+dz*4.2,1.55,0,Math.PI*2);g.fill();
  g.beginPath();g.arc(px,pz,3.25,0,Math.PI*2);g.fill();g.stroke();
@@ -31593,6 +31660,11 @@ function poiLocalOverlayZoom(zoom,ax=.5,az=.5,base=poiLocalOverlay?.view){
 function poiLocalBind(){
  const dialog=$('poiLocalMapDialog'),cv=$('poiLocalMapLarge'),open=$('poiMiniOpen');
  open.addEventListener('click',poiLocalOpen);
+ if(typeof ResizeObserver==='function'){
+  const hud=$('poiMiniMap');
+  const observer=new ResizeObserver(()=>{if(poiLocalFrame&&hud.clientWidth>0)poiLocalPaintHud(hud,poiLocalFrame)});
+  observer.observe(hud);
+ }
  $('poiLocalMapClose').addEventListener('click',poiLocalClose);
  dialog.addEventListener('close',()=>{poiLocalOverlay=null;clear();if(poiWalkActive&&!$('poiMiniHud').hidden)open.focus({preventScroll:true})});
  dialog.addEventListener('click',e=>{if(e.target===dialog)poiLocalClose()});
@@ -31681,7 +31753,7 @@ function poiMiniUpdate(){
   stars.setAttribute('aria-label','危険度 '+area.difficulty+'／10');
  }
  poiLocalFrame=poiLocalCapture(poiWalkX,poiWalkZ,floor,facilitySite,dungeon,realm,concealed,quests);
- poiLocalPaint(cv,poiLocalFrame);
+ poiLocalPaintHud(cv,poiLocalFrame);
  // Preserve the public location/badge reporting seam; quest pins only draw
  // on tiles the player has seen inside this local frame.
  poiMiniLast={location:area.name,stars:area.stars,x:poiWalkX,z:poiWalkZ,level:floor,facing:poiWalkFacing,questKey};
@@ -31974,6 +32046,7 @@ function poiWalkEnterCell(dx,dz,now,continuous=false,onDoorCue){
  if(facilitySite?.id==='base'&&poiWalkLevel===0&&typeof poiLookoutEnter==='function')poiLookoutEnter(poiWalkFromX,poiWalkFromZ,poiWalkX,poiWalkZ);
  if(facilitySite?.id==='base'){if(facilitySite.creek)poiCreekAudioSync();poiEconomyCollect(poiWalkX,poiWalkZ);if(typeof poiGroundGoldPickup==='function')poiGroundGoldPickup(poiWalkX,poiWalkZ);poiInventoryPickup(poiWalkX,poiWalkZ);poiMineFindExplore(poiWalkX,poiWalkZ);poiMineFindPickup(poiWalkX,poiWalkZ);poiArmedPickup(poiWalkX,poiWalkZ);if(typeof poiPortQuestVisit==='function')poiPortQuestVisit();if(typeof poiNorthTrailPickup==='function')poiNorthTrailPickup(poiWalkX,poiWalkZ)}
  if(facilitySite?.id==='snowpass'){poiGroundGoldPickup(poiWalkX,poiWalkZ);poiInventoryPickup(poiWalkX,poiWalkZ)}
+ if(typeof poiSoulFloorWalkover==='function')poiSoulFloorWalkover(poiWalkX,poiWalkZ,now);
  if(!poiWalkDoorFoley(door,fromLevel,onDoorCue)&&!continuous)poiWalkFootstep(wet);
  poiWalkRoof();if(!continuous)poiWalkAvatar(poiWalkStarted);poiWalkStatus();if(pineGameActive){workshopAdventureResumeQuiet=false;pineGameSave()}workshopResumeWrite();
  return dx?'x':'z';

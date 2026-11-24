@@ -59,18 +59,21 @@ try{
  const drop=await read(),snow=drop.local[0];
  assert.equal(snow.type,'slimeSoul');assert.equal(snow.region,'snowpass');assert.equal(snow.durability,17);
  assert(!drop.item.length);assert.deepEqual(drop.saved.soulDrops,[baseItem,snow]);
- phase='cold Snow resume, actual step over remains inert, exact open input picks only the Snow soul';
+ phase='cold Snow resume: fractional trusted thumb enters the exact Snow soul cell';
  await p.reload();await p.locator('#pineStartupCover').waitFor({state:'hidden'});await at('snowpass',1);
  assert.deepEqual((await read()).local,[snow]);
  assert.equal(snow.x,12);assert.equal(snow.z,2);
- await p.waitForTimeout(250);await p.keyboard.press('ArrowDown');await at('snowpass',2);
- assert.deepEqual((await read()).local,[snow]);assert.equal(last.action,'soul-pickup');
- await p.locator('#poiWalkAction').tap();
+ const thumb=await pad.boundingBox();assert(thumb);
+ const pt={x:Math.round(thumb.x+thumb.width*.5),y:Math.round(thumb.y+thumb.height*.5),id:11};
+ await touch('touchStart',[pt]);await touch('touchMove',[{...pt,y:pt.y+36}]);
+ await at('snowpass',2);
+ await touch('touchEnd',[]);
+ assert.deepEqual((await read()).local,[]);
  await p.waitForFunction(()=>window.__editorTest.soulSnowQA().item.some(c=>c.type==='slimeSoul'));
  assert.deepEqual((await read()).item,[{type:'slimeSoul',count:1,durability:17}]);assert.deepEqual(last.drops,[baseItem]);assert.equal(last.active,null);
  phase='real return to base exposes preserved extension-lobe item and leaves wallet alone';
  await cross(-1,'base');await at('base',138);
  assert.deepEqual((await read()).local,[baseItem]);assert.equal(last.gold,12);assert.equal(last.saved.soulDrops[0].durability,317);
- assert.deepEqual(errors,[]);console.log('PASS two trusted region transitions, isolated miniatures across cold Snow and explicit pickup; exact saved base seam and HP kept');
+ assert.deepEqual(errors,[]);console.log('PASS two trusted region transitions, isolated miniatures across cold Snow and trusted analog pickup; exact saved base seam and HP kept');
 }catch(e){console.error(phase,JSON.stringify(last));throw e}
 finally{await browser?.close();await new Promise(ok=>server.close(ok))}

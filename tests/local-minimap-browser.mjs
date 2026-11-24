@@ -16,7 +16,7 @@ inject(opt,opt+`
   tile:(x,z)=>{
    const f=poiLocalFrame,c=$('poiMiniMap'),r=f.crop,b=r.x2-r.x1+1;
    if(x<r.x1||x>r.x2||z<r.z1||z>r.z2)return null;
-   const px=Math.floor((x-r.x1+.5)*c.width/b),pz=Math.floor((z-r.z1+.5)*c.height/b);
+   const px=Math.floor((c.width-c.height)/2+(x-r.x1+.5)*c.height/b),pz=Math.floor((z-r.z1+.5)*c.height/b);
    const bits=poiLocalSurveys?.get(f.scope);
    return {known:poiLocalKnown(bits,x,z),resolved:f.cells[(z-r.z1)*b+x-r.x1],
      rgba:Array.from(c.getContext('2d').getImageData(px,pz,1,1).data)};
