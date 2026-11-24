@@ -41,6 +41,16 @@ try{
  })));
  await p.goto(root+'/?resume=1&test=1',{waitUntil:'domcontentloaded'});
  await p.locator('#pineStartupCover').waitFor({state:'hidden'});
+ // After v290 entering the room no longer wakes David from across it.
+ // First approach the new real radius, then keep the original wide
+ // diagonal chase and jump assertions by stepping back during waking.
+ if(/POI_DAVID_WAKE_RANGE=2(?:,|;)/.test(html)){
+  phase='authored close discovery then original movement scenario';
+  assert((await read()).dormant,'original far checkpoint still leaves statue dormant');
+  assert(await p.evaluate(()=>window.__freeDavidQA.relocate(25,105)));
+  await p.waitForFunction(()=>window.__freeDavidQA.state()?.awake,null,{timeout:6000});
+  assert(await p.evaluate(()=>window.__freeDavidQA.relocate(28,108)));
+ }
  phase='actual angular direction and center during live diagonal movement';
  await p.waitForFunction(()=>{const s=window.__freeDavidQA.state();return s?.leg&&s.t>.1&&s.t<.92},{},{timeout:9000});
  const a=await read();
