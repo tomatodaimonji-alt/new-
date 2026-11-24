@@ -10,7 +10,7 @@ function setup(type='monsterSlime',opts={}){
   poiWalkActive:true,pineAIActive:false,pineGameActive:false,poiAudioAllowed:()=>true,poiPlayerDying:()=>false,
   facilitySite:null,poiWildPlayerOutside:()=>true,poiMobHitPlayer:(o,now)=>{hits.push(now);return false},
   poiNextMobTick:0,poiMineEarlyMayMove:()=>true,poiMonsterCanMove:()=>true,poiMonsterMeshDirty:false};
- runInNewContext(extract('// BEGIN SLIME ATTACK','// END SLIME ATTACK')+
+ runInNewContext(extract('const POI_FIELD_NOTICE=','const POI_WILD_BIRTH_MARGIN=')+extract('// BEGIN SLIME ATTACK','// END SLIME ATTACK')+
  extract('function poiMobFrame(now)','// Hand-authored standing points'),m);
  return m;
 }
