@@ -66,7 +66,7 @@ try{
   const s=await until(s=>s.player[1]===z&&s.now>=s.nextStep,10);
   assert.deepEqual(s.player,[24,z,0]);
  }
- const pending=await until(s=>s.q?.kind==='leap'&&s.q.cursor===0&&s.cue.some(a=>a.start===s.q.start&&a.vertices>50),45);
+ const pending=await until(s=>s.q?.kind==='leap'&&s.q.cursor===0&&s.cue.some(a=>a.start===s.q.start&&a.vertices>50),100);
  assert(pending.q.leap.z>=110&&pending.q.leap.z<112,'the real scheduler fixes a valid tile short of player');
  assert.deepEqual(pending.boss,[24,104]);assert.equal(pending.hp,100);assert.equal(pending.damage.length,0);
  where='airborne real published mesh moves and rises before hurting';

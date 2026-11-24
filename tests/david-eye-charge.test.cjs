@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const src=fs.readFileSync(process.env.WORLD_HTML||'world-editor.html','utf8');
 const cut=(a,b)=>{const x=src.indexOf(a),y=src.indexOf(b,x+1);assert.ok(y>x);return src.slice(x,y)};
 const c=vm.createContext({});
-vm.runInContext(cut('function tri(m,a,b,c,col){','function rot2(x,z,r)')+cut('// BEGIN STONE DAVID VISUAL','// END STONE DAVID VISUAL'),c);
+vm.runInContext(cut('function tri(m,a,b,c,col){','function rot2(x,z,r)')+cut('// BEGIN STONE DAVID VISUAL','// END STONE DAVID VISUAL')+src.match(/^const POI_DAVID_AWAKENING=.*;/m)[0]+'\n',c);
 const mesh=(phase,progress,kind='beam')=>JSON.parse(vm.runInContext(`(()=>{const m={p:[],n:[],c:[]};const rig=poiDavidGeometry(m,0,0,0,${JSON.stringify({phase,progress,kind})});return JSON.stringify({m,rig})})()`,c));
 const eyeR=frame=>Math.max(...frame.m.c.filter((_,i)=>i%3===0&&frame.m.p[i+1]>4.72&&frame.m.p[i+1]<4.78&&frame.m.p[i+2]>.276));
 test('real eye mesh ramps red progressively before first beam; adjacent brow receives restrained local spill',()=>{
