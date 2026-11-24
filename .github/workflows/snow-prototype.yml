@@ -55,7 +55,7 @@ jobs:
           """ if(facilitySite.id==='base')poiSnowPassSeam(facilitySite,facilitySite.map.world);
            facilityLoadMap(facilitySite.map);
            facilityPrepareFloorMasks();""")
-          sub("  localSceneStatus:()=>facilityLocalSceneStatus(),","  snowPassRegion:()=>({id:facilitySite?.id,world:world.length,width:MAP_W,height:MAP_H,forest:!!facilitySite?.southForest,mapReady:!!sceneMesh?.count,actors:poiMonsterStates.size,switches:poiSnowPassSwitches,hp:poiPlayerHP}),\n  localSceneStatus:()=>facilityLocalSceneStatus(),")
+          sub("  localSceneStatus:()=>facilityLocalSceneStatus(),","  snowPassRegion:()=>({id:facilitySite?.id,world:world.length,width:MAP_W,height:MAP_H,forest:!!facilitySite?.southForest,mapReady:!!sceneMesh?.count,actors:poiMonsterStates.size,spawn:[poiSpawnX,poiSpawnZ],switches:poiSnowPassSwitches,hp:poiPlayerHP}),\n  localSceneStatus:()=>facilityLocalSceneStatus(),")
           # Extend the prototype palette so import validation and palette lookup accept snow.
           sub("{id:'treePine',name:'針葉樹'", "{id:'poiSnowGround',name:'積雪',icon:'▫',cat:'floor'},\n{id:'treePine',name:'針葉樹'")
           out.parent.mkdir(parents=True,exist_ok=True)
@@ -117,7 +117,7 @@ jobs:
            const onBase=facilitySite?.id==='base';
            if(onBase===(dest.region==='base')||!onBase&&!poiSnowPassBase)return false;
            const hp=poiPlayerHP,cooldown=poiAttackReady;
-           const base=onBase?{site:facilitySite,map:data(),world,monsters:poiMonsterStates,warm:!cold,edited:facilitySurfaceEdited}:poiSnowPassBase;
+           const base=onBase?{site:facilitySite,map:data(),world,monsters:poiMonsterStates,warm:!cold,spawn:cold?facilitySite.spawn:{x:poiSpawnX,z:poiSpawnZ},edited:facilitySurfaceEdited}:poiSnowPassBase;
            const incoming=onBase?poiSnowPassMap():base.site,map=onBase?incoming.map:base.map;
            // Verify incoming authored cells before any mutation. No editor input enters this registry.
            const cells=(onBase?map.world:base.world).filter(o=>o.x===dest.x&&o.z===dest.z&&o.y===0);
@@ -133,6 +133,8 @@ jobs:
            poiMonsterStates=!onBase&&base.warm?base.monsters:new Map();
            if(!onBase&&!base.warm)poiResetCombat();
            else for(const state of poiMonsterStates.values()){state.playerAttack=null;state.nextAttack=Math.max(state.nextAttack||0,now+300)}
+           const spawn=onBase?incoming.spawn:base.spawn;
+           poiSpawnX=spawn.x;poiSpawnZ=spawn.z;
            poiWalkReset(dest.x,dest.z);poiWalkFacing=dest.facing;
            if(!cold){poiPlayerHP=hp;poiAttackReady=cooldown}
            if(!cold){poiWalkNextReady=now+POI_WALK_MS;poiOtherworldTravelSerial++}
@@ -234,14 +236,14 @@ jobs:
            await roll(1,'snowpass');
            const entry=await state();
            assert.deepEqual([entry.area.width,entry.area.height,entry.area.actors,entry.area.hp],[24,29,0,69]);
-           assert.equal(entry.p.x,12);assert.equal(entry.save.region,'snowpass');assert.equal(entry.kit,stock);
+           assert.deepEqual(entry.area.spawn,[12,0]);assert.equal(entry.p.x,12);assert.equal(entry.save.region,'snowpass');assert.equal(entry.kit,stock);
            await page.waitForTimeout(225);await page.keyboard.press('ArrowDown');await at('snowpass',1);
            await page.reload();await page.locator('#pineStartupCover').waitFor({state:'hidden'});await at('snowpass',1);
            const restored=await state();assert.equal(restored.area.hp,69);assert.equal(restored.kit,stock);
            await roll(-1,'base');
            const back=await state();
            assert.equal(back.area.width,128);assert.equal(back.p.x,49);assert.equal(back.save.region,undefined);
-           assert.equal(back.area.hp,69);assert.equal(back.kit,stock);assert(back.area.actors>0);assert(back.area.forest,'same loaded base still has normal forest');
+           assert.equal(back.area.hp,69);assert.equal(back.kit,stock);assert(back.area.actors>0);assert.deepEqual(back.area.spawn,old.area.spawn,'base death respawn does not use local snow coordinates');assert(back.area.forest,'same loaded base still has normal forest');
            assert.deepEqual(JSON.parse(back.kit).drops,[{type:'healingHerb',x:50,z:126,y:0}]);
            await page.waitForTimeout(225);await page.keyboard.press('ArrowUp');await at('base',126);
            await page.waitForTimeout(225);await page.keyboard.press('ArrowRight');
