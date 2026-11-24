@@ -1,0 +1,34 @@
+name: workshop thermal VFX isolated
+on:
+  push:
+    branches: [dot/workshop-thermal-vfx-qa]
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [thermal-vfx-browser.mjs, david-foley-browser.mjs, david-temple-browser.mjs]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build exact isolated snapshot
+        run: |
+          test "$(git hash-object world-editor.html)" = "5c3bc9c78dad3c68c1e8311b57e2cb1b3c8fc9c7"
+          python .qa/thermal/build.py world-editor.html /tmp/david-thermal.html
+          test "$(git hash-object /tmp/david-thermal.html)" = "fbdb1f92f34eddc40cd953a3fd6126081fbe1fda"
+      - run: npm install --no-save playwright@1.58.2 && npx playwright install --with-deps chromium
+      - run: node ".qa/thermal/${{ matrix.scenario }}" /tmp/david-thermal.html
+        env:
+          VFX_SCREENSHOTS: /tmp/vfx-frames
+          FACILITY_SCREENSHOTS: /tmp/vfx-frames
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vfx-${{ matrix.scenario }}
+          path: /tmp/vfx-frames
