@@ -4,10 +4,9 @@ import {createRequire} from 'node:module';
 import {readFileSync} from 'node:fs';
 import {Script} from 'node:vm';
 const source=readFileSync(process.argv[2]??'world-editor.html','utf8');
-const anchor=' for(const o of poiOverlandCommands)draw(o.m,poiOverlandNeighborVP(vp,facilitySite.id,o.id));';
+const anchor='  poiStreamPropDraw(o.m,matrices.get(o.id),player[0]+.5,player[1]+.5,now);';
 assert.equal(source.split(anchor).length,2,'test must observe the actual nearby-chunk draw, not distant sky');
-const html=source.replace(anchor,` for(const o of poiOverlandCommands){
-  const transform=poiOverlandNeighborVP(vp,facilitySite.id,o.id),q=window.__actualNeighborQA;
+const html=source.replace(anchor,`  const transform=matrices.get(o.id),q=window.__actualNeighborQA;
   let before,x0,y0,w,h,actual,expected;
   if(q&&!q.done&&q.tests.length<120&&o.id!==facilitySite.id&&
      o.key===(o.id==='snowpass'?'snowpass:1,0':'base:7,17')){
@@ -25,7 +24,7 @@ const html=source.replace(anchor,` for(const o of poiOverlandCommands){
     before=new Uint8Array(w*h*4);gl.readPixels(x0,y0,w,h,gl.RGBA,gl.UNSIGNED_BYTE,before);
    }
   }
-  draw(o.m,transform);
+  poiStreamPropDraw(o.m,transform,player[0]+.5,player[1]+.5,now);
   if(before){
    const after=new Uint8Array(before.length);gl.readPixels(x0,y0,w,h,gl.RGBA,gl.UNSIGNED_BYTE,after);
    let changed=0;
@@ -33,8 +32,7 @@ const html=source.replace(anchor,` for(const o of poiOverlandCommands){
     if(Math.abs(after[i]-before[i])+Math.abs(after[i+1]-before[i+1])+Math.abs(after[i+2]-before[i+2])+Math.abs(after[i+3]-before[i+3])>=18)changed++;
    q.tests.push({id:o.id,key:o.key,actual,expected,changed,count:o.m.count,x:poiWalkX,z:poiWalkZ});
    if(changed>15)q.done=true;
-  }
- }`);
+  }`);
 if(process.env.SNOW_NEIGHBOR_SYNTAX_ONLY==='1'){
  for(const [,,body] of [...html.matchAll(/<script(?:\s+([^>]*))?>([\s\S]*?)<\/script>/gi)].filter(([,a])=>!a||!/\b(?:src|type)\s*=/.test(a)))new Script(body);
  console.log('PASS exact actual snow-neighbor probe anchors and script parse');process.exit(0);

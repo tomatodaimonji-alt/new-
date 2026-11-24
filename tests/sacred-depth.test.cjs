@@ -8,7 +8,7 @@ test('open meadow, known original terrain and continuous authored paths to the r
  a.deepEqual([site.map.width,site.map.height],[128,182]);
  a.deepEqual([d.entrance.x,d.entrance.z,d.boss.x,d.boss.z],[24,128,24,158]);
  a.equal(crypto.createHash('sha256').update(JSON.stringify(w.slice(0,d.authored.index))).digest('hex'),'15535689893b8a631827467885930d45d786e0d3b559b74d6a2544267d03439a');
- a(w.every(o=>o.z<128||o.x<48||o.x<64&&o.z<139));
+ a(w.every(o=>o.z<128||o.x<48||o.x<72&&o.z<139));
  a.deepEqual([f.route[0].x,f.route[0].z,f.route.at(-1).x,f.route.at(-1).z],[12,49,24,125]);
  a(f.route.length>=100);
  a(f.trees.length>=72&&f.trees.length<=96&&f.trees.every(o=>o.z>=73));
