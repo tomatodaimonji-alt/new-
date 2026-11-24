@@ -67,7 +67,7 @@ try{
  await hold(slot(1));assert.equal(await detail.locator('#poiItemDetailName').innerText(),'薬草');
  assert.equal(await stats.isVisible(),false);await back.tap();
 
- await page.waitForFunction(()=>document.querySelector('#poiWalkAction')?.getAttribute('aria-label')==='住人と話す');
+ await page.waitForFunction(()=>document.querySelector('#poiWalkAction')?.getAttribute('aria-label')==='イネス（食堂の料理人）と話す');
  await page.locator('#poiWalkAction').tap();await page.locator('#poiNpcMenu [data-npc-action="status"]').tap();
  const npc=page.locator('#poiNpcInventory');
  await npc.locator('[data-npc-item="equipLadle"]').tap();
@@ -79,3 +79,4 @@ try{
  await cd.detach();await ctx.close();
  console.log('PASS actual hotbar and read-only NPC weapons show three canonical rows, consumables do not, and storage is unchanged');
 }finally{await browser?.close();await new Promise(resolve=>server.close(resolve))}
+

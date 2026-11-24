@@ -1585,7 +1585,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v260）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v261）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -11518,7 +11518,7 @@ function poiDropChestSlot(index){
 const POI_ARMED_FOES=Object.freeze({
  monsterSkelWarrior:{type:'equipBoneSword',x:110,z:56,y:-1,bounds:[107,54,111,57],reach:1,windup:580,cool:1680},
  monsterSkelKnight:{type:'equipIronSword',x:106,z:78,y:-1,bounds:[104,77,107,80],reach:1,windup:700,cool:1880},
- monsterSkelArcher:{type:'equipWoodBow',x:105,z:86,y:0,bounds:[101,82,109,89],reach:5,windup:760,cool:2050},
+ monsterSkelArcher:{type:'equipWoodBow',x:105,z:86,y:0,bounds:[101,82,109,89],reach:8,windup:760,cool:2050},
  monsterSkelSpearman:{type:'equipWoodSpear',x:101,z:61,y:-1,bounds:[98,59,102,62],reach:2,windup:590,cool:1750},
  monsterSkelMage:{type:'equipPlainStaff',x:40,z:88,y:0,bounds:[38,86,43,92],reach:4,windup:820,cool:2280},
  monsterSkelLongStaff:{type:'equipLongStaff',x:43,z:7,y:0,bounds:[40,5,47,10],reach:2,windup:660,cool:1720}
@@ -11600,7 +11600,12 @@ function poiEnemyAngleHitClear(a,x,z,actor){
 // END ENEMY ANGLES
 function poiArmedAim(obj,state,x,z){
 
- const p=POI_ARMED_FOES[obj.type];if(!p||!poiArmedBound(obj,x,z))return null;
+ const p=POI_ARMED_FOES[obj.type];if(!p)return null;
+ // Attack reach can extend beyond an outdoor archer's roaming area. Do
+ // not expand its movement leash or allow arrows aimed into a safe town.
+ const arrow=obj.type==='monsterSkelArcher',outdoor=arrow&&obj.y===0&&
+  typeof facilitySite!=='undefined'&&facilitySite?.id==='base'&&typeof poiWildExterior==='function';
+ if((outdoor&&!poiWildExterior(x,z))||(!poiArmedBound(obj,x,z)&&!outdoor))return null;
  const dx=x-state.x,dz=z-state.z,n=Math.abs(dx)+Math.abs(dz);
  if(dx&&dz&&typeof poiEnemyAttackTrace==='function'&&
     !(typeof poiNorthWatchGuard==='function'&&poiNorthWatchGuard(obj))){
@@ -13909,6 +13914,8 @@ function poiEnemyResolvePlayer(now){
   }else if(a.guardTrial&&typeof poiMineGuardTrialCovered==='function'){
    covered=poiMineGuardTrialCovered(a,now);
    poiMineGuardTrialSettle(s,now,timely&&covered&&poiWalkLevel===a.y);
+  }else if(typeof poiEnemyCueRanged==='function'&&poiEnemyCueRanged(a)){
+   covered=poiEnemyRangedContact(a,s,typeof poiAimOrigin==='function'?poiAimOrigin(now):{x:poiWalkX,z:poiWalkZ,y:poiWalkLevel});
   }else if(covered&&a.angular&&typeof poiEnemyAngleHitClear==='function')covered=poiEnemyAngleHitClear(a,poiWalkX,poiWalkZ,s);
   if(!timely||!covered||poiWalkLevel!==a.y||
      (typeof poiDungeonPatrolCanFight==='function'&&!poiDungeonPatrolCanFight(a.obj,poiWalkX,poiWalkZ))||
@@ -14254,6 +14261,13 @@ function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMo
   (typeof poiOtherworldEnemyMayFight!=='function'||poiOtherworldEnemyMayFight(obj,poiWalkX,poiWalkZ))&&
   (!patrol||poiDungeonPatrolCanFight(obj,poiWalkX,poiWalkZ,patrol));
  const dx=poiWalkX-state.x,dz=poiWalkZ-state.z,dist=Math.hypot(dx,dz);
+ // Only a valid stationary ranged attempt precedes the existing chase/
+ // patrol range; when no shot is possible, movement remains unchanged.
+ if(allowed&&obj.type==='monsterSkelArcher'&&dist<=8&&(dist>6.5||!poiArmedBound(obj,poiWalkX,poiWalkZ))&&
+    poiArmedAim(obj,state,poiWalkX,poiWalkZ)){
+  if(now>=state.nextAttack)poiEnemyBeginPlayer(obj,state,now);
+  continue;
+ }
  if(!allowed||patrol&&dist>6.5){
   if(state.actorFree&&poiMonsterActorSettle(obj,state,now))continue;
   if(patrol&&poiDungeonPatrolStep(obj,state,now,patrol))changed=true;
@@ -16188,7 +16202,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v260',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v261',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -16303,7 +16317,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v260';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v261';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -16518,7 +16532,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v260',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v261',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -17452,7 +17466,7 @@ const POI_UNARMED_WEAPON_GRADES=Object.freeze({speed:3,reach:1});
 const POI_PLAYER_WEAPON_PROFILES=Object.freeze({
  kitchenKnife:{range:1,get damage(){return POI_PLAYER_ATTACK+POI_KNIFE_BONUS},hit:80,ready:225,pose:190,
   commitAim:true,contactSound:true,speed:4,reach:1},
- equipWoodBow:{range:5,damage:22,hit:325,ready:1030,pose:525,cellMs:65,minFlight:70,speed:1,reach:4},
+ equipWoodBow:{range:8,damage:22,hit:325,ready:1030,pose:525,cellMs:65,minFlight:70,speed:1,reach:5},
  equipWoodSpear:{range:3,damage:24,tipLength:.75,shaftScale:.75,hit:240,ready:540,pose:410,speed:2,reach:3},
  equipStoneMace:{range:1,damage:32,hit:380,ready:760,pose:620,commitAim:true,speed:1,reach:1},
  equipWoodSword:{...POI_SWORD_PROFILE,get damage(){return POI_PLAYER_ATTACK+POI_HOTBAR_SWORD_BONUS}},
@@ -21056,6 +21070,89 @@ function poiEnemyCueTiles(a,s){
 function poiEnemyCuePoint(x,z,y){
  return [x+.5,terrainY(Math.floor(x+.5),Math.floor(z+.5))+y*1.4+.052,z+.5];
 }
+function poiEnemyCueRanged(a){
+ return a?.obj?.type==='monsterSkelArcher'||a?.obj?.type==='monsterSkelMage';
+}
+const POI_ENEMY_RANGED_CUE_WIDTH=.20;
+function poiEnemyRangedArea(a,s){
+ const d=Math.hypot(a.dx,a.dz),origin={x:a.sx,z:a.sz},width=POI_ENEMY_RANGED_CUE_WIDTH;
+ if(!(d>1e-6))return [];
+ const dx=a.dx/d,dz=a.dz/d;
+ const tiles=a.mageTiles??a.tiles??[a];
+ let length=0;
+ for(const t of tiles){
+  const x=t.x-origin.x,z=t.z-origin.z,forward=x*dx+z*dz;
+  if(a.mageTiles===undefined&&a.mageReach!==undefined&&Math.abs(x)+Math.abs(z)>a.mageReach)continue;
+  length=Math.max(length,forward);
+ }
+ length=Math.min(length,(a.x-origin.x)*dx+(a.z-origin.z)*dz);
+ if(length<=1e-6)return [];
+ const radius=Math.min(width,length),neck=Math.max(0,length-radius);
+ const h=Math.PI/2,angles=new Set([-h,0,h]);
+ // Short evenly-spaced directions keep the rounded cap smooth; paired
+ // rays just either side of each wall corner prevent leaking a wedge.
+ const curve=Math.atan2(radius,Math.max(neck,.001));
+ for(let i=0;i<=32;i++)angles.add(-h+i*Math.PI/32);
+ for(let i=0;i<=22;i++)angles.add(-curve+i*2*curve/22);
+ const scan=length+radius;
+ for(let z=Math.ceil(origin.z-scan-.5)+.5;z<=origin.z+scan;z++)for(let x=Math.ceil(origin.x-scan-.5)+.5;x<=origin.x+scan;x++){
+  const rx=x-origin.x,rz=z-origin.z,forward=rx*dx+rz*dz,side=rx*dz-rz*dx;
+  if(forward<0||forward>length+1e-6||Math.abs(side)>radius+1e-6)continue;
+  const bearing=Math.atan2(-side,forward);
+  for(const shift of [-1e-6,0,1e-6])if(Math.abs(bearing+shift)<h)angles.add(bearing+shift);
+ }
+ const memo=new Map(),outdoor=a.obj.type==='monsterSkelArcher'&&a.y===0&&
+  typeof facilitySite!=='undefined'&&facilitySite?.id==='base'&&typeof poiWildExterior==='function';
+ const pass=(x,z,fx,fz)=>{
+  const k=x+','+z+','+fx+','+fz;
+  if(!memo.has(k))memo.set(k,(typeof poiDungeonPatrolCanFight!=='function'||poiDungeonPatrolCanFight(a.obj,x,z))&&
+   (!outdoor||poiWildExterior(x,z))&&poiEnemyCombatEdge(x,z,fx,fz,a.y,s));
+  return memo.get(k);
+ };
+ return [...angles].sort((a,b)=>a-b).map(theta=>{
+  const c=Math.cos(theta),sin=Math.sin(theta),side=Math.abs(sin),ux=dx*c-dz*sin,uz=dz*c+dx*sin;
+  let r=radius/Math.max(1e-9,side);
+  if(r*c>neck){
+   const disc=radius*radius-neck*neck*side*side;
+   r=neck*c+Math.sqrt(Math.max(0,disc));
+  }
+  r=poiAimWallLimit(origin,{x:ux,z:uz},Math.max(0,r),pass);
+  return {x:ux*r,z:uz*r};
+ });
+}
+function poiEnemyCueRangedGeometry(a,s,area=poiEnemyRangedArea(a,s)){
+ const m=mesh(),c=poiEnemyCuePoint(a.sx,a.sz,a.y),red=[.93,.19,.15];
+ for(let i=1;i<area.length;i++){
+  const l=area[i-1],r=area[i];
+  if(Math.abs(l.x*r.z-l.z*r.x)<1e-9)continue;
+  tri(m,c,poiEnemyCuePoint(a.sx+r.x,a.sz+r.z,a.y),poiEnemyCuePoint(a.sx+l.x,a.sz+l.z,a.y),red);
+ }
+ return m;
+}
+function poiEnemyRangedCovers(a,s,p,area=poiEnemyRangedArea(a,s)){
+ if(!p||p.y!==a.y)return false;
+ const x=p.x-a.sx,z=p.z-a.sz,eps=1e-7;
+ if(x*x+z*z<eps*eps)return false;
+ // Test the exact same origin triangles uploaded by the warning renderer.
+ // Both the warning and damage follow the already-committed path, not
+ // whichever cell the player was in when the warning began.
+ for(let i=1;i<area.length;i++){
+  const u=area[i-1],v=area[i],det=u.x*v.z-u.z*v.x;
+  if(det<=1e-9)continue;
+  const first=(x*v.z-z*v.x)/det,second=(u.x*z-u.z*x)/det;
+  if(first>=-eps&&second>=-eps&&first+second<=1+eps)return true;
+ }
+ return false;
+}
+
+function poiEnemyRangedContact(a,s,p){
+ if(!poiEnemyRangedCovers(a,s,p))return false;
+ // A blocker can move away between draw and resolve. Do not hit through
+ // area that has yet to be drawn red, even if it is geometrically clear now.
+ const drawn=typeof poiEnemyCueCache==='undefined'?null:poiEnemyCueCache.get(a)?.area;
+ return !drawn||poiEnemyRangedCovers(a,s,p,drawn);
+}
+
 function poiEnemyCueTilesGeometry(a,tiles){
  const m=mesh(),fill=[.93,.19,.15],seen=new Set(tiles.map(({x,z})=>x+','+z)),r=.18;
  const corner=[[-.5,-.5],[.5,-.5],[.5,.5],[-.5,.5]];
@@ -21130,7 +21227,7 @@ function poiDrawNorthAxeCue(now,vp){
   if(!a||a.y!==poiWalkLevel||!poiEnemyAttackSourceValid(s,a)||!poiDungeonVisualVisible(a.sx,a.sz,a.y))return false;
   if(a.pending&&now-a.hit>=poiEnemyContactTolerance(a))return false;
   const alpha=poiEnemyCueOpacity(a,now,reduced);if(alpha<=0)return false;
-  const continuous=!!(a.guardTrial||a.northAttack);
+  const continuous=!!(a.guardTrial||a.northAttack),ranged=poiEnemyCueRanged(a);
   // Keep color animation independent of collision work. Discrete diagonal
   // traces revalidate about once per tenth of a second, or immediately on
   // door / mage terrain changes, without per-frame scans or GPU uploads.
@@ -21138,16 +21235,18 @@ function poiDrawNorthAxeCue(now,vp){
   live.add(a);
   let cached=poiEnemyCueCache.get(a);
   if(!cached||cached.door!==door||cached.mageTiles!==a.mageTiles||cached.mageReach!==a.mageReach||
-     (!continuous&&a.angular&&now>=cached.nextProbe)){
-   const tiles=continuous?null:poiEnemyCueTiles(a,s);
-   const key=tiles?tiles.map(t=>t.x+','+t.z).join(';'):'angular';
+     (!continuous&&(a.angular||ranged)&&now>=cached.nextProbe)){
+   const area=ranged?poiEnemyRangedArea(a,s):null;
+   const tiles=continuous||ranged?null:poiEnemyCueTiles(a,s);
+   const key=area?area.map(p=>p.x+','+p.z).join(';'):tiles?tiles.map(t=>t.x+','+t.z).join(';'):'angular';
    let gpu=cached?.gpu??null;
    if(!cached||cached.key!==key||(continuous&&cached.door!==door)){
     if(gpu)gl.deleteBuffer(gpu.buf);
-    const m=a.northAttack==='axe'?poiNorthAxeCueGeometry(a):continuous?poiEnemyCueLaneGeometry(a):poiEnemyCueTilesGeometry(a,tiles);
+    const m=a.northAttack==='axe'?poiNorthAxeCueGeometry(a):continuous?poiEnemyCueLaneGeometry(a):
+     ranged?poiEnemyCueRangedGeometry(a,s,area):poiEnemyCueTilesGeometry(a,tiles);
     gpu=m.p.length?upload(m):null;
    }
-   cached={key,gpu,door,mageTiles:a.mageTiles,mageReach:a.mageReach,nextProbe:now+90};
+   cached={key,gpu,door,area,mageTiles:a.mageTiles,mageReach:a.mageReach,nextProbe:now+90};
    poiEnemyCueCache.set(a,cached);
   }
   if(cached.gpu)draws.push({gpu:cached.gpu,alpha});

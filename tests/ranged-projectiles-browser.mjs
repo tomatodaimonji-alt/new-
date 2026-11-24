@@ -12,10 +12,11 @@ assert(begin>=0&&end>begin);
 const site=JSON.parse(JSON.stringify(vm.runInNewContext(html.slice(begin,end)+";buildFacilitySite('base')")));
 const bow='equipWoodBow',wand='fireWand';
 const cases=[
- {name:'bow-south-hit',type:bow,x:105,z:83,y:0,facing:2,toX:105,toZ:88,range:5,damage:22,target:'monsterSkelArcher'},
- {name:'bow-west-miss',type:bow,x:110,z:70,y:0,facing:3,toX:105,toZ:70,range:5,damage:0},
+ {name:'bow-south-hit',type:bow,x:105,z:80,y:0,facing:2,toX:105,toZ:88,range:8,damage:22,target:'monsterSkelArcher'},
+ {name:'bow-west-miss',type:bow,x:110,z:70,y:0,facing:3,toX:102,toZ:70,range:8,damage:0},
  {name:'flame-east-hit',type:wand,x:97,z:88,y:0,facing:1,toX:105,toZ:88,range:8,damage:34,target:'monsterSkelArcher'}
 ];
+assert.match(html,/equipWoodBow:\{range:8,/, 'wood bow reaches eight actual cells');
 assert.match(html,/fireWand:\{range:8,/, 'v200 flame range is eight actual cells, not v199 range five');
 for(const c of cases){
  const tiles=site.map.world.filter(t=>t.x===c.toX&&t.z===c.toZ&&t.y===c.y);

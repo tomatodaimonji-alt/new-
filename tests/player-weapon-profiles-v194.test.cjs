@@ -9,8 +9,8 @@ function runtime(extra=''){
 test('bow releases at draw completion, stops at first wall, and does not wear when blocked',()=>{
  const c=runtime();c.held='equipWoodBow';c.mobs.set('14,10',[{type:'monsterSlime'},{x:14,z:10,hp:50}]);
  assert.equal(c.poiPlayerStartProfile(c.held,100),true);
- c.poiPlayerWeaponFrame(749);assert.equal(c.wear,0);
- c.world.push({x:13,z:10,y:0,type:'wall'});c.poiPlayerWeaponFrame(750);c.poiPlayerWeaponFrame(1300);
+ c.poiPlayerWeaponFrame(424);assert.equal(c.wear,0);
+ c.world.push({x:13,z:10,y:0,type:'wall'});c.poiPlayerWeaponFrame(425);c.poiPlayerWeaponFrame(1300);
  assert.equal(c.wear,0);assert.equal(c.mobs.get('14,10')[1].hp,50);
 });
 test('spear is weaker close up, stops at first target, routes kill and wear once',()=>{
@@ -23,13 +23,13 @@ test('wand charges on a miss, respects cooldown, and does not wear equipped weap
  const c=runtime();assert.equal(c.poiPlayerCastFireWand(2).ok,true);assert.equal(c.debits,1);assert.equal(c.poiPlayerCastFireWand(2).ok,false);
  c.poiPlayerWeaponFrame(500);assert.equal(c.wear,0);assert.equal(c.debits,1);
 });
-test('bow hits only first target in five cells and physical windup cancels if moving',()=>{
+test('bow hits only first target within eight cells and physical windup cancels if moving',()=>{
  const c=runtime();c.held='equipWoodBow';
- const first={x:15,z:10,hp:50},beyond={x:16,z:10,hp:50};
- c.mobs.set('15,10',[{},first]);c.mobs.set('16,10',[{},beyond]);
- c.poiPlayerStartProfile(c.held,100);c.poiPlayerWeaponFrame(750);c.poiPlayerWeaponFrame(1075);
+ const first={x:18,z:10,hp:50},beyond={x:19,z:10,hp:50};
+ c.mobs.set('18,10',[{},first]);c.mobs.set('19,10',[{},beyond]);
+ c.poiPlayerStartProfile(c.held,100);c.poiPlayerWeaponFrame(425);c.poiPlayerWeaponFrame(945);
  assert.equal(first.hp,28);assert.equal(beyond.hp,50);assert.equal(c.wear,1);
- c.poiPlayerStartProfile(c.held,1200);c.poiWalkX--;c.poiPlayerWeaponFrame(1850);
+ c.poiPlayerStartProfile(c.held,1200);c.poiWalkX--;c.poiPlayerWeaponFrame(1525);
  assert.equal(c.wear,1);assert.equal(first.hp,28);
 });
 test('wand cannot pass initial obstacle or continue after lifecycle cancellation',()=>{
@@ -43,16 +43,16 @@ test('wand cannot pass initial obstacle or continue after lifecycle cancellation
 test('bow keeps committed cardinal flight after movement or equip switch, wears and hits only at contact',()=>{
  for(const [facing,[dx,dz]] of [[0,[0,-1]],[1,[1,0]],[2,[0,1]],[3,[-1,0]]]){
   const c=runtime();c.held='equipWoodBow';c.poiWalkFacing=facing;
-  const first={x:10+5*dx,z:10+5*dz,hp:50};
+  const first={x:10+8*dx,z:10+8*dz,hp:50};
   c.mobs.set(first.x+','+first.z,[{},first]);
   c.poiPlayerStartProfile(c.held,100);
-  c.poiPlayerWeaponFrame(750);
+  c.poiPlayerWeaponFrame(425);
   assert.equal(first.hp,50);assert.equal(c.wear,0);
   const v=vm.runInContext('poiPlayerWeaponVisual',c);
-  assert.deepEqual([v.started,v.travel,v.toX,v.toZ],[750,325,first.x,first.z]);
+  assert.deepEqual([v.started,v.travel,v.toX,v.toZ],[425,520,first.x,first.z]);
   c.poiWalkX++;c.poiWalkFacing=(facing+1)%4;c.held='equipIronSword';
-  c.poiPlayerWeaponFrame(1074);assert.equal(first.hp,50);assert.equal(c.wear,0);
-  c.poiPlayerWeaponFrame(1075);assert.equal(first.hp,28);assert.equal(c.wear,1);
+  c.poiPlayerWeaponFrame(944);assert.equal(first.hp,50);assert.equal(c.wear,0);
+  c.poiPlayerWeaponFrame(945);assert.equal(first.hp,28);assert.equal(c.wear,1);
  }
 });
 test('fire consumes on cast and reaches eighth tile but not ninth',()=>{

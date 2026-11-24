@@ -42,7 +42,7 @@ test('player projectiles use an arrow silhouette and flame facets, leaving the o
 test('a projectile tip aligns with the resolved tile center at first and later cell contact',()=>{
  const c={terrainY:()=>0,facilitySite:null};
  vm.runInNewContext(cut('function poiPlayerProjectileSample(','function poiWeaponArrowGeometry('),c);
- for(const [type,range,cellMs,minFlight] of [['equipWoodBow',5,65,70],['fireWand',8,55,55]]){
+ for(const [type,range,cellMs,minFlight] of [['equipWoodBow',8,65,70],['fireWand',8,55,55]]){
   const flight={type,x:2,z:2,y:0,facing:1,started:0,travel:range*cellMs,toX:2+range,toZ:2,profile:{cellMs,minFlight}};
   for(let n=1;n<=range;n++){
    const sample=c.poiPlayerProjectileSample(flight,Math.max(minFlight,n*cellMs));
