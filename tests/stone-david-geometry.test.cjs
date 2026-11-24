@@ -3,7 +3,7 @@ const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 function harness(){
  const cut=(a,b)=>{const i=h.indexOf(a),j=h.indexOf(b,i+1);if(i<0||j<=i)throw Error('missing real renderer '+a);return h.slice(i,j)};
  const w=vm.createContext({});
- vm.runInContext(cut('function tri(m,a,b,c,col){','function rot2(x,z,r)')+cut('// BEGIN STONE DAVID VISUAL','// END STONE DAVID VISUAL'),w);
+ vm.runInContext(cut('function tri(m,a,b,c,col){','function rot2(x,z,r)')+cut('// BEGIN STONE DAVID VISUAL','// END STONE DAVID VISUAL')+h.match(/^const POI_DAVID_AWAKENING=.*;/m)[0]+'\n',w);
  return vm.runInContext(`((kind,phase,progress=0,contact=0,elapsed)=>{
   const p={kind,phase,progress,contact,elapsed},m={p:[],n:[],c:[]};
   const rig=poiDavidGeometry(m,0,0,0,p);

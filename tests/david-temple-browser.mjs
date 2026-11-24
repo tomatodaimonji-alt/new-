@@ -125,7 +125,7 @@ async function start(browser){
 async function inside(browser){
  const session=await start(browser),p=session.p;
  for(const z of [92,93,94,95,96,97,98,99,100,101])await step(p,'ArrowDown',24,z);
- await wait(p,()=>window.__editorTest.davidQA.state().statue?.d?.awake);
+ await wait(p,()=>window.__editorTest.davidQA.state().statue?.d?.wakeDone);
  return session;
 }
 async function step(p,key,x,z){

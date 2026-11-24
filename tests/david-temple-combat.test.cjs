@@ -16,15 +16,15 @@ function setup(){
  };
  const api=vm.runInNewContext(cut('// BEGIN DAVID TEMPLE COMBAT','// END DAVID TEMPLE COMBAT')+
   cut('function poiAimWallLimit(','function poiAimChooseLock(')+cut('// BEGIN DAVID TEMPLE CUES','// END DAVID TEMPLE CUES')+
-  ';({step:poiDavidMobFrame,tick:poiDavidCombatFrame,pose:poiDavidPose,area:poiDavidArea,begin:poiDavidBegin,match:poiDavidMatch,incoming:poiDavidIncoming,cue:(q,b)=>({...poiDavidCueGeometry(q,b),beam:poiDavidThermalBeam(q,{x:q.dx,z:q.dz},poiDavidBeamReach(q,b,{x:q.dx,z:q.dz}),0)})})',Object.assign(c,{POI_AIM_EPS:1e-7}));
+  ';({realStep:poiDavidMobFrame,step:(o,s,t)=>{const ok=poiDavidMobFrame(o,s,t);if(ok){const b=poiDavidMatch(o);for(const u of [POI_DAVID_AWAKENING.first,POI_DAVID_AWAKENING.second,POI_DAVID_AWAKENING.ready])poiDavidAwakeningTick(o,s,b,t+u);if(!s.david?.wakeDone)throw Error("post-awakening fixture unavailable");s.david.next=t+620;}return ok},tick:poiDavidCombatFrame,pose:poiDavidPose,area:poiDavidArea,begin:poiDavidBegin,match:poiDavidMatch,incoming:poiDavidIncoming,cue:(q,b)=>({...poiDavidCueGeometry(q,b),beam:poiDavidThermalBeam(q,{x:q.dx,z:q.dz},poiDavidBeamReach(q,b,{x:q.dx,z:q.dz}),0)})})',Object.assign(c,{POI_AIM_EPS:1e-7}));
  return {c,s,api,boss};
 }
 test('only canonical authored room enables dormant encounter; no damage or patrol through threshold',()=>{
- const {c,s,api}=setup();c.player={x:24,z:95,y:0};api.step(o,s,1000);
+ const {c,s,api}=setup();c.player={x:24,z:95,y:0};api.realStep(o,s,1000);
  a.equal(s.david,undefined);a.deepEqual([s.x,s.z],[24,104]);c.player={x:24,z:97,y:0};
- c.wall=(x,z)=>z===99;api.step(o,s,1100);a(!s.david?.awake);c.wall=()=>false;
- api.step(o,s,1200);a(s.david.awake);a.equal(api.pose(s,1410).phase,'wake');a.equal(api.incoming(o,s,28,1410),10);
- c.player={x:24,z:94,y:0};api.tick(1800);a(!s.david?.awake);a.equal(c.damage.length,0);
+ c.wall=(x,z)=>z===99;api.realStep(o,s,1100);a(!s.david?.awake);c.wall=()=>false;
+ api.realStep(o,s,1200);a(s.david.awake);a.equal(api.pose(s,1410).phase,'wake');a.equal(api.incoming(o,s,28,1410),0);
+ c.player={x:24,z:94,y:0};api.tick(1800);a(s.david?.returning);api.tick(2250);a(!s.david?.awake);a.equal(c.damage.length,0);
  a.deepEqual([s.x,s.z],[24,104]);delete c.facilitySite.davidTemple;
  a.equal(api.match(o),null);a.equal(api.incoming(o,s,28,2000),0);
 });
