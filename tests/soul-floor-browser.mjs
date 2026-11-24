@@ -23,7 +23,7 @@ inject(api,api+`
   spawn:()=>{
    const [dx,dz]=[[0,-1],[1,0],[0,1],[-1,0]][poiWalkFacing],x=poiWalkX+dx,z=poiWalkZ+dz,y=poiWalkLevel;
    if(!poiWalkCanStep(x,z,poiWalkX,poiWalkZ)||poiMonsterAt(x,z,true)||!poiCompanionAttackClear({x:poiWalkX,z:poiWalkZ},{x,z},y))return false;
-   const o={type:'monsterSkeleton',x,z,y,rot:0},s=poiCombatActorMake(o);
+   const o={type:'monsterSlime',x,z,y,rot:0},s=poiCombatActorMake(o);
    s.hp=1;s.nextAttack=performance.now()+60000;poiMonsterStates.set(o,s);poiMonsterMeshDirty=true;window.__soulFoe=[o,s];return true;
   },
  },
@@ -50,7 +50,7 @@ try{
  const p=await ctx.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));
  await p.clock.install({time:new Date('2026-04-01T10:00:00Z')});
  await p.goto(url+'/seed');await p.evaluate(()=>{
-  const slots=Array(27).fill(null);slots[0]={type:'equipWoodSword',count:1,durability:150};slots[2]={type:'slimeSoul',count:1,durability:17};
+  const slots=Array(27).fill(null);slots[0]={type:'equipWoodSword',count:1,durability:150};slots[2]={type:'orvasSoul',count:1,durability:317};
   localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,gold:12,weaponDurabilityVersion:2,weapon:'equipWoodSword',potions:0,slots}));
   localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,position:{x:102,z:93,y:0,facing:2},
    townLayout:5,townMapHeight:182,templeDepth:1,view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:0,orbitPitch:.25,orbitDistance:5.6}}));
@@ -78,27 +78,39 @@ try{
   }
   assert.fail('did not reach actual floor soul');
  }
- await load();assert.equal((await tick()).slots[2]?.durability,17);
+ await load();assert.equal((await tick()).slots[2]?.durability,317);
  phase='trusted inventory swipe produces real rolling model, without changing gold';
- const bar=p.locator('#poiHotbar [data-hotbar-slot="2"]'),bound=await bar.boundingBox();
- const cdp=await ctx.newCDPSession(p),start={x:bound.x+bound.width/2,y:bound.y+bound.height/2,id:1};
- const touch=(type,touchPoints)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints});
- await touch('touchStart',[start]);
- for(let i=1;i<=3;i++)await touch('touchMove',[{...start,x:start.x+i*2,y:start.y-i*37}]);
- await touch('touchEnd',[]);
- const dropped=await until(s=>s.souls.some(d=>d.type==='slimeSoul')&&s.fx.some(q=>q.stage==='roll')&&s.movingMesh>0);
- const slime=dropped.souls.find(d=>d.type==='slimeSoul');assert.equal(slime.durability,17);assert.equal(dropped.slots[2],null);assert.equal(dropped.gold,12);
+ const slot=n=>p.locator('#poiHotbar [data-hotbar-slot="'+n+'"]');
+ async function swipe(n){
+  const bound=await slot(n).boundingBox();assert(bound);
+  const cdp=await ctx.newCDPSession(p),start={x:bound.x+bound.width/2,y:bound.y+bound.height/2,id:1};
+  const touch=(type,touchPoints)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints});
+  await touch('touchStart',[start]);
+  for(let i=1;i<=3;i++)await touch('touchMove',[{...start,x:start.x+i*2,y:start.y-i*37}]);
+  await touch('touchEnd',[]);await cdp.detach();
+ }
+ await swipe(2);
+ const dropped=await until(s=>s.souls.some(d=>d.type==='orvasSoul')&&s.fx.some(q=>q.stage==='roll')&&s.movingMesh>0);
+ const slime=dropped.souls.find(d=>d.type==='orvasSoul');assert.equal(slime.durability,317);assert.equal(dropped.slots[2],null);assert.equal(dropped.gold,12);
  assert.deepEqual(dropped.saved.soulDrops,[slime]);assert.deepEqual(dropped.pickUps,[]);
- await cdp.detach();
  phase='cold reload keeps floor HP and visually settles; directly crossing is not pickup';
  await p.clock.resume();await load();const stayed=await until(s=>s.staticMesh>0);
- assert.deepEqual(stayed.souls,[slime]);assert(!stayed.slots.some(c=>c?.type==='slimeSoul'));
- const stepped=await go(slime);assert(stepped.souls.some(d=>d.type==='slimeSoul'));assert.deepEqual(stepped.pickUps,[]);
+ assert.deepEqual(stayed.souls,[slime]);assert(!stayed.slots.some(c=>c?.type==='orvasSoul'));
+ const stepped=await go(slime);assert(stepped.souls.some(d=>d.type==='orvasSoul'));assert.deepEqual(stepped.pickUps,[]);
  assert.equal((await until(s=>s.button==='soul-pickup')).button,'soul-pickup');
- if(process.env.FACILITY_SCREENSHOTS){mkdirSync(process.env.FACILITY_SCREENSHOTS,{recursive:true});await p.screenshot({path:process.env.FACILITY_SCREENSHOTS+'/manual-soul.png'});}
+ if(process.env.FACILITY_SCREENSHOTS){mkdirSync(process.env.FACILITY_SCREENSHOTS,{recursive:true});await p.screenshot({path:process.env.FACILITY_SCREENSHOTS+'/orvas-317-manual-soul.png'});}
  phase='real action pickup preserves exact HP and does not activate';
  await take();const picked=await until(s=>s.pickUps.length===1);
- assert.deepEqual(picked.souls,[]);assert.equal(picked.slots.find(c=>c?.type==='slimeSoul')?.durability,17);assert.equal(picked.active,null);
+ assert.deepEqual(picked.souls,[]);assert.equal(picked.slots.find(c=>c?.type==='orvasSoul')?.durability,317);assert.equal(picked.active,null);
+ phase='active ally cannot be duplicated by a native drop swipe';
+ const activeIndex=picked.slots.findIndex(c=>c?.type==='orvasSoul');assert(activeIndex>=0&&activeIndex<9);
+ await slot(activeIndex).tap();await p.locator('#poiCompanionCommands [data-companion-command="summon"]').tap();
+ await until(v=>v.active==='orvasSoul');
+ await swipe(activeIndex);
+ const blocked=await tick(760);assert.equal(blocked.active,'orvasSoul');assert.deepEqual(blocked.souls,[]);
+ assert.equal(blocked.slots[activeIndex].durability,317);
+ await slot(activeIndex).tap();await p.locator('#poiCompanionCommands [data-companion-command="dismiss"]').tap();
+ await until(v=>v.active===null);
  phase='real finishing blow emits fracture, reverse gather, miniature form and local tumble without receiving item';
  let spawned=await p.evaluate(()=>window.__editorTest.soulFloorQA.spawn());if(!spawned){
   const s=await read(),i=s.edge.findIndex(Boolean);assert(i>=0);await move(s.x+s.dirs[i][0],s.z+s.dirs[i][1]);await tick(240);
@@ -107,15 +119,15 @@ try{
  await take();
  const stages=new Map();
  for(let i=0;i<60;i++){
-  const s=await tick(65),f=s.fx.find(r=>r.type==='skeletonSoul');
+  const s=await tick(65),f=s.fx.find(r=>r.type==='slimeSoul');
   if(f&&!stages.has(f.stage))stages.set(f.stage,{parts:f.parts,vertices:s.movingMesh,tip:f.tip});
-  assert(!s.slots.some(c=>c?.type==='skeletonSoul'));assert.equal(s.pending,null);assert.equal(s.active,null);
-  assert.deepEqual(s.pickUps,['slimeSoul']);
-  if(!f&&s.souls.some(d=>d.type==='skeletonSoul')&&s.staticMesh>0)break;
+  assert(!s.slots.some(c=>c?.type==='slimeSoul'));assert.equal(s.pending,null);assert.equal(s.active,null);
+  assert.deepEqual(s.pickUps,['orvasSoul']);
+  if(!f&&s.souls.some(d=>d.type==='slimeSoul')&&s.staticMesh>0)break;
  }
  assert.deepEqual([...stages.keys()],['fracture','gather','form','roll']);assert(last.damage.some(d=>d.source===null&&d.amount>0));
  for(const f of stages.values())assert(f.parts>0&&f.vertices>0,JSON.stringify([...stages]));
- const skeleton=last.souls.find(d=>d.type==='skeletonSoul');assert(skeleton?.durability>0);
+ const skeleton=last.souls.find(d=>d.type==='slimeSoul');assert(skeleton?.durability>0);
  assert.deepEqual(last.saved.soulDrops,[skeleton]);assert.equal(last.gold,12);assert.deepEqual(last.drops,[]);
  assert.deepEqual(errors,[]);console.log('PASS native player hit / fracture / gather / miniature / local floor roll and deliberate durable collection',JSON.stringify({stages:[...stages],slime,skeleton}));
 }catch(e){console.error(phase,JSON.stringify(last));throw e}

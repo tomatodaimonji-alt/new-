@@ -30,3 +30,18 @@ test('movement never invokes collection, and battle reuses durable real death re
  a.match(h,/const soul=typeof poiSoulFloorReachable[^\n]+poiSoulFloorCollect\(soul\)/);
  a.match(h,/poiDungeonRememberDefeat\(obj,state,debris\)/);
 });
+test('duplicate legacy hotbar order cannot replace the wounded held Orvas; floor pickup refuses identical owned token',()=>{
+ const drop={x:10,z:11,y:0,type:'orvasSoul',durability:1050},full={type:'orvasSoul',count:1,durability:1050},wounded={...full,durability:317},k={slots:[full,null,wounded],soulDrops:[drop],companionSoul:{version:1,active:'orvasSoul'}};
+ const t=state(k);t.c.poiCompanionDecode=x=>x;
+ vm.runInContext(part('function poiCompanionReconcile(','function poiCompanionAllowed('),t.c);
+ const reconciled=t.c.poiCompanionReconcile(k);
+ a.equal(reconciled.slots[0],null);a.equal(reconciled.slots[2],wounded);a.equal(reconciled.companionSoul.active,'orvasSoul');
+ a.equal(t.c.poiSoulFloorCollect(drop),false);a.equal(t.saves.length,0);a.equal(t.sounds.length,0);
+});
+test('full bag or rejected storage leaves the real floor miniature and existing inventory intact',()=>{
+ const drop={x:10,z:11,y:0,type:'orvasSoul',durability:317},t=state({slots:[],soulDrops:[drop]});
+ t.c.poiInventoryAccept=()=>({accepted:0,slots:[]});
+ a.equal(t.c.poiSoulFloorCollect(drop),false);a.equal(t.get().soulDrops[0],drop);a.equal(t.saves.length,0);
+ t.c.poiInventoryAccept=()=>({accepted:1,slots:[{type:'orvasSoul',durability:317}]});t.c.poiEconomyWrite=()=>false;
+ a.equal(t.c.poiSoulFloorCollect(drop),false);a.equal(t.get().soulDrops[0],drop);a.equal(t.sounds.length,0);
+});
