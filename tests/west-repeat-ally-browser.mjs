@@ -219,7 +219,7 @@ const violations=[];
 try{
  browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
  args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
- for(const profile of ['away','warm','cold']){
+ for(const profile of (process.env.WEST_RIM_ONLY==='1'?['warm']:['away','warm','cold'])){
   const coldSnow=profile==='cold';
   const ctx=await browser.newContext({viewport:{width:844,height:390},deviceScaleFactor:.65,isMobile:true,hasTouch:true,serviceWorkers:'block'});
   const page=await ctx.newPage(),errors=[],remote=[],req=[];
@@ -255,6 +255,30 @@ try{
   const cdp=await ctx.newCDPSession(page);
   try{
    const bind=id=>({x:Math.round(pad.x+pad.width/2),y:Math.round(pad.y+pad.height/2),id,radiusX:4,radiusY:4,force:.7});
+   if(!coldSnow){
+    const excursion=async(sign,id,target)=>{
+     const input=bind(id);
+     await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[input]});
+     try{
+      await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...input,x:input.x-sign*36}]});
+      return await (await page.waitForFunction(({sign,target})=>{
+       const s=window.__editorTest.seamlessSnowQA();
+       return s.region==='base'&&sign*(s.pose.x-target)>=0&&s;
+      },{sign,target},{polling:30,timeout:4800})).jsonValue();
+     }finally{await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]})}
+    };
+    await page.evaluate(()=>{const s=window.__snowSeamProbe;s.active=true;s.high=s.live;s.frames=[];s.uploads=[];s.sceneCounts=[];s.masked=0;});
+    const flank=await excursion(-1,95,41.85);
+    await excursion(1,96,45.75);
+    const resources=await page.evaluate(()=>{const s=window.__snowSeamProbe;s.active=false;return {peak:s.high,uploads:s.uploads.length,frames:s.frames,vertices:s.sceneCounts}});
+    const detail=await page.evaluate(()=>window.__editorTest.westRepeatDetails());
+    assert(flank.ally?.same&&detail.hp===193&&flank.pose.x<42&&resources.frames.length>=12);
+    assert(resources.vertices.every(n=>n>500),'actual outdoor canvas draws throughout east flank excursion');
+    const evidence={flank:flank.pose,shell:flank.shell,peak:resources.peak,uploads:resources.uploads,gap:frameGaps(resources.frames),stream:detail.stream};
+    console.log('TEMPLE EAST FLANK SAME OWNER PROFILE',JSON.stringify(evidence));
+    assert(resources.peak<48*1024*1024,'east flank cannot rebuild the town atlas: '+JSON.stringify(evidence));
+    if(process.env.WEST_RIM_ONLY==='1')continue;
+   }
    async function cross(sign,label,id){
     const from=await get(),input=bind(id),dst=sign>0?'snowpass':'base';
     const start=await page.evaluate(()=>{const s=window.__snowSeamProbe;s.active=true;s.frames=[];s.phases=[];s.switchPhases=[];s.palette=[];s.audio=[];s.longTasks=[];s.animation=[];s.npc=[];s.remote=[];s.paths=[];s.veils=[];s.samples=[];s.uploads=[];s.thumb=[];s.sceneCounts=[];s.masked=0;s.high=s.live;
