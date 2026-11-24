@@ -33,14 +33,17 @@ test('NPC counter uses the same contact pose toward its saved target and does no
  assert.equal(attack.phase,'contact');assert.ok(attack.dz<-.5&&attack.dx===0);
  c.poiEnemyResolvePlayer(220);assert.deepEqual(hits,[]);
 });
-test('foreground loss between frames cancels pending visual and contact without resetting cooldown',()=>{
+test('foreground loss preserves the same resolved slime contact and cooldown',()=>{
  const {c,mob,obj,hits}=setup();c.poiEnemyBeginPlayer(obj,mob,100);
- c.poiEnemyCancelPlayer();c.poiEnemyResolvePlayer(580);
- assert.equal(c.poiSlimeAttackPose(mob,580),null);assert.equal(mob.nextAttack,1250);assert.deepEqual(hits,[]);
- const leave=html.slice(html.indexOf('window.__workshopAudioForeground='),html.indexOf('const POI_PLAYER_MAX_HP='));
- assert.match(leave,/if\(!visible\)\{[^}]*poiEnemyCancelPlayer/);
- assert.match(html,/visibilitychange',\(\)=>\{if\(document.hidden\)\{poiWildPause\(\);poiEnemyCancelPlayer\(\)/);
- assert.match(html,/pagehide',\(\)=>\{poiWildPause\(\);poiEnemyCancelPlayer\(\)/);
+ const a=html.indexOf('// BEGIN WORKSHOP SUSPENDABLE GAME CLOCK'),b=html.indexOf('// END WORKSHOP SUSPENDABLE GAME CLOCK',a);
+ c.wall=410;c.window={performance:{now:()=>c.wall},pineStartup:{},addEventListener(){}};
+ c.document={hidden:false,addEventListener(){}};
+ const frame=vm.runInContext(html.slice(a,b)+';()=>{if(!poiGameFrozen())poiEnemyResolvePlayer(performance.now())}',c);
+ const pending=mob.playerAttack,ready=mob.nextAttack;
+ c.window.__workshopForegroundChanged(false);c.wall+=10000;frame();
+ assert.equal(mob.playerAttack,pending);assert.equal(mob.nextAttack,ready);assert.deepEqual(hits,[]);
+ c.window.__workshopForegroundChanged(true);c.wall+=169;frame();assert.deepEqual(hits,[]);
+ c.wall+=1;frame();assert.deepEqual(hits,[580]);assert.equal(mob.playerAttack,pending);
 });
 test('slow frames pin the displayed peak to the actual contact, not a later landing',()=>{
  const {c,mob,obj,hits}=setup();c.poiEnemyBeginPlayer(obj,mob,100);
@@ -51,4 +54,3 @@ test('slow frames pin the displayed peak to the actual contact, not a later land
  assert.equal(c.poiSlimeAttackPose(mob,911).phase,'recover-rest');
  assert.equal(mob.nextAttack,2221,'recovery begins from actual resolution');
 });
-

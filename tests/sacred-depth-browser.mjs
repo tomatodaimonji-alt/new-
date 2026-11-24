@@ -30,7 +30,7 @@ replace(apply,apply+`
  if(window.__sacredCapture)gl.clearColor(0,0,0,0);
  if(window.__sacredCompareDry)gl.uniform3f(loc.sacredFog,0,0,0);
 `);
-const end=" if(typeof poiSacredDrawScene==='function')poiSacredDrawScene(p.vp);";
+const end=" if(!stream&&typeof poiSacredDrawScene==='function')poiSacredDrawScene(p.vp);";
 replace(end,end+`
  if(window.__sacredCapture){
   window.__sacredCapture=false;
