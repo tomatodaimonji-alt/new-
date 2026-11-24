@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),test=require('node:test');
 const h=fs.readFileSync(process.env.WORLD_HTML||'world-editor.html','utf8');
-test('only authored interior becomes natural grade in both modes, whilst the boss is hidden unless physically inside',()=>{
+test('only authored interior becomes natural grade in both modes, whilst the boss remains non-targetable outside the encounter',()=>{
  const a=h.indexOf('// BEGIN SACRED INTERIOR PRESENTATION'),b=h.indexOf('function poiSacredInteriorClear(',a);
  assert(a>0&&b>a,'shared stock, stream and monster rendering contract must exist');
  const inside=(x,z,y)=>x===24&&z===128&&y===0;
@@ -18,6 +18,6 @@ test('only authored interior becomes natural grade in both modes, whilst the bos
  assert.equal(c.poiSacredInteriorHostileVisible(site.davidTemple.boss),true);
  assert.match(h,/poiSacredInteriorGrade\(region\.layout,x,z/);
  assert.match(h,/poiSacredInteriorGrade\(facilitySite,x,z/);
- assert.match(h,/poiSacredInteriorDraw\(p\.vp\)/);
+ assert.match(h,/poiSacredInteriorDraw\(p\.vp,sacredPeek\)/);
  assert.match(h,/poiSacredInteriorHostileVisible\(o\)/);
 });
