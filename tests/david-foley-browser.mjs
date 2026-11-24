@@ -67,7 +67,10 @@ let fixture=insert(html,anchor,`
     const [o,s]=pair;
     if(!s.david?.awake)return false;
     s.x=s.fromX=o.x;s.z=s.fromZ=o.z;
-    if(!workshopResumeRestorePosition({x:24,z:101,y:0,facing:2}))return false;
+    // Sight the real beam from the open chamber, not below the dogleg
+    // roof lip. A shallow side orbit can see up the descending flame.
+    if(!workshopResumeRestorePosition({x:24,z:kind==='beam'?102:101,y:0,facing:2}))return false;
+    if(kind==='beam'){poiThirdPerson=true;poiCameraYaw=.94;poiCameraPitch=.13;poiCameraDistance=4.7;}
     s.david.attack=null;s.david.next=-Infinity;
     poiPlayerHP=POI_PLAYER_MAX_HP;
     if(!poiDavidBegin(o,s,performance.now()+100,kind))return false;
@@ -87,7 +90,7 @@ let fixture=insert(html,anchor,`
   },`);
 fixture=fixture.replace('function poiDavidBeamSide(roll=Math.random())','function poiDavidBeamSide(roll=window.__davidFrames.roll??.8)');
 fixture=insert(fixture,' source.connect(gain).connect(poiAudioEffects);',"\n const sample=[...poiRecordedFoleyCache].find(([k,b])=>b===buffer&&k.startsWith('david'));if(sample||buffer===poiDavidAlienCache){source.__davidSample={name:sample?.[0]??'davidAlienBeam',duration:buffer.duration,gain:gain.gain.value,linked:poiAudioEffects.context===ctx};}");
-fixture=insert(fixture,'q.sweep={side,tell:now,start:null,end:null,angle:0,hit:false};',"\n     if(window.__davidFrames.aimTarget)workshopResumeRestorePosition({x:24+window.__davidFrames.aimTarget*2,z:101,y:0,facing:2});");
+fixture=insert(fixture,'q.sweep={side,tell:now,start:null,end:null,angle:0,hit:false};',"\n     if(window.__davidFrames.aimTarget)workshopResumeRestorePosition({x:24+window.__davidFrames.aimTarget*2,z:102,y:0,facing:2});");
 fixture=fixture.replace('draw(poiDavidCue.fan,vp)','{const f=window.__davidFrames,c=f.glCounters();draw(poiDavidCue.fan,vp);f.fan++;f.beamSubmission(q.start,"fan",now,c);}');
 fixture=fixture.replace('if(poiDavidCue.beamVisible)poiDavidDrawThermalBeam(poiDavidCue.beam,vp,reduced?emission.alpha*.76:emission.alpha);',
  'if(poiDavidCue.beamVisible){window.__davidFrames.emission={now,turning:emission.turning,fraction:emission.fraction};poiDavidDrawThermalBeam(poiDavidCue.beam,vp,reduced?emission.alpha*.76:emission.alpha);}');
