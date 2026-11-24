@@ -105,3 +105,29 @@ test('gallery chase stays active and can take actual legal steps toward a diagon
  a(vertices.length>0);
  a(Math.min(...vertices.filter((_,i)=>i%3===2))>=arena.minZ+.5-1e-6);
 });
+test('360 actual analog headings remain in the legitimate interior cells at the wall; only the entrance exits',()=>{
+ const build=vm.runInNewContext(cut('const FACILITY_SITES=Object.freeze(','function workshopResumeDecode(')+';buildFacilitySite');
+ const site=build('base');site.id='base';const b=site.davidTemple.boss;
+ const c={facilitySite:site,world:site.map.world.filter(o=>o.x>=2&&o.x<=45&&o.z>=81&&o.z<=128),poiWalkActive:true,poiWalkX:24,poiWalkZ:104,poiWalkLevel:0,
+  facilityCreekIndex:null,validPos:(x,z)=>x>=0&&z>=0&&x<128&&z<128,poiMonsterAt:()=>null,
+  poiIsMonster:t=>t==='monsterStoneDavid',pineSuperVehicleType:()=>false,isWallId:t=>/wall/i.test(t),
+  isFloor:t=>/^(road|grass|earth|woodfloor)/.test(t)};
+ const v=vm.runInNewContext(cut('function poiWalkPassableDoor(','let facilityCreekIndex=')+
+  cut('function poiWalkCanStep(','function poiFreeCenter(')+cut('// BEGIN FREE MOVEMENT SOLVER','// END FREE MOVEMENT SOLVER')+
+  cut('// BEGIN DAVID TEMPLE COMBAT','function poiDavidLine(')+';({advance:poiFreeAdvance,legal:poiWalkCanStep,in:poiDavidIn})',c);
+ const memo=new Map(),step=(x,z,fx,fz)=>{
+  const k=[x,z,fx,fz].join(',');
+  if(!memo.has(k))memo.set(k,v.legal(x,z,fx,fz));return memo.get(k);
+ };
+ let wall=0,gate=0,wide=0;
+ for(let deg=0;deg<360;deg++){
+  const r=deg*Math.PI/180,x=Math.cos(r),z=Math.sin(r);let exited=false;
+  const enter=(x,z,fx,fz)=>{if(fz===94&&z===93&&x>=22&&x<=26)exited=true;return step(x,z,fx,fz)};
+  const p=v.advance(24,104,x*20,z*20,.20,step,enter);
+  if(exited){gate++;a(!v.in(b,{...p,y:0}),JSON.stringify({deg,p}));continue;}
+  wall++;if(Math.hypot(p.x-24,p.z-104)>16.95)wide++;
+  a(v.in(b,{...p,y:0}),JSON.stringify({deg,p}));
+ }
+ a(wall>300&&gate>5&&wide>10,'exercises wall, gate and previously lost fractional positions');
+ for(const [x,z] of [[29,88],[34,89],[42,104],[40.51,109.3],[24,121],[6.3,104]])a(!v.in(b,{x,z,y:0}),[x,z]);
+});

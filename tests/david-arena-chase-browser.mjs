@@ -13,7 +13,7 @@ let fixture=inject(html,key,key+`
    get:()=>{
     const m=[...poiMonsterStates].find(([o])=>o.type==='monsterStoneDavid'),s=m?.[1],d=s?.david,q=d?.attack;
     return {now:performance.now(),nextMob:poiNextMobTick,nextStep:poiWalkNextReady,arena:facilitySite.davidTemple.boss.room.arena,
-      player:[poiWalkX,poiWalkZ,poiWalkLevel],hp:poiPlayerHP,boss:s?[s.x,s.z]:null,awake:!!d?.awake,returning:!!d?.returning,
+      player:[poiWalkX,poiWalkZ,poiWalkLevel],pose:[poiWalkViewX,poiWalkViewZ],free:!!poiFreePose,hp:poiPlayerHP,boss:s?[s.x,s.z]:null,awake:!!d?.awake,returning:!!d?.returning,
       q:q?{kind:q.kind,start:q.start,cursor:q.cursor,dx:q.dx,dz:q.dz,sx:q.sx,sz:q.sz}:null,
       cue:window.__arenaCue??[],damage:window.__arenaDamage??[]};
    }
@@ -72,6 +72,24 @@ try{
  }
  const still=await until(s=>s.boss?.[1]>=112,50);
  assert(still.hp>0);assert.deepEqual(still.player,[24,119,0]);assert(still.awake&&!still.returning);
+ where='actual fractional thumb travel beyond the old radius remains inside authored tile';
+ for(let x=25;x<=29;x++){
+  await p.keyboard.press('ArrowRight');
+  const s=await until(s=>s.player[0]===x&&s.now>=s.nextStep,10);
+  assert.deepEqual(s.player,[x,119,0]);assert(s.awake&&!s.returning);
+ }
+ const pad=await p.locator('#poiAnalogPad').boundingBox();assert(pad);
+ const cdp=await p.context().newCDPSession(p);
+ const left={x:Math.round(pad.x+pad.width/2),y:Math.round(pad.y+pad.height/2),id:1,force:.7,radiusX:4,radiusY:4};
+ try{
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[left]});
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...left,x:left.x+8,y:left.y+37}]});
+  const rim=await until(s=>s.free&&Math.hypot(s.pose[0]-24,s.pose[1]-104)>16.95,30);
+  assert(rim.awake&&!rim.returning,'real fractional wall-adjacent position stays in combat');
+  assert.deepEqual(rim.player,[29,120,0]);
+ }finally{
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await cdp.detach();
+ }
  assert.deepEqual(errors,[]);
  console.log('PASS real 5-tile sweep warning/damage and true south gallery pursuit to '+JSON.stringify(still.boss));
 }catch(e){console.error(where,await (p?log().catch(()=>null):null),errors);throw e}
