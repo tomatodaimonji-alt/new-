@@ -49,7 +49,6 @@ jobs:
           sub("  snowPassRegion:()=>","  overlandStream:()=>poiOverlandInspect(),\n  snowPassRegion:()=>")
           sub("if(!(swap?enter(row,from+dir,row,from):enter(from+dir,row,from,row))){",
            "if(!(swap?enter(row,from+dir,row,from,q,next):enter(from+dir,row,from,row,next,q))){")
-          sub("radius,canStep,enter,clipBody){","radius,canStep,enter,clipBody){")
           sub(" const dest=poiSnowPassEdge(nx,nz,poiWalkX,poiWalkZ);\n if(!dest)return false;",
           """ const dest=poiSnowPassEdge(nx,nz,poiWalkX,poiWalkZ);
            if(!dest)return false;
@@ -62,6 +61,14 @@ jobs:
             try{transition=poiWalkEnterCell(x-fromX,z-fromZ,now,true,onDoorCue)}
             finally{if(POI_OVERLAND_SPIKE)poiOverlandAnalogOffer=null}""")
           sub(" },clipBody);\n if(result.stopped", " },clipBody);\n if(POI_OVERLAND_SPIKE&&poiOverlandResumeAnalog(c,old,now))return;\n if(result.stopped")
+          sub("function poiWalkFrameNoRegionRemote(){\n poiStopRepeat();",
+           "function poiWalkFrameNoRegionRemote(){\n poiStopRepeat(poiOverlandKeepAnalog);")
+          sub("""function poiStopRepeat(){
+           if(poiWalkRepeat!==null){clearInterval(poiWalkRepeat);poiWalkRepeat=null}
+           if(typeof poiAnalogStop==='function')poiAnalogStop();""",
+          """function poiStopRepeat(preserveAnalog=false){
+           if(poiWalkRepeat!==null){clearInterval(poiWalkRepeat);poiWalkRepeat=null}
+           if(preserveAnalog!==true&&typeof poiAnalogStop==='function')poiAnalogStop();""")
           dst.parent.mkdir(parents=True,exist_ok=True);dst.write_text(s)
           SOURCE
           cat >.spike/core.js <<'SOURCE'
@@ -192,10 +199,10 @@ jobs:
            for(const o of poiOverlandCommands)draw(o.m,poiOverlandNeighborVP(vp,facilitySite.id,o.id));
           }
           function poiOverlandInspect(){
-           return {...poiOverlandStats,active:facilitySite?.id,drawing:poiOverlandDrawing,effective:poiOverlandDrawing?poiOverlandCommands.length:0,last:poiOverlandCommands.map(o=>({id:o.id,key:o.key,vertices:o.m.count})),
+           return {...poiOverlandStats,active:facilitySite?.id,drawing:poiOverlandDrawing,effective:poiOverlandDrawing?poiOverlandCommands.length:0,contact:poiAnalogContact?.id??null,captured:!!poiAnalogContact&&poiAnalogPad.hasPointerCapture(poiAnalogContact.id),last:poiOverlandCommands.map(o=>({id:o.id,key:o.key,vertices:o.m.count})),
             bytes:[...poiOverlandMeshes.values()].reduce((n,m)=>n+m.bytes,0),oldVariants:facilityScenes.size};
           }
-          let poiOverlandAnalogOffer=null,poiOverlandAnalogHandoff=null;
+          let poiOverlandAnalogOffer=null,poiOverlandAnalogHandoff=null,poiOverlandKeepAnalog=false;
           function poiOverlandRealNeighbor(id,x,z){
            return poiOverlandMeshes.has(id+':'+Math.floor(x/POI_OVERLAND_CHUNK)+','+Math.floor(z/POI_OVERLAND_CHUNK));
           }
@@ -204,7 +211,9 @@ jobs:
            if(!POI_OVERLAND_SPIKE||!pass||!poiOverlandRealNeighbor(dest.region,dest.x,dest.z))return null;
            const p=poiOverlandLocal(dest.region,...poiOverlandGlobal(from,pass.x,pass.z));
            if(poiFreeCell(p[0])!==dest.x||poiFreeCell(p[1])!==dest.z)return null;
-           if(!poiSnowPassChange(dest,now))return false;
+           poiOverlandKeepAnalog=true;
+           try{if(!poiSnowPassChange(dest,now))return false}
+           finally{poiOverlandKeepAnalog=false}
            poiOverlandAnalogHandoff={...pass,x:p[0],z:p[1]};
            return true;
           }
@@ -262,6 +271,7 @@ jobs:
            where='same held pointer runs across base to snow';
            await send('touchStart',[point]);await send('touchMove',[{...point,y:point.y+42}]);
            await page.waitForFunction(()=>{const t=window.__editorTest;return t.snowPassRegion().id==='snowpass'&&t.freeMovementPose().z>1.5});
+           assert((await ready()).q.captured,'actual DOM pointer capture remains owned after the seam');
            where='same held pointer reverses and runs back to base';
            await send('touchMove',[{...point,y:point.y-42}]);
            await page.waitForFunction(()=>{const t=window.__editorTest;return t.snowPassRegion().id==='base'&&t.freeMovementPose().z<125.9});
@@ -340,7 +350,7 @@ jobs:
            groundGold:[{id:'pile-qa',x:12,z:2,y:0,amount:2}],drops:[{type:'healingHerb',x:12,z:2,y:0}]});
           function startProbe(){
            const p=WebGLRenderingContext.prototype,s=window.__snowSeamProbe={
-            frames:[],uploads:[],high:0,live:0,lost:0,veils:[],thumb:[],samples:[],active:false};
+            frames:[],uploads:[],sceneCounts:[],masked:0,high:0,live:0,lost:0,veils:[],thumb:[],samples:[],active:false};
            const shapes=new WeakMap(),current=new WeakMap(),cap=4500;
            for(const [method,wrap] of Object.entries({
             bindBuffer(original,target,buffer){
@@ -359,10 +369,19 @@ jobs:
              if(buffer){s.live-=shapes.get(buffer)??0;shapes.delete(buffer)}
              return original.call(this,buffer);
             },
+            drawArrays(original,mode,first,count){
+             if(s.active&&this.canvas?.id==='view')s.masked+=count;
+             return original.call(this,mode,first,count);
+            },
+            drawElements(original,mode,count,...args){
+             if(s.active&&this.canvas?.id==='view')s.masked+=count;
+             return original.call(this,mode,count,...args);
+            },
             clear(original,flags){
              const t=performance.now(),r=original.call(this,flags);
              if(s.active&&this.canvas?.id==='view'&&(flags&this.COLOR_BUFFER_BIT)&&s.frames.length<cap){
-              s.frames.push(t);
+              if(s.frames.length)s.sceneCounts.push(s.masked);
+              s.masked=0;s.frames.push(t);
               const qa=window.__editorTest?.seamlessSnowQA?.();
               if(qa?.veil||qa?.dark)s.veils.push({at:t,region:qa.region});
               if(qa)s.samples.push({t,region:qa.region,x:qa.pose.x,z:qa.pose.z,heading:qa.heading,pitch:qa.pitch,
@@ -381,6 +400,7 @@ jobs:
            const maxGPU=+(process.env.SNOW_MAX_LIVE_BUFFER_BYTES??48*1024*1024);
            return {
             rendered:summary.frames>=6,
+            noBlankCanvas:summary.sceneCounts.length>0&&summary.sceneCounts.every(n=>n>500),
             sameThumb:summary.continued&&summary.thumb.filter(e=>e.event==='pointerdown').length===1&&
              !summary.thumb.some(e=>e.event==='pointercancel'||e.event==='pointerup')&&
              summary.continued.pointer===summary.thumb.find(e=>e.event==='pointerdown').id,
@@ -439,7 +459,7 @@ jobs:
              const bind=id=>({x:Math.round(pad.x+pad.width/2),y:Math.round(pad.y+pad.height/2),id,radiusX:4,radiusY:4,force:.7});
              async function cross(sign,label,id){
               const from=await get(),input=bind(id),dst=sign>0?'snowpass':'base';
-              const start=await page.evaluate(()=>{const s=window.__snowSeamProbe;s.active=true;s.frames=[];s.veils=[];s.samples=[];s.uploads=[];s.thumb=[];s.high=s.live;
+              const start=await page.evaluate(()=>{const s=window.__snowSeamProbe;s.active=true;s.frames=[];s.veils=[];s.samples=[];s.uploads=[];s.thumb=[];s.sceneCounts=[];s.masked=0;s.high=s.live;
                return {at:performance.now(),live:s.live};});
               await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[input]});
               await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...input,y:input.y+sign*36}]});
@@ -457,7 +477,7 @@ jobs:
               const q=await page.evaluate(()=>{const s=window.__snowSeamProbe;s.active=false;return s});
               await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
               const summary={label,from:from.region,to:end?.region,start:firstPointer,end,continued,
-               elapsed:(continued??end).timestamp-start.at,frames:q.frames.length,veils:q.veils,lost:q.lost,
+               elapsed:(continued??end).timestamp-start.at,frames:q.frames.length,sceneCounts:q.sceneCounts,veils:q.veils,lost:q.lost,
                liveAtStart:start.live,peak:q.high,settled:q.live,largestUpload:Math.max(0,...q.uploads.map(u=>u.bytes)),
                gap:frameGaps(q.frames),away,thumb:q.thumb};
               const gates=limits(summary);
@@ -562,7 +582,7 @@ jobs:
           }finally{await b?.close();await new Promise(r=>server.close(r))}
           SOURCE
           python .spike/build.py world-editor.html .spike/world-editor.html
-          test "$(git hash-object .spike/world-editor.html)" = 33b4764639684d912cc53a38f662c26a9d4c3970
+          test "$(git hash-object .spike/world-editor.html)" = 2cf6c167b0e717762c6a3ea21fe0f496a1521168
           cd .spike && node --test tests/planning.test.cjs
       - run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
       - if: matrix.probe == 'engine'
