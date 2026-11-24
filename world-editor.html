@@ -22966,6 +22966,7 @@ function poiDavidBeamAdvance(o,s,d,q,p,b,now){
  sw.angle=angle;
  if(latest===sw.end){sw.done=true;sw.endedAt=now;q.until=now+POI_DAVID_BEAM_REST;d.next=q.until;poiDavidBeamAudioEnd(q)}
  if(typeof poiCompanionDavidBeam==='function')poiCompanionDavidBeam(o,s,b,q,lo,hi,now);
+ if(typeof poiOrvasBeamTrace==='function')poiOrvasBeamTrace(q,b,now,angle);
  // Sweep the whole angular interval traversed since last visible draw. A
  // slow frame cannot jump over a target; live room and LOS still govern.
  if(!sw.hit){
@@ -23370,6 +23371,8 @@ function poiDavidCombatFrame(now){
     q.until+=late;d.next=q.until;
    }
    q.executed++;q.lastContactAt=now;poiMonsterMeshDirty=true;
+   if(q.kind==='double'&&typeof poiOrvasBladeTrace==='function')poiOrvasBladeTrace(q,b,i,now);
+   if(q.kind==='beam'&&typeof poiOrvasBeamTrace==='function')poiOrvasBeamTrace(q,b,now);
    if(q.kind==='stomp'&&typeof poiDavidImpactStomp==='function')poiDavidImpactStomp(q,now);
    if((q.kind==='sweep'||q.kind==='double')&&typeof poiDavidHeavyContact==='function')poiDavidHeavyContact(q.kind,q,now,b);
    if(q.kind==='beam'){
@@ -32579,6 +32582,118 @@ function poiDrawDavidFissure(now,vp){
  finally{gl.depthMask(true);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.blendColor(0,0,0,0);gl.disable(gl.BLEND)}
 }
 // END DAVID GROUND FISSURE
+// BEGIN ORVAS TRANSIENT GROUND TRACES
+const ORVAS_TRACE_MAX_TILES=70,ORVAS_TRACE_RADIUS=15,ORVAS_TRACE_MAX_EVENTS=3;
+const poiOrvasGroundTraces=[];
+let poiOrvasGroundGpu=null,poiOrvasGroundDirty=false,poiOrvasGroundSlices=[];
+function poiOrvasTraceEvent(q,kind,now,x=q.sx,z=q.sz){
+ return {owner:facilitySite,y:q.y,sx:q.sx,sz:q.sz,x,z,kind,start:now,seen:now,
+  parts:[],cells:new Set(),radius:ORVAS_TRACE_RADIUS};
+}
+function poiOrvasTracePush(e){
+ poiOrvasGroundTraces.push(e);if(poiOrvasGroundTraces.length>ORVAS_TRACE_MAX_EVENTS)poiOrvasGroundTraces.shift();
+ poiOrvasGroundDirty=true;
+}
+function poiOrvasTraceGround(q,e,b){
+ const floors=q.orvasGroundFloors??=poiDavidFractureFloors(e);
+ const coord=(x,z)=>[Math.floor(x+.5),Math.floor(z+.5)];
+ return (x,z)=>{
+  const [tx,tz]=coord(x,z),kind=floors.get(tx+','+tz);
+  if(!kind||!/^(road|woodfloor|grass|moss|earth|stone|brickfloor|tatami)/i.test(kind)||
+    !poiDavidIn(b,{x,z,y:e.y})||!poiDavidLine({x:e.sx,z:e.sz},{x,z,y:e.y},b))return null;
+  const wx=x+.5,wz=z+.5;
+  return [wx,terrainY(tx,tz)+1.4*e.y+poiDavidFractureRoadHeight(kind,tx,tz,wx,wz)+.014,wz];
+ };
+}
+function poiOrvasHairline(m,ground,x,z,nx,nz,w,color){
+ const d=Math.hypot(nx-x,nz-z);if(d<.015)return;
+ const a=-(nz-z)/d*w,b=(nx-x)/d*w;
+ const mid=ground((x+nx)*.5,(z+nz)*.5);if(!mid)return;
+ const v=[ground(x+a,z+b),ground(nx+a*.74,nz+b*.74),ground(nx-a*.74,nz-b*.74),ground(x-a,z-b)];
+ if(v.every(Boolean))quad(m,...v.map(p=>[p[0],p[1]+.004,p[2]]),color);
+}
+function poiOrvasBeamTrace(q,b,now,angle=0){
+ if(!q?.executed||q.kind!=='beam'||!poiWalkActive||q.y!==poiWalkLevel)return false;
+ const fresh=!q.orvasBeamGround,e=q.orvasBeamGround??=poiOrvasTraceEvent(q,'beam',now);
+ if(e.owner!==facilitySite||(e.pushed&&!poiOrvasGroundTraces.includes(e)))return false;
+ if(!fresh&&Math.abs(angle-e.lastAngle)<.071&&!q.sweep?.done)return false;
+ const previous=e.lastAngle??0,samples=fresh?1:Math.min(18,Math.max(1,Math.ceil(Math.abs(angle-previous)/.075)));
+ const ground=poiOrvasTraceGround(q,e,b),length=e.parts.length;
+ for(let k=1;k<=samples&&e.parts.length<ORVAS_TRACE_MAX_TILES;k++){
+  const ray=poiDavidBeamRay(q,previous+(angle-previous)*k/samples);
+  const reach=poiDavidBeamReach(q,b,ray)-.10;
+  for(let r=.52;r<=reach&&e.parts.length<ORVAS_TRACE_MAX_TILES;r+=.31){
+   const x=q.sx+ray.x*r,z=q.sz+ray.z*r,tx=Math.floor(x+.5),tz=Math.floor(z+.5),key=tx+','+tz;
+   if(e.cells.has(key))continue;
+   const cx=Math.max(tx-.29,Math.min(tx+.29,x)),cz=Math.max(tz-.29,Math.min(tz+.29,z));
+   // Do not let the wider fleck extend past the actual clipped ray.
+   const usable=(x,z)=>((x-q.sx)*ray.x+(z-q.sz)*ray.z)<=reach?ground(x,z):null;
+   const center=usable(cx,cz),jitter=.5+.5*Math.sin(tx*17.51+tz*19.39);
+   if(!center)continue;
+   const m=mesh(),rx=.17+.035*jitter,rz=.15+.052*(1-jitter);
+   const edges=[[-.95,-.35],[-.50,-.88],[.52,-.72],[.94,.26],[.22,.89],[-.55,.64]];
+   for(let i=0;i<edges.length;i++){
+    const a=edges[i],b=edges[(i+1)%edges.length],v=usable(cx+a[0]*rx,cz+a[1]*rz),w=usable(cx+b[0]*rx,cz+b[1]*rz);
+    if(v&&w)tri(m,center,v,w,i%2?[.106,.071,.056]:[.129,.086,.064]);
+   }
+   poiOrvasHairline(m,usable,cx-.13*ray.x,cz-.13*ray.z,cx+.015*ray.x-.028*ray.z,cz+.015*ray.z+.028*ray.x,.009,[.045,.031,.027]);
+   poiOrvasHairline(m,usable,cx+.015*ray.x-.028*ray.z,cz+.015*ray.z+.028*ray.x,cx+.15*ray.x,cz+.15*ray.z,.008,[.044,.030,.026]);
+   if(m.p.length){e.cells.add(key);e.parts.push(m)}
+  }
+ }
+ e.lastAngle=angle;e.seen=now;
+ if(!e.pushed&&e.parts.length){e.pushed=true;poiOrvasTracePush(e)}
+ else if(e.parts.length!==length)poiOrvasGroundDirty=true;
+ return e.parts.length!==length;
+}
+function poiOrvasBladeTrace(q,b,index,now){
+ if(q.kind!=='double'||!poiWalkActive||q.y!==poiWalkLevel||q.executed<=index||(index!==0&&index!==1))return false;
+ const bit=1<<index;if((q.orvasBladeMask??0)&bit)return false;q.orvasBladeMask=(q.orvasBladeMask??0)|bit;
+ // The two actual downstroke tips are separated by their grip offset.
+ const side=index?.68:-.68,forward=3.30,x=q.sx+q.dx*forward+q.dz*side,z=q.sz+q.dz*forward-q.dx*side;
+ const e=poiOrvasTraceEvent(q,'double',now,x,z),ground=poiOrvasTraceGround(q,e,b),m=mesh();
+ if(!ground(x,z))return false;
+ for(let i=0;i<5;i++){
+  const theta=Math.atan2(q.dz,q.dx)+i*2.40+(index?.64:.08),dx=Math.cos(theta),dz=Math.sin(theta);
+  const length=[1.13,.77,.58,.91,.66][i],w=i===0?.031:.024;
+  const bx=x+dx*length*.48-dz*.064,bz=z+dz*length*.48+dx*.064;
+  const c=[.072,.053,.041];
+  poiOrvasHairline(m,ground,x,z,bx,bz,w,c);
+  poiOrvasHairline(m,ground,bx,bz,x+dx*length,z+dz*length,w*.66,c);
+  if(i<3)poiOrvasHairline(m,ground,bx,bz,bx+(dx+dz)*.23,bz+(dz-dx)*.23,w*.50,[.102,.069,.052]);
+ }
+ if(!m.p.length)return false;
+ e.parts.push(m);poiOrvasTracePush(e);return e;
+}
+function poiDrawOrvasGroundTraces(now,vp){
+ if(!poiOrvasGroundTraces.length&&!poiOrvasGroundGpu)return;
+ for(let i=poiOrvasGroundTraces.length-1;i>=0;i--){
+  const e=poiOrvasGroundTraces[i],life=e.kind==='beam'?1800:1050;
+  if(e.owner!==facilitySite||now-e.seen>=life){poiOrvasGroundTraces.splice(i,1);poiOrvasGroundDirty=true}
+ }
+ if(!poiOrvasGroundTraces.length){
+  if(poiOrvasGroundGpu)gl.deleteBuffer(poiOrvasGroundGpu.buf);
+  poiOrvasGroundGpu=null;poiOrvasGroundSlices=[];return;
+ }
+ if(!poiWalkActive||document.hidden||!facilitySite?.davidTemple?.boss||
+  !poiDavidIn(facilitySite.davidTemple.boss,poiAimOrigin(now)))return;
+ if(poiOrvasGroundDirty){
+  const m=mesh();poiOrvasGroundSlices=[];
+  for(const e of poiOrvasGroundTraces){
+   const start=m.p.length/3;for(const p of e.parts){m.p.push(...p.p);m.n.push(...p.n);m.c.push(...p.c)}
+   poiOrvasGroundSlices.push({e,start,count:m.p.length/3-start});
+  }
+  poiOrvasGroundGpu=upload(m,poiOrvasGroundGpu?.buf??null,gl.DYNAMIC_DRAW);poiOrvasGroundDirty=false;
+ }
+ gl.enable(gl.BLEND);gl.blendFunc(gl.CONSTANT_ALPHA,gl.ONE_MINUS_CONSTANT_ALPHA);gl.depthMask(false);
+ try{for(const {e,start,count} of poiOrvasGroundSlices)if(e.y===poiWalkLevel&&count){
+  const life=e.kind==='beam'?1800:1050,hold=e.kind==='beam'?930:365;
+  const alpha=(e.kind==='beam'?.64:.78)*Math.max(0,1-Math.max(0,now-e.seen-hold)/(life-hold));
+  gl.blendColor(0,0,0,alpha);
+  draw(poiOrvasGroundGpu,vp,start,count);
+ }}finally{gl.depthMask(true);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.blendColor(0,0,0,0);gl.disable(gl.BLEND)}
+}
+// END ORVAS TRANSIENT GROUND TRACES
 // BEGIN DAVID RAISED STONE
 let poiDavidRaisedStoneMesh=null;
 const poiDavidStoneVp=new Float32Array(16),poiDavidStoneEase=t=>t*t*(3-2*t);
@@ -32885,6 +33000,7 @@ function render(){
  drawSignOverlays(p.vp,daylight);pineDrawEditCursor(p.vp);
  poiDrawNorthAxeCue(now,p.vp);
  const davidBeam=typeof poiDrawDavidCue==='function'?poiDrawDavidCue(now,p.vp):null;
+ if(typeof poiDrawOrvasGroundTraces==='function')poiDrawOrvasGroundTraces(now,p.vp);
  if(typeof poiDrawDavidFissure==='function')poiDrawDavidFissure(now,p.vp);
  if(typeof poiDrawDavidRaisedStone==='function')poiDrawDavidRaisedStone(now,p.vp);
  if(typeof poiDrawDavidImpact==='function')poiDrawDavidImpact(now,p.vp);
