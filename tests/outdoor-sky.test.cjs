@@ -32,7 +32,7 @@ test('normal orbit and overhead unchanged; outdoor elevated aim reveals a sky gr
  c.cameraTopDown=true;c.poiThirdPerson=false;c.poiSkyBackdrop(c.camera());assert(!attrs.has('data-poi-sky'));
  const cliff=make({terrainY:()=>1.2}).c.camera();assert(cliff.vp.eye[1]>=1.42-1e-8);
 });
-test('negative sky pitch survives valid saves but remains unavailable indoors, underground, or during a collision clip',()=>{
+test('negative sky pitch survives saves, remains gated indoors and underground, and wall correction preserves the real camera restriction',()=>{
  const {c}=make();
  const saved=()=>c.workshopResumeDecode(JSON.stringify({version:1,route:'facility',id:'base',play:true,
   view:{yaw:0,zoom:1,panX:0,panZ:0,level:0,orbitYaw:0,orbitPitch:-.16,orbitDistance:5.5,third:true}}));
@@ -41,7 +41,13 @@ test('negative sky pitch survives valid saves but remains unavailable indoors, u
  const underground=make({poiWalkLevel:-1,poiDungeonPointIn:()=>false}).c;
  assert.equal(underground.poiOrbitPitchClamp(-1),.12);assert.equal(underground.camera().skyHorizon,undefined);
  const clipped=make({facilitySharedWallCameraEye:(_t,e)=>[e[0],e[1],e[2]+1]}).c;
- assert.equal(clipped.camera().skyHorizon,undefined);
+ const clear=c.camera(),corrected=clipped.camera();
+ assert.equal(corrected.vp.eye[2],clear.vp.eye[2]+1,'real collision-adjusted eye is still used');
+ assert.equal(corrected.vp.eye[1],clear.vp.eye[1]);
+ assert(Number.isFinite(corrected.skyHorizon),'surface wall correction no longer force-flashes the editor color');
+ const {eye,target}=corrected.vp;
+ const horizon=50-50*(eye[1]-target[1])/Math.hypot(eye[0]-target[0],eye[2]-target[2])/Math.tan(.6);
+ assert(Math.abs(corrected.skyHorizon-horizon)<1e-9,'sky uses corrected angle and original clipped lens');
  assert(h.includes('poiOrbitPitchClamp(poiCameraPitch+(now.y-multiGesture.y)*.004)'));
  assert(h.includes('poiOrbitPitchClamp(poiCameraPitch+(e.clientY-t.lastY)*.006)'));
 });

@@ -1612,7 +1612,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v288）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v289）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -5744,7 +5744,13 @@ function poiDavidRig(pose){
  });
  const elbows=hands.map((h,i)=>[(i?1:-1)*(1.25+Math.max(0,Math.abs(h[0])-1.1)*.42),
   h[1]>3.55?3.99:(3.67+h[1])*.50,kind==='sweep'&&i===1?-.04+.48*(h[2]-rest[i][2]):-.04]);
- return {doubleBladeRoll,doubleBladeHeading,feet,knees,shoulders,hands,elbows,swordTips,eyes:sights,glow,wakeGlow,leapCrouch};
+ // Lay the cutting edges above/below during travel. The tip and
+ // hand are untouched; carry the roll into only the first windup frames.
+ const travel=kind==null&&(phase==='ready'||phase==='idle'||phase==='return');
+ const carry=travel?1:kind&&phase==='windup'&&contact===0?
+  1-ease(Math.max(t/.18,(p.elapsed||0)/130)):0;
+ const walkBladeRoll=Math.PI*.5*ease(p.walkAmount||0)*carry;
+ return {walkBladeRoll,doubleBladeRoll,doubleBladeHeading,feet,knees,shoulders,hands,elbows,swordTips,eyes:sights,glow,wakeGlow,leapCrouch};
 }
 function poiDavidSkirt(r,T,Q,fold){
  // Sculpted diagonal split between the two unequal front lapels. The
@@ -5910,7 +5916,13 @@ function poiDavidGeometry(m,x,y,z,pose){
   // the downstroke plane. Width, taper and guard remain unscaled.
   const tangent=r.doubleBladeHeading?.[i];
   const cuttingBlade=roll&&tangent?unit(cross(axis,cross(tangent,axis))):usualBlade;
-  const blade=roll?unit(add(usualBlade.map(v=>v*(1-roll)),cuttingBlade,roll)):usualBlade,thick=cross(axis,blade);
+  let blade=roll?unit(add(usualBlade.map(v=>v*(1-roll)),cuttingBlade,roll)):usualBlade;
+  if(r.walkBladeRoll){
+   // Blade width rotates around the unchanged shaft; the broad face
+   // normal then points sideways rather than up.
+   blade=add(blade.map(v=>v*Math.cos(r.walkBladeRoll)),cross(axis,blade),Math.sin(r.walkBladeRoll));
+  }
+  const thick=cross(axis,blade);
   const point=(along,wide=0,deep=0)=>add(add(add(g,axis,along),blade,wide),thick,deep);
   prism(point(-.25),point(.205),.16,.146,.16,.146,fold,6);
   prism(point(-.37),point(-.25),.19,.155,.2,.151,stone,6);
@@ -22949,7 +22961,7 @@ function poiDavidAwakeningPose(d,now,common){
 
 function poiDavidCease(o,s,b,now){
  const d=s.david;
- if(!d?.awake||d.returning)return;
+ if(!d?.awake||d.returning||d.deathFinish)return;
  poiDavidLeapAbort(s,now);
  d.attack=null;
  if(typeof poiDavidStopAttackFoley==='function')poiDavidStopAttackFoley();
@@ -22996,11 +23008,41 @@ function poiDavidReturnFrame(o,s,b,now){
  d.gaitDistance=(d.gaitDistance??-1)+1;
  path.pop();poiMonsterMeshDirty=true;
 }
-function poiDavidDeathFrame(now){
+function poiDavidDeathFrame(now,killer){
  const live=poiDavidActive,b=live&&poiDavidMatch(live.o);
  if(!live||!b||live.s.hp<=0||poiMonsterStates.get(live.o)!==live.s)return;
- poiDavidCease(live.o,live.s,b,now);
- if(live.s.david?.returning)poiDavidReturnFrame(live.o,live.s,b,now);
+ const {o,s}=live,d=s.david,q=d?.attack;
+ // Called synchronously by the defeat initializer, before the lethal
+ // strike's enclosing branch returns. Only that actual source qualifies.
+ if(killer===o&&q?.cursor>0&&!d.returning){
+  d.deathFinish={until:Math.min(q.until,now+POI_DEATH_PAUSE)};
+  if(q.kind==='beam'&&q.sweep?.start===null){
+   // A follow-up turn that has not begun is a future attack, not a pose.
+   q.sweep=null;q.until=now+POI_DAVID_PATTERNS.beam.rest;
+   d.deathFinish.until=q.until;
+  }
+  if(typeof poiAimLocked!=='undefined'&&poiAimLocked?.id===o)poiCombatLockReset();
+ }
+ if(d?.deathFinish){
+  if(q&&now<d.deathFinish.until){
+   // Only the renderer's cursor advances. No hit, companion contact,
+   // ground effect, strike audio, regeneration, or AI choice occurs here.
+   while(q.cursor<q.hits.length&&now>=q.hits[q.cursor]){
+    q.lastContactAt=q.hits[q.cursor++];
+   }
+   const sw=q.sweep;
+   if(sw?.start!=null&&!sw.done){
+    const at=Math.min(now,sw.end);
+    sw.angle=sw.side*POI_DAVID_BEAM_ARC*(at-sw.start)/POI_DAVID_BEAM_SWEEP;
+    if(at===sw.end){sw.done=true;sw.endedAt=now;poiDavidBeamAudioEnd(q)}
+   }
+   if(q.kind==='beam'&&!sw&&now-q.lastContactAt>=POI_DAVID_BEAM_SHORT)poiDavidBeamAudioEnd(q);
+   return;
+  }
+  d.deathFinish=null;
+ }
+ poiDavidCease(o,s,b,now);
+ if(s.david?.returning)poiDavidReturnFrame(o,s,b,now);
 }
 function poiDavidMobFrame(o,s,now){
  const b=poiDavidMatch(o);
@@ -23117,6 +23159,11 @@ function poiDavidCombatFrame(now){
  const live=poiDavidActive;if(!live)return false;
  const {o,s}=live,b=poiDavidMatch(o),d=s.david;
  if(!b||s.hp<=0||poiMonsterStates.get(o)!==s||!d?.awake){poiDavidActive=null;return false}
+ if(d.deathFinish){
+  // A menu or mode switch may clear the defeat sequence early.
+  if(typeof poiPlayerDying==='function'&&poiPlayerDying())return false;
+  d.deathFinish=null;poiDavidCease(o,s,b,now);return false;
+ }
  if(typeof poiDavidFootFeedback==='function')poiDavidFootFeedback(o,s,b,now);
  if(d.returning){poiDavidReturnFrame(o,s,b,now);return false}
  const p=poiAimOrigin(now);
@@ -23678,7 +23725,7 @@ function poiMobHitPlayer(obj,now,attackDamage){
  }
  poiDamageNumber(poiWalkViewX+.5,poiWalkViewZ+.5,terrainY(poiWalkX,poiWalkZ)+1.8+(facilitySite?poiWalkLevel*1.4:0),amount,true);
  poiCombatHud();if(poiPlayerHP)return false;
- if(!poiPlayerDeathBegin(now)){
+ if(!poiPlayerDeathBegin(now,obj)){
   // Legacy play has no staged defeat cue; keep its one real hit audible.
   if(priorHP>0)poiSound('player-hurt');
   poiPlayerHP=POI_PLAYER_MAX_HP;poiWalkReset(poiSpawnX,poiSpawnZ);poiDamageLabels=[];
@@ -26173,7 +26220,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v288',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v289',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -26288,7 +26335,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v288';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v289';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -26503,7 +26550,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v288',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v289',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -27319,18 +27366,82 @@ function poiAimNewShot(shot,now){
  if(shot.type==='equipWoodSpear')poiAimAttack.spearVisual=poiWorldSpearAim(aimed,now);
  return aimed;
 }
+// BEGIN OVERSIZED MELEE BODY
+function poiLargeMeleeBody(target,shot,now){
+ // Null retains legacy center targeting. An empty array means the
+ // authored body is above/below the actual held weapon contact plane.
+ const type=target.id.type,w=shot.type;
+ if(type!=='monsterStoneDavid'||w==='equipWoodBow'||w==='fireWand')return null;
+ if(typeof poiDavidRig!=='function'||typeof poiMonsterPose!=='function')return null;
+ const p=poiMonsterPose(target.id,target.state,now),r=poiDavidRig(p.david);
+ const height=w==='equipWoodSpear'?.868:(typeof POI_WORLD_MELEE_CONTACT_HEIGHT!=='undefined'?POI_WORLD_MELEE_CONTACT_HEIGHT[w]:0)??.76;
+ const y=terrainY(Math.floor(shot.aim.x+.5),Math.floor(shot.aim.z+.5))+shot.aim.y*1.4+(height||.76)-p.y;
+ // Mesh ankle and knee prism centerline/radii in poiDavidGeometry.
+ // Evaluate the visible low body at the contact height, never its held
+ // swords, arms, or the empty space between the two legs.
+ const body=[],angle=Number.isFinite(p.heading)?p.heading:null,c=Math.cos(angle??0),s=Math.sin(angle??0);
+ const point=(a,b,lo,hi)=>{
+  if(y<Math.min(a[1],b[1])||y>Math.max(a[1],b[1]))return;
+  const t=(y-a[1])/(b[1]-a[1]);
+  const u=a[0]+(b[0]-a[0])*t,v=a[2]+(b[2]-a[2])*t;
+  const [x,z]=angle===null?(typeof rot2==='function'?rot2(u,v,target.state.facing||0):[u,v]):[u*c-v*s,u*s+v*c];
+  // Inscribed ground disk rather than filling the corners of stone.
+  body.push({x:p.x-.5+x,z:p.z-.5+z,y:p.y+y,r:lo+(hi-lo)*t});
+ };
+ for(let i=0;i<2;i++){
+  const f=r.feet[i],k=r.knees[i],side=i?1:-1;
+  const ankle=[f[0],f[1]+.24,f[2]-.14],hip=[side*.406+.09,2.29+side*.045,-.018];
+  const bend=typeof poiDavidLeapBodyY==='function'?poiDavidLeapBodyY:(y=>y);
+  const fit=([x,y,z])=>[x,bend(y,r.leapCrouch),z];
+  point(fit([f[0],f[1]+.03,f[2]]),fit(ankle),.25,.23);
+  point(fit(ankle),fit(k),.205,.235);
+  point(fit(k),fit(hip),.235,.29);
+ }
+ return body;
+}
+function poiLargeMeleeRay(o,d,b,range){
+ const x=b.x-o.x,z=b.z-o.z,t=x*d.x+z*d.z,side=x*d.z-z*d.x;
+ const delta=b.r*b.r-side*side;
+ if(delta<-POI_AIM_EPS)return null;
+ const depth=Math.sqrt(Math.max(0,delta));
+ if(t+depth<POI_AIM_EPS)return null;
+ const hit=Math.max(0,t-depth);
+ return hit<=range+POI_AIM_EPS?hit:null;
+}
+function poiLargeMeleeSweep(o,d,b,range,arc,pass){
+ const x=b.x-o.x,z=b.z-o.z,u=x*d.x+z*d.z,v=x*d.z-z*d.x;
+ let a=Math.max(arc?0:POI_AIM_EPS,u),side=v;
+ if(arc){
+  if(u<0)side=Math.max(-range,Math.min(range,v));
+  else{const k=Math.min(1,range/(Math.hypot(a,side)||1));a*=k;side*=k}
+ }else{a=Math.min(a,range);side=Math.max(-POI_SWORD_HALF_WIDTH,Math.min(POI_SWORD_HALF_WIDTH,v))}
+ if((u-a)**2+(v-side)**2>b.r*b.r+POI_AIM_EPS)return false;
+ const px=a*d.x+side*d.z,pz=a*d.z-side*d.x,len=Math.hypot(px,pz),ray=poiAimUnit(px,pz);
+ // Check the actual overlapping part, not the actor's center behind it.
+ return len<=POI_AIM_EPS||poiAimWallLimit(o,ray,len,pass)+POI_AIM_EPS>=len;
+}
+// END OVERSIZED MELEE BODY
 function poiAimTrace(shot,range,now){
  const o=shot.aim,d={x:shot.dx,z:shot.dz},pass=poiAimWall(o),limit=poiAimWallLimit(o,d,range,pass);
- let winner=null,best=Infinity;
+ let winner=null,best=Infinity,bodyPoint=null;
  for(const c of poiAimTargetList(o,range,now)){
+  const body=typeof poiLargeMeleeBody==='function'?poiLargeMeleeBody(c,shot,now):null;
+  if(body){
+   for(const b of body){
+    const t=poiLargeMeleeRay(o,d,b,range);
+    if(t===null||t>=best||t>limit+POI_AIM_EPS)continue;
+    winner=c;best=t;bodyPoint={x:o.x+d.x*t+.5,z:o.z+d.z*t+.5,y:b.y};
+   }
+   continue;
+  }
   const t=poiAimCircleEntry(o,d,c,POI_AIM_RADIUS,range);
   const len=Math.hypot(c.x-o.x,c.z-o.z);
   if(t!==null&&t<best&&t<=limit+POI_AIM_EPS&&len<=limit+POI_AIM_EPS&&
-     poiAimWallLimit(o,poiAimUnit(c.x-o.x,c.z-o.z)||d,len,pass)+POI_AIM_EPS>=len){winner=c;best=t}
+     poiAimWallLimit(o,poiAimUnit(c.x-o.x,c.z-o.z)||d,len,pass)+POI_AIM_EPS>=len){winner=c;best=t;bodyPoint=null}
  }
  return winner?{x:Math.floor(winner.x+.5),z:Math.floor(winner.z+.5),distance:Math.hypot(winner.x-o.x,winner.z-o.z),
-  forward:(winner.x-o.x)*d.x+(winner.z-o.z)*d.z,monster:[winner.id,winner.state],
-  ...(shot.type==='equipWoodSpear'?{spearPoint:{x:winner.x+.5,z:winner.z+.5,y:winner.y+
+  forward:bodyPoint?best:(winner.x-o.x)*d.x+(winner.z-o.z)*d.z,monster:[winner.id,winner.state],
+  ...(shot.type==='equipWoodSpear'?{spearPoint:bodyPoint??{x:winner.x+.5,z:winner.z+.5,y:winner.y+
    (POI_COMBAT_TORSO_HEIGHT[winner.id.type]??.67)},spearLimit:limit}:{})}:
   {monster:null,distance:limit,...(shot.type==='equipWoodSpear'?{spearLimit:limit}:{})};
 }
@@ -27594,6 +27705,8 @@ function poiSwordResolve(shot,now){
  const forward=shot.profile.range??POI_SWORD_FORWARD,arc=shot.profile.frontArc;
  const range=arc?forward:Math.hypot(forward,POI_SWORD_HALF_WIDTH),hits=[];
  for(const c of poiAimTargetList(o,range,now)){
+  const body=typeof poiLargeMeleeBody==='function'?poiLargeMeleeBody(c,shot,now):null;
+  if(body){if(body.some(b=>poiLargeMeleeSweep(o,d,b,forward,arc,pass)))hits.push(c);continue}
   if(arc?!poiPlayerFrontArcContains(o,d,c,forward):!poiSwordSweepContains(o,d,c,forward))continue;
   const x=c.x-o.x,z=c.z-o.z,len=Math.hypot(x,z),ray=poiAimUnit(x,z);
   if(ray&&poiAimWallLimit(o,ray,len,pass)+POI_AIM_EPS>=len)hits.push(c);
@@ -28787,12 +28900,12 @@ function poiPlayerDeathClear(){
  if(!poiPlayerDeath)return;
  poiPlayerDeath=null;poiPlayerDeathView('idle',0);
 }
-function poiPlayerDeathBegin(now){
+function poiPlayerDeathBegin(now,killer){
  if(typeof poiHealingCastCancel==="function")poiHealingCastCancel();
  if(typeof poiPlayerWeaponCancel==='function')poiPlayerWeaponCancel();
  if(facilitySite?.id!=='base'||!poiWalkActive||poiPlayerHP!==0||poiPlayerDeath)return false;
  poiPlayerDeath={phase:'pause',start:now,blackAt:null,relocated:false,opacity:0};
- if(typeof poiDavidDeathFrame==='function')poiDavidDeathFrame(now);
+ if(typeof poiDavidDeathFrame==='function')poiDavidDeathFrame(now,killer);
  poiWalkAttackPosePending=false;poiWalkActionStarted=-10000;
  if(typeof poiStopRepeat==='function')poiStopRepeat();
  if(typeof poiBagSetOpen==='function')poiBagSetOpen(false);
@@ -31010,10 +31123,13 @@ function parameters(){
   const near=eye!==desired&&arm<1.81?.08:.45;
   const fov=eye===desired?Math.PI/3:facilityWatchtowerCloseFov(arm);
   let sky=null;
-  if(skyOutdoor&&eye===desired){
+  if(skyOutdoor){
    // Anchor the time-of-day palette to physical elevations, not camera
    // opacity. Empty pixels below the horizon still use the current time.
-   const tilt=Math.atan2(eye[1]-target[1],Math.max(1e-6,horizontal)),scale=50/Math.tan(fov/2);
+   // The collision arm can shorten or tilt at a wall. Project the
+   // palette with that real view instead of exposing the editor color.
+   const eyeHorizontal=Math.hypot(eye[0]-target[0],eye[2]-target[2]);
+   const tilt=Math.atan2(eye[1]-target[1],Math.max(1e-6,eyeHorizontal)),scale=50/Math.tan(fov/2);
    const stop=elevation=>50-scale*Math.tan(Math.min(Math.PI/3,tilt+elevation));
    sky={skyHorizon:stop(0),skyMiddle:stop(Math.PI/12),skyHigh:stop(Math.PI/6)};
   }
@@ -31939,10 +32055,82 @@ function poiDrawDavidFissure(now,vp){
  finally{gl.depthMask(true);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.blendColor(0,0,0,0);gl.disable(gl.BLEND)}
 }
 // END DAVID GROUND FISSURE
+// BEGIN DAVID RAISED STONE
+let poiDavidRaisedStoneMesh=null;
+function poiDavidRaisedStoneGeometry(e,b){
+ const m=mesh(),pass=poiAimWall({y:e.y}),arena=poiDavidArena(b),q={sx:e.sx,sz:e.sz};
+ const near=(wx,wz)=>{
+  const x=wx-.5,z=wz-.5,dx=x-q.sx,dz=z-q.sz,r=Math.hypot(dx,dz);
+  return r<=e.radius&&poiDavidIn(b,{x,z,y:e.y})&&(r<1e-5||
+   poiDavidRoomRay(q,b,{x:dx/r,z:dz/r},r,pass,arena)+1e-6>=r);
+ };
+ const seed=(n)=>.5+.5*Math.sin(n*77.17+2.43);
+ const rings=e.leap?[[1.38,8],[2.82,11],[4.40,12]]:[[1.18,6],[2.28,7],[3.50,5]];
+ const phase=Math.atan2(e.z-.5-e.sz,e.x-.5-e.sx);
+ for(let j=0,id=0;j<rings.length;j++){
+  const [ring,count]=rings[j];
+  for(let i=0;i<count;i++,id++){
+   const angle=phase+i*Math.PI*2/count+.34*j+(seed(id)-.5)*.42;
+   const dx=Math.cos(angle),dz=Math.sin(angle),reach=ring+(seed(id+19)-.5)*.64;
+   const x=e.x+dx*reach,z=e.z+dz*reach;
+   const weight=(.58+.42*seed(id+44))*(1-j*.22);
+   const w=(e.leap?.281:.199)*weight+.055,h=(e.leap?.74:.41)*weight+.05;
+   const tilt=.32*w,rot=angle+seed(id+23)*1.55,foot=[],crown=[];
+   const ground=terrainY(Math.floor(x),Math.floor(z))+1.4*e.y;
+   if(!near(x,z))continue;
+   for(let f=0;f<5;f++){
+    const theta=rot+f*Math.PI*2/5,px=Math.cos(theta),pz=Math.sin(theta);
+    const rr=w*(.86+.26*seed(id+f*7)),tt=.50+.18*seed(id+f*9+11);
+    foot.push([x+px*rr,ground-.065,z+pz*rr]);
+    crown.push([x+px*rr*tt+dx*tilt,ground+h*(.65+.27*seed(id+f*4+47)),z+pz*rr*tt+dz*tilt]);
+   }
+   const tip=[x+dx*tilt,ground+h,z+dz*tilt];
+   const footprint=[...foot,...crown,tip];
+   for(let f=0;f<5;f++){
+    const p=foot[f],n=foot[(f+1)%5];
+    footprint.push([(p[0]+n[0])*.5,ground,(p[2]+n[2])*.5]);
+   }
+   if(!footprint.every(p=>near(p[0],p[2])&&Math.abs(terrainY(Math.floor(p[0]),Math.floor(p[2]))+1.4*e.y-ground)<.065))continue;
+   const tint=.83+.20*seed(id+59),stone=[.48,.423,.355].map(v=>v*tint),top=[.62,.555,.465].map(v=>v*tint);
+   for(let f=0;f<5;f++){
+    const next=(f+1)%5,dark=f%2?.90:1.03;
+    quad(m,foot[f],crown[f],crown[next],foot[next],stone.map(v=>v*dark));
+    tri(m,tip,crown[next],crown[f],top);
+   }
+  }
+ }
+ return m;
+}
+function poiDrawDavidRaisedStone(now,vp){
+ const e=poiDavidFissure,age=e?now-e.start:Infinity,span=e?(e.fissureMs??POI_DAVID_FISSURE_MS):0;
+ if(!e||e.owner!==facilitySite||age>=span){
+  if(poiDavidRaisedStoneMesh?.gpu)gl.deleteBuffer(poiDavidRaisedStoneMesh.gpu.buf);
+  poiDavidRaisedStoneMesh=null;return;
+ }
+ if(age<0||!poiDavidImpactVisible(e,now,span))return;
+ if(poiDavidRaisedStoneMesh?.e!==e){
+  const geometry=poiDavidRaisedStoneGeometry(e,e.owner.davidTemple.boss),prior=poiDavidRaisedStoneMesh?.gpu;
+  if(!geometry.p.length){
+   if(prior)gl.deleteBuffer(prior.buf);
+   poiDavidRaisedStoneMesh={e,gpu:null};return;
+  }
+  poiDavidRaisedStoneMesh={e,gpu:upload(geometry,prior?.buf??null,gl.STATIC_DRAW)};
+ }
+ if(!poiDavidRaisedStoneMesh.gpu)return;
+ const bury=e.leap?.82:.49,rise=e.leap?290:232,hold=e.leap?620:480;
+ const smooth=t=>t*t*(3-2*t);
+ const offset=-bury*(1-smooth(Math.min(1,age/rise))+smooth(Math.max(0,(age-hold)/(span-hold))));
+ // Translate just this mesh vertically in world space. Terrain depth clips
+ // the buried rock; the physical map, camera and attack never move.
+ const lifted=new Float32Array(vp);
+ for(let i=0;i<4;i++)lifted[12+i]+=offset*vp[4+i];
+ draw(poiDavidRaisedStoneMesh.gpu,lifted);
+}
+// END DAVID RAISED STONE
 
 function poiDrawDavidCue(now,vp){
  const s=poiDavidActive?.s,q=s?.david?.attack,o=poiDavidActive?.o,b=poiDavidMatch(o);
- const active=q&&b&&s.hp>0&&poiEnemyThreatEnabled()&&poiWalkLevel===q.y&&poiDavidIn(b,poiAimOrigin(now));
+ const finishing=!!s?.david?.deathFinish,active=q&&b&&s.hp>0&&(poiEnemyThreatEnabled()||finishing)&&poiWalkLevel===q.y&&poiDavidIn(b,poiAimOrigin(now));
  if(poiDavidCue&&(!active||poiDavidCue.q!==q||poiDavidCue.door!==poiWalkDoorOpen||poiDavidCue.map!==world)){
   for(const m of [poiDavidCue.lane,poiDavidCue.beam,poiDavidCue.fan])if(m)gl.deleteBuffer(m.buf);
   poiDavidCue=null;
@@ -31950,16 +32138,18 @@ function poiDrawDavidCue(now,vp){
  if(!active)return;
  const pending=q.cursor<q.hits.length,age=Number.isFinite(q.lastContactAt)?now-q.lastContactAt:Infinity;
  const sw=q.sweep,tell=sw&&sw.start===null&&age>=110,emission=poiDavidBeamEmission(q,now);
+ if(finishing&&!emission)return;
  if(!pending&&age>=210&&!tell&&!emission)return;
  if(!poiDavidCue){
-  const {lane}=poiDavidCueGeometry(q,b);
+  const {lane}=finishing?{lane:{p:[]}}:poiDavidCueGeometry(q,b);
   poiDavidCue={q,door:poiWalkDoorOpen,map:world,lane:lane.p.length?upload(lane):null,beam:null,beamAt:-Infinity};
  }
  const reduced=!!poiEnemyCueReduced?.matches;
  const alpha=reduced?.26:age<160?.42-.18*age/160:.19+.075*Math.sin((now-q.start)*.014);
  gl.enable(gl.BLEND);gl.blendFunc(gl.CONSTANT_ALPHA,gl.ONE_MINUS_CONSTANT_ALPHA);gl.depthMask(false);
  try{
-  if(tell){
+  if(finishing){ /* The residue is the existing depth-tested beam, not a warning. */ }
+  else if(tell){
    if(poiDavidCue.fan===undefined){
     const fan=poiDavidCueGeometry({...q,kind:'beamfan'},b).lane;
     poiDavidCue.fan=fan.p.length?upload(fan):null;
@@ -32111,6 +32301,7 @@ function render(){
  poiDrawNorthAxeCue(now,p.vp);
  const davidBeam=typeof poiDrawDavidCue==='function'?poiDrawDavidCue(now,p.vp):null;
  if(typeof poiDrawDavidFissure==='function')poiDrawDavidFissure(now,p.vp);
+ if(typeof poiDrawDavidRaisedStone==='function')poiDrawDavidRaisedStone(now,p.vp);
  if(typeof poiDrawDavidImpact==='function')poiDrawDavidImpact(now,p.vp);
  if(poiWalkActive){
   poiEconomyDraw(p.vp,now);poiInventoryDraw(p.vp,now);

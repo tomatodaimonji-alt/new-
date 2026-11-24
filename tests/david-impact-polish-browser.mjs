@@ -23,6 +23,7 @@ let fixture=inject(html,key,key+`
     return {now:performance.now(),nextMob:poiNextMobTick,nextStep:poiWalkNextReady,arena:facilitySite.davidTemple.boss.room.arena,
       player:[poiWalkX,poiWalkZ,poiWalkLevel],pose:[poiWalkViewX,poiWalkViewZ],free:!!poiFreePose,hp:poiPlayerHP,boss:s?[s.x,s.z]:null,awake:!!d?.awake,returning:!!d?.returning,renderPose:renderPose?{x:renderPose.x,y:renderPose.y,z:renderPose.z,david:renderPose.david}:null,
       rig:rig?{crouch:rig.leapCrouch??0,feet:rig.feet.map(p=>p[1])}:null,cracks:window.__crackFrames??[],quakes:window.__quakeFrames??[],audio:window.__impactAudio??[],
+      rock:window.__raisedStoneFrames??[],rockBuffers:window.__raisedStoneBuffers??[],rockLive:!!poiDavidRaisedStoneMesh?.gpu,
       event:poiDavidFissure?{start:poiDavidFissure.start,radius:poiDavidFissure.radius,duration:poiDavidFissure.fissureMs,quake:poiDavidFissure.quakeMs}:null,
       wakes:!!d?.wakeDone,q:q?{kind:q.kind,start:q.start,cursor:q.cursor,dx:q.dx,dz:q.dz,sx:q.sx,sz:q.sz,leap:q.leap,hits:q.hits}:null,
       cue:window.__arenaCue??[],damage:window.__arenaDamage??[]};
@@ -36,6 +37,16 @@ fixture=inject(fixture,'try{gl.blendColor(0,0,0,alpha);draw(g,vp,0,Math.min(g.co
   gl.blendColor(0,0,0,alpha);draw(g,vp,0,Math.min(g.count,count));
   (window.__crackFrames??=[]).push({now,age,n:Math.min(g.count,count),alpha,fx:e.x,fz:e.z,leap:e.leap,radius:e.radius});
  }`);
+fixture=inject(fixture,'  poiDavidRaisedStoneMesh={e,gpu:upload(geometry,prior?.buf??null,gl.STATIC_DRAW)};',`
+  poiDavidRaisedStoneMesh={e,gpu:upload(geometry,prior?.buf??null,gl.STATIC_DRAW)};
+  let lo=Infinity,hi=-Infinity;
+  for(let i=1;i<geometry.p.length;i+=3){lo=Math.min(lo,geometry.p[i]);hi=Math.max(hi,geometry.p[i])}
+  (window.__raisedStoneBuffers??=[]).push({start:e.start,height:hi-lo,n:poiDavidRaisedStoneMesh.gpu.count});
+`);
+fixture=inject(fixture,' draw(poiDavidRaisedStoneMesh.gpu,lifted);',`
+ draw(poiDavidRaisedStoneMesh.gpu,lifted);
+ (window.__raisedStoneFrames??=[]).push({age,start:e.start,n:poiDavidRaisedStoneMesh.gpu.count,offset});
+`);
 fixture=inject(fixture,' const priorHP=poiPlayerHP;',' const priorHP=poiPlayerHP;if(obj.type==="monsterStoneDavid")(window.__arenaDamage??=[]).push({start:poiDavidActive?.s?.david?.attack?.start,raw,amount,now});');
 fixture=inject(fixture,` const out=new Float32Array(frame.vp);
  for(let i=0;i<16;i+=4)out[i+1]+=dy*out[i+3];`,` const out=new Float32Array(frame.vp);
@@ -88,6 +99,7 @@ try{
  else assert(await p.evaluate(()=>window.__editorTest.arenaQA.selectStomp()));
  const selected=await until(s=>s.q?.kind===kind&&s.q.cursor===0,140);
  assert.equal(selected.cracks.length,0,'no ground fracture during the tell');
+ assert.equal(selected.rock.length,0,'no emerging stone during the tell');
  assert.equal(selected.audio.length,0);assert.equal(selected.hp,100);
  where='actual contact submits native audio, shaking projection and growing ground fracture';
  const recent=await until(s=>s.q?.kind===kind&&s.q.cursor===1&&s.cracks.length>=3,56);
@@ -102,12 +114,22 @@ try{
  assert(recent.cracks.at(-1).n>recent.cracks[0].n,'cracks spread from the real landing point');
  assert(Math.hypot(recent.cracks[0].fx-selected.q.sx-.5,recent.cracks[0].fz-selected.q.sz-.5)<1);
  const late=await until(s=>s.now>e.start+540,34);
+ const rock=late.rock.filter(f=>f.start===e.start),uploads=late.rockBuffers.filter(f=>f.start===e.start);
+ assert.equal(uploads.length,1,'actual opaque stone packet uploaded once');
+ assert(rock.length>=3&&rock.every(f=>f.age>=0&&f.n===uploads[0].n));
+ assert(uploads[0].n%45===0&&uploads[0].n>=(leapMode?800:420));
+ assert(uploads[0].height>=(leapMode?.65:.34),'native stone geometry is significantly above floor');
+ assert(rock[0].offset<-.15&&rock.some(r=>Math.abs(r.offset)<.002),'stones physically emerge from floor');
+ const sinking=await until(s=>s.now>e.start+(leapMode?1200:960),25);
+ assert(sinking.rock.filter(f=>f.start===e.start).at(-1).offset<-.10,'stones sink before expiring');
  assert(late.quakes.some(f=>f.age>450&&Math.abs(f.dy)>.00002),'visible rumble lasts past prior camera duration');
  assert(late.cracks.at(-1).alpha<recent.cracks.at(-1).alpha,'draw opacity fades within the extended lifetime');
  const almost=await until(s=>s.now>e.start+e.duration+20,38);
  const prior=almost.cracks.length;await advance(120);const ended=await log();
  assert.equal(ended.cracks.length,prior,'no fracture draw beyond its extended lifetime');
- console.log(JSON.stringify({kind,audio,e,cracks:[recent.cracks[0],recent.cracks.at(-1)],quakeLate:late.quakes.at(-1)}));
+ assert.equal(ended.rock.length,almost.rock.length,'no raised stone draw beyond fissure lifespan');
+ assert(!ended.rockLive,'native stone buffer released after expiry');
+ console.log(JSON.stringify({kind,audio,e,cracks:[recent.cracks[0],recent.cracks.at(-1)],rock:uploads[0],quakeLate:late.quakes.at(-1)}));
  assert.deepEqual(errors,[]);
  console.log('PASS actual '+kind+' contact and native WebAudio/WebGL crack and extended rumble');
 }catch(e){console.error(where,await (p?log().catch(()=>null):null),errors);throw e}
