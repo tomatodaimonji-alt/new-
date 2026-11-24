@@ -14,8 +14,18 @@ put(api,api+`
    return {kit:poiInventorySlots(kit).filter(c=>poiCompanionType(c?.type)),active:kit.companionSoul?.active??null,
     actor:a?{x:a.x,z:a.z,id:a.id}:null,pose,body:poiCompanionMesh?.count??0,contacts:window.__orvasHits??[],
     health:poiPlayerHP,lastSwing:poiWalkActionStarted,breaks:poiMonsterBreakSnapshot(now),
-    bossController:!!poiDavidActive,bar:$('poiCompanionHudHp')?.max,clock:now,foe:window.__orvasFoe?.s.hp??null,
+    bossController:!!poiDavidActive,boss: [...poiMonsterStates].some(([o])=>!!poiDavidMatch(o)),mode:poiCompanionMode(kit),
+    fracture:poiOrvasAllyEffects.raised?.gpu?.count??0,cue:poiOrvasAllyEffects.cue?.beam?.count??0,
+    audio:window.__orvasNativeFoley??[],bar:$('poiCompanionHudHp')?.max,clock:now,foe:window.__orvasFoe?.s.hp??null,
     x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,dir:['n','s','e','w'].map(k=>poiCameraRelativeStep(k))};
+  },
+  neutralMatch:()=>{
+   const a=poiCompanionActor;
+   const pair=[...poiMonsterStates].find(([o])=>poiDavidMatch(o));if(!a||!pair)return null;
+   const now=performance.now(),p=poiCompanionWorldPose(a,now),boss=poiMonsterPose(...pair,now);
+   const g=mesh(),f=mesh();poiCompanionOrvasMesh(g,{...p,heading:0,x:0,y:0,z:0,rig:boss.david});
+   poiDavidGeometry(f,0,0,0,boss.david);
+   return {n:g.p.length,same:g.p.every((v,i)=>v===f.p[i])&&g.c.every((v,i)=>v===f.c[i]),ally:p.scale,boss:boss.david?.phase};
   },
   opponent:(attacks=false)=>{
    const a=poiCompanionActor;if(!a)return null;
@@ -25,7 +35,7 @@ put(api,api+`
     if(!poiWalkCanStep(x,z)||poiMonsterAt(x,z,true)||x===poiWalkX&&z===poiWalkZ||!poiCompanionAttackClear({x,z},a,a.y))continue;
     const o={type:'monsterSkeleton',x,z,y:a.y,rot:0},s=poiCombatActorMake(o);poiMonsterStates.set(o,s);poiMonsterMeshDirty=true;
     if(attacks&&!poiEnemyBeginPlayer(o,s,performance.now(),{x:a.x,z:a.z,actor:a})){poiMonsterStates.delete(o);continue}
-    if(!attacks){s.hp=100;s.nextAttack=performance.now()+12000;}
+    if(!attacks){s.hp=400;s.nextAttack=performance.now()+17000;s.northReturnReady=s.nextAttack;}
     window.__orvasFoe={o,s};
     return {initial:s.hp,pending:!!s.playerAttack?.pending,dist:Math.hypot(dx,dz)};
    }
@@ -35,7 +45,12 @@ put(api,api+`
 `);
 put(' requestAnimationFrame(render);',' if(!window.__orvasManual)requestAnimationFrame(render);');
 const damage='function poiPlayerDamageTarget(monster,x,z,amount,weapon,now,silent=false,atContact=false,source=null){';
-put(damage,damage+"\n if(source?.companion)(window.__orvasHits??=[]).push({before:monster[1].hp,damage:amount,now});");
+put(damage,damage+"\n if(source?.companion)(window.__orvasHits??=[]).push({before:monster[1].hp,damage:amount,now,kind:poiCompanionActor?.david?.attack?.kind});");
+const track='function poiDavidTrackAttackFoley(source,gain,q=null){';
+put(track,track+`
+ if(q?.ally)(window.__orvasNativeFoley??=[]).push({kind:q.kind,leap:!!q.davidLeapImpact,playing:source.context.state,loop:source.loop,
+   name:source.buffer===poiDavidAlienCache?'alien':[...poiRecordedFoleyCache].find(([id,buffer])=>buffer===source.buffer)?.[0]});
+`);
 for(const [,js] of html.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(js);
 if(process.env.ORVAS_SOUL_SYNTAX_ONLY){console.log('Orvas native fixture parses');process.exit(0)}
 const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
@@ -44,7 +59,7 @@ await new Promise((ok,no)=>server.listen(0,'127.0.0.1',ok).once('error',no));con
 let b,last,phase='boot';
 try{
  b=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
-  args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
+  args:['--autoplay-policy=no-user-gesture-required','--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
  const screenshot=process.env.FACILITY_SCREENSHOTS;if(screenshot)mkdirSync(screenshot,{recursive:true});
  async function load(hp,x=102,z=93,already=false){
   const c=await b.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.75}),p=await c.newPage(),errors=[];
@@ -69,23 +84,40 @@ try{
    return last=await p.evaluate(()=>window.__editorTest.orvasQA.see())};
   const until=async(fn,n=120)=>{for(let i=0;i<n;i++){const s=await tick();if(fn(s))return s}throw Error(JSON.stringify(last))};
   const tap=slot=>p.locator('#poiHotbar [data-hotbar-slot="'+slot+'"]').tap();
-  return {c,p,open,tick,until,tap,errors};
+  const summon=async slot=>{
+   await tap(slot);
+   const follow=p.locator('#poiCompanionCommands [data-companion-command="follow"]');
+   if(await follow.isVisible())await p.locator('#poiCompanionCommands [data-companion-command="fight"]').tap();
+  };
+  return {c,p,open,tick,until,tap,summon,errors};
  }
  phase='real Orvas shortcut, its distinct live stone mesh and ordinary hostile hit';
  let q=await load(997),p=q.p;
  let s=await q.tick(),oldSwing=s.lastSwing;
  assert(s.kit.some(c=>c.type==='orvasSoul'&&c.durability===997));
- await q.tap(1);s=await q.until(v=>v.active==='orvasSoul'&&v.pose?.orvas&&v.body>1000);
- assert.equal(s.bar,1050);assert.equal(s.pose.scale,.53);assert(s.kit.some(c=>c.type==='slimeSoul'&&c.durability===29));
+ await q.summon(1);s=await q.until(v=>v.active==='orvasSoul'&&v.pose?.orvas&&v.body>1000);
+ assert.equal(s.bar,1050);assert.equal(s.pose.scale,1);assert(s.kit.some(c=>c.type==='slimeSoul'&&c.durability===29));
  if(screenshot)await p.screenshot({path:screenshot+'/orvas-soul-live.png'});
  assert(await p.evaluate(()=>window.__editorTest.orvasQA.opponent(false)));
  const wind=await q.until(v=>v.pose?.orvas&&v.pose?.rig.phase==='windup');
  assert.equal(wind.contacts.length,0);
- s=await q.until(v=>v.contacts.length>0);assert.equal(s.contacts.length,1);assert.equal(s.contacts[0].damage,16);
+ s=await q.until(v=>v.contacts.length>0);assert.equal(s.contacts.length,1);assert.equal(s.contacts[0].damage,30);
  assert(s.foe<s.contacts[0].before);assert.equal(s.lastSwing,oldSwing);assert.equal(s.bossController,false);
- await q.tap(2);s=await q.until(v=>v.active==='slimeSoul'&&v.actor?.id==='slimeSoul');
+ // Force no sequence timing or contacts. The original allied scheduler must
+ // naturally discover and cycle three additional native original attacks.
+ s=await q.until(v=>v.contacts.some(h=>h.kind==='stomp')&&v.fracture>0,185);
+ assert.deepEqual(s.contacts.filter(h=>h.kind==='double').map(h=>h.damage),[28,35]);
+ assert(s.contacts.some(h=>h.kind==='stomp'&&h.damage===39));
+ s=await q.until(v=>v.contacts.some(h=>h.kind==='beam')&&v.cue>0,170);
+ assert(s.contacts.some(h=>h.kind==='beam'&&h.damage===47));
+ assert(s.audio.some(e=>e.name==='alien'&&e.loop&&e.playing==='running'));
+ for(const name of ['davidBladeSweep','davidSwordFirst','davidSwordSecond','davidHeavyStomp'])
+  assert(s.audio.some(e=>e.name===name&&e.playing==='running'),JSON.stringify(s.audio));
+ assert.equal(s.lastSwing,oldSwing);assert.equal(s.health,100);
+
+ await q.summon(2);s=await q.until(v=>v.active==='slimeSoul'&&v.actor?.id==='slimeSoul');
  assert(s.kit.some(c=>c.type==='orvasSoul'&&c.durability===997));
- await q.tap(1);s=await q.until(v=>v.active==='orvasSoul'&&v.actor?.id==='orvasSoul');
+ await q.summon(1);s=await q.until(v=>v.active==='orvasSoul'&&v.actor?.id==='orvasSoul');
  assert.equal(s.bar,1050);
  phase='real command dismisses without shatter, and resummon keeps the old token HP';
  await q.tap(1);
@@ -93,13 +125,13 @@ try{
  await p.locator('#poiCompanionCommands [data-companion-command="dismiss"]').tap();
  s=await q.until(v=>v.active===null&&v.actor===null);
  assert(s.kit.some(c=>c.type==='orvasSoul'&&c.durability===997));assert(!s.breaks.some(v=>v.type==='monsterStoneDavid'));
- await q.tap(1);s=await q.until(v=>v.actor?.id==='orvasSoul');
+ await q.summon(1);s=await q.until(v=>v.actor?.id==='orvasSoul');
  phase='cold navigation preserves actual damaged HP and selected distinct ally';
  await p.clock.resume();await q.open();s=await q.until(v=>v.active==='orvasSoul'&&v.pose?.orvas);
  assert(s.kit.some(c=>c.type==='orvasSoul'&&c.durability===997));assert.deepEqual(q.errors,[]);await q.c.close();
- phase='narrow real room compresses the guardian without relocating player or changing durable HP';
+ phase='narrow real room preserves full-size original guardian without relocating player or changing durable HP';
  q=await load(777,56,33,true);s=await q.until(v=>v.pose?.orvas&&v.body>1000);
- assert.equal(s.pose.scale,.205);assert.deepEqual([s.x,s.z,s.y],[56,33,0]);assert(s.kit.some(c=>c.type==='orvasSoul'&&c.durability===777));
+ assert.equal(s.pose.scale,1);assert.deepEqual([s.x,s.z,s.y],[56,33,0]);assert(s.kit.some(c=>c.type==='orvasSoul'&&c.durability===777));
  await q.c.close();
  phase='active Orvas actually follows through the original physical gate and corridor with HP unchanged';
  q=await load(1050,24,126,true);p=q.p;s=await q.until(v=>v.pose?.orvas);const entryActor={...s.actor};
@@ -110,9 +142,16 @@ try{
  };
  for(const [x,z] of [[24,127],[24,128],[24,129],[25,129],[25,130],[25,131],[24,131],[23,131],[23,132]])await step(x,z);
  s=await q.until(v=>v.pose?.orvas&&v.actor.z>=128);
- assert(entryActor.z<128&&s.actor.z>=128);assert.equal(s.pose.scale,.205);
+ assert(entryActor.z<128&&s.actor.z>=128);assert.equal(s.pose.scale,1);
  assert(s.kit.some(c=>c.type==='orvasSoul'&&c.durability===1050));
  assert.equal(s.bossController,false);assert.deepEqual(q.errors,[]);
+ await q.c.close();
+ phase='original statue and allied unscaled mesh coexist in their real chamber';
+ q=await load(1050,24,154,true);s=await q.until(v=>v.pose?.orvas&&v.boss&&v.body>1000);
+ assert.equal(s.bossController,false);
+ const match=await q.p.evaluate(()=>window.__editorTest.orvasQA.neutralMatch());
+ assert(match?.same&&match.n>3000&&match.ally===1&&match.boss==='dormant',JSON.stringify(match));
+ if(screenshot)await q.p.screenshot({path:screenshot+'/orvas-twins-full-size.png'});
  await q.c.close();
  phase='real hostile attack breaks low remaining Orvas durability, deletes only his token, shatters';
  q=await load(1,102,93,true);s=await q.until(v=>v.pose?.orvas);const hp=s.health;
