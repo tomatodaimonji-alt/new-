@@ -8,10 +8,11 @@ let html=readFileSync(file,'utf8');
 const mark='  freeMovementPose:()=>({x:poiWalkViewX,z:poiWalkViewZ,level:poiWalkLevel}),';
 assert.equal(html.split(mark).length,2);
 html=html.replace(mark,mark+`
+  orvasResetDropQA:()=>poiInventoryDrop(2),
   resetKitQA:()=>{const k=poiHotbarRead(),slots=poiInventorySlots(k);
    return {walking:poiWalkActive,site:facilitySite?.id,pos:[poiWalkX,poiWalkZ,poiWalkLevel],
     kit:{weapon:k.weapon,potions:k.potions,gold:k.gold??0,orvasRewards:k.orvasRewards??0,
-     slots:slots.map(c=>c?{type:c.type,count:c.count,durability:c.durability}:null)},
+     drops:(k.drops??[]).filter(c=>c.type==='equipOrvasHead').length,slots:slots.map(c=>c?{type:c.type,count:c.count,durability:c.durability}:null)},
     spawn:facilitySite?.spawn,max:['equipOrvasHead','equipOrvasGreatsword','equipOrvasTwinGreatswords'].map(poiEquipmentDurabilityMax),
     raw:localStorage.getItem(POI_HOTBAR_KEY),backup:localStorage.getItem(POI_GAME_RESET_BACKUP),first:localStorage.getItem(POI_GAME_RESET_FIRST_BACKUP)};
   },
@@ -62,6 +63,14 @@ try{
  assert.equal(JSON.parse(s.first).before[kitKey],before.raw);assert.equal(JSON.parse(s.backup).phase,'complete');
  where='reload again is not an initialization or second grant';
  const first=s.first;await p.reload({waitUntil:'domcontentloaded'});await ready();s=await snapshot();seeded(s);assert.equal(s.first,first);
+ where='dropping one experimental weapon then retaining reset-camera URL must not grant it again';
+ assert(await p.evaluate(()=>window.__editorTest.orvasResetDropQA().ok),'the real inventory drop is persisted');
+ s=await snapshot();assert.equal(s.kit.slots[2],null);assert.equal(s.kit.drops,1);
+ assert(new URL(p.url()).searchParams.get('reset-camera')==='1');
+ await p.reload({waitUntil:'domcontentloaded'});await ready();s=await snapshot();
+ assert.equal(s.kit.slots[2],null);assert.equal(s.kit.drops,1);
+ assert.deepEqual(s.kit.slots.filter(c=>keys.includes(c?.type)).map(c=>c.type),keys.slice(1));
+ assert.equal(s.first,first);
  where='second explicit initialization replaces rather than accumulating another set';
  await open();await Promise.all([p.waitForEvent('framenavigated',{predicate:f=>f===p.mainFrame()}),p.locator('#poiResetGameConfirm').click()]);await ready();
  s=await snapshot();seeded(s);assert.equal(s.first,first);assert.deepEqual(errors,[]);
