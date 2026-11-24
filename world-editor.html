@@ -2418,7 +2418,23 @@ function poiRoleToolGripStyle(type){
  if(type==='equipBallpointPen')return {grip:.17,scaleX:.86,scaleY:.83,scaleZ:.73,tilt:.67};
  return null;
 }
+// BEGIN ORVAS WAISTCLOTH MODEL
+function poiOrvasWaistclothGeometry(m,x,y,z){
+ // The same carved fold/split panel geometry as the real boss, narrowed to
+ // the standing player's hips. Positive local X is the visibly open thigh.
+ const p=v=>[x+v[0]*.224,y+.166+(v[1]-.74)*.203,z+v[2]*.264];
+ const T=(a,b,c,col)=>tri(m,p(a),p(b),p(c),col);
+ const Q=(a,b,c,d,col)=>quad(m,p(a),p(b),p(c),p(d),col);
+ poiDavidSkirt({feet:[[0,0,0]],knees:[[0,1.06,0]]},T,Q,[.477,.444,.375]);
+}
+// END ORVAS WAISTCLOTH MODEL
+
 function poiStarterGearGeometry(m,type,x,y,z){
+ if(type==='armorOrvasWaistcloth'){
+  const first=m.p.length;poiOrvasWaistclothGeometry(m,x,y,z);
+  if(m.townParts)m.townParts.orvasWaist=[first,m.p.length];
+  return;
+ }
  const B=(dx,dy,dz,w,h,d,col)=>cube(m,x+dx,y+dy,z+dz,w,h,d,col);
  if(type==='armorIronTorso'){
   const iron=[.48,.52,.54],light=[.71,.75,.76],edge=[.32,.36,.39],strap=[.27,.21,.17];
@@ -4729,6 +4745,7 @@ case 'kitchenKnife':{
 case 'armorMerchantCoat':case 'armorGuildUniform':case 'armorCookApron':case 'armorCookHat':
 case 'equipFryingPan':case 'equipLadle':case 'equipBallpointPen':
  poiRoleItemGeometry(m,id,x,y,z);break;
+case 'armorOrvasWaistcloth':poiOrvasWaistclothGeometry(m,x,y-.14,z);break;
 case 'starterCap':case 'starterTunic':case 'starterTrousers':case 'starterBoots':{
  const bottom={starterCap:1.343,starterTunic:.47,starterTrousers:.108,starterBoots:0}[id];
  poiStarterGearGeometry(m,id,x,y-bottom,z);break;}
@@ -19640,22 +19657,34 @@ const POI_ORVAS_REWARDS=Object.freeze({
  'orvas-head':Object.freeze({id:'orvas-head',type:'equipOrvasHead',x:24,z:103,y:0,bit:1}),
  'orvas-greatsword':Object.freeze({id:'orvas-greatsword',type:'equipOrvasGreatsword',x:25,z:104,y:0,bit:2}),
  'orvas-twin-greatswords':Object.freeze({id:'orvas-twin-greatswords',type:'equipOrvasTwinGreatswords',x:23,z:104,y:0,bit:4}),
- 'orvas-soul':Object.freeze({id:'orvas-soul',type:'orvasSoul',x:24,z:105,y:0,bit:8})
+ 'orvas-soul':Object.freeze({id:'orvas-soul',type:'orvasSoul',x:24,z:105,y:0,bit:8}),
+ 'orvas-waistcloth':Object.freeze({id:'orvas-waistcloth',type:'armorOrvasWaistcloth',bit:16})
 });
+function poiOrvasPlacedReward(reward){
+ if(!reward||reward.id!=='orvas-waistcloth')return reward;
+ const current=typeof facilitySite!=='undefined'&&facilitySite?.id==='base'?facilitySite.davidTemple?.boss:null;
+ const row=typeof POI_DUNGEON_SPAWN_ROWS!=='undefined'?POI_DUNGEON_SPAWN_ROWS.find(([id])=>id==='davidTemple.david'):null;
+ const b=current??(row?{x:row[2],z:row[3],y:0}:null);
+ // The authored arena leaves this inner diagonal open. Resolve against
+ // the actual site whenever loaded, and the stock spawn registry offsite.
+ if(!b||!Number.isInteger(b.x)||!Number.isInteger(b.z)||b.y!==0)return null;
+ return {...reward,x:b.x+1,z:b.z+1,y:b.y};
+}
 function poiOrvasRewardValid(drop){
- const d=Object.hasOwn(POI_ORVAS_REWARDS,drop?.id)?POI_ORVAS_REWARDS[drop.id]:null;
+ const d=Object.hasOwn(POI_ORVAS_REWARDS,drop?.id)?poiOrvasPlacedReward(POI_ORVAS_REWARDS[drop.id]):null;
  return d&&d.type===drop.type&&d.x===drop.x&&d.z===drop.z&&d.y===drop.y?d:null;
 }
 function poiOrvasRewardOwned(kit,type){
- return poiInventoryOrdinarySlots(kit).some(c=>c?.type===type)||poiAnyChestHas(kit,type)||kit.drops?.some(d=>d.type===type);
+ return (type==='armorOrvasWaistcloth'&&kit.worn?.legs===type)||poiInventoryOrdinarySlots(kit).some(c=>c?.type===type)||poiAnyChestHas(kit,type)||kit.drops?.some(d=>d.type===type);
 }
-function poiOrvasRewardMask(mask){return Number.isInteger(mask)&&mask>=0&&mask<=15?mask:0}
+function poiOrvasRewardMask(mask){return Number.isInteger(mask)&&mask>=0&&mask<=31?mask:0}
 function poiOrvasRewardGrant(kit,grant=true){
  const old=kit.armedDrops||[];let drops=old,mask=poiOrvasRewardMask(kit.orvasRewards);
- for(const reward of Object.values(POI_ORVAS_REWARDS)){
-  if(mask&reward.bit)continue;
+ for(const spec of Object.values(POI_ORVAS_REWARDS)){
+  const reward=poiOrvasPlacedReward(spec);
+  if(!reward||mask&reward.bit)continue;
   const {bit,...drop}=reward;
-  const exists=old.some(d=>poiOrvasRewardValid(d)===reward)||poiOrvasRewardOwned(kit,reward.type);
+  const exists=old.some(d=>poiOrvasRewardValid(d)?.id===reward.id)||poiOrvasRewardOwned(kit,reward.type);
   if(!exists&&!grant)continue;
   mask|=bit;
   if(!exists)drops=[...drops,{...drop,durability:poiEquipmentDurabilityMax(drop.type)}];
@@ -19664,7 +19693,9 @@ function poiOrvasRewardGrant(kit,grant=true){
 }
 function poiOrvasRewardRestore(kit,raw,minute=poiDungeonPopulationMinute()){
  const when=raw?.version===1?raw.dead?.['davidTemple.david']:null;
- return poiOrvasRewardGrant(kit,Number.isSafeInteger(when)&&when>=0&&when<=minute);
+ // The old complete mask included the non-starter boss soul and is
+ // still proof after the separate timed respawn ledger expires.
+ return poiOrvasRewardGrant(kit,poiOrvasRewardMask(kit.orvasRewards)===15||Number.isSafeInteger(when)&&when>=0&&when<=minute);
 }
 // END ORVAS REWARD CORE
 function poiDungeonRememberDefeat(o,state){
@@ -19928,7 +19959,7 @@ function poiHotbarRead(){
   (saved.dungeonPopulation?.dead?.['northFort.minotaur']!==undefined||result.armedDrops?.some(d=>d.id==='north-minotaur-axe'))?
   poiNorthMinotaurRewardRestore(result,saved.dungeonPopulation):result;
  const orvasRestored=typeof poiOrvasRewardRestore==='function'&&
-  (saved.dungeonPopulation?.dead?.['davidTemple.david']!==undefined||restored.armedDrops?.some(d=>poiOrvasRewardValid(d)))?
+  (saved.dungeonPopulation?.dead?.['davidTemple.david']!==undefined||restored.orvasRewards===15||restored.armedDrops?.some(d=>poiOrvasRewardValid(d)))?
   poiOrvasRewardRestore(restored,saved.dungeonPopulation):restored;
  const final=typeof poiCompanionReconcile==='function'?poiCompanionReconcile(orvasRestored):orvasRestored;
  return poiHotbarState=typeof poiArmedWithoutDuplicateWeapons==='function'?poiArmedWithoutDuplicateWeapons(final):final;
@@ -20288,12 +20319,12 @@ const POI_GAME_WEAPON_NAMES=Object.freeze({equipWoodSword:'木の剣',kitchenKni
 const POI_STARTER_ARMOR=Object.freeze({head:'starterCap',torso:'starterTunic',legs:'starterTrousers',feet:'starterBoots'});
 const POI_FRESH_ARMOR=Object.freeze({head:null,torso:null,legs:null,feet:null});
 const POI_STARTER_ARMOR_NAMES=Object.freeze({starterCap:'キャップ',starterTunic:'布の服',starterTrousers:'布のズボン',starterBoots:'スニーカー',
- armorIronTorso:'鉄の鎧',armorMerchantCoat:'商人の服',armorGuildUniform:'ギルド制服',armorCookApron:'料理人の服',armorCookHat:'料理人の帽子'});
-const POI_ROLE_ARMOR_PART=Object.freeze({armorIronTorso:'torso',armorMerchantCoat:'torso',armorGuildUniform:'torso',armorCookApron:'torso',armorCookHat:'head'});
+ armorOrvasWaistcloth:'オルヴァスの腰布',armorIronTorso:'鉄の鎧',armorMerchantCoat:'商人の服',armorGuildUniform:'ギルド制服',armorCookApron:'料理人の服',armorCookHat:'料理人の帽子'});
+const POI_ROLE_ARMOR_PART=Object.freeze({armorOrvasWaistcloth:'legs',armorIronTorso:'torso',armorMerchantCoat:'torso',armorGuildUniform:'torso',armorCookApron:'torso',armorCookHat:'head'});
 function poiArmorCategory(type){
  return Object.hasOwn(POI_ROLE_ARMOR_PART,type)?POI_ROLE_ARMOR_PART[type]:Object.keys(POI_STARTER_ARMOR).find(p=>POI_STARTER_ARMOR[p]===type)||null;
 }
-const POI_ARMOR_DEFENSE=Object.freeze({starterCap:.25,starterTunic:.75,starterTrousers:.75,starterBoots:.25,
+const POI_ARMOR_DEFENSE=Object.freeze({starterCap:.25,starterTunic:.75,starterTrousers:.75,starterBoots:.25,armorOrvasWaistcloth:.75,
  armorMerchantCoat:1.25,armorGuildUniform:2,armorCookApron:1.5,armorCookHat:.5,armorIronTorso:4});
 const POI_ROLE_GEAR_PRICE=Object.freeze({starterCap:5,starterTunic:8,starterTrousers:8,starterBoots:10,
  armorMerchantCoat:20,armorGuildUniform:28,armorCookApron:18,armorCookHat:10,armorIronTorso:55,
@@ -20313,7 +20344,7 @@ function poiArmorDecode(raw){
  return Object.fromEntries(pieces.map(([part,type])=>[part,raw[part]===null?null:poiArmorCategory(raw[part])===part?raw[part]:type]));
 }
 const POI_EQUIPMENT_DURABILITY=Object.freeze({equipWoodSword:160,kitchenKnife:POI_KNIFE_DURABILITY,
- starterCap:36,starterTunic:62,starterTrousers:54,starterBoots:46,armorIronTorso:150,
+ starterCap:36,starterTunic:62,starterTrousers:54,starterBoots:46,armorOrvasWaistcloth:96,armorIronTorso:150,
  equipWoodBow:100,equipWoodSpear:120,equipStoneMace:140,equipBoneSword:125,equipIronSword:180,
  equipPlainStaff:80,equipLongStaff:65,equipNorthMinotaurAxe:180,equipOrvasHead:100,equipOrvasGreatsword:220,equipOrvasTwinGreatswords:210,
  armorMerchantCoat:76,armorGuildUniform:92,armorCookApron:70,armorCookHat:48,
@@ -21349,7 +21380,7 @@ function poiArmedDropDecode(raw){
   'knight-armor':'armorIronTorso','chapel-mace':'equipStoneMace','mage-wand':'fireWand',[POI_NORTH_WATCH_GUARD_LOOT]:'equipBoneSword',...Object.fromEntries(Object.values(POI_OTHERWORLD_EAST_LOOT))};
  const result=[];
  let legacy=0;
- for(const d of raw.slice(0,17)){
+ for(const d of raw.slice(0,18)){
   const orvas=typeof poiOrvasRewardValid==='function'?poiOrvasRewardValid(d):null;
   if(orvas){
    if(!result.some(v=>v.id===d.id)&&d.durability===poiEquipmentDurabilityMax(d.type)){
@@ -29222,7 +29253,11 @@ function poiBuildPlayerMesh(weapon,pose,gear,stride=0,r=0,x=0,y=0,z=0,heading=nu
    if(i>=left[0]&&i<left[1]||i>=right[0]&&i<right[1])continue;
   }
   const lx=body.p[i],ly=body.p[i+1],lz=body.p[i+2];
-  const swing=ly<.54&&Math.abs(lx)<.22?(lx<0?-stride:stride):
+  const waist=body.townParts.orvasWaist,isSkirt=waist&&i>=waist[0]&&i<waist[1];
+  // Weight the carved pleats continuously toward each thigh; the belt
+  // stays on the pelvis and never gets split by the old per-leg motion.
+  const hem=isSkirt?stride*.62*Math.max(-1,Math.min(1,lx/.18))*Math.max(0,Math.min(1,(.53-ly)/.32)):0;
+  const swing=isSkirt?hem:ly<.54&&Math.abs(lx)<.22?(lx<0?-stride:stride):
     ly>.45&&ly<.85&&Math.abs(lx)>.23?(lx<0?stride:-stride)*.36:0;
   const c=ly>.49?twistC:1,s=ly>.49?twistS:0;
   // Legs stay planted; the torso leads the shoulder through the punch.

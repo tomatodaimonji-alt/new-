@@ -117,10 +117,10 @@ try{
  }
  function checkGrant(s,source){
   assert.equal(s.hits.length,1);assert.equal(s.hits[0].companion,source);
-  assert.deepEqual(s.ground.map(d=>d.id).sort(),['orvas-greatsword','orvas-head','orvas-soul','orvas-twin-greatswords']);
+  assert.deepEqual(s.ground.map(d=>d.id).sort(),['orvas-greatsword','orvas-head','orvas-soul','orvas-twin-greatswords','orvas-waistcloth']);
   assert.deepEqual(s.ground.find(d=>d.id==='orvas-soul'),{id:'orvas-soul',type:'orvasSoul',x:24,z:105,y:0,durability:1050});
-  assert.equal(s.saved.orvasRewards,15);assert.equal(typeof s.saved.dungeonPopulation.dead['davidTemple.david'],'number');
-  assert.deepEqual(s.atomic[0],{flag:15,dead:true,soul:1});
+  assert.equal(s.saved.orvasRewards,31);assert.equal(typeof s.saved.dungeonPopulation.dead['davidTemple.david'],'number');
+  assert.deepEqual(s.atomic[0],{flag:31,dead:true,soul:1});
   assert(s.atomic.every(w=>w.soul<=1));
  }
  const scenario=process.env.ORVAS_AWARD_CASE;let q,p,s;
@@ -133,15 +133,15 @@ try{
  checkGrant(s,true);assert.equal(s.swing,walkSwing);assert.deepEqual(s.draw.slice(0,2),[24.5,105.5]);assert(s.draw[2]>72);
  phase='cold reload preserves floor reward, then actually walk over it';
  p=await q.cold();s=await q.until(v=>v.ground.some(d=>d.id==='orvas-soul'));
- assert.equal(s.ground.length,4);assert(s.slots.every(c=>c?.type!=='orvasSoul'));
- for(const [x,z] of [[25,102],[26,102],[26,103],[26,104],[26,105],[25,105],[24,105]])s=await q.step(x,z);
+ assert.equal(s.ground.length,5);assert(s.slots.every(c=>c?.type!=='orvasSoul'));
+ for(const [x,z] of [[23,102],[22,102],[22,103],[22,104],[22,105],[23,105],[24,105]])s=await q.step(x,z);
  assert.equal(s.slots.filter(c=>c?.type==='orvasSoul').length,1);
  assert.equal(s.slots.find(c=>c?.type==='orvasSoul').durability,1050);
- assert.equal(s.ground.length,3);assert(s.ground.every(d=>d.type!=='orvasSoul'));
+ assert.equal(s.ground.length,4);assert(s.ground.every(d=>d.type!=='orvasSoul'));
  s=await q.step(24,106);s=await q.step(24,105);
- assert.equal(s.slots.filter(c=>c?.type==='orvasSoul').length,1);assert.equal(s.saved.orvasRewards,15);
+ assert.equal(s.slots.filter(c=>c?.type==='orvasSoul').length,1);assert.equal(s.saved.orvasRewards,31);
  p=await q.cold();s=await q.until(v=>v.slots.some(c=>c?.type==='orvasSoul'));
- assert.equal(s.ground.length,3);assert.equal(s.saved.orvasRewards,15);
+ assert.equal(s.ground.length,4);assert.equal(s.saved.orvasRewards,31);
  assert(s.slots.some(c=>c?.type==='slimeSoul'&&c.durability===29));
  phase='real confirmed reset retains only the three weapon starters, never the soul';
  await p.locator('#poiLandscapeMenuToggle').tap();
