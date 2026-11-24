@@ -11,10 +11,15 @@ replace(testApi,testApi+`
   frame:()=>render(),
   inspect:()=>{
    const f=facilitySite.sacredForest,at=poiAimOrigin(performance.now());
-   const map=poiMiniStatic.get(0),minictx=map?.layer.getContext('2d');
-   const pixel=(x,z)=>map?[...minictx.getImageData(Math.round(map.ox+x*map.scale),Math.round(map.oy+z*map.scale),1,1).data]:null;
+   const map=poiLocalFrame,canvas=$('poiMiniMap'),minictx=canvas.getContext('2d');
+   const pixel=(x,z)=>{
+    if(!map||x<map.crop.x1||x>map.crop.x2||z<map.crop.z1||z>map.crop.z2)return null;
+    const px=Math.floor((x-map.crop.x1+.5)*canvas.width/41),pz=Math.floor((z-map.crop.z1+.5)*canvas.height/41);
+    return [...minictx.getImageData(px,pz,1,1).data];
+   };
    const mini=map?{concealed:map.concealed,temple:[pixel(22,158),pixel(28,158),pixel(24,164)],
-    trail:pixel(12,53),town:pixel(42,49),builds:poiMiniBuilds,saved:JSON.parse(localStorage.getItem(POI_HOTBAR_KEY)||'{}').sacredTempleSeen===true}:null;
+    gate:pixel(24,128),gateFlank:pixel(25,128),gateCell:map.cells[(128-map.crop.z1)*41+24-map.crop.x1],localTrail:pixel(poiWalkX,poiWalkZ-1),builds:poiMiniBuilds,
+    saved:JSON.parse(localStorage.getItem(POI_HOTBAR_KEY)||'{}').sacredTempleSeen===true}:null;
    return {x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,name:poiRegionAt(facilitySite,poiWalkX,poiWalkZ,false,poiWalkLevel).name,
     path:f.route,reveal:f.reveal,tree:f.trees[10],fog:[...gl.getUniform(program,loc.sacredFog)],raster:window.__sacredRaster||null,
     scene:poiSacredForestStatus(),err:gl.getError(),directions:['n','s','e','w'].map(k=>poiCameraRelativeStep(k)),
@@ -81,9 +86,9 @@ try{
  phase='old western save, explore entire continuous world on real gameplay key input';
  await seed(12,49);let s=await tick(38);assert.deepEqual([s.x,s.z,s.y],[12,49,0]);assert(!s.nearTemple,'town-edge meadow does not advertise the temple');
  assert(s.mini?.concealed&&!s.mini.saved);
- assert(s.mini.temple.every(c=>c[3]===0));
- const stableTerrain={trail:s.mini.trail,town:s.mini.town};
- assert(stableTerrain.trail[3]>0&&stableTerrain.town[3]>0);
+ const black=[0,0,0,255];
+ assert(s.mini.temple.every(c=>c===null),'distant temple is outside the local map');
+ const stableTrail=s.mini.localTrail;assert.notDeepEqual(stableTrail,black);
  const route=s.path.slice(1);let raster,compare,peak=0,builds=0,first=null;
  for(const q of route){
   await step(q);s=last;peak=Math.max(peak,s.fog[2]);builds=Math.max(builds,s.scene.vertices);
@@ -104,19 +109,21 @@ try{
  if(process.env.FACILITY_SCREENSHOTS)await p.screenshot({path:process.env.FACILITY_SCREENSHOTS+'/sacred-forest-reveal.png'});
  phase='continue through same historic gate into the actual temple';
  for(const z of [126,127])await step({x:24,z});
- assert(last.mini.concealed&&!last.mini.saved);
+ assert(last.mini.concealed&&!last.mini.saved);assert.equal(last.mini.gateCell,0);assert.deepEqual(last.mini.gateFlank,black);
  const beforeBuild=last.mini.builds;
  await step({x:24,z:128});
  assert(!last.mini.concealed&&last.mini.saved);
- assert(last.mini.temple.every(c=>c[3]>0),'actual map draws the revealed stone floor');
- assert.deepEqual({trail:last.mini.trail,town:last.mini.town},stableTerrain);
+ assert(last.mini.temple.every(c=>c===null),'discovery still does not reveal outside local radius');
+ assert(last.mini.gateCell>0,'real terrain is drawn below the marker only after reaching the gate');
+ assert.notDeepEqual(last.mini.gate,black,'actual map draws the reached gate after discovery');
  assert.equal(last.mini.builds,beforeBuild+1,'same surface cache is rebuilt exactly once at discovery');
  await step({x:24,z:129});
  assert.equal(last.mini.builds,beforeBuild+1);
  assert.equal(last.fog[2],0);assert.equal(last.name,'白環の大神殿');
  phase='cold reload away from the gate preserves discovery while keeping unrelated pouch data';
  await p.clock.resume();await seed(12,49);s=await tick(38);
- assert(s.mini.saved&&!s.mini.concealed&&s.mini.temple.every(c=>c[3]>0));
+ assert(s.mini.saved&&!s.mini.concealed&&s.mini.temple.every(c=>c===null));
+ assert.deepEqual(s.mini.localTrail,stableTrail);
  assert.equal(await p.evaluate(()=>JSON.parse(localStorage.getItem('world-workshop-hotbar-v1')).gold),23);
  phase='cold old exact saved arena returns with no fog';
  await p.clock.resume();await seed(24,100,true);s=await tick(38);
