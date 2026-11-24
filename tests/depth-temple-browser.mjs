@@ -43,7 +43,7 @@ async function init(x,z,newDepth){
  await wait(()=>!!window.__editorTest?.deepTempleQA);
  return state();
 }
-async function step(expected,key='ArrowDown'){
+async function step(expected,key='ArrowUp'){
  await p.keyboard.press(key);
  await wait(z=>{const q=window.__editorTest.deepTempleQA();return q.p[0]===24&&q.p[1]===z&&q.now>=q.movingUntil},expected);
  return state();

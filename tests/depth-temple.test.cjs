@@ -34,3 +34,18 @@ test('only the named far dome is withheld from ordinary far ground view; near vi
  ctx.cameraTopDown=false;ctx.poiWalkViewZ=120;a.deepEqual(Array.from(r()),[0]);
  ctx.poiWalkViewZ=151;a.deepEqual(Array.from(r()),[0]);
 });
+test('new deep ground item and gold save coordinates are scoped to the base extension',()=>{
+ const i=h.indexOf('function poiDavidDepthGroundPoint('),j=h.indexOf('function poiInventoryReadDrops(',i);
+ a(i>0&&j>i);const fn=vm.runInNewContext(h.slice(i,j)+';poiDavidDepthGroundPoint');
+ a(fn({x:24,z:158,y:0}));a(fn({x:47,z:181,y:0}));
+ for(const p of [{x:48,z:149,y:0},{x:24,z:182,y:0},{x:24,z:159,y:-1},{x:24,z:159,y:1},{x:24,z:159,y:0,region:'snowpass'},null])a.equal(fn(p),false);
+});
+test('old exact stable Orvas drop ids rehydrate beside new center rather than disappearing or duplicating',()=>{
+ const i=h.indexOf('const POI_ORVAS_REWARDS='),j=h.indexOf('function poiOrvasRewardOwned(',i);
+ if(i<0)return;
+ const get=vm.runInNewContext(h.slice(i,j)+';poiOrvasRewardValid');
+ const old={id:'orvas-head',type:'equipOrvasHead',x:24,z:103,y:0};
+ a.equal(get(old).z,157);
+ a.equal(get({...old,z:157}).z,157);
+ a.equal(get({...old,z:104}),null);
+});

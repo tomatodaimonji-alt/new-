@@ -2127,7 +2127,8 @@ const catalog=new Map(palette.map(p=>[p.id,p]));let selected='wall',mode='place'
 let pineObjectSelection=null,pineSelectedTile=null,pineMoveArmed=false;
 const byId=id=>catalog.get(id)||models.find(m=>m.id===id)||prefabs.find(p=>p.id===id);
 const cellKey=(x,z,y=0)=>x+','+z+','+y;
-const validPos=(x,z)=>Number.isInteger(x)&&Number.isInteger(z)&&x>=0&&z>=0&&x<MAP_W&&z<MAP_H;
+const validPos=(x,z)=>Number.isInteger(x)&&Number.isInteger(z)&&x>=0&&z>=0&&x<MAP_W&&z<MAP_H&&
+ (typeof poiSacredDepthVoid!=='function'||!poiSacredDepthVoid(facilitySite,x,z));
 const safeColor=s=>/^#[0-9a-f]{6}$/i.test(s);
 const hexRGB=s=>[1,3,5].map(i=>parseInt(s.slice(i,i+2),16)/255);
 const mesh=()=>({p:[],n:[],c:[]});
@@ -20493,11 +20494,16 @@ let poiHotbarEmptySlot=2,poiInventoryMesh=null,poiInventoryMeshDrops=null,poiInv
 const POI_REPEATABLE_MONSTER_WEAPONS=new Set(['equipWoodBow','equipWoodSpear','equipStoneMace',
  'equipBoneSword','equipIronSword','equipPlainStaff','equipLongStaff']);
 function poiRepeatableMonsterWeapon(type){return POI_REPEATABLE_MONSTER_WEAPONS.has(type)}
+function poiDavidDepthGroundPoint(p){
+ // Only the base/snow shared kit can create ordinary ground stacks. The
+ // extension is a narrow base surface lobe, never an editor or snow region.
+ return !!p&&p.region!=='snowpass'&&p.y===0&&p.x>=0&&p.x<48&&p.z>=128&&p.z<182;
+}
 function poiInventoryReadDrops(raw){
  if(!Array.isArray(raw))return [];
  const seen=new Set(),unique=new Set(),out=[];
  for(const d of raw.slice(0,POI_INVENTORY_LIMIT)){
-  if(!d||![d.x,d.z,d.y].every(Number.isInteger)||d.x<0||d.x>=MAX_MAP||d.z<0||d.z>=MAX_MAP||d.y< -1||d.y>9)continue;
+  if(!d||![d.x,d.z,d.y].every(Number.isInteger)||d.x<0||d.x>=MAX_MAP||d.z<0||(d.z>=MAX_MAP&&(typeof poiDavidDepthGroundPoint!=='function'||!poiDavidDepthGroundPoint(d)))||d.y< -1||d.y>9)continue;
   const key=(d.region==='snowpass'?'s:':'')+d.x+','+d.z+','+d.y;
   const max=poiInventoryStack(d.type),count=Number.isInteger(d.count)?Math.max(1,Math.min(max,d.count)):1;
   const c=poiInventorySanitizeCell({...d,count}),isWeapon=poiHotbarWeaponForType(d.type)&&!poiRepeatableMonsterWeapon(d.type);
@@ -20676,7 +20682,7 @@ function poiGroundGoldDecode(raw){
  const seen=new Set(),out=[];
  if(!Array.isArray(raw))return out;
  for(const p of raw.slice(0,POI_INVENTORY_LIMIT)){
-  if(!p||![p.x,p.z,p.y,p.amount].every(Number.isSafeInteger)||p.x<0||p.x>=MAX_MAP||p.z<0||p.z>=MAX_MAP||p.y< -1||p.y>9||p.amount<1||p.amount>POI_ECONOMY_GOLD_MAX)continue;
+  if(!p||![p.x,p.z,p.y,p.amount].every(Number.isSafeInteger)||p.x<0||p.x>=MAX_MAP||p.z<0||(p.z>=MAX_MAP&&(typeof poiDavidDepthGroundPoint!=='function'||!poiDavidDepthGroundPoint(p)))||p.y< -1||p.y>9||p.amount<1||p.amount>POI_ECONOMY_GOLD_MAX)continue;
   const key=(p.region==='snowpass'?'s:':'')+p.x+','+p.z+','+p.y;
   if(seen.has(key))continue;
   seen.add(key);out.push({x:p.x,z:p.z,y:p.y,amount:p.amount,...(p.region==='snowpass'?{region:p.region}:{})});
@@ -33493,6 +33499,8 @@ function pineValidateWorldData(o,stockDepth=false){if(!o||o.format!=='forest-wor
 const newW=o.width??o.size,newH=o.height??o.size;
 const extended=stockDepth&&newW===MAX_MAP&&newH===POI_SACRED_DEPTH_H;
 if(!Number.isInteger(newW)||!Number.isInteger(newH)||newW<MIN_MAP||newW>MAX_MAP||newH<MIN_MAP||newH>MAX_MAP&&!extended)throw Error('マップの広さが不正です');
+const outsideLobe=p=>p?.z>=128&&p.x>=POI_SACRED_DEPTH_W;
+if(extended&&[o.world,o.terrainHeights,o.checks].some(rows=>Array.isArray(rows)&&rows.some(outsideLobe)))throw Error('マップの範囲外です');
 const blocks=o.prefabs||[];if(!Array.isArray(blocks)||blocks.length>100)throw Error('設計図の数が多すぎます');
 if(!o.models.every(validModel))throw Error('モデルの内容が不正です');
 const heights=o.terrainHeights??[];
@@ -39069,7 +39077,7 @@ function poiSacredFogStrength(site,x,z,y){
  const close=smooth(2.2,10.5,Math.hypot(x-f.reveal.x,z-f.reveal.z));
  // Clear meadow, layered distance in the woods, then let the stone and
  // candlelight take over only at the actual path's final turn.
- return .96*progression*smooth(-1.25,3.2,inside)*close*(1-smooth(128,139,z));
+ return .96*progression*smooth(-1.25,3.2,inside)*close*(1-smooth(123,128,z));
 }
 function poiSacredApplyFog(now,light){
  const p=poiWalkActive&&!cameraTopDown&&!pineAIActive?poiAimOrigin(now):null;
