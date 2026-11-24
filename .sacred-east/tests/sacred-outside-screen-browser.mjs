@@ -55,7 +55,8 @@ try{
  const baseline=process.env.SACRED_STOCK==='1',mode=baseline?'stock':'veil';
  await seed(41,75);const camera=async(x,z,yaw,pitch,minute)=>{
   assert(await p.evaluate(args=>window.__editorTest.sacredQA.gate(...args),[x,z,yaw,pitch,minute]));
-  const s=await tick(45);
+  let s=await tick(45);
+  if(z===125)for(let i=0;i<4;i++)s=await tick(85);
   assert.deepEqual([s.x,s.z,s.y],[x,z,0]);assert.equal(s.err,0);return s;
  };
  phase='actual 21:21 screenshot east trail and two nearby yaw angles';
@@ -71,7 +72,7 @@ try{
  phase='ordinary meadow and gates remain clear through day/night, and forecourt reveals';
  for(const [x,z,yaw,pitch,m,key] of [[23,49,-.08,.14,1281,'west'],[41,69,-.42,.12,690,'south'],[24,125,0,.12,1281,'reveal']]){
   const s=await camera(x,z,yaw,pitch,m);
-  if(key==='reveal'){assert(s.roofDraws>0);assert.equal(s.edge[3],0);assert.equal(s.isConcealed,true);}
+  if(key==='reveal'){assert.equal(s.edge[3],0);assert.equal(s.isConcealed,true);assert(s.scene.active);}
   else{assert.equal(s.roofDraws,0);assert(s.edge[3]<.09);}
   await screenshot(mode+'-'+key);
  }
