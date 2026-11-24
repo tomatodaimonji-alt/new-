@@ -5760,6 +5760,7 @@ function poiFortGeometry(m,id,x,y,z,rot=0,lod=0){
   B(0,h,0,w,.12,d+.053,rim);
   if(corner)B(0,h+.12,0,.66,.27,.66,warm);
   else for(const sx of [-.33,.24])B(sx,h+.12,0,.28,.25,d-.02,stone);
+  m.hybridCubeEnd=m.p.length/3;
   // Pared-down slabs: surface stripes, not a cube for every stone.
   for(const side of [-1,1])for(const yy of lod===0?[.48,.84,1.21,1.59]:lod===1?[.48,1.21]:[]){
    const q=side*(d*.5+.002);
@@ -33659,7 +33660,7 @@ function makeScene(){
 }
 function upload(m,reuse=null,usage=gl.STATIC_DRAW){const n=m.p.length/3,data=new Float32Array(n*9);for(let i=0;i<n;i++){const a=i*9,b=i*3;for(let j=0;j<3;j++){data[a+j]=m.p[b+j];data[a+3+j]=m.n[b+j];data[a+6+j]=m.c[b+j]}}const vbo=reuse||gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vbo);gl.bufferData(gl.ARRAY_BUFFER,data,usage);return{buf:vbo,count:n}}
 const POI_OCCLUSION_OPACITY=.16;
-const VERT='precision highp float;attribute vec3 aPos;attribute vec3 aNorm;attribute vec3 aCol;attribute vec3 aHybridWallShift;attribute vec2 aHybridWallBand;uniform mat4 uMVP;varying vec3 vCol;varying mediump vec2 vHybridWallBand;varying mediump float vWorldHeight;varying mediump vec2 vLootXZ;void main(){gl_Position=uMVP*vec4(aPos+aHybridWallShift,1.0);vWorldHeight=aPos.y+aHybridWallShift.y;vLootXZ=aPos.xz+aHybridWallShift.xz;vHybridWallBand=aHybridWallBand;float l=.60+.40*max(dot(normalize(aNorm),normalize(vec3(-.4,1.0,.35))),0.0);vCol=aCol*l;}';
+const VERT='precision highp float;attribute vec3 aPos;attribute vec3 aNorm;attribute vec3 aCol;attribute vec3 aHybridWallShift;attribute vec2 aHybridWallBand;attribute vec2 aHybridWallRot;attribute float aHybridWallFace;uniform mat4 uMVP;varying vec3 vCol;varying mediump vec2 vHybridWallBand;varying mediump float vWorldHeight;varying mediump vec2 vLootXZ;float wallShade(vec3 n){return n.y>.5?1.08:n.z>.5?1.0:n.z<-.5?.72:n.x<-.5?.88:.83;}void main(){vec3 p=aPos,n=aNorm;float c=aHybridWallRot.x,s=aHybridWallRot.y;if(c!=0.0||s!=0.0){p.xz=vec2(p.x*c-p.z*s,p.x*s+p.z*c);n.xz=vec2(n.x*c-n.z*s,n.x*s+n.z*c);}p+=aHybridWallShift;gl_Position=uMVP*vec4(p,1.0);vWorldHeight=p.y;vLootXZ=p.xz;vHybridWallBand=aHybridWallBand;float l=.60+.40*max(dot(normalize(n),normalize(vec3(-.4,1.0,.35))),0.0);vCol=aCol*l*mix(1.0,wallShade(n)/wallShade(aNorm),aHybridWallFace);}';
 const FRAG=`precision mediump float;
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 #define OCCP highp
@@ -33767,7 +33768,7 @@ void main(){
 function sh(t,src){const s=gl.createShader(t);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s}
 let program;try{program=gl.createProgram();gl.attachShader(program,sh(gl.VERTEX_SHADER,VERT));gl.attachShader(program,sh(gl.FRAGMENT_SHADER,FRAG));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program))}catch(e){window.pineStartup.fail(e);return}
 gl.useProgram(program);gl.enable(gl.DEPTH_TEST);gl.depthMask(true);gl.depthFunc(gl.LESS);gl.clearColor(0,0,0,0);const loc={p:gl.getAttribLocation(program,'aPos'),n:gl.getAttribLocation(program,'aNorm'),c:gl.getAttribLocation(program,'aCol'),mvp:gl.getUniformLocation(program,'uMVP'),
- daylight:gl.getUniformLocation(program,'uTownDaylight'),lootHighlight:gl.getUniformLocation(program,'uLootHighlight'),occlusionShape:gl.getUniformLocation(program,'uOcclusionShape'),occlusionInfo:gl.getUniformLocation(program,'uOcclusionInfo'),hitFlash:gl.getUniformLocation(program,'uHitFlash'),sacredFog:gl.getUniformLocation(program,'uSacredFog'),sacredEdge:gl.getUniformLocation(program,'uSacredEdge'),streamPropReveal:gl.getUniformLocation(program,'uStreamPropReveal'),outdoorSight:gl.getUniformLocation(program,'uOutdoorSight'),sharedCanopy:gl.getUniformLocation(program,'uSharedCanopy'),hybridGateBand:gl.getUniformLocation(program,'uHybridGateBand'),hybridWallShift:gl.getAttribLocation(program,'aHybridWallShift'),hybridWallBand:gl.getAttribLocation(program,'aHybridWallBand'),sacredTempleHide:gl.getUniformLocation(program,'uSacredTempleHide'),sacredColor:gl.getUniformLocation(program,'uSacredColor')};
+ daylight:gl.getUniformLocation(program,'uTownDaylight'),lootHighlight:gl.getUniformLocation(program,'uLootHighlight'),occlusionShape:gl.getUniformLocation(program,'uOcclusionShape'),occlusionInfo:gl.getUniformLocation(program,'uOcclusionInfo'),hitFlash:gl.getUniformLocation(program,'uHitFlash'),sacredFog:gl.getUniformLocation(program,'uSacredFog'),sacredEdge:gl.getUniformLocation(program,'uSacredEdge'),streamPropReveal:gl.getUniformLocation(program,'uStreamPropReveal'),outdoorSight:gl.getUniformLocation(program,'uOutdoorSight'),sharedCanopy:gl.getUniformLocation(program,'uSharedCanopy'),hybridGateBand:gl.getUniformLocation(program,'uHybridGateBand'),hybridWallShift:gl.getAttribLocation(program,'aHybridWallShift'),hybridWallBand:gl.getAttribLocation(program,'aHybridWallBand'),hybridWallRot:gl.getAttribLocation(program,'aHybridWallRot'),hybridWallFace:gl.getAttribLocation(program,'aHybridWallFace'),sacredTempleHide:gl.getUniformLocation(program,'uSacredTempleHide'),sacredColor:gl.getUniformLocation(program,'uSacredColor')};
 try{initSignProgram()}catch(e){console.warn('2D sign textures unavailable',e)}
 function mult(a,b){const c=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++)for(let k=0;k<4;k++)c[j*4+i]+=a[k*4+i]*b[j*4+k];return c}
 function ortho(l,r,b,t,n,f){return new Float32Array([2/(r-l),0,0,0,0,2/(t-b),0,0,0,0,-2/(f-n),0,-(r+l)/(r-l),-(t+b)/(t-b),-(f+n)/(f-n),1])}
@@ -41590,6 +41591,7 @@ function poiHybridGateKey(id,o){return id+':'+o.x+','+o.z}
 let poiHybridGateCache=new Map(),poiHybridGateFrame=[],poiHybridGateReady=new Set(),poiHybridGateBytes=0;
 const poiHybridGateSources=new WeakMap();
 function poiHybridGatePrepare(){
+ if(POI_HYBRID_WALL_OPT)return poiHybridGatePrepareOpt();
  if(!POI_HYBRID_GATE)return;
  poiHybridGateFrame=[];poiHybridGateReady.clear();
  if(!poiOutdoorFrame){
@@ -41646,7 +41648,7 @@ function poiHybridGateDraw(vp){
   if(!matrices.has(spec.id))matrices.set(spec.id,poiOverlandNeighborVP(vp,id,spec.id));
   const mat=matrices.get(spec.id),h=(spec.terrain.get(o.x+','+o.z)||0)*TERRAIN_STEP;
   if(!poiOverlandBoxVisible(mat,[o.x-1.2,h,o.z-1.2,o.x+2.2,h+3.7,o.z+2.2]))continue;
-  const [x,z]=poiOverlandGlobal(spec.id,o.x,o.z),[px,pz]=poiOverlandLocal(spec.id,...g),w=poiHybridGateWeights(...g,x,z);
+  const [x,z]=poiOverlandGlobal(spec.id,o.x,o.z),[px,pz]=poiOverlandLocal(spec.id,...g),w=q.display??poiHybridGateWeights(...g,x,z);
   if(spec.id!==id)poiSacredFrontierFogRegion(spec.id);
   try{
    let lo=0;
@@ -41686,24 +41688,32 @@ function poiHybridWallWarm(){
  }:gl.getExtension('ANGLE_instanced_arrays');
  if(!ext)return false; // keep exact installed stock / stream geometry when hardware lacks it
  const variants=[];
- for(let rot=0;rot<4;rot++)for(let tier=0;tier<3;tier++){
+ for(let rot=0;rot<(POI_HYBRID_WALL_OPT?1:4);rot++)for(let tier=0;tier<3;tier++){
   const m=mesh();poiFortGeometry(m,'poiFortWall',0,0,0,rot,tier);variants.push(m);
  }
- const dynBytes=POI_HYBRID_WALL_MAX*5*4,bytes=variants.reduce((n,m)=>n+m.p.length*12,dynBytes);
+ const stride=POI_HYBRID_WALL_OPT?7:5,dynBytes=POI_HYBRID_WALL_MAX*stride*4,
+ bytes=variants.reduce((n,m)=>n+m.p.length*12+(POI_HYBRID_WALL_OPT?m.p.length/3:0),dynBytes);
  const near=[...poiOverlandMeshes.values()].reduce((n,m)=>n+m.bytes,0);
  if(bytes>POI_HYBRID_WALL_LIMIT||bytes+near+poiHybridGateBytes>POI_OVERLAND_GPU_LIMIT)return false;
  poiOutdoorTrimForDetailed(bytes,near);
  if(bytes+near+poiHybridGateBytes+poiOutdoorFarBytes>POI_OVERLAND_GPU_LIMIT)return false;
  const instances=gl.createBuffer();
  gl.bindBuffer(gl.ARRAY_BUFFER,instances);gl.bufferData(gl.ARRAY_BUFFER,dynBytes,gl.DYNAMIC_DRAW);
- poiHybridWallPack={ext,instances,variants:variants.map(m=>upload(m))};
+ poiHybridWallPack={ext,instances,stride,variants:variants.map(m=>{
+  const g=upload(m);
+  if(POI_HYBRID_WALL_OPT){
+   const mark=new Uint8Array(g.count);mark.fill(1,0,m.hybridCubeEnd);
+   g.face=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,g.face);gl.bufferData(gl.ARRAY_BUFFER,mark,gl.STATIC_DRAW);
+  }
+  return g;
+ })};
  poiHybridWallBytes=bytes;
  return true;
 }
 function poiHybridWallDraw(vp){
  poiHybridWallDebug={calls:0,instances:0,bytes:poiHybridWallBytes,impl:poiHybridWallPack?'instanced':'stock'};
  if(!poiHybridWallActive||!poiOutdoorFrame)return;
- const {id,g}=poiOutdoorFrame,{instances,variants,ext}=poiHybridWallPack;
+ const {id,g}=poiOutdoorFrame,{instances,variants,ext,stride}=poiHybridWallPack;
  let uploaded=0;
  for(const spec of poiOutdoorAreas(id)){
   if(spec.id!=='base')continue;
@@ -41717,33 +41727,108 @@ function poiHybridWallDraw(vp){
    const h=(spec.terrain.get(o.x+','+o.z)||0)*TERRAIN_STEP;
    if(!poiOverlandBoxVisible(view,[o.x-.3,h,o.z-.3,o.x+1.3,h+2.6,o.z+1.3]))continue;
    for(const [tier,lo,hi] of poiHybridWallBands(poiHybridGateWeights(x,z,o.x,o.z))){
-    const key=((o.rot||0)&3)*3+tier,r=sets.get(key)||[];
-    r.push(o.x+.5,h,o.z+.5,lo,hi);sets.set(key,r);
+    const key=POI_HYBRID_WALL_OPT?tier:((o.rot||0)&3)*3+tier,r=sets.get(key)||[];
+    r.push(o.x+.5,h,o.z+.5,lo,hi);
+    if(POI_HYBRID_WALL_OPT){const {c,s}=poiHybridWallRot(o.rot);r.push(c,s)}
+    sets.set(key,r);
    }
   }
   if(spec.id!==id)poiSacredFrontierFogRegion(spec.id);
   try{
    for(const [key,coords] of sets){
-    const g=variants[key],count=coords.length/5;
+    const g=variants[key],count=coords.length/stride;
     if(count>POI_HYBRID_WALL_MAX)continue; // beyond canonical family count; never overrun GPU slice
     const props=[[loc.p,0],[loc.n,12],[loc.c,24]];
     gl.bindBuffer(gl.ARRAY_BUFFER,g.buf);
     for(const [a,o] of props){gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,3,gl.FLOAT,false,36,o)}
     gl.bindBuffer(gl.ARRAY_BUFFER,instances);
     gl.bufferSubData(gl.ARRAY_BUFFER,0,Float32Array.from(coords));uploaded+=coords.length*4;
-    for(const [a,n,o] of [[loc.hybridWallShift,3,0],[loc.hybridWallBand,2,12]]){
-     gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,n,gl.FLOAT,false,20,o);ext.vertexAttribDivisorANGLE(a,1);
+    for(const [a,n,o] of [[loc.hybridWallShift,3,0],[loc.hybridWallBand,2,12],...(POI_HYBRID_WALL_OPT?[[loc.hybridWallRot,2,20]]:[])]){
+     gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,n,gl.FLOAT,false,stride*4,o);ext.vertexAttribDivisorANGLE(a,1);
     }
+    if(POI_HYBRID_WALL_OPT){gl.bindBuffer(gl.ARRAY_BUFFER,g.face);gl.enableVertexAttribArray(loc.hybridWallFace);
+     gl.vertexAttribPointer(loc.hybridWallFace,1,gl.UNSIGNED_BYTE,false,0,0);ext.vertexAttribDivisorANGLE(loc.hybridWallFace,0)}
     gl.uniformMatrix4fv(loc.mvp,false,view);
     poiUniformBuildDraw(x+.5,z+.5,'hybrid-wall',()=>ext.drawArraysInstancedANGLE(gl.TRIANGLES,0,g.count,count));
     poiHybridWallDebug.calls++;poiHybridWallDebug.instances+=count;
    }
   }finally{
    if(spec.id!==id)poiSacredFrontierFogRegion(id);
-   for(const a of [loc.hybridWallShift,loc.hybridWallBand]){ext.vertexAttribDivisorANGLE(a,0);gl.disableVertexAttribArray(a);gl.vertexAttrib4f(a,0,0,0,1)}
+   for(const a of [loc.hybridWallShift,loc.hybridWallBand,loc.hybridWallRot,loc.hybridWallFace]){ext.vertexAttribDivisorANGLE(a,0);gl.disableVertexAttribArray(a);gl.vertexAttrib4f(a,0,0,0,1)}
   }
  }
  poiHybridWallDebug.uploaded=uploaded;
+}
+// BEGIN OPTIMIZED FORT POLICY
+function poiHybridGateResidentTiers(weights){return weights.map((w,i)=>w>1e-7?i:-1).filter(i=>i>=0)}
+function poiHybridWallRot(rot){
+ const i=(rot||0)&3;
+ return {c:i===0?1:i===2?-1:0,s:i===1?1:i===3?-1:0};
+}
+function poiHybridWallFaceShade(x,y,z){return y>.5?1.08:z>.5?1:z<-.5?.72:x<-.5?.88:.83}
+// END OPTIMIZED FORT POLICY
+const POI_HYBRID_WALL_OPT=POI_HYBRID_WALL&&facilityParams.get('hybrid-wall-opt')==='1';
+function poiHybridGateDropTier(e,i){
+ const q=e.gpus[i];if(!q)return;
+ gl.deleteBuffer(q.buf);e.gpus[i]=null;const b=q.count*36;
+ e.bytes-=b;poiHybridGateBytes-=b;
+}
+function poiHybridGatePrepareOpt(){
+ poiHybridGateFrame=[];poiHybridGateReady.clear();
+ if(!poiOutdoorFrame){
+  const warm=poiWalkActive&&poiWalkLevel===0&&facilitySite?.id==='base'&&performance.now()<poiUniformWarmUntil&&
+   poiDavidTempleEnclosedAt(facilitySite,poiWalkViewX,poiWalkViewZ,0);
+  if(!warm){for(const e of poiHybridGateCache.values())for(let i=0;i<3;i++)poiHybridGateDropTier(e,i);poiHybridGateCache.clear()}
+  return;
+ }
+ const {id,g}=poiOutdoorFrame,candidates=[];
+ for(const spec of poiOutdoorAreas(id)){
+  let list=poiHybridGateSources.get(spec.world);
+  if(!list){list=spec.world.filter(o=>o.y===0&&o.type==='poiFortGate'&&spec.owns(o.x,o.z));poiHybridGateSources.set(spec.world,list)}
+  for(const o of list){
+   const [x,z]=poiOverlandGlobal(spec.id,o.x,o.z),d=Math.hypot(x-g[0],z-g[1]),
+    weights=poiHybridGateWeights(...g,x,z),tiers=poiHybridGateResidentTiers(weights);
+   candidates.push({spec,o,key:poiHybridGateKey(spec.id,o),d,weights,tiers});
+  }
+ }
+ candidates.sort((a,b)=>a.d-b.d||a.key.localeCompare(b.key));
+ const wanted=new Map(candidates.filter(q=>q.tiers.length).map(q=>[q.key,q]));
+ for(const [key,e] of poiHybridGateCache)if(wanted.get(key)?.spec.world!==e.source){
+  for(let i=0;i<3;i++)poiHybridGateDropTier(e,i);poiHybridGateCache.delete(key);
+ }
+ const near=[...poiOverlandMeshes.values()].reduce((n,m)=>n+m.bytes,0);
+ let baked=false;
+ for(const q of candidates){
+  const {spec,o,key,tiers}=q;
+  if(!tiers.length){poiHybridGateReady.add(key);continue}
+  let e=poiHybridGateCache.get(key);
+  if(!e){e={source:spec.world,gpus:[null,null,null],bytes:0,last:null};poiHybridGateCache.set(key,e)}
+  if(tiers.every(i=>e.gpus[i]))for(let i=0;i<3;i++)if(!tiers.includes(i))poiHybridGateDropTier(e,i);
+  const i=tiers.find(i=>!e.gpus[i]);
+  if(i!==undefined&&!baked){
+   const h=(spec.terrain.get(o.x+','+o.z)||0)*TERRAIN_STEP,m=mesh();
+   poiFortGeometry(m,o.type,o.x+.5,h,o.z+.5,o.rot||0,i);
+   const bytes=m.p.length*12;baked=true;
+   const mandatory=near+poiHybridGateBytes+poiHybridWallBytes;
+   if(bytes+poiHybridGateBytes<=POI_HYBRID_GATE_LIMIT&&bytes+mandatory<=POI_OVERLAND_GPU_LIMIT){
+    // Never evict required ground merely to prewarm a visual transition.
+    while(bytes+mandatory+poiOutdoorFarBytes>POI_OVERLAND_GPU_LIMIT){
+     const victim=poiSplitVictim(poiOutdoorCaches,'props',-Infinity);if(victim===null)break;poiOutdoorDrop(victim);
+    }
+    if(bytes+mandatory+poiOutdoorFarBytes<=POI_OVERLAND_GPU_LIMIT){e.gpus[i]=upload(m);e.bytes+=bytes;poiHybridGateBytes+=bytes}
+   }
+  }
+  let display=q.weights;
+  if(tiers.every(i=>e.gpus[i])){
+   for(let i=0;i<3;i++)if(!tiers.includes(i))poiHybridGateDropTier(e,i);
+   e.last=tiers.reduce((a,i)=>q.weights[i]>q.weights[a]?i:a,tiers[0]);
+  }else{
+   const hold=e.gpus[e.last]?e.last:tiers.find(i=>e.gpus[i]);
+   if(hold===undefined)continue;
+   display=[0,0,0];display[hold]=1;
+  }
+  poiHybridGateReady.add(key);poiHybridGateFrame.push({...q,e,display});
+ }
 }
 // BEGIN OUTDOOR GEOGRAPHY LOD
 const POI_OUTDOOR_FAR_OUT=48;
@@ -42790,7 +42875,7 @@ function workshopResumePermitted(params){
  if(params.get('reset-camera')==='1'&&facilityPlayOnOpen(params,'base')&&
     [...params.keys()].every(k=>['facility','facility-play','reset-camera','test'].includes(k)))return true;
  if(params.has('facility')||params.has('facility-return')||params.has('editor'))return false;
- if(params.get('resume')==='1')return [...params.keys()].every(k=>k==='resume'||k==='test'||k==='outdoor-lod'&&params.get(k)==='0'||(k==='uniform-outdoor'||k==='uniform-shell'||k==='uniform-split'||k==='hybrid-gate'||k==='hybrid-wall')&&params.get(k)==='1');
+ if(params.get('resume')==='1')return [...params.keys()].every(k=>k==='resume'||k==='test'||k==='outdoor-lod'&&params.get(k)==='0'||(k==='uniform-outdoor'||k==='uniform-shell'||k==='uniform-split'||k==='hybrid-gate'||k==='hybrid-wall'||k==='hybrid-wall-opt')&&params.get(k)==='1');
  if(![...params.keys()].length)return true;
  return [...params.keys()].every(k=>k==='revision')&&/^\d{1,20}$/.test(params.get('revision')||'');
 }

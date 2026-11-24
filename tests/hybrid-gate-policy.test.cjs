@@ -23,7 +23,7 @@ test('untouched detailed built-in gate while medium and far use fewer vertices b
   cube:(m,x,y,z,w,h,d,c)=>m.push([x-w/2,y,z-d/2,c],[x+w/2,y+h,z+d/2,c]),
   quad:(m,a,b,c,d,e)=>m.push([...a,e],[...b,e],[...c,e],[...d,e])});
   vm.runInContext(set(s),c);return c.poiFortGeometry;};
- const base=run(old),f=run(h),sample=(fn,type,lod)=>{const out=[];fn(out,type,84.5,0,67.5,0,lod);return out};
+ const base=run(old),f=run(h),sample=(fn,type,lod)=>{const out=[];out.p=[];fn(out,type,84.5,0,67.5,0,lod);return out};
  const gate='poiFortGate',near=sample(f,gate,0),med=sample(f,gate,1),far=sample(f,gate,2);
  assert.deepEqual(JSON.stringify(near),JSON.stringify(sample(base,gate,0)));
  assert.deepEqual(JSON.stringify(sample(f,'poiFortWall',0)),JSON.stringify(sample(base,'poiFortWall',0)));
