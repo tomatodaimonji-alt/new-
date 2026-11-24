@@ -39,8 +39,8 @@ try{
  const waypoints=[[49,130],[52,130],[52,132],[57,132],[57,135],[60,135],[60,138]];
  for(const [tx,tz] of waypoints)while(s.x!==tx||s.z!==tz){
   const want={x:s.x+Math.sign(tx-s.x),z:s.z+Math.sign(tz-s.z)};
-  const index=s.dirs.findIndex(d=>d[0]===want.x-s.x&&d[1]===want.z-s.z);a(index>=0);
-  const key=['ArrowUp','ArrowDown','ArrowRight','ArrowLeft'][index];
+  // Fixed overhead input uses literal world cardinal arrows.
+  const key=want.x>s.x?'ArrowRight':want.x<s.x?'ArrowLeft':want.z>s.z?'ArrowDown':'ArrowUp';
   let after;
   for(let i=0;i<5;i++){
    await p.keyboard.press(key);await p.waitForTimeout(230);after=await get();

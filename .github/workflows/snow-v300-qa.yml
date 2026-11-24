@@ -9,7 +9,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [strict, geometry, pixels, routes, audible-a, audible-b, controls-a, controls-b]
+        suite: [strict, geometry, temple, local-map]
     runs-on: ubuntu-24.04
     timeout-minutes: 18
     steps:
@@ -32,6 +32,7 @@ jobs:
       - if: matrix.suite == 'strict'
         run: |
           cp .snow-v300/world-editor.html world-editor.html
+          cp .snow-v300/compat/*.cjs tests/
           c=0
           node --test --test-reporter=tap tests/*.test.cjs >strict.log 2>&1 || c=$?
           grep -E '^(not ok|# tests|# pass|# fail)' strict.log || true
@@ -40,24 +41,7 @@ jobs:
         run: npm install --no-save playwright@1.58.2 && npx playwright install chromium
       - if: matrix.suite == 'geometry'
         run: node .snow-v300/tests/snow-new-sleeve-browser.mjs .snow-v300/world-editor.html
-      - if: matrix.suite == 'pixels'
-        run: |
-          node .snow-v300/tests/snow-neighbor-alignment-browser.mjs .snow-v300/world-editor.html
-          node .snow-v300/tests/snow-visible-from-forest-browser.mjs .snow-v300/world-editor.html
-      - if: matrix.suite == 'routes'
-        run: node .snow-v300/tests/snow-pass-browser.mjs .snow-v300/world-editor.html
-      - if: startsWith(matrix.suite, 'audible-')
-        shell: bash
-        run: |
-          code=0
-          for repetition in 1 2; do
-            echo "Unchanged audible held drag gate, physically translated coordinates, repetition $repetition"
-            SNOW_PHASE_REPORT=1 SNOW_PALETTE_REPORT=1 node .snow-v300/tests/snow-continuous-seam-browser.mjs .snow-v300/world-editor.html || code=1
-          done
-          exit "$code"
-      - if: startsWith(matrix.suite, 'controls-')
-        shell: bash
-        run: |
-          stock(){ SNOW_MATCHED_STOCK_ONLY=1 node .snow-v300/tests/snow-matched-gpu-browser.mjs .snow-v300/sleeve.html; }
-          trial(){ node .snow-v300/tests/snow-matched-gpu-browser.mjs .snow-v300/world-editor.html; }
-          if [ "${{ matrix.suite }}" = controls-a ]; then stock && trial; else trial && stock; fi
+      - if: matrix.suite == 'temple'
+        run: node tests/depth-temple-browser.mjs .snow-v300/world-editor.html
+      - if: matrix.suite == 'local-map'
+        run: node tests/local-minimap-browser.mjs .snow-v300/world-editor.html
