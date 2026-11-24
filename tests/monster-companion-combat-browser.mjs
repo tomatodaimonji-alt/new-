@@ -53,6 +53,7 @@ inject(testAPI,testAPI+`
     trainingPosition:window.__companionFoes?.training?{x:window.__companionFoes.training.s.x,z:window.__companionFoes.training.s.z}:null,
     rendered:a?!!poiCompanionMesh:false,worn:poiArmorWorn(kit),wornHealth:kit.wornDurability,
     carriedCoat:slots.find(c=>c?.type==='starterTunic'),toolshop:kit.toolshopSupply?.stock,
+    breaks:poiMonsterBreakSnapshot(performance.now()),shatterPose:window.__companionShatterPose??null,shatterMesh:window.__companionShatterMesh??null,
     saved:JSON.parse(localStorage.getItem(POI_HOTBAR_KEY)||'null')};
   }
  },
@@ -65,6 +66,12 @@ const wild='function poiWildSpawnFrame(now,rng=Math.random){';
 inject(wild,wild+'return;');
 const sound='function poiSound(kind,weapon=null,defeated=false,atContact=false,targetType=null){';
 inject(sound,sound+"\n if(kind==='item-pickup'&&weapon==='slimeSoul')window.__companionPickup=(window.__companionPickup||0)+1;");
+const hurt='function poiCompanionHurt(damage,now){';
+inject(hurt,hurt+"\n if(poiCompanionActor)window.__companionShatterPose=poiCompanionWorldPose(poiCompanionActor,now);");
+const debrisStart='function poiMonsterAppendDebris(m,e,t,fade=1){';
+inject(debrisStart,debrisStart+'\n const shatterBefore=m.p.length;');
+const debrisEnd='\n}\nfunction poiMonsterDrawBreaks(';
+inject(debrisEnd,'\n if(e.type==="monsterSlime"&&!e.actor&&!e.soulFx&&m.p.length>shatterBefore)window.__companionShatterMesh={x:e.x,z:e.z,vertices:(m.p.length-shatterBefore)/3};'+debrisEnd);
 const damage='function poiPlayerDamageTarget(monster,x,z,amount,weapon,now,silent=false,atContact=false,source=null){';
 inject(damage,damage+"\n if(source?.companion)(window.__companionDamage??=[]).push({kind:monster[0].type,amount,before:monster[1].hp});");
 for(const [,script] of h.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(script);
@@ -185,7 +192,7 @@ try{
   await page.evaluate(()=>window.__editorTest.companionCombatQA.retire('hostile'));await advance(190);
   return a;
  }
- q=await hostileContact();assert(q.hp>0&&q.hp<36);
+ q=await hostileContact();assert(q.hp>0&&q.hp<36);assert.equal(q.breaks.length,0,'nonlethal damage has no debris');
  phase='dismiss, inspect durability, return using the actual pouch';
  await tap('#poiBagToggle');await detail();
  assert.match(await page.locator('#poiItemDetailDescription').innerText(),new RegExp(q.hp+' / 36'));
@@ -195,7 +202,7 @@ try{
  await tap(action);let state=await advance(48);assert(state.actor,'opening command menu does not change the real ally');
  assert(await page.locator('#poiCompanionCommands').evaluate(el=>el.open));
  await tap('#poiCompanionCommands [data-companion-command="dismiss"]');
- state=await advance(48);assert.equal(state.actor,null);assert.equal(state.hp,q.hp);
+ state=await advance(48);assert.equal(state.actor,null);assert.equal(state.hp,q.hp);assert.equal(state.breaks.length,0,'dismiss has no debris');
  await use(/仲間を呼ぶ/);await closeBag();state=await until(a=>!!a.actor);assert.equal(state.hp,q.hp);
  assert.equal(state.pickup,1);
  phase='real reload restores exact remaining durability and chosen summon';
@@ -211,10 +218,17 @@ try{
  assert.equal(state.slots,0);assert.equal(state.actor,null);assert.equal(state.active,null);assert.equal(state.pickup,0);
  assert(state.saved.slots.some(c=>c?.type==='equipWoodSword'));
  assert(!state.saved.slots.some(c=>c?.type==='slimeSoul'));
+ assert.equal(state.breaks.length,1,'true lethal contact adds one ordinary fragment event');
+ const shatter=state.breaks[0],pose=state.shatterPose;
+ assert.equal(shatter.type,'monsterSlime');assert.equal(shatter.actor,undefined);
+ assert.equal(shatter.phase,'flight');assert(shatter.parts.length>2);
+ assert(Math.hypot(shatter.x-pose.x,shatter.z-pose.z)<.00001,'same fractional world origin as last rendered body');
+ const mesh=await until(s=>s.shatterMesh&&Math.hypot(s.shatterMesh.x-pose.x,s.shatterMesh.z-pose.z)<.00001,500);
+ assert(mesh.shatterMesh.vertices>12,'the normal fragment renderer actually submits mesh vertices at that origin');
  unchanged(state);
  phase='cold reload after real companion death';
  await page.clock.resume();await open();state=await see();
- assert.equal(state.slots,0);assert.equal(state.actor,null);assert.equal(state.active,null);unchanged(state);
+ assert.equal(state.slots,0);assert.equal(state.actor,null);assert.equal(state.active,null);assert.equal(state.breaks.length,0);unchanged(state);
  phase='trim only the known malformed soul during ordinary cold bag decode';
  await page.evaluate(()=>{
   const k=JSON.parse(localStorage.getItem('world-workshop-hotbar-v1'));
@@ -228,3 +242,4 @@ try{
  console.log('Native melee & pouch: player defeat → one audible acquisition while moving → real allied attack → durable HP, reload and genuine hostile lethal loss');
 }catch(e){console.error('failed at',phase,'\n last:',last);throw e}
 finally{await browser?.close();await new Promise(r=>server.close(r))}
+

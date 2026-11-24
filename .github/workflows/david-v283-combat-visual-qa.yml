@@ -1,0 +1,30 @@
+name: Independent v283 combat visual QA
+on:
+  push:
+    branches: ['dot/workshop-v283-combat-visual-qa']
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        test: [david-beam-depth, david-double-edge, david-fissure, monster-companion-combat]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: test "$(git hash-object world-editor.html)" = 8d670b6f9c8eacbab619661f90dd3e0dcc371e38
+      - run: npm install --no-save playwright@1.58.2 && npx playwright install --with-deps chromium
+      - run: node tests/${{ matrix.test }}-browser.mjs world-editor.html
+  strict:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: |
+          code=0
+          node --test --test-reporter=tap tests/*.cjs >strict.log 2>&1 || code=$?
+          grep -E '^(not ok|# tests|# pass|# fail)' strict.log || true
+          exit "$code"
