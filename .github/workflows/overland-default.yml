@@ -41,6 +41,23 @@ jobs:
               "if(params.get('resume')==='1')return [...params.keys()].every(k=>k==='resume'||k==='test'||k==='overland-stream'&&params.get('test')==='1');")
           sub(" if(facilitySite&&poiWalkActive){\n  if(facilitySite.id!=='snowpass'&&!facilityRoofMeshes.length)facilityBuildRoofs();",
               " const stream=typeof poiOverlandPreviewTick==='function'?poiOverlandPreviewTick():null;\n if(stream){sceneMesh=stream;signOverlays=[];dirty=false}\n else if(facilitySite&&poiWalkActive){\n  if(facilitySite.id!=='snowpass'&&!facilityRoofMeshes.length)facilityBuildRoofs();")
+          sub(" const nearActors=poiTownNpcActors.filter(a=>!a.recessed&&!a.death&&poiTownNpcMotionNear(a));",
+              " const actors=typeof poiOverlandActorVisible==='function'?poiTownNpcActors.filter(a=>poiOverlandActorVisible(a.x,a.z)):poiTownNpcActors;\n const nearActors=actors.filter(a=>!a.recessed&&!a.death&&poiTownNpcMotionNear(a));")
+          sub(" const outfits=poiTownNpcActors.filter(a=>!a.recessed&&!a.death&&a.y===poiWalkLevel)",
+              " const outfits=actors.filter(a=>!a.recessed&&!a.death&&a.y===poiWalkLevel)")
+          sub("  for(const a of poiTownNpcActors){\n   if(a.recessed||a.death||a.y!==poiWalkLevel)continue;\n   const sleeping=",
+              "  for(const a of actors){\n   if(a.recessed||a.death||a.y!==poiWalkLevel)continue;\n   const sleeping=")
+          monster_start=s.index('function poiMonsterRender(now,vp){')
+          monster_end=s.index('\nfunction ',monster_start+1)
+          monster=s[monster_start:monster_end]
+          assert monster.count('const onSlice=(o)=>')==1
+          monster=monster.replace("const onSlice=(o)=>!(facilitySite&&o.y!==poiWalkLevel)&&","const onSlice=(o,state)=>!(facilitySite&&o.y!==poiWalkLevel)&&\n  (typeof poiOverlandActorVisible!=='function'||poiOverlandActorVisible(state?.x??o.x,state?.z??o.z))&&")
+          monster=monster.replace('onSlice(o)', 'onSlice(o,s)').replace('onSlice(obj)', 'onSlice(obj,s)')
+          monster="let poiOverlandMonsterSlice=null;\n"+monster.replace(" const animate=poiMonsterBreaks.some", """ const clip=typeof poiOverlandDrawing!=='undefined'&&poiOverlandDrawing;
+           const slice=clip?[...poiMonsterStates].map(([o,s])=>s.hp>0&&onSlice(o,s)?'1':'0').join(''):null;
+           if(typeof poiOverlandMonsterSlice!=='undefined'&&slice!==poiOverlandMonsterSlice){poiOverlandMonsterSlice=slice;poiMonsterMeshDirty=true}
+           const animate=poiMonsterBreaks.some""")
+          s=s[:monster_start]+monster+s[monster_end:]
           sub(" draw(sceneMesh?.ground,p.vp);poiDrawSceneOcclusion(sceneMesh,p.vp);",
               " if(stream)poiOverlandPresent(p.vp);else{draw(sceneMesh?.ground,p.vp);poiDrawSceneOcclusion(sceneMesh,p.vp);")
           sub(" facilityDrawRoofs(p.vp);poiDrawGameRoofs(p.vp);",
@@ -295,6 +312,11 @@ jobs:
            if(facilityScenes.size||facilityRoofMeshes.length)facilityInvalidateScenes();
            poiOverlandStats.frames++;poiOverlandDrawing=true;
            return poiOverlandCommands[0]?.m??null;
+          }
+          // The streamed perspective only draws nearby terrain. Leave simulation and
+          // collision untouched; don't rebuild models whose positions cannot be in it.
+          function poiOverlandActorVisible(x,z){
+           return !poiOverlandDrawing||Math.abs(x-poiWalkViewX)<=34&&Math.abs(z-poiWalkViewZ)<=34;
           }
           function poiOverlandNeighborVP(vp,active,other){
            if(active===other)return vp;
@@ -1141,7 +1163,7 @@ jobs:
           SOURCE
           python .spike/build.py world-editor.html .spike/stream.html --default
           python .spike/horizon-safe.py .spike/stream.html .spike/world-editor.html
-          test "$(git hash-object .spike/world-editor.html)" = 2675cb81ee3d3b9010b276a33ea0da9130f4f493
+          test "$(git hash-object .spike/world-editor.html)" = 53d92d4d3fd66681acd01821e46ca7396c4d3bd4
           cd .spike && node --test tests/*.cjs
       - if: matrix.probe != 'regressions'
         run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
