@@ -35,6 +35,15 @@ rep(' if(!facilitySite||facilityViewLevel()>=0)for(let z=0;z<MAP_H;z++)for(let x
 """ if(!facilitySite||facilityViewLevel()>=0)for(let z=0;z<MAP_H;z++)
   for(let x=0,cols=facilitySite?.id==='base'&&facilitySite.sacredDepth&&z>=facilitySite.sacredDepth.oldH?
    facilitySite.sacredDepth.w:MAP_W;x<cols;x++){""")
+rep('function makeScene(){',"""function poiSacredPaintArea(site,z,width,height){
+ const lobe=site?.id==='base'?site.sacredDepth:null;
+ return width*(lobe&&z<lobe.oldH?lobe.oldH:height);
+}
+function makeScene(){""")
+rep('else addFloorTile(tmp,x,z,kind,MAP_W*MAP_H,ROAD_DIAGONALS.has(kind)', 
+    'else addFloorTile(tmp,x,z,kind,poiSacredPaintArea(facilitySite,z,MAP_W,MAP_H),ROAD_DIAGONALS.has(kind)')
+rep('else addFloorTile(tmp,o.x,o.z,kind,MAP_W*MAP_H,ROAD_IDS.has(kind)',
+    'else addFloorTile(tmp,o.x,o.z,kind,poiSacredPaintArea(facilitySite,o.z,MAP_W,MAP_H),ROAD_IDS.has(kind)')
 rep('function pineValidateWorldData(o){','function pineValidateWorldData(o,stockDepth=false){')
 rep("if(!Number.isInteger(newW)||!Number.isInteger(newH)||newW<MIN_MAP||newW>MAX_MAP||newH<MIN_MAP||newH>MAX_MAP)throw Error('マップの広さが不正です');",
 """const extended=stockDepth&&newW===MAX_MAP&&newH===POI_SACRED_DEPTH_H;

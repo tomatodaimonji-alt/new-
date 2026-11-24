@@ -50,3 +50,11 @@ test('deep stock save decoding accepts only the additional western lobe; public 
  a.equal(s(49,127,128).x,49);a.equal(c.poiSacredDepthVoid(site,49,127),false);a.equal(c.poiSacredDepthVoid(site,49,128),true);
  a.match(h,/const MIN_MAP=12,MAX_MAP=128,POI_SACRED_DEPTH_H=182/);
 });
+
+test('old town grass/cobble uses the identical paint detail cutoff despite the southwestern depth',()=>{
+ const c=vm.createContext({});vm.runInContext(cut('function poiSacredPaintArea(','function makeScene('),c);
+ a.equal(c.poiSacredPaintArea(site,61,128,182),16384);
+ a.equal(c.poiSacredPaintArea(site,127,128,182),16384);
+ a.equal(c.poiSacredPaintArea(site,128,128,182),23296);
+ a.equal(c.poiSacredPaintArea({id:'snowpass'},5,24,29),696);
+});

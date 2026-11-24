@@ -14,7 +14,7 @@ replace(testApi,testApi+`
   inspect:()=>{
    const f=facilitySite.sacredForest,at=poiAimOrigin(performance.now());
    return {x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,name:poiRegionAt(facilitySite,poiWalkX,poiWalkZ,false,poiWalkLevel).name,
-    path:f.route,mapH:MAP_H,roofDraws:window.__depthRoofDraws??0,isConcealed:poiMiniSnapshot()?.concealed,reveal:f.reveal,tree:f.trees[10],fog:[...gl.getUniform(program,loc.sacredFog)],raster:window.__sacredRaster||null,
+    path:f.route,mapH:MAP_H,roofDraws:window.__depthRoofDraws??0,isConcealed:poiMiniStatic.get(0)?.concealed,seen:poiHotbarRead().sacredTempleSeen===true,reveal:f.reveal,tree:f.trees[10],fog:[...gl.getUniform(program,loc.sacredFog)],raster:window.__sacredRaster||null,
     scene:poiSacredForestStatus(),err:gl.getError(),directions:['n','s','e','w'].map(k=>poiCameraRelativeStep(k)),
     nearTemple:poiDavidTempleContains(facilitySite,at.x,at.z,at.y)};
   }
@@ -80,7 +80,7 @@ try{
  }
  const screenshot=async name=>{if(process.env.FACILITY_SCREENSHOTS){mkdirSync(process.env.FACILITY_SCREENSHOTS,{recursive:true});await p.screenshot({path:process.env.FACILITY_SCREENSHOTS+'/'+name+'.png'});}};
  phase='two stock town gates reveal open sky, not the far roof';
- await seed(23,49);let s=await tick(40);assert.equal(s.mapH,182);assert.equal(s.z,49);assert.equal(s.roofDraws,0);assert.equal(s.fog[2],0);
+ await seed(23,49);let s=await tick(40);assert.equal(s.mapH,182);assert.equal(s.z,49);assert.equal(s.roofDraws,0);assert.equal(s.fog[2],0);assert.equal(s.isConcealed,true);
  await screenshot('open-west-town-gate');
  const gate=async(x,z,yaw)=>{
   assert(await p.evaluate(([x,z,yaw])=>window.__editorTest.sacredQA.gate(x,z,yaw),[x,z,yaw]));
@@ -98,19 +98,22 @@ try{
   if(q.x===18&&q.z===109){
    phase='actual WebGL keeps near woods but blends the long sightline';
    await p.evaluate(()=>{window.__sacredCapture=true});raw=(await tick(36)).raster;
+   await screenshot('depth-fog');
    await p.evaluate(()=>{window.__sacredCompareDry=true;window.__sacredCapture=true});clear=(await tick(16)).raster;
+   await screenshot('depth-dry-control');
    await p.evaluate(()=>{window.__sacredCompareDry=false});
-   if(process.env.FACILITY_SCREENSHOTS){mkdirSync(process.env.FACILITY_SCREENSHOTS,{recursive:true});await p.screenshot({path:process.env.FACILITY_SCREENSHOTS+'/depth-fog.png'});}
   }
  }
  assert.deepEqual([s.x,s.z,s.y],[24,125,0]);assert.equal(s.err,0);
  assert(peak>.85&&maxTrees>1800&&maxTrees<=96*180&&forests.length===3&&forests.every((v,i)=>!i||v>forests[i-1]),JSON.stringify({peak,maxTrees,forests}));
  assert(raw&&clear&&(raw.haze-clear.haze)>raw.total*.03&&raw.textured>raw.total*.04,JSON.stringify({raw,clear}));
- assert(s.fog[2]<.035&&s.roofDraws>0,'healthy close reveal of actual dome');
+ assert(s.fog[2]<.035&&s.roofDraws>0,'healthy close reveal of actual dome');assert.equal(s.isConcealed,true);
  if(process.env.FACILITY_SCREENSHOTS)await p.screenshot({path:process.env.FACILITY_SCREENSHOTS+'/depth-reveal.png'});
  phase='actual north forecourt and straight covered same-world crossing';
  for(let z=126;z<=132;z++)await step({x:24,z});
- assert.equal(last.fog[2],0);assert.equal(last.name,'白環の大神殿');
+ assert.equal(last.fog[2],0);assert.equal(last.name,'白環の大神殿');assert.equal(last.isConcealed,true);
+ for(let z=133;z<=143;z++)await step({x:24,z});
+ assert.equal(last.isConcealed,false);assert.equal(last.seen,true);
  phase='old temple check-in migrates safe, new deep check-in resumes exactly';
  await p.clock.resume();await seed(24,104);s=await tick(38);
  assert.deepEqual([s.x,s.z,s.y],[24,125,0]);
