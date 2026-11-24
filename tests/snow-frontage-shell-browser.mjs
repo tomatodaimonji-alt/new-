@@ -13,7 +13,8 @@ html=html.replace(anchor,anchor+`
    pointer:poiAnalogContact?.id??null,switches:poiSnowPassSwitches,veil:!$('poiSnowTransitionVeil').hidden,
    light:[...gl.getUniform(program,loc.daylight)],sky:$('viewWrap').hasAttribute('data-poi-sky'),
    theater:poiSnowTempleNeighbor.length,stream:poiOverlandDrawing,
-   exterior:poiSnowExteriorShown,exteriorVerts:poiSnowExteriorShell?.gpu?.count??0,
+   exterior:poiSacredTempleVisibleAmount(scene==='base'?facilitySite:poiSnowPassBase?.site,...global,0,false),
+   roof:facilitySite?.id==='base'&&facilityVisibleRoofs().some(i=>facilitySite.buildings[i]?.id==='davidTemple'),
    neighbor:poiOverlandDrawn.some(q=>q.id!==scene),kind:poiOrchestraScene(performance.now()),error:gl.getError()};
  },
 `);
@@ -43,10 +44,7 @@ try{
    await p.goto(url+'/?resume=1&test=1');await p.locator('#pineStartupCover').waitFor({state:'hidden',timeout:25000});
    const read=()=>p.evaluate(()=>window.__editorTest?.snowFrontQA());let start=await read();
    a.deepEqual(start.tile,v.start);a.equal(start.scene,v.id);
-   if(v.axis===0){
-    await p.waitForFunction(()=>{const s=window.__editorTest.snowFrontQA();return s.stream&&s.exterior>.1&&s.exteriorVerts>0},null,{polling:30,timeout:10000});
-    start=await read();a(start.exteriorVerts<=42000);
-   }else{a.equal(start.exterior,0);a.equal(start.exteriorVerts,0);}
+   a.equal(start.exterior,0,'north and west snow edges are not the sacred entrance');a.equal(start.roof,false);
    const out=process.env.FACILITY_SCREENSHOTS,tag=v.id+'-'+v.start.join('-');
    if(out){mkdirSync(out,{recursive:true});await p.screenshot({path:out+'/'+tag+'-before.png'});}
    const dy=v.axis===0?v.dir[0]:-v.dir[1];
@@ -71,11 +69,8 @@ try{
    a(Math.abs(after.global[1-v.axis]-start.global[1-v.axis])<.12,'non-crossing axis stays fixed');
    a(Math.max(...after.light.map((n,i)=>Math.abs(n-near.light[i])))<.10,'the same night clock hands off continuously: '+JSON.stringify({v,near,after}));
    a.equal(after.kind,v.dst==='snowpass'?'snow':'outside');
-   if(v.axis===0){
-    a(near.exterior>.1&&after.exterior>.1,'real named shell covers both sides at the west view');
-    a.equal(near.exteriorVerts,after.exteriorVerts,'same real exterior geometry survives the seam');
-    a(Math.abs(near.exterior-after.exterior)<.25,'sole projected reveal function avoids a wall snap');
-   }else{a.equal(after.exterior,0);a.equal(after.exteriorVerts,0);}
+   a.equal(near.exterior,0,'no silhouette at the natural ridge');a.equal(after.exterior,0,'no silhouette after crossing');
+   a.equal(near.roof,false);a.equal(after.roof,false);
    if(out)await p.screenshot({path:out+'/'+tag+'-after.png'});
    const written=await p.evaluate(()=>JSON.parse(localStorage.getItem('world-workshop-resume-v1')));
    a.equal(written.region,v.dst==='snowpass'?'snowpass':undefined);

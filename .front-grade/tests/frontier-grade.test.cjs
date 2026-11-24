@@ -69,3 +69,14 @@ test('outdoor and interior lighting blend over actual fractional tunnel travel',
  for(let z=128;z<143;z+=.25)a(Math.max(...f(24,z+.25).map((n,i)=>Math.abs(n-f(24,z)[i])))<.04,`no lighting jump at ${z}`);
  a(Math.abs(f(24,136)[0]-.76)<.025);
 });
+test('same projected ground near honest seam receives continuous haze without renaming Snow',()=>{
+ const c=vm.createContext({poiOverlandGlobal:(id,x,z)=>id==='snowpass'?[x+48,z+139]:[x,z]});
+ const data=source.includes('function poiSacredFrontierHaze(')?cut('function poiSacredFrontierHaze(','function poiSacredApplyFog('):'function poiSacredFrontierHaze(){return 0}';
+ vm.runInContext(cut('function poiSacredForestOf(','function poiSacredForestKey(')+data,c);
+ const site={id:'base',davidTemple:{depth:1,entrance:{x:24,z:128},ring:{x:24,z:158,radius:18},interior:{exitZ:142}},sacredForest:{coverage:[]}};
+ const f=(id,x,z)=>c.poiSacredFrontierHaze(site,id,x,z,0);
+ a(f('base',47.49,154)>.32);
+ a(Math.abs(f('base',47.49,154)-f('snowpass',-.49,15))<.025);
+ a(f('snowpass',6,15)<.18);a.equal(f('snowpass',11,15),0);
+ a(!c.poiSacredForestContains(site,48,154,0),'snow-projected cells are not Base territory');
+});

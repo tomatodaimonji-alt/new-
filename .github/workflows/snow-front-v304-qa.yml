@@ -1,26 +1,37 @@
-name: Exact sacred frontage sightline
+name: Exact tunnel night backdrop red and green
 on:
   push:
     branches: ['dot/workshop-v304-snow-frontage-qa']
 permissions:
   contents: read
 jobs:
-  verify:
+  visual:
+    strategy:
+      matrix:
+        mode: [baseline, corrected]
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: {node-version: '22'}
       - run: |
-          test "$(git hash-object world-editor.html)" = 62d5a258424b6dca202814c02002d9633d73f0f1
-          cp world-editor.html baseline.html
-          python .front-grade/build.py baseline.html world-editor.html
-          test "$(git hash-object world-editor.html)" = 13d66933a49d2e70a339ebf346e14262a6d1a4c1
+          test "$(git hash-object world-editor.html)" = ad7e28b0eb36efc2936bd4e1f1e3c6de28b64f3e
+          python .front-grade/sky-only.py world-editor.html fix.html
+          test "$(git hash-object fix.html)" = 3e03b55850a08d384536c5004dd3b6468355f526
           cp .front-grade/tests/* tests/
-          HTML=world-editor.html node --test tests/frontier-grade.test.cjs
           npm install --no-save playwright@1.58.2 && npx playwright install chromium
-          FACILITY_SCREENSHOTS=shots node tests/frontier-grade-browser.mjs world-editor.html
+      - if: matrix.mode == 'baseline'
+        run: |
+          status=0
+          FACILITY_SCREENSHOTS=shots node tests/frontier-grade-browser.mjs world-editor.html >red.log 2>&1 || status=$?
+          cat red.log
+          test "$status" -ne 0
+          grep -F 'real time-of-day portal backdrop must not turn into editor sky' red.log
+      - if: matrix.mode == 'corrected'
+        run: |
+          HTML=fix.html node --test tests/frontier-grade.test.cjs
+          FACILITY_SCREENSHOTS=shots node tests/frontier-grade-browser.mjs fix.html
       - if: always()
         uses: actions/upload-artifact@v4
-        with: {name: sacred-frontage-frames, path: shots}
+        with: {name: "tunnel-${{ matrix.mode }}", path: shots}
