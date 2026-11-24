@@ -23,7 +23,10 @@ test('all genuinely walkable north and west landings are reciprocal, obstacles a
   const b=link('snowpass',s.x,s.z,0,-1,s.z);a.deepEqual([b.x,b.z,b.facing],[47,z,3]);
   if(open(base.map.world,47,z)&&open(snow.map.world,0,z-139))west++;
  }
- a(north>=19&&north<24);a.equal(west,29);
+ a.equal(north,23);a.equal(west,29);
+ a(open(snow.map.world,7,0),'real open Snow x7 is reachable straight across from Base x55');
+ a(snow.map.world.some(o=>o.x===15&&o.z===0&&o.y===0&&o.type==='rockMossy'));
+ a(!open(snow.map.world,15,0),'Base x63 points at an actual blocking Snow rock, not an invented entrance');
  for(const args of [['base',72,138,0,72,139],['base',47,168,0,48,168],['base',49,138,1,49,139],['snowpass',23,3,0,24,3],['snowpass',2,28,0,2,29],['base',48,138,0,49,139]])
   a.equal(link(...args),null);
  const custom=[{id:'a',ox:0,oz:0,owns:(x,z)=>x===0&&z===0},{id:'b',ox:0,oz:1,owns:(x,z)=>x===0&&z===0}];
