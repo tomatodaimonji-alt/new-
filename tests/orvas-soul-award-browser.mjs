@@ -35,6 +35,8 @@ inject(api,api+`
    const at=poiAimOrigin(performance.now());
    return {x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,dir:['n','s','e','w'].map(k=>poiCameraRelativeStep(k)),
     awake:!!b?.s?.david?.wakeDone,bossHp:b?.s.hp??null,
+    wake:{hidden:document.hidden,cursor:b?.s?.david?.wakeCursor??null,returning:b?.s?.david?.returning??null,
+     at:b?.s?.david?.wakeAt??null,readyAt:authored?.[1].davidReadyAt??null,atPlayer:[at.x,at.z],animation:authored?poiDavidPose(authored[1],performance.now())?.phase:null},
     bossProbe:authored?{x:authored[1].x,z:authored[1].z,hp:authored[1].hp,arena:poiDavidIn(site,at),
      threat:poiEnemyThreatEnabled(),los:site?poiDavidLine(authored[1],at,site):null,next:poiNextMobTick}:null,active:k.companionSoul?.active??null,pending:k.companionSoul?.pending??null,
     actor:a?{id:a.id,x:a.x,z:a.z}:null,slots:poiInventorySlots(k),saved,ground,
@@ -105,12 +107,13 @@ try{
     throw Error(JSON.stringify({phase,stage,bootErrors,detail:String(e)}));
    }
    if(realBoot)await p.clock.install({time:new Date('2026-04-01T10:00:00Z')});
-   await p.clock.pauseAt((await p.evaluate(()=>Date.now()))+4500);
+   await p.bringToFront();await p.waitForFunction(()=>!document.hidden);
    await p.evaluate(()=>{window.__orvasAwardManual=true});
+   await p.clock.pauseAt((await p.evaluate(()=>Date.now()))+4500);
   }
   await open();
   const see=async()=>last=await p.evaluate(()=>window.__editorTest.orvasAwardQA.inspect());
-  const tick=async(ms=36)=>{await p.clock.fastForward(ms);await p.evaluate(()=>window.__editorTest.orvasAwardQA.frame());return see()};
+  const tick=async(ms=50)=>{await p.clock.fastForward(ms);await p.evaluate(()=>window.__editorTest.orvasAwardQA.frame());return see()};
   const until=async(fn,n=180)=>{for(let i=0;i<n;i++){const s=await tick();if(fn(s))return s;}throw Error(JSON.stringify(last));};
   const step=async(x,z)=>{
    const s=last,i=s.dir.findIndex(d=>d[0]===x-s.x&&d[1]===z-s.z);assert(i>=0);
@@ -145,7 +148,7 @@ try{
  if(scenario!=='pending'){
  phase='real canonical awakening and actual slime-companion final blow';
  q=await begin('ally',155);p=q.p;await q.tick();await q.step(24,156);await q.step(24,157);
- s=await q.until(v=>v.awake&&v.actor?.id==='slimeSoul');const walkSwing=s.swing;
+ s=await q.until(v=>v.awake&&v.actor?.id==='slimeSoul',350);const walkSwing=s.swing;
  assert(await p.evaluate(()=>window.__editorTest.orvasAwardQA.pin()));
  // Active melee ally must have an actual clear lane; stand aside from
  // the one-tile center path instead of blocking it with the player body.
@@ -186,7 +189,7 @@ try{
  if(scenario!=='pickup'){
  phase='real sword finish while recovered old slime waits on the ground and bag is full';
  q=await begin('pending',155);p=q.p;await q.tick();await q.step(24,156);await q.step(24,157);
- s=await q.until(v=>v.awake&&v.pending===null&&v.slimeGround?.type==='slimeSoul');
+ s=await q.until(v=>v.awake&&v.pending===null&&v.slimeGround?.type==='slimeSoul',350);
  assert(await p.evaluate(()=>window.__editorTest.orvasAwardQA.pin()));
  await p.locator('#poiWalkAction').tap();
  s=await q.until(v=>v.ground.some(d=>d.id==='orvas-soul'));
