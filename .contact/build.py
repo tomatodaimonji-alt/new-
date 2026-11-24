@@ -13,8 +13,11 @@ rep(s[a:b],"""function poiSacredTunnelPresentation(site,x,z,y){
  const t=site?.id==='base'?site.davidTemple:null,i=t?.interior;
  // Admission is stable at the same feet. The actual opaque tunnel faces
  // and depth buffer decide which portions are visible through the opening.
- return !!(i&&t.depth===1&&y===0&&z>=t.entrance.z-3.05&&z<=i.exitZ&&
-  x>=i.minX-.35&&x<=i.maxX+.35);
+ if(!i||t.depth!==1||y!==0||z<t.entrance.z-4.45||z>i.exitZ)return false;
+ // The real square of stone in front is five tiles wide; once behind
+ // the threshold only the walkable three-tile tunnel keeps this access.
+ const pad=z<t.entrance.z-.45?1.45:.45;
+ return x>=i.minX-pad&&x<=i.maxX+pad;
 }
 """)
 rep(""" const sacredPeek=typeof poiSacredTunnelSight==='function'&&poiWalkActive&&!pineAIActive&&!cameraTopDown&&

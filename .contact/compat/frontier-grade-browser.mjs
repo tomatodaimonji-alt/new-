@@ -61,13 +61,23 @@ try{
    a.equal(s.visibleArea,v.region?'白嶺峠':'深樹の聖林');await image('concealed-'+v.x+'-'+v.z);
   });
  }
+ await scene({x:25,z:126,angle:-.36,minute:390},async(p,snap,image)=>{
+  await p.waitForFunction(()=>{const s=window.__editorTest.testFrontierGrade.snap();return s.floor>0&&s.peek&&s.visual},null,{polling:50,timeout:12000});
+  const left=await snap();a(!left.admitted&&left.reveal===1,'solid existing aperture, no outside encounter');
+  await image('north-porch-shoulder-left');
+  await p.evaluate(()=>window.__editorTest.testFrontierGrade.yaw(.37));
+  await p.waitForFunction(()=>{const s=window.__editorTest.testFrontierGrade.snap();return s.floor>0&&s.peek&&s.visual},null,{polling:50,timeout:12000});
+  const right=await snap();a.deepEqual(right.tile,left.tile);a(right.floor>0&&right.visual&&!right.admitted&&right.reveal===1);
+  await image('north-porch-shoulder-right');
+ });
  await scene({x:24,z:125,angle:0,minute:1330},async(p,snap,image)=>{
   await p.waitForFunction(()=>{const s=window.__editorTest.testFrontierGrade.snap();return s.floor>0&&s.peek&&s.visual},null,{polling:50,timeout:12000});
   const outside=await snap();a(outside.floor>0&&outside.visual&&!outside.inside&&!outside.admitted);a.equal(outside.phase,'dormant');
   await image('north-aperture-visible');
-  await p.evaluate(()=>window.__editorTest.testFrontierGrade.yaw(1.27));
+  await p.evaluate(()=>window.__editorTest.testFrontierGrade.yaw(.48));
   await p.waitForFunction(()=>window.__editorTest.testFrontierGrade.snap().peek,null,{polling:50,timeout:5000});
-  const sideways=await snap();a(sideways.peek&&sideways.visual&&!sideways.admitted);a.deepEqual(sideways.tile,outside.tile);
+  const sideways=await snap();a(sideways.peek&&sideways.visual&&sideways.floor>0&&!sideways.admitted);a.deepEqual(sideways.tile,outside.tile);
+  await image('north-orbit-unchanged');
   await p.evaluate(()=>window.__editorTest.testFrontierGrade.yaw(0));
   async function realStep(z){
    const dirs=await p.evaluate(()=>window.__editorTest.testFrontierGrade.dirs());

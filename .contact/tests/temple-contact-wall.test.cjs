@@ -20,6 +20,8 @@ test('north porch geometry depends on physical access, never orbit angle',()=>{
  const f=vm.runInNewContext((a0>=0&&b>a0?src.slice(a0,b):'function poiSacredTunnelPresentation(){return false}')+';poiSacredTunnelPresentation');
  const area={id:'base',davidTemple:{depth:1,entrance:{x:24,z:128},interior:{minX:23,maxX:25,exitZ:142}}};
  a(f(area,24,125,0),'physical northern entry already submits the same interior scene');
+ a(f(area,25.7,125,0),'the stone porch shoulder sees physical tunnel too');
+ a(!f(area,25.7,130,0),'not from behind a side wall');
  a(f(area,24,128,0));a(f(area,24,135,0));
  a(!f(area,29,125,0));a(!f(area,24,119,0));a(!f(area,42,158,0));a(!f(area,24,125,1));
  a(!f({...area,id:'snowpass'},24,125,0));
