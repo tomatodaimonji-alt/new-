@@ -19,8 +19,19 @@ swap('workshopFacility:{version:1,floorOffset,groundY:floorOffset}};',
    ...(map.width===128&&map.height===182?{stockDepth:1}:{})}};''')
 swap("(typeof poiSacredDepthVoid!=='function'||!poiSacredDepthVoid(facilitySite,x,z));","(MAP_W!==128||MAP_H!==182||z<128||x<48);")
 swap("for(let x=0,cols=facilitySite?.id==='base'&&facilitySite.sacredDepth&&z>=facilitySite.sacredDepth.oldH?\n   facilitySite.sacredDepth.w:MAP_W;x<cols;x++){","for(let x=0,cols=MAP_W===128&&MAP_H===182&&z>=128?48:MAP_W;x<cols;x++){")
-q.write_text(s)
 # Runtime validPos is already authoritative for editor and shared movement.
 # Do not preserve a second facility-only collision branch with identical effect.
 swap(' if(!validPos(x,z)||poiSacredDepthVoid(facilitySite,x,z))return false;', ' if(!validPos(x,z))return false;')
+# v295 adds a fourth exact guaranteed-drop ID. Move its real authored spawn
+# with the boss; the existing stable-ID migration accepts its previous z as well.
+oldSoul="'orvas-soul':Object.freeze({id:'orvas-soul',type:'orvasSoul',x:24,z:105,y:0,bit:8})"
+if oldSoul in s:swap(oldSoul,oldSoul.replace('z:105','z:159'))
+# Preserve a deep export's floor translation when the generic editor re-exports
+# it. A live facility continues using its own normalized physical floor data.
+swap("function data(){return{format:'forest-world-v1',version:1,size:MAP_W,width:MAP_W,height:MAP_H,",
+     "let pineStockDepthExportOffset=0;\nfunction data(){return{format:'forest-world-v1',version:1,size:MAP_W,width:MAP_W,height:MAP_H,")
+swap("workshopFacility:{version:1,floorOffset:0,groundY:0,stockDepth:1}", 
+     "workshopFacility:{version:1,floorOffset:pineStockDepthExportOffset,groundY:pineStockDepthExportOffset,stockDepth:1}")
+swap("pineValidateWorldData(o,stockDepth);\npineObjectSelection=null;",
+     "pineValidateWorldData(o,stockDepth);\npineStockDepthExportOffset=newW===128&&newH===182&&o.workshopFacility?.floorOffset===1?1:0;\npineObjectSelection=null;")
 q.write_text(s)
