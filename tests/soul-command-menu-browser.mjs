@@ -56,7 +56,7 @@ try{
  await p.goto(url+'/seed');await p.evaluate(()=>{
   const slots=Array(27).fill(null);slots[0]={type:'equipWoodSword',count:1,durability:90};
   slots[2]={type:'slimeSoul',count:1,durability:22};slots[4]={type:'fireWand',count:1,charges:5};slots[5]={type:'orvasSoul',count:1,durability:123};
-  localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weapon:'equipWoodSword',gold:3,potions:0,slots,companionSoul:{version:1,active:'slimeSoul',pending:null,mode:'flee'}}));
+  localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weaponDurabilityVersion:2,fireWandFound:true,weapon:'equipWoodSword',gold:3,potions:0,slots,companionSoul:{version:1,active:'slimeSoul',pending:null,mode:'flee'}}));
   localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,position:{x:102,z:93,y:0,facing:2},townLayout:5,townMapHeight:182,templeDepth:1,
    view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:0,orbitPitch:.25,orbitDistance:5.5}}));
  });
