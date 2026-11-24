@@ -55,9 +55,21 @@ jobs:
           """ if(facilitySite.id==='base')poiSnowPassSeam(facilitySite,facilitySite.map.world);
            facilityLoadMap(facilitySite.map);
            facilityPrepareFloorMasks();""")
-          sub("  localSceneStatus:()=>facilityLocalSceneStatus(),","  snowPassRegion:()=>({id:facilitySite?.id,world:world.length,width:MAP_W,height:MAP_H,forest:!!facilitySite?.southForest,mapReady:!!sceneMesh?.count,actors:poiMonsterStates.size,spawn:[poiSpawnX,poiSpawnZ],switches:poiSnowPassSwitches,hp:poiPlayerHP}),\n  localSceneStatus:()=>facilityLocalSceneStatus(),")
+          sub("  localSceneStatus:()=>facilityLocalSceneStatus(),","  snowInventoryQA:{drop:slot=>poiInventoryDrop(slot),gold:n=>poiGroundGoldDrop(n),clock:()=>poiTownClockActive(),weapon:()=>poiEquippedWeapon(),markMusic:()=>window.__snowField=poiOrchestraDecks.get('outside')?.fieldLoop,fieldSame:()=>!!window.__snowField&&window.__snowField===poiOrchestraDecks.get('outside')?.fieldLoop},\n  snowPassRegion:()=>({id:facilitySite?.id,world:world.length,width:MAP_W,height:MAP_H,forest:!!facilitySite?.southForest,mapReady:!!sceneMesh?.count,actors:poiMonsterStates.size,spawn:[poiSpawnX,poiSpawnZ],switches:poiSnowPassSwitches,hp:poiPlayerHP,music:poiOrchestraScene(performance.now()),field:!!poiOrchestraDecks.get('outside')?.fieldLoop}),\n  localSceneStatus:()=>facilityLocalSceneStatus(),")
           # Extend the prototype palette so import validation and palette lookup accept snow.
           sub("{id:'treePine',name:'針葉樹'", "{id:'poiSnowGround',name:'積雪',icon:'▫',cat:'floor'},\n{id:'treePine',name:'針葉樹'")
+          from ground import apply as ground
+          s=ground(s,p)
+          sub("""function facilitySetPlay(active){
+           if(active===poiWalkActive)return;""","""function facilitySetPlay(active){
+           if(active===poiWalkActive)return;
+           // This region is a play-only route. Editor still opens the original base.
+           if(!active&&facilitySite?.id==='snowpass'&&
+              !poiSnowPassChange({region:'base',x:49,z:127,facing:0},performance.now()))return;""")
+          sub("function poiTownClockActive(){\n return facilitySite?.id==='base'&&poiWalkActive", "function poiTownClockActive(){\n return (facilitySite?.id==='base'||facilitySite?.id==='snowpass')&&poiWalkActive")
+          sub("function poiAudioMusicZone(){","function poiAudioMusicZone(){\n if(facilitySite?.id==='snowpass')return 'outside';")
+          sub("const zone=facilitySite?.id==='base'?poiAudioMusicZone():'indoor';",
+           "const zone=facilitySite?.id==='snowpass'?'outside':facilitySite?.id==='base'?poiAudioMusicZone():'indoor';")
           out.parent.mkdir(parents=True,exist_ok=True)
           out.write_text(s)
           LOCAL_SOURCE
@@ -73,8 +85,10 @@ jobs:
           }
           function poiSnowPassDecode(d,p){
            const {id,width,height}=POI_SNOW_PASS;
-           if(d?.route!=='facility'||d.id!=='base'||d.region!==id||d.play!==true||p?.y!==0||
-              !Number.isInteger(p.x)||!Number.isInteger(p.z)||p.x<0||p.x>=width||p.z<0||p.z>=height)return {};
+           if(d?.route!=='facility'||d.id!=='base'||!Object.hasOwn(d,'region'))return {};
+           // A foreign/invalid local coordinate is not a usable base coordinate.
+           if(d.region!==id||d.play!==true||p?.y!==0||!Number.isInteger(p.x)||!Number.isInteger(p.z)||
+              p.x<0||p.x>=width||p.z<0||p.z>=height)return {position:null};
            const hp=Number.isInteger(d.regionHp)&&d.regionHp>=1&&d.regionHp<=100?d.regionHp:null;
            return {region:id,...(hp===null?{}:{regionHp:hp})};
           }
@@ -113,29 +127,35 @@ jobs:
            if(!link||!world.some(o=>o.x===fx&&o.z===fz&&o.y===0&&o.type==='roadGravelFull'))return null;
            return link;
           }
-          function poiSnowPassApply(dest,now,cold=false){
+          function poiSnowPassPrepare(dest,cold=false){
            const onBase=facilitySite?.id==='base';
-           if(onBase===(dest.region==='base')||!onBase&&!poiSnowPassBase)return false;
-           const hp=poiPlayerHP,cooldown=poiAttackReady;
-           const base=onBase?{site:facilitySite,map:data(),world,monsters:poiMonsterStates,warm:!cold,spawn:cold?facilitySite.spawn:{x:poiSpawnX,z:poiSpawnZ},edited:facilitySurfaceEdited}:poiSnowPassBase;
+           if(onBase===(dest.region==='base')||!onBase&&!poiSnowPassBase)return null;
+           const base=onBase?{site:facilitySite,map:data(),world,monsters:poiMonsterStates,warm:!cold,
+            spawn:cold?facilitySite.spawn:{x:poiSpawnX,z:poiSpawnZ},edited:facilitySurfaceEdited,initial:facilityInitialMap}:poiSnowPassBase;
            const incoming=onBase?poiSnowPassMap():base.site,map=onBase?incoming.map:base.map;
-           // Verify incoming authored cells before any mutation. No editor input enters this registry.
            const cells=(onBase?map.world:base.world).filter(o=>o.x===dest.x&&o.z===dest.z&&o.y===0);
-           if(!cells.some(o=>o.type==='roadGravelFull')||cells.some(o=>isWallId(o.type)))return false;
-           try{pineValidateWorldData(facilityExportMap(map))}catch(_e){return false}
+           if(!cells.some(o=>o.type==='roadGravelFull')||cells.some(o=>isWallId(o.type)))return null;
+           let validated;
+           try{validated=pineValidateWorldData(facilityExportMap(map))}catch(_e){return null}
+           return {onBase,base,incoming,map,validated};
+          }
+          function poiSnowPassApply(dest,now,cold=false,prepared=poiSnowPassPrepare(dest,cold)){
+           if(!prepared)return false;
+           const {onBase,base,incoming,map}=prepared,hp=poiPlayerHP,cooldown=poiAttackReady;
            if(onBase)poiSnowPassBase=base;
            poiWalkFrameNoRegionRemote();
            facilitySite=incoming;
            facilityLoadMap(map);
            if(!onBase)world=base.world;
            facilityPrepareFloorMasks();facilitySurfaceEdited=onBase?false:base.edited;
-           facilityInitialMap=JSON.stringify(data());
+           facilityInitialMap=onBase?JSON.stringify(data()):base.initial;
            poiMonsterStates=!onBase&&base.warm?base.monsters:new Map();
            if(!onBase&&!base.warm)poiResetCombat();
            else for(const state of poiMonsterStates.values()){state.playerAttack=null;state.nextAttack=Math.max(state.nextAttack||0,now+300)}
            const spawn=onBase?incoming.spawn:base.spawn;
            poiSpawnX=spawn.x;poiSpawnZ=spawn.z;
            poiWalkReset(dest.x,dest.z);poiWalkFacing=dest.facing;
+           if(!onBase&&!base.warm)poiEconomyStart();
            if(!cold){poiPlayerHP=hp;poiAttackReady=cooldown}
            if(!cold){poiWalkNextReady=now+POI_WALK_MS;poiOtherworldTravelSerial++}
            mode='move';dirty=true;cursorDirty=true;
@@ -153,14 +173,111 @@ jobs:
            if(poiMonsterMesh){gl.deleteBuffer(poiMonsterMesh.buf);poiMonsterMesh=null}
            poiMonsterMeshDirty=true;
           }
+          function poiSnowPassChange(dest,now){
+           const prepared=poiSnowPassPrepare(dest);
+           if(!prepared||!workshopResumeReady||workshopResumeLeaving||poiGameResetDeparture||poiGameResetBlocked)return false;
+           const record={version:1,route:'facility',id:'base',play:true,townLayout:5,townMapHeight:128,
+            position:{x:dest.x,z:dest.z,y:0,facing:dest.facing},view:workshopResumeView(),
+            editorView:facilityEditView?workshopResumeView(facilityEditView):null,
+            ...(dest.region==='snowpass'?{region:'snowpass',regionHp:poiPlayerHP}:{})};
+           const raw=JSON.stringify(record);
+           let backup,wrote=false;
+           try{
+            backup=localStorage.getItem(WORKSHOP_RESUME_KEY);
+            localStorage.setItem(WORKSHOP_RESUME_KEY,raw);wrote=true;
+            if(localStorage.getItem(WORKSHOP_RESUME_KEY)!==raw)throw Error('preview resume write was not durable');
+           }catch(_e){
+            if(wrote)try{if(backup===null)localStorage.removeItem(WORKSHOP_RESUME_KEY);else localStorage.setItem(WORKSHOP_RESUME_KEY,backup)}catch(__e){}
+            toast('現在地を保存できないため、境界を越えられません。');return false;
+           }
+           try{
+            if(!poiSnowPassApply(dest,now,false,prepared))throw Error('preview region failed to activate');
+            workshopResumeRaw=raw;
+            return true;
+           }catch(e){
+            // A failed activation must never enter the saved destination.
+            try{
+             if(backup===null)localStorage.removeItem(WORKSHOP_RESUME_KEY);
+             else localStorage.setItem(WORKSHOP_RESUME_KEY,backup);
+             workshopResumeRaw=backup||'';
+            }catch(_e){}
+            console.warn('Snow pass region activation aborted',e);return false;
+           }
+          }
           function poiSnowPassUse(nx,nz,now){
            const dest=poiSnowPassEdge(nx,nz,poiWalkX,poiWalkZ);
-           if(!dest)return false;
-           if(!poiSnowPassApply(dest,now))return false;
-           workshopResumeWrite();
-           return true;
+           return !!dest&&poiSnowPassChange(dest,now);
           }
           // END SNOW PASS ACTIVATION
+          LOCAL_SOURCE
+          cat >.snow/ground.py <<'LOCAL_SOURCE'
+          from pathlib import Path
+          def apply(s,p):
+           def sub(a,b):
+            nonlocal s
+            assert s.count(a)==1,a
+            s=s.replace(a,b,1)
+           sub("function poiHotbarHasKit(){return facilitySite?.id==='base'}",
+            (p/'ground.js').read_text()+"\nfunction poiHotbarHasKit(){return facilitySite?.id==='base'||(typeof poiSnowGroundActive==='function'&&poiSnowGroundActive())}")
+           sub("const drops=poiInventoryReadDrops(saved.drops);","const drops=poiInventoryReadDrops(typeof poiSnowGroundDecode==='function'?poiSnowGroundDecode(saved.drops,saved.snowDrops):saved.drops);")
+           sub("poiGroundGoldDecode(saved.groundGold):[]","poiGroundGoldDecode(typeof poiSnowGroundDecode==='function'?poiSnowGroundDecode(saved.groundGold,saved.snowGroundGold):saved.groundGold):[]")
+           sub("...(drops?.length?{drops}:{}),...(kit.groundGold?.length?{groundGold:kit.groundGold}:{})",
+            "...(typeof poiSnowGroundSave==='function'?poiSnowGroundSave(drops,kit.groundGold):{...(drops?.length?{drops}:{}),...(kit.groundGold?.length?{groundGold:kit.groundGold}:{})})")
+           a=s.index('function poiInventoryReadDrops('); z=s.index('function poiInventoryAllowed(',a)
+           frag=s[a:z].replace("const key=d.x+','+d.z+','+d.y;","const key=(d.region==='snowpass'?'s:':'')+d.x+','+d.z+','+d.y;").replace("y:d.y,...(count","y:d.y,...(d.region==='snowpass'?{region:d.region}:{}),...(count")
+           assert frag!=s[a:z];s=s[:a]+frag+s[z:]
+           a=s.index('function poiGroundGoldDecode('); z=s.index('function poiDropNearestCell(',a)
+           frag=s[a:z].replace("const key=p.x+','+p.z+','+p.y;","const key=(p.region==='snowpass'?'s:':'')+p.x+','+p.z+','+p.y;").replace("amount:p.amount}","amount:p.amount,...(p.region==='snowpass'?{region:p.region}:{})}")
+           assert frag!=s[a:z];s=s[:a]+frag+s[z:]
+           sub("return poiHotbarHasKit()&&poiWalkActive&&!pineAIActive&&poiWalkLevel===0;",
+            "return facilitySite?.id==='base'&&poiHotbarHasKit()&&poiWalkActive&&!pineAIActive&&poiWalkLevel===0;")
+           sub(" mark(kit.drops);mark(kit.groundGold);mark(poiArmedDrawList(kit));mark(poiMineFindList(kit));",
+            """ const regional=typeof poiSnowGroundMatch==='function'?poiSnowGroundMatch:()=>true;
+           const snow=typeof poiSnowGroundActive==='function'&&poiSnowGroundActive();
+           mark((kit.drops||[]).filter(regional));mark((kit.groundGold||[]).filter(regional));
+           if(!snow){mark(poiArmedDrawList(kit));mark(poiMineFindList(kit));""")
+           sub(" mark(poiEconomyCaches.values());mark(poiEconomyDrops.values());",
+            " mark(poiEconomyCaches.values());mark(poiEconomyDrops.values());}")
+           sub("  (x,z,fromX,fromZ)=>route(x,z)&&poiWalkCanStep(x,z,fromX,fromZ),",
+            "  (x,z,fromX,fromZ)=>(!snow||validPos(x,z))&&route(x,z)&&poiWalkCanStep(x,z,fromX,fromZ),")
+           sub(" return location?{location:{...location,y}}:{reason:'blocked'};",
+            " return location?{location:{...location,y,...(snow?{region:'snowpass'}:{})}}:{reason:'blocked'};")
+           sub("pile=list.find(p=>p.x===x&&p.z===z&&p.y===poiWalkLevel)",
+            "pile=list.find(p=>p.x===x&&p.z===z&&p.y===poiWalkLevel&&(typeof poiSnowGroundMatch!=='function'||poiSnowGroundMatch(p)))")
+           sub("const item=list.find(d=>d.x===x&&d.z===z&&d.y===poiWalkLevel);",
+            "const item=list.find(d=>d.x===x&&d.z===z&&d.y===poiWalkLevel&&(typeof poiSnowGroundMatch!=='function'||poiSnowGroundMatch(d)));")
+           sub("{type:d.type,x:d.x,z:d.z,y:d.y}):d)","{type:d.type,x:d.x,z:d.z,y:d.y,...(d.region?{region:d.region}:{})}):d)")
+           sub("if(item.type===POI_INVENTORY_HERB&&item.y===0&&kit.towerFind?.kind==='herb'",
+            "if(!item.region&&item.type===POI_INVENTORY_HERB&&item.y===0&&kit.towerFind?.kind==='herb'")
+           sub("    if(d.y!==poiWalkLevel||!validPos(d.x,d.z)||!poiDungeonVisualVisible(d.x,d.z,d.y))continue;",
+            "    if(d.y!==poiWalkLevel||(typeof poiSnowGroundMatch==='function'&&!poiSnowGroundMatch(d))||!validPos(d.x,d.z)||!poiDungeonVisualVisible(d.x,d.z,d.y))continue;")
+           sub(" if(!poiWalkDoorFoley(door,fromLevel,onDoorCue)&&!continuous)poiWalkFootstep(wet);",
+            """ if(facilitySite?.id==='snowpass'){poiGroundGoldPickup(poiWalkX,poiWalkZ);poiInventoryPickup(poiWalkX,poiWalkZ)}
+           if(!poiWalkDoorFoley(door,fromLevel,onDoorCue)&&!continuous)poiWalkFootstep(wet);""")
+           return s
+          LOCAL_SOURCE
+          cat >.snow/ground.js <<'LOCAL_SOURCE'
+          // BEGIN SNOW GROUND NAMESPACE
+          function poiSnowGroundActive(){return typeof facilitySite!=='undefined'&&facilitySite?.id==='snowpass'}
+          function poiSnowGroundMatch(record){return (record?.region==='snowpass')===poiSnowGroundActive()}
+          function poiSnowGroundIn(p){
+           return p&&p.y===0&&Number.isInteger(p.x)&&Number.isInteger(p.z)&&p.x>=0&&p.x<24&&p.z>=0&&p.z<29;
+          }
+          function poiSnowGroundDecode(base,snow){
+           const old=Array.isArray(base)?base.map(p=>p&&Object.hasOwn(p,'region')?{...p,region:undefined}:p):[];
+           return Array.isArray(snow)?old.concat(snow.filter(poiSnowGroundIn).map(p=>({...p,region:'snowpass'}))):old;
+          }
+          function poiSnowGroundSave(drops,gold){
+           const fields={};
+           for(const [list,base,snow] of [[drops,'drops','snowDrops'],[gold,'groundGold','snowGroundGold']]){
+            if(!list?.length)continue;
+            const original=list.filter(o=>o.region!=='snowpass'),local=list.filter(o=>o.region==='snowpass').map(({region,...o})=>o);
+            if(original.length)fields[base]=original;
+            if(local.length)fields[snow]=local;
+           }
+           return fields;
+          }
+          // END SNOW GROUND NAMESPACE
           LOCAL_SOURCE
           cat >.snow/tests/snow-pass-local.test.cjs <<'LOCAL_SOURCE'
           const {test}=require('node:test'),a=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
@@ -176,7 +293,7 @@ jobs:
           test('legacy/unknown/invalid version-1 resumes do not activate the snow sector',()=>{
            const initial={version:1,route:'facility',id:'base',play:true},p={x:14,z:12,y:0,facing:2},snow={...initial,region:'snowpass',regionHp:41};
            a.deepEqual(plain(c.decode(initial,p)),{});a.deepEqual(plain(c.decode(snow,p)),{region:'snowpass',regionHp:41});
-           for(const [s,q] of [[{...snow,region:'capital'},p],[{...snow,play:false},p],[snow,{...p,z:29}],[snow,{...p,y:-1}]])a.deepEqual(plain(c.decode(s,q)),{});
+           for(const [s,q] of [[{...snow,region:'capital'},p],[{...snow,play:false},p],[snow,{...p,z:29}],[snow,{...p,y:-1}]])a.deepEqual(plain(c.decode(s,q)),{position:null});
           });
           test('small pass has real cardinal route, exact return landing, no actors or remote content',()=>{
            const {map,snowRoute}=c.map();a.deepEqual([map.width,map.height],[24,29]);a.ok(map.world.length<800&&snowRoute.length>30);
@@ -185,6 +302,19 @@ jobs:
             if(i){const p=snowRoute[i-1];a.equal(Math.abs(p.x-q.x)+Math.abs(p.z-q.z),1)}
            }
            a.ok(map.world.every(o=>!o.type.startsWith('monster')));
+          });
+
+          test('ground save encoding separates exact same coordinates in base and snow',()=>{
+           const begin=h.indexOf('// BEGIN SNOW GROUND NAMESPACE'),end=h.indexOf('// END SNOW GROUND NAMESPACE',begin);
+           const env={facilitySite:{id:'base'}};
+           const bag=vm.runInNewContext(h.slice(begin,end)+';({read:poiSnowGroundDecode,write:poiSnowGroundSave,match:poiSnowGroundMatch})',env);
+           const herb={x:12,z:2,y:0,type:'healingHerb'},snow={...herb,count:2},other={...herb,x:24};
+           const list=bag.read([herb],[snow,other]);a.equal(list.length,2);
+           a.deepEqual(plain(list.filter(bag.match)),[herb]);
+           env.facilitySite={id:'snowpass'};
+           a.deepEqual(plain(list.filter(bag.match)),[{...snow,region:'snowpass'}]);
+           const coins=bag.read([{x:12,z:2,y:0,amount:1}],[{x:12,z:2,y:0,amount:3}]);
+           a.deepEqual(plain(bag.write(list,coins)),{drops:[herb],snowDrops:[snow],groundGold:[{x:12,z:2,y:0,amount:1}],snowGroundGold:[{x:12,z:2,y:0,amount:3}]});
           });
           LOCAL_SOURCE
           cat >.snow/tests/snow-pass-browser.mjs <<'LOCAL_SOURCE'
@@ -211,7 +341,9 @@ jobs:
            page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(12000);
            await page.goto(root+'/seed');
            const stock=await page.evaluate(()=>{
-            const kit=JSON.stringify({version:1,weaponDurabilityVersion:2,weapon:'equipWoodSword',potions:0,slots:[{type:'equipWoodSword',count:1,durability:77}],drops:[{type:'healingHerb',x:50,z:126,y:0}]});
+            const slots=Array(27).fill(null);slots[0]={type:'equipWoodSword',count:1,durability:77};slots[1]={type:'healingHerb',count:1};
+            const kit=JSON.stringify({version:1,weaponDurabilityVersion:2,weapon:'equipWoodSword',potions:1,gold:9,slots,
+             drops:[{type:'healingHerb',x:50,z:126,y:0},{type:'healingHerb',x:12,z:2,y:0}]});
             localStorage.setItem('world-workshop-hotbar-v1',kit);
             localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
              position:{x:49,z:126,y:0,facing:2},townLayout:5,townMapHeight:128,view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.24,orbitDistance:5.5}}));
@@ -226,31 +358,62 @@ jobs:
            await page.evaluate(()=>window.__editorTest.testWound(31));
            const pad=page.locator('#poiAnalogPad'),cdp=await page.context().newCDPSession(page);
            const send=(type,touchPoints)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints});
-           const roll=async(dir,next)=>{
+           const roll=async(dir,next,z=dir>0?0:127)=>{
             const r=await pad.boundingBox();assert(r);
             const p={x:Math.round(r.x+r.width*.5),y:Math.round(r.y+r.height*.5),id:7};
             await send('touchStart',[p]);await send('touchMove',[{...p,y:p.y+36*dir}]);
-            await at(next,dir>0?0:127);
+            await at(next,z);
             await send('touchEnd',[]);
            };
+           // The actual switch must refuse a real storage failure rather than
+           // persisting a half-entered region or changing the carried kit.
+           await page.evaluate(()=>{
+            window.__snowStorageWrite=Storage.prototype.setItem;
+            Storage.prototype.setItem=function(k,v){
+             if(k==='world-workshop-resume-v1'&&JSON.parse(v).region==='snowpass'){
+              window.__snowRefused=true;throw new DOMException('fixture full','QuotaExceededError');
+             }
+             return window.__snowStorageWrite.call(this,k,v);
+            };
+           });
+           await roll(1,'base',127);
+           // At the edge, hold a new actual drag until the resolver attempts the write.
+           const rect=await pad.boundingBox(),press={x:Math.round(rect.x+rect.width/2),y:Math.round(rect.y+rect.height/2),id:8};
+           await send('touchStart',[press]);await send('touchMove',[{...press,y:press.y+36}]);
+           await page.waitForFunction(()=>window.__snowRefused===true);
+           await send('touchEnd',[]);
+           const refused=await state();assert.equal(refused.area.id,'base');assert.equal(refused.save.region,undefined);assert.equal(refused.kit,stock);
+           await page.evaluate(()=>{Storage.prototype.setItem=window.__snowStorageWrite});
+           await page.waitForFunction(()=>window.__editorTest.snowPassRegion().field);
+           await page.evaluate(()=>window.__editorTest.snowInventoryQA.markMusic());
            await roll(1,'snowpass');
            const entry=await state();
            assert.deepEqual([entry.area.width,entry.area.height,entry.area.actors,entry.area.hp],[24,29,0,69]);
            assert.deepEqual(entry.area.spawn,[12,0]);assert.equal(entry.p.x,12);assert.equal(entry.save.region,'snowpass');assert.equal(entry.kit,stock);
+           assert.equal(entry.area.music,'outside');assert.equal(await page.evaluate(()=>window.__editorTest.snowInventoryQA.fieldSame()),true);
+           assert.deepEqual(await page.evaluate(()=>[window.__editorTest.snowInventoryQA.clock(),window.__editorTest.snowInventoryQA.weapon()]),[true,'equipWoodSword']);
            await page.waitForTimeout(225);await page.keyboard.press('ArrowDown');await at('snowpass',1);
+           assert.equal(await page.evaluate(()=>window.__editorTest.snowInventoryQA.drop(1).ok),true);
+           assert.equal(await page.evaluate(()=>window.__editorTest.snowInventoryQA.gold(2).ok),true);
+           const saved=JSON.parse((await state()).kit);
+           assert.deepEqual(saved.drops,JSON.parse(stock).drops);
+           assert.deepEqual(saved.snowDrops,[{type:'healingHerb',x:12,z:2,y:0}]);
+           assert.equal(saved.snowGroundGold[0].amount,2);assert.equal(saved.gold,7);
            await page.reload();await page.locator('#pineStartupCover').waitFor({state:'hidden'});await at('snowpass',1);
-           const restored=await state();assert.equal(restored.area.hp,69);assert.equal(restored.kit,stock);
+           const restored=await state();assert.equal(restored.area.hp,69);assert.deepEqual(JSON.parse(restored.kit).snowDrops,saved.snowDrops);
+           await page.keyboard.press('ArrowDown');await at('snowpass',2);
+           const repicked=JSON.parse((await state()).kit);assert(!repicked.snowDrops?.length);assert.deepEqual(repicked.drops,saved.drops);
            await roll(-1,'base');
            const back=await state();
            assert.equal(back.area.width,128);assert.equal(back.p.x,49);assert.equal(back.save.region,undefined);
-           assert.equal(back.area.hp,69);assert.equal(back.kit,stock);assert(back.area.actors>0);assert.deepEqual(back.area.spawn,old.area.spawn,'base death respawn does not use local snow coordinates');assert(back.area.forest,'same loaded base still has normal forest');
-           assert.deepEqual(JSON.parse(back.kit).drops,[{type:'healingHerb',x:50,z:126,y:0}]);
+           assert.equal(back.area.hp,69);assert.deepEqual(JSON.parse(back.kit).snowGroundGold,saved.snowGroundGold);assert(back.area.actors>0);assert.deepEqual(back.area.spawn,old.area.spawn,'base death respawn does not use local snow coordinates');assert(back.area.forest,'same loaded base still has normal forest');
+           assert.deepEqual(JSON.parse(back.kit).drops,saved.drops);
            await page.waitForTimeout(225);await page.keyboard.press('ArrowUp');await at('base',126);
            await page.waitForTimeout(225);await page.keyboard.press('ArrowRight');
            await page.waitForFunction(()=>window.__editorTest.freeMovementPose().x>49.92);
            const picked=JSON.parse((await state()).kit);
-           assert(!picked.drops?.some(d=>d.type==='healingHerb'),'the old ground item is still collectible after return');
-           assert(picked.potions===1||picked.slots?.some(d=>d?.type==='healingHerb'),'real base ground pickup still transfers into the same inventory');
+           assert.deepEqual(picked.drops,[{type:'healingHerb',x:12,z:2,y:0}],'only base local ground item is collected after return');
+           assert(picked.potions===2||picked.slots?.some(d=>d?.type==='healingHerb'&&d.count===2),'real base ground pickup still transfers into the same inventory');
            assert.deepEqual(errors,[]);
            console.log('PASS legacy save, actual walking both borders, one region, cold reopen, base and held kit untouched');
           }finally{await b?.close();await new Promise(r=>server.close(r))}
