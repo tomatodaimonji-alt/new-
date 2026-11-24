@@ -29,6 +29,21 @@ const anchor='  freeMovementPose:()=>({x:poiWalkViewX,z:poiWalkViewZ,level:poiWa
 const insert=(s,k,v)=>{assert.equal(s.split(k).length,2,k);return s.replace(k,k+v)};
 let fixture=insert(html,anchor,`
   davidQA:{
+   retreatStep:()=>{
+    const start=[poiWalkX,poiWalkZ],goal=[24,101];
+    if(start[0]===goal[0]&&start[1]===goal[1])return {done:true};
+    const q=[[...start,null]],seen=new Set([start.join(',')]);
+    for(let i=0;i<q.length;i++){
+     const [x,z,first]=q[i];
+     for(const [dx,dz,key] of [[0,-1,'ArrowUp'],[1,0,'ArrowRight'],[0,1,'ArrowDown'],[-1,0,'ArrowLeft']]){
+      const xx=x+dx,zz=z+dz,id=xx+','+zz;
+      if(xx<14||xx>27||zz<101||zz>107||seen.has(id)||!poiWalkCanStep(xx,zz,x,z))continue;
+      const route=first??{x:xx,z:zz,key};if(xx===goal[0]&&zz===goal[1])return route;
+      seen.add(id);q.push([xx,zz,route]);
+     }
+    }
+    return null;
+   },
    aimTest:(roll,target)=>{
     const f=window.__davidFrames;
     f.roll=roll;f.aimTarget=target;f.beamClock={now:performance.now()};
@@ -212,6 +227,19 @@ async function routeWalk(p,points,after=()=>{}){
   await step(p,x>cx?'ArrowRight':x<cx?'ArrowLeft':z>cz?'ArrowDown':'ArrowUp',x,z);await after();
  }
 }
+async function escapeChamber(p){
+ // The old row can contain the real boss and cannot be walked through.
+ // Choose the next cardinal step from the live collision geometry.
+ for(let i=0;i<28;i++){
+  const n=await p.evaluate(()=>window.__editorTest.davidQA.retreatStep());
+  if(n?.done)return;
+  if(!n){await p.waitForTimeout(180);continue}
+  await p.keyboard.press(n.key);
+  try{await wait(p,([x,z])=>{const q=window.__editorTest.davidQA.state();return q.pos[0]===x&&q.pos[1]===z&&q.now>=q.step},[n.x,n.z],1200);}
+  catch(e){if(e.name!=='TimeoutError')throw e;} // actor can cross after planning: replan, never teleport
+ }
+ assert.fail('could not physically reach the escape lip: '+JSON.stringify(await qa(p)));
+}
 async function inside(browser){
  const session=await start(browser),p=session.p;
  await routeWalk(p,TEMPLE_IN.slice(1));
@@ -266,8 +294,8 @@ try{
   await routeWalk(p,TEMPLE_NEAR);
   await wait(p,()=>{const s=window.__editorTest.davidQA.state().statue;return s?.d?.awake&&(s.x!==24||s.z!==104)});
   checkpoint='physical retreat cancels any chase or threat into exterior';
-  await routeWalk(p,[...TEMPLE_IN.slice(-1),...TEMPLE_NEAR].reverse());
-  await routeWalk(p,TEMPLE_IN.slice().reverse());
+  await escapeChamber(p);
+  await routeWalk(p,TEMPLE_IN.slice(0,-1).reverse());
   const back=await qa(p);
   await wait(p,t=>window.__editorTest.davidQA.state().now>=t+1550,back.now);
   s=await qa(p);assert.deepEqual(s.pos,[24,91,0]);assert(!s.statue?.d?.attack);

@@ -10,7 +10,7 @@ let page=connect(h,"if(facilityParams.get('test')==='1')window.__editorTest={",
  "if(facilityParams.get('test')==='1')window.__editorTest={"+`
  wakeQA:{
   manual:()=>{window.__davidWake.manual=true},draw:()=>render(),
-  data:()=>({now:performance.now(),player:[poiWalkX,poiWalkZ,poiWalkLevel],hp:poiPlayerHP,
+  data:()=>({now:performance.now(),nextStep:poiWalkNextReady,player:[poiWalkX,poiWalkZ,poiWalkLevel],hp:poiPlayerHP,
    started:poiDavidBattleActive(performance.now()),pulls:window.__davidWake.pulls,frames:window.__davidWake.frames,
    introScore:window.__davidWake.introScore,cover:$('pineStartupCover').hidden,errors:gl.getError(),
    d:[...poiMonsterStates].find(([o])=>o.type==='monsterStoneDavid')?.[1]?.david??null}),
@@ -76,7 +76,7 @@ try{
  const enter=async z=>{
   await p.keyboard.press('ArrowUp');
   let q;
-  for(let i=0;i<20;i++){q=await advance();if(q.player[0]===24&&q.player[1]===z)return q}
+  for(let i=0;i<20;i++){q=await advance();if(q.player[0]===24&&q.player[1]===z&&q.now>=q.nextStep)return q}
   assert.fail(JSON.stringify({want:z,got:q?.player,d:q?.d}));
  };
  const lip=await enter(101);
