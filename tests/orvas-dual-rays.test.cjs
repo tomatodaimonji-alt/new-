@@ -31,10 +31,20 @@ test('short ordinary room ray safely lands both separate tips on real ground bef
  const rays=[{x:.48,z:-.151,end:6.02,h:2.5},{x:.48,z:.151,end:6.02,h:2.5}];
  assert(c.poiOrvasPlayerGroundImpact(o,rays,d,120,undefined,6.02,-1));
  assert(rays.every(r=>r.groundDrop&&r.groundDrop.at<r.end&&r.groundDrop.at>r.end-1.0));
- assert(rays.every(r=>r.groundDrop.h<.17&&r.groundDrop.blendStart<r.groundDrop.at-1.1));
- const m={p:[],c:[],n:[]};c.poiOrvasPlayerTraceTerminalMesh(m,{rays,d});
- assert(xyz(m).some(p=>p[1]<.16&&p[2]<.45)&&xyz(m).some(p=>p[1]<.16&&p[2]>.55));
- assert(xyz(m).every(p=>p[0]<7.0&&Math.abs(p[2]-.5)>.034));
+ assert(rays.every(r=>r.groundDrop.h<.17));
+ const m=c.poiDavidThermalBeam({sx:0,sz:0,y:0,opticalRays:rays,opticalCenter:6.02},d,6.32,0,true);
+ const verts=xyz(m);
+ for(const r of rays){
+  const rows=new Map();
+  for(const [x,y,z] of verts)if(Math.sign(z-.5)===Math.sign(r.z)){
+   const at=x-r.x-.5,key=at.toFixed(6);const row=rows.get(key)??{at,lo:Infinity,hi:-Infinity};
+   row.lo=Math.min(row.lo,y);row.hi=Math.max(row.hi,y);rows.set(key,row);
+  }
+  assert(rows.size>=6);
+  for(const {at,lo,hi} of rows.values())
+   assert(Math.abs((lo+hi)*.5-(r.h+(r.groundDrop.h-r.h)*at/r.groundDrop.at))<.006,'every rendered section lies on the same eye-to-ground line');
+  assert(Math.abs(Math.max(...Array.from(rows.values(),r=>r.at))-r.groundDrop.at)<1e-8);
+ }
  const targetRays=rays.map(({groundDrop,visualEnd,...r})=>({...r,end:2,visualLimit:6.02}));
  assert(c.poiOrvasPlayerGroundImpact(o,targetRays,d,120,undefined,6.02));
  assert(targetRays.every(r=>r.groundDrop.at>r.end+3&&r.groundDrop.at<r.visualLimit));
@@ -52,9 +62,7 @@ test('the same committed sweep draws cut vegetation and a soil gouge using actua
  }
 });
 
-test('opaque wall impact uses its actual forward face; no ground trail is fabricated',()=>{
- const {c}=engine(),s={min:[-.5,0,-.5],max:[.5,3,.5],tris:null};
- c.poiWallCameraSlab=(s,a,ray,max)=>{
+const slab=(s,a,ray,max)=>{
   let lo=0,hi=max;
   for(let i=0;i<3;i++){
    if(Math.abs(ray[i])<1e-9){if(a[i]<s.min[i]||a[i]>s.max[i])return Infinity;continue}
@@ -63,13 +71,30 @@ test('opaque wall impact uses its actual forward face; no ground trail is fabric
   }
   return lo;
  };
+test('opaque wall impact uses its actual forward face; no ground trail is fabricated',()=>{
+ const {c}=engine(),s={min:[-.5,0,-.5],max:[.5,3,.5],tris:null};
+ c.poiWallCameraSlab=slab;
  c.poiWallCameraCandidates=()=>[{x:6.5,y:0,z:.5,s}];
  const ray={x:.40,z:.151,h:2,end:5.15,visualLimit:5.15},d={x:1,z:0};
  assert(c.poiOrvasPlayerGroundImpact({x:0,z:0,y:0},[ray],d,16,undefined,5.15));
  assert(ray.wallImpact>5&&ray.visualEnd<ray.wallImpact&&!ray.groundDrop);
  const report=vm.runInContext('poiOrvasGroundTraces.at(-1)',c);
  assert.equal(report.parts.length,1);assert([...report.cells][0].startsWith('wall:'));
- assert(xyz(report.parts[0]).every(([x,y,z])=>Math.abs(x-5.986)<.001&&y>1.7&&y<2.3));
+ const rContact=ray.h+(ray.visualHeight-ray.h)*ray.wallImpact/ray.visualEnd;
+ assert(rContact<ray.h-.10);
+ assert(xyz(report.parts[0]).every(([x,y,z])=>Math.abs(x-5.986)<.001&&y>rContact-.31&&y<rContact+.31));
+});
+test('a steep downward ray stops at a wall below its eye line and cannot scorch the floor beyond it',()=>{
+ const {c}=engine(),d={x:1,z:0};
+ c.poiWallCameraSlab=slab;
+ c.poiWallCameraCandidates=()=>[{x:4,y:0,z:.5,s:{min:[-.5,0,-.5],max:[.5,1.18,.5],tris:null}}];
+ const o={x:0,z:0,y:0},ray={x:.45,z:.15,h:2,end:5.9};
+ assert.equal(c.poiOrvasWallContact(ray.x,ray.h,ray.z,d,5.9,0),null);
+ assert(c.poiOrvasPlayerGroundImpact(o,[ray],d,16,undefined,5.9));
+ assert(ray.wallImpact>2.5&&ray.wallImpact<2.60&&!ray.groundDrop);
+ assert(ray.visualHeight<1.18&&ray.visualHeight>.90);
+ const event=vm.runInContext('poiOrvasGroundTraces.at(-1)',c);
+ assert([...event.cells].every(x=>x.startsWith('wall:')));
 });
 test('an endpoint remaining in empty air above no real surface cannot create a mark',()=>{
  const {c,grounds}=engine();grounds.clear();
