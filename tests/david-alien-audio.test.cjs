@@ -31,10 +31,10 @@ test('one phase-continuous sound per eye cast, not per impact/growth/fan/followu
  f.stop();a(stops.at(-1)[1]<4.5);
  f.play({...q,kind:'sweep'},p,b,0,'impact');a.deepEqual(sounds,[['davidBladeSweep',4.4,.60]]);
 });
-test('heavy metallic sweep is the verified CC0 edit and the Fire Wand master is untouched',()=>{
+test('heavy metallic sweep stays the verified CC0 edit and Fire Wand uses the authorized short flare',()=>{
  const f=vm.runInNewContext(cut('const POI_RECORDED_FOLEY={','const poiRecordedFoleyCache')+';POI_RECORDED_FOLEY');
  const digest=k=>crypto.createHash('sha256').update(Buffer.from(f[k],'base64')).digest('hex');
  a.equal(digest('davidBladeSweep'),'d2460f6fe00ae14e4f6fb7ce908f45cfcb12f47739a07bdd9da21d6ced7dc59a');
- a.equal(digest('wandFlameLaunch'),'104bb2d01a7d706c7ad91377ad3e7f9996950c36596cde1c6ad728d519aa1c14');
+ a.equal(digest('wandFlameLaunch'),'5d4cdb5dd4abd03069a825a73fb6ef88ffdc2cb46570f1c398befd996db9b81a');
  a(!f.davidEyeFire&&!f.davidEyeExtend,'David no longer uses flame recordings');
 });
