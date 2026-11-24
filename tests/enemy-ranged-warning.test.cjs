@@ -71,7 +71,7 @@ test('authored archer stationary aim reaches exactly eight beyond its old roamin
   poiWalkCanStep:(x,z)=>!e.block || x!==e.block,
   poiEnemyCombatEdge:(x,z)=>!e.block||x!==e.block};
  vm.createContext(e);
- vm.runInContext(cut('const POI_ARMED_FOES=','const POI_ARMED_WAND_FIND=')+
+ vm.runInContext(cut('const POI_FIELD_NOTICE=','const POI_WILD_BIRTH_MARGIN=')+cut('const POI_ARMED_FOES=','const POI_ARMED_WAND_FIND=')+
   cut('function poiEnemyAttackTrace(','function poiEnemyDiagonalType(')+cut('function poiArmedAim(','function poiArmedLootOptions('),e);
  const o={type:'monsterSkelArcher',y:0,x:0,z:0};
  a.equal(e.poiArmedAim(o,o,8,0).tiles.length,8);
@@ -79,7 +79,8 @@ test('authored archer stationary aim reaches exactly eight beyond its old roamin
  a.equal(e.poiArmedAim(o,o,8,1),null);
  e.block=7;a.equal(e.poiArmedAim(o,o,8,0),null);
  e.block=null;e.safe=9;a.equal(e.poiArmedAim(o,o,8,0),null);
- a.match(h,/dist<=8&&\(dist>6\.5\|\|!poiArmedBound/);
+ a.match(h,/dist<=POI_FIELD_ARCHER_NOTICE&&\(dist>POI_FIELD_NOTICE\|\|!poiArmedBound/);
+ a.deepEqual(vm.runInContext('[POI_FIELD_ARCHER_NOTICE,POI_FIELD_NOTICE].join(",")',e),'8,6.5');
  a.match(h,/monsterSkelMage:\{type:'equipPlainStaff'[^\n]*reach:4,windup:820/);
 });
 test('real enemy resolver hits in geometric lane exactly once and no longer damages old-cell corners',()=>{
