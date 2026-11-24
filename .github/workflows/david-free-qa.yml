@@ -1,0 +1,280 @@
+name: David continuous movement (isolated proof)
+on:
+  push:
+    branches: ['dot/workshop-david-free-qa']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [angular, original, leap, gait, companion, unit]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 6199584f9111b348d064aedb44cd647dd3638146
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build exact isolated candidate
+        shell: bash
+        run: |
+          set -eu
+          test "$(git hash-object world-editor.html)" = 42db26103ed3a697bd29beba57bd8abf5b91073b
+          mkdir -p .david/tests
+          cat >.david/build.py <<'EXACT_SOURCE'
+          from pathlib import Path
+          import sys
+          base,dst=map(Path,sys.argv[1:3]);s=base.read_text()
+          def sub(a,b):
+           global s
+           assert s.count(a)==1,(a,s.count(a))
+           s=s.replace(a,b,1)
+          p=Path(__file__).parent
+          sub('function poiDavidApproach(o,s,b,p,now){',p.joinpath('free.js').read_text()+'''
+          function poiDavidApproach(o,s,b,p,now){
+           if(typeof poiDavidFreeApproach==='function'&&typeof poiFreeAdvance==='function'&&typeof poiMonsterActorStart==='function')return poiDavidFreeApproach(o,s,b,p,now);''')
+          sub(' if(now<(s.moveStarted??-1e9)+(s.guardMoveMs||380))return;\n if(s.x===b.x&&s.z===b.z)', ''' if(now<(s.moveStarted??-1e9)+(s.guardMoveMs||380))return;
+           if(typeof poiDavidFreeReturn==='function'&&s.david.freeMotion)return poiDavidFreeReturn(o,s,b,now);
+           if(s.x===b.x&&s.z===b.z)''')
+          sub(" if(!d.leapAbort&&s.x===b.x&&s.z===b.z&&now-", " if(!d.leapAbort&&!s.actorFree&&s.x===b.x&&s.z===b.z&&now-")
+          sub(" const b=poiDavidMatch(o),d=s.david,k=POI_DAVID_PATTERNS[kind],p=poiAimOrigin(now);",
+           ''' const b=poiDavidMatch(o),d=s.david,k=POI_DAVID_PATTERNS[kind],p=poiAimOrigin(now);
+           const src=typeof poiDavidGroundPoint==='function'?poiDavidGroundPoint(s,now):s;
+           if(src.t<1)return false;''')
+          a=s.index('function poiDavidBegin(');b=s.index('// BEGIN DAVID FREE MOTION',a)
+          area=s[a:b].replace('{x:s.x,z:s.z}','src').replace('p.x-s.x,dz=p.z-s.z','p.x-src.x,dz=p.z-src.z').replace('sx:s.x,sz:s.z','sx:src.x,sz:src.z')
+          s=s[:a]+area+s[b:]
+          a=s.index('function poiDavidLeapBegin(');b=s.index('function poiDavidLeapAbort(',a)
+          area=s[a:b].replace(' const d=s.david;',' const d=s.david,src=typeof poiDavidGroundPoint===\'function\'?poiDavidGroundPoint(s,now):s;\n if(src.t<1)return false;').replace('{x:s.x,z:s.z}','src').replace('p.x-s.x','p.x-src.x').replace('p.z-s.z','p.z-src.z').replace('x0:s.x,z0:s.z','x0:src.x,z0:src.z')
+          s=s[:a]+area+s[b:]
+          sub(' s.x=s.fromX=l.x;s.z=s.fromZ=l.z;s.moveStarted=now-380;s.guardMoveMs=0;',
+           ''' if(s.actorFree){
+            s.actorFree=null;poiMonsterActorActive.delete(o);
+            s.david.gaitDistance=(s.david.gaitDistance??0)+(s.david.walkLength??0);s.david.walkLength=0;
+           }
+           s.x=s.fromX=l.x;s.z=s.fromZ=l.z;s.moveStarted=now-380;s.guardMoveMs=0;''')
+          sub(' const distance=Math.hypot(p.x-s.x,p.z-s.z),mid=distance<=6;',
+           ''' const src=typeof poiDavidGroundPoint==='function'?poiDavidGroundPoint(s,now):s;
+           if(src.t<1)return false;
+           const distance=Math.hypot(p.x-src.x,p.z-src.z),mid=distance<=6;''')
+          a=s.index('function poiCompanionDavidTarget(');b=s.index('function poiCompanionDavidFocus(',a)
+          c=s[a:b]
+          c=c.replace(' const tether=', " const pos=typeof poiDavidGroundPoint==='function'?poiDavidGroundPoint(s,performance.now()):s;\n const tether=")
+          c=c.replace('{x:s.x,z:s.z,y:o.y}', '{x:pos.x,z:pos.z,y:o.y}').replace('Math.hypot(s.x-p.x,s.z-p.z)', 'Math.hypot(pos.x-p.x,pos.z-p.z)').replace('Math.hypot(s.x-sx,s.z-sz)', 'Math.hypot(pos.x-sx,pos.z-sz)').replace('{x:s.x,z:s.z,y:a.y}', '{x:pos.x,z:pos.z,y:a.y}')
+          s=s[:a]+c+s[b:]
+          a=s.index('function poiMonsterAt(');b=s.index('  const destination=',a);r=s[a:b]
+          a1=r.index('  if(state.actorFree)');a2=r.index('  const landing=',a1)
+          r=r[:a1]+r[a2:]+r[a1:a2];s=s[:a]+r+s[b:]
+          sub('  const x=(s.fromX??s.x)+(s.x-(s.fromX??s.x))*e,z=(s.fromZ??s.z)+(s.z-(s.fromZ??s.z))*e;\n  const david=', '''  const free=s.actorFree?poiMonsterActorPoint(s.actorFree,now):null;
+            const x=free?.x??(s.fromX??s.x)+(s.x-(s.fromX??s.x))*e,z=free?.z??(s.fromZ??s.z)+(s.z-(s.fromZ??s.z))*e;
+            const david=''')
+          sub('walkDistance=(gait??0)+e;', 'walkDistance=(gait??0)+(free?(s.david?.walkLength??0)*free.t:e);')
+          sub(' const count=Math.floor((gait+e+1e-7)/POI_DAVID_GAIT_STRIDE),previous=', ''' const free=s.actorFree?poiMonsterActorPoint(s.actorFree,now):null;
+           const count=Math.floor((gait+(free?(d.walkLength??0)*free.t:e)+1e-7)/POI_DAVID_GAIT_STRIDE),previous=''')
+          sub('||s.fromX===s.x&&s.fromZ===s.z||d.attack||d.leapAbort', '||!free&&s.fromX===s.x&&s.fromZ===s.z||d.attack||d.leapAbort')
+          sub(' const x=(s.fromX??s.x)+(s.x-(s.fromX??s.x))*e,z=(s.fromZ??s.z)+(s.z-(s.fromZ??s.z))*e;\n poiDavidHeavyContact', ''' const x=free?.x??(s.fromX??s.x)+(s.x-(s.fromX??s.x))*e,z=free?.z??(s.fromZ??s.z)+(s.z-(s.fromZ??s.z))*e;
+           poiDavidHeavyContact''')
+          dst.parent.mkdir(parents=True,exist_ok=True);dst.write_text(s)
+          EXACT_SOURCE
+          cat >.david/free.js <<'EXACT_SOURCE'
+          // BEGIN DAVID FREE MOTION
+          // Fractional locomotion uses the same swept body and occupancy reservations
+          // as ordinary enemies. Keep integer s.x/z only for existing occupancy APIs.
+          function poiDavidGroundPoint(s,now){
+           return s.actorFree?poiMonsterActorPoint(s.actorFree,now):{x:s.x,z:s.z,t:1};
+          }
+          function poiDavidFreePlan(o,s,b,from,x,z){
+           const dx=x-from.x,dz=z-from.z,len=Math.hypot(dx,dz);
+           if(len<1e-6)return null;
+           const cells=poiMonsterActorFootprint(from.x,from.z),memo=new Map();
+           const legal=(x,z,fx,fz)=>{
+            const k=[x,z,fx,fz].join(',');
+            if(!memo.has(k))memo.set(k,poiDavidIn(b,{x,z,y:o.y})&&poiActorSameGrade(x,z,fx,fz)&&
+             !poiTownNpcActorOccupied(x,z,o.y)&&poiMonsterCanMove(x,z,s,fx,fz));
+            if(memo.get(k))cells.add(x+','+z);
+            return memo.get(k);
+           };
+           const sweep=poiFreeAdvance(from.x,from.z,dx,dz,POI_ACTOR_RADIUS,legal,()=>true);
+           if(sweep.stopped||Math.hypot(sweep.x-x,sweep.z-z)>1e-5||Math.abs(sweep.distance-len)>1e-5||
+              [...poiMonsterActorFootprint(x,z)].some(k=>!cells.has(k)))return null;
+           return {x,z,dx,dz,len,cells};
+          }
+          function poiDavidFreeApply(o,s,now,from,leg,ms){
+           const d=s.david;
+           d.gaitDistance=(d.gaitDistance??0)+(d.walkLength??0);
+           d.freeMotion=true;d.walkLength=leg.len;d.dx=leg.dx/leg.len;d.dz=leg.dz/leg.len;
+           poiMonsterActorStart(o,s,now,from,leg.x,leg.z,ms,leg.cells);
+           s.guardMoveMs=ms;poiMonsterMeshDirty=true;
+          }
+          function poiDavidFreeTrail(o,s,b,d,x,z){
+           const prior=d.trail.findIndex(p=>Math.hypot(p.x-x,p.z-z)<1e-5);
+           if(prior>=0){d.trail.length=prior+1;return}
+           // Repeated circling can erase a loop only when the body genuinely
+           // sweeps back to its prior position in the same compatible cell.
+           const cx=poiFreeCell(x),cz=poiFreeCell(z);
+           const loop=d.trail.findIndex(p=>poiFreeCell(p.x)===cx&&poiFreeCell(p.z)===cz&&poiDavidFreePlan(o,s,b,{x,z},p.x,p.z));
+           if(loop>=0)d.trail.length=loop+1;
+           d.trail.push({x,z});
+          }
+          function poiDavidFreeApproach(o,s,b,p,now){
+           const from=poiDavidGroundPoint(s,now),d=s.david;
+           const dx=p.x-from.x,dz=p.z-from.z,len=Math.hypot(dx,dz);
+           if(from.t<1||now-(s.moveStarted??-1e9)<250||len<2.6)return false;
+           const angles=[[dx/len,dz/len],...(Math.abs(dx)>=Math.abs(dz)?[[Math.sign(dx),0],[0,Math.sign(dz)]]:[[0,Math.sign(dz)],[Math.sign(dx),0]])];
+           for(const [u,v] of angles){
+            if(!(u||v))continue;
+            const leg=poiDavidFreePlan(o,s,b,from,from.x+u,from.z+v);if(!leg)continue;
+            if(Math.hypot(p.x-leg.x,p.z-leg.z)>=len)continue;
+            poiDavidFreeApply(o,s,now,from,leg,235);d.next=now+250;
+            poiDavidFreeTrail(o,s,b,d,leg.x,leg.z);return true;
+           }
+           return false;
+          }
+          function poiDavidFreeReturn(o,s,b,now){
+           const d=s.david,from=poiDavidGroundPoint(s,now);
+           if(from.t<1)return;
+           if(Math.hypot(from.x-b.x,from.z-b.z)<1e-5){
+            s.actorFree=null;poiMonsterActorActive.delete(o);s.x=s.fromX=b.x;s.z=s.fromZ=b.z;poiDavidArrive(s,now);return;
+           }
+           if(now<d.next||poiDavidHidden()||poiWalkLevel!==b.y)return;
+           const path=d.trail,want=path?.[path.length-2];
+           if(!want){d.next=now+170;return}
+           const leg=poiDavidFreePlan(o,s,b,from,want.x,want.z);
+           if(!leg){d.next=now+170;return}
+           path.pop();poiDavidFreeApply(o,s,now,from,leg,Math.max(80,350*leg.len));
+          }
+          // END DAVID FREE MOTION
+          EXACT_SOURCE
+          cat >.david/tests/david-free.test.cjs <<'EXACT_SOURCE'
+          const {test}=require('node:test'),a=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+          const s=fs.readFileSync(require('node:path').join(__dirname,'../world-editor.html'),'utf8');
+          const cut=(a,b)=>s.slice(s.indexOf(a),s.indexOf(b,s.indexOf(a)+1));
+          const plain=x=>JSON.parse(JSON.stringify(x));
+          function load(extra={}){
+           const ctx={POI_ACTOR_RADIUS:.21,POI_FREE_STEP:.12,POI_FREE_EPS:1e-5,
+            poiDavidIn:(b,p)=>p.x>=0&&p.x<=5&&p.z>=0&&p.z<=5,
+            poiActorSameGrade:()=>true,poiTownNpcActorOccupied:()=>false,poiMonsterCanMove:()=>true,
+            poiMonsterActorActive:new Map(),poiMonsterMeshDirty:false,
+            poiActorHeading:(x,z)=>Math.atan2(x,z),poiDavidHidden:()=>false,poiWalkLevel:0,poiDavidArrive:s=>{s.david=null},
+            ...extra};
+           const inc=vm.runInNewContext("const poiFreeCell=x=>Math.floor(x+.5);"+
+            cut('function poiFreeAdvance(','function poiPlayerNpcBodyClip(')+
+            cut('function poiMonsterActorPoint(','function poiMonsterActorSync(')+
+            cut('// BEGIN DAVID FREE MOTION','// END DAVID FREE MOTION')+
+            ';({plan:poiDavidFreePlan,approach:poiDavidFreeApproach,point:poiDavidGroundPoint,back:poiDavidFreeReturn})',ctx);
+           return inc;
+          }
+          test('real two-axis movement follows fractional line and returns without endpoint snap',()=>{
+           const api=load(),o={y:0},s={x:0,z:0,david:{trail:[{x:0,z:0}]}},b={x:0,z:0,y:0};
+           a.equal(api.approach(o,s,b,{x:3,z:4},10),true);
+           const start=api.point(s,10),center=api.point(s,127.5),end=api.point(s,245);
+           a.deepEqual(plain(start),{x:0,z:0,t:0});
+           a.ok(Math.abs(center.x-.3)<1e-6&&Math.abs(center.z-.4)<1e-6);
+           a.ok(Math.abs(end.x-.6)<1e-6&&Math.abs(end.z-.8)<1e-6&&end.t===1);
+           a.equal(api.approach(o,s,b,{x:3,z:4},190),false);
+           api.back(o,s,b,260);a.deepEqual(plain(api.point(s,260)),{x:.6,z:.8,t:0});
+           api.back(o,s,b,620);a.equal(s.david,null);a.equal(s.x,0);a.equal(s.z,0);
+          });
+          test('swept diagonal cannot cut solid corner and blocked fallback does not snap',()=>{
+           const api=load({poiMonsterCanMove:(x,z)=>x<=1||z<=1}),o={y:0},s={x:1,z:1,david:{trail:[{x:1,z:1}]}};
+           a.equal(api.plan(o,s,{},s,1.8,1.8),null);
+           a.equal(api.approach(o,s,{}, {x:4,z:4},0),true);
+           const e=api.point(s,235);a.ok(e.x===1||e.z===1);a.ok(Math.hypot(e.x-1,e.z-1)>.99);
+          });
+          EXACT_SOURCE
+          cat >.david/tests/david-free-browser.mjs <<'EXACT_SOURCE'
+          import assert from 'node:assert/strict';
+          import {createServer} from 'node:http';
+          import {createRequire} from 'node:module';
+          import {readFileSync} from 'node:fs';
+          import {Script} from 'node:vm';
+          let html=readFileSync(process.argv[2]??'world-editor.html','utf8');
+          const hook="if(facilityParams.get('test')==='1')window.__editorTest={";
+          assert.equal(html.split(hook).length,2);
+          html=html.replace(hook,`
+           window.__freeDavidQA={
+            state:()=>{
+             const b=facilitySite?.davidTemple?.boss,[o,s]=[...poiMonsterStates].find(([o])=>o.type==='monsterStoneDavid')||[];
+             if(!s)return null;
+             const now=performance.now(),p=poiDavidGroundPoint(s,now),live=poiMonsterPose(o,s,now),d=s.david,a=d?.attack,l=s.actorFree;
+             return {now,player:[poiWalkX,poiWalkZ],occupied:[s.x,s.z],x:p.x,z:p.z,t:p.t,
+              rendered:[live.x-.5,live.z-.5],gait:live.david?.walkDistance,plant:d?.footPlantCount,
+              awake:!!d?.awake,returning:!!d?.returning,attack:a?{kind:a.kind,sx:a.sx,sz:a.sz,leap:a.leap??null}:null,leg:l?{fromX:l.fromX,fromZ:l.fromZ,x:l.x,z:l.z,ms:l.ms}:null,
+              dormant:!d?.awake,wall:facilitySite?.davidTemple?.resumeSolid.find(q=>q.type==='poiDavidWallRound'&&q.x===24&&q.z>119)?.z??null};
+            },
+            relocate:(x,z)=>workshopResumeRestorePosition({x,z,y:0,facing:2}),
+            wallTest:()=>{
+             const [o,s]=[...poiMonsterStates].find(([o])=>o.type==='monsterStoneDavid'),b=facilitySite.davidTemple.boss;
+             return [poiDavidFreePlan(o,s,b,{x:24,z:119.7},24,121.3)===null,poiDavidFreePlan(o,s,b,{x:24,z:118},24.4,118.4)!==null];
+            }
+           };`+hook);
+          for(const [,s] of html.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(s);
+          if(process.env.DAVID_FREE_PARSE_ONLY){console.log('true game movement fixture parses');process.exit(0)}
+          const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
+          const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(req.url==='/seed'?'<title>Test seed</title>':html)});
+          await new Promise(r=>server.listen(0,'127.0.0.1',r));
+          let browser,p,phase='boot';
+          const read=()=>p.evaluate(()=>window.__freeDavidQA.state());
+          try{
+           browser=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
+           p=await (await browser.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.65})).newPage();
+           p.setDefaultTimeout(15000);const errors=[];p.on('pageerror',e=>errors.push(e.message));
+           const root='http://127.0.0.1:'+server.address().port;
+           await p.goto(root+'/seed');await p.evaluate(()=>localStorage.setItem('world-workshop-resume-v1',JSON.stringify({
+            version:1,route:'facility',id:'base',play:true,position:{x:28,z:108,y:0,facing:2},townLayout:5,townMapHeight:128,
+            view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:0,orbitPitch:.24,orbitDistance:5.5}
+           })));
+           await p.goto(root+'/?resume=1&test=1',{waitUntil:'domcontentloaded'});
+           await p.locator('#pineStartupCover').waitFor({state:'hidden'});
+           phase='actual angular direction and center during live diagonal movement';
+           await p.waitForFunction(()=>{const s=window.__freeDavidQA.state();return s?.leg&&s.t>.1&&s.t<.92},{},{timeout:9000});
+           const a=await read();
+           assert(a.leg&&Math.abs(a.leg.x-a.leg.fromX)>.2&&Math.abs(a.leg.z-a.leg.fromZ)>.2,'both axes change on the same actual movement leg');
+           assert(Math.abs((a.leg.x-a.leg.fromX)-(a.leg.z-a.leg.fromZ))<.03,'diagonal is an actual trajectory, not a cardinal sequence');
+           assert(Math.hypot(a.rendered[0]-a.x,a.rendered[1]-a.z)<.001);
+           assert(a.gait>0&&a.gait<=1);
+           assert.deepEqual(await p.evaluate(()=>window.__freeDavidQA.wallTest()),[true,true]);
+           phase='attack origin comes from the actual settled fractional center';
+           await p.waitForFunction(()=>window.__freeDavidQA.state()?.attack?.kind==='sweep',null,{timeout:8500});
+           const strike=await read();
+           assert(Math.hypot(strike.attack.sx-strike.x,strike.attack.sz-strike.z)<.001&&Math.abs(strike.x-Math.round(strike.x))>.1);
+           phase='exit and actual returned statue at its original position';
+           assert(await p.evaluate(()=>window.__freeDavidQA.relocate(24,91)));
+           await p.waitForFunction(()=>window.__freeDavidQA.state()?.returning,null,{timeout:5000});
+           const retreat=await read();assert.deepEqual(retreat.player,[24,91]);assert(retreat.gait>=a.gait);
+           await p.waitForFunction(()=>{const d=window.__freeDavidQA.state();return d.dormant&&d.x===24&&d.z===104&&!d.leg},null,{timeout:9000});
+           assert.deepEqual(errors,[]);
+           console.log('True diagonal and contact/return proofs',JSON.stringify({ground:a,origin:strike.attack,final:await read()}));
+          }catch(e){console.error('David free native',phase,await read().catch(()=>null));throw e}
+          finally{await browser?.close();await new Promise(r=>server.close(r))}
+          EXACT_SOURCE
+          python .david/build.py world-editor.html .david/world-editor.html
+          test "$(git hash-object .david/world-editor.html)" = c35b10b01b363549918d2ae10d77aeb1cc8f494a
+          node --test .david/tests/david-free.test.cjs
+      - if: matrix.suite != 'unit'
+        run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
+      - if: matrix.suite == 'angular'
+        run: node .david/tests/david-free-browser.mjs .david/world-editor.html
+      - if: matrix.suite == 'original'
+        run: |
+          node tests/david-arena-chase-browser.mjs .david/world-editor.html
+          node tests/david-temple-browser.mjs .david/world-editor.html
+      - if: matrix.suite == 'leap'
+        run: node tests/david-leap-browser.mjs .david/world-editor.html
+      - if: matrix.suite == 'gait'
+        run: |
+          node tests/david-gait-browser.mjs .david/world-editor.html
+          node tests/david-heavy-feedback-browser.mjs .david/world-editor.html
+      - if: matrix.suite == 'companion'
+        run: node tests/companion-david-browser.mjs .david/world-editor.html
+      - if: matrix.suite == 'unit'
+        run: |
+          cp .david/world-editor.html world-editor.html
+          code=0
+          node --test --test-reporter=tap tests/*.cjs >.david/unit.log 2>&1 || code=$?
+          grep -E '^(not ok|# tests|# pass|# fail)' .david/unit.log | cut -c1-260 || true
+          exit "$code"
