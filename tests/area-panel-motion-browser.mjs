@@ -103,7 +103,9 @@ async function trial(browser,reduced,viewport={width:320,height:740}){
     a.pause();a.currentTime=duration*.24;
     const rect=node=>{const {left,right,top,width,height}=node.getBoundingClientRect();return {left,right,top,width,height}};
     const clock=document.querySelector('#poiClockHud'),mini=document.querySelector('#poiMiniMap');
-    const result={...rect(el),clock:rect(clock),map:rect(mini),origin:getComputedStyle(el).transformOrigin,duration};
+    const r=document.querySelector('#viewWrap');
+    const result={...rect(el),clock:rect(clock),map:rect(mini),origin:getComputedStyle(el).transformOrigin,duration,
+     timing:a.effect.getKeyframes(),chrome:[...r.querySelectorAll('#poiAnalogPad,#poiHotbar,#poiBagPanel,#poiChestPanel,#poiNpcInventory,#poiNpcTradePanel')].filter(n=>!n.hidden).map(n=>({id:n.id,rect:n.getBoundingClientRect().toJSON()}))};
     result.peakShadow=getComputedStyle(el).boxShadow;
     a.currentTime=1050;result.afterOldDuration=rect(el);
     a.currentTime=duration;
@@ -112,7 +114,7 @@ async function trial(browser,reduced,viewport={width:320,height:740}){
     return result;
    });
    assert(Math.abs(sizes.width-sizes.original.width)<.2&&Math.abs(sizes.left-sizes.original.left)<.2);
-   assert(Math.abs(sizes.top-sizes.original.top)<.2&&sizes.height>sizes.original.height*1.08,'real card enlarges downward');
+   assert(Math.abs(sizes.top-sizes.original.top)<.2&&sizes.height>sizes.original.height*1.08,'real card enlarges downward '+JSON.stringify(sizes));
    assert.equal(sizes.duration,landscape?1750:1050);
    assert.equal(sizes.afterOldDuration.left,sizes.original.left,'late animation keeps the fixed left edge');
    assert.match(sizes.peakShadow,/inset/);
