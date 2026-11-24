@@ -1612,7 +1612,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v287）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v288）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -26173,7 +26173,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v287',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v288',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -26288,7 +26288,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v287';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v288';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -26503,7 +26503,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v287',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v288',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -27851,24 +27851,70 @@ function poiBareFistRig(pose,stride=0,reach=null,side=1){
  };
  return {right:arm(1,side===1),left:arm(-1,side===-1)};
 }
-function poiDrawBareFistRig(m,rig,gear,rotate,x,y,z){
+// BEGIN PLAYER SHARED BLOCK ARMS
+const POI_PLAYER_BLOCK_ARM=Object.freeze({upper:.238,lower:.267,
+ upperWidth:.142,lowerWidth:.122,wristWidth:.108,handWidth:.132});
+const poiPlayerArmMix=(p,q,t)=>p.map((v,i)=>v+(q[i]-v)*t);
+const poiPlayerArmUnit=(p,fallback=[0,-1,0])=>{const n=Math.hypot(...p);return n>1e-7?p.map(v=>v/n):fallback};
+function poiPlayerBlockArm(shoulder,wrist,side,bias=null){
+ const {upper,lower}=POI_PLAYER_BLOCK_ARM;
+ const v=wrist.map((p,i)=>p-shoulder[i]),u=poiPlayerArmUnit(v);
+ let n=Math.hypot(...v);
+ // Existing hand/weapon sockets stay exact even if a long bow draw asks
+ // for a couple of extra centimetres. Only the shoulder follows slightly.
+ const lo=lower-upper+.025,hi=upper+lower-.006,span=Math.max(lo,Math.min(hi,n));
+ if(Math.abs(span-n)>1e-7){shoulder=wrist.map((p,i)=>p-u[i]*span);n=span}
+ const pole=bias?bias.map((p,i)=>p-shoulder[i]):[side*.27,-.39,-.78];
+ const project=p=>{const dot=u.reduce((v,x,i)=>v+x*p[i],0);return p.map((q,i)=>q-dot*u[i])};
+ const stable=poiPlayerArmUnit(project(Math.abs(u[1])<.9?[0,-1,0]:[0,0,side]));
+ const perp=poiPlayerArmUnit(project(pole),stable);
+ const slide=(upper*upper+n*n-lower*lower)/(2*n),bend=Math.sqrt(Math.max(0,upper*upper-slide*slide));
+ const elbow=shoulder.map((p,i)=>p+u[i]*slide+perp[i]*bend);
+ return {shoulder,elbow,wrist,side};
+}
+function poiPlayerWeaponHands(pose,stride){
+ const t=pose?.twist||0,c=Math.cos(t),s=Math.sin(t);
+ const rot=(x,y,z)=>[x*c-z*s,y,x*s+z*c];
+ const hand=side=>{
+  const arm=characterArmRotation(pose?.[side>0?'strike':'guard']||0,side>0?(pose?.sweep||0):0);
+  const [x,y,z]=arm(0,.55-.965,.028);
+  return poiPlayerBlockArm(rot(side*.272,.965*.90,0),rot(side*.272+x,(.965+y)*.90,z-(pose?0:side*stride*.36)),side);
+ };
+ return {right:hand(1),left:hand(-1)};
+}
+function poiPlayerArmCrate(m,origin,end,ww,dd,register,color){
+ const u=poiPlayerArmUnit(end.map((q,i)=>q-origin[i])),ref=Math.abs(u[0])>.95?[0,0,1]:[1,0,0];
+ const dot=u.reduce((v,p,i)=>v+p*ref[i],0),a=poiPlayerArmUnit(ref.map((p,i)=>p-dot*u[i]));
+ const b=[u[1]*a[2]-u[2]*a[1],u[2]*a[0]-u[0]*a[2],u[0]*a[1]-u[1]*a[0]];
+ const ring=p=>[[-1,-1],[1,-1],[1,1],[-1,1]].map(([x,z])=>
+  register(p.map((v,i)=>v+a[i]*ww*x/2+b[i]*dd*z/2)));
+ const q=ring(origin),r=ring(end);
+ for(let i=0;i<4;i++){const j=(i+1)%4;quad(m,q[i],q[j],r[j],r[i],color)}
+ quad(m,q[3],q[2],q[1],q[0],color);quad(m,r[0],r[1],r[2],r[3],color);
+}
+function poiDrawPlayerBlockArms(m,arms,gear,rotate,x,y,z){
  const P=p=>{const [a,b]=rotate(p[0],p[2]);return [x+a,y+p[1],z+b]};
- const skin=[.77,.59,.43],shadow=[.71,.52,.39],knuckles=[.84,.66,.51];
- const torso=poiHumanGearType(gear?.torso);
- const sleeve=torso==='starterTunic'?[.48,.53,.43]:poiRoleClothingTone(torso);
- const B=(a,b,r,q,c)=>naturalBranch(m,...P(a),...P(b),r,q,c);
- for(const arm of [rig.right,rig.left]){
-  const {shoulder:s,elbow:e,wrist:w,closed}=arm;
-  const d=w.map((v,i)=>v-e[i]),n=Math.hypot(...d)||1,u=d.map(q=>q/n);
-  const tip=w.map((v,i)=>v+u[i]*(.056+.016*closed)),lip=w.map((v,i)=>v+u[i]*.044);
-  const cuff=s.map((v,i)=>v+(e[i]-v)*.52);
-  B(s,e,.076,.060,skin);B(e,w,.061,.047,skin);
-  if(sleeve)B(s,cuff,.084,.076,sleeve);
-  // Short, blunt rounded closed-fist silhouette, distinct from the wrist;
-  // the non-striking hand gradually relaxes with no mesh-size jump.
-  B(w,lip,.053+.014*closed,.064+.016*closed,shadow);
-  B(lip,tip,.064+.016*closed,.046+.013*closed,knuckles);
+ const skin=[.77,.59,.43],shadow=[.71,.52,.39],knuckle=[.82,.63,.47];
+ const torso=poiHumanGearType(gear?.torso),sleeve=torso==='starterTunic'?[.48,.53,.43]:poiRoleClothingTone(torso);
+ const {upperWidth,lowerWidth,wristWidth,handWidth}=POI_PLAYER_BLOCK_ARM;
+ const block=(a,b,w,d,c)=>poiPlayerArmCrate(m,a,b,w,d,P,c);
+ for(const {shoulder:s,elbow:e,wrist:w} of [arms.right,arms.left]){
+  const u=poiPlayerArmUnit(w.map((v,i)=>v-e[i])),at=f=>w.map((v,i)=>v+u[i]*f);
+  block(s,poiPlayerArmMix(s,e,1.06),upperWidth,.160,skin);
+  if(sleeve)block(s,poiPlayerArmMix(s,e,.57),upperWidth+.014,.174,sleeve);
+  block(poiPlayerArmMix(w,e,1.04),at(-.020),lowerWidth,.143,skin);
+  block(at(-.029),at(.018),wristWidth,.124,shadow);
+  block(at(.007),at(.070),handWidth,.138,knuckle);
  }
+}
+function poiPlayerPlannedFist(rig){
+ const convert=(a,side)=>poiPlayerBlockArm(a.shoulder,a.wrist,side,a.elbow);
+ return {right:convert(rig.right,1),left:convert(rig.left,-1)};
+}
+// END PLAYER SHARED BLOCK ARMS
+
+function poiDrawBareFistRig(m,rig,gear,rotate,x,y,z){
+ poiDrawPlayerBlockArms(m,poiPlayerPlannedFist(rig),gear,rotate,x,y,z);
 }
 // END PLAYER BARE HAND RIG
 
@@ -28231,15 +28277,13 @@ function poiBowAimPoints(pose){
   left:[-.272*torso,.838,-.272*ts],right:[.272*torso,.838,.272*ts],
   leftElbow:[-.280,.725+.12*d,.135+.157*d],rightElbow:[.334,.707+.15*d,.079-.211*d]};
 }
-function poiBuildBowAim(m,pose,r,x,y,z,rotate=(a,d)=>rot2(a,d,r)){
+function poiBuildBowAim(m,pose,r,x,y,z,rotate=(a,d)=>rot2(a,d,r),gear=null){
  const p=poiBowAimPoints(pose),R=(a,h,d)=>{const [px,pz]=rotate(a,d);return [x+px,y+h,z+pz]};
  const P=a=>R(...a);
  const B=(a,b,w,col)=>{const A=P(a),B=P(b);naturalBranch(m,...A,...B,w,w*.86,col)};
- const f=p.front,draw=p.draw,skin=[.77,.59,.43],highlight=[.84,.65,.48],wood=[.47,.29,.15],limb=[.69,.46,.22];
- for(const [shoulder,elbow,hand] of [[p.left,p.leftElbow,f],[p.right,p.rightElbow,draw]]){
-  B(shoulder,elbow,.076,skin);B(elbow,hand,.060,highlight);
-  const [hx,hy,hz]=P(hand);cube(m,hx,hy-.035,hz,.090,.073,.081,skin);
- }
+ const f=p.front,draw=p.draw,wood=[.47,.29,.15],limb=[.69,.46,.22];
+ poiDrawPlayerBlockArms(m,{left:poiPlayerBlockArm(p.left,f,-1,p.leftElbow),
+  right:poiPlayerBlockArm(p.right,draw,1,p.rightElbow)},gear,rotate,x,y,z);
  const bow=[[-.35,-.213],[-.26,-.075],[-.13,-.006],[0,0],[.13,-.010],[.27,-.080],[.35,-.213]]
   .map(([h,d])=>[f[0],f[1]+h,f[2]+d]);
  for(let i=1;i<bow.length;i++)B(bow[i-1],bow[i],i===3||i===4 ? .032 : .026,i%2?wood:limb);
@@ -28259,12 +28303,12 @@ function poiBuildPlayerMesh(weapon,pose,gear,stride=0,r=0,x=0,y=0,z=0,heading=nu
  const rotate=heading===null?(xx,zz)=>rot2(xx,zz,r):(xx,zz)=>[xx*cos-zz*sin,xx*sin+zz*cos];
  const m=mesh(),body=mesh(),twist=pose?.twist||0,twistC=Math.cos(twist),twistS=Math.sin(twist);
  const bowAim=weapon==='equipWoodBow'&&Number.isFinite(pose?.bowDraw);
- const fist=worldSpear&&!weapon;
+ const fist=!weapon;
  const fistPose=fist&&pose?.bareFist?pose:null;
- if(bowAim||fist)body.townParts={};
- characterHuman(body,0,0,0,false,bowAim||fist?null:pose,gear,true);
+ body.townParts={};
+ characterHuman(body,0,0,0,false,null,gear,true);
  for(let i=0;i<body.p.length;i+=3){
-  if((bowAim||fist)&&body.townParts?.left&&body.townParts?.right){
+  if(body.townParts?.left&&body.townParts?.right){
    const {left,right}=body.townParts;
    if(i>=left[0]&&i<left[1]||i>=right[0]&&i<right[1])continue;
   }
@@ -28287,15 +28331,12 @@ function poiBuildPlayerMesh(weapon,pose,gear,stride=0,r=0,x=0,y=0,z=0,heading=nu
   m.c.push(body.c[i],body.c[i+1],body.c[i+2]);
  }
  if(fist)poiDrawBareFistRig(m,poiBareFistRig(fistPose,stride,pose?.fistReach),gear,rotate,x,y,z);
- else if(bowAim)poiBuildBowAim(m,pose,r,x,y,z,rotate);
+ else if(bowAim)poiBuildBowAim(m,pose,r,x,y,z,rotate,gear);
  else if(weapon){
-  // Grip uses the same shoulder transform and torso turn as the fist
-  // geometry. The only independent motion is wrist orientation.
-  const arm=characterArmRotation(pose?.strike||0,pose?.sweep||0);
-  const [hx,hy,hz]=arm(0,.55-.965,.028);
-  const handZ=hz-(pose?0:stride*.36);
-  const gx=(.272+hx)*twistC-handZ*twistS,gz=handZ*twistC+(.272+hx)*twistS;
-  const gy=(.965+hy)*.90;
+  // Use the unaltered weapon attachment as the wrist socket. Only the
+  // newly articulated arm mesh will move differently around that point.
+  const arms=poiPlayerWeaponHands(pose,stride),[gx,gy,gz]=arms.right.wrist;
+  poiDrawPlayerBlockArms(m,arms,gear,rotate,x,y,z);
   if(worldSpear&&weapon==='equipWoodSpear'){
    poiBuildWorldSpear(m,pose,{x:gx,y:gy,z:gz},rotate,x,y,z);
    return m;
