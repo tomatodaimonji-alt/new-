@@ -11,6 +11,7 @@ replace(testApi,testApi+`
   frame:()=>{window.__depthRoofDraws=0;render()},
   gate:(x,z,yaw)=>{const ok=workshopResumeRestorePosition({x,z,y:0,facing:2});poiCameraYaw=yaw;poiCameraPitch=-.11;poiCameraDistance=6;return ok},
 
+  admission:(x,z)=>({passable:poiWalkCanStep(x,z,poiWalkX,poiWalkZ),next:poiWalkNextReady,now:performance.now(),hp:poiPlayerHP}),
   inspect:()=>{
    const f=facilitySite.sacredForest,at=poiAimOrigin(performance.now());
    return {x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,name:poiRegionAt(facilitySite,poiWalkX,poiWalkZ,false,poiWalkLevel).name,
@@ -75,8 +76,16 @@ try{
  async function step(q){
   const s=last,dx=q.x-s.x,dz=q.z-s.z,i=s.directions.findIndex(d=>d[0]===dx&&d[1]===dz);
   assert(i>=0,'a genuine cardinal keyboard step '+JSON.stringify({dx,dz,state:s}));
-  await p.keyboard.press(['ArrowUp','ArrowDown','ArrowRight','ArrowLeft'][i]);
-  const n=await tick();assert.deepEqual([n.x,n.z,n.y],[q.x,q.z,0],'actual collision and west trail');
+  const key=['ArrowUp','ArrowDown','ArrowRight','ArrowLeft'][i],attempts=[];
+  for(let k=0;k<5;k++){
+   const admission=await p.evaluate(({x,z})=>window.__editorTest.sacredQA.admission(x,z),q);
+   await p.keyboard.press(key);
+   const n=await tick(k?350:225);
+   if(n.x===q.x&&n.z===q.z&&n.y===0)return;
+   attempts.push({admission,pos:[n.x,n.z,n.y]});
+   assert.deepEqual([n.x,n.z,n.y],[s.x,s.z,0],'never leaves the route to skip a blocked step');
+  }
+  assert.fail('actual collision and west trail '+JSON.stringify({q,attempts}));
  }
  const screenshot=async name=>{if(process.env.FACILITY_SCREENSHOTS){mkdirSync(process.env.FACILITY_SCREENSHOTS,{recursive:true});await p.screenshot({path:process.env.FACILITY_SCREENSHOTS+'/'+name+'.png'});}};
  phase='two stock town gates reveal open sky, not the far roof';
