@@ -3,7 +3,7 @@ import {createServer} from 'node:http';
 import {createRequire} from 'node:module';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
-const leapMode=process.argv.includes('--leap');
+const leapMode=process.argv.includes('--leap'),fatal=process.argv.includes('--fatal');
 const kind=leapMode?'leap':'stomp';
 const html=readFileSync(process.argv[2]??'world-editor.html','utf8');
 const leapRadius=Number(html.match(/POI_DAVID_LEAP_RADIUS=([0-9.]+)/)?.[1]);
@@ -12,6 +12,7 @@ function inject(s,a,b){assert.equal(s.split(a).length,2,a);return s.replace(a,b)
 let fixture=inject(html,key,key+`
   arenaQA:{
    manual:()=>{window.__arenaManual=true},
+   armLethal:()=>{poiPlayerHP=1;poiCombatHud()},
    draw:()=>render(),
    leapTarget:()=>workshopResumeRestorePosition({x:24,z:112,y:0,facing:0}),
    audio:()=>poiAudioContext?.state,
@@ -23,6 +24,7 @@ let fixture=inject(html,key,key+`
     return {now:performance.now(),nextMob:poiNextMobTick,nextStep:poiWalkNextReady,arena:facilitySite.davidTemple.boss.room.arena,
       player:[poiWalkX,poiWalkZ,poiWalkLevel],pose:[poiWalkViewX,poiWalkViewZ],free:!!poiFreePose,hp:poiPlayerHP,boss:s?[s.x,s.z]:null,awake:!!d?.awake,returning:!!d?.returning,renderPose:renderPose?{x:renderPose.x,y:renderPose.y,z:renderPose.z,david:renderPose.david}:null,
       rig:rig?{crouch:rig.leapCrouch??0,feet:rig.feet.map(p=>p[1])}:null,cracks:window.__crackFrames??[],quakes:window.__quakeFrames??[],audio:window.__impactAudio??[],
+      death:poiPlayerDeathSnapshot(),fade:document.getElementById('poiDeathFade')?.style.opacity,crackLive:!!poiDavidFissureMesh?.gpu,
       rock:window.__raisedStoneFrames??[],rockBuffers:window.__raisedStoneBuffers??[],rockLive:!!poiDavidRaisedStoneMesh?.gpu,
       event:poiDavidFissure?{start:poiDavidFissure.start,radius:poiDavidFissure.radius,duration:poiDavidFissure.fissureMs,quake:poiDavidFissure.quakeMs}:null,
       wakes:!!d?.wakeDone,q:q?{kind:q.kind,start:q.start,cursor:q.cursor,dx:q.dx,dz:q.dz,sx:q.sx,sz:q.sz,leap:q.leap,hits:q.hits}:null,
@@ -41,7 +43,7 @@ fixture=inject(fixture,'  poiDavidRaisedStoneMesh={e,gpu:upload(geometry,prior?.
   poiDavidRaisedStoneMesh={e,gpu:upload(geometry,prior?.buf??null,gl.STATIC_DRAW)};
   let lo=Infinity,hi=-Infinity;
   for(let i=1;i<geometry.p.length;i+=3){lo=Math.min(lo,geometry.p[i]);hi=Math.max(hi,geometry.p[i])}
-  (window.__raisedStoneBuffers??=[]).push({start:e.start,height:hi-lo,n:poiDavidRaisedStoneMesh.gpu.count});
+  (window.__raisedStoneBuffers??=[]).push({start:e.start,height:hi-lo,n:poiDavidRaisedStoneMesh.gpu.count,...geometry.broken});
 `);
 fixture=inject(fixture,' draw(poiDavidRaisedStoneMesh.gpu,lifted);',`
  draw(poiDavidRaisedStoneMesh.gpu,lifted);
@@ -101,6 +103,7 @@ try{
  assert.equal(selected.cracks.length,0,'no ground fracture during the tell');
  assert.equal(selected.rock.length,0,'no emerging stone during the tell');
  assert.equal(selected.audio.length,0);assert.equal(selected.hp,100);
+ if(fatal)await p.evaluate(()=>window.__editorTest.arenaQA.armLethal());
  where='actual contact submits native audio, shaking projection and growing ground fracture';
  const recent=await until(s=>s.q?.kind===kind&&s.q.cursor===1&&s.cracks.length>=3,56);
  assert(recent.damage.some(d=>d.start===selected.q.start&&d.raw===(leapMode?43:39)));
@@ -117,9 +120,30 @@ try{
  const rock=late.rock.filter(f=>f.start===e.start),uploads=late.rockBuffers.filter(f=>f.start===e.start);
  assert.equal(uploads.length,1,'actual opaque stone packet uploaded once');
  assert(rock.length>=3&&rock.every(f=>f.age>=0&&f.n===uploads[0].n));
- assert(uploads[0].n%45===0&&uploads[0].n>=(leapMode?800:420));
- assert(uploads[0].height>=(leapMode?.65:.34),'native stone geometry is significantly above floor');
+ assert(uploads[0].n%3===0&&uploads[0].n>=(leapMode?800:420));
+ assert(uploads[0].slabs>=(leapMode?3:2)&&uploads[0].chips>=8&&uploads[0].width>=(leapMode?1.45:.94));
+ assert(uploads[0].height>=(leapMode?.54:.34),'native stone geometry is significantly above floor');
  assert(rock[0].offset<-.15&&rock.some(r=>Math.abs(r.offset)<.002),'stones physically emerge from floor');
+ if(process.env.DAVID_STONE_ARTIFACT){
+  const {mkdirSync}=await import('node:fs');mkdirSync(process.env.DAVID_STONE_ARTIFACT,{recursive:true});
+  await p.screenshot({path:process.env.DAVID_STONE_ARTIFACT+'/'+(fatal?'fatal-leap':kind)+'-peak.png'});
+ }
+ if(fatal){
+  where='real fatal leap keeps both opaque and fissure passes through visible fade, then clears on black relocation';
+  assert.equal(late.hp,0);assert.equal(late.death?.phase,'pause');
+  const fading=await until(s=>s.death?.phase==='out'&&s.death.opacity>.72,32);
+  assert.equal(fading.hp,0);assert.deepEqual(fading.player,recent.player);
+  assert(fading.now>e.start+e.duration,'visible death window outlasts normal lifetime');
+  assert(fading.rockLive&&fading.crackLive&&Math.abs(fading.rock.at(-1).age-(fading.now-e.start))<2);
+  assert(fading.cracks.at(-1).alpha>.65&&Math.abs(fading.cracks.at(-1).age-(fading.now-e.start))<2);
+  const black=await until(s=>s.death?.relocated,10);
+  assert.equal(black.fade,'1');assert.deepEqual(black.player,[24,91,0],'contextual respawn uses actual forecourt checkpoint, not city');assert(black.hp>0);
+  assert(!black.rockLive&&!black.crackLive&&!black.event,'neither geometric effect survives relocation');
+  assert.equal(black.damage.length,1);assert.equal(black.audio.length,1);
+  assert.deepEqual(errors,[]);
+  console.log('PASS real lethal leap retains both WebGL passes until opaque relocation, with exactly one real damage contact');
+  process.exitCode=0;
+ }else{
  const sinking=await until(s=>s.now>e.start+(leapMode?1200:960),25);
  assert(sinking.rock.filter(f=>f.start===e.start).at(-1).offset<-.10,'stones sink before expiring');
  assert(late.quakes.some(f=>f.age>450&&Math.abs(f.dy)>.00002),'visible rumble lasts past prior camera duration');
@@ -132,5 +156,6 @@ try{
  console.log(JSON.stringify({kind,audio,e,cracks:[recent.cracks[0],recent.cracks.at(-1)],rock:uploads[0],quakeLate:late.quakes.at(-1)}));
  assert.deepEqual(errors,[]);
  console.log('PASS actual '+kind+' contact and native WebAudio/WebGL crack and extended rumble');
+ }
 }catch(e){console.error(where,await (p?log().catch(()=>null):null),errors);throw e}
 finally{await browser?.close();await new Promise(r=>server.close(r))}
