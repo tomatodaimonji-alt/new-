@@ -1612,7 +1612,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v278）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v279）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -5773,6 +5773,15 @@ function poiDavidGeometry(m,x,y,z,pose){
  prism([0,3.91,.005],[0,4.35,.025],.33,.281,.29,.249,stone,6,false);
  // Chisel the head as a facial relief, not a stack of flat stripes.
  // Rotate on the neck; both optical centers use the beam bearing.
+ // Pigment brightens only with the actual committed beam animation.
+ // Keep the adjacent carved stone as a small reflected glow with no new
+ // geometry or drawn light; the shared material handles day/night.
+ const beamLight=pose?.kind==='beam',eyePhase=pose?.phase,
+  tEye=Math.max(0,Math.min(1,pose?.progress||0)),eyeEase=tEye*tEye*(3-2*tEye);
+ const charging=beamLight&&eyePhase==='windup';
+ const litBeam=beamLight&&['impact','beam-hold','beam-tell','beam-sweep'].includes(eyePhase);
+ const eyeEnergy=charging?eyeEase:litBeam?1:beamLight&&eyePhase==='recover'?1-eyeEase:0;
+ const eyeSpill=color=>eyeEnergy>0?color.map((v,i)=>v+eyeEnergy*([.40,.003,-.056][i])):color;
  const H=v=>poiDavidHeadPoint(v,pose),ht=(a,b,c,color)=>T(H(a),H(b),H(c),color),
   hq=(a,b,c,d,color)=>Q(H(a),H(b),H(c),H(d),color);
  const ring=rows=>rows.map(([h,w,f,b])=>[
@@ -5797,14 +5806,14 @@ function poiDavidGeometry(m,x,y,z,pose){
   const cheek=p(.279,4.610,.301),temple=p(.336,4.762,.232),nose=p(.082,4.607,.307),
    jaw=p(.217,4.453,.264),ear=p(.447,4.644,-.024);
   ht(nose,cheek,jaw,stone);
-  ht(cheek,temple,p(.091,4.719,.267),pale);
+  ht(cheek,temple,p(.091,4.719,.267),eyeSpill(pale));
   ht(p(.364,4.587,-.042),ear,p(.425,4.818,-.068),stone);
   ht(ear,p(.384,4.711,.049),p(.425,4.818,-.068),pale);
-  const light=r.glow?[1,.13,.085]:shade(fold,.74);
+  const light=r.glow?[charging?.66+1.43*eyeEnergy:1+1.09*eyeEnergy,charging?.046+.17*eyeEnergy:.13+.086*eyeEnergy,charging?.037+.067*eyeEnergy:.085+.019*eyeEnergy]:shade(fold,.74);
   ht([ex-.102,ey,ez-.015],[ex,ey-.045,ez+.006],[ex+.103,ey,ez-.015],shadow);
   hq([ex-.086,ey-.011,ez],[ex,ey-.025,ez+.004],[ex+.086,ey+.006,ez],[ex,ey+.022,ez+.012],light);
-  ht(p(.047,4.803,.294),p(.275,4.770,.280),p(.330,4.815,.263),chalk);
-  ht(p(.047,4.803,.294),p(.330,4.815,.263),p(.111,4.855,.284),pale);
+  ht(p(.047,4.803,.294),p(.275,4.770,.280),p(.330,4.815,.263),eyeSpill(chalk));
+  ht(p(.047,4.803,.294),p(.330,4.815,.263),p(.111,4.855,.284),eyeSpill(pale));
  }
  // Raised, irregular curls, chiselled depression inside each bend.
  // This is shallow relief on the original head, not free-floating beads.
@@ -19475,7 +19484,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v278',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v279',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -19590,7 +19599,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v278';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v279';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -19805,7 +19814,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v278',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v279',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -22012,7 +22021,9 @@ function poiMonsterRender(now,vp){
      m.p.push(cx+px,part.p[i+1],cz+pz);
      m.n.push(nx,part.n[i+1],nz);
     }
-    m.c.push(Math.min(1,part.c[i]+tell),Math.min(1,part.c[i+1]+tell*.89+exposed*.64),
+    // Only David's sculpted eye charge may exceed ordinary red paint.
+   const redCap=art==='monsterStoneDavid'&&david?.kind==='beam'?2.10:1;
+   m.c.push(Math.min(redCap,part.c[i]+tell),Math.min(1,part.c[i+1]+tell*.89+exposed*.64),
      Math.min(1,part.c[i+2]+tell*.62+exposed));
    }
    if(m.p.length/3>first)hitFlashSpans.push({first,end:m.p.length/3,source:s});
@@ -24017,6 +24028,42 @@ function facilityMineCameraEye(target,desired,walls){
  return target.map((v,i)=>v+vector[i]*length/distance);
 }
 // END MINE CAMERA WALL CLIP
+// BEGIN DAVID CAMERA WALL CLIP
+const facilityDavidCameraWallCache=new WeakMap();
+function facilityDavidCameraEligible(active,site,floor,ai,top,point){
+ if(!active?.s?.david?.awake||active.s.hp<=0||site?.id!=='base'||floor!==0||ai||top)return false;
+ const boss=poiDavidMatch(active.o);
+ return !!boss&&poiDavidIn(boss,point);
+}
+function facilityDavidCameraWalls(site,objects){
+ if(facilityDavidCameraWallCache.has(objects))return facilityDavidCameraWallCache.get(objects);
+ const d=site.davidTemple,types=new Set(['poiDavidWallRound','poiDavidWallWing','poiDavidGatePier']);
+ const key=o=>[o.x,o.z,o.y,o.type,o.rot||0].join(',');
+ const owned=new Set(d.resumeSolid.filter(o=>o.y===0&&types.has(o.type)).map(key));
+ const candidates=objects.filter(o=>o.y===0&&types.has(o.type)&&owned.has(key(o)));
+ const walls=[];
+ for(const o of candidates){
+  const m=mesh();
+  deco(m,o.type,o.x+.5,terrainY(o.x,o.z),o.z+.5,o.rot||0);
+  if(!m.p.length)continue;
+  const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];
+  for(let i=0;i<m.p.length;i++){
+   const a=i%3,v=m.p[i];
+   min[a]=Math.min(min[a],v);max[a]=Math.max(max[a],v);
+  }
+  walls.push({x:o.x,z:o.z,type:o.type,min,max});
+ }
+ facilityDavidCameraWallCache.set(objects,walls);
+ return walls;
+}
+function facilityDavidCameraEye(target,desired){
+ const active=typeof poiDavidActive==='undefined'?null:poiDavidActive;
+ const point={x:target[0]-.5,z:target[2]-.5,y:poiWalkLevel};
+ if(!facilityDavidCameraEligible(active,facilitySite,poiWalkLevel,pineAIActive,cameraTopDown,point))return desired;
+ return facilityMineCameraEye(target,desired,facilityDavidCameraWalls(facilitySite,world));
+}
+// END DAVID CAMERA WALL CLIP
+
 function facilityWatchtowerCloseFov(distance){
  // A short safe arm would otherwise fill the screen with the character.
  // A wider lens, only when clipped, keeps the doorway and avatar readable.
@@ -24088,7 +24135,8 @@ function parameters(){
   const mineCamera=facilitySite?.id==='base'&&poiWalkLevel===-1&&
    poiDungeonPointIn(facilitySite.mine?.bounds,Math.floor(x),Math.floor(z),poiWalkLevel)&&
    !poiDungeonTravelKey(facilitySite,Math.floor(x),Math.floor(z),poiWalkLevel);
-  const eye=mineCamera?facilityMineCameraEye(target,desired,facilityMineCameraWalls(sceneMesh)):facilityWatchtowerCameraEye(target,desired);
+  const templeEye=typeof facilityDavidCameraEye==='function'?facilityDavidCameraEye(target,desired):desired;
+  const eye=templeEye!==desired?templeEye:mineCamera?facilityMineCameraEye(target,desired,facilityMineCameraWalls(sceneMesh)):facilityWatchtowerCameraEye(target,desired);
   const arm=eye===desired?poiCameraDistance:Math.hypot(...eye.map((v,i)=>v-target[i]));
   const near=eye!==desired&&arm<1.81?.08:.45;
   const fov=eye===desired?Math.PI/3:facilityWatchtowerCloseFov(arm);
@@ -31133,6 +31181,7 @@ function facilityInvalidateScenes(){
  if(typeof facilityClearForestScene==='function')facilityClearForestScene();
  facilityWatchtowerCameraWalls=null;
  facilityEntranceGuides=null;
+ if(typeof facilityDavidCameraWallCache!=='undefined')facilityDavidCameraWallCache.delete(world);
  facilityGradeInvalidate();
  const removed=new Set();
  for(const {mesh,signs} of facilityScenes.values()){
