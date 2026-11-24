@@ -29,7 +29,7 @@ put(ap,ap+`
     now:performance.now(),nextMob:poiNextMobTick,hp:poiPlayerHP,boss:b?
     {x:b.x,z:b.z,y:b.y}:null,player:[poiWalkX,poiWalkZ,poiWalkLevel],awake:d?.awake,ready:d?.wakeDone,
     q:q&&{kind:q.kind,cursor:q.cursor,executed:q.executed,last:q.lastContactAt,
-     angle:q.sweep?.angle,done:q.sweep?.done,sx:q.sx,sz:q.sz},
+     angle:q.sweep?.angle,done:q.sweep?.done,sx:q.sx,sz:q.sz,dx:q.dx,dz:q.dz,reach:q.kind==='beam'&&poiDavidBeamReach(q,b,{x:q.dx,z:q.dz})},
     stomp:poiDavidFissure&&{radius:poiDavidFissure.radius,when:poiDavidFissure.start,leap:poiDavidFissure.leap},
     live:!!poiOrvasGroundGpu};
   }
@@ -103,7 +103,13 @@ try{
    const later=await until(s=>s.q?.done&&s.start[0]?.cells.length>first.start[0].cells.length,38,'rotating beam paints additional legal cells');
    assert.equal(later.start.length,1);assert(later.start[0].cells.length<=70);assert(later.uploads.every((u,i)=>i===0||u.reuse));
   }else if(label==='beam'){
-   assert.equal(first.start[0].kind,'beam');assert(first.start[0].cells.length>=5&&first.start[0].cells.length<18);
+   assert.equal(first.start[0].kind,'beam');assert(first.start[0].cells.length>=3&&first.q.reach<14,'beam stops on the authored physical tunnel');
+   for(const key of first.start[0].cells){
+    const [x,z]=key.split(',').map(Number),dx=x-first.q.sx,dz=z-first.q.sz;
+    assert(dx*first.q.dx+dz*first.q.dz>0&&Math.hypot(dx,dz)<=first.q.reach+.5);
+    assert(Math.abs(dx*first.q.dz-dz*first.q.dx)<.51);
+   }
+   if(out)await p.screenshot({path:out+'/orvas-trace-beam-active.png'});
    const after=await until(s=>!s.live&&s.now>first.now+1700,40,'GPU retires automatically');
    assert.equal(after.start.length,0);
   }else{
