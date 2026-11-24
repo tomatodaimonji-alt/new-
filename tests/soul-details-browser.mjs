@@ -21,16 +21,16 @@ const server=createServer((req,res)=>{
  res.end(req.url==='/seed'?'<title>Soul detail QA</title>':h);
 });
 await new Promise((r,j)=>server.listen(0,'127.0.0.1',r).once('error',j));
-const url='http://127.0.0.1:'+server.address().port;let browser,phase='boot';
+const url='http://127.0.0.1:'+server.address().port;let browser,p,phase='boot';
 const errors=[];
 try{
  browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
   args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
  const ctx=await browser.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:1});
- const p=await ctx.newPage();p.on('pageerror',e=>errors.push(e.message));
+ p=await ctx.newPage();p.on('pageerror',e=>errors.push(e.message));
  await p.goto(url+'/seed');
  await p.evaluate(()=>{
-  const slots=Array(34).fill(null);
+  const slots=Array(27).fill(null);
   slots[2]={type:'orvasSoul',count:1,durability:417};
   slots[3]={type:'equipWoodSword',count:1,durability:150};
   slots[9]={type:'slimeSoul',count:1,durability:17};
@@ -38,7 +38,7 @@ try{
     companionSoul:{version:1,active:'orvasSoul',pending:null,mode:'follow'}}));
   localStorage.setItem('world-workshop-town-clock-v1','{"version":1,"gameMs":360000}');
   localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
-    position:{x:24,z:125,y:0,facing:2},townLayout:5,townMapHeight:182,templeDepth:1,
+    position:{x:56,z:33,y:0,facing:2},townLayout:5,townMapHeight:182,templeDepth:1,
     view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:0,orbitPitch:.12,orbitDistance:6.5}}));
  });
  await p.goto(url+'/?resume=1&test=1',{waitUntil:'domcontentloaded'});
@@ -88,5 +88,5 @@ try{
  assert(!await p.locator('#poiItemDetailSoulHP').textContent());
  assert.deepEqual(errors,[]);
  console.log('Real landscape hotbar long touch, live active Orvas damage update, portrait bag slime and unchanged weapon detail.');
-}catch(e){console.error(phase,errors);throw e}
+}catch(e){console.error(phase,errors,await p?.evaluate(()=>window.__editorTest?.soulDetailQA.state()).catch(()=>null));throw e}
 finally{await browser?.close();await new Promise(r=>server.close(r))}
