@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 42e6bb79d68fb020ebba61021464ab8b0e168b92
+          ref: 54ea1b4dd57b922157a60c119a8074d4aea9ec0d
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -23,7 +23,7 @@ jobs:
         shell: bash
         run: |
           set -eu
-          test "$(git hash-object world-editor.html)" = 25abdba4344330e6135c6c56202a283fceb65618
+          test "$(git hash-object world-editor.html)" = b7ae26358e64f411d9d22f6fd3318b698a045bdb
           mkdir -p .spike/tests
           cat >.spike/build.py <<'SOURCE'
           from pathlib import Path
@@ -297,7 +297,12 @@ jobs:
            if(mask&bit)return;
            poiOverlandPrimedMusic.set(ctx,mask|bit);
            const go=()=>{
-            if(ctx!==poiAudioContext||!poiAudioAllowed()||!poiAudioEnabled){poiOverlandPrimedMusic.set(ctx,(poiOverlandPrimedMusic.get(ctx)||0)&~bit);return}
+            const region=facilitySite?.id,currentX=poiWalkViewX,currentZ=poiWalkViewZ;
+            const stillNear=region===target||region===site&&(target==='snowpass'?
+             Math.abs(currentX-49)<=3&&currentZ>=121:Math.abs(currentX-12)<=3&&currentZ<=6);
+            if(ctx!==poiAudioContext||!poiWalkActive||!stillNear||!poiAudioAllowed()||!poiAudioEnabled||poiAudioLevels.master<=0||poiAudioLevels.bgm<=0){
+             poiOverlandPrimedMusic.set(ctx,(poiOverlandPrimedMusic.get(ctx)||0)&~bit);return;
+            }
             // Decode only, with the existing caches. Scene ownership still selects
             // playback after the real crossing, never while a neighbor is drawn.
             if(target==='base'&&typeof poiMysticFieldDecode==='function')poiMysticFieldDecode(ctx);
@@ -571,7 +576,7 @@ jobs:
           let h=game.replace(key,key+`
             overlandOutletQA:{savedApproach:()=>workshopResumeRestorePosition({x:124,z:82,y:0,facing:0}),
              signedRoad:()=>{
-              for(const o of world.filter(o=>o.type==='innSign'&&o.y===0)){
+              for(const o of world.filter(o=>o.type==='shopBagSign'&&o.y===0&&o.x===103&&o.z===113)){
                for(const [dx,dz] of [[0,3],[3,0],[0,-3],[-3,0],[0,5],[5,0],[-5,0],[0,-5]]){
                 const x=o.x+dx,z=o.z+dz;
                 if(validPos(x,z)&&facilityFloorOwner(x,z,0)===null&&poiWalkCanStep(x,z)&&workshopResumeRestorePosition({x,z,y:0,facing:0}))
@@ -649,11 +654,11 @@ jobs:
            await page.evaluate(()=>window.__editorTest.overlandOutletQA.mode(false));
            await page.waitForFunction(()=>{const q=window.__editorTest.overlandOutletQA.read();return !q.top&&q.scene.drawing&&q.legacy===0});
            if(process.env.USE_STREAM_SIGN_PROOF){
-            checkpoint='authored lodging sign keeps real texture buffer in streamed perspective';
+            checkpoint='authored south-market sign keeps real texture buffer in streamed perspective';
             const nearby=await page.evaluate(()=>window.__editorTest.overlandOutletQA.signedRoad());
-            assert(nearby?.sign?.id==='innSign','select an actual stock outdoor inn sign approach');
-            await page.waitForFunction(()=>{const q=window.__editorTest.overlandOutletQA.read();return q.scene.drawing&&!q.legacy&&q.signIds.includes('innSign')});
-            console.log('Actual authored inn sign drawn after streamed travel',JSON.stringify({nearby,signIds:(await read()).signIds}));
+            assert(nearby?.sign?.id==='shopBagSign','select an actual stock outdoor south-market sign approach');
+            await page.waitForFunction(()=>{const q=window.__editorTest.overlandOutletQA.read();return q.scene.drawing&&!q.legacy&&q.signIds.includes('shopBagSign')});
+            console.log('Actual authored market sign drawn after streamed travel',JSON.stringify({nearby,signIds:(await read()).signIds}));
            }
            checkpoint='actual stock chapel path uses legacy cellar renderer';
            assert.equal(await page.evaluate(()=>window.__editorTest.overlandOutletQA.savedApproach()),true,'use existing save restoration to reach distant chapel approach for this probe');
@@ -1256,7 +1261,7 @@ jobs:
           SOURCE
           python .spike/build.py world-editor.html .spike/stream.html --default
           python .spike/horizon-safe.py .spike/stream.html .spike/world-editor.html
-          test "$(git hash-object .spike/world-editor.html)" = ff7e0661a722054fca4a5a9f37609ec8333c0ccb
+          test "$(git hash-object .spike/world-editor.html)" = e33a4f3b47b1d38bd4c0059f358c0e733c0cdb20
           cd .spike && node --test tests/*.cjs
       - if: matrix.probe != 'regressions'
         run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
@@ -1277,6 +1282,7 @@ jobs:
         run: |
           node tests/mystic-field-bgm-browser.mjs .spike/world-editor.html
           node tests/snow-audio-browser.mjs .spike/world-editor.html
+          node tests/orchestral-native-browser.mjs .spike/world-editor.html
       - if: matrix.probe == 'persistence'
         run: node .spike/tests/snow-pass-browser.mjs .spike/world-editor.html
       - if: matrix.probe == 'regressions'
