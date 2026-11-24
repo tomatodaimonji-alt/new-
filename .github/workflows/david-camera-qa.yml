@@ -74,7 +74,7 @@ jobs:
           a='  const eye=mineCamera?facilityMineCameraEye(target,desired,facilityMineCameraWalls(sceneMesh)):facilityWatchtowerCameraEye(target,desired);'
           sub(a,'''  const templeEye=typeof facilityDavidCameraEye==='function'?facilityDavidCameraEye(target,desired):desired;
             const eye=templeEye!==desired?templeEye:mineCamera?facilityMineCameraEye(target,desired,facilityMineCameraWalls(sceneMesh)):facilityWatchtowerCameraEye(target,desired);''')
-          sub("function facilityInvalidateScenes(){", "function facilityInvalidateScenes(){\n if(typeof facilityDavidCameraWallCache!=='undefined')facilityDavidCameraWallCache.delete(world);")
+          sub(" facilityWatchtowerCameraWalls=null;\n facilityEntranceGuides=null;", " facilityWatchtowerCameraWalls=null;\n facilityEntranceGuides=null;\n if(typeof facilityDavidCameraWallCache!=='undefined')facilityDavidCameraWallCache.delete(world);")
           dest.parent.mkdir(parents=True,exist_ok=True);dest.write_text(s)
           EXACT_SOURCE
           cat >.camera/tests/david-camera.test.cjs <<'EXACT_SOURCE'
@@ -200,13 +200,24 @@ jobs:
             if(Math.abs(safe.pixels[i]-blocked.pixels[i])+Math.abs(safe.pixels[i+1]-blocked.pixels[i+1])+Math.abs(safe.pixels[i+2]-blocked.pixels[i+2])>36)different++;
            const ratio=different/(safe.pixels.length/4);
            assert(ratio>.30&&safe.bins>blocked.bins,'large actual scene region recovers more than the legacy small dither hole');
+           phase='inside the authored entrance wing, exterior remains intact';
+           await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{...dest,id:8}]});
+           await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...from,id:8}]});
+           await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+           assert(await p.evaluate(()=>window.__davidCameraTest.setup(29,95)));
+           await p.clock.fastForward(230);await p.evaluate(()=>window.__davidCameraTest.frame());
+           const wingBefore=await cap(true),wingAfter=await cap(false);
+           assert(!wingBefore.clipped&&wingAfter.clipped&&wingAfter.arm<wingBefore.arm-.5,
+            'same real input clamps the view clear of the solid authored entrance wing');
+           assert(wingAfter.bins>wingBefore.bins,'wing recovery improves actual rendered scene');
+           console.log('Actual entrance wing camera framebuffer',JSON.stringify({blocked:wingBefore.arm,safe:wingAfter.arm,bins:[wingBefore.bins,wingAfter.bins]}));
            assert.deepEqual(errors,[]);assert.equal((await get()).gpu,0);
            console.log('Real temple wall camera framebuffer',JSON.stringify({blocked:{arm:blocked.arm,bins:blocked.bins},safe:{arm:safe.arm,bins:safe.bins},ratio,limitsAfter}));
           } catch(e){console.error('David camera native:',phase);throw e}
           finally{await browser?.close();await new Promise(r=>server.close(r))}
           EXACT_SOURCE
           python .camera/build.py world-editor.html .camera/world-editor.html
-          test "$(git hash-object .camera/world-editor.html)" = d9d9134807eca758d8fee1d2a3a15d879b6f4c06
+          test "$(git hash-object .camera/world-editor.html)" = 432dd2be2ce1f0ef155c89cf95bb2368164b489e
           node --test .camera/tests/david-camera.test.cjs
       - if: matrix.suite != 'unit'
         run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
