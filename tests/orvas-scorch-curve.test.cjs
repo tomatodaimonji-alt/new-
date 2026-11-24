@@ -38,6 +38,7 @@ test('adjacent faces on one plane join, wall gap and wall-to-floor transition ne
  const wall=(z,left,right,x=2)=>({kind:'wall',p:[x,3,z],face:{normal:[1,0,0],row:{x:0,y:0,z:0,s:{left,right}}}});
  a(f.c.poiOrvasSweepRibbon(m,()=>null,wall(0,-1,.11),wall(.26,.10,1)));
  const count=m.p.length;
+ const p=m.p,ny=(p[4]-p[1])*(p[8]-p[2])-(p[5]-p[2])*(p[7]-p[1]);a(ny>0,"wall faces outward towards the beam");
  a(!f.c.poiOrvasSweepRibbon(m,()=>null,wall(0,-1,.08),wall(.26,.16,1)));
  a(!f.c.poiOrvasSweepRibbon(m,()=>null,wall(0,-1,.11),wall(.26,.1,1,2.1)));
  a(!f.c.poiOrvasSweepRibbon(m,()=>null,wall(0,-1,.11),{kind:'floor',p:[2,3,.1]}));
