@@ -45,7 +45,7 @@ try{
    const slots=Array(27).fill(null);
    slots[0]={type:'equipWoodSword',count:1,durability:150};slots[1]={type:'orvasSoul',count:1,durability:377};
    slots[2]={type:'healingHerb',count:2};slots[3]={type:'slimeSoul',count:1,durability:22};
-   localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weapon:null,potions:0,gold:9,weaponDurabilityVersion:2,slots,
+   localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weapon:'equipWoodSword',potions:0,gold:9,weaponDurabilityVersion:2,slots,
     companionSoul:{version:1,active:'orvasSoul',mode:'follow',pending:null}}));
    localStorage.setItem('world-workshop-town-clock-v1','{"version":1,"gameMs":345000}');
    localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
@@ -56,7 +56,15 @@ try{
   await p.goto(base+'/?resume=1&test=1',{waitUntil:'domcontentloaded'});
   const ready=async()=>{await p.locator('#pineStartupCover').waitFor({state:'hidden',timeout:30000});
    await p.waitForFunction(()=>window.__editorTest?.squareFieldQA&&window.__editorTest?.facility()?.active&&
-    window.__editorTest.squareFieldQA.state().ally==='orvasSoul',null,{timeout:14000,polling:55});};
+    true,null,{timeout:14000,polling:55}).catch(async e=>{throw Error(JSON.stringify({url:await p.url(),errors,flags:await p.evaluate(()=>Object.keys(window.__editorTest??{}))}),{cause:e})});
+   for(let i=0;i<65;i++){
+    let got;try{got=await p.evaluate(()=>window.__editorTest.squareFieldQA.state());}
+    catch(e){throw Error(JSON.stringify({site,x,z,errors}),{cause:e})}
+    if(got.ally==='orvasSoul')return;
+    if(i===64)throw Error(JSON.stringify({got,site,x,z,errors}));
+    await p.waitForTimeout(90);
+   }
+  };
   const read=()=>p.evaluate(()=>window.__editorTest.squareFieldQA.state());
   const until=async pred=>{let s;for(let i=0;i<65;i++){s=await read();if(pred(s))return s;await p.waitForTimeout(90)}
    throw Error(JSON.stringify({s,errors}));};

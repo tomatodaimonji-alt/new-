@@ -49,3 +49,27 @@ test('expanded survey indexes are dense only for new 13,920 cells and use existi
  }
  assert.equal(ranks.size,13920);assert.match(text,/base:0:outerfield/);assert.match(text,/nearest|poiSquareFieldNear/);
 });
+test('real validPos keeps canonical Play ground-only and does not enlarge editor or independent facilities',()=>{
+ const ctx=vm.createContext({poiWalkActive:false,pineAIActive:false,poiWalkLevel:0,MAP_W:128,MAP_H:182,
+  facilitySite:{id:'base',map:{width:128,height:182},davidTemple:{depth:1}}});
+ vm.runInContext(src('// BEGIN SQUARE FIELD','// END SQUARE FIELD')+
+  src('function poiSnowSleeveOwn(','function poiOverlandBaseGroundOwn(')+src('const validPos=','const safeColor=')+';this.valid=validPos',ctx);
+ assert.equal(ctx.valid(183,183),false);
+ ctx.poiWalkActive=true;assert.equal(ctx.valid(183,183),true);assert.equal(ctx.valid(184,183),false);
+ assert.equal(ctx.valid(59,145),false,'Base must not claim Snow local coordinates through its old array dimensions');
+ ctx.poiWalkLevel=-1;assert.equal(ctx.valid(183,183),false);assert.equal(ctx.valid(45,155),true);
+ ctx.poiWalkLevel=0;ctx.pineAIActive=true;assert.equal(ctx.valid(183,183),false);
+ ctx.pineAIActive=false;ctx.facilitySite={id:'toolshop',map:{width:128,height:182}};
+ assert.equal(ctx.valid(183,183),false);
+});
+test('same authored Snow parcel receives matching shared-corner material and exposure at all four real edges',()=>{
+ const c=vm.createContext({smoothSurfaceNoise:()=>.5});
+ vm.runInContext(src('function poiSnowFrostAmount(','function poiSacredTunnelLight('),c);
+ for(const [x,z] of [[48,150],[60,139],[72,150],[60,168]]){
+  const base=c.poiSnowGroundEdgeTint('base',x,z,'grass',null)(x,z,[.3,.5,.4]);
+  const snow=c.poiSnowGroundEdgeTint('snowpass',x-48,z-139,'poiSnowGround',null)(x-48,z-139,[.86,.91,.96]);
+  assert.deepEqual(base,snow);
+ }
+ for(const [x,z] of [[-.5,15],[12,-.5],[23.5,15],[12,28.5]])assert.equal(c.poiSnowBiomeLightWeight(x,z),0);
+ assert.equal(c.poiSnowBiomeLightWeight(12,14),1);
+});
