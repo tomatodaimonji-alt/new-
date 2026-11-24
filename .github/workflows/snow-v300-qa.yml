@@ -1,4 +1,4 @@
-name: Isolated disjoint snowy corridor native QA
+name: Isolated v301 coastal temple plus disjoint snow corridor
 on:
   push:
     branches: ['dot/workshop-v300-disjoint-snow-qa']
@@ -9,30 +9,35 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [strict, geometry, temple, local-map]
+        suite: [strict, geometry, pixels, routes, coastal-name, local-temple, audible-a, audible-b, controls-a, controls-b]
     runs-on: ubuntu-24.04
     timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: a53b08cb52f3e32c10dff1838be4485b11fa6082
+          path: exact
       - uses: actions/setup-node@v4
         with: {node-version: '22'}
       - run: |
-          test "$(git hash-object world-editor.html)" = f3a618915de7ec9f29c019cd76c7f91b8379408d
-          cp world-editor.html .snow-v300/stock.html
+          test "$(git hash-object exact/world-editor.html)" = 1e5dd2982499fd06b3f3efd962d6c4121e1558b0
+          cp exact/world-editor.html .snow-v300/stock.html
           cd .snow-v300
           python sleeve.py stock.html sleeve.html
-          test "$(git hash-object sleeve.html)" = 97413660a11d45805bb70a4cd2b47879bb757f2d
+          test "$(git hash-object sleeve.html)" = 4b40d4f182cd5d4a52b3207333ceb0eb5408dbe1
           python build.py sleeve.html stream.html --default
           python horizon-safe.py stream.html horizon.html
           python path-ast-trial.py horizon.html paths.html
           python cold-palette-reuse.py paths.html palette.html
           python forest-stream-bridge.py palette.html world-editor.html
-          test "$(git hash-object world-editor.html)" = 7349cc2e52119afcd9d7693272ed62b9d36fa513
+          test "$(git hash-object world-editor.html)" = b8aba8c5d4bfcbb32f0b565936e2d12d7d394ae6
           STOCK=stock.html HTML=world-editor.html node --test tests/*.test.cjs
       - if: matrix.suite == 'strict'
         run: |
-          cp .snow-v300/world-editor.html world-editor.html
-          cp .snow-v300/compat/*.cjs tests/
+          cp .snow-v300/world-editor.html exact/world-editor.html
+          cp .snow-v300/compat/*.cjs exact/tests/
+          cd exact
           c=0
           node --test --test-reporter=tap tests/*.test.cjs >strict.log 2>&1 || c=$?
           grep -E '^(not ok|# tests|# pass|# fail)' strict.log || true
@@ -41,7 +46,33 @@ jobs:
         run: npm install --no-save playwright@1.58.2 && npx playwright install chromium
       - if: matrix.suite == 'geometry'
         run: node .snow-v300/tests/snow-new-sleeve-browser.mjs .snow-v300/world-editor.html
-      - if: matrix.suite == 'temple'
-        run: node tests/depth-temple-browser.mjs .snow-v300/world-editor.html
-      - if: matrix.suite == 'local-map'
-        run: node tests/local-minimap-browser.mjs .snow-v300/world-editor.html
+      - if: matrix.suite == 'pixels'
+        run: |
+          node .snow-v300/tests/snow-neighbor-alignment-browser.mjs .snow-v300/world-editor.html
+          node .snow-v300/tests/snow-visible-from-forest-browser.mjs .snow-v300/world-editor.html
+      - if: matrix.suite == 'routes'
+        run: node .snow-v300/tests/snow-pass-browser.mjs .snow-v300/world-editor.html
+      - if: matrix.suite == 'coastal-name'
+        run: |
+          node exact/tests/sacred-coastal-sightline-browser.mjs .snow-v300/world-editor.html
+          node exact/tests/orvas-temple-name-browser.mjs .snow-v300/world-editor.html
+          node exact/tests/sacred-depth-browser.mjs .snow-v300/world-editor.html
+      - if: matrix.suite == 'local-temple'
+        run: |
+          node exact/tests/local-minimap-browser.mjs .snow-v300/world-editor.html
+          node exact/tests/depth-temple-browser.mjs .snow-v300/world-editor.html
+      - if: startsWith(matrix.suite, 'audible-')
+        shell: bash
+        run: |
+          code=0
+          for repetition in 1; do
+            echo "Unchanged audible held drag gate, physically translated coordinates, repetition $repetition"
+            SNOW_PHASE_REPORT=1 SNOW_PALETTE_REPORT=1 node .snow-v300/tests/snow-continuous-seam-browser.mjs .snow-v300/world-editor.html || code=1
+          done
+          exit "$code"
+      - if: startsWith(matrix.suite, 'controls-')
+        shell: bash
+        run: |
+          stock(){ SNOW_MATCHED_STOCK_ONLY=1 node .snow-v300/tests/snow-matched-gpu-browser.mjs .snow-v300/sleeve.html; }
+          trial(){ node .snow-v300/tests/snow-matched-gpu-browser.mjs .snow-v300/world-editor.html; }
+          if [ "${{ matrix.suite }}" = controls-a ]; then stock && trial; else trial && stock; fi
