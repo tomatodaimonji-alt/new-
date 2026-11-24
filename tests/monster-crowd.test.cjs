@@ -25,7 +25,7 @@ function fixture(count=3,sealed=false,wildBand=null){
   poiMonsterCanMove:(x,z,s,fx,fz)=>!(x===0&&z===0)&&(!sealed||x===0)&&!env.poiMonsterAt(x,z,true,s)&&
    (!s.wildSpawn||env.poiWildMobMayMove(s,x,z,fx,fz)),
  };
- vm.createContext(env);vm.runInContext(cut('function terrainPassable(','function waterfallFace(')+
+ vm.createContext(env);vm.runInContext(cut('const POI_FIELD_NOTICE=','const POI_WILD_BIRTH_MARGIN=')+cut('function terrainPassable(','function waterfallFace(')+
   cut('function poiWildMobMayMove(','function poiWildSpawnTerrain(')+cut('// BEGIN ENEMY ANGLES','// END ENEMY ANGLES')+cut('// BEGIN MONSTER FREE LEG','// END MONSTER FREE LEG')+
   cut('function poiMonsterChaseFree(','// Hand-authored standing points'),env);
  const step=t=>{env.poiMonsterActorSync(t);env.poiMobFrame(t)};
