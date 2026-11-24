@@ -1612,7 +1612,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v289）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v291）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -2112,6 +2112,12 @@ palette.push(
   .map(([id,name])=>({id,name,cat:'build',icon:'▥'}))
 );
 palette.push({id:'poiDavidWallRound',name:'大神殿の円壁',cat:'build',icon:'◯'},
+ {id:'poiDavidSacredRoof',name:'白環神殿の不透光天蓋',cat:'build',icon:'◠'},
+ {id:'poiDavidTunnelRoof',name:'白環神殿の回廊天井',cat:'build',icon:'▰'},
+ {id:'poiDavidWallWingTall',name:'白環神殿の背高石壁',cat:'build',icon:'▥'},
+ {id:'poiDavidWallTunnel',name:'白環神殿の回廊石壁',cat:'build',icon:'▥'},
+ {id:'poiDavidWallHeader',name:'白環神殿の門上壁',cat:'build',icon:'▥'},
+ {id:'poiDavidCandleSconce',name:'白環神殿の壁燭台',cat:'decor',icon:'♨'},
  {id:'poiDavidDome',name:'大神殿の大円蓋',cat:'build',icon:'◠'},
  {id:'poiDavidWallWing',name:'大神殿の入口石壁',cat:'build',icon:'▥'});
 const catalog=new Map(palette.map(p=>[p.id,p]));let selected='wall',mode='place',rotation=0,level=0,hideUpper=false,worldMaxLevel=0,world=[],models=[],prefabs=[],undoStack=[],redoStack=[],hover=null,dragPainting=false,yaw=Math.PI/4,zoom=1,panX=0,panZ=0,dirty=true,sceneMesh=null,cursorMesh=null,cursorDirty=true,modelParts=[],activeModelId=null;
@@ -6123,8 +6129,8 @@ function poiDavidDomeGeometry(m,x,z){
 }
 // Roofless north wall returns match the exact solid tile under each wing.
 // Slightly stepped cap heights join the original high circular stone shell.
-function poiDavidWingGeometry(m,x,y,z,turn){
- const h=[4.70,5.48,6.36,7.38][turn]??4.70;
+function poiDavidWingGeometry(m,x,y,z,turn,tall=false){
+ const h=tall?7.98:([4.70,5.48,6.36,7.38][turn]??4.70);
  const base=[.56,.545,.50],stone=[.84,.803,.72],pale=[.92,.884,.788],slate=[.70,.665,.59];
  const B=(dx,dy,dz,w,b,d,c)=>cube(m,x+dx,y+dy,z+dz,w,b,d,c);
  B(0,0,0,1.034,.27,1.034,base);
@@ -6134,10 +6140,64 @@ function poiDavidWingGeometry(m,x,y,z,turn){
  B(0,h-.22,0,1.038,.22,1.038,pale);
 }
 // END ROUND DAVID TEMPLE ART
+// BEGIN SACRED TEMPLE ART
+function poiDavidSacredRoofGeometry(m,x,z){
+ const segments=40,bands=7,eaves=7.85,apex=14.3,tau=Math.PI*2;
+ const v=(i,j)=>{
+  const a=tau*i/segments,t=j/bands,r=18.22*Math.cos(t*Math.PI*.5);
+  return [x+Math.cos(a)*r,eaves+(apex-eaves)*Math.sin(t*Math.PI*.5),z+Math.sin(a)*r];
+ };
+ for(let i=0;i<segments;i++){
+  const a=v(i,0),b=v(i+1,0),lo=7.62,t=[.225,.205,.252],c=[.184,.164,.193];
+  // Solid bottom closes the sightline above the inward-bent façade.
+  tri(m,[x,lo,z],[a[0],lo,a[2]],[b[0],lo,b[2]],c);
+  quad(m,a,b,[b[0],lo,b[2]],[a[0],lo,a[2]],t);
+  for(let j=0;j<bands;j++){
+   const a=v(i,j),b=v(i+1,j),c=v(i+1,j+1),d=v(i,j+1);
+   const color=i%5===0?[.333,.314,.365]:j%2?[.243,.241,.290]:[.262,.251,.310];
+   tri(m,a,d,c,color);if(j<bands-1)tri(m,a,c,b,color);
+  }
+ }
+ cube(m,x,14.12,z,1.2,.55,1.2,[.41,.344,.319]);
+}
+function poiDavidTunnelArt(m,id,x,y,z,r){
+ const shade=[.384,.345,.319],stone=[.495,.449,.396],trim=[.586,.522,.437];
+ if(id==='poiDavidWallTunnel'){
+  cube(m,x,y,z,1.026,3.59,1.026,stone);
+  cube(m,x,y+.05,z,1.045,.19,1.045,shade);
+  cube(m,x,y+3.30,z,1.039,.29,1.039,trim);
+ }else if(id==='poiDavidWallHeader'){
+  cube(m,x,y+3.12,z,1.035,4.84,1.08,stone);
+  cube(m,x,y+3.12,z,1.055,.35,1.10,trim);
+ }else if(id==='poiDavidTunnelRoof'){
+  cube(m,x,3.19,z,1.044,.44,1.044,shade);
+  // Generic blocks omit ground-facing faces; this underside is a real
+  // visible ceiling viewed from below, so supply the opaque bottom.
+  const w=.522,h=3.19;
+  quad(m,[x-w,h,z+w],[x+w,h,z+w],[x+w,h,z-w],[x-w,h,z-w],[.326,.273,.225]);
+ }else{
+  const toward=[[1,0],[0,1],[-1,0],[0,-1]][r]??[1,0],dx=toward[0],dz=toward[1],tx=-dz,tz=dx;
+  const p=(u,v,d)=>[x+tx*u+dx*d,y+v,z+tz*u+dz*d];
+  // Two subtle vertex bands were baked into this wall-facing light pool;
+  // a physical candle flame has its own bright material; no live light loop.
+  const band=(width,low,high,color)=>{
+   const d=.526;quad(m,p(-width,low,d),p(width,low,d),p(width,high,d),p(-width,high,d),color);
+  };
+  band(.44,.02,1.02,[.568,.442,.334]);band(.30,.22,.85,[.675,.491,.326]);
+  const set=(u,v,d,w,h,color)=>{const a=p(u,v,d);cube(m,a[0],a[1],a[2],w,h,w,color)};
+  set(0,.30,.580,.25,.066,[.39,.273,.176]);set(0,.35,.604,.095,.25,[.91,.779,.498]);
+  for(const u of [-.027,.027])tri(m,p(u,.61,.608),p(0,.771,.62),p(-u,.64,.662),[3.11,1.71,.53]);
+ }
+}
+// END SACRED TEMPLE ART
+
 
 function deco(m,id,x,y,z,r=0){
  if(id==='poiDavidWallRound'){poiDavidRoundWall(m,x,y,z);return}
  if(id==='poiDavidDome'){poiDavidDomeGeometry(m,x,z);return}
+ if(id==='poiDavidWallWingTall'){poiDavidWingGeometry(m,x,y,z,r,true);return}
+ if(id==='poiDavidSacredRoof'){poiDavidSacredRoofGeometry(m,x,z);return}
+ if(/^poiDavid(?:TunnelRoof|WallTunnel|WallHeader|CandleSconce)$/.test(id)){poiDavidTunnelArt(m,id,x,y,z,r);return}
  if(id==='poiDavidWallWing'){poiDavidWingGeometry(m,x,y,z,r);return}
  if(POI_DAVID_TEMPLE_ARCH.has(id)){poiDavidTempleArchitecture(m,id,x,y,z,r);return}
  if(id==='poiHealingHerb'){poiDrawHealingHerb(m,x,y,z);return}
@@ -19285,6 +19345,7 @@ function poiHotbarRead(){
  if(!valid)return poiHotbarState={weapon:null,potions:POI_HOTBAR_POTION_START,...(raw===null?{worn:{...POI_FRESH_ARMOR}}:{})};
  poiMigrateWeaponDurability(saved);
  const kit={weapon:saved.weapon,potions:saved.potions};
+ if(saved.sacredTempleSeen===true)kit.sacredTempleSeen=true;
  const companion=typeof poiCompanionDecode==='function'?poiCompanionDecode(saved.companionSoul):null;
  if(companion)kit.companionSoul=companion;
  const pv=typeof poiPortQuestDecode==='function'?poiPortQuestDecode(saved.portQuests):null;
@@ -19379,6 +19440,7 @@ function poiHotbarSave(kit=poiHotbarState){
   const {weapon,potions,gold,claimedCaches,sword,drops,slots,towerFind,kitchenChest,worn,wornDurability,woodSwordBroken,npcTrade,goldBagOrder,quests,mineSurvey,mineGateCleared,mineTreasureChest,mineFindClaims,mineFindRolls,otherworldCleared,otherworldChest,chapelCleared,chapelChest,toolshopSupply}=kit;
   localStorage.setItem(POI_HOTBAR_KEY,JSON.stringify({version:1,weapon,potions:Math.min(potions,POI_HOTBAR_POTION_MAX),
    ...(poiHasExplicitWeaponDurability(kit)?{weaponDurabilityVersion:2}:{}),...(toolshopSupply?{toolshopSupply}:{}),...(kit.southShipment?{southShipment:kit.southShipment}:{}),...(kit.armedDrops?.length?{armedDrops:kit.armedDrops}:{}),...(kit.fireWandFound?{fireWandFound:true}:{}),...(kit.northTrailCampSupplies===true?{northTrailCampSupplies:true}:{}),...(kit.northWatchPostSupplies===true?{northWatchPostSupplies:true}:{}),...(kit.otherworldEastSupplyFound===true?{otherworldEastSupplyFound:true}:{}),...(kit.chapelWestSupplyFound===true?{chapelWestSupplyFound:true}:{}),...(kit.northMarshHerbFound===true?{northMarshHerbFound:true}:{}),...(kit.northWatchPostGuardLoot===true?{northWatchPostGuardLoot:true}:{}),...(kit.northMinotaurAxeAwarded===true?{northMinotaurAxeAwarded:true}:{}),...(Number.isInteger(kit.northFortReturn)&&kit.northFortReturn>=0&&kit.northFortReturn<=7?{northFortReturn:kit.northFortReturn}:{}),
+   ...(kit.sacredTempleSeen===true?{sacredTempleSeen:true}:{}),
    ...(typeof poiCompanionDecode==='function'&&poiCompanionDecode(kit.companionSoul)?{companionSoul:poiCompanionDecode(kit.companionSoul)}:{}),
    ...(typeof poiPortQuestDecode==='function'&&poiPortQuestDecode(kit.portQuests)?{portQuests:poiPortQuestDecode(kit.portQuests)}:{}),
    ...(gold?{gold}:{}),...(claimedCaches?.length?{claimedCaches}:{}),...(towerFind?{towerFind}:{}),...(kitchenChest?{kitchenChest}:{}),...(worn?{worn}:{}),...(wornDurability?{wornDurability}:{}),...(woodSwordBroken?{woodSwordBroken}:{}),...(npcTrade?{npcTrade}:{}),...(goldBagOrder?{goldBagOrder}:{}),...(goldHotbarSlot!==null?{goldHotbarSlot}:{}),...(quests?.length?{quests}:{}),...(mineSurvey?{mineSurvey}:{}),...(mineGateCleared?{mineGateCleared}:{}),...(mineTreasureChest?{mineTreasureChest}:{}),...(mineFindClaims?.length?{mineFindClaims}:{}),...(mineFindRolls?{mineFindRolls}:{}),...(otherworldCleared?{otherworldCleared}:{}),...(otherworldChest?{otherworldChest}:{}),...(chapelCleared?{chapelCleared}:{}),...(chapelChest?{chapelChest}:{}),
@@ -21245,7 +21307,9 @@ function poiOtherworldUseStep(x,z,now){
  poiWalkStepMs=POI_WALK_MS;poiWalkStarted=now-POI_WALK_MS;poiWalkNextReady=now+POI_WALK_MS;
  poiWalkAttackPosePending=false;poiWalkActionStarted=-10000;poiMonsterMeshDirty=true;poiDamageLabels=[];
  $('level').value=String(level);$('app').classList.toggle('facilityCellar',to.y<0);
- dirty=true;cursorDirty=true;poiCreekAudioSync();poiWalkRoof();poiWalkAvatar();poiWalkCamera();poiWalkStatus();workshopResumeWrite();
+ dirty=true;cursorDirty=true;poiCreekAudioSync();poiWalkRoof();poiWalkAvatar();poiWalkCamera();poiWalkStatus();
+ if(typeof poiDefeatRememberEntry==='function')poiDefeatRememberEntry(to.x,to.z,to.y,poiWalkFacing);
+ workshopResumeWrite();
  if(typeof poiDungeonArrive==='function')poiDungeonArrive(to.x,to.z,prior,to.y);
  if(typeof poiDungeonEnterEffect==='function')poiDungeonEnterEffect(to.x,to.z,prior,to.y);
  if(typeof poiDungeonExitEffect==='function')poiDungeonExitEffect(route.from.x,route.from.z,prior,to.y);
@@ -22698,7 +22762,7 @@ const POI_NORTH_MINOTAUR_COUNTER_DIST=1.62,POI_NORTH_MINOTAUR_BRACE=.33;
 // BEGIN DAVID TEMPLE COMBAT
 // Canonical statue only, one active state and one short-lived cue buffer.
 const POI_DAVID_AWAKENING=Object.freeze({eyes:235,first:920,second:1840,ready:2440});
-const POI_DAVID_TYPE='monsterStoneDavid',POI_DAVID_WAKE_RANGE=7,POI_DAVID_WAKE_MS=POI_DAVID_AWAKENING.ready;
+const POI_DAVID_TYPE='monsterStoneDavid',POI_DAVID_WAKE_RANGE=2,POI_DAVID_WAKE_MS=POI_DAVID_AWAKENING.ready;
 const POI_DAVID_PATTERNS=Object.freeze({
  sweep:{hits:[560],damage:[30],rest:590},
  double:{hits:[720,1040],damage:[28,35],rest:690},
@@ -22903,7 +22967,10 @@ function poiDavidLeapTick(o,s,b,p,q,now){
   length,poiAimWall({y:b.y}))+1e-6>=length;
  if(length<=POI_DAVID_LEAP_RADIUS+1e-6&&line){
   q.landed=1;
-  if(poiMobHitPlayer(o,now,POI_DAVID_LEAP_DAMAGE)){poiDavidCease(o,s,b,now);return true}
+  if(poiMobHitPlayer(o,now,POI_DAVID_LEAP_DAMAGE)){
+   if(typeof poiDavidPinFatalFracture==='function')poiDavidPinFatalFracture(now);
+   poiDavidCease(o,s,b,now);return true;
+  }
  }
  return false;
 }
@@ -26220,7 +26287,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v289',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v291',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -26335,7 +26402,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v289';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v291';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -26550,7 +26617,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v289',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v291',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -28903,8 +28970,8 @@ function poiPlayerDeathClear(){
 function poiPlayerDeathBegin(now,killer){
  if(typeof poiHealingCastCancel==="function")poiHealingCastCancel();
  if(typeof poiPlayerWeaponCancel==='function')poiPlayerWeaponCancel();
- if(facilitySite?.id!=='base'||!poiWalkActive||poiPlayerHP!==0||poiPlayerDeath)return false;
- poiPlayerDeath={phase:'pause',start:now,blackAt:null,relocated:false,opacity:0};
+ if(!poiDefeatSupported(facilitySite)||!poiWalkActive||poiPlayerHP!==0||poiPlayerDeath)return false;
+ poiPlayerDeath={phase:'pause',start:now,blackAt:null,relocated:false,opacity:0,checkpoint:poiDefeatContext()};
  if(typeof poiDavidDeathFrame==='function')poiDavidDeathFrame(now,killer);
  poiWalkAttackPosePending=false;poiWalkActionStarted=-10000;
  if(typeof poiStopRepeat==='function')poiStopRepeat();
@@ -28920,22 +28987,88 @@ function poiPlayerDeathBegin(now,killer){
  if(typeof poiMessagePush!=='function'||!poiMessagePush(notice,'defeat',now))toast(notice);
  poiPlayerDeathView('pause',0);return true;
 }
-function poiPlayerDeathSnapshot(){return poiPlayerDeath?{...poiPlayerDeath}:null}
-function poiPlayerDeathSpawn(){
- const seed=facilitySite.spawn??{x:poiSpawnX,z:poiSpawnZ};
- // Even if the Play copy has been edited, try its nearby safe city cells.
- poiWalkLevel=0;
- const safe=(x,z)=>poiWalkCanStep(x,z)&&
-  (typeof poiWildZone!=='function'||poiWildZone(POI_SAFE_TOWN,x,z));
- for(let r=0;r<=20;r++)for(let dz=-r;dz<=r;dz++){
-  const dx=r-Math.abs(dz);
-  for(const x of dx?[seed.x-dx,seed.x+dx]:[seed.x])if(safe(x,seed.z+dz))return {x,z:seed.z+dz};
+function poiPlayerDeathSnapshot(){
+ if(!poiPlayerDeath)return null;
+ const {checkpoint,...snapshot}=poiPlayerDeath;return snapshot;
+}
+// BEGIN DEFEAT CHECKPOINTS
+let poiDefeatEntry=null;
+function poiDefeatSupported(site){return site?.id==='base'||site?.id==='snowpass'||!!site?.respawnEntry}
+function poiDefeatArea(site,x,z,y){
+ if(site?.id!=='base')return site?.id?'region:'+site.id:null;
+ const realm=typeof poiDungeonTravelKey==='function'?poiDungeonTravelKey(site,x,z,y):null;
+ if(realm)return realm;
+ if(y<0&&site.mine&&poiDungeonPointIn(site.mine.bounds,x,z,y))return 'mine';
+ if(y===0&&site.davidTemple?.retreat&&z>=(site.davidTemple.entrance?.z??site.davidTemple.retreat.z+1)&&typeof poiDavidTempleContains==='function'&&poiDavidTempleContains(site,x,z,y))return 'davidTemple';
+ return 'home';
+}
+function poiDefeatRememberEntry(x,z,y,facing){
+ const site=facilitySite,area=poiDefeatArea(site,x,z,y);
+ poiDefeatEntry=area&&area!=='home'?{site,area,x,z,y,facing}:null;
+}
+function poiDefeatContext(){
+ return {site:facilitySite,area:poiDefeatArea(facilitySite,poiWalkX,poiWalkZ,poiWalkLevel),facing:poiWalkFacing};
+}
+function poiDefeatCheckpoint(ctx){
+ const {site,area,facing}=ctx,d=site[area];let p,face=facing;
+ if(area?.startsWith('region:')){p=site.respawnEntry??site.spawn;face=p?.facing??2}
+ else if(area==='mine'){const s=site.mine.stairs;p={x:s?.x,z:s?.z-1,y:site.mine.bounds.y};face=0}
+ else if(area==='davidTemple'){p=d.retreat;face=0}
+ else if(area!=='home'){p=d?.dungeonStand;face=((p?.facing??2)+2)%4}
+ else p=site.spawn??{x:poiSpawnX,z:poiSpawnZ};
+ return p?{x:p.x,z:p.z,y:p.y??0,facing:face}:null;
+}
+function poiDefeatFind(pin,accept,max){
+ if(!pin||!Number.isInteger(pin.x)||!Number.isInteger(pin.z)||!Number.isInteger(pin.y))return null;
+ const prior=poiWalkLevel;
+ try{
+  poiWalkLevel=pin.y;
+  for(let r=0;r<=max;r++)for(let dz=-r;dz<=r;dz++){
+   const dx=r-Math.abs(dz);
+   for(const x of dx?[pin.x-dx,pin.x+dx]:[pin.x]){
+    const z=pin.z+dz;
+    if(!validPos(x,z)||!accept(x,z,pin.y)||!poiWalkCanStep(x,z)||
+       (typeof poiOtherworldPortalAt==='function'&&poiOtherworldPortalAt(facilitySite,x,z,pin.y))||
+       world.some(o=>o.x===x&&o.z===z&&o.y===pin.y&&
+        (o.type==='guildStairUp'||o.type==='guildStairDown'||
+         (typeof poiWalkPassableDoor==='function'&&poiWalkPassableDoor(o.type)))))continue;
+    return {...pin,x,z};
+   }
+  }
+ }finally{poiWalkLevel=prior}
+ return null;
+}
+// END DEFEAT CHECKPOINTS
+function poiPlayerDeathSpawn(ctx=poiDefeatContext()){
+ const {site,area}=ctx,pin=poiDefeatCheckpoint(ctx),arrived=poiDefeatEntry?.site===site&&poiDefeatEntry.area===area?poiDefeatEntry:null;
+ const home=(x,z,y)=>y===0&&(typeof poiWildZone!=='function'||poiWildZone(POI_SAFE_TOWN,x,z));
+ const same=(x,z,y)=>area==='davidTemple'?
+  y===0&&poiDefeatArea(site,x,z,y)==='home':
+  area==='home'?home(x,z,y):poiDefeatArea(site,x,z,y)===area;
+ // Never trust saved coordinates as an entrance. A genuine live ingress
+ // is preferred in this map; cold resumes use its authored safe stand.
+ const entry=arrived&&{x:arrived.x,z:arrived.z,y:arrived.y,facing:arrived.facing};
+ const local=poiDefeatFind(entry,same,0)||poiDefeatFind(pin,same,area==='home'?20:6);
+ if(local)return local;
+ if(site.id==='base'){
+  const base={...(site.spawn??{x:poiSpawnX,z:poiSpawnZ}),y:0,facing:ctx.facing};
+  const safe=poiDefeatFind(base,home,20);
+  if(safe)return safe;
+  let center=null;
+  if(typeof poiWalkSpawnNearCenter==='function'){
+   const prior=poiWalkLevel;
+   try{poiWalkLevel=0;center=poiWalkSpawnNearCenter()}finally{poiWalkLevel=prior}
+  }
+  const fallback=poiDefeatFind(center&&{...center,y:0,facing:ctx.facing},(_x,_z,y)=>y===0,6);
+  if(fallback)return fallback;
  }
- return (typeof poiWalkSpawnNearCenter==='function'?poiWalkSpawnNearCenter():null)||seed;
+ // Do not cross a region boundary if even its entry was edited away.
+ return poiDefeatFind(pin,()=>true,10)||
+  {x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,facing:ctx.facing};
 }
 function poiPlayerDeathFrame(now){
  const d=poiPlayerDeath;if(!d)return false;
- if(!poiWalkActive||facilitySite?.id!=='base'){poiPlayerDeathClear();return false}
+ if(!poiWalkActive||facilitySite!==d.checkpoint.site){poiPlayerDeathClear();return false}
  if(typeof poiAudioAllowed==='function'&&!poiAudioAllowed())return true;
  const elapsed=now-d.start;
  if(elapsed<POI_DEATH_PAUSE){d.phase='pause';d.opacity=0}
@@ -28943,9 +29076,9 @@ function poiPlayerDeathFrame(now){
  else if(!d.relocated){
   d.phase='black';d.opacity=1;d.blackAt=now;d.relocated=true;
   poiPlayerDeathView(d.phase,d.opacity);
-  const spawn=poiPlayerDeathSpawn();level=0;$('level').value='0';
+  const spawn=poiPlayerDeathSpawn(d.checkpoint);level=spawn.y;$('level').value=String(level);
   poiPlayerHP=POI_PLAYER_MAX_HP;poiDamageLabels=[];poiAttackReady=0;
-  poiWalkReset(spawn.x,spawn.z);poiCombatHud();workshopResumeWrite();
+  poiWalkReset(spawn.x,spawn.z,spawn.y,spawn.facing);poiCombatHud();workshopResumeWrite();
   return true;
  }else if(now-d.blackAt<POI_DEATH_BLACK){d.phase='black';d.opacity=1}
  else{
@@ -29138,6 +29271,7 @@ function poiRegionAt(site,x,z,legacy=false,floor=null){
   if(realm){name=site[realm].name;difficulty=site[realm].difficulty}
   else if(typeof poiSouthPortContains==='function'&&poiSouthPortContains(site,x,z,floor)){name=site.southPort.name;difficulty=0}
   else if(typeof poiDavidTempleContains==='function'&&poiDavidTempleContains(site,x,z,floor)){name=site.davidTemple.name;difficulty=site.davidTemple.difficulty}
+  else if(name==='外'&&typeof poiSacredForestContains==='function'&&poiSacredForestContains(site,x,z,floor)){name=site.sacredForest.name;difficulty=site.sacredForest.difficulty}
   else if(typeof poiSouthForestContains==='function'&&poiSouthForestContains(site,x,z,floor)){name=site.southForest.name;difficulty=site.southForest.difficulty}
   else if(typeof poiSouthTownContains==='function'&&poiSouthTownContains(site,x,z,floor)){name=site.southRoad.town.name;difficulty=0}
   else if(!inTown&&!inGuild&&name==='外'&&typeof poiNorthTrailRegion==='function'){
@@ -29188,11 +29322,51 @@ function poiLocationMotion(panel,area){
  current.onfinish=()=>{if(poiLocationAnimation===current)poiLocationAnimation=null};
 }
 // END LOCATION PANEL MOTION
+// BEGIN SACRED TEMPLE DISCOVERY
+const poiSacredMiniFilters=new WeakMap(),poiSacredLocalSeen=new WeakMap();
+function poiSacredMiniRecordKey(o){return o.x+','+o.z+','+o.y+','+o.type}
+function poiSacredMiniRecords(site,concealed){
+ const d=site?.id==='base'&&site.sacredForest?site.davidTemple:null;
+ if(!d||!concealed)return null;
+ let mask=poiSacredMiniFilters.get(d);
+ if(!mask){
+  const {index,count}=d.authored;
+  const path=new Set(d.approach.filter(o=>o.z<d.entrance.z).map(o=>o.x+','+o.z));
+  mask=new Set(site.map.world.slice(index,index+count).filter(o=>o.y===0&&
+   !(/^(road|earth|grass)/.test(o.type)&&path.has(o.x+','+o.z))).map(poiSacredMiniRecordKey));
+  poiSacredMiniFilters.set(d,mask);
+ }
+ return mask;
+}
+function poiSacredMiniEntrance(d,x,z){
+ const gate=d.entrance,min=d.interior?.minX??gate.x-1,max=d.interior?.maxX??gate.x+1;
+ if(z===gate.z&&x>=min&&x<=max)return true;
+ const k=x+','+z;
+ return z>gate.z&&!!(d.enclosure?.has(k)||d.boss?.room?.arena?.cells?.has(k));
+}
+function poiSacredMiniConcealed(site,x,z,y){
+ const d=y===0&&site?.id==='base'&&site.sacredForest?site.davidTemple:null;
+ if(!d||typeof poiHotbarRead!=='function')return false;
+ const kit=poiHotbarRead();
+ if(kit.sacredTempleSeen===true)return false;
+ const before=poiSacredLocalSeen.get(d);
+ if(before===undefined&&!poiSacredMiniEntrance(d,x,z))return true;
+ // A player who just entered should see the actual structure even if
+ // browser storage is temporarily unavailable. Retry at most every 2s.
+ const now=Date.now();
+ if(before===undefined||now>=before){
+  poiSacredLocalSeen.set(d,now+2000);
+  if(typeof poiEconomyWrite==='function')poiEconomyWrite({...kit,sacredTempleSeen:true});
+ }
+ return false;
+}
+// END SACRED TEMPLE DISCOVERY
+
 const poiMiniStatic=new Map();
 let poiMiniLast=null,poiMiniBuilds=0;
 function poiMiniInvalidate(){poiMiniStatic.clear();poiMiniLast=null}
 function poiMiniSnapshot(){return poiMiniLast?{...poiMiniLast,topologyBuilds:poiMiniBuilds}:null}
-function poiMiniDrawTopology(width,height,floor,site=null,bounds=null){
+function poiMiniDrawTopology(width,height,floor,site=null,bounds=null,concealed=false){
  const layer=document.createElement('canvas');layer.width=width;layer.height=height;
  const g=layer.getContext('2d');if(!g)return null;
  const x1=bounds?.x1??0,z1=bounds?.z1??0,tileW=bounds?bounds.x2-x1+1:MAP_W,tileH=bounds?bounds.z2-z1+1:MAP_H;
@@ -29201,8 +29375,10 @@ function poiMiniDrawTopology(width,height,floor,site=null,bounds=null){
  // is the only panel backdrop. Roads, water, walls and markers still render.
  if(floor===0){g.strokeStyle='rgba(178,204,176,.42)';g.strokeRect(ox,oy,MAP_W*scale,MAP_H*scale)}
  const cells=new Uint8Array(tileW*tileH);
+ const templeMask=concealed&&typeof poiSacredMiniRecords==='function'?poiSacredMiniRecords(site,true):null;
  for(const o of world){
   if(o.y!==floor||o.x<x1||o.x>=x1+tileW||o.z<z1||o.z>=z1+tileH)continue;
+  if(templeMask?.has(poiSacredMiniRecordKey(o)))continue;
   const t=o.type;
   const category=BRIDGE_IDS.has(t)?6:t==='poiFortGate'||t==='otherworldPortal'||poiWalkPassableDoor(t)?5:t==='guildStairDown'||t==='guildStairUp'?7:
    isWallId(t)||t.includes('wall')||t.startsWith('tower')||/^poiFort(?:Wall|Corner|Boundary)$/.test(t)?4:
@@ -29237,7 +29413,7 @@ function poiMiniDrawTopology(width,height,floor,site=null,bounds=null){
  }
  g.fillStyle='#f0e3b8';g.font='bold 10px system-ui';g.textAlign='right';g.fillText('N',width-5,12);
  if(floor!==0){g.textAlign='left';g.fillText(bounds?'異界':floor<0?'B'+(-floor):(floor+1)+'F',5,12)}
- return {layer,scale,ox,oy,world,width,height,floor,mapW:MAP_W,mapH:MAP_H};
+ return {layer,scale,ox,oy,world,width,height,floor,mapW:MAP_W,mapH:MAP_H,concealed};
 }
 function poiMiniQuestMark(g,x,z){
  // A cool, outlined diamond, distinct from the warm circular player marker.
@@ -29256,9 +29432,10 @@ function poiMiniUpdate(){
  const dungeon=typeof poiDungeonTravelKey==='function'?poiDungeonTravelKey(facilitySite,poiWalkX,poiWalkZ,floor):
   typeof poiOtherworldIn==='function'&&poiOtherworldIn(facilitySite,poiWalkX,poiWalkZ,floor)?'otherworld':null;
  const realm=dungeon?facilitySite[dungeon].bounds:null,cacheKey=realm?dungeon+':'+floor:floor;
+ const concealed=typeof poiSacredMiniConcealed==='function'&&poiSacredMiniConcealed(facilitySite,poiWalkX,poiWalkZ,floor);
  let map=poiMiniStatic.get(cacheKey);
- if(!map||map.world!==world||map.width!==width||map.height!==height||map.mapW!==MAP_W||map.mapH!==MAP_H){
-  map=poiMiniDrawTopology(width,height,floor,facilitySite,realm);poiMiniLast=null;
+ if(!map||map.world!==world||map.width!==width||map.height!==height||map.mapW!==MAP_W||map.mapH!==MAP_H||!!map.concealed!==concealed){
+  map=poiMiniDrawTopology(width,height,floor,facilitySite,realm,concealed);poiMiniLast=null;
   if(!map)return;
   if(!poiMiniStatic.has(cacheKey)&&poiMiniStatic.size>=4)poiMiniStatic.delete(poiMiniStatic.keys().next().value);
   poiMiniStatic.set(cacheKey,map);
@@ -29347,6 +29524,8 @@ const POI_TOWN_LIGHT=[
 ];
 function poiTownSceneLight(){
  if(facilitySite?.id!=='base'||!poiWalkActive||pineAIActive||poiWalkLevel<0)return POI_TOWN_LIGHT_NEUTRAL;
+ if(typeof poiDavidTempleEnclosedAt==='function'&&poiDavidTempleEnclosedAt(facilitySite,poiWalkX,poiWalkZ,poiWalkLevel))
+  return poiDavidTempleTunnelAt(facilitySite,poiWalkX,poiWalkZ,poiWalkLevel)?[.76,.65,.54]:[.77,.70,.62];
  const minute=poiTownClockGameMs/POI_TOWN_MINUTE_MS%1440;
  for(let i=1;i<POI_TOWN_LIGHT.length;i++){
   const [end,b]=POI_TOWN_LIGHT[i];if(minute>=end)continue;
@@ -29510,6 +29689,7 @@ function poiWalkEnterCell(dx,dz,now,continuous=false,onDoorCue){
    o.x===poiWalkX&&o.z===poiWalkZ&&o.y===next&&o.type===(direction>0?'guildStairDown':'guildStairUp'))){
    const prior=poiWalkLevel;
    poiWalkLevel=next;level=next;$('level').value=String(level);dirty=true;cursorDirty=true;
+   if(prior*next<=0&&typeof poiDefeatRememberEntry==='function')poiDefeatRememberEntry(poiWalkX,poiWalkZ,next,poiWalkFacing);
    if(typeof poiDungeonArrive==='function')poiDungeonArrive(poiWalkX,poiWalkZ,prior,next);
    if(typeof poiDungeonEnterEffect==='function')poiDungeonEnterEffect(poiWalkX,poiWalkZ,prior,next);
    if(typeof poiDungeonExitEffect==='function')poiDungeonExitEffect(poiWalkX,poiWalkZ,prior,next);
@@ -29656,7 +29836,7 @@ function poiWalkAction(){
  }
  // Interactions without an assigned action are intentionally silent.
 }
-function poiWalkReset(x,z){
+function poiWalkReset(x,z,spawnY=0,spawnFacing=poiWalkFacing){
  if(typeof poiHealingCastCancel==="function")poiHealingCastCancel();
  if(typeof poiHitstopReset==='function')poiHitstopReset();
  if(typeof poiPlayerHitFlashAt!=='undefined')poiPlayerHitFlashAt=-Infinity;
@@ -29669,10 +29849,10 @@ function poiWalkReset(x,z){
  if(poiChestIsOpen())poiBagSetOpen(false);
  if(typeof poiEnemyPending!=='undefined')poiEnemyCancelPlayer();
  if(facilitySite?.id==='base')poiWildClear();
- if(facilitySite){$('app').classList.remove('facilityCellar');poiMonsterMeshDirty=true}
+ if(facilitySite){$('app').classList.toggle('facilityCellar',spawnY<0);poiMonsterMeshDirty=true}
  poiWalkActionStarted=-10000;poiWalkAttackPosePending=false;
  poiMonsterClearBreaks();
- poiWalkLevel=0;poiWalkX=x;poiWalkZ=z;poiWalkFromX=x;poiWalkFromZ=z;poiWalkViewX=x;poiWalkViewZ=z;poiWalkStarted=-10000;poiWalkNextReady=0;
+ poiWalkLevel=spawnY;poiWalkFacing=spawnFacing;poiWalkX=x;poiWalkZ=z;poiWalkFromX=x;poiWalkFromZ=z;poiWalkViewX=x;poiWalkViewZ=z;poiWalkStarted=-10000;poiWalkNextReady=0;
  if(poiWalkActive){poiCreekAudioSync();poiWalkRoof();poiWalkAvatar();poiWalkCamera();poiWalkStatus()}
 }
 function poiWalkSpawnNearCenter(){
@@ -29991,6 +30171,7 @@ function guildInteriorDetails(m,visible){
 // Check the outside flood-fill, so exterior window faces remain unchanged.
 function pineFinishInteriorWindow(m,o,lookup){
  if(o.type!=='stonewallWindow')return;
+ if(o.y>0&&typeof poiTownGuildFacade==='function'&&poiTownGuildFacade(o))return;
  const faces=wallFaceState(o,lookup),rot=o.rot||0;
  const x=o.x+.5,z=o.z+.5,y=o.y*1.4+terrainY(o.x,o.z);
  for(const side of [1,-1]){
@@ -30035,17 +30216,20 @@ function pineWarmNear(lamps,x,z,floor){
  if(!index){
   index=new Map();pineWarmIndex.set(lamps,index);
   for(const o of lamps){
-   let dx=0,dz=0,r=2.82,h=.34,g=.39;
+   let dx=0,dz=0,r=2.82,h=.34,g=.39,floor=o.y;
    if(o.type==='poiStreetLamp'){r=3.65;h=1.70;g=.48}
    if(o.type==='candleStand'){r=2.64;h=1.20;g=.39}
    if(o.type==='poiWallSconce'){[dx,dz]=rot2(0,.732,o.rot||0);r=2.82;h=1.14}
    if(o.type==='poiDavidCandleSconce'){
     [dx,dz]=[[.62,0],[0,.62],[-.62,0],[0,-.62]][o.rot||0];r=2.76;h=.68;
+    // These authored temple fixtures are mounted on layer 1, 1.4m
+    // above the only walkable floor. Spill belongs to that level only.
+    if(o.y===1)floor=0;
    }
    const lx=o.x+.5+dx,lz=o.z+.5+dz;
    const lamp={x:lx,z:lz,h:terrainY(o.x,o.z)+o.y*1.4+h,r,g};
    for(let zz=Math.floor(lz-r);zz<=Math.floor(lz+r);zz++)for(let xx=Math.floor(lx-r);xx<=Math.floor(lx+r);xx++){
-    const k=xx+','+zz+','+o.y;
+    const k=xx+','+zz+','+floor;
     let hits=index.get(k);if(!hits)index.set(k,hits=[]);hits.push(lamp);
    }
   }
@@ -30477,7 +30661,8 @@ function makeScene(){
  const sharedParts=facilityBuildFullSurface?[]:null;
  const localGradeSources=[],m=mesh(),visible=(localBatch||world).filter(o=>{
   if(!localBatch&&poiWalkActive&&((typeof poiFacilityLocalMember==='function'&&poiFacilityLocalMember(o))||
-    (typeof poiSouthForestMember==='function'&&poiSouthForestMember(o)))){
+    (typeof poiSouthForestMember==='function'&&poiSouthForestMember(o))||
+    (typeof poiSacredForestMember==='function'&&poiSacredForestMember(o)))){
    if(poiWalkLevel>=0&&o.y===0&&o.type==='lantern')localGradeSources.push(o);
    return false;
   }
@@ -30687,6 +30872,7 @@ function makeScene(){
   else if(o.type==='pineLandingCraft')pineLandingCraftGeometry(m,o.x+.5,o.z+.5);
   else if(o.type.startsWith('pineHarbor'))pineHarborGeometry(m,o);
   else if(o.type.startsWith('pineSuper'))pineSupermarketGeometry(m,o);
+  else if(o.type.startsWith('stonewall')&&inTownGuild(o.x,o.z)&&typeof poiTownGuildCladding==='function'&&poiTownGuildCladding(m,o,wallFaceState(o,wallLookup))){}
   else if(isWallId(o.type)){const faces=wallFaceState(o,wallLookup);wallBlock(m,o.type,o.x+.5,o.y*1.4+terrainY(o.x,o.z),o.z+.5,o.rot||0,faces.visible,faces.exterior,inTownGuild(o.x,o.z))}
   else if(facilityHasDiningCellarPart(o,'guildStairDown',0))
    deco(m,'facilityCellarEntryVisual',o.x+.5,terrainY(o.x,o.z),o.z+.5,o.rot||0);
@@ -30714,6 +30900,7 @@ function makeScene(){
    const offset=facilityHomeBedOffset(o,wallLookup);
    deco(m,o.type,o.x+.5+(offset?.x??0),o.y*1.4+terrainY(o.x,o.z),o.z+.5+(offset?.z??0),o.rot||0);
   }
+  else if(!poiWalkActive&&typeof poiSacredForestMember==='function'&&poiSacredForestMember(o))poiSacredTreeGeometry(m,o);
   else if(!pineDrawBaseTree(m,o)&&!pineDrawEastNature(m,o))deco(m,o.type,o.x+.5,o.y*1.4+terrainY(o.x,o.z),o.z+.5,o.rot||0);
   if(isWallId(o.type)||/^poiDavidWall/.test(o.type))pineBakeWallWarmth(m,start,o,pineShadows,pineWarmLamps);
   if(sides.length)poiAngledWallRecord(wallFade,m,o,sides,start);
@@ -30749,6 +30936,8 @@ varying mediump float vWorldHeight;
 varying mediump vec2 vLootXZ;
 uniform vec3 uTownDaylight;
 uniform float uHitFlash;
+uniform vec3 uSacredFog;
+uniform vec3 uSacredColor;
 uniform vec4 uLootHighlight;
 uniform OCCP vec4 uOcclusionShape;
 uniform OCCP vec4 uOcclusionInfo;
@@ -30786,12 +30975,17 @@ void main(){
   vec3 litLoot=paint*(1.28+.19*uLootHighlight.z)+paint*.16;
   color=mix(color,litLoot,nearLoot);
  }
- gl_FragColor=vec4(mix(color,vec3(1.0,.13,.14),uHitFlash),1.0);
+ color=mix(color,vec3(1.0,.13,.14),uHitFlash);
+ if(uSacredFog.z>0.0){
+  float mist=smoothstep(2.65,9.7,length(vLootXZ-uSacredFog.xy))*uSacredFog.z;
+  color=mix(color,uSacredColor,mist);
+ }
+ gl_FragColor=vec4(color,1.0);
 }`;
 function sh(t,src){const s=gl.createShader(t);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s}
 let program;try{program=gl.createProgram();gl.attachShader(program,sh(gl.VERTEX_SHADER,VERT));gl.attachShader(program,sh(gl.FRAGMENT_SHADER,FRAG));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program))}catch(e){window.pineStartup.fail(e);return}
 gl.useProgram(program);gl.enable(gl.DEPTH_TEST);gl.depthMask(true);gl.depthFunc(gl.LESS);gl.clearColor(0,0,0,0);const loc={p:gl.getAttribLocation(program,'aPos'),n:gl.getAttribLocation(program,'aNorm'),c:gl.getAttribLocation(program,'aCol'),mvp:gl.getUniformLocation(program,'uMVP'),
- daylight:gl.getUniformLocation(program,'uTownDaylight'),lootHighlight:gl.getUniformLocation(program,'uLootHighlight'),occlusionShape:gl.getUniformLocation(program,'uOcclusionShape'),occlusionInfo:gl.getUniformLocation(program,'uOcclusionInfo'),hitFlash:gl.getUniformLocation(program,'uHitFlash')};
+ daylight:gl.getUniformLocation(program,'uTownDaylight'),lootHighlight:gl.getUniformLocation(program,'uLootHighlight'),occlusionShape:gl.getUniformLocation(program,'uOcclusionShape'),occlusionInfo:gl.getUniformLocation(program,'uOcclusionInfo'),hitFlash:gl.getUniformLocation(program,'uHitFlash'),sacredFog:gl.getUniformLocation(program,'uSacredFog'),sacredColor:gl.getUniformLocation(program,'uSacredColor')};
 try{initSignProgram()}catch(e){console.warn('2D sign textures unavailable',e)}
 function mult(a,b){const c=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++)for(let k=0;k<4;k++)c[j*4+i]+=a[k*4+i]*b[j*4+k];return c}
 function ortho(l,r,b,t,n,f){return new Float32Array([2/(r-l),0,0,0,0,2/(t-b),0,0,0,0,-2/(f-n),0,-(r+l)/(r-l),-(t+b)/(t-b),-(f+n)/(f-n),1])}
@@ -30975,7 +31169,7 @@ function facilityDavidCameraEye(target,desired){
 
 // BEGIN SHARED THIRD PERSON WALL ARM
 const POI_WALL_CAMERA_EXTRA=new Set(['towerWall','towerWindow','towerBattlement','crackedWall','ruinWallJagged','ruinWallLow',
- 'ruinWindowEmpty','ruinWindowShattered','ruinDoorBroken','ruinDoorHanging','poiDavidWallRound','poiDavidWallWing','poiDavidGatePier',
+ 'ruinWindowEmpty','ruinWindowShattered','ruinDoorBroken','ruinDoorHanging','poiDavidWallRound','poiDavidWallWing','poiDavidWallWingTall','poiDavidWallTunnel','poiDavidWallHeader','poiDavidTunnelRoof','poiDavidSacredRoof','poiDavidGatePier',
  'poiFortWall','poiFortCorner','poiFortBoundary','poiFortGate','poiFortArch','archStone','northFortGate','ironGate','door','pineSuperDoor']);
 const poiWallCameraWorldCache=new WeakMap(),poiWallCameraTemplates=new Map();
 const poiWallCameraOpening=/^(?:wall|woodwall|stonewall|brickwall|plasterwall|mosswall|ironwall)(?:Door|Window|Counter)(?:Open)?$/;
@@ -31017,7 +31211,7 @@ function poiWallCameraTemplate(o,open){
   if(m.p.length){
    const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];
    for(let i=0;i<m.p.length;i++){const j=i%3;min[j]=Math.min(min[j],m.p[i]);max[j]=Math.max(max[j],m.p[i]);}
-   shape={min,max,tris:new Float32Array(m.p)};
+   shape={min,max,tris:type==='poiDavidTunnelRoof'?null:new Float32Array(m.p)};
   }else shape=null;
  }
  poiWallCameraTemplates.set(key,shape);return shape;
@@ -31058,16 +31252,29 @@ function poiWallCameraCandidates(target,desired){
   if(o.y<0&&o.y!==poiWalkLevel||poiWalkLevel<0&&o.y!==poiWalkLevel)continue;
   if(Math.min(target[0],desired[0])-pad>o.x+1||Math.max(target[0],desired[0])+pad<o.x||
      Math.min(target[2],desired[2])-pad>o.z+1||Math.max(target[2],desired[2])+pad<o.z)continue;
-  const base=o.y*1.4+terrainY(o.x,o.z);
-  if(base>hiY+.15||base+3.0<loY)continue;
+  if(o.type==='poiDavidSacredRoof')continue; // broad bounds below, not one tile
+  const explicit=o.type==='poiDavidTunnelRoof'||o.type==='poiDavidWallHeader'||o.type==='poiDavidWallWingTall'||o.type==='poiDavidWallTunnel';
+  const base=o.type==='poiDavidTunnelRoof'||o.type==='poiDavidWallHeader'?0:o.y*1.4+terrainY(o.x,o.z);
+  if(!explicit&&(base>hiY+.15||base+3.0<loY))continue;
   const open=door&&door.x===o.x&&door.z===o.z&&door.y===o.y;
   const s=poiWallCameraTemplate(o,!!open);
-  if(s)rows.push({s,x:o.x+.5,y:base,z:o.z+.5});
+  if(s&&(!explicit||base+s.min[1]<=hiY+.15&&base+s.max[1]>=loY))rows.push({s,x:o.x+.5,y:base,z:o.z+.5});
+ }
+ const sacred=facilitySite?.davidTemple;
+ if(poiWalkLevel===0&&sacred?.interior&&hiY>=7.62&&loY<=14.8){
+  const r=sacred.ring,o=(index.get(poiWallCameraBucket(r.x,r.z))||[]).find(o=>o.type==='poiDavidSacredRoof');
+  if(o&&Math.min(target[0],desired[0])<=r.x+19&&Math.max(target[0],desired[0])>=r.x-18&&
+        Math.min(target[2],desired[2])<=r.z+19&&Math.max(target[2],desired[2])>=r.z-18){
+   const s=poiWallCameraTemplate(o,false);
+   if(s)rows.push({s,x:o.x+.5,y:0,z:o.z+.5});
+  }
  }
  return rows;
 }
 function facilitySharedWallCameraEye(target,desired){
- if(!poiWalkActive||!poiThirdPerson||cameraTopDown||pineAIActive)return desired;
+ const sacred=typeof poiDavidTempleEnclosedAt==='function'&&
+  poiDavidTempleEnclosedAt(facilitySite,target[0]-.5,target[2]-.5,poiWalkLevel);
+ if(!poiWalkActive||!sacred&&(!poiThirdPerson||cameraTopDown)||pineAIActive)return desired;
  const ray=desired.map((v,i)=>v-target[i]),distance=Math.hypot(...ray),h=Math.hypot(ray[0],ray[2]);
  if(distance<1e-5)return desired;
  const rows=poiWallCameraCandidates(target,desired);if(!rows.length)return desired;
@@ -31101,7 +31308,7 @@ function facilitySharedWallCameraEye(target,desired){
   const maxPitch=poiWalkLevel<0?Math.max(ceilingSafe,1.15):ceilingSafe;
   for(const a of [...(poiWalkLevel<0?[maxPitch,1.39,1.46]:[]),maxPitch,pitch+(maxPitch-pitch)*.7,pitch*.45,.035]){
    const k=Math.cos(a),u=[ray[0]/h*k,Math.sin(a),ray[2]/h*k];
-   const limit=poiWalkLevel<0?Math.min(radius,sideLimit/k):radius,v=arm(march(u,limit),limit);
+   const limit=poiWalkLevel<0||sacred?Math.min(radius,sideLimit/k):radius,v=arm(march(u,limit),limit);
    if(v>n){n=v;direction=u}
    if(n>=1.8)break;
   }
@@ -31156,20 +31363,61 @@ function poiSkyBackdrop(p){
  if(before)stage.toggleAttribute('data-poi-sky',true);
 }
 // END OUTDOOR SKY
+// BEGIN SACRED THRESHOLD PORTRAIT
+let poiDavidRevealManualAt=-Infinity;
+function poiDavidRevealLane(site,x,z,y){
+ const t=site?.id==='base'?site.davidTemple:null;
+ return t?.interior&&y===t.boss.y&&Math.abs(x-t.boss.x)<1.05&&
+  z>=t.interior.exitZ-.40&&z<=t.interior.exitZ+1.62?t:null;
+}
+function poiDavidRevealManual(now){
+ if(poiDavidRevealLane(facilitySite,poiWalkViewX,poiWalkViewZ,poiWalkLevel)&&!Number.isFinite(poiDavidRevealManualAt))
+  poiDavidRevealManualAt=now;
+}
+function poiDavidRevealLook(eye,target,now){
+ const t=poiDavidRevealLane(facilitySite,poiWalkViewX,poiWalkViewZ,poiWalkLevel);
+ if(!t){poiDavidRevealManualAt=-Infinity;return target;}
+ if(cameraTopDown)return target;
+ const d=poiDavidActive?.s?.david;
+ if(d?.returning)return target;
+ const smooth=v=>{const u=Math.max(0,Math.min(1,v));return u*u*(3-2*u)};
+ const z=poiWalkViewZ-t.interior.exitZ,fromMouth=smooth((z+.40)/.40)*(1-smooth((z-1.02)/.60));
+ const manual=Number.isFinite(poiDavidRevealManualAt)?1-smooth((now-poiDavidRevealManualAt)/190):1;
+ const wake=Number.isFinite(d?.wakeAt)?1-smooth((now-d.wakeAt-2120)/710):1;
+ const vx=target[0]-eye[0],vz=target[2]-eye[2],ax=t.boss.x+.5-eye[0],az=t.boss.z+.5-eye[2];
+ const run=Math.hypot(vx,vz),range=Math.hypot(ax,az);
+ if(run<.02||range<.35)return target;
+ const alignment=(vx*ax+vz*az)/(run*range);
+ const weight=fromMouth*manual*wake*smooth((alignment-.78)/.20);
+ if(weight<1e-4)return target;
+ // Bias the lens, not movement, collision, zoom, yaw or saved camera.
+ // Aim slightly below the real stone eyes to place them in the upper third.
+ const face=terrainY(t.boss.x,t.boss.z)+t.boss.y*1.4+4.12;
+ const lift=Math.max(0,eye[1]+run*(face-eye[1])/range-target[1]);
+ return lift>1e-4?[target[0],target[1]+weight*lift,target[2]]:target;
+}
+// END SACRED THRESHOLD PORTRAIT
 function parameters(){
  const q=layout(),halfH=9/zoom,halfW=halfH*q.aspect;
  const centerX=MAP_W/2+panX,centerZ=MAP_H/2+panZ;
  const elev=cameraTopDown?Math.PI/2-.001:.86;
  const targetY=poiWalkActive?poiWalkLevel*1.4:hideUpper?level*1.4:Math.min(8.5,worldMaxLevel*.7+Math.max(0,...terrainHeights.values())*TERRAIN_STEP*.5);
  const sceneReach=Math.hypot(MAP_W,MAP_H)+Math.max(0,worldMaxLevel)*1.4+TERRAIN_MAX*TERRAIN_STEP;
- if(poiWalkActive&&poiThirdPerson){
+ const sacredView=poiWalkActive&&!pineAIActive&&typeof poiDavidTempleEnclosedAt==='function'&&
+  poiDavidTempleEnclosedAt(facilitySite,poiWalkViewX,poiWalkViewZ,poiWalkLevel);
+ if(poiWalkActive&&(poiThirdPerson||sacredView)){
+  // Under the genuine permanent roof use a physical local camera even
+  // when the previous outdoor view was orthographic; no wall cutaway.
+  const bearing=poiThirdPerson?poiCameraYaw:yaw+Math.PI;
+  const radius=poiThirdPerson?poiCameraDistance:(cameraTopDown?3.6:5.1);
   // Independent orbit camera: walking changes the avatar's direction, not the camera.
   const x=poiWalkViewX+.5,z=poiWalkViewZ+.5;
   const ground=poiCreekPlayerHeight(performance.now())+poiWalkLevel*1.4;
   const skyOutdoor=poiSkyCanLookUp();
-  const pitch=poiCameraPitch<.15&&skyOutdoor?poiCameraPitch:Math.max(.12,poiCameraPitch);
-  const horizontal=poiCameraDistance*Math.cos(pitch);
-  const desired=[x-horizontal*Math.sin(poiCameraYaw),ground+1.1+poiCameraDistance*Math.sin(pitch),z-horizontal*Math.cos(poiCameraYaw)];
+  const pitch=!poiThirdPerson?(cameraTopDown?.71:.49):
+   poiCameraPitch<.15&&skyOutdoor?poiCameraPitch:Math.max(.12,poiCameraPitch);
+  const horizontal=radius*Math.cos(pitch);
+  const desired=[x-horizontal*Math.sin(bearing),ground+1.1+radius*Math.sin(pitch),z-horizontal*Math.cos(bearing)];
   if(pitch<.12){
    const ex=Math.floor(desired[0]),ez=Math.floor(desired[2]);
    // In low orbit keep the eye clear of both the local floor and any hillside behind.
@@ -31179,7 +31427,7 @@ function parameters(){
   }
   const target=[x,ground+1.1,z];
   const eye=typeof facilitySharedWallCameraEye==='function'?facilitySharedWallCameraEye(target,desired):desired;
-  const arm=eye===desired?poiCameraDistance:Math.hypot(...eye.map((v,i)=>v-target[i]));
+  const arm=eye===desired?radius:Math.hypot(...eye.map((v,i)=>v-target[i]));
   const near=eye!==desired&&arm<1.81?.08:.45;
   const fov=eye===desired?Math.PI/3:facilityWatchtowerCloseFov(arm);
   let sky=null;
@@ -31193,7 +31441,8 @@ function parameters(){
    const stop=elevation=>50-scale*Math.tan(Math.min(Math.PI/3,tilt+elevation));
    sky={skyHorizon:stop(0),skyMiddle:stop(Math.PI/12),skyHigh:stop(Math.PI/6)};
   }
-  return{...q,halfH,halfW,centerX,centerZ,elev,targetY,...sky,vp:mult(perspective(fov,Math.max(.1,q.aspect),near,Math.max(90,sceneReach*1.6+18)),look(eye,target))};
+  const lensTarget=poiDavidRevealLook(eye,target,performance.now());
+  return{...q,halfH,halfW,centerX,centerZ,elev,targetY,...sky,vp:mult(perspective(fov,Math.max(.1,q.aspect),near,Math.max(90,sceneReach*1.6+18)),look(eye,lensTarget))};
  }
  const cameraDistance=Math.max(80,sceneReach*1.6+24);
  const eye=[centerX+cameraDistance*Math.sin(yaw)*Math.cos(elev),targetY+cameraDistance*Math.sin(elev),centerZ+cameraDistance*Math.cos(yaw)*Math.cos(elev)];
@@ -31914,7 +32163,11 @@ const POI_DAVID_HEAVY_PROFILE=Object.freeze({
  foot:[.024,205,.39],sweep:[.036,220,0],double:[.044,235,0],beam:[.028,220,0]
 });
 let poiDavidHeavyBump=null;
-function poiDavidClearHeavyFeedback(){poiDavidHeavyBump=null;poiDavidImpact=null;if(typeof poiDrawDavidFissure==='function')poiDavidFissure=null}
+function poiDavidClearHeavyFeedback(){
+ poiDavidHeavyBump=null;poiDavidImpact=null;
+ if(typeof poiDrawDavidFissure==='function'&&
+    (typeof poiDavidKeepFatalFracture!=='function'||!poiDavidKeepFatalFracture(poiDavidFissure)))poiDavidFissure=null;
+}
 function poiDavidFootFeedback(o,s,b,now){
  const d=s.david,gait=d?.gaitDistance;
  if(!d||gait===undefined||typeof POI_DAVID_GAIT_STRIDE==='undefined')return;
@@ -31956,12 +32209,20 @@ function poiDavidImpactStomp(q,now){
  if(typeof poiDrawDavidFissure==='function')poiDavidFissure=poiDavidImpact;
  return true;
 }
-function poiDavidImpactVisible(e,now,limit=e?.dustMs??POI_DAVID_DUST_MS){
+function poiDavidPinFatalFracture(now){
+ const e=poiDavidFissure,d=typeof poiPlayerDeath==='undefined'?null:poiPlayerDeath;
+ if(e?.leap&&e.start===now&&d?.start===now&&!d.relocated)e.fatalDeath=d;
+}
+function poiDavidKeepFatalFracture(e){
+ const d=e?.fatalDeath;
+ return !!d&&typeof poiPlayerDeath!=='undefined'&&d===poiPlayerDeath&&!d.relocated&&(d.phase==='pause'||d.phase==='out');
+}
+function poiDavidImpactVisible(e,now,limit=e?.dustMs??POI_DAVID_DUST_MS,keepDeathGround=false){
  if(!e||now<e.start||now-e.start>=limit||!poiWalkActive||facilitySite!==e.owner||
     poiWalkLevel!==e.y||document.hidden||
     (typeof pineAIActive!=='undefined'&&pineAIActive)||(typeof pineCheckMode!=='undefined'&&pineCheckMode)||
     (typeof poiScreenNotePhase!=='undefined'&&poiScreenNotePhase)||
-    (typeof poiPlayerDying==='function'&&poiPlayerDying())||
+    (!keepDeathGround&&typeof poiPlayerDying==='function'&&poiPlayerDying())||
     document.querySelector('dialog[open],.modal.open,:is(#poiLandscapeMenu,#poiBagPanel,#poiNpcMenu,#poiSoundPanel):not([hidden])'))return false;
  // Cached briefly so a wake camera pass and dust pass share the same ray test.
  const p=poiAimOrigin(now),b=facilitySite.davidTemple?.boss;
@@ -32048,7 +32309,12 @@ function poiDavidFissureGeometry(e,b){
   return r<=(e.radius??6)&&poiDavidIn(b,{x,z,y:e.y})&&(r<.0001||
    poiDavidRoomRay(source,b,{x:(x-source.sx)/r,z:(z-source.sz)/r},r,pass,a)+1e-6>=r);
  };
- const ground=(x,z,h)=>[x+.5,terrainY(Math.floor(x+.5),Math.floor(z+.5))+1.4*e.y+h,z+.5];
+ const floors=typeof poiDavidFractureFloors==='function'?poiDavidFractureFloors(e):null;
+ const ground=(x,z,h)=>{
+  const wx=x+.5,wz=z+.5,tx=Math.floor(wx),tz=Math.floor(wz);
+  const road=floors?poiDavidFractureRoadHeight(floors.get(tx+','+tz),tx,tz,wx,wz):0;
+  return [wx,terrainY(tx,tz)+1.4*e.y+h+road,wz];
+ };
  const wave=i=>Math.sin(i*7.928+.87);
  const add=(x,z,nx,nz,w0,w1,depth)=>{
   const length=Math.hypot(nx-x,nz-z);if(length<.01)return;
@@ -32089,13 +32355,14 @@ function poiDavidFissureGeometry(e,b){
 }
 function poiDrawDavidFissure(now,vp){
  const e=poiDavidFissure;if(!e&&!poiDavidFissureMesh)return;
+ const keep=typeof poiDavidKeepFatalFracture==='function'&&poiDavidKeepFatalFracture(e);
  const age=e?now-e.start:Infinity,span=e?.fissureMs??POI_DAVID_FISSURE_MS;
- if(!e||e.owner!==facilitySite||age>=span){
+ if(!e||e.owner!==facilitySite||(e.fatalDeath&&!keep)||(!keep&&age>=span)){
   poiDavidFissure=null;
   if(poiDavidFissureMesh)gl.deleteBuffer(poiDavidFissureMesh.gpu.buf);
   poiDavidFissureMesh=null;return;
  }
- if(!poiDavidImpactVisible(e,now,span))return;
+ if(!poiDavidImpactVisible(e,now,keep?Infinity:span,keep))return;
  if(poiDavidFissureMesh?.e!==e){
   const geom=poiDavidFissureGeometry(e,facilitySite.davidTemple.boss);
   const old=poiDavidFissureMesh?.gpu;
@@ -32108,7 +32375,7 @@ function poiDrawDavidFissure(now,vp){
  const g=poiDavidFissureMesh.gpu,reduced=poiEnemyCueReduced?.matches;
  const grow=reduced?1:Math.max(.06,Math.min(1,age/(e.leap?375:290)));
  const hold=e.leap?530:415;
- const fade=Math.max(0,1-Math.max(0,age-hold)/(span-hold)),alpha=(reduced?.42:.88)*fade;
+ const fade=Math.max(0,1-Math.max(0,(keep?Math.min(age,hold):age)-hold)/(span-hold)),alpha=(reduced?.42:.88)*fade;
  const count=Math.max(12,Math.floor(g.count/12*grow)*12);
  gl.enable(gl.BLEND);gl.blendFunc(gl.CONSTANT_ALPHA,gl.ONE_MINUS_CONSTANT_ALPHA);gl.depthMask(false);
  try{gl.blendColor(0,0,0,alpha);draw(g,vp,0,Math.min(g.count,count))}
@@ -32117,57 +32384,117 @@ function poiDrawDavidFissure(now,vp){
 // END DAVID GROUND FISSURE
 // BEGIN DAVID RAISED STONE
 let poiDavidRaisedStoneMesh=null;
+const poiDavidStoneVp=new Float32Array(16),poiDavidStoneEase=t=>t*t*(3-2*t);
+function poiDavidFractureFloors(e){
+ if(e.fractureFloors)return e.fractureFloors;
+ const floors=e.fractureFloors=new Map(),radius=(e.radius??6)+1;
+ for(const o of world)if(o.y===e.y&&Math.abs(o.x-e.sx)<=radius&&Math.abs(o.z-e.sz)<=radius&&isFloor(o.type))
+  floors.set(o.x+','+o.z,o.type);
+ return floors;
+}
+function poiDavidFractureRoadHeight(kind,x,z,wx,wz){
+ if(!kind||!ROAD_IDS.has(kind)||!kind.endsWith('Full'))return 0;
+ const u=wx-x,v=wz-z;
+ if(u<.036||u>.964||v<.036||v>.964)return 0;
+ return u<.046||u>.954||v<.046||v>.954?.035:(MAP_W*MAP_H<=4096?.15:.13);
+}
 function poiDavidRaisedStoneGeometry(e,b){
  const m=mesh(),pass=poiAimWall({y:e.y}),arena=poiDavidArena(b),q={sx:e.sx,sz:e.sz};
+ const floors=poiDavidFractureFloors(e),paint=new Map(),stats=m.broken={slabs:0,chips:0,width:0,height:0};
  const near=(wx,wz)=>{
   const x=wx-.5,z=wz-.5,dx=x-q.sx,dz=z-q.sz,r=Math.hypot(dx,dz);
   return r<=e.radius&&poiDavidIn(b,{x,z,y:e.y})&&(r<1e-5||
    poiDavidRoomRay(q,b,{x:dx/r,z:dz/r},r,pass,arena)+1e-6>=r);
  };
- const seed=(n)=>.5+.5*Math.sin(n*77.17+2.43);
- const rings=e.leap?[[1.38,8],[2.82,11],[4.40,12]]:[[1.18,6],[2.28,7],[3.50,5]];
- const phase=Math.atan2(e.z-.5-e.sz,e.x-.5-e.sx);
- for(let j=0,id=0;j<rings.length;j++){
-  const [ring,count]=rings[j];
-  for(let i=0;i<count;i++,id++){
-   const angle=phase+i*Math.PI*2/count+.34*j+(seed(id)-.5)*.42;
-   const dx=Math.cos(angle),dz=Math.sin(angle),reach=ring+(seed(id+19)-.5)*.64;
-   const x=e.x+dx*reach,z=e.z+dz*reach;
-   const weight=(.58+.42*seed(id+44))*(1-j*.22);
-   const w=(e.leap?.281:.199)*weight+.055,h=(e.leap?.74:.41)*weight+.05;
-   const tilt=.32*w,rot=angle+seed(id+23)*1.55,foot=[],crown=[];
-   const ground=terrainY(Math.floor(x),Math.floor(z))+1.4*e.y;
-   if(!near(x,z))continue;
-   for(let f=0;f<5;f++){
-    const theta=rot+f*Math.PI*2/5,px=Math.cos(theta),pz=Math.sin(theta);
-    const rr=w*(.86+.26*seed(id+f*7)),tt=.50+.18*seed(id+f*9+11);
-    foot.push([x+px*rr,ground-.065,z+pz*rr]);
-    crown.push([x+px*rr*tt+dx*tilt,ground+h*(.65+.27*seed(id+f*4+47)),z+pz*rr*tt+dz*tilt]);
-   }
-   const tip=[x+dx*tilt,ground+h,z+dz*tilt];
-   const footprint=[...foot,...crown,tip];
-   for(let f=0;f<5;f++){
-    const p=foot[f],n=foot[(f+1)%5];
-    footprint.push([(p[0]+n[0])*.5,ground,(p[2]+n[2])*.5]);
-   }
-   if(!footprint.every(p=>near(p[0],p[2])&&Math.abs(terrainY(Math.floor(p[0]),Math.floor(p[2]))+1.4*e.y-ground)<.065))continue;
-   const tint=.83+.20*seed(id+59),stone=[.48,.423,.355].map(v=>v*tint),top=[.62,.555,.465].map(v=>v*tint);
-   for(let f=0;f<5;f++){
-    const next=(f+1)%5,dark=f%2?.90:1.03;
-    quad(m,foot[f],crown[f],crown[next],foot[next],stone.map(v=>v*dark));
-    tri(m,tip,crown[next],crown[f],top);
+ const seed=n=>.5+.5*Math.sin(n*77.17+2.43),angle0=Math.atan2(e.z-.5-e.sz,e.x-.5-e.sx);
+ const shape=[[-1,-.53],[-.27,-1],[.72,-.80],[1,-.10],[.67,.83],[-.28,1],[-.90,.47]];
+ // Preserve the authored paint seam on the displaced pieces by clipping
+ // the actual road triangles, not painting a substitute cap over the slab.
+ const road=(x,z)=>{
+  const key=x+','+z;
+  if(!paint.has(key)){
+   const id=floors.get(key),t=mesh();
+   if(id&&ROAD_IDS.has(id)&&id.endsWith('Full'))roadTile(t,x,z,id,0,MAP_W*MAP_H);
+   paint.set(key,t);
+  }
+  return paint.get(key);
+ };
+ const clip=(poly,a,b)=>{
+  const d=p=>(b[0]-a[0])*(p[2]-a[1])-(b[1]-a[1])*(p[0]-a[0]),out=[];
+  for(let i=0;i<poly.length;i++){
+   const p=poly[i],q=poly[(i+1)%poly.length],u=d(p),v=d(q);
+   if(u>=-1e-8)out.push(p);
+   if((u< -1e-8)!==(v< -1e-8)){
+    const t=u/(u-v);out.push(p.map((coord,k)=>coord+(q[k]-coord)*t));
    }
   }
+  return out;
+ };
+ const piece=(x,z,span,depth,angle,height,slab,id)=>{
+  const ix=Math.floor(x),iz=Math.floor(z),idAt=floors.get(ix+','+iz);
+  if(!idAt||!ROAD_IDS.has(idAt)||!idAt.endsWith('Full'))return;
+  const c=Math.cos(angle),s=Math.sin(angle),g=terrainY(ix,iz)+1.4*e.y;
+  const poly=shape.map(([u,v])=>[x+c*u*span-s*v*depth,z+s*u*span+c*v*depth]);
+  const witnesses=[[x,z]];
+  for(let i=0;i<poly.length;i++){
+   const p=poly[i],q=poly[(i+1)%poly.length];witnesses.push(p,[(p[0]+q[0])/2,(p[1]+q[1])/2]);
+  }
+  if(!witnesses.every(([wx,wz])=>{
+   const xx=Math.floor(wx),zz=Math.floor(wz),k=floors.get(xx+','+zz);
+   return k&&ROAD_IDS.has(k)&&k.endsWith('Full')&&Math.abs(terrainY(xx,zz)+1.4*e.y-g)<.065&&near(wx,wz);
+  }))return;
+  const xs=poly.map(p=>p[0]),zs=poly.map(p=>p[1]);
+  const raise=(px,pz)=>g+height+(.35*(px-x)*c+.63*(pz-z)*s)*height/Math.max(.25,span);
+  const col=road(ix,iz).c.slice(18,21).map(v=>v*.73);
+  // A continuous raw rock skin beneath the lifted paving paint. No cap,
+  // narrow stalk or detached floating paver; part of the wall stays buried.
+  for(let f=0;f<poly.length;f++){
+   const a=poly[f],b=poly[(f+1)%poly.length],lo=g-.13-.04*seed(id+f);
+   const at=[a[0],raise(...a)+.12,a[1]],bt=[b[0],raise(...b)+.12,b[1]];
+   const av=[a[0],lo,a[1]],bv=[b[0],lo,b[1]],tone=col.map(v=>v*(f%2?.69:.96));
+   const seam=[(a[0]+b[0])*.5,(at[1]+bt[1]+2*lo)*.25,(a[1]+b[1])*.5];
+   tri(m,av,at,seam,tone);tri(m,at,bt,seam,tone.map(v=>v*1.09));
+   tri(m,bt,bv,seam,tone);tri(m,bv,av,seam,tone.map(v=>v*.81));
+  }
+  for(let tz=Math.floor(Math.min(...zs));tz<=Math.floor(Math.max(...zs));tz++)for(let tx=Math.floor(Math.min(...xs));tx<=Math.floor(Math.max(...xs));tx++){
+   const p=road(tx,tz);
+   for(let i=0;i<p.p.length;i+=9){
+    // Terrain-only grass underlay is retained under the real paint, making
+    // any tile-edge gap match exactly, rather than inventing a painted seam.
+    let raw=[p.p.slice(i,i+3),p.p.slice(i+3,i+6),p.p.slice(i+6,i+9)];
+    for(let j=0;j<poly.length&&raw.length>=3;j++)raw=clip(raw,poly[j],poly[(j+1)%poly.length]);
+    if(raw.length<3)continue;
+    const face=raw.map(([px,py,pz])=>[px,py+raise(px,pz),pz]),color=p.c.slice(i,i+3);
+    for(let j=1;j<face.length-1;j++)tri(m,face[0],face[j],face[j+1],color);
+   }
+  }
+  if(slab){stats.slabs++;stats.width=Math.max(stats.width,span*2);stats.height=Math.max(stats.height,height)}
+  else stats.chips++;
+ };
+ // Large fragments hug the central break. Uneven scattered chips on
+ // either side interrupt the radial lines without a ring of equal shapes.
+ const slabCount=e.leap?7:4,chipCount=e.leap?28:17;
+ for(let i=0;i<slabCount;i++){
+  const a=angle0+i*2*Math.PI/slabCount+(seed(i+37)-.5)*.38;
+  const r=(e.leap?1.76:1.48)+(seed(i+87)-.3)*1.64,span=(e.leap?.54:.42)+seed(i+5)*(e.leap?.58:.34);
+  piece(e.x+Math.cos(a)*r,e.z+Math.sin(a)*r,span,span*(.49+.34*seed(i+8)),
+   a+.8+(seed(i+9)-.5)*1.18,(e.leap?.27:.20)+seed(i+13)*(e.leap?.38:.24),true,i);
+ }
+ for(let i=0;i<chipCount;i++){
+  const a=angle0+i*2.399963+(seed(i+39)-.5)*.52,r=1.2+seed(i+177)*(e.leap?4.6:3.65);
+  const span=.071+seed(i+51)*(i%4===0?.30:.138);
+  const x=e.x+Math.cos(a)*r,z=e.z+Math.sin(a)*r;
+  piece(x,z,span,span*(.49+.48*seed(i+53)),a+seed(i+31)*2,.035+span*.48,false,i+100);
  }
  return m;
 }
 function poiDrawDavidRaisedStone(now,vp){
- const e=poiDavidFissure,age=e?now-e.start:Infinity,span=e?(e.fissureMs??POI_DAVID_FISSURE_MS):0;
- if(!e||e.owner!==facilitySite||age>=span){
+ const e=poiDavidFissure,keep=typeof poiDavidKeepFatalFracture==='function'&&poiDavidKeepFatalFracture(e),age=e?now-e.start:Infinity,span=e?(e.fissureMs??POI_DAVID_FISSURE_MS):0;
+ if(!e||e.owner!==facilitySite||(e.fatalDeath&&!keep)||(!keep&&age>=span)){
   if(poiDavidRaisedStoneMesh?.gpu)gl.deleteBuffer(poiDavidRaisedStoneMesh.gpu.buf);
   poiDavidRaisedStoneMesh=null;return;
  }
- if(age<0||!poiDavidImpactVisible(e,now,span))return;
+ if(age<0||!poiDavidImpactVisible(e,now,keep?Infinity:span,keep))return;
  if(poiDavidRaisedStoneMesh?.e!==e){
   const geometry=poiDavidRaisedStoneGeometry(e,e.owner.davidTemple.boss),prior=poiDavidRaisedStoneMesh?.gpu;
   if(!geometry.p.length){
@@ -32177,12 +32504,11 @@ function poiDrawDavidRaisedStone(now,vp){
   poiDavidRaisedStoneMesh={e,gpu:upload(geometry,prior?.buf??null,gl.STATIC_DRAW)};
  }
  if(!poiDavidRaisedStoneMesh.gpu)return;
- const bury=e.leap?.82:.49,rise=e.leap?290:232,hold=e.leap?620:480;
- const smooth=t=>t*t*(3-2*t);
- const offset=-bury*(1-smooth(Math.min(1,age/rise))+smooth(Math.max(0,(age-hold)/(span-hold))));
+ const bury=e.leap?.91:.63,rise=e.leap?290:232,hold=e.leap?620:480;
+ const offset=-bury*(1-poiDavidStoneEase(Math.min(1,age/rise))+poiDavidStoneEase(Math.max(0,((keep?Math.min(age,hold):age)-hold)/(span-hold))));
  // Translate just this mesh vertically in world space. Terrain depth clips
  // the buried rock; the physical map, camera and attack never move.
- const lifted=new Float32Array(vp);
+ const lifted=poiDavidStoneVp;lifted.set(vp);
  for(let i=0;i<4;i++)lifted[12+i]+=offset*vp[4+i];
  draw(poiDavidRaisedStoneMesh.gpu,lifted);
 }
@@ -32349,12 +32675,14 @@ function render(){
  }
  if(cursorDirty){if(cursorMesh)gl.deleteBuffer(cursorMesh.buf);cursorMesh=makeCursor();cursorDirty=false}
  const daylight=poiTownSceneLight();gl.uniform3f(loc.daylight,...daylight);
+ if(typeof poiSacredApplyFog==='function')poiSacredApplyFog(now,daylight);
  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
  poiOcclusionBegin(p,now);
  draw(sceneMesh?.ground,p.vp);poiDrawSceneOcclusion(sceneMesh,p.vp);
  if(typeof facilityDrawLocalScene==='function')facilityDrawLocalScene(p.vp);
  if(typeof facilityDrawForestScene==='function')facilityDrawForestScene(p.vp);
  facilityDrawRoofs(p.vp);poiDrawGameRoofs(p.vp);
+ if(typeof poiSacredDrawScene==='function')poiSacredDrawScene(p.vp);
  poiOcclusionEnd();
  poiDrawEditorGhostRoof(p.vp);
  drawSignOverlays(p.vp,daylight);pineDrawEditCursor(p.vp);
@@ -35466,8 +35794,85 @@ function buildFacilitySite(id){
  const southPort=extendTownWorldSouthPort(expanded.map.world);
  const southForest=extendTownWorldSouthForest(expanded.map.world,southPort);
  const davidTemple=extendTownWorldDavidTemple(expanded);
- return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad,northFort,southPort,southForest,davidTemple};
+ const sacredForest=extendTownWorldSacredForest(expanded,davidTemple);
+ return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad,northFort,southPort,southForest,davidTemple,sacredForest};
 }
+
+// BEGIN SACRED FOREST MAP
+function extendTownWorldSacredForest(site,temple){
+ const world=site.map.world,index=world.length,y=0,P=(x,z)=>({x,z,y}),K=(x,z)=>x+','+z;
+ const covered=[
+  {x1:2,x2:20,z1:48,z2:73},{x1:2,x2:44,z1:74,z2:124}
+ ];
+ const old=new Map(),taken=new Set(),paths=[],trees=[],ground=[],bury=[];
+ for(const o of world)if(o.y===0){
+  const k=K(o.x,o.z),v=old.get(k)||[];v.push(o.type);old.set(k,v);
+ }
+ for(const p of site.map.terrainHeights||[])taken.add(K(p.x,p.z));
+ const around=(x,z)=>Math.hypot(x-temple.ring.x,z-temple.ring.z);
+ const route=knots=>{
+  const full=[];let [x,z]=knots[0];full.push(P(x,z));
+  for(const [xx,zz] of knots.slice(1))while(x!==xx||z!==zz){
+   x+=Math.sign(xx-x);z+=Math.sign(zz-z);full.push(P(x,z));
+  }
+  return full;
+ };
+ const main=route([[12,49],[9,49],[9,56],[7,56],[7,65],[10,65],[10,71],[15,71],[15,79],[17,79],[17,82],[24,82],[24,86],[28,86],[28,88],[29,88]]);
+ const westLoop=route([[7,56],[4,56],[4,60],[3,60],[3,66],[5,66],[5,65],[7,65]]);
+ const gladeLoop=route([[10,71],[10,77],[8,77],[8,83],[16,83],[16,82],[17,82]]);
+ // Reserve the junction from the existing eastern road, never replace it.
+ const east=route([[41,77],[41,84],[35,84],[35,88],[29,88]]);
+ const lane=new Set();
+ for(const dots of [main,westLoop,gladeLoop,east,temple.approach]){
+  for(const p of dots){
+   const k=K(p.x,p.z);lane.add(k);
+   if(old.has(k)||taken.has(k))continue;
+   // Soft edges and path breaks blend into existing turf.
+   if((p.x*7+p.z*13)%17===0)continue;
+   ground.push({...p,type:(p.x*17+p.z*3)%11<2?'grassTrampled':'earth',rot:0});taken.add(k);
+  }
+ }
+ // Broad forest depth without painting 2,600 new floor objects.
+ // Grow in irregular bands; preserve a surprisingly open west trail and
+ // keep narrow negative space near crossings, bends and the temple apron.
+ const noise=(x,z,s=0)=>(Math.imul((x+37)*14513+(z+53)*11579+s*9127,2654435761)>>>0)/4294967296;
+ const reveal=temple.approach[0],tries=[];
+ // Give both the player and a normal third-person orbit room when the
+ // trail opens: a solid canopy behind the player otherwise hides the gate.
+ const sightClearing=(x,z)=>Math.hypot((x-reveal.x)/6.35,(z-reveal.z+2)/7.4)<1;
+ for(const b of covered)for(let z=b.z1;z<=b.z2;z++)for(let x=b.x1;x<=b.x2;x++){
+  const k=K(x,z);
+  if(old.has(k)||taken.has(k)||lane.has(k)||around(x,z)<19.6||
+     (z>=86&&z<=92&&x>=22&&x<=33)||sightClearing(x,z))continue;
+  const hush=(z>=73&&z<=83&&x>=12&&x<=37)||z>=97&&x>=36;
+  const grove=Math.sin(x*.39+z*.27)*Math.sin(x*.16-z*.28)>.08;
+  const score=noise(x,z)+(.18*(+grove))+(.18*(+hush));
+  if(score>.63)tries.push({x,z,score});
+ }
+ tries.sort((a,b)=>b.score-a.score||a.z-b.z||a.x-b.x);
+ for(const {x,z} of tries){
+  if(trees.length>=146)break;
+  if(trees.some(o=>Math.hypot(o.x-x,o.z-z)<2.55))continue;
+  const species=noise(x,z,3),type=species<.13?'treeBirch':species<.39?'treeOak':species<.68?'treePine':'treeCedar';
+  trees.push({...P(x,z),type,rot:Math.floor(noise(x,z,4)*4)});taken.add(K(x,z));
+ }
+ // Low vegetation and stones guide the eye, with no literal temple sign.
+ for(const [x,z,type] of [
+  [7,50,'bushFern'],[11,53,'tallGrass'],[8,60,'bushFern'],[6,63,'flowerField'],
+  [11,69,'bushFern'],[13,72,'tallGrass'],[11,76,'bushFern'],[12,80,'flowerField'],
+  [18,81,'bushFern'],[20,83,'tallGrass'],[22,81,'bushFern'],[25,84,'flowerField'],
+  [29,85,'bushFern'],[33,81,'tallGrass'],[37,84,'bushFern'],[39,81,'tallGrass']
+ ]){
+  const k=K(x,z);
+  if(!old.has(k)&&!taken.has(k)&&!lane.has(k)&&around(x,z)>19.6){
+   bury.push({...P(x,z),type,rot:(x+z)%4});taken.add(k);
+  }
+ }
+ world.push(...ground,...bury,...trees);
+ return {name:'深樹の聖林',difficulty:1,coverage:covered,route:main,routes:[main,westLoop,gladeLoop],
+  reveal,trees,authored:{index,count:world.length-index}};
+}
+// END SACRED FOREST MAP
 
 // The first southern coast uses the old 128x128 save frame, away from the inn.
 function extendTownWorldSouthPort(world){
@@ -35569,7 +35974,7 @@ function extendTownWorldDavidTemple(site){
  for(const [xx,z,tier] of eastWing)for(const x of [xx,2*ring.x-xx]){
   // Radial depth transitions already owned by the original shoulder.
   if(occupied.has(k(x,z,0)))continue;
-  prop(x,z,'poiDavidWallWing',tier);
+  prop(x,z,'poiDavidWallWingTall');
  }
  const approach=[P(29,88),P(29,89),P(29,90),P(29,91),P(28,91),P(27,91),P(26,91),P(25,91),P(24,91),P(24,92),P(24,93),P(24,94)];
  for(const p of approach.slice(1,-1))put(p.x,p.z,'roadGravelFull');
@@ -35577,6 +35982,19 @@ function extendTownWorldDavidTemple(site){
   put(x,z,x===24?'roadRoyalFull':'roadCutStoneFull');
  prop(27,90,'poiDavidWaystone',0);
  prop(21,94,'poiDavidGatePier',0);prop(27,94,'poiDavidGatePier',2);
+ // The passage is physically doglegged: both baffles stop outside LOS.
+ // The old portal stays x24,z94, the final mouth points back down its axis.
+ const tunnelPath=[[24,94],[24,95],[25,95],[25,96],[25,97],[24,97],
+  [23,97],[23,98],[23,99],[24,99],[24,100],[24,101]].map(([x,z])=>P(x,z));
+ for(let z=94;z<=100;z++){
+  for(const x of [22,26])prop(x,z,'poiDavidWallTunnel');
+  for(let x=22;x<=26;x++)prop(x,z,'poiDavidTunnelRoof',0,2);
+ }
+ for(const [x,z] of [[23,96],[24,96],[24,98],[25,98]])prop(x,z,'poiDavidWallTunnel');
+ for(let x=21;x<=27;x++)prop(x,94,'poiDavidWallHeader',0,3);
+ prop(ring.x,ring.z,'poiDavidSacredRoof',0,2);
+ for(const [x,z,rot] of [[22,95,0],[26,96,2],[22,97,0],[26,99,2],[22,100,0],
+  [7,104,0],[41,104,2],[10,114,0],[38,114,2],[24,121,3]])prop(x,z,'poiDavidCandleSconce',rot,1);
  for(const [x,z] of [[10,104],[38,104],[13,113],[35,113],[22,118],[26,118]])prop(x,z,'lantern');
  prop(boss.x,boss.z,boss.type,0);
 // Off-center copses in existing meadow, not a uniform hedge at the wall.
@@ -35622,10 +36040,21 @@ function extendTownWorldDavidTemple(site){
    cells.add(key);pending.push([x,z]);
   }
  }
- boss.room.arena.cells=cells;
- site.buildings.push({id:'davidTemple',name,...bounds,footprint,floorFootprints:{0:footprint},openAir:true});
- return {name,difficulty:6,bounds,ring,approach,entrance:P(24,94),threshold:{minX:22,maxX:26,z:94,y},retreat:P(24,91),boss,
+ const tunnel=c=>{const [x,z]=c.split(',').map(Number);return x>=23&&x<=25&&z>=94&&z<=100};
+ boss.room.arena.cells=new Set([...cells].filter(c=>!tunnel(c)));
+ const enclosure=[...cells].map(c=>{const [x,z]=c.split(',').map(Number);return P(x,z)});
+ const interior={permanent:true,minX:23,maxX:25,enterZ:94,exitZ:101,path:tunnelPath};
+ site.buildings.push({id:'davidTemple',name,...bounds,footprint,floorFootprints:{0:enclosure},permanentRoof:true});
+ return {name,difficulty:10,bounds,ring,approach,entrance:P(24,94),threshold:{minX:22,maxX:26,z:94,y},retreat:P(24,91),boss,interior,enclosure:cells,musicArrival:{minX:22,maxX:26,minZ:88,maxZ:100,y},
   resumeSolid:[...props.filter(o=>o.y===0&&/^poiDavid/.test(o.type)),...plantedTrees],authored:{index,count:world.length-index}};
+}
+function poiDavidTempleEnclosedAt(site,x,z,y){
+ const t=site?.id==='base'?site.davidTemple:null;
+ return !!(t?.interior&&y===0&&t.enclosure.has(Math.floor(x+.5)+','+Math.floor(z+.5)));
+}
+function poiDavidTempleTunnelAt(site,x,z,y){
+ const t=site?.davidTemple?.interior;
+ return !!(t&&poiDavidTempleEnclosedAt(site,x,z,y)&&x>=t.minX-.5&&x<t.maxX+.5&&z>=t.enterZ-.5&&z<t.exitZ-.5)
 }
 function poiDavidTempleContains(site,x,z,y,pad=0){
  const d=site?.id==='base'?site.davidTemple:null;
@@ -37531,6 +37960,7 @@ function poiSnowPassApply(dest,now,cold=false,prepared=poiSnowPassPrepare(dest,c
  facilityBuildRoofs();poiMiniInvalidate();
  $('facilitySessionName').textContent=facilitySite.name;
  if(poiWalkActive){poiWalkAvatar(now);poiWalkCamera();poiWalkStatus();poiCombatHud();poiHotbarRender()}
+ if(!cold&&typeof poiDefeatRememberEntry==='function')poiDefeatRememberEntry(dest.x,dest.z,0,dest.facing);
  poiSnowPassSwitches++;
  if(!onBase)poiSnowPassBase=null;
  return true;
@@ -37675,11 +38105,11 @@ function workshopResumeWrite(override,seed=false){
  if(!workshopResumeReady||(workshopResumeLeaving&&!override))return;
  const route=facilitySite?'facility':pineGameActive?'adventure':poiWalkActive?'map-play':'editor';
  const record=override||{version:1,route,id:facilitySite?.id==='snowpass'?'base':facilitySite?.id??null,play:poiWalkActive,
-  ...(facilitySite?.id==='snowpass'&&poiWalkActive?{region:'snowpass',regionHp:poiPlayerHP}:{}),
+  ...(facilitySite?.id==='snowpass'&&poiWalkActive?{region:'snowpass',regionHp:poiPlayerDeath?POI_PLAYER_MAX_HP:poiPlayerHP}:{}),
   ...(facilitySite?.id==='base'?(facilitySite.townOffset>=22?{townLayout:5,townMapHeight:facilitySite.map.height}:{townLayout:facilitySite.townOffset?4:3}):{}),
   tag:route==='editor'||route==='map-play'?workshopResumeTag:null,
   position:poiWalkActive?(typeof poiPlayerDeath!=='undefined'&&poiPlayerDeath&&!poiPlayerDeath.relocated?
-   {x:poiSpawnX,z:poiSpawnZ,y:0,facing:poiWalkFacing}:{x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,facing:poiWalkFacing}):null,
+   poiPlayerDeathSpawn(poiPlayerDeath.checkpoint):{x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,facing:poiWalkFacing}):null,
   view:workshopResumeView(),editorView:facilitySite&&facilityEditView?workshopResumeView(facilityEditView):null};
  try{
   const raw=JSON.stringify(record);
@@ -37721,6 +38151,7 @@ function workshopResumeRestorePosition(p){
  if(typeof poiSouthPortRecoverPosition==='function')p=poiSouthPortRecoverPosition(p);
  if(typeof poiSouthForestRecoverPosition==='function')p=poiSouthForestRecoverPosition(p);
  if(typeof poiDavidTempleRecoverPosition==='function')p=poiDavidTempleRecoverPosition(p);
+ if(typeof poiSacredRecoverPosition==='function')p=poiSacredRecoverPosition(p);
  // The two former shortcut doorways now have walls. Preserve that exact
  // old save's floor, facing and nearby room instead of restarting in town.
  if(p&&facilitySite?.id==='base'&&p.y===-1){
@@ -37924,9 +38355,91 @@ function facilityValidLanding(x,z,y){
  return validPos(x,z)&&world.some(o=>
   o.x===x&&o.z===z&&o.y===y&&(isFloor(o.type)||o.type==='guildStairDown'||o.type==='guildStairUp'));
 }
+// BEGIN TOWN GUILD REMODEL
+function poiTownGuildRemodel(site){
+ const g=site?.buildings?.find(b=>b.id==='townGuild');
+ // This is the stock campaign guild only. Saved editor guilds have their own
+ // sources and never receive this visual or furnishing transform.
+ if(!g||g.x2-g.x1!==15||g.z2-g.z1!==14||g.entrance.x-g.x1!==7)return site;
+ const cx=g.entrance.x,door=g.entrance.z,west=g.x1;
+ const world=site.map.world.map(o=>{
+  const {x,z,y,type}=o;
+  if(y!==0||x<=g.x1||x>=g.x2||z<=g.z1||z>=g.z2)return o;
+  if(type==='woodfloor'&&z>=door-8&&z<=door-1){
+   if(Math.abs(x-cx)<=1)return {...o,type:'woodfloorLight'};
+   if(Math.abs(x-cx)===2)return {...o,type:'woodfloorDark'};
+  }
+  if(type==='benchWood'&&x===west+1){
+   if(z===door-6)return {...o,x:x+1,z:z+1,rot:3};
+   if(z===door-4)return {...o,x:x+1,z:z+1,rot:3};
+  }
+  return o;
+ });
+ return {...site,guildRemodel:g,map:{...site.map,world}};
+}
+function poiTownGuildFacade(o){
+ const g=facilitySite?.id==='base'?facilitySite.guildRemodel:null;
+ return g&&o.y>=0&&o.y<=2&&o.x>=g.x1&&o.x<=g.x2&&o.z>=g.z1&&o.z<=g.z2&&
+  (o.x===g.x1||o.x===g.x2||o.z===g.z1||o.z===g.z2)&&/^stonewall(?:Window|Door)?$/.test(o.type)?g:null;
+}
+function poiTownGuildPorch(m,x,y,z){
+ // A bracketed oak rain hood keeps the full original door and street clear.
+ const roof=[.42,.28,.22],rim=[.27,.17,.12],oak=[.46,.29,.17],face=z+.51;
+ const half=1.73,eave=face+.95,high=y+1.99,low=y+1.71;
+ const u=[x-half,high,face],v=[x+half,high,face],w=[x+half,low,eave],q=[x-half,low,eave];
+ quad(m,u,q,w,v,roof);
+ quad(m,v,w,q,u,[.29,.21,.16]);
+ cube(m,x,low-.04,eave,half*2+.09,.10,.11,rim);
+ cube(m,x,high-.05,face+.04,half*2,.10,.12,oak);
+ for(const side of [-1,1]){
+  const xx=x+side*1.42;
+  cube(m,xx,y+1.34,face+.06,.15,.62,.18,oak);
+  naturalBranch(m,xx,y+1.13,face+.1,xx,low-.09,eave-.08,.078,.065,oak);
+  naturalBranch(m,xx,high-.055,face+.07,xx,low-.06,eave,.055,.054,rim);
+ }
+}
+function poiTownGuildCladding(m,o,faces){
+ const g=poiTownGuildFacade(o);
+ if(!g)return false;
+ const x=o.x+.5,z=o.z+.5,y=o.y*1.4+terrainY(o.x,o.z),r=o.rot||0;
+ const start=m.c.length;
+ if(o.type==='stonewall'){
+  wallBlock(m,o.y?'plasterwall':'stonewall',x,y,z,r,faces.visible,faces.exterior,true);
+ }else{
+  const suffix=o.type.slice('stonewall'.length);
+  deco(m,(o.y?'plasterwall':'stonewall')+suffix,x,y,z,r);
+ }
+ if(o.y===0){
+  // Buff limestone plinth; keep the original door/frame dimensions and
+  // normal lighting. Color changes affect only this tile's submitted vertices.
+  for(let i=start;i<m.c.length;i+=3){
+   m.c[i]=Math.min(1,m.c[i]*1.10+.026);
+   m.c[i+1]*=.979;m.c[i+2]*=.805;
+  }
+  if(o.type==='stonewallDoor'&&o.x===g.entrance.x&&o.z===g.entrance.z)poiTownGuildPorch(m,x,y,z);
+ }
+ return true;
+}
+function poiTownGuildRoof(m,cells,neighbors){
+ if(!cells.length)return;
+ const o=cells[0],base=o.y*1.4+.04+terrainY(o.x,o.z),first=m.p.length,rise=1.43;
+ residentialRoofGeometry(m,cells,neighbors,true);
+ // Keep the town roof's tiles and eaves, while giving a wide civic parcel
+ // a little more pitch than a cottage. Rescale normals with the rise.
+ for(let i=first;i<m.p.length;i+=3){
+  m.p[i+1]=base+(m.p[i+1]-base)*rise;
+  const nx=m.n[i],ny=m.n[i+1]/rise,nz=m.n[i+2],n=Math.hypot(nx,ny,nz)||1;
+  m.n[i]=nx/n;m.n[i+1]=ny/n;m.n[i+2]=nz/n;
+ }
+}
+// END TOWN GUILD REMODEL
+
 function facilityUsesGuildRendering(){return facilitySite?.id==='guildrenewal'||facilitySite?.id==='guildsaved'}
 function facilityHiddenRoof(){
  if(!facilitySite||!poiWalkActive)return null;
+ if(typeof poiDavidTempleEnclosedAt==='function'&&poiDavidTempleEnclosedAt(facilitySite,poiWalkX,poiWalkZ,poiWalkLevel)){
+  const i=facilitySite.buildings.findIndex(b=>b.id==='davidTemple');if(i>=0)return i;
+ }
  if(facilityDoorTiles.has(facilityCellKey(poiWalkX,poiWalkZ,poiWalkLevel))){
   const owner=facilityFloorOwner(poiWalkX,poiWalkZ,poiWalkLevel);
   // The tile must be an actual door belonging to this floor, not just an
@@ -38081,12 +38594,14 @@ function facilityVisibilityOwner(){
  return owner!==null&&(facilityUsesGuildRendering()||facilitySite.buildings[owner]?.id==='townGuild')?owner:null;
 }
 function facilityRoofOwner(o){
+ const named=o.type==='poiDavidSacredRoof'||o.type==='poiDavidTunnelRoof'||o.type==='poiDavidWallHeader';
+ if(named){const i=facilitySite?.buildings.findIndex(b=>b.id==='davidTemple'&&b.permanentRoof);if(i>=0)return i;}
  const index=facilityFloorMasks.findIndex(({footprint})=>footprint.has(o.x+','+o.z));
  return index<0?null:index;
 }
 function facilityIsRoofPiece(o){
  return o.y>0&&(AUTO_ROOFS.has(o.type)||RESIDENTIAL_ROOFS.has(o.type)||
-  o.type==='chimney'||o.type==='poiDavidDome');
+  o.type==='chimney'||o.type==='poiDavidDome'||o.type==='poiDavidSacredRoof'||o.type==='poiDavidTunnelRoof'||o.type==='poiDavidWallHeader');
 }
 function facilityViewLevel(){return poiWalkActive?poiWalkLevel:level}
 function facilityObjectVisible(o,cut=facilityVisibilityOwner()){
@@ -38316,6 +38831,141 @@ function facilityDrawForestScene(vp){
 }
 // END SOUTH FOREST LOCAL
 
+// BEGIN SACRED FOREST LOCAL
+const poiSacredTrees=new WeakMap();
+let poiSacredScene=null,poiSacredBuilds=0,poiSacredFogOn=false;
+function poiSacredForestOf(site){return site?.id==='base'?site.sacredForest:null}
+function poiSacredForestContains(site,x,z,y){
+ const f=poiSacredForestOf(site);
+ return !!f&&y===0&&f.coverage.some(b=>x>=b.x1&&x<=b.x2&&z>=b.z1&&z<=b.z2);
+}
+function poiSacredForestKey(o){return o.x+','+o.z+','+o.y+','+o.type}
+function poiSacredForestMember(o){
+ const f=poiSacredForestOf(facilitySite);
+ if(!f||o.y!==0||!/^tree(?:Oak|Pine|Cedar|Birch)$/.test(o.type))return false;
+ let index=poiSacredTrees.get(f);
+ if(!index){index=new Set(f.trees.map(poiSacredForestKey));poiSacredTrees.set(f,index)}
+ return index.has(poiSacredForestKey(o));
+}
+function poiSacredRecoverPosition(p){
+ const f=poiSacredForestOf(facilitySite);
+ if(!p||p.y!==0||!f)return p;
+ if(!f.trees.some(o=>o.x===p.x&&o.z===p.z)||!world.some(o=>o.x===p.x&&o.z===p.z&&poiSacredForestMember(o)))return p;
+ const prior=poiWalkLevel;poiWalkLevel=0;
+ try{
+  if(poiWalkCanStep(p.x,p.z))return p;
+  // Only original saves landing in one of the new trunks are adjusted.
+  for(const [dx,dz] of [[0,-1],[1,0],[0,1],[-1,0],[0,-2],[2,0],[0,2],[-2,0]]){
+   const x=p.x+dx,z=p.z+dz;
+   if(poiWalkCanStep(x,z))return {...p,x,z};
+  }
+  return p;
+ }finally{poiWalkLevel=prior}
+}
+function poiSacredTreeGeometry(m,o){
+ const ox=o.x+.5,oz=o.z+.5,y=terrainY(o.x,o.z);
+ const seed=(n)=>((Math.imul((o.x+11)*17417+(o.z+17)*7919+n*9577,1597334677)>>>0)/4294967296);
+ const pine=o.type==='treePine'||o.type==='treeCedar',birch=o.type==='treeBirch';
+ const h=(pine?5.4:birch?4.65:5.0)+seed(0)*1.35,w=(pine?1.20:1.48)+seed(1)*.38;
+ const theta=seed(2)*6.2831853,trunk=birch?[.56,.55,.46]:[.24,.20,.15];
+ const leaf=pine?[.16,.30,.23]:[.21,.35,.24];
+ function ring(r,base,lx=0,lz=0){
+  return Array.from({length:6},(_,i)=>{
+   const a=theta+i*Math.PI/3,edge=r*(.90+.2*seed(i+3));
+   return [ox+lx+Math.cos(a)*edge,y+base,oz+lz+Math.sin(a)*edge];
+  });
+ }
+ const low=ring(.25,0),mid=ring(.115,h*.73,(seed(8)-.5)*.3,(seed(9)-.5)*.3);
+ for(let i=0;i<6;i++)quad(m,low[(i+1)%6],low[i],mid[i],mid[(i+1)%6],trunk);
+ // Tiered, irregular shadow masses; 72 triangles at most per whole tree.
+ const layers=pine?[[.30,.24,1], [.47,.23,.84],[.64,.22,.66],[.78,.22,.45]]:
+  [[.40,.28,.76],[.51,.30,1],[.67,.29,.73]];
+ for(let j=0;j<layers.length;j++){
+  const [base,height,scale]=layers[j],lx=(seed(10+j)-.5)*.64,lz=(seed(14+j)-.5)*.64;
+  const rim=ring(w*scale,h*base,lx,lz),tip=[ox+lx*.55,y+h*(base+height),oz+lz*.55];
+  const lower=[ox+lx,y+h*(base-(pine?.12:.16)),oz+lz];
+  for(let i=0;i<6;i++){
+   const f=.75+j*.10+seed(i+j*6+20)*.25,c=leaf.map(v=>v*f);
+   tri(m,rim[(i+1)%6],rim[i],tip,c);tri(m,rim[i],rim[(i+1)%6],lower,c.map(v=>v*.73));
+  }
+ }
+}
+function poiSacredForestStatus(){
+ const state=poiSacredScene,cells=state?[...state.loaded.values()]:[];
+ return {active:!!cells.length,sections:cells.length,vertices:cells.reduce((n,b)=>n+b.count,0),builds:poiSacredBuilds};
+}
+function poiSacredClearScene(){
+ if(!poiSacredScene)return;
+ for(const b of poiSacredScene.loaded.values())gl.deleteBuffer(b.buf);
+ poiSacredScene=null;
+}
+function poiSacredDrawScene(vp){
+ const f=poiSacredForestOf(facilitySite);
+ if(!f||!poiWalkActive||poiWalkLevel!==0){
+  if(poiSacredScene)poiSacredClearScene();
+  return;
+ }
+ const within=(b,pad)=>poiWalkX>=b.x1-pad&&poiWalkX<=b.x2+pad&&poiWalkZ>=b.z1-pad&&poiWalkZ<=b.z2+pad;
+ const inspect=cameraTopDown||pineAIActive;
+ if(!inspect&&!f.coverage.some(b=>within(b,23))){poiSacredClearScene();return}
+ if(!poiSacredScene||poiSacredScene.world!==world||poiSacredScene.site!==facilitySite){
+  poiSacredClearScene();
+  const chunks=new Map();
+  for(const o of world)if(poiSacredForestMember(o)){
+   const x1=o.x&~15,z1=o.z&~15,key=x1+','+z1;
+   let b=chunks.get(key);
+   if(!b){b={x1,z1,x2:x1+15,z2:z1+15,objects:[]};chunks.set(key,b)}
+   b.objects.push(o);
+  }
+  poiSacredScene={world,site:facilitySite,chunks,loaded:new Map()};
+ }
+ const {chunks,loaded}=poiSacredScene;
+ for(const [k,b] of chunks){
+  const old=loaded.get(k);
+  if(!inspect&&!within(b,old?20:15)){
+   if(old){gl.deleteBuffer(old.buf);loaded.delete(k)}
+   continue;
+  }
+  let gpu=old;
+  if(!gpu){
+   const m=mesh();
+   for(const o of b.objects)poiSacredTreeGeometry(m,o);
+   gpu=upload(m);loaded.set(k,gpu);poiSacredBuilds++;
+  }
+  draw(gpu,vp);
+ }
+}
+function poiSacredFogStrength(site,x,z,y){
+ const f=poiSacredForestOf(site);
+ if(!f||y!==0)return 0;
+ const smooth=(a,b,t)=>{const v=Math.max(0,Math.min(1,(t-a)/(b-a)));return v*v*(3-2*v)};
+ const margin=Math.max(...f.coverage.map(b=>Math.min(x-b.x1,b.x2-x,z-b.z1,b.z2-z)));
+ // More than one overlapping rectangle edge must not make a clear stripe.
+ const inner=Math.min(x-5,17-x,z-66,81-z);
+ const r=site.davidTemple?.ring;
+ const clear=r?smooth(17.6,23.1,Math.hypot(x-r.x,z-r.z)):1;
+ const reveal=smooth(2.6,8.5,Math.hypot(x-f.reveal.x,z-f.reveal.z));
+ return smooth(-1.6,3.6,Math.max(margin,inner))*Math.min(clear,reveal);
+}
+function poiSacredApplyFog(now,light){
+ const p=poiWalkActive&&!cameraTopDown&&!pineAIActive?poiAimOrigin(now):null;
+ const fog=p?poiSacredFogStrength(facilitySite,p.x,p.z,p.y):0;
+ if(fog>0.001){
+  poiSacredFogOn=true;
+  const c=[.38*light[0],.47*light[1],.43*light[2]];
+  gl.uniform3f(loc.sacredFog,p.x+.5,p.z+.5,fog);
+  gl.uniform3f(loc.sacredColor,...c);
+  gl.clearColor(c[0]*fog,c[1]*fog,c[2]*fog,fog);
+ }else if(poiSacredFogOn){
+  poiSacredFogOn=false;
+  gl.uniform3f(loc.sacredFog,0,0,0);
+  gl.clearColor(0,0,0,0);
+ }
+}
+// END SACRED FOREST LOCAL
+
+
+
 
 function facilityRenderScene(){
  const cut=facilityVisibilityOwner(),floorKey=facilitySite.id==='guildsaved'?poiWalkLevel:facilitySite.id==='guildrenewal'?poiWalkLevel:0;
@@ -38349,7 +38999,11 @@ function facilityBuildRoofs(){
  const residential=new Map(pieces.filter(o=>RESIDENTIAL_ROOFS.has(o.type)).map(o=>[o.x+','+o.z+','+o.y,o]));
  facilityRoofMeshes=facilitySite.buildings.map((_,owner)=>{
   const m=mesh(),roof=pieces.filter(o=>facilityRoofOwner(o)===owner),roofFade=[];
-  for(const o of roof)if(o.type==='poiDavidDome')poiDavidDomeGeometry(m,o.x+.5,o.z+.5);
+  for(const o of roof){
+   if(o.type==='poiDavidDome')poiDavidDomeGeometry(m,o.x+.5,o.z+.5);
+   else if(o.type==='poiDavidSacredRoof')poiDavidSacredRoofGeometry(m,o.x+.5,o.z+.5);
+   else if(o.type==='poiDavidTunnelRoof'||o.type==='poiDavidWallHeader')poiDavidTunnelArt(m,o.type,o.x+.5,0,o.z+.5,o.rot||0);
+  }
   const add=(start,tiles)=>{
    const p=poiAngledRoofPart(m,start,tiles);if(p)roofFade.push(p);
   };
@@ -38361,7 +39015,8 @@ function facilityBuildRoofs(){
   const guildRoof=facilityUsesGuildRendering()||facilitySite.buildings[owner]?.id==='townGuild';
   for(const group of residentialRoofComponents(roof.filter(o=>RESIDENTIAL_ROOFS.has(o.type)))){
    const start=m.p.length/3;
-   if(!guildRoof||!pineGuildFantasyRoof(m,group))residentialRoofGeometry(m,group,residential,!guildRoof);
+   if(typeof poiTownGuildRoof==='function'&&facilitySite.guildRemodel===facilitySite.buildings[owner])poiTownGuildRoof(m,group,residential);
+   else if(!guildRoof||!pineGuildFantasyRoof(m,group))residentialRoofGeometry(m,group,residential,!guildRoof);
    add(start,group);
   }
   for(const o of roof.filter(o=>o.type==='chimney')){
@@ -38376,7 +39031,7 @@ function facilityBuildRoofs(){
 function facilityVisibleRoofs(){
  if(!poiWalkActive||poiWalkLevel<0)return [];
  const hidden=facilityHiddenRoof();
- return facilityRoofMeshes.flatMap(({count},i)=>count&&i!==hidden?[i]:[]);
+ return facilityRoofMeshes.flatMap(({count},i)=>count&&(i!==hidden||facilitySite.buildings[i]?.permanentRoof)?[i]:[]);
 }
 function facilityCollectEntranceGuides(site,tiles){
  if(!site||site.id==='guildsaved'||site.id==='guildrenewal')return [];
@@ -38438,6 +39093,7 @@ function facilityInvalidateScenes(){
  if(typeof facilityClearForestScene==='function')facilityClearForestScene();
  facilityWatchtowerCameraWalls=null;
  facilityEntranceGuides=null;
+ if(typeof poiSacredClearScene==='function')poiSacredClearScene();
  if(typeof facilityDavidCameraWallCache!=='undefined')facilityDavidCameraWallCache.delete(world);
  if(typeof poiWallCameraWorldCache!=='undefined')poiWallCameraWorldCache.delete(world);
  facilityGradeInvalidate();
@@ -39159,6 +39815,7 @@ canvas.addEventListener('pointermove',e=>{
   if(now&&multiGesture){
    if(poiWalkActive&&poiThirdPerson){
     if(multiGesture.dist>1)poiCameraDistance=Math.max(2.5,Math.min(15,poiCameraDistance*multiGesture.dist/Math.max(1,now.dist)));
+    poiDavidRevealManual(performance.now());
     poiCameraYaw-=angleDifference(now.angle,multiGesture.angle);
     poiCameraPitch=poiOrbitPitchClamp(poiCameraPitch+(now.y-multiGesture.y)*.004);
     cursorDirty=true;
@@ -39177,6 +39834,7 @@ canvas.addEventListener('pointermove',e=>{
  if(Math.hypot(e.clientX-t.x,e.clientY-t.y)>TAP_SLOP)t.moved=true;
  if(t.moved){
   if(poiWalkActive&&poiThirdPerson){
+   poiDavidRevealManual(performance.now());
    poiCameraYaw-=(e.clientX-t.lastX)*.008;
    poiCameraPitch=poiOrbitPitchClamp(poiCameraPitch+(e.clientY-t.lastY)*.006);
    cursorDirty=true;
@@ -39974,7 +40632,8 @@ const facilityRecord=guildOriginalRequested?{id:'guildsaved',name:PINE_ADVENTURE
  ?{id:'guildrenewal',name:'冒険者ギルド・上階改修版'}
  :FACILITY_SITES.find(record=>record.id===facilityRequested);
 if(facilityRecord){
- const built=guildOriginalRequested?pineGuildOriginalSite():guildRenewalRequested?(pineGuildRenewalSite()||pineGuildRenewalSample()):buildFacilitySite(facilityRecord.id);
+ const stock=guildOriginalRequested?pineGuildOriginalSite():guildRenewalRequested?(pineGuildRenewalSite()||pineGuildRenewalSample()):buildFacilitySite(facilityRecord.id);
+ const built=stock&&facilityRecord.id==='base'?poiTownGuildRemodel(stock):stock;
  if(built)facilitySite={...built,id:facilityRecord.id,difficulty:facilityRecord.difficulty,name:facilityRecord.name+
   (built.guildRenewalSource==='sample'?'（標準見本）':'')};
  else if(guildRenewalRequested)toast('上階改修の見本を開けません。元の保存データは変更していません。');
