@@ -1522,11 +1522,20 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 #poiPartyHud #poiCompanionHud[hidden]{display:none!important}
 #poiCompanionHud .poiHpMetric progress{width:100%;min-width:0;height:5px;accent-color:#76c5e7}
 #poiCompanionHudHpValue{font-variant-numeric:tabular-nums}
-#poiCompanionCommands{position:fixed;right:max(14px,env(safe-area-inset-right));bottom:max(75px,calc(env(safe-area-inset-bottom) + 70px));z-index:36;color:var(--ink);background:#213831f7;border:1px solid #778f77;border-radius:14px;padding:13px;width:min(320px,calc(100vw - 36px));max-height:calc(100dvh - 90px);overflow:auto;box-shadow:0 6px 22px #101a15a0}
+#poiCompanionCommands{
+ --soul-side:max(8px,env(safe-area-inset-left),env(safe-area-inset-right));
+ --soul-width:min(152px,calc(100vw - var(--soul-side) * 2));
+ position:fixed;z-index:36;width:var(--soul-width);box-sizing:border-box;
+ left:clamp(var(--soul-side),calc(var(--soul-slot-x,50vw) - var(--soul-width) / 2),calc(100vw - var(--soul-width) - var(--soul-side)));
+ bottom:max(6px,env(safe-area-inset-bottom),calc(100dvh - var(--soul-slot-top,calc(100dvh - 76px)) + 7px));
+ max-height:max(48px,calc(var(--soul-slot-top,calc(100dvh - 76px)) - max(8px,env(safe-area-inset-top)) - 7px));overflow:auto;
+ color:#fff8e7;background:var(--workshop-panel-surface);border:1px solid #b5cdb588;border-radius:9px;padding:5px;
+ box-shadow:0 2px 8px #091c1390;overscroll-behavior:contain;
+}
 #poiCompanionCommands[hidden]{display:none}
-#poiCompanionCommands h2{font-size:16px;margin:0 0 10px}
-.poiCompanionCommandButtons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
-.poiCompanionCommandButtons button{min-height:44px}
+#poiCompanionCommands h2{font-size:11px;line-height:1.2;color:#decba5;margin:1px 5px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.poiCompanionCommandButtons{display:grid;grid-template-columns:minmax(0,1fr);gap:3px}
+.poiCompanionCommandButtons button{min-height:35px;padding:4px 8px;font-size:13px;text-align:left;white-space:nowrap;touch-action:manipulation}
 .poiCompanionCommandButtons button[aria-pressed="true"]{outline:1px solid #8fd4dc}
 #poiCompanionCommandsStatus:not(:empty){margin-top:8px;font-size:13px}
 </style></head><body>
@@ -18784,7 +18793,10 @@ window.addEventListener('pageshow',()=>{poiAudioPageHidden=false;poiAudioSyncLif
 window.__workshopAudioForeground=visible=>{
  if(typeof visible!=='boolean')return;
  if(!visible){if(typeof poiHealingCastCancel==="function")poiHealingCastCancel();if(typeof poiStopRepeat==='function')poiStopRepeat();if(typeof poiMineUnlockCancel==='function')poiMineUnlockCancel()}
- poiAudioNativeForeground=visible;if(!visible){poiWildPause();if(typeof poiEnemyCancelPlayer==="function")poiEnemyCancelPlayer();if(typeof poiPlayerWeaponCancel==='function')poiPlayerWeaponCancel()}poiAudioSyncLifecycle();
+ poiAudioNativeForeground=visible;
+ if(!visible&&typeof poiOrvasAllyStop==='function'&&poiCompanionActor?.id==='orvasSoul')
+  poiOrvasAllyStop(poiCompanionActor,performance.now(),true);
+ if(!visible){poiWildPause();if(typeof poiEnemyCancelPlayer==="function")poiEnemyCancelPlayer();if(typeof poiPlayerWeaponCancel==='function')poiPlayerWeaponCancel()}poiAudioSyncLifecycle();
 };
 // Foreground gameplay always uses the current mixer settings.
 
@@ -19165,7 +19177,8 @@ function poiOrvasAllyLeapPath(a,src,target,dx,dz){
   for(let i=1;i<=Math.ceil(n*5);i++){
    const t=i/Math.ceil(n*5),cx=Math.round(src.x+(x-src.x)*t),cz=Math.round(src.z+(z-src.z)*t);
    if(cx===fx&&cz===fz)continue;
-   if(!poiCompanionCell(cx,cz,a.y,fx,fz)||
+   if((typeof poiActorSameGrade==='function'&&!poiActorSameGrade(cx,cz,a.x,a.z))||
+      !poiCompanionCell(cx,cz,a.y,fx,fz)||
       (cx!==fx&&cz!==fz&&(!poiCompanionCell(cx,fz,a.y,fx,fz)||!poiCompanionCell(fx,cz,a.y,fx,fz)))){safe=false;break}
    fx=cx;fz=cz;
   }
@@ -19196,6 +19209,7 @@ function poiOrvasAllyEngage(a,now){
  d.dx=dx;d.dz=dz;d.cycle++;d.next=until;
  d.attack={kind,start:now,hits,sx:leap?.x??src.x,sz:leap?.z??src.z,y:a.y,dx,dz,cursor:0,executed:0,landed:0,
   lastFrameAt:now,lastContactAt:null,until,ally:true,allyArena:b,
+  ...(kind==='beam'&&typeof terrainY==='function'?{beamBase:terrainY(a.x,a.z)+a.y*1.4}:{}),
   ...(leap?{leap:{...leap,x0:src.x,z0:src.z,launch,land}}:{})};
  if(leap)d.leapReady=now+POI_DAVID_LEAP_COOL;
  return a;
@@ -19363,7 +19377,7 @@ function poiCompanionOrvasPose(a,now,facing){
   if(dx||dz)a.orvasHeading=Math.atan2(-dx,dz);
  }else if(d?.attack)a.orvasHeading=Math.atan2(-rig.dx,rig.dz);
  rig.walkAmount=moving?1:0;rig.walkDistance=a.freeMileage||0;
- return {x:(rig.leapX??p.x)+.5,z:(rig.leapZ??p.z)+.5,y:a.y*1.4+terrainY(p.x,p.z)+(rig.leapHeight??0),
+ return {x:(rig.leapX??p.x)+.5,z:(rig.leapZ??p.z)+.5,y:a.y*1.4+terrainY(a.x,a.z)+(rig.leapHeight??0),
   heading:a.orvasHeading??Math.PI,facing,scale:1,orvas:true,attack:!!d?.attack,rig};
 }
 function poiCompanionOrvasMesh(m,pose){
@@ -21057,6 +21071,16 @@ function poiCompanionUiClose(restore=true){
  const focus=poiCompanionCommandReturn;poiCompanionCommandReturn=null;
  if(restore&&focus?.isConnected)focus.focus({preventScroll:true});
 }
+function poiCompanionUiPosition(){
+ const node=$('poiCompanionCommands'),anchor=poiCompanionCommandReturn?.getBoundingClientRect?.();
+ if(!node?.style)return;
+ if(anchor&&anchor.width>0&&anchor.height>0){
+  node.style.setProperty('--soul-slot-x',(anchor.left+anchor.width/2)+'px');
+  node.style.setProperty('--soul-slot-top',anchor.top+'px');
+ }else{
+  node.style.removeProperty('--soul-slot-x');node.style.removeProperty('--soul-slot-top');
+ }
+}
 function poiCompanionUiOpen(kit,index,focus=null){
  const node=$('poiCompanionCommands'),cell=poiInventorySlots(kit)[index],spec=poiCompanionType(cell?.type);
  if(!node||!spec||cell.durability<=0||!poiCompanionAllowed()||document.querySelector('dialog[open],.modal.open'))
@@ -21071,7 +21095,7 @@ function poiCompanionUiOpen(kit,index,focus=null){
  const dismiss=node.querySelector('[data-companion-command="dismiss"]');
  if(dismiss)dismiss.disabled=!active;
  // No modal capture or analog cancel: the left thumb keeps its original pointer.
- node.hidden=false;
+ poiCompanionUiPosition();node.hidden=false;
  if(focus?.matches?.(':focus-visible'))node.querySelector('[data-companion-command="back"]')?.focus({preventScroll:true});
  return {ok:true,reason:null};
 }
@@ -22721,7 +22745,7 @@ function poiWireMovingWeaponShortcuts(bar,bag,find){
   if(slot===poiGoldHotbarSlot(kit))return null;
   const type=poiInventorySlot(kit,slot);
   // The normal shortcut for bare hands is a truly empty slot.
-  return type===null||type===POI_FIRE_WAND||!!poiHotbarWeaponForType(type)||type==='healingHerb'||type==='cannedFood'?{slot,type}:null;
+  return type===null||type===POI_FIRE_WAND||!!poiHotbarWeaponForType(type)||type==='healingHerb'||type==='cannedFood'||(typeof poiCompanionType==='function'&&!!poiCompanionType(type))?{slot,type}:null;
  };
  const clear=()=>{right=null;clicks.length=0};
  bar.addEventListener('pointerdown',e=>{
@@ -33303,7 +33327,11 @@ function poiDavidCuePairs(q,b){
   const angle=Math.atan2(half,n);
   for(const sign of [-1,1])for(let i=0;i<=12;i++)bearings.add(sign*i*angle/12);
  }
- const convex=poiDavidArena(b),x0=convex?sx-14:r.minX,z0=convex?sz-14:r.minZ,x1=convex?sx+14:r.maxX,z1=convex?sz+14:r.maxZ;
+ const convex=poiDavidArena(b),reach=q.ally&&kind!=='beam'&&!fan?(kind==='leap'?POI_DAVID_LEAP_RADIUS:6):14;
+ const x0=convex?sx-reach:q.ally?Math.max(r.minX,Math.floor(sx-reach)):r.minX,
+  z0=convex?sz-reach:q.ally?Math.max(r.minZ,Math.floor(sz-reach)):r.minZ,
+  x1=convex?sx+reach:q.ally?Math.min(r.maxX,Math.ceil(sx+reach)):r.maxX,
+  z1=convex?sz+reach:q.ally?Math.min(r.maxZ,Math.ceil(sz+reach)):r.maxZ;
  for(let x=x0-.5;x<=x1+.5;x++)for(let z=z0-.5;z<=z1+.5;z++){
   const u=x-sx,v=z-sz;if(u*u+v*v>210)continue;
   const angle=Math.atan2(v*dx-u*dz,u*dx+v*dz);
@@ -42300,9 +42328,32 @@ document.addEventListener('keydown',e=>{
  if(d){e.preventDefault();if(e.repeat&&poiOtherworldKeyReleaseRequired)return;
   if(!e.repeat)poiOtherworldKeyReleaseRequired=false;const cameraKey={arrowup:'n',w:'n',arrowdown:'s',s:'s',arrowleft:'w',a:'w',arrowright:'e',d:'e'}[k];poiWalkStep(...(poiThirdPerson?poiCameraRelativeStep(cameraKey):d))}
 });
-$('poiCompanionCommands').addEventListener('click',e=>{
- const button=e.target.closest('[data-companion-command]');if(button)poiCompanionUiCommand(button.dataset.companionCommand);
-});
+{
+ const panel=$('poiCompanionCommands');
+ const reposition=()=>{if(!panel.hidden)poiCompanionUiPosition()};
+ window.addEventListener('resize',reposition);window.visualViewport?.addEventListener('resize',reposition);
+ const command=target=>target?.closest?.('[data-companion-command]');
+ let right=null,handled=null;
+ panel.addEventListener('pointerdown',e=>{
+  const button=command(e.target);
+  if(!right&&!panel.hidden&&button&&!button.disabled&&e.pointerType==='touch'&&!e.isPrimary&&e.button===0&&poiAnalogContact)
+   right={button,id:e.pointerId,x:e.clientX,y:e.clientY};
+ });
+ panel.addEventListener('pointerup',e=>{
+  if(right?.id!==e.pointerId)return;
+  const {button,x,y}=right;right=null;
+  if(panel.hidden||button.disabled||command(e.target)!==button||Math.hypot(x-e.clientX,y-e.clientY)>=10)return;
+  handled={button,id:e.pointerId,until:performance.now()+650};
+  e.preventDefault();poiCompanionUiCommand(button.dataset.companionCommand);
+ });
+ panel.addEventListener('pointercancel',e=>{if(right?.id===e.pointerId)right=null});
+ panel.addEventListener('click',e=>{
+  const button=command(e.target);
+  if(!button||button.disabled||panel.hidden)return;
+  if(handled?.id===e.pointerId&&handled.button===button&&performance.now()<handled.until){handled=null;return}
+  poiCompanionUiCommand(button.dataset.companionCommand);
+ });
+}
 document.addEventListener('keydown',e=>{
  if(e.key!=='Escape'||$('poiCompanionCommands').hidden)return;
  e.preventDefault();e.stopImmediatePropagation();poiCompanionUiClose();

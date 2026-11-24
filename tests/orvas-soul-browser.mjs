@@ -27,6 +27,19 @@ put(api,api+`
    poiDavidGeometry(f,0,0,0,boss.david);
    return {n:g.p.length,same:g.p.every((v,i)=>v===f.p[i])&&g.c.every((v,i)=>v===f.c[i]),ally:p.scale,boss:boss.david?.phase};
   },
+  distant:()=>{
+   const a=poiCompanionActor;if(!a)return null;
+   const p=poiCompanionPosition(a);
+   for(const [dx,dz] of [[1,0],[0,1],[-1,0],[0,-1],[.8,.6],[-.8,.6]]){
+    const x=Math.round(p.x+dx*9),z=Math.round(p.z+dz*9),dist=Math.hypot(x-p.x,z-p.z);
+    if(!poiWalkCanStep(x,z)||!poiCompanionAttackClear(p,{x,z},a.y)||
+       !poiOrvasAllyLeapPath(a,p,{x,z},(x-p.x)/dist,(z-p.z)/dist))continue;
+    const o={type:'monsterSkeleton',x,z,y:a.y,rot:0},s=poiCombatActorMake(o);
+    s.hp=400;s.nextAttack=performance.now()+15000;s.northReturnReady=s.nextAttack;
+    poiMonsterStates.set(o,s);poiMonsterMeshDirty=true;window.__orvasFoe={o,s};return {x,z,dist};
+   }
+   return null;
+  },
   opponent:(attacks=false)=>{
    const a=poiCompanionActor;if(!a)return null;
    const opts=attacks?[[-1,0],[1,0],[0,-1],[0,1]]:[[1,1],[-1,-1],[1,-1],[-1,1],[1,0],[-1,0],[0,1],[0,-1]];
@@ -169,6 +182,20 @@ try{
  for(const z of [147,146,145,144,143,142,141])await walk(24,z);
  s=await q.until(v=>!v.actor?.attack,120);
  assert(!s.actor?.attack,'leaving actual authored chamber clears an allied commitment');
+ assert.deepEqual(q.errors,[]);
+ await q.c.close();
+ phase='distant sight triggers original full-scale leap, native stomp source and safe physical landing';
+ q=await load(1050,102,93,true);
+ s=await q.until(v=>v.pose?.orvas);
+ const launchedFrom=s.actor,launchPlayer=s.lastSwing;
+ const target=await q.p.evaluate(()=>window.__editorTest.orvasQA.distant());assert(target&&target.dist>=7&&target.dist<=12.5);
+ s=await q.until(v=>v.pose?.rig.phase==='airborne'&&v.pose.rig.kind==='leap',100);
+ assert(s.pose.rig.leapHeight>0&&s.pose.scale===1);assert.equal(s.contacts.length,0);
+ assert.deepEqual([s.actor.x,s.actor.z],[launchedFrom.x,launchedFrom.z]);
+ s=await q.until(v=>v.contacts.some(c=>c.kind==='leap'&&c.damage===43)&&v.fracture>0,100);
+ assert(Math.hypot(s.actor.x-launchedFrom.x,s.actor.z-launchedFrom.z)>4);
+ assert(s.audio.some(e=>e.name==='davidLeapStomp'&&e.leap&&e.playing==='running'),JSON.stringify(s.audio));
+ assert.equal(s.lastSwing,launchPlayer);
  assert.deepEqual(q.errors,[]);
  await q.c.close();
  phase='real hostile attack breaks low remaining Orvas durability, deletes only his token, shatters';

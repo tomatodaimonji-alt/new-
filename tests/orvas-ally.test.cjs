@@ -15,7 +15,8 @@ function battle(){
  const b=vm.createContext({poiMonsterStates:new Map([[foe,s],[other,friend]]),poiWalkX:p.x,poiWalkZ:p.z,
   poiCompanionPosition:a=>({x:a.px??a.x,z:a.pz??a.z}),poiAimOrigin:()=>p,poiMonsterPose:(o,s)=>({x:s.x+.5,z:s.z+.5}),
   poiCompanionAttackClear:()=>true,poiCompanionEncounterAllows:()=>true,poiDungeonVisualVisible:()=>true,
-  poiWalkLevel:0,facilitySite:{},poiEnemyThreatEnabled:()=>true,poiDavidHidden:()=>false,poiCompanionCell:()=>true,POI_COMPANION_FREE_RADIUS:.2,
+  poiWalkLevel:0,facilitySite:{},poiEnemyThreatEnabled:()=>true,
+  poiDavidBattleActive:()=>true,poiDavidMatch:()=>({x:11,z:8,y:0,room:{minX:0,maxX:40,minZ:0,maxZ:40}}),poiDavidHidden:()=>false,poiCompanionCell:()=>true,POI_COMPANION_FREE_RADIUS:.2,
   poiAimWall:()=>()=>true,poiAimWallLimit:(_p,d,n,pass)=>b.block?.(d,n)??n,
   poiPlayerDamageTarget:([o,s],x,z,amount,weapon,now,silent,contact,source)=>{s.hp-=amount;seen.push({o,amount,now,source})},
   poiDavidAttackFoley:q=>fx.push(q.kind),poiDavidHeavyContact:k=>fx.push(k),poiDavidFinishBeamFoley:()=>{},
@@ -58,4 +59,37 @@ t.test('live changing-wall LOS, unlandable leap abort, follow and hidden-frame c
  b.poiOrvasAllyResolve(q,8900,'fight');b.poiOrvasAllyResolve(q,9250,'fight');b.poiOrvasAllyResolve(q,9560,'fight');
  a(q.x>8);a.equal(seen.at(-1).amount,43);a(fx.includes('leap'));
  b.poiOrvasAllyResolve(q,11000,'fight');a.equal(q.david.attack,null);
+});
+
+t.test('established canonical boss is retained across an actual arena-sized retreat, not a true room exit',()=>{
+ const {b,p,q,foe,s,seen}=battle();
+ foe.type='monsterStoneDavid';s.david={awake:true};
+ b.poiOrvasAllyEngage(q,1000);
+ a(b.poiOrvasAllyBossLatch(q,1100));
+ p.x=34;p.z=30;b.poiWalkX=34;b.poiWalkZ=30;
+ a(b.poiOrvasAllyBossLatch(q,1300));
+ b.poiOrvasAllyResolve(q,1350,'fight');
+ b.poiOrvasAllyResolve(q,1560,'fight');
+ a.deepEqual(seen.map(v=>v.amount),[30]);
+ p.x=41;b.poiWalkX=41;
+ b.poiOrvasAllyResolve(q,1597,'fight');
+ a(!b.poiOrvasAllyBossLatch(q,1597));a.equal(q.david.attack,null);
+});
+t.test('the production rubble emitter honors implicit outdoor terrain but not water or an absent cellar floor',()=>{
+ const code=h.slice(h.indexOf('function poiDavidRaisedStoneGeometry('),h.indexOf('const globalpoiDavidImpact='));
+ const mesh=()=>({p:[],n:[],c:[]}), tri=(m,A,B,C,col)=>{m.p.push(...A,...B,...C);m.c.push(...col,...col,...col)};
+ const c=vm.createContext({mesh,tri,poiAimWall:()=>null,poiDavidArena:()=>null,poiDavidIn:()=>true,poiDavidRoomRay:(q,b,d,n)=>n,
+  poiDavidFractureFloors:e=>e.floors,facilitySite:{id:'base'},validPos:()=>true,MAP_W:128,MAP_H:182,
+  ROAD_IDS:new Set(['roadBrownFull']),ROAD_DIAGONALS:new Set(),terrainY:()=>0,pineEastGroundColor:()=>[.28,.65,.34],
+  addFloorTile(m,x,z,id,area,adjacent,tint){
+   a.equal(id,'grass');const col=tint(x,z);
+   tri(m,[x,0,z],[x,0,z+1],[x+1,0,z+1],col);tri(m,[x,0,z],[x+1,0,z+1],[x+1,0,z],col);
+  }});
+ vm.runInContext(code,c);
+ const e={x:103.1,z:93.9,sx:103,sz:93,y:0,radius:6,arena:{},floors:new Map()};
+ const outdoor=c.poiDavidRaisedStoneGeometry(e,e.arena);
+ a(outdoor.broken.slabs>0&&outdoor.broken.chips>0&&outdoor.p.length>100);
+ a.equal(c.poiDavidRaisedStoneGeometry({...e,y:-1},e.arena).p.length,0);
+ const water=new Map(Array.from({length:17*17},(_,i)=>[String(95+i%17)+','+String(85+(i/17|0)),'water']));
+ a.equal(c.poiDavidRaisedStoneGeometry({...e,floors:water},e.arena).p.length,0);
 });
