@@ -1,0 +1,44 @@
+name: Isolated sacred eastern sightline QA
+on:
+  push:
+    branches: ['dot/workshop-sacred-east-screen-qa']
+permissions:
+  contents: read
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [east, strict, travel, temple, snow]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: |
+          test "$(git hash-object world-editor.html)" = 9854592ed243431332f40b55e829dfd85e63376c
+          cp world-editor.html stock.html
+          python .sacred-east/build.py stock.html world-editor.html
+          test "$(git hash-object world-editor.html)" = a7be1dd1a555d0f4992e95791eb34caf77a6bbbd
+          cp .sacred-east/tests/* tests/
+      - if: matrix.suite == 'strict'
+        run: node --test tests/*.test.cjs
+      - if: matrix.suite != 'strict'
+        run: npm install --no-save playwright@1.58.2 && npx playwright install chromium
+      - if: matrix.suite == 'east'
+        run: |
+          mkdir -p visuals
+          SACRED_STOCK=1 FACILITY_SCREENSHOTS=visuals node tests/sacred-outside-screen-browser.mjs stock.html
+          FACILITY_SCREENSHOTS=visuals node tests/sacred-outside-screen-browser.mjs world-editor.html
+      - if: matrix.suite == 'travel'
+        run: node tests/sacred-depth-browser.mjs
+      - if: matrix.suite == 'temple'
+        run: node tests/depth-temple-browser.mjs
+      - if: matrix.suite == 'snow'
+        run: node tests/snow-pass-browser.mjs
+      - if: always() && matrix.suite == 'east'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sacred-eastern-day-night-stock-vs-edge-screen
+          path: visuals
