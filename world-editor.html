@@ -2631,13 +2631,13 @@ function expansionGeometry(m,id,x,y,z){
   B(0,.23,.305,.39,.28,.04,[.77,.33,.16]);D(0,.35,.337,.19,[.99,.69,.19]);
   B(0,1.06,.04,1.10,.15,.66,light);break;
  case 'lantern':
-  B(0,.05,0,.21,.12,.21,dark);B(0,.20,0,.20,.30,.20,[.93,.70,.35]);
+  B(0,.05,0,.21,.12,.21,dark);B(0,.20,0,.20,.30,.20,[2.48,1.26,.42]);
   for(let s of [-1,1]){B(s*.13,.16,0,.04,.36,.04,iron);B(0,.16,s*.13,.04,.36,.04,iron)}
   B(0,.51,0,.30,.08,.30,iron);B(0,.59,0,.07,.14,.07,iron);break;
  case 'candleStand':
   B(0,0,0,.35,.08,.34,iron);B(0,.08,0,.07,.73,.07,iron);
   B(0,.78,0,.21,.06,.21,iron);B(0,.84,0,.10,.29,.10,light);
-  D(0,1.20,0,.11,[.97,.72,.26]);break;
+  D(0,1.20,0,.11,[3.12,1.74,.50]);break;
  case 'barrel':{
   // Twelve-sided stave body with a generous middle bulge, flat round lid and curved iron hoops.
   const n=12;
@@ -4207,7 +4207,7 @@ case 'poiStreetLamp':{
  // Stone socket and timber shaft with wrought-iron collar and glazed lamp.
  // All geometry is static; existing vertex lighting supplies the ground pool.
  const stone=[.42,.44,.43],iron=[.15,.18,.18],copper=[.35,.31,.22];
- const wood=[.34,.23,.15],gold=[.65,.49,.25],amber=[.98,.60,.22];
+ const wood=[.34,.23,.15],gold=[.65,.49,.25],amber=[2.63,1.41,.46];
  cube(m,x,y,z,.35,.075,.35,stone);
  cube(m,x,y+.075,z,.28,.11,.28,stone.map(v=>v*1.1));
  naturalBranch(m,x,y+.16,z,x,y+1.51,z,.069,.046,wood);
@@ -4225,9 +4225,9 @@ case 'poiStreetLamp':{
  // Emit deliberate gaps between the lit center and corner metal uprights.
  for(let side=0;side<4;side++){
   const [cx,cz]=rot2(0,.094,side),[w,d]=side%2?[.023,.168]:[.168,.023];
-  cube(m,x+cx,y+1.631,z+cz,w,.171,d,side%2?[.87,.45,.16]:amber);
+  cube(m,x+cx,y+1.631,z+cz,w,.171,d,side%2?[2.31,1.12,.36]:amber);
  }
- diamond(m,x,y+1.797,z,.085,[1,.81,.35]);
+ diamond(m,x,y+1.797,z,.085,[3.06,1.81,.55]);
  cube(m,x,y+loft,z,.287,.041,.287,iron);
  let corners=[[-.145,-.145],[.145,-.145],[.145,.145],[-.145,.145]];
  for(let i=0;i<4;i++){
@@ -4240,7 +4240,7 @@ case 'poiWallSconce':{
  // Wall escutcheon and iron arm carry a little caged copper lantern.
  // Rot 0 has its backplate against the wall's +Z surface.
  const iron=[.16,.18,.18],bronze=[.49,.33,.17],gold=[.70,.51,.26];
- const amber=[.98,.60,.23],honey=[1,.78,.31],cz=z+.732;
+ const amber=[2.14,1.05,.33],honey=[2.67,1.46,.46],cz=z+.732;
  cube(m,x,y+.82,z+.515,.12,.32,.048,iron);
  for(const yy of [.85,1.085])cube(m,x,y+yy,z+.55,.028,.026,.018,gold);
  naturalBranch(m,x,y+.89,z+.528,x,y+1.038,cz,.019,.024,iron);
@@ -4253,7 +4253,7 @@ case 'poiWallSconce':{
   const [dx,dz]=rot2(0,.054,n),[w,d]=n%2?[.016,.102]:[.102,.016];
   cube(m,x+dx,y+1.074,cz+dz,w,.139,d,n%2?amber:honey);
  }
- diamond(m,x,y+1.191,cz,.048,[1,.83,.42]);
+ diamond(m,x,y+1.191,cz,.048,[3.08,1.80,.58]);
  cube(m,x,y+1.238,cz,.172,.029,.166,bronze);
  const p=[[-.086,-.082],[.086,-.082],[.086,.082],[-.086,.082]];
  for(let i=0;i<4;i++){
@@ -29874,7 +29874,7 @@ function pineAddGuildStaffObjects(objects){
 }
 function guildMountedLighting(m,visible,record=null){
  const g=guildBounds();if(!g)return;
- const metal=[.17,.17,.16],oak=[.44,.28,.16],amber=[1.0,.84,.49],glass=[1.0,.69,.35];
+ const metal=[.17,.17,.16],oak=[.44,.28,.16],amber=[3.07,1.78,.55],glass=[2.52,1.30,.41];
  // The existing floor lantern POI placements become wall-mounted fixtures
  // without mutating or duplicating the user's saved world objects.
  const emit=(x,z,y,dx,dz)=>{
@@ -30027,6 +30027,67 @@ function pineFinishPartitionTops(m,visible,record=null){
 }
 // v102: Baked floor contact shading and warm lantern bounce, using EXISTING
 // floor triangles. No shadow maps, light textures, extra render passes or timers.
+// Bake warm light into the current static vertex stream. The index belongs
+// to this filtered lamp array (including lodging cut variants), not a frame.
+const pineWarmIndex=new WeakMap(),PINE_WARM_TYPES=new Set(['lantern','candleStand','poiStreetLamp','poiWallSconce','poiDavidCandleSconce']);
+function pineWarmNear(lamps,x,z,floor){
+ let index=pineWarmIndex.get(lamps);
+ if(!index){
+  index=new Map();pineWarmIndex.set(lamps,index);
+  for(const o of lamps){
+   let dx=0,dz=0,r=2.82,h=.34,g=.39;
+   if(o.type==='poiStreetLamp'){r=3.65;h=1.70;g=.48}
+   if(o.type==='candleStand'){r=2.64;h=1.20;g=.39}
+   if(o.type==='poiWallSconce'){[dx,dz]=rot2(0,.732,o.rot||0);r=2.82;h=1.14}
+   if(o.type==='poiDavidCandleSconce'){
+    [dx,dz]=[[.62,0],[0,.62],[-.62,0],[0,-.62]][o.rot||0];r=2.76;h=.68;
+   }
+   const lx=o.x+.5+dx,lz=o.z+.5+dz;
+   const lamp={x:lx,z:lz,h:terrainY(o.x,o.z)+o.y*1.4+h,r,g};
+   for(let zz=Math.floor(lz-r);zz<=Math.floor(lz+r);zz++)for(let xx=Math.floor(lx-r);xx<=Math.floor(lx+r);xx++){
+    const k=xx+','+zz+','+o.y;
+    let hits=index.get(k);if(!hits)index.set(k,hits=[]);hits.push(lamp);
+   }
+  }
+ }
+ return index.get(x+','+z+','+floor)||[];
+}
+function pineWarmClear(px,pz,lamp,y,nearby,wallX,wallZ){
+ const dx=px-lamp.x,dz=pz-lamp.z,steps=Math.ceil(Math.max(Math.abs(dx),Math.abs(dz))*5);
+ const fromX=Math.floor(lamp.x),fromZ=Math.floor(lamp.z);
+ const blocked=(x,z)=>
+  !(x===fromX&&z===fromZ)&&!(x===wallX&&z===wallZ)&&
+  !!nearby.get(x+','+z+','+y)?.some(b=>b.wall);
+ let prevX=fromX,prevZ=fromZ;
+ for(let i=1;i<=steps;i++){
+  const x=Math.floor(lamp.x+dx*i/steps),z=Math.floor(lamp.z+dz*i/steps);
+  if(x===prevX&&z===prevZ)continue;
+  if((x!==prevX&&z!==prevZ&&(blocked(prevX,z)||blocked(x,prevZ)))||blocked(x,z))return false;
+  prevX=x;prevZ=z;
+ }
+ return true;
+}
+function pineWarmAdd(m,i,power){
+ m.c[i]=Math.min(1,m.c[i]+power);
+ m.c[i+1]=Math.min(1,m.c[i+1]+power*.62);
+ m.c[i+2]=Math.min(1,m.c[i+2]+power*.13);
+}
+function pineBakeWallWarmth(m,start,o,nearby,lamps){
+ if(!nearby.get(o.x+','+o.z+','+o.y)?.some(b=>b.wall))return;
+ const lights=pineWarmNear(lamps,o.x,o.z,o.y);if(!lights.length)return;
+ for(let i=start*3;i<m.p.length;i+=3){
+  const nx=m.n[i],nz=m.n[i+2];if(Math.abs(nx)+Math.abs(nz)<.7)continue;
+  const x=m.p[i],y=m.p[i+1],z=m.p[i+2];let warmth=0;
+  for(const l of lights){
+   const dx=l.x-x,dz=l.z-z,dy=l.h-y,d2=dx*dx+dz*dz+dy*dy;
+   if(d2>=l.r*l.r||nx*dx+nz*dz<=.04)continue;
+   if(!pineWarmClear(x,z,l,o.y,nearby,o.x,o.z))continue;
+   const fade=1-d2/(l.r*l.r);
+   warmth=Math.max(warmth,l.g*.78*fade*fade);
+  }
+  if(warmth>0)pineWarmAdd(m,i,warmth);
+ }
+}
 function pineBakeFloorLighting(tmp,x,z,floor,nearby,lamps){
  if(!tmp.p.length)return;
  const blockers=[];
@@ -30034,7 +30095,7 @@ function pineBakeFloorLighting(tmp,x,z,floor,nearby,lamps){
   const objects=nearby.get((x+dx)+','+(z+dz)+','+floor);
   if(objects)for(const o of objects)blockers.push(o);
  }
- const lights=lamps.filter(o=>(o.type==='lantern'||o.y===floor)&&Math.abs(o.x-x)<3.6&&Math.abs(o.z-z)<3.6);
+ const lights=pineWarmNear(lamps,x,z,floor);
  if(!blockers.length&&!lights.length)return;
  for(let i=0;i<tmp.p.length;i+=3){
   // Floor geometry is in local height coordinates before shiftMesh().
@@ -30053,16 +30114,14 @@ function pineBakeFloorLighting(tmp,x,z,floor,nearby,lamps){
   const lightIndex=i;
   let warm=0;
   for(const lamp of lights){
-   const [lx,lz]=lamp.type==='poiWallSconce'?rot2(0,.69,lamp.rot||0):[0,0];
-   const d=Math.hypot(px-lamp.x-.5-lx,pz-lamp.z-.5-lz);
-   const radius=lamp.type==='poiStreetLamp'?3.35:lamp.type==='poiWallSconce'?2.30:2.85;
-   const r=Math.max(0,1-d/radius);
-   warm=Math.max(warm,r*r);
+   const dx=px-lamp.x,dz=pz-lamp.z,rr=lamp.r*lamp.r,d2=dx*dx+dz*dz;
+   if(d2>=rr)continue;
+   const fade=1-d2/rr,candidate=lamp.g*fade*fade;
+   if(candidate>warm&&pineWarmClear(px,pz,lamp,floor,nearby))warm=candidate;
   }
   const dark=1-shade;
-  tmp.c[lightIndex]=Math.min(1,tmp.c[lightIndex]*dark+warm*.17);
-  tmp.c[lightIndex+1]=Math.min(1,tmp.c[lightIndex+1]*dark+warm*.105);
-  tmp.c[lightIndex+2]=Math.min(1,tmp.c[lightIndex+2]*dark+warm*.022);
+  for(let k=0;k<3;k++)tmp.c[lightIndex+k]*=dark;
+  if(warm>0)pineWarmAdd(tmp,lightIndex,warm);
  }
 }
 function pineFloorLightingSources(visible){
@@ -30070,12 +30129,12 @@ function pineFloorLightingSources(visible){
  const large=new Set(['treeOak','treeCedar','treePine','treeMaple','treeBirch','treeRound','treeWillow']);
  for(const o of visible){
   if(isFloor(o.type))continue;
-  if(o.type==='lantern'||o.type==='poiStreetLamp'||o.type==='poiWallSconce'){lamps.push(o);continue}
+  if(PINE_WARM_TYPES.has(o.type)){lamps.push(o);continue}
   if(o.type==='guildFacadeSign'||o.type.startsWith('roof')||RESIDENTIAL_ROOFS.has(o.type)||AUTO_ROOFS.has(o.type))continue;
   if(o.type.startsWith('monster')||o.type.startsWith('human'))continue;
   const tree=large.has(o.type)?pineBaseTreeProfile(o)?.w:0;
   if(large.has(o.type)&&!tree)continue;
-  const wall=isWallId(o.type)||/(?:Wall|wall|Fence|fence|Door|door)$/.test(o.type);
+  const wall=isWallId(o.type)||/(?:Wall|wall|Fence|fence|Door|door)$/.test(o.type)||/^poiDavidWall/.test(o.type);
   const furniture=/^(?:bed|chair|stool|bench|table|roundTable|bookshelf|wardrobe|counter|crate|barrel|chest|displayShelf|guildLatrine|kitchen)/.test(o.type);
   if(!wall&&!furniture&&!tree)continue;
   const key=o.x+','+o.z+','+o.y;
@@ -30656,6 +30715,7 @@ function makeScene(){
    deco(m,o.type,o.x+.5+(offset?.x??0),o.y*1.4+terrainY(o.x,o.z),o.z+.5+(offset?.z??0),o.rot||0);
   }
   else if(!pineDrawBaseTree(m,o)&&!pineDrawEastNature(m,o))deco(m,o.type,o.x+.5,o.y*1.4+terrainY(o.x,o.z),o.z+.5,o.rot||0);
+  if(isWallId(o.type)||/^poiDavidWall/.test(o.type))pineBakeWallWarmth(m,start,o,pineShadows,pineWarmLamps);
   if(sides.length)poiAngledWallRecord(wallFade,m,o,sides,start);
   poiAngledStoreyRecord(storeyFade,m,o,start);
   if(sharedParts&&o.type==='guildFacadeSign'&&start<m.p.length/3){
