@@ -105,6 +105,18 @@ try{
  assert.equal(lethal.active,'orvasSoul');assert.equal(lethal.mode,'follow');assert.equal(lethal.token,317);
  const deathGlow=await step(255);assert(deathGlow.fx?.frame?.spark>0&&!deathGlow.ally&&!deathGlow.navBlock);
  assert.deepEqual(deathGlow.fx.origin,lethal.fx.origin);await shot('player-death-companion-recall-mid');
+ phase='background during genuine death recall preserves its exact in-memory glow and rejoin';
+ await p.evaluate(()=>{
+  window.__workshopForegroundChanged(false);
+  window.dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true}));
+ });
+ const beforeBg=await read(),duringBg=await step(9500);
+ for(const key of ['now','xy','death','fx','active','token','mode'])assert.deepEqual(duringBg[key],beforeBg[key],key);
+ await p.evaluate(()=>window.__workshopForegroundChanged(true));
+ assert.deepEqual((await step(450)).fx,beforeBg.fx,'foreground callback cannot override cached pagehide');
+ await p.evaluate(()=>window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true})));
+ assert.deepEqual((await read()).fx,beforeBg.fx,'resumed scene retains same visible recall phase');
+
  await p.evaluate(()=>window.__editorTest.recallQA.retire());
  const vaporGone=await until(q=>!!q.death&&!q.fx&&!q.ally);assert.equal(vaporGone.token,317);
  const respawn=await until(q=>!q.death&&q.ally?.id==='orvasSoul'&&q.show);

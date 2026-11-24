@@ -3,7 +3,7 @@ const h=fs.readFileSync(process.env.WORLD_HTML||'world-editor.html','utf8');
 const cut=(x,y)=>{const i=h.indexOf(x),j=h.indexOf(y,i+1);a(i>=0&&j>i,x);return h.slice(i,j)};
 test('real play frame submits the ground cue first and beam only after opaque actors and weapons',()=>{
  const src=cut('function render(){','let savedMapRestoreFailed');
- const q=src.indexOf('poiDrawDavidCue(now,p.vp)'),mon=src.indexOf('poiMonsterRender(now,p.vp)'),
+ const q=src.indexOf('poiDrawDavidCue(now,p.vp)'),mon=src.indexOf('poiMonsterRender(now,p.vp,sacredPeek)'),
   avatar=src.indexOf('poiDrawWalkAvatar(p.vp,now)'),weapon=src.indexOf('poiPlayerWeaponDraw(now,p.vp)'),
   beam=src.indexOf('poiDrawDavidBeam(now,p.vp,davidBeam)');
  a.ok(q>=0&&q<mon&&mon<avatar&&avatar<weapon&&weapon<beam,{q,mon,avatar,weapon,beam});

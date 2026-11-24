@@ -10,8 +10,10 @@ function game(){
   poiWalkCanStep:(x,z)=>!c.blocked?.has(x+','+z),
   world:[{x:84,z:116,y:0,type:'poiPortFishStall'},{x:84,z:116,y:0,type:'stone'},{x:70,z:109,y:0,type:'treePine'}],
   isFloor:type=>type==='stone'||type==='sea',makeScene:()=>{log.push(c.build());return {count:24,buf:log.length}},
-  gl:{deleteBuffer:b=>log.push('delete '+b)},draw:()=>log.push('draw')};
- vm.createContext(c);vm.runInContext(h.slice(start,end)+';this.build=()=>poiFacilityLocalBuild',c);
+  poiWalkViewX:40,poiWalkViewZ:41,performance:{now:()=>1000},loc:{streamPropReveal:0},
+  gl:{deleteBuffer:b=>log.push('delete '+b),uniform3f(){}},draw:()=>log.push('draw')};
+ const aa=h.indexOf('// BEGIN STREAM PROP REVEAL'),bb=h.indexOf('// END STREAM PROP REVEAL',aa);
+ vm.createContext(c);vm.runInContext(h.slice(aa,bb)+h.slice(start,end)+';this.build=()=>poiFacilityLocalBuild',c);
  return {c,log};
 }
 test('cold base neither compiles nor draws port, a near scene uses local objects only and detaches after hysteresis',()=>{

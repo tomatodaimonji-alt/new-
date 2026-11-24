@@ -1,12 +1,12 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),{test}=require('node:test');
 const h=fs.readFileSync(process.env.WORLD_HTML||'world-editor.html','utf8');
 const a=h.indexOf('function facilityVisibleRoofs()'),b=h.indexOf('function facilityCollectEntranceGuides',a);
-const t={depth:1,entrance:{x:24,z:128},interior:{exitZ:142},ring:{x:24,z:158,radius:18}};
+const t={depth:1,entrance:{x:24,z:128},interior:{exitZ:142},enclosure:new Set(['24,131','24,157']),ring:{x:24,z:158,radius:18}};
 const site={id:'base',buildings:[{id:'davidTemple',permanentRoof:true},{id:'normal'}],davidTemple:t};
 function ctx(){
  const c=vm.createContext({Math,facilitySite:site,facilityRoofMeshes:[{count:10},{count:5}],poiWalkViewX:54,poiWalkViewZ:119,poiWalkLevel:0,poiWalkActive:true,cameraTopDown:false,pineAIActive:false,facilityHiddenRoof:()=>null});
  const i=h.indexOf('// BEGIN SACRED TEMPLE SIGHTLINE'),j=h.indexOf('// END SACRED TEMPLE SIGHTLINE',i);
- vm.runInContext((i<0?'':h.slice(i,j))+h.slice(a,b),c);
+ vm.runInContext((i<0?'':h.slice(i,j))+h.slice(h.indexOf('function poiDavidTempleEnclosedAt('),h.indexOf('function poiDavidTempleTunnelAt('))+h.slice(a,b),c);
  return c;
 }
 const expectRoofs=(c,expected)=>assert.deepEqual(Array.from(c.facilityVisibleRoofs()),expected);
@@ -17,6 +17,7 @@ test('actual facility roof gate does not reveal the dome from the coastal forest
  c.cameraTopDown=true;expectRoofs(c,[0,1]);c.cameraTopDown=false;
  c.poiWalkViewX=24;c.poiWalkViewZ=125;expectRoofs(c,[0,1]);
  c.poiWalkViewZ=157;expectRoofs(c,[0,1]);
+ c.poiWalkViewX=47;expectRoofs(c,[1]);
 });
 test('real scene submit excludes only tagged architecture; partial and indexed rendering do not leak the draw uniform',()=>{
  const c=ctx(),out=[];

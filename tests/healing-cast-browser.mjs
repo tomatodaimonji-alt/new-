@@ -51,8 +51,9 @@ try{
  await wait(()=>{const s=window.__editorTest.healingQA.state();return s.active&&s.gauge>=0&&s.gauge<85});
  const started=await state();assert.equal(started.hp,10);assert.equal(started.slots[1].count,2);
  await hit.tap();
- await p.keyboard.press('ArrowUp');
- await wait(()=>window.__editorTest.healingQA.state().pos[1]===90);
+ // The sacred forest added a real pine to the old north square (24,90).
+ await p.keyboard.press('ArrowLeft');
+ await wait(()=>window.__editorTest.healingQA.state().pos[0]===23);
  const walking=await state();assert.equal(walking.action,started.action);assert(!walking.pending);
  await wait(()=>{const s=window.__editorTest.healingQA.state();return !s.active&&s.hp===40});
  assert.equal((await state()).slots[1].count,1);assert.equal((await state()).gauge,-1);
@@ -71,10 +72,12 @@ try{
  assert.equal((await state()).slots[9],null);
  await p.keyboard.press('2');await wait(()=>window.__editorTest.healingQA.state().active);
  await p.evaluate(()=>window.__workshopAudioForeground(false));
- assert(!(await state()).active);
- await p.evaluate(()=>window.__workshopAudioForeground(true));
+ assert((await state()).active);
  await p.waitForTimeout(1550);
  assert.equal((await state()).hp,95);assert.equal((await state()).slots[1].count,1);
+ await p.evaluate(()=>window.__workshopAudioForeground(true));
+ await wait(()=>{const s=window.__editorTest.healingQA.state();return !s.active&&s.hp===100});
+ assert.equal((await state()).slots[1],null);
  assert.deepEqual(errors,[]);
- console.log('PASS actual hotbar and bag healing with overhead gauge, movement, blocked attack and native cancellation');
+ console.log('PASS actual hotbar and bag healing with overhead gauge, movement, blocked attack and native pause and exact resumption');
 }finally{await browser?.close();await new Promise(y=>server.close(y))}

@@ -59,6 +59,7 @@ public class MainActivity extends Activity {
     private WebView web;
     private FrameLayout root;
     private volatile boolean checking;
+    private volatile boolean activityForeground;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -91,20 +92,37 @@ public class MainActivity extends Activity {
         checkForUpdate();
     }
 
-    // An Android app may return from the home screen without running onCreate
-    // again. Apply a queued HTML update on every return to the foreground.
+    /** Snapshot for an HTML document that starts after the native callback. */
+    private final class GameLifecycle {
+        @JavascriptInterface public boolean isForeground() { return activityForeground; }
+    }
+
+    private void signalGameForeground(WebView target) {
+        if (target != null && target == web) target.evaluateJavascript(
+            "if(window.__workshopForegroundChanged)window.__workshopForegroundChanged("
+                + activityForeground + ")", null);
+    }
+
+    @Override protected void onPause() {
+        activityForeground = false;
+        final WebView target = web;
+        if (target != null) {
+            signalGameForeground(target);
+            target.onPause();
+        }
+        super.onPause();
+    }
+
     @Override protected void onResume() {
         super.onResume();
-        if (web == null || current == null || pending == null) return;
-        if (pending.isFile()) {
-            try {
-                activatePending();
-                web.loadUrl(GAME_URL);
-            } catch (Exception ex) {
-                android.util.Log.w("MoonRuins", "Could not activate pending editor: " + ex.getMessage());
-            }
+        activityForeground = true;
+        if (web != null) {
+            web.onResume();
+            signalGameForeground(web);
         }
-        checkForUpdate();
+        // Downloads still queue automatically, but resuming a live Activity
+        // must not destroy its in-memory gameplay. onCreate applies the file.
+        if (current != null && pending != null) checkForUpdate();
     }
 
     private void createWeb() {
@@ -125,7 +143,13 @@ public class MainActivity extends Activity {
             settings.setMediaPlaybackRequiresUserGesture(false);
         }
         web.addJavascriptInterface(new JsonFileExporter(), "PineFileSave");
+        web.addJavascriptInterface(new GameLifecycle(), "PineLifecycle");
         web.setWebViewClient(new WebViewClient() {
+            @Override public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                signalGameForeground(view);
+            }
+
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
                 if ("https".equals(uri.getScheme()) &&
@@ -331,23 +355,8 @@ public class MainActivity extends Activity {
                     throw new IOException("Cannot replace queued update");
                 if (!downloading.renameTo(pending))
                     throw new IOException("Cannot queue update");
-                // Apply the verified HTML immediately. A separate reload URL avoids
-                // WebView reusing the current document after the file changes.
-                runOnUiThread(() -> {
-                    if (isFinishing() || isDestroyed()) return;
-                    try {
-                        activatePending();
-                        if (web != null) {
-                            web.stopLoading();
-                            web.clearCache(false);
-                            web.loadUrl(GAME_URL + "?revision=" + System.currentTimeMillis());
-                            Toast.makeText(this, "ワールド工房を更新しました", Toast.LENGTH_SHORT).show();
-                        }
-                    } catch (Exception applyError) {
-                        android.util.Log.e("WorldWorkshop", "Could not apply editor update", applyError);
-                        Toast.makeText(this, "更新適用失敗: " + applyError.getMessage(), Toast.LENGTH_LONG).show();
-                    }
-                });
+                // Keep the running WebView and game state intact. The
+                // verified pending file activates on the next fresh launch.
             } catch (Exception ex) {
                 // Offline, Private/404, or bad update: current game remains available.
                 android.util.Log.w("WorldWorkshop", "Editor update failed", ex);

@@ -2,11 +2,14 @@ const {test}=require('node:test'),a=require('node:assert/strict'),fs=require('no
 const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 const i=h.indexOf('// BEGIN SNOW PASS PROTOTYPE'),j=h.indexOf('// END SNOW PASS PROTOTYPE',i);
 a.ok(i>=0&&j>i,'sector contract is installed');
-const c=vm.runInNewContext(h.slice(i,j)+';({link:poiSnowPassLink,decode:poiSnowPassDecode,map:poiSnowPassMap})'),plain=v=>JSON.parse(JSON.stringify(v));
-test('only exact directed edge can activate another local region and land in bounds',()=>{
+const p=h.indexOf('// BEGIN OVERLAND STREAM PLANNING'),q=h.indexOf('// END OVERLAND STREAM PLANNING',p);
+a.ok(p>=0&&q>p,'global surface coordinate helpers are installed');
+const c=vm.runInNewContext(h.slice(p,q)+h.slice(i,j)+';({link:poiSnowPassLink,decode:poiSnowPassDecode,map:poiSnowPassMap})'),plain=v=>JSON.parse(JSON.stringify(v));
+test('only genuine adjacent owned cardinal edges can activate another local region',()=>{
  a.deepEqual(plain(c.link('base',60,138,0,60,139)),{region:'snowpass',x:12,z:0,y:0,facing:2});
  a.deepEqual(plain(c.link('snowpass',12,0,0,12,-1)),{region:'base',x:60,z:138,y:0,facing:0});
- for(const q of [['base',59,138,0,59,139],['base',60,138,-1,60,139],['base',59,138,0,60,139],['base',60,138,0,60,137],['base',49,127,0,49,128],['snowpass',12,0,0,12,1],['unknown',12,0,0,12,-1]])a.equal(c.link(...q),null);
+ a.deepEqual(plain(c.link('base',47,155,0,48,155)),{region:'snowpass',x:0,z:16,y:0,facing:1});
+ for(const q of [['base',72,138,0,72,139],['base',60,138,-1,60,139],['base',59,138,0,60,139],['base',60,138,0,60,137],['base',49,127,0,49,128],['snowpass',12,0,0,12,1],['unknown',12,0,0,12,-1]])a.equal(c.link(...q),null);
 });
 test('legacy/unknown/invalid version-1 resumes do not activate the snow sector',()=>{
  const initial={version:1,route:'facility',id:'base',play:true},p={x:14,z:12,y:0,facing:2},snow={...initial,region:'snowpass',regionHp:41};
