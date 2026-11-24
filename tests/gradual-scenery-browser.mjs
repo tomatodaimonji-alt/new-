@@ -53,8 +53,8 @@ sub(exp,exp+`
  },`);
 sub('if(art===\'monsterStoneDavid\')poiDavidGeometry(part,cx,y,cz,david);',
  "if(art==='monsterStoneDavid'){window.__templeHostileDraws=(window.__templeHostileDraws??0)+1;poiDavidGeometry(part,cx,y,cz,david);}");
-sub(' if(inside)for(const m of q.draws)draw(m,vp);',
- ' if(inside)for(const m of q.draws){window.__templeFloorDraws=(window.__templeFloorDraws??0)+1;draw(m,vp);}');
+sub(' if(inside)for(const m of q.draws)if(poiOverlandBoxVisible(vp,m.bounds))draw(m,vp);',
+ ' if(inside)for(const m of q.draws)if(poiOverlandBoxVisible(vp,m.bounds)){window.__templeFloorDraws=(window.__templeFloorDraws??0)+1;draw(m,vp);}');
 sub(' const nearActors=actors.filter(a=>!a.recessed', ' window.__townRenderedIds=actors.filter(a=>!a.recessed&&!a.death&&a.y===poiWalkLevel).map(a=>a.role.id);\n const nearActors=actors.filter(a=>!a.recessed');
 for(const [,js] of h.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(js);
 if(process.env.GRADUAL_SYNTAX_ONLY){console.log('exact anchors and inline syntax');process.exit(0)}
@@ -100,7 +100,7 @@ try{
   const {c,p,until,errors}=await load(24,127,0);
   const outside=await until(s=>!s.stream&&s.allyMesh>400);
   assert(!outside.inside&&!outside.actualBoss&&outside.bossDraws===0&&outside.interiorDraws===0,JSON.stringify(outside));
-  await p.keyboard.press('ArrowDown');
+  await p.keyboard.press('ArrowUp');
   const inside=await until(s=>s.inside&&s.actualBoss&&s.interiorDraws>0);
   assert.equal(inside.z,128);
   assert(inside.bossDraws>0&&inside.interiorMeshes>=1&&inside.allyMesh>400,JSON.stringify(inside));

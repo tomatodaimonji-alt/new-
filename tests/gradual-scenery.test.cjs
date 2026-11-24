@@ -10,6 +10,7 @@ test('even a frustum-visible actor cannot float over uncovered ground; main stoc
  assert.equal(actor(60,100),false,'frustum alone is not a valid support witness');
  vm.runInContext("poiOverlandGroundDrawn.set('base:7,17',new Uint8Array([0,0,16,0,0,0,0,0]));poiOverlandGroundDrawn.set('snowpass:7,17',new Uint8Array(8).fill(255));",c);
  assert.equal(actor(60,138),true);
+ assert.equal(c.poiOverlandActorVisible([],61,138,0,'snowpass'),true,'companion uses its actual old region during physical seam handoff');
  assert.equal(actor(60,137),false,'region-edge hole inside a submitted chunk is still not ground');
  assert.equal(actor(61,138),false,'an adjacent clipped tile or foreign chunk is not support');
  assert.equal(actor(60,138,1),true,'higher floor actors still have existing floor/visibility semantics');
@@ -21,7 +22,7 @@ test('production shader and range submit the newest distant props gradually with
  assert.match(shader,/uStreamPropReveal/);
  assert.match(draw,/poiStreamPropDraw/);
  assert.match(h,/m\.propsFirst=m\.p\.length\/3/);
- assert.match(h,/if\(poiOverlandDrawing&&!poiOverlandActorVisible\(vp,a\.x,a\.z,a\.y\)\)/);
+ assert.match(h,/if\(poiOverlandDrawing&&!poiOverlandActorVisible\(vp,a\.x,a\.z,a\.y,a\.site\?\.id\)\)/);
  const src=clip('// BEGIN STREAM PROP REVEAL','// END STREAM PROP REVEAL');
  const calls=[],a=vm.createContext({performance:{now:()=>1000},draw:(m,vp,first,count)=>calls.push(['draw',first??0,count??m.count]),gl:{uniform3f:(u,...v)=>calls.push(['uniform',...v])},loc:{streamPropReveal:1}});
  vm.runInContext(src,a);
