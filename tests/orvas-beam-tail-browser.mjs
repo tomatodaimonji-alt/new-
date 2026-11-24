@@ -12,7 +12,7 @@ install(mark,`
  window.__orvas={
   frame:()=>render(),
   drop:i=>{
-   if(!workshopResumeRestorePosition({x:24,z:108,y:0,facing:1}))return null;
+   if(!workshopResumeRestorePosition({x:24,z:162,y:0,facing:1}))return null;
    const type=poiInventorySlots(poiHotbarRead())[i]?.type;
    if(!type||!poiInventoryDrop(i).ok)return null;
    return poiHotbarRead().drops.find(d=>d.type===type);
@@ -29,7 +29,7 @@ install(mark,`
     poiDavidAttackFoley({kind,sx:b.x,sz:b.z,y:b.y},p,b,i,phase);
   },
   stage:index=>{
-   if(!workshopResumeRestorePosition({x:24,z:108,y:0,facing:1}))return false;
+   if(!workshopResumeRestorePosition({x:24,z:162,y:0,facing:1}))return false;
    poiMonsterStates.clear();poiCombatLockReset();
    return poiEquipHotbarItem(index)?.ok;
   },
@@ -135,7 +135,7 @@ p.on('pageerror',e=>errors.push(e.message));p.setDefaultTimeout(18000);
   assert.deepEqual(picked,{slot:i,ok:true});assert.equal((await read()).weapon,d.type);
  }
 
- let {q,held}=await start(2,[[32,108,0],[34,108,0]]);
+ let {q,held}=await start(2,[[32,162,0],[34,162,0]]);
  let landed=await until(v=>!v.pending&&v.beam?.draw);
  assert(landed.clock-held.start>=420);
  assert.deepEqual(landed.hp,[52,100]);assert.equal(landed.used,q.used-1);
@@ -155,7 +155,7 @@ p.on('pageerror',e=>errors.push(e.message));p.setDefaultTimeout(18000);
  await frame(90);after=await read();assert.equal(after.beam,null);
  assert(after.clock-beamStart>=510);assert.deepEqual(after.hp,[52,100]);assert.equal(after.used,q.used-1);
  assert.equal(after.audio.length,1);assert.equal(after.stops.length,1);
- ({q,held}=await start(2,[[32,108,0]]));landed=await until(v=>!v.pending&&v.beam?.draw);
+ ({q,held}=await start(2,[[32,162,0]]));landed=await until(v=>!v.pending&&v.beam?.draw);
  const swapBefore=landed.stops.length;
  assert(await p.evaluate(()=>window.__orvas.stage(3)));await frame(7);
  let interrupted=await read();assert.equal(interrupted.beam,null);
@@ -163,17 +163,17 @@ p.on('pageerror',e=>errors.push(e.message));p.setDefaultTimeout(18000);
  // resumed source is allowed. The pressed weapon can still wear only once.
  assert(interrupted.stops.length===swapBefore||interrupted.stops.length===swapBefore+1);
  if(interrupted.stops.length>swapBefore)assert(interrupted.stops.at(-1).when-interrupted.stops.at(-1).time<.05);
- ({q,held}=await start(2,[[32,108,0]]));landed=await until(v=>!v.pending&&v.beam?.draw);
+ ({q,held}=await start(2,[[32,162,0]]));landed=await until(v=>!v.pending&&v.beam?.draw);
  await p.evaluate(()=>window.__workshopAudioForeground(false));await frame(7);
  interrupted=await read();assert.equal(interrupted.beam,null);assert.deepEqual(interrupted.hp,[52]);assert.equal(interrupted.used,q.used-1);
  const plays=interrupted.audio.length;await p.evaluate(()=>window.__workshopAudioForeground(true));await frame(550);
  interrupted=await read();assert(!interrupted.beam&&interrupted.audio.length===plays);
  assert(interrupted.stops.some(e=>e.when===undefined||e.when-e.time<.05));
- ({q,held}=await start(3,[[28,108,0],[26,111,0],[23,108,0]]));
+ ({q,held}=await start(3,[[28,162,0],[26,165,0],[23,162,0]]));
  landed=await until(v=>!v.pending);
  assert(landed.clock-held.start>=560);
  assert.deepEqual(landed.hp,[54,54,100]);assert.equal(landed.used,q.used-1);
- ({q,held}=await start(4,[[27,108,0],[26,111,0],[23,108,0]]));
+ ({q,held}=await start(4,[[27,162,0],[26,165,0],[23,162,0]]));
  const first=await until(v=>v.cursor===1);
  assert(first.clock-held.start>=720);assert.deepEqual(first.hp,[72,100,100]);
  landed=await until(v=>!v.pending);

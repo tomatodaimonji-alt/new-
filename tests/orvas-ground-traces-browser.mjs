@@ -14,9 +14,15 @@ put(ap,ap+`
    const b=facilitySite?.davidTemple?.boss;if(!b)return false;
    return workshopResumeRestorePosition({x:b.x,z:b.z-2,y:b.y,facing:2});
   },
-  dodge:()=>{
+  seatSouth:()=>{
+   const b=facilitySite.davidTemple.boss,s=poiDavidActive?.s;
+   if(!s?.david?.awake||s.david.attack)return false;
+   s.x=s.fromX=b.x;s.z=s.fromZ=b.z+11;
+   return workshopResumeRestorePosition({x:b.x,z:b.z+13,y:b.y,facing:0});
+  },
+  dodge:(south)=>{
    const b=facilitySite.davidTemple.boss;
-   return workshopResumeRestorePosition({x:b.x+2,z:b.z-2,y:b.y,facing:2});
+   return workshopResumeRestorePosition({x:b.x+2,z:b.z+(south?13:-2),y:b.y,facing:2});
   },
   select:(cycle,roll)=>{
    const d=poiDavidActive?.s?.david;
@@ -57,7 +63,7 @@ let b,errorContext;
 try{
  b=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
  const out=process.env.FACILITY_SCREENSHOTS;if(out)mkdirSync(out,{recursive:true});
- for(const [label,cycle,roll] of [['double',1,1],['beam',3,1],['alternate',3,.42],['stomp',2,1]]){
+ for(const [label,cycle,roll] of [['double',1,1],['beam',3,1],['clipped',3,1],['alternate',3,.42],['stomp',2,1]]){
   console.log('Begin',label);
   const context=await b.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.70});
   const p=await context.newPage(),errors=[];p.on('pageerror',x=>errors.push(x.message));
@@ -85,11 +91,13 @@ try{
   const aligned=await read();if(aligned.nextMob>aligned.now)await p.clock.fastForward(Math.ceil(aligned.nextMob-aligned.now)+20);
   await until(s=>s.awake,55,'natural exact wake range');
   assert(await p.evaluate(([c,r])=>window.__editorTest.orvasTracesQA.select(c,r),[cycle,roll]));
-  const kind=label==='alternate'?'beam':label;
+  const clipped=label==='clipped';
+  if(clipped)assert(await p.evaluate(()=>window.__editorTest.orvasTracesQA.seatSouth()));
+  const kind=label==='alternate'||clipped?'beam':label;
   const pre=await until(s=>s.q?.kind===kind&&s.q.cursor===0,115,'normal real cast');
   assert.equal(pre.start.length,0,'no decal on warning');
   assert.equal(pre.drawn.length,0);assert.equal(pre.hp,100);
-  if(label!=='stomp')assert(await p.evaluate(()=>window.__editorTest.orvasTracesQA.dodge()));
+  if(label!=='stomp')assert(await p.evaluate(south=>window.__editorTest.orvasTracesQA.dodge(south),clipped));
   const first=await until(s=>s.q?.cursor===1&&(label==='stomp'?s.stomp: s.start.length>0&&s.drawn.length>0),45,'first executed contact and real GPU');
   assert.equal(first.gl,0);
   if(label==='double'){
@@ -102,8 +110,11 @@ try{
   }else if(label==='alternate'){
    const later=await until(s=>s.q?.done&&s.start[0]?.cells.length>first.start[0].cells.length,38,'rotating beam paints additional legal cells');
    assert.equal(later.start.length,1);assert(later.start[0].cells.length<=70);assert(later.uploads.every((u,i)=>i===0||u.reuse));
-  }else if(label==='beam'){
-   assert.equal(first.start[0].kind,'beam');assert(first.start[0].cells.length>=3&&first.q.reach<14,'beam stops on the authored physical tunnel');
+  }else if(label==='beam'||clipped){
+   assert.equal(first.start[0].kind,'beam');
+   assert(first.start[0].cells.length>=3);
+   if(clipped)assert(first.q.dz>.95&&first.q.reach<14,'beam stops on the real south wall from a reachable combat position');
+   else assert.equal(first.q.reach,14,'unobstructed centered ray in the deeper arena is not prematurely clipped');
    for(const key of first.start[0].cells){
     const [x,z]=key.split(',').map(Number),dx=x-first.q.sx,dz=z-first.q.sz;
     assert(dx*first.q.dx+dz*first.q.dz>0&&Math.hypot(dx,dz)<=first.q.reach+.5);

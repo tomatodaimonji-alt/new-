@@ -8,7 +8,7 @@ const cells=(x,z,y)=>site.map.world.filter(o=>o.x===x&&o.z===z&&o.y===y).map(o=>
 const equal=(actual,expected)=>a.equal(JSON.stringify(actual),JSON.stringify(expected));
 test('north approach uses new adjacent terrain, clear scout camp slots, and a stone gate at the existing boundary',()=>{
  const f=site.northFort;a.ok(f,'north fort absent');
- a.equal(site.map.width,128);a.equal(site.map.height,128);
+ a.equal(site.map.width,128);a.equal(site.map.height,site.sacredDepth?.h??128);
  a.equal(f.name,'北の古砦');a.equal(f.difficulty,5);
  const path=f.approach;a.ok(path.length>=12);
  equal(path[0],{x:66,z:4,y:0});equal(path.at(-1),f.entrance);

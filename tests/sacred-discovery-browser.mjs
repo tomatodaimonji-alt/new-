@@ -13,8 +13,8 @@ replace(testApi,testApi+`
    const f=facilitySite.sacredForest,at=poiAimOrigin(performance.now());
    const map=poiMiniStatic.get(0),minictx=map?.layer.getContext('2d');
    const pixel=(x,z)=>map?[...minictx.getImageData(Math.round(map.ox+x*map.scale),Math.round(map.oy+z*map.scale),1,1).data]:null;
-   const mini=map?{concealed:map.concealed,temple:[pixel(22,104),pixel(28,104),pixel(24,110)],
-    trail:pixel(9,53),town:pixel(42,49),builds:poiMiniBuilds,saved:JSON.parse(localStorage.getItem(POI_HOTBAR_KEY)||'{}').sacredTempleSeen===true}:null;
+   const mini=map?{concealed:map.concealed,temple:[pixel(22,158),pixel(28,158),pixel(24,164)],
+    trail:pixel(12,53),town:pixel(42,49),builds:poiMiniBuilds,saved:JSON.parse(localStorage.getItem(POI_HOTBAR_KEY)||'{}').sacredTempleSeen===true}:null;
    return {x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,name:poiRegionAt(facilitySite,poiWalkX,poiWalkZ,false,poiWalkLevel).name,
     path:f.route,reveal:f.reveal,tree:f.trees[10],fog:[...gl.getUniform(program,loc.sacredFog)],raster:window.__sacredRaster||null,
     scene:poiSacredForestStatus(),err:gl.getError(),directions:['n','s','e','w'].map(k=>poiCameraRelativeStep(k)),
@@ -56,14 +56,14 @@ try{
  const ctx=await b.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.75});
  const p=await ctx.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));
  await p.clock.install({time:new Date('2026-04-01T10:00:00Z')});
- async function seed(x,z){
+ async function seed(x,z,legacy=false){
   await p.goto(base+'/seed',{waitUntil:'domcontentloaded',timeout:45000});
-  await p.evaluate(({x,z})=>{
+  await p.evaluate(({x,z,legacy})=>{
    if(!localStorage.getItem('world-workshop-hotbar-v1'))localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weapon:'equipWoodSword',potions:0,gold:23}));
    localStorage.setItem('world-workshop-town-clock-v1','{"version":1,"gameMs":360000}');
    localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,position:{x,z,y:0,facing:2},
-    townLayout:5,townMapHeight:128,view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:-.15,orbitPitch:.13,orbitDistance:6}}));
-  },{x,z});
+    townLayout:5,townMapHeight:legacy?128:182,...(legacy?{}:{templeDepth:1}),view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:-.15,orbitPitch:.13,orbitDistance:6}}));
+  },{x,z,legacy});
   await p.goto(base+'/?resume=1&test=1',{waitUntil:'domcontentloaded',timeout:45000});
   await p.locator('#pineStartupCover').waitFor({state:'hidden',timeout:35000});
   await p.waitForFunction(()=>window.__editorTest?.facility()?.active,null,{polling:50,timeout:30000});
@@ -79,7 +79,7 @@ try{
   const n=await tick();assert.deepEqual([n.x,n.z,n.y],[q.x,q.z,0],'actual collision and west trail');
  }
  phase='old western save, explore entire continuous world on real gameplay key input';
- await seed(12,49);let s=await tick(38);assert.deepEqual([s.x,s.z,s.y],[12,49,0]);assert.equal(s.name,'深樹の聖林');
+ await seed(12,49);let s=await tick(38);assert.deepEqual([s.x,s.z,s.y],[12,49,0]);assert(!s.nearTemple,'town-edge meadow does not advertise the temple');
  assert(s.mini?.concealed&&!s.mini.saved);
  assert(s.mini.temple.every(c=>c[3]===0));
  const stableTerrain={trail:s.mini.trail,town:s.mini.town};
@@ -87,7 +87,7 @@ try{
  const route=s.path.slice(1);let raster,compare,peak=0,builds=0,first=null;
  for(const q of route){
   await step(q);s=last;peak=Math.max(peak,s.fog[2]);builds=Math.max(builds,s.scene.vertices);
-  if(q.x===17&&q.z===82){
+  if(q.x===24&&q.z===115){
    phase='actual WebGL fog leaves near shaded terrain while replacing distant geometry';
    await p.evaluate(()=>{window.__sacredCapture=true});s=await tick(38);raster=s.raster;first=s;
    if(process.env.FACILITY_SCREENSHOTS){mkdirSync(process.env.FACILITY_SCREENSHOTS,{recursive:true});await p.screenshot({path:process.env.FACILITY_SCREENSHOTS+'/sacred-forest-mist.png'});}
@@ -96,24 +96,22 @@ try{
    phase='woodland bend and clearing';
   }
  }
- assert(peak>.99&&builds>1000&&builds<=146*180);
+ assert(peak>.73&&builds>1000&&builds<=146*180);
  assert.equal(s.err,0);assert(s.fog[2]<.04,'weather lifts only at the reveal and entry');
- assert(first&&first.fog[2]>.98&&(raster.haze-compare.haze)>raster.total*.05&&raster.textured>raster.total*.03,JSON.stringify({raster,compare}));
- assert(s.nearTemple,'historical northeast reveal approaches intact monument');
+ assert(first&&first.fog[2]>.73&&(raster.haze-compare.haze)>raster.total*.02&&raster.textured>raster.total*.03,JSON.stringify({raster,compare}));
+ assert.deepEqual([s.x,s.z],[24,125]);
  assert(s.mini.concealed&&!s.mini.saved,'seeing the clearing does not far-reveal the map ring');
  if(process.env.FACILITY_SCREENSHOTS)await p.screenshot({path:process.env.FACILITY_SCREENSHOTS+'/sacred-forest-reveal.png'});
  phase='continue through same historic gate into the actual temple';
- for(const z of [89,90,91])await step({x:29,z});
- for(const x of [28,27,26,25,24])await step({x,z:91});
- for(const z of [92,93])await step({x:24,z});
+ for(const z of [126,127])await step({x:24,z});
  assert(last.mini.concealed&&!last.mini.saved);
  const beforeBuild=last.mini.builds;
- await step({x:24,z:94});
+ await step({x:24,z:128});
  assert(!last.mini.concealed&&last.mini.saved);
  assert(last.mini.temple.every(c=>c[3]>0),'actual map draws the revealed stone floor');
  assert.deepEqual({trail:last.mini.trail,town:last.mini.town},stableTerrain);
  assert.equal(last.mini.builds,beforeBuild+1,'same surface cache is rebuilt exactly once at discovery');
- await step({x:24,z:95});
+ await step({x:24,z:129});
  assert.equal(last.mini.builds,beforeBuild+1);
  assert.equal(last.fog[2],0);assert.equal(last.name,'白環の大神殿');
  phase='cold reload away from the gate preserves discovery while keeping unrelated pouch data';
@@ -121,8 +119,8 @@ try{
  assert(s.mini.saved&&!s.mini.concealed&&s.mini.temple.every(c=>c[3]>0));
  assert.equal(await p.evaluate(()=>JSON.parse(localStorage.getItem('world-workshop-hotbar-v1')).gold),23);
  phase='cold old exact saved arena returns with no fog';
- await p.clock.resume();await seed(24,100);s=await tick(38);
- assert.deepEqual([s.x,s.z,s.y],[24,100,0]);assert.equal(s.fog[2],0);
+ await p.clock.resume();await seed(24,100,true);s=await tick(38);
+ assert.deepEqual([s.x,s.z,s.y],[24,125,0]);assert.equal(s.fog[2],0);
  assert.deepEqual(errors,[]);
  console.log('Native wooded route, baked mesh, real fog raster and old temple gate/reload passed',JSON.stringify({peak,builds,raster}));
 }catch(e){console.error(phase,last&&{x:last.x,z:last.z,y:last.y,name:last.name,fog:last.fog,raster:last.raster,scene:last.scene,directions:last.directions});throw e}

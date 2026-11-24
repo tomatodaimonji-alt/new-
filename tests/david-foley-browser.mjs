@@ -10,8 +10,8 @@ const slice=(a,b)=>{const i=html.indexOf(a),j=html.indexOf(b,i+1);assert(i>=0&&j
 const base=JSON.parse(JSON.stringify(vm.runInNewContext(slice('const FACILITY_SITES=Object.freeze(','function workshopResumeDecode(')+";buildFacilitySite('base')")));
 const temple=base.davidTemple;
 assert(temple,'genuine authored temple metadata required');
-assert.deepEqual([base.map.width,base.map.height],[128,128]);
-assert(base.map.world.some(o=>o.type==='monsterStoneDavid'&&o.x===24&&o.z===104&&o.y===0));
+assert.deepEqual([base.map.width,base.map.height],[128,182]);
+assert(base.map.world.some(o=>o.type==='monsterStoneDavid'&&o.x===24&&o.z===158&&o.y===0));
 assert.equal(base.map.world.filter(o=>o.type==='monsterStoneDavid').length,1);
 // Exercise the actual import validator as facilityLoadMap does, including
 // exported floor offsets and all palette entries present before catalog build.
@@ -23,21 +23,21 @@ const validation=vm.runInNewContext(
  ';({validate:pineValidateWorldData,exportMap:facilityExportMap,palette})');
 const ids=new Set(validation.palette.map(p=>p.id));
 for(const id of ['monsterStoneDavid','poiDavidGatePier','poiDavidTempleColumn','poiDavidWaystone'])assert(ids.has(id),'live initial catalog: '+id);
-assert.equal(validation.validate(validation.exportMap(base.map)).newW,128);
+assert.equal(validation.validate(validation.exportMap(base.map),true).newW,128);
 
 const anchor='  freeMovementPose:()=>({x:poiWalkViewX,z:poiWalkViewZ,level:poiWalkLevel}),';
 const insert=(s,k,v)=>{assert.equal(s.split(k).length,2,k);return s.replace(k,k+v)};
 let fixture=insert(html,anchor,`
   davidQA:{
    retreatStep:()=>{
-    const start=[poiWalkX,poiWalkZ],goal=[24,101];
+    const start=[poiWalkX,poiWalkZ],goal=[24,155];
     if(start[0]===goal[0]&&start[1]===goal[1])return {done:true};
     const q=[[...start,null]],seen=new Set([start.join(',')]);
     for(let i=0;i<q.length;i++){
      const [x,z,first]=q[i];
      for(const [dx,dz,key] of [[0,-1,'ArrowUp'],[1,0,'ArrowRight'],[0,1,'ArrowDown'],[-1,0,'ArrowLeft']]){
       const xx=x+dx,zz=z+dz,id=xx+','+zz;
-      if(xx<14||xx>27||zz<101||zz>107||seen.has(id)||!poiWalkCanStep(xx,zz,x,z))continue;
+      if(xx<14||xx>27||zz<155||zz>161||seen.has(id)||!poiWalkCanStep(xx,zz,x,z))continue;
       const route=first??{x:xx,z:zz,key};if(xx===goal[0]&&zz===goal[1])return route;
       seen.add(id);q.push([xx,zz,route]);
      }
@@ -80,15 +80,15 @@ let fixture=insert(html,anchor,`
     s.x=s.fromX=o.x;s.z=s.fromZ=o.z;
     // Sight the real beam from the open chamber, not below the dogleg
     // roof lip. A shallow side orbit can see up the descending flame.
-    if(!workshopResumeRestorePosition({x:24,z:kind==='beam'?102:101,y:0,facing:2}))return false;
-    if(kind==='beam'){poiThirdPerson=true;poiCameraYaw=.94;poiCameraPitch=.13;poiCameraDistance=4.7;}
+    if(!workshopResumeRestorePosition({x:24,z:kind==='beam'?156:155,y:0,facing:2}))return false;
+    if(kind==='beam'){poiThirdPerson=true;poiCameraYaw=.94;poiCameraPitch=.42;poiCameraDistance=4.7;}
     s.david.attack=null;s.david.next=-Infinity;
     poiPlayerHP=POI_PLAYER_MAX_HP;
     if(!poiDavidBegin(o,s,performance.now()+100,kind))return false;
     // Lock out only automatic follow-up selection in the isolated
     // battery. Original timing, hit shape, health and cues are untouched.
     window.__davidFrames.onlySelected=true;
-    if(!window.__davidFrames.beamClock)window.__davidFrames.fatalClock={now:s.david.attack.start-100};
+    if(!window.__davidFrames.beamClock)window.__davidFrames.fatalClock={now:s.david.attack.start-100,beam:kind==='beam',first:s.david.attack.hits[0]};
     if(window.__davidFrames.beamClock)window.__davidFrames.beamClock.first=s.david.attack.hits[0];
     return s.david.attack.start;
    },
@@ -103,7 +103,7 @@ let fixture=insert(html,anchor,`
 fixture=fixture.replace('function poiDavidBeamSide(roll=Math.random())','function poiDavidBeamSide(roll=window.__davidFrames.roll??.8)');
 fixture=insert(fixture,'function poiDavidStopAttackFoley(){',"\n window.__davidFrames.foleyCleanup.push({death:poiPlayerDeath?.phase??null,tracked:poiDavidFoleySources.size,stops:window.__davidFrames.audioStops.length});");
 fixture=insert(fixture,' source.connect(gain).connect(poiAudioEffects);',"\n const sample=[...poiRecordedFoleyCache].find(([k,b])=>b===buffer&&k.startsWith('david'));if(sample||buffer===poiDavidAlienCache){source.__davidSample={id:++window.__davidFrames.audioId,name:sample?.[0]??'davidAlienBeam',duration:buffer.duration,gain:gain.gain.value,linked:poiAudioEffects.context===ctx};}");
-fixture=insert(fixture,'q.sweep={side,tell:now,start:null,end:null,angle:0,hit:false};',"\n     if(window.__davidFrames.aimTarget)workshopResumeRestorePosition({x:24+window.__davidFrames.aimTarget*2,z:102,y:0,facing:2});");
+fixture=insert(fixture,'q.sweep={side,tell:now,start:null,end:null,angle:0,hit:false};',"\n     if(window.__davidFrames.aimTarget)workshopResumeRestorePosition({x:24+window.__davidFrames.aimTarget*2,z:156,y:0,facing:2});");
 fixture=fixture.replace('draw(poiDavidCue.fan,vp)','{const f=window.__davidFrames,c=f.glCounters();draw(poiDavidCue.fan,vp);f.fan++;f.beamSubmission(q.start,"fan",now,c);}');
 fixture=fixture.replace('if(poiDavidCue.beamVisible)poiDavidDrawThermalBeam(poiDavidCue.beam,vp,reduced?emission.alpha*.76:emission.alpha);',
  'if(poiDavidCue.beamVisible){window.__davidFrames.emission={now,turning:emission.turning,fraction:emission.fraction};poiDavidDrawThermalBeam(poiDavidCue.beam,vp,reduced?emission.alpha*.76:emission.alpha);}');
@@ -175,7 +175,7 @@ const install=()=>{
  const summary=window.__davidFrames={coverShows:0,cue:{lane:0,beam:0,builds:0,byStart:{}},contacts:[],timing:{},canceled:{},audio:[],audioId:0,audioStops:[],audioDeadlines:[],ended:[],foleyCleanup:[],fan:0,live:0,rays:[],beamDraws:{},beamClock:null,returnClock:null,fatalClock:null,bufferIds:new WeakMap(),nextBuffer:1,
   renderTime(real){
    const c=this.returnClock||this.beamClock||this.fatalClock;if(!c)return real;
-   const lead=c.first-c.now,cap=this.returnClock?86:this.fatalClock&&!this.beamClock?245:lead>0&&lead<=225?47:120;
+   const lead=c.first-c.now,cap=this.returnClock?86:c.beam&&lead<=265&&lead>=-185?44:this.fatalClock&&!this.beamClock?245:lead>0&&lead<=225?47:120;
    // Drop surplus host stalls; never repay old elapsed time on immediately
    // adjacent frames. Logical contacts cannot outrun native WebAudio time.
    const delta=Math.max(0,real-(c.lastReal??real));c.lastReal=real;
@@ -222,7 +222,7 @@ async function shot(p,name){
  try{await p.screenshot({path:screenshots+'/'+name,timeout:6500})}
  catch(e){if(e.name!=='TimeoutError')throw e;console.log('Optional screenshot timed out:',name)}
 }
-const save={version:1,route:'facility',id:'base',play:true,position:{x:24,z:91,y:0,facing:2},townLayout:5,townMapHeight:128,
+const save={version:1,route:'facility',id:'base',play:true,position:{x:24,z:125,y:0,facing:2},townLayout:5,townMapHeight:182,templeDepth:1,
  view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.35,orbitDistance:5.5}};
 const economy={version:1,weapon:'equipWoodSword',potions:0,gold:37,claimedCaches:['glade']};
 const editor={format:'forest-world-v1',version:1,width:30,height:30,size:30,world:[{x:2,y:0,z:2,type:'stonewall',rot:1}],models:[],prefabs:[],terrainHeights:[],checks:[]};
@@ -251,7 +251,7 @@ async function start(browser){
   await ctx.close();throw e
  }
 }
-const TEMPLE_IN=[[24,91],[24,92],[24,93],[24,94],[24,95],[25,95],[25,96],[25,97],[24,97],[23,97],[23,98],[23,99],[24,99],[24,100],[24,101],[24,102]],TEMPLE_NEAR=[[23,102],[22,102],[21,102],[20,102],[19,102],[18,102],[17,102]];
+const TEMPLE_IN=Array.from({length:32},(_,i)=>[24,125+i]),TEMPLE_NEAR=[23,22,21,20,19,18,17].map(x=>[x,156]);
 async function routeWalk(p,points,after=()=>{}){
  for(const [x,z] of points){
   const {pos:[cx,cz]}=await qa(p);
@@ -287,7 +287,7 @@ async function step(p,key,x,z){
  },[x,z]);
 }
 function assertNativeReturn(v,label){
- assert(v.returnAnchor&&(v.returnAnchor[0]!==24||v.returnAnchor[1]!==104),label+' starts genuinely displaced');
+ assert(v.returnAnchor&&(v.returnAnchor[0]!==24||v.returnAnchor[1]!==158),label+' starts genuinely displaced');
  assert(v.returnFrames.length>=2,label+' emits distinct renderer poses during return');
  assert(v.returnFrames.every(f=>f[5]),label+' actual rendered grounded feet stay inside the real authored arena');
  for(let i=1;i<v.returnFrames.length;i++){
@@ -308,7 +308,7 @@ try{
  try{
   let s;
   checkpoint='real old v270 save outside doorway';
-  const far=await qa(p);assert.deepEqual(far.pos,[24,91,0]);
+  const far=await qa(p);assert.deepEqual(far.pos,[24,125,0]);
   assert.equal(far.status,'ready');
   await wait(p,t=>window.__editorTest.davidQA.state().now>=t+1150,far.now);
   const rested=await qa(p);assert(!rested.statue?.d?.awake);assert(!rested.statue?.d?.attack);
@@ -327,15 +327,15 @@ try{
   // in the optional leap band. Real pursuit starts, with a shorter safe
   // retreat route; lethal coverage independently uses the distant x17.
   await routeWalk(p,TEMPLE_NEAR.slice(0,-2));
-  await wait(p,()=>{const s=window.__editorTest.davidQA.state().statue;return s?.d?.awake&&(s.x!==24||s.z!==104)},null,25000);
+  await wait(p,()=>{const s=window.__editorTest.davidQA.state().statue;return s?.d?.awake&&(s.x!==24||s.z!==158)},null,25000);
   checkpoint='physical retreat cancels any chase or threat into exterior';
   await escapeChamber(p);
   await routeWalk(p,TEMPLE_IN.slice(0,-1).reverse());
   const back=await qa(p);
   await wait(p,t=>window.__editorTest.davidQA.state().now>=t+1550,back.now);
-  s=await qa(p);assert.deepEqual(s.pos,[24,91,0]);assert(!s.statue?.d?.attack);
+  s=await qa(p);assert.deepEqual(s.pos,[24,125,0]);assert(!s.statue?.d?.attack);
   assert(!s.statue?.d?.awake||s.statue.d.returning,'crossing exterior cancels any future strike immediately');
-  await wait(p,()=>{const s=window.__editorTest.davidQA.state().statue;return !s?.d?.awake&&(!s||s.x===24&&s.z===104)});
+  await wait(p,()=>{const s=window.__editorTest.davidQA.state().statue;return !s?.d?.awake&&(!s||s.x===24&&s.z===158)});
   s=await qa(p);
   assert.equal(s.hp,back.hp);assert.equal(s.travel,far.travel);assert.equal(s.opens,far.opens);
   assertNativeReturn(s,'physical exit');
@@ -344,7 +344,7 @@ try{
   checkpoint='cold genuine outside resume retains prior v270 save and same room';
   await p.reload({waitUntil:'domcontentloaded',timeout:25000});await p.locator('#pineStartupCover').waitFor({state:'hidden'});
   await wait(p,()=>window.__editorTest?.davidQA&&window.__editorTest.facility().active);
-  s=await qa(p);assert.deepEqual(s.pos,[24,91,0]);assert.equal((await pack()).gold,37);
+  s=await qa(p);assert.deepEqual(s.pos,[24,125,0]);assert.equal((await pack()).gold,37);
   assert.equal(await p.evaluate(()=>JSON.parse(localStorage.getItem('forest-world-editor-v1')).world[0].type),'stonewall');
   assert.deepEqual(errors,[]);
  }catch(e){console.error(checkpoint,await qa(p).catch(()=>null),errors);throw e}
@@ -370,7 +370,7 @@ try{
     await wait(battle.p,({start,hits})=>{
      const v=window.__editorTest.davidQA.state();
      return v.canceled[start]||v.contacts.filter(a=>a.start===start).length>=hits;
-    },{start:t,hits:raw.length});
+    },{start:t,hits:raw.length},kind==='beam'?22000:12000);
     const hit=await qa(battle.p),contacts=hit.contacts.filter(a=>a.start===t);
     if(contacts.length<raw.length&&hit.canceled[t]){
      const reason=hit.canceled[t];
@@ -386,6 +386,7 @@ try{
     assert(hit.cue.lane>pre.cue.lane&&hit.draw.draws>0,'actual WebGL floor cue drawn');
     if(kind==='beam'){
      await wait(battle.p,n=>window.__editorTest.davidQA.state().cue.beam>n,pre.cue.beam);
+     await wait(battle.p,key=>window.__editorTest.davidQA.state().thermal[key]?.some(s=>s.count>15&&s.warm>5&&s.n>s.core&&s.core>30),t+':straight');
      const pixels=(await qa(battle.p)).thermal[t+':straight'];
      assert(pixels?.some(s=>s.count>15&&s.warm>5&&s.n>s.core&&s.core>30),JSON.stringify(pixels));
     }
@@ -500,12 +501,15 @@ try{
   // encounter render clock to native playable increments. No attack,
   // damage, route, frames, death or audio source is injected.
   await fp.evaluate(()=>{window.__davidFrames.fatalClock={now:performance.now()}});
-  await routeWalk(fp,route);
+  // The radius-two boundary is separately tested by the dedicated depth
+  // route. For this vulnerable encounter take one genuine extra step so
+  // visual interpolation cannot leave the combat origin just beyond it.
+  await routeWalk(fp,[...route,[24,157]]);
   await wait(fp,()=>window.__editorTest.davidQA.state().statue?.d?.awake,null,22000);
-  await routeWalk(fp,TEMPLE_NEAR);
-  await wait(fp,()=>{const s=window.__editorTest.davidQA.state().statue;return s?.d?.awake&&(s.x!==24||s.z!==104)},null,25000);
+  await routeWalk(fp,[[24,156],...TEMPLE_NEAR]);
+  await wait(fp,()=>{const s=window.__editorTest.davidQA.state().statue;return s?.d?.awake&&(s.x!==24||s.z!==158)},null,25000);
   await wait(fp,()=>window.__editorTest.davidQA.state().contacts.some(h=>h.hp===0),null,60000);
-  await wait(fp,()=>{const s=window.__editorTest.davidQA.state().statue;return !s?.d?.awake&&s?.x===24&&s?.z===104},null,42000);
+  await wait(fp,()=>{const s=window.__editorTest.davidQA.state().statue;return !s?.d?.awake&&s?.x===24&&s?.z===158},null,42000);
   const summary=await qa(fp),audio=await fp.evaluate(()=>window.__editorTest.davidQA.sound());
   assertNativeReturn(summary,'real fatal contact');
   assert(audio.cleanup.length>0&&audio.pending===0,'actual encounter cleanup ran with no David audio leaking');

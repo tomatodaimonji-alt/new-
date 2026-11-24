@@ -61,7 +61,7 @@ try{
  await p.evaluate(()=>{
   localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weapon:'equipWoodSword',potions:3,gold:0}));
   localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
-   position:{x:24,z:87,y:0,facing:2},townLayout:5,townMapHeight:128,
+   position:{x:24,z:123,y:0,facing:2},townLayout:5,townMapHeight:182,templeDepth:1,
    view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.35,orbitDistance:5.5}}));
  });
  await p.goto(url+'/?resume=1&test=1',{waitUntil:'domcontentloaded'});
@@ -76,14 +76,14 @@ try{
   await p.keyboard.press(key);
   await wait(z=>{const s=window.__editorTest.templeScoreQA();return s.pos[0]===24&&s.pos[1]===z&&s.now>=s.pending},z);
  }
- trace='existing field';let s=await audio('outside');assert.deepEqual(s.pos,[24,87,0]);assert(!s.battle);
- trace='physical forecourt before gate';await step(88,'ArrowDown');
- s=await audio('davidStill');assert.deepEqual(s.pos,[24,88,0]);assert(!s.battle);
- for(const z of [89,90,91,92,93,94])await step(z,'ArrowDown');
+ trace='existing field';let s=await audio('outside');assert.deepEqual(s.pos,[24,123,0]);assert(!s.battle);
+ trace='physical forecourt before gate';await step(124,'ArrowDown');
+ s=await audio('davidStill');assert.deepEqual(s.pos,[24,124,0]);assert(!s.battle);
+ for(const z of [125,126,127,128])await step(z,'ArrowDown');
  s=await state();assert.equal(s.audio.active,'davidStill');assert(!s.battle);
  assert.equal(s.events.filter(e=>e.key==='davidStill').length,1);
  trace='actual arena awakening';
- await step(95,'ArrowDown');await step(96,'ArrowDown');await step(97,'ArrowDown');await step(98,'ArrowDown');
+ for(let z=129;z<=156;z++)await step(z,'ArrowDown');
  s=await audio('davidAwake');assert(s.battle);
  const calm=s.events.find(e=>e.key==='davidStill'),dark=s.events.find(e=>e.key==='davidAwake');
  assert(calm.loop&&dark.loop&&calm.ready&&dark.ready&&calm.energy>10&&dark.energy>10);
@@ -91,12 +91,12 @@ try{
  assert(calm.offset<.015&&dark.offset>.10&&dark.offset<48);
  assert(s.audio.decks.length<=2);
  trace='real retreat beyond entrance';
- for(const z of [97,96,95,94,93,92,91])await step(z,'ArrowUp');
+ for(let z=155;z>=125;z--)await step(z,'ArrowUp');
  await wait(()=>{const r=window.__editorTest.templeScoreQA();return r.audio.active==='davidStill'&&r.events.filter(e=>e.key==='davidStill').length===2});
- for(const z of [90,89,88,87])await step(z,'ArrowUp');
+ for(const z of [124,123])await step(z,'ArrowUp');
  s=await audio('outside');
  await wait(()=>window.__editorTest.templeScoreQA().audio.decks.length===1);
- s=await state();assert(!s.battle);assert.deepEqual(s.pos,[24,87,0]);
+ s=await state();assert(!s.battle);assert.deepEqual(s.pos,[24,123,0]);
  assert(s.stops.some(z=>z.key==='davidAwake')&&s.stops.some(z=>z.key==='davidStill'));
  // Actual AudioParam events and source timestamps on the same AudioContext:
  // the dry and both reflection routes meet one last gain before master BGM.

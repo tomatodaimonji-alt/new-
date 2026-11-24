@@ -61,7 +61,7 @@ try{
     const slots=Array.from({length:27},()=>null);slots[0]={type:'equipWoodSword',count:1};slots[3]={type:'healingHerb',count:1};
     localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weapon:'equipWoodSword',potions:1,gold:0,slots}));
     localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
-     position:{x:24,z:102,y:0,facing:2},townLayout:5,townMapHeight:128,
+     position:{x:24,z:156,y:0,facing:2},townLayout:5,townMapHeight:182,templeDepth:1,
      view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:0,orbitPitch:.12,orbitDistance:5.5}}));
    });
    await p.goto(url+'/?resume=1&test=1',{waitUntil:'domcontentloaded'});await p.locator('#pineStartupCover').waitFor({state:'hidden'});
