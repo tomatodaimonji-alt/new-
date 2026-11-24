@@ -1,0 +1,43 @@
+name: Verify real upward gestures and physical Orvas ceiling
+on:
+  push:
+    branches: [dot/workshop-next-higher-view-qa]
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      FACILITY_SCREENSHOTS: screenshots
+    strategy:
+      fail-fast: false
+      matrix:
+        script: [higher-view-browser, surface-sky-camera-browser, night-sky-wall-browser, ordinary-house-camera-browser, shared-wall-camera-browser, david-sacred-portrait-browser]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save playwright@1.56.1
+      - run: npx playwright install chromium
+      - run: node tests/${{ matrix.script }}.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ matrix.script }}
+          path: screenshots
+          if-no-files-found: ignore
+  strict:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          if node --test tests/*.cjs > "$RUNNER_TEMP/unit.out" 2>&1; then
+            tail -8 "$RUNNER_TEMP/unit.out"
+          else
+            grep -E '^not ok |^  location:|^  error:|^# (tests|pass|fail|duration)' "$RUNNER_TEMP/unit.out" | cut -c1-350 | tail -200
+            exit 1
+          fi

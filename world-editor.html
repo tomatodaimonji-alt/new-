@@ -32203,8 +32203,24 @@ function poiSkyCanLookUp(){
  return poiWalkActive&&poiThirdPerson&&!cameraTopDown&&!pineAIActive&&
   facilitySite?.id==='base'&&poiWalkLevel===0&&!poiWalkIndoor();
 }
+const POI_ORBIT_LOOKUP_LIMIT=-1.02,POI_ORBIT_LOW_EYE=-.16;
+function poiOrbitHigherDome(){
+ return poiWalkActive&&poiThirdPerson&&!cameraTopDown&&!pineAIActive&&poiWalkLevel===0&&
+  typeof poiDavidTempleEnclosedAt==='function'&&poiDavidTempleEnclosedAt(facilitySite,poiWalkViewX,poiWalkViewZ,poiWalkLevel);
+}
 function poiOrbitPitchClamp(pitch){
- return Math.max(poiSkyCanLookUp()?-.16:.12,Math.min(1.15,pitch));
+ const low=poiSkyCanLookUp()||poiOrbitHigherDome()?POI_ORBIT_LOOKUP_LIMIT:.12;
+ return Math.max(low,Math.min(1.15,pitch));
+}
+function poiOrbitHigherLens(eye,target,pitch,allowed){
+ const extra=Math.min(0,pitch-POI_ORBIT_LOW_EYE);
+ if(!allowed||extra>=0)return target;
+ const horizontal=Math.hypot(eye[0]-target[0],eye[2]-target[2]);
+ if(horizontal<1e-5)return target;
+ // The low camera arm has already obeyed actual floor and solid walls.
+ // Rotate only the view direction as the user keeps looking up.
+ const down=Math.atan2(eye[1]-target[1],horizontal);
+ return [target[0],eye[1]-horizontal*Math.tan(Math.max(-1.20,down+extra)),target[2]];
 }
 const POI_SKY_COLOR=[
  [0,[16,29,62],[60,86,126]],[300,[16,29,62],[60,86,126]],
@@ -32291,9 +32307,9 @@ function parameters(){
   const ground=poiCreekPlayerHeight(performance.now())+poiWalkLevel*1.4;
   const skyOutdoor=poiSkyCanLookUp();
   const homeAngle=!sacredView&&poiHomeCameraZone(facilitySite,poiWalkViewX,poiWalkViewZ,poiWalkLevel);
+  const higher=poiThirdPerson&&!cameraTopDown&&(skyOutdoor||sacredView);
   const pitch=!poiThirdPerson?(cameraTopDown?.71:.49):
-   homeAngle?Math.max(-.16,poiCameraPitch):
-   poiCameraPitch<.15&&skyOutdoor?poiCameraPitch:Math.max(.12,poiCameraPitch);
+   homeAngle||higher?Math.max(POI_ORBIT_LOW_EYE,poiCameraPitch):Math.max(.12,poiCameraPitch);
   const horizontal=radius*Math.cos(pitch);
   const desired=[x-horizontal*Math.sin(bearing),ground+1.1+radius*Math.sin(pitch),z-horizontal*Math.cos(bearing)];
   if(pitch<.12){
@@ -32308,19 +32324,20 @@ function parameters(){
   const arm=eye===desired?radius:Math.hypot(...eye.map((v,i)=>v-target[i]));
   const near=eye!==desired&&arm<1.81?.08:.45;
   const fov=eye===desired?Math.PI/3:facilityWatchtowerCloseFov(arm);
+  const lensTarget=poiDavidRevealLook(eye,target,performance.now());
+  const viewTarget=poiOrbitHigherLens(eye,lensTarget,poiCameraPitch,higher);
   let sky=null;
   if(skyOutdoor){
    // Anchor the time-of-day palette to physical elevations, not camera
    // opacity. Empty pixels below the horizon still use the current time.
    // The collision arm can shorten or tilt at a wall. Project the
    // palette with that real view instead of exposing the editor color.
-   const eyeHorizontal=Math.hypot(eye[0]-target[0],eye[2]-target[2]);
-   const tilt=Math.atan2(eye[1]-target[1],Math.max(1e-6,eyeHorizontal)),scale=50/Math.tan(fov/2);
+   const eyeHorizontal=Math.hypot(eye[0]-viewTarget[0],eye[2]-viewTarget[2]);
+   const tilt=Math.atan2(eye[1]-viewTarget[1],Math.max(1e-6,eyeHorizontal)),scale=50/Math.tan(fov/2);
    const stop=elevation=>50-scale*Math.tan(Math.min(Math.PI/3,tilt+elevation));
    sky={skyHorizon:stop(0),skyMiddle:stop(Math.PI/12),skyHigh:stop(Math.PI/6)};
   }
-  const lensTarget=poiDavidRevealLook(eye,target,performance.now());
-  return{...q,halfH,halfW,centerX,centerZ,elev,targetY,...sky,vp:mult(perspective(fov,Math.max(.1,q.aspect),near,Math.max(90,sceneReach*1.6+18)),look(eye,lensTarget))};
+  return{...q,halfH,halfW,centerX,centerZ,elev,targetY,...sky,vp:mult(perspective(fov,Math.max(.1,q.aspect),near,Math.max(90,sceneReach*1.6+18)),look(eye,viewTarget))};
  }
  const cameraDistance=Math.max(80,sceneReach*1.6+24);
  const eye=[centerX+cameraDistance*Math.sin(yaw)*Math.cos(elev),targetY+cameraDistance*Math.sin(elev),centerZ+cameraDistance*Math.cos(yaw)*Math.cos(elev)];
@@ -39206,7 +39223,7 @@ function workshopResumeDecode(raw){
  const fit=(v,min,max)=>Number.isFinite(v)&&v>=min&&v<=max;
  const view=v=>v&&fit(v.yaw,-7,7)&&fit(v.zoom,.025,4)&&fit(v.panX,-MAX_MAP*4,MAX_MAP*4)&&
   fit(v.panZ,-MAX_MAP*4,MAX_MAP*4)&&Number.isInteger(v.level)&&v.level>=-1&&v.level<=MAX_LEVEL&&
-  fit(v.orbitYaw,-7,7)&&fit(v.orbitPitch,-.16,1.15)&&fit(v.orbitDistance,2.5,15)
+  fit(v.orbitYaw,-7,7)&&fit(v.orbitPitch,-1.02,1.15)&&fit(v.orbitDistance,2.5,15)
   ?{yaw:v.yaw,zoom:v.zoom,panX:v.panX,panZ:v.panZ,level:v.level,hideUpper:v.hideUpper===true,
     top:v.top===true,third:v.third===true,orbitYaw:v.orbitYaw,orbitPitch:v.orbitPitch,orbitDistance:v.orbitDistance}:null;
  const p=d.position;

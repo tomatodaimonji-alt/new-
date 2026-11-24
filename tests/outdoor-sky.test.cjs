@@ -22,7 +22,7 @@ test('normal orbit and overhead unchanged; outdoor elevated aim reveals a sky gr
  const normal=make({poiCameraPitch:.35}).c.camera();
  assert(normal.skyHorizon>15&&normal.skyHorizon<22);
  assert(Math.abs(normal.vp.eye[1]-(1.1+5.5*Math.sin(.35)))<1e-9);
- assert.equal(c.poiOrbitPitchClamp(-2),-.16);
+ assert.equal(c.poiOrbitPitchClamp(-2),-1.02);
  const looked=c.camera();assert(looked.vp.eye[1]<looked.vp.target[1]);
  assert(looked.skyHorizon>50&&looked.skyHorizon<70);
  c.poiSkyBackdrop(looked);assert(attrs.has('data-poi-sky'));
@@ -54,7 +54,7 @@ test('negative sky pitch survives saves, remains gated indoors and underground, 
 test('fixed-time sky uses opaque fixed-world colors at straight, upward, and deep downward angles',()=>{
  const {c,attrs,style}=make({poiTownClockGameMs:90*500,poiCameraDistance:5.5});
  const steps=[];
- for(const p of [.12,-.16,.14,.15,.35,.75]){
+ for(const p of [.12,-.16,-.99,.14,.15,.35,.75]){
   c.poiCameraPitch=p;
   const packet=c.camera();c.poiSkyBackdrop(packet);
   assert(attrs.has('data-poi-sky'));assert.equal(packet.skyOpacity,undefined);
