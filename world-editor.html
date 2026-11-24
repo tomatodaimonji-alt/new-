@@ -1606,7 +1606,11 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  };
  const arm=()=>{
   stop();
-  if(status==='loading'&&!document.hidden)watchdog=setTimeout(()=>fail(),25000);
+  const foreground=()=>{
+   if(document.hidden||window.__workshopIsForeground?.()===false)return false;
+   try{return window.PineLifecycle?.isForeground?.()!==false}catch(_e){return true}
+  };
+  if(status==='loading'&&foreground())watchdog=setTimeout(()=>{if(foreground())fail()},25000);
  };
  document.addEventListener('visibilitychange',arm);
  window.addEventListener('error',event=>fail(event.error||event.message));
@@ -1625,7 +1629,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
     await init();initialized=true;finish();
    }catch(error){fail(error)}
   },
-  checkpoint,
+  checkpoint,syncVisibility:arm,
   async rendered(){
    if(status!=='loading'||frameSubmitted)return;
    frameSubmitted=true;
@@ -1649,7 +1653,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v306）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v307）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -1885,6 +1889,85 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 <div class="modal" id="jsonModal"><div class="modalBody"><h2>ワールドをデータで共有</h2><p>建物やタイルなどの配置データをJSONで保存・共有できます。</p><textarea id="jsonText" spellcheck="false" placeholder="ここにJSONを貼り付けて読み込み"></textarea><div class="row"><button id="exportJson">最新のJSONを表示</button><button id="copyJson">JSONをコピー</button><button id="downloadJson">.json を保存</button><button id="pickJsonFile">.jsonファイルを選ぶ</button><input id="jsonFile" type="file" accept=".json,application/json" style="display:none"><button id="importJson">JSONを読み込む</button><button id="closeJson">閉じる</button></div><p class="muted">安全のため、読み込み時はデータ形式・数・位置・サイズを検査する。ブラウザにローカル保存される。</p></div></div>
 <script>
 window.pineStartup.start(async()=>{'use strict';
+// BEGIN WORKSHOP SUSPENDABLE GAME CLOCK
+let poiAppForeground=true;
+try{if(typeof window.PineLifecycle?.isForeground==='function')poiAppForeground=window.PineLifecycle.isForeground()!==false}catch(_e){}
+let poiPageAway=false,poiPausedAt=null,poiPausedTotal=0,poiPauseMounted=false,poiRawInputReset=false;
+const poiWallNow=()=>window.performance.now();
+const poiGameDeferred=new Set();
+const poiFreshPointers=new Set();
+const poiGameFrozen=()=>poiPausedAt!==null;
+// Local to the game script; browser APIs and render-budget instrumentation
+// can still read wall time. All simulation deadlines use this single clock.
+const performance={now:()=>(poiPausedAt??poiWallNow())-poiPausedTotal};
+function poiGameWhenForeground(fn){
+ if(poiGameFrozen())poiGameDeferred.add(fn);
+ else fn();
+}
+function poiGameLifecycle(){
+ const blocked=!poiAppForeground||poiPageAway||document.hidden===true;
+ if(blocked===poiGameFrozen())return;
+ const wall=poiWallNow();
+ if(blocked){
+  poiPausedAt=wall;
+  window.pineStartup.syncVisibility?.();
+  if(!poiPauseMounted)return;
+  poiPauseInput();
+  if(typeof poiPlayerHitEdgeLifecycle==='function')poiPlayerHitEdgeLifecycle(true);
+  poiAudioSyncLifecycle();
+  workshopResumeWrite();
+  if(typeof poiTownClockSave==='function')poiTownClockSave(true);
+ }else{
+  poiPausedTotal+=wall-poiPausedAt;poiPausedAt=null;
+  window.pineStartup.syncVisibility?.();
+  if(!poiPauseMounted)return;
+  if(typeof poiPlayerHitEdgeLifecycle==='function')poiPlayerHitEdgeLifecycle(false);
+  poiAudioSyncLifecycle();
+  for(const fn of poiGameDeferred){poiGameDeferred.delete(fn);fn()}
+ }
+}
+function poiNativeGameForeground(visible){
+ if(typeof visible!=='boolean')return;
+ poiAppForeground=visible;poiGameLifecycle();
+}
+window.__workshopForegroundChanged=poiNativeGameForeground;
+window.__workshopIsForeground=()=>!poiGameFrozen();
+window.__workshopAudioForeground=poiNativeGameForeground;
+document.addEventListener('visibilitychange',poiGameLifecycle,true);
+window.addEventListener('pagehide',()=>{poiPageAway=true;poiGameLifecycle()},true);
+window.addEventListener('pageshow',()=>{poiPageAway=false;poiGameLifecycle()},true);
+poiGameLifecycle();
+function poiPauseInput(){
+ poiRawInputReset=true;poiFreshPointers.clear();
+ poiStopRepeat();poiAnalogActionTouch=null;poiAnalogActionClick.length=0;
+ poiHealingBlockedKeys.clear();poiLifecycleKeys.clear();
+ const captured=[...touchPositions.keys()];touchPositions.clear();tapCandidate=null;multiGesture=null;
+ for(const id of captured)try{if(canvas.hasPointerCapture(id))canvas.releasePointerCapture(id)}catch(_e){}
+ if(typeof poiBagCancelDrag==='function')poiBagCancelDrag();
+ poiScreenNoteStroke=null;
+ if(typeof poiInventoryPortraitCancelAll==='function')poiInventoryPortraitCancelAll();
+ poiStorageTapGate?.cancel();
+ document.dispatchEvent(new Event('workshopinputclear'));
+}
+function poiPauseInstallInputs(){
+ const stop=(e)=>{if(e.cancelable)e.preventDefault();e.stopImmediatePropagation()};
+ const pointer=(e)=>{
+  if(poiGameFrozen()){stop(e);return}
+  if(!poiRawInputReset||!e.isTrusted)return;
+  if(e.type==='pointerdown'){if(poiFreshPointers.size>=24)poiFreshPointers.delete(poiFreshPointers.values().next().value);poiFreshPointers.add(e.pointerId);return}
+  if(e.type==='pointerup'&&!poiFreshPointers.has(e.pointerId)){stop(e);return}
+  if(e.type==='click'&&e.detail>0&&(!poiFreshPointers.size||e.pointerId>0&&!poiFreshPointers.has(e.pointerId)))stop(e);
+  if(e.type==='pointercancel')poiFreshPointers.delete(e.pointerId);
+ };
+ for(const ev of ['pointerdown','pointerup','pointercancel','click'])window.addEventListener(ev,pointer,true);
+ for(const ev of ['keydown','keyup','wheel'])window.addEventListener(ev,e=>{if(poiGameFrozen()||ev==='keydown'&&poiRawInputReset&&e.repeat&&!poiLifecycleKeys.has(e.key.toLowerCase())){stop(e);return}
+  if(ev==='keydown')poiLifecycleKeys.add(e.key.toLowerCase());
+  else if(ev==='keyup')poiLifecycleKeys.delete(e.key.toLowerCase());
+ },{capture:true,passive:false});
+}
+const poiLifecycleKeys=new Set();
+// END WORKSHOP SUSPENDABLE GAME CLOCK
+
 // Android WebView can report a taller CSS viewport than the visible screen.
  // Keep the game height synchronized with the actual visible viewport.
  function syncVisibleViewport(){
@@ -7922,8 +8005,7 @@ const PINE_AUDIO_SETTINGS_KEY='world-workshop-audio-v2';
 let poiAudioContext=null,poiAudioMaster=null,poiAudioMusic=null,poiAudioAmbience=null,poiAudioEffects=null;
 let poiAudioInterval=null,poiAudioNoise=null,poiAudioEnabled=true,poiAudioNotes=new Set();
 const poiAudioTransient=new Set();
-let poiAudioPageHidden=false,poiAudioNativeForeground=true;
-function poiAudioAllowed(){return !document.hidden&&!poiAudioPageHidden&&poiAudioNativeForeground}
+function poiAudioAllowed(){return !document.hidden&&(typeof poiGameFrozen!=='function'||!poiGameFrozen())}
 let poiAudioLevels={master:85,bgm:68,se:90};
 try{
  const saved=JSON.parse(localStorage.getItem(PINE_AUDIO_SETTINGS_KEY)||'null');
@@ -12942,7 +13024,7 @@ function poiCreekAudioSync(){
  if(level>0&&audio.release!==null){clearTimeout(audio.release);audio.release=null}
  else if(level===0&&audio.release===null){
   audio.release=setTimeout(()=>{
-   if(poiCreekAudio===audio&&audio.level===0)poiCreekAudioStop();
+   if(poiCreekAudio===audio&&audio.level===0){audio.release=null;if(typeof poiGameFrozen!=='function'||!poiGameFrozen())poiCreekAudioStop()}
   },850);
  }
 }
@@ -18676,22 +18758,13 @@ function poiSound(kind,weapon=null,defeated=false,atContact=false,targetType=nul
  }catch(e){console.warn('Sound effect unavailable',e)}
 }
 function poiAudioSyncLifecycle(){
- if(poiWalkActive&&poiAudioEnabled&&poiAudioAllowed())poiAudioStart(true);
- else poiAudioStop(true);
+ if(poiGameFrozen()){
+  if(poiAudioInterval!==null){clearInterval(poiAudioInterval);poiAudioInterval=null}
+  // AudioContext time pauses with the game. Keep scheduled notes, loops
+  // and mixer state on the same context, rather than restarting a track.
+  try{poiAudioContext?.suspend().catch(()=>{})}catch(_e){}
+ }else if(poiWalkActive&&poiAudioEnabled&&poiAudioAllowed())poiAudioStart(true);
 }
-document.addEventListener('visibilitychange',poiAudioSyncLifecycle);
-window.addEventListener('pagehide',()=>{poiAudioPageHidden=true;poiAudioSyncLifecycle()});
-window.addEventListener('pageshow',()=>{poiAudioPageHidden=false;poiAudioSyncLifecycle()});
-// The native host can additionally signal Activity pause/resume. A foreground
-// hint never overrides a hidden document or an active pagehide.
-window.__workshopAudioForeground=visible=>{
- if(typeof visible!=='boolean')return;
- if(!visible){if(typeof poiCompanionSummonCancel==='function')poiCompanionSummonCancel();if(typeof poiHealingCastCancel==="function")poiHealingCastCancel();if(typeof poiStopRepeat==='function')poiStopRepeat();if(typeof poiMineUnlockCancel==='function')poiMineUnlockCancel()}
- poiAudioNativeForeground=visible;
- if(!visible&&typeof poiOrvasAllyStop==='function'&&poiCompanionActor?.id==='orvasSoul')
-  poiOrvasAllyStop(poiCompanionActor,performance.now(),true);
- if(!visible){poiWildPause();if(typeof poiEnemyCancelPlayer==="function")poiEnemyCancelPlayer();if(typeof poiPlayerWeaponCancel==='function')poiPlayerWeaponCancel()}poiAudioSyncLifecycle();
-};
 // Foreground gameplay always uses the current mixer settings.
 
 const POI_PLAYER_MAX_HP=100,POI_PLAYER_ATTACK=20;
@@ -19285,8 +19358,6 @@ function poiCompanionSummonDraw(now,vp){
  try{gl.blendColor(0,0,0,alpha);draw(poiCompanionSummonGpu,q);}
  finally{gl.depthMask(true);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.blendColor(0,0,0,0);gl.disable(gl.BLEND);}
 }
-if(typeof document!=='undefined'&&typeof document.addEventListener==='function')
- document.addEventListener('visibilitychange',()=>{if(document.hidden)poiCompanionSummonCancel();});
 // END COMPANION SUMMON EFFECT
 
 function poiCompanionTick(now){
@@ -19548,9 +19619,6 @@ function poiOrvasAllyResolve(a,now,mode){
  if(now>=q.until){d.attack=null;return false}
  return true;
 }
-if(typeof document!=='undefined'&&typeof document.addEventListener==='function')document.addEventListener('visibilitychange',()=>{
- if(document.hidden&&poiCompanionActor?.id==='orvasSoul')poiOrvasAllyStop(poiCompanionActor,performance.now(),true);
-});
 // END ORVAS ALLY BOSS RUNTIME
 
 function poiCompanionAttackClear(src,dst,y){
@@ -19903,7 +19971,7 @@ function poiCompanionRecallDraw(now,vp){
  }
 }
 if(typeof window!=='undefined'&&typeof window.addEventListener==='function')
- window.addEventListener('pagehide',()=>{poiCompanionRecallCancel();poiCompanionRejoinTicket=null});
+ window.addEventListener('pagehide',event=>{if(!event.persisted){poiCompanionRecallCancel();poiCompanionRejoinTicket=null}});
 // END COMPANION RECALL VISUAL
 
 // BEGIN COMPANION V2 AI
@@ -23275,7 +23343,7 @@ function poiWireMovingWeaponShortcuts(bar,bag,find){
   clicks.splice(i,1);e.preventDefault();e.stopImmediatePropagation();
  },true);
  window.addEventListener('blur',clear);
- document.addEventListener('visibilitychange',()=>{if(document.hidden)clear()});
+ document.addEventListener('workshopinputclear',clear);
 }
 function poiBagWire(){
  const bar=$('poiHotbar'),bag=$('poiBagPanel'),toggle=$('poiBagToggle'),chest=$('poiChestPanel'),ghost=$('poiItemDragPreview');
@@ -23298,7 +23366,7 @@ function poiBagWire(){
  poiBagCancelDrag=clear;
  const clearInput=()=>{clear();poiStorageTapGate?.cancel();if(poiBagKeySource&&poiBagSlotRef(poiBagKeySource).zone==='wallet')poiBagSelectSource(null)};
  window.addEventListener('blur',clearInput);
- document.addEventListener('visibilitychange',()=>{if(document.hidden)clearInput()});
+ document.addEventListener('workshopinputclear',clearInput);
  const occupied=button=>{const ref=poiBagSlotRef(button);return ref.zone==='wallet'?poiWalletGold(poiHotbarRead())>0:(ref.zone==='chest'
   ?poiChestIsOpen()&&!!poiChestSlotAt(ref.index):ref.zone==='armor'?!!poiArmorSnapshot()[ref.part]:!!poiInventoryCell(poiHotbarRead(),ref))};
  const resultToast=result=>{
@@ -24091,10 +24159,6 @@ const POI_DAVID_PATTERNS=Object.freeze({
 const POI_DAVID_ORDER=['sweep','double','stomp','beam'];
 let poiDavidActive=null;
 const poiDavidHidden=()=>typeof document!=='undefined'&&document.hidden;
-if(typeof document!=='undefined')document.addEventListener('visibilitychange',()=>{
- const q=poiDavidActive?.s?.david?.attack;
- if(q&&poiDavidHidden())q.interrupted=true;
-});
 function poiDavidMatch(o){
  const b=facilitySite?.id==='base'?facilitySite.davidTemple?.boss:null,r=b?.room;
  return b?.type===POI_DAVID_TYPE&&o?.type===b.type&&o.x===b.x&&o.z===b.z&&o.y===b.y&&
@@ -25127,7 +25191,16 @@ function poiDrawMonsterHitFlash(mesh,vp,now){
 }
 // END GAME DAMAGE FLASH
 // BEGIN PLAYER DAMAGE EDGE
-let poiPlayerEdgeAnimation=null,poiPlayerEdgeUntil=-Infinity;
+let poiPlayerEdgeAnimation=null,poiPlayerEdgeUntil=-Infinity,poiPlayerEdgeSuspended=null;
+function poiPlayerHitEdgeLifecycle(paused){
+ const a=poiPlayerEdgeAnimation;
+ if(paused){
+  if(a?.playState==='running'){a.pause();poiPlayerEdgeSuspended=a}
+ }else{
+  if(a===poiPlayerEdgeSuspended&&a?.playState==='paused')a.play();
+  poiPlayerEdgeSuspended=null;
+ }
+}
 function poiPlayerHitEdgeClear(){
  if(poiPlayerEdgeAnimation){poiPlayerEdgeAnimation.cancel();poiPlayerEdgeAnimation=null;}
  poiPlayerEdgeUntil=-Infinity;
@@ -25142,7 +25215,6 @@ function poiPlayerHitEdge(now){
  poiPlayerEdgeAnimation=a;
  a.onfinish=()=>{if(poiPlayerEdgeAnimation===a)poiPlayerEdgeAnimation=null};
 }
-if(typeof document!=='undefined')document.addEventListener('visibilitychange',()=>{if(document.hidden)poiPlayerHitEdgeClear()});
 // END PLAYER DAMAGE EDGE
 function poiMobHitPlayer(obj,now,attackDamage){
  const raw=attackDamage??(typeof poiMonsterStatsAt==='function'?poiMonsterStatsAt(obj):POI_MONSTER_STATS[obj.type]).attack;
@@ -27728,7 +27800,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v306',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v307',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -27843,7 +27915,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v306';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v307';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -28058,7 +28130,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v306',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v307',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -31328,8 +31400,12 @@ function poiLocalBind(){
   const d={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
   if(d){e.preventDefault();e.stopPropagation();poiLocalOverlayView(view.zoom,view.x+d[0]*step,view.z+d[1]*step)}
  },true);
- window.addEventListener('pagehide',()=>{poiLocalClose();poiLocalSave()});
- document.addEventListener('visibilitychange',()=>{if(document.hidden){poiLocalClose();poiLocalSave()}});
+ document.addEventListener('workshopinputclear',()=>{
+  const captured=[...contacts.keys()];clear();
+  for(const id of captured)if(cv.hasPointerCapture(id))cv.releasePointerCapture(id);
+ });
+ window.addEventListener('pagehide',poiLocalSave);
+ document.addEventListener('visibilitychange',()=>{if(document.hidden)poiLocalSave()});
 }
 
 let poiMiniLast=null,poiMiniBuilds=0;
@@ -35166,6 +35242,7 @@ function facilityDrawSnowHorizon(p){
 
 function render(){
  if(window.pineStartup.failed)return;
+ if(typeof poiGameFrozen==='function'&&poiGameFrozen()){poiGameDeferred.add(render);return}
  requestAnimationFrame(render);
  if(poiScreenNoteFrozen()){
   if(typeof poiHitstopReset==='function')poiHitstopReset();
@@ -40598,8 +40675,8 @@ function poiOverlandUpload(q,m){
 function poiOverlandBakeFrame(list,areas,boot=false){
  if(poiOverlandBake&&!list.some(q=>q.key===poiOverlandBake.q.key))poiOverlandBake=null;
  let work=0;
- const start=performance.now();
- while(work++<(boot?2048:100)&&(boot||performance.now()-start<3)){
+ const wall=typeof poiWallNow==='function'?poiWallNow:()=>performance.now(),start=wall();
+ while(work++<(boot?2048:100)&&(boot||wall()-start<3)){
   if(!poiOverlandBake){
    const q=list.find(q=>!poiOverlandMeshes.has(q.key));if(!q)break;
    poiOverlandBake={q,g:poiOverlandChunkRows(q,areas.find(a=>a.id===q.id))};
@@ -40610,7 +40687,7 @@ function poiOverlandBakeFrame(list,areas,boot=false){
    break; // A frame may submit at most one fresh GPU chunk.
   }
  }
- poiOverlandStats.maxBakeMs=Math.max(poiOverlandStats.maxBakeMs,performance.now()-start);
+ poiOverlandStats.maxBakeMs=Math.max(poiOverlandStats.maxBakeMs,wall()-start);
 }
 const poiOverlandPrimedMusic=new WeakMap();
 function poiOverlandPrimeMusic(site){
@@ -40960,9 +41037,12 @@ function poiSnowPassUse(nx,nz,now){
  // Keep no inactive base GPU allocation on mobile. Paint a brief
  // transition before the base scene rebuild; keep the outdoor music.
  poiSnowPassPending=true;poiSnowPassVeil(true);poiStopRepeat();poiAnalogStop();
- requestAnimationFrame(()=>requestAnimationFrame(()=>{
-  if(!poiSnowPassChange(dest,performance.now())){poiSnowPassPending=false;poiSnowPassVeil(false)}
+ const done=()=>{if(!poiSnowPassChange(dest,performance.now())){poiSnowPassPending=false;poiSnowPassVeil(false)}};
+ const queued=()=>requestAnimationFrame(()=>requestAnimationFrame(()=>{
+  if(typeof poiGameFrozen==='function'&&poiGameFrozen())poiGameDeferred.add(queued);
+  else done();
  }));
+ queued();
  return true;
 }
 // END SNOW PASS ACTIVATION
@@ -41044,7 +41124,7 @@ function workshopResumeStart(){
  workshopResumeWrite(undefined,startupEditor||facilityParams.get('guild-return')==='1');
  // Native activity termination and updates need not dispatch beforeunload.
  // Position/mode writes are immediate; camera-only gestures are sampled.
- setInterval(workshopResumeWrite,500);
+ setInterval(()=>{if(typeof poiGameFrozen!=='function'||!poiGameFrozen())workshopResumeWrite()},500);
  window.addEventListener('pagehide',()=>workshopResumeWrite());
  document.addEventListener('visibilitychange',()=>{if(document.hidden)workshopResumeWrite()});
  window.addEventListener('pageshow',e=>{
@@ -42251,10 +42331,6 @@ function facilityBoot(resume,playOnOpen=false){
  if(facilitySite.id==='base'&&poiGameResetBlocked){
   toast('ゲーム世界の初期化バックアップを確認できません。保存データには手を加えていません。');
  }else facilityOpenPlayFromEntry(resume,playOnOpen);
- if(facilitySite.id==='base'){
-  window.addEventListener('pagehide',poiTownClockSuspend);
-  document.addEventListener('visibilitychange',()=>{if(document.hidden)poiTownClockSuspend()});
- }
  workshopResumeStart();
  facilityFinishResetCameraEntry();
 }
@@ -42887,12 +42963,6 @@ pineQueueCheckLayout(); // Position both permanent rows on initial editor load.
 $('topDownView').addEventListener('click',toggleTopDown);
 $('registerPOI').addEventListener('click',pineRegisterCurrentPOI);
 $('poiWalkToggle').addEventListener('click',()=>facilitySite?facilitySetPlay(!poiWalkActive):poiWalkSet(!poiWalkActive));
-// A hidden tab may deliver no animation frames until the player returns.
-document.addEventListener('visibilitychange',()=>{if(document.hidden){poiWildPause();poiEnemyCancelPlayer();poiMineUnlockCancel();poiStopRepeat();poiPlayerWeaponCancel()}});
-window.addEventListener('pagehide',()=>{poiMineUnlockCancel();poiStopRepeat();poiPlayerWeaponCancel()});
-document.addEventListener('visibilitychange',()=>{if(document.hidden)poiHealingCastCancel()});
-window.addEventListener('pagehide',poiHealingCastCancel);
-window.addEventListener('pagehide',()=>{poiWildPause();poiEnemyCancelPlayer()});
 $('enterGameWorld').addEventListener('click',()=>{
  if(facilitySite?.id==='base'&&poiWalkActive){poiGameResetOpen();return}
  pineSetCheckMode(false);if(facilitySite)facilitySetPlay(true);else if(!pineGameActive)facilityNavigate('base',true);
@@ -43313,7 +43383,6 @@ document.addEventListener('keydown',e=>{
  }
 },true);
 if(typeof ResizeObserver==='function')new ResizeObserver(poiScreenNoteResizeInk).observe(poiScreenNoteLayer);
-window.addEventListener('pagehide',poiScreenNoteClose);
 // END SCREEN NOTE UI
 const poiAnalogMedia=matchMedia('(orientation: landscape) and (pointer: coarse) and (min-width: 520px)');
 const poiAnalogPad=$('poiAnalogPad');
@@ -43605,6 +43674,7 @@ document.addEventListener('keydown',e=>{
  window.addEventListener('resize',reposition);window.visualViewport?.addEventListener('resize',reposition);
  const command=target=>target?.closest?.('[data-companion-command]');
  let right=null,handled=null;
+ document.addEventListener('workshopinputclear',()=>{right=null;handled=null});
  document.addEventListener('pointerdown',e=>{
   if(!panel.hidden&&!panel.contains(e.target)){right=null;poiCompanionUiClose(false)}
  },true);
@@ -43632,7 +43702,6 @@ document.addEventListener('keydown',e=>{
  if(e.key!=='Escape'||$('poiCompanionCommands').hidden)return;
  e.preventDefault();e.stopImmediatePropagation();poiCompanionUiClose();
 },true);
-window.addEventListener('pagehide',()=>poiCompanionUiClose(false));
 poiLocalBind();
 $('poiNameCancel').addEventListener('click',pineClosePOINameModal);
 $('poiNameForm').addEventListener('submit',e=>{e.preventDefault();pineConfirmPOIName()});
@@ -43645,7 +43714,9 @@ $('pickJsonFile').addEventListener('click',()=>$('jsonFile').click());
 $('jsonFile').addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{if(file.size>6*1024*1024)throw Error('ファイルが大きすぎます（上限6MB）');const contents=await file.text();JSON.parse(contents);$('jsonText').value=contents;toast('JSONファイルを読み込みました。「JSONを読み込む」で配置に反映します')}catch(err){toast('ファイルの読み込み失敗: '+err.message)}finally{e.target.value=''}});
 $('importJson').addEventListener('click',()=>{if(facilitySite){toast('JSONの読み込みは元の編集画面で行ってください。この施設の一時編集はJSON保存できます。');return}try{const o=JSON.parse($('jsonText').value);const before=JSON.stringify(data());loadData(o);undoStack.push(before);if(undoStack.length>45)undoStack.shift();redoStack.length=0;commit();$('jsonModal').classList.remove('open');toast('ワールドを読み込んだ')}catch(e){toast('読み込み失敗：'+e.message)}});
 $('showPalette').addEventListener('click',()=>{pineSetCheckMode(false);$('palette').classList.toggle('mobileOpen');$('inspector').classList.remove('mobileOpen')});
+poiPauseMounted=true;poiPauseInstallInputs();
 await window.pineStartup.checkpoint(2,'ワールドと保存データを読み込み中…');
+if(poiGameFrozen())await new Promise(poiGameWhenForeground);
 try{if(!startupEditor&&poiGameResetPending(localStorage))poiGameResetBlocked=!poiGameResetRecover(localStorage)}catch(_e){}
 const workshopResume=workshopResumeRead();
 const facilityRequested=startupEditor?null:facilityParams.get('facility')??(workshopResume?.route==='facility'?workshopResume.id:null);
