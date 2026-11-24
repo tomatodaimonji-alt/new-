@@ -15,7 +15,7 @@ test('real standing mesh depicts all gear, and idle held blade points slightly f
  const x={mesh:()=>({p:[],n:[],c:[]})};
  vm.createContext(x);
  vm.runInContext(grab('function tri(','function addPart(')+grab('function characterHuman(','function roundStack(')+
-  grab('function poiBuildPlayerMesh(','const POI_MONSTER_BREAK_MS='),x);
+  grab('// BEGIN PLAYER BARE HAND RIG','// END PLAYER BARE HAND RIG')+grab('function poiBuildPlayerMesh(','const POI_MONSTER_BREAK_MS='),x);
  x.deco=(m,id)=>x.cube(m,0,.25,0,.12,1.1,.10,[.8,.6,.3]);
  const naked=x.poiBuildPlayerMesh(null,null,null),outfit={head:{type:'starterCap'},torso:{type:'starterTunic'},legs:{type:'starterTrousers'},feet:{type:'starterBoots'}};
  for(const part of Object.keys(outfit)){

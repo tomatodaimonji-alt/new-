@@ -77,6 +77,7 @@ try{
  assert(drawing.bow>.07&&drawing.bow<1);
  assert(distance(drawing.arms.left.wrist,unposed.arms.left.wrist)>.10);
  for(let j=0;j<3;j++)await tick(48);
+ await tick(16);
  const full=verify(await get(),'equipWoodBow',bare.vertices);
  assert(full.bow>.94&&full.released,'release retains full-draw rig shape');
  for(let j=0;j<3;j++)await tick(36);

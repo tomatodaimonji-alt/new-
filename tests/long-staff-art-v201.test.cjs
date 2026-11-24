@@ -4,18 +4,18 @@ test('held long-staff downstroke reaches its original two-tile contact in each c
  const mesh=()=>({p:[],n:[],c:[]});
  const c={mesh,characterHuman(){},deco:(m,type)=>{m.p=[0,2.18,0];m.n=[0,1,0];m.c=[.4,.3,.2]},
   poiPlayerWeaponProfile:()=>({range:2,hit:210,pose:400})};
- vm.runInNewContext(cut('// BEGIN WORLD MELEE REACH','// Visual release only:')+cut('function poiBuildPlayerMesh(','function poiWalkAvatar(')+
+ vm.runInNewContext(cut('function tri(m,','function addPart(m,')+cut('function poiHumanGearType(','function poiRoleClothingGeometry(')+cut('// BEGIN WORLD MELEE REACH','// Visual release only:')+cut('function poiBuildPlayerMesh(','function poiWalkAvatar(')+
   cut('function characterArmRotation(','function roundStack(')+cut('function rot2(','function rotY(').split('\n')[0]+cut('function poiLongStaffGripStyle(','function poiBuildPlayerMesh(')+cut('function poiRoleToolGripStyle(','function poiStarterGearGeometry('),c);
  const at=ms=>c.poiPlayerProfilePose('equipLongStaff',ms);
  assert.equal(at(210).staffPhase,'down');assert.equal(at(100).staffPhase,'hold');assert.equal(at(330).staffPhase,'recover');assert.equal(at(400),null);
  for(const [r,dx,dz] of [[2,0,-1],[3,1,0],[0,0,1],[1,-1,0]]){
   const pose=at(210);pose.meleeReach=c.poiWorldMeleePlan('equipLongStaff',c.poiPlayerWeaponProfile(),210);
-  const [x,y,z]=c.poiBuildPlayerMesh('equipLongStaff',pose,null,0,r,0,0,0,null,true).p;
+  const [x,y,z]=c.poiBuildPlayerMesh('equipLongStaff',pose,null,0,r,0,0,0,null,true).p.slice(-3);
   const forward=x*dx+z*dz,lateral=x*dz-z*dx;
   assert(Math.abs(forward-2)<.001,JSON.stringify({r,forward}));
   assert(Math.abs(lateral)<.001&&Math.abs(y-.74)<.001);
  }
- assert(c.poiBuildPlayerMesh('equipLongStaff',null,null,0,0).p[1]>1.40,'loftier visible idle staff');
+ assert(c.poiBuildPlayerMesh('equipLongStaff',null,null,0,0).p.at(-2)>1.40,'loftier visible idle staff');
 });
 test('native prop has visibly longer calibrated silhouette while combat constants remain unchanged',()=>{
  const runtime=vm.runInNewContext(cut('// BEGIN PLAYER WEAPON PROFILES','function poiPlayerWeaponCancel(')+';poiPlayerWeaponProfile("equipLongStaff")');

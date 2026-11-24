@@ -51,7 +51,7 @@ test('poiWalkAvatar uploads a 240ms-contact thrust using exact locked yaw even i
  const src='function mesh(){return {p:[],n:[],c:[]}};'+cut('function tri(m,','function addPart(m,')+
   cut('function naturalBranch(m,','function naturalCrown(m,')+cut('function characterArmRotation(','function roundStack(')+
   cut('// BEGIN WORLD PLAYER SPEAR','// END WORLD PLAYER SPEAR')+
-  cut('function poiBuildPlayerMesh(','const POI_MONSTER_BREAK_MS=')+
+  cut('// BEGIN PLAYER SHARED BLOCK ARMS','// END PLAYER SHARED BLOCK ARMS')+cut('function poiHumanGearType(','function poiRoleClothingGeometry(')+cut('function poiBuildPlayerMesh(','const POI_MONSTER_BREAK_MS=')+
   ';function poiPlayerProfilePose(type,ms){return poiWorldSpearPose(poiPlayerWeaponProfile(type),ms)};poiWalkAvatar(1570);poiWalkMesh.p.slice(-3);';
  const tip=vm.runInNewContext(src,c);
  near((tip[0]-origin.x)*.6+(tip[2]-origin.z)*.8,3);
