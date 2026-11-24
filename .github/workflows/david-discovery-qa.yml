@@ -1,648 +1,186 @@
-name: Orvas actual rewards and three weapons
+name: Fire Wand flare actual one-shot QA
 on:
   push:
     branches: ['dot/workshop-david-discovery-qa']
 permissions:
   contents: read
 jobs:
-  verify:
+  audio:
     runs-on: ubuntu-24.04
     timeout-minutes: 9
-    strategy:
-      fail-fast: false
-      matrix:
-        suite: [orvas-reset-kit, orvas-weapons]
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 42ef0e3833439e67b6baff56ce840824c7c2e833
+          ref: 04c55894a275b66e3139e5c08986c2b29b506805
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Build exact combined candidate
+      - name: Build exact sound-only candidate
         run: |
           set -eu
-          test "$(git hash-object world-editor.html)" = 7db83b92dbc97a49f1d31d040b8a92c0d671f195
-          mkdir -p .qa/tests
+          test "$(git hash-object world-editor.html)" = aa855e8ed66395458f8f431d03c24d53168a304e
+          mkdir -p .qa/tests .qa/rendered
           cat >.qa/build.py <<'SOURCE'
           from pathlib import Path
-          import sys
-          src,dst=map(Path,sys.argv[1:]);s=src.read_text()
-          def rep(a,b):
-           global s
-           assert s.count(a)==1,(a,s.count(a))
-           s=s.replace(a,b,1)
-          def code(n):return Path(__file__).with_name(n).read_text()
-          rep('function poiDungeonRememberDefeat(o,state){',code('rewards.js')+'function poiDungeonRememberDefeat(o,state){')
-          rep("const reward=id==='northFort.minotaur'?poiNorthMinotaurRewardGrant(kit):kit;",
-              "const reward=id==='northFort.minotaur'?poiNorthMinotaurRewardGrant(kit):id==='davidTemple.david'&&typeof poiOrvasRewardGrant==='function'?poiOrvasRewardGrant(kit):kit;")
-          rep('const kit={weapon:saved.weapon,potions:saved.potions};',
-              "const kit={weapon:saved.weapon,potions:saved.potions};\n const orvas=typeof poiOrvasRewardMask==='function'?poiOrvasRewardMask(saved.orvasRewards):0;if(orvas)kit.orvasRewards=orvas;")
-          rep('const final=typeof poiCompanionReconcile===\'function\'?poiCompanionReconcile(restored):restored;',
-              '''const orvasRestored=typeof poiOrvasRewardRestore==='function'&&
-            (saved.dungeonPopulation?.dead?.['davidTemple.david']!==undefined||restored.armedDrops?.some(d=>poiOrvasRewardValid(d)))?
-            poiOrvasRewardRestore(restored,saved.dungeonPopulation):restored;
-           const final=typeof poiCompanionReconcile==='function'?poiCompanionReconcile(orvasRestored):orvasRestored;''')
-          rep('...(kit.northMinotaurAxeAwarded===true?{northMinotaurAxeAwarded:true}:{}),','...(kit.northMinotaurAxeAwarded===true?{northMinotaurAxeAwarded:true}:{}),'+
-              "...(typeof poiOrvasRewardMask==='function'&&poiOrvasRewardMask(kit.orvasRewards)?{orvasRewards:kit.orvasRewards}:{}),")
-          rep('for(const [index,d] of raw.slice(0,13).entries()){',
-              '''let legacy=0;
-           for(const d of raw.slice(0,16)){
-            const orvas=typeof poiOrvasRewardValid==='function'?poiOrvasRewardValid(d):null;
-            if(orvas){
-             if(!result.some(v=>v.id===d.id)&&d.durability===poiEquipmentDurabilityMax(d.type)){
-              const {bit,...drop}=orvas;result.push({...drop,durability:d.durability});
-             }
-             continue;
-            }
-            const index=legacy++;
-            if(index>12)continue;''')
-          rep("!poiArmedDuplicateWeapon(kit,d.type));","!(typeof poiOrvasRewardValid==='function'&&poiOrvasRewardValid(d)&&poiOrvasRewardOwned(kit,d.type))&&!poiArmedDuplicateWeapon(kit,d.type));")
-          rep("equipNorthMinotaurAxe:'ミノタウロスの長柄斧',","equipNorthMinotaurAxe:'ミノタウロスの長柄斧',equipOrvasHead:'オルヴァスの頭',equipOrvasGreatsword:'審判の巨剣',equipOrvasTwinGreatswords:'審判の双巨剣',")
-          rep("equipNorthMinotaurAxe:180,","equipNorthMinotaurAxe:180,equipOrvasHead:100,equipOrvasGreatsword:220,equipOrvasTwinGreatswords:210,")
-          rep("""{id:'equipNorthMinotaurAxe',name:'ミノタウロスの長柄斧',icon:'🪓',cat:'equipment'},""",
-          "{id:'equipNorthMinotaurAxe',name:'ミノタウロスの長柄斧',icon:'🪓',cat:'equipment'},\n{id:'equipOrvasHead',name:'オルヴァスの頭',icon:'♜',cat:'equipment'},\n{id:'equipOrvasGreatsword',name:'審判の巨剣',icon:'🗡',cat:'equipment'},\n{id:'equipOrvasTwinGreatswords',name:'審判の双巨剣',icon:'⚔',cat:'equipment'},")
-          rep("'equipLongStaff','equipNorthMinotaurAxe'];","'equipLongStaff','equipNorthMinotaurAxe','equipOrvasHead','equipOrvasGreatsword','equipOrvasTwinGreatswords'];")
-          rep("const name=byId(type)?.name||'モンスター',message=name+'を倒した';",
-              "const name=type==='monsterStoneDavid'&&typeof POI_ORVAS_NAME==='string'?POI_ORVAS_NAME:(byId(type)?.name||'モンスター'),message=name+'を倒した';")
-          rep("  bar.seen=frame;\n  if(bar.hp!==state.hp)", "  if(obj.type==='monsterStoneDavid'&&state.david?.wakeDone&&typeof POI_ORVAS_NAME==='string')bar.el.setAttribute('aria-label',POI_ORVAS_NAME+'のHP');\n  bar.seen=frame;\n  if(bar.hp!==state.hp)")
-          rep("function decoBase(m,id,x,y,z,r=0){",code('art.js')+"function decoBase(m,id,x,y,z,r=0){")
-          rep("case 'equipNorthMinotaurAxe':", """case 'equipOrvasHead':poiOrvasHeadGeometry(m,x,y,z);break;
-          case 'equipOrvasGreatsword':poiOrvasGreatswordGeometry(m,x,y,z);break;
-          case 'equipOrvasTwinGreatswords':poiOrvasTwinGeometry(m,x,y,z);break;
-          case 'equipNorthMinotaurAxe':""")
-          rep("const POI_PLAYER_WEAPON_PROFILES=Object.freeze({",code('combat.js')+"const POI_PLAYER_WEAPON_PROFILES=Object.freeze({")
-          rep(" equipNorthMinotaurAxe:{range:2.55", """ equipOrvasHead:{range:14,damage:48,hit:420,ready:1520,pose:760,speed:1,reach:5,eyeBeam:true},
-           equipOrvasGreatsword:{range:POI_DAVID_SWEEP_FORWARD,damage:46,hit:560,ready:1150,pose:1150,speed:1,reach:5,sweep:true,orvasCut:'sweep'},
-           equipOrvasTwinGreatswords:{range:3.55,damage:63,hit:720,ready:1730,pose:1730,speed:1,reach:4,orvasCut:'double'},
-           equipNorthMinotaurAxe:{range:2.55""")
-          rep(" if(a.profile.sweep&&contact.aim)poiSwordResolve(contact,now);",
-              " if(a.profile.eyeBeam&&typeof poiOrvasBeamResolve==='function')poiOrvasBeamResolve(contact,now);\n else if(a.profile.orvasCut==='sweep'&&typeof poiOrvasCutResolve==='function')poiOrvasCutResolve(contact,now,'sweep');\n else if(a.profile.sweep&&contact.aim)poiSwordResolve(contact,now);")
-          rep("else if(type!=='equipWoodBow'&&type!=='equipWoodSword'&&!profile.frontArc)", "else if(type!=='equipWoodBow'&&type!=='equipWoodSword'&&!profile.frontArc&&!profile.eyeBeam)")
-          rep(" if(p.sweep)return poiPlayerSwordSweepPose(ms);", """ if(p.eyeBeam)return poiOrvasHeadPose(p,ms);
-           if(p.orvasCut==='double')return poiOrvasTwinPose(ms);
-           if(type==='equipOrvasGreatsword'){
-            const t=ms<p.hit?ms/p.hit*108:108+(ms-p.hit)/(p.pose-p.hit)*188;
-            return poiPlayerSwordSweepPose(t);
-           }
-           if(p.sweep)return poiPlayerSwordSweepPose(ms);""")
-          rep("equipLongStaff:.74,equipNorthMinotaurAxe:.83", "equipLongStaff:.74,equipNorthMinotaurAxe:.83,equipOrvasGreatsword:.79")
-          rep("equipLongStaff:1.58,equipNorthMinotaurAxe:2.14,", "equipLongStaff:1.58,equipNorthMinotaurAxe:2.14,equipOrvasGreatsword:4.65,")
-          rep("  const prop=mesh();deco(prop,weapon,0,0,0,0);", """  if(weapon==='equipOrvasHead'){
-             const head=mesh();poiOrvasHeadGeometry(head,...poiOrvasTrophyBase([gx,gy,gz]));
-             const origin=[x,y,z];
-             for(let i=0;i<head.p.length;i+=3){
-              const [u,v]=rotate(head.p[i],head.p[i+2]),[nx,nz]=rotate(head.n[i],head.n[i+2]);
-              m.p.push(origin[0]+u,origin[1]+head.p[i+1],origin[2]+v);m.n.push(nx,head.n[i+1],nz);
-              m.c.push(head.c[i],head.c[i+1],head.c[i+2]);
-             }
-             return m;
-            }
-            const prop=mesh();deco(prop,weapon,0,0,0,0);""")
-          rep("weapon==='equipNorthMinotaurAxe'?{grip:.64,scale:.75}:null;", "weapon==='equipNorthMinotaurAxe'?{grip:.64,scale:.75}:weapon==='equipOrvasGreatsword'?{grip:.34,scale:.68}:null;")
-          rep("  poiMonsterRender(now,p.vp);","  poiMonsterRender(now,p.vp);\n  if(typeof poiDrawOrvasPlayerBeam==='function')poiDrawOrvasPlayerBeam(now,p.vp);")
-          rep(" equipNorthMinotaurAxe:'北の古砦のミノタウロスが振るっていた長柄斧。',"," equipNorthMinotaurAxe:'北の古砦のミノタウロスが振るっていた長柄斧。',equipOrvasHead:'両目から光線を放つ、石造りの戦利品。放つたびに耐久を消費する。',equipOrvasGreatsword:'オルヴァスが振るった巨大な石剣。前方を広く薙ぎ払う。',equipOrvasTwinGreatswords:'左右の巨剣で、正面へ縦斬りを二度放つ。',")
-          rep(" if(poiEquippedWeapon()!==a.type){poiPlayerWeaponCancel(true);return}\n if(now<a.started+a.profile.hit)return;",
-              """ if(poiEquippedWeapon()!==a.type&&!(a.orvasPaid&&a.orvasWeaponAfterWear===poiEquippedWeapon())){poiPlayerWeaponCancel(true);return}
-           if(a.profile.orvasCut==='double'&&typeof poiOrvasTwinFrame==='function'){poiOrvasTwinFrame(a,now);return}
-           if(now<a.started+a.profile.hit)return;""")
-          rep("  if(weapon==='equipOrvasHead'){","""  if(weapon==='equipOrvasTwinGreatswords'){
-             const piece=mesh();poiOrvasGreatswordGeometry(piece,0,0,0);
-             for(const [i,side] of [[0,'right'],[1,'left']]){
-              const grip=arms[side].wrist,angle=pose?.orvasTwin?.[i],tilt=Number.isFinite(angle)?-angle:-.42;
-              const R=characterArmRotation(tilt,i?.14:-.14);
-              for(let j=0;j<piece.p.length;j+=3){
-               const [u,v,w]=R(piece.p[j]*.67,(piece.p[j+1]-.34)*1.09,piece.p[j+2]*.76);
-               const [px,pz]=rotate(u+grip[0],w+grip[2]),nn=R(piece.n[j]/.67,piece.n[j+1]/1.09,piece.n[j+2]/.76);
-               const [nx,nz]=rotate(nn[0],nn[2]),n=Math.hypot(nx,nn[1],nz)||1;
-               m.p.push(x+px,y+grip[1]+v,z+pz);m.n.push(nx/n,nn[1]/n,nz/n);m.c.push(piece.c[j],piece.c[j+1],piece.c[j+2]);
-              }
-             }
-             return m;
-            }
-            if(weapon==='equipOrvasHead'){""")
-          rep(" if(d.wakeCursor!==undefined&&!poiDavidAwakeningTick(o,s,b,now))return false;",
-              """ const alreadyNamed=d.wakeDone;
-           if(d.wakeCursor!==undefined&&!poiDavidAwakeningTick(o,s,b,now))return false;
-           if(!alreadyNamed&&d.wakeDone&&typeof POI_ORVAS_NAME==='string'&&typeof poiMessagePush==='function')
-            poiMessagePush(POI_ORVAS_NAME+'が目を覚ました','notice',now);""")
-          dst.parent.mkdir(parents=True,exist_ok=True);dst.write_text(s)
+          import base64,re,sys
+          src,dst=map(Path,sys.argv[1:]);s=src.read_bytes()
+          pcm=(Path(__file__).parent/'rendered/wandFlameLaunch.pcm').read_bytes()
+          assert len(pcm)==8256
+          b64=base64.b64encode(pcm)
+          lines=b' +\n'.join(b"  '"+b64[i:i+120]+b"'" for i in range(0,len(b64),120))
+          pattern=rb"\n wandFlameLaunch:\s*(?:'[A-Za-z0-9+/=]+'\s*(?:\+\s*)?)+(?=,)"
+          s,n=re.subn(pattern,b'\n wandFlameLaunch:\n'+lines,s);assert n==1
+          dst.parent.mkdir(parents=True,exist_ok=True);dst.write_bytes(s)
           SOURCE
-          cat >.qa/rewards.js <<'SOURCE'
-          // BEGIN ORVAS REWARD CORE
-          const POI_ORVAS_NAME='オルヴァス';
-          const POI_ORVAS_REWARDS=Object.freeze({
-           'orvas-head':Object.freeze({id:'orvas-head',type:'equipOrvasHead',x:24,z:103,y:0,bit:1}),
-           'orvas-greatsword':Object.freeze({id:'orvas-greatsword',type:'equipOrvasGreatsword',x:25,z:104,y:0,bit:2}),
-           'orvas-twin-greatswords':Object.freeze({id:'orvas-twin-greatswords',type:'equipOrvasTwinGreatswords',x:23,z:104,y:0,bit:4})
+          cat >.qa/tests/fire-wand-flare.test.cjs <<'SOURCE'
+          const assert=require('node:assert/strict'),fs=require('node:fs'),test=require('node:test');
+          const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
+          const asset=name=>{
+           const m=html.match(new RegExp('\\n '+name+':\\s*((?:\'[A-Za-z0-9+/=]+\'\\s*(?:\\+\\s*)?)+)'));
+           assert(m,name);
+           return Buffer.from([...m[1].matchAll(/'([^']+)'/g)].map(x=>x[1]).join(''),'base64');
+          };
+          test('recorded fire wand is a short immediately voiced one-shot with smooth quiet tail and headroom',()=>{
+           const b=asset('wandFlameLaunch'),n=b.length/2,a=Array.from({length:n},(_,i)=>b.readInt16LE(i*2)/32768);
+           assert(n>=3360&&n<=4800,'140–200 ms only, no sustained torch');
+           const rms=(s,e)=>Math.sqrt(a.slice(s,e).reduce((sum,x)=>sum+x*x,0)/(e-s));
+           assert(Math.abs(a[0])<=1/32768&&Math.abs(a.at(-1))<=1/32768,'clickless endpoints');
+           const max=Math.max(...a.map(Math.abs));
+           assert(max>=.22&&max<=.60,'one shot peak .22–.60 before normal mixer');
+           const peak=a.findIndex(x=>Math.abs(x)>=max);
+           assert(peak<1680,'body arrives within first 70ms');
+           assert(rms(120,n*.30|0)>=.045,'audible body before the short decay');
+           assert(rms(n-480,n)<rms(120,n*.30|0)*.09,'last 20ms not a hiss');
+           assert(html.includes("poiTryRecordedFoley('wandFlameLaunch',now,.52)"),'same launch routing and mixing');
           });
-          function poiOrvasRewardValid(drop){
-           const d=Object.hasOwn(POI_ORVAS_REWARDS,drop?.id)?POI_ORVAS_REWARDS[drop.id]:null;
-           return d&&d.type===drop.type&&d.x===drop.x&&d.z===drop.z&&d.y===drop.y?d:null;
-          }
-          function poiOrvasRewardOwned(kit,type){
-           return poiInventoryOrdinarySlots(kit).some(c=>c?.type===type)||poiAnyChestHas(kit,type)||kit.drops?.some(d=>d.type===type);
-          }
-          function poiOrvasRewardMask(mask){return Number.isInteger(mask)&&mask>=0&&mask<=7?mask:0}
-          function poiOrvasRewardGrant(kit,grant=true){
-           const old=kit.armedDrops||[];let drops=old,mask=poiOrvasRewardMask(kit.orvasRewards);
-           for(const reward of Object.values(POI_ORVAS_REWARDS)){
-            if(mask&reward.bit)continue;
-            const {bit,...drop}=reward;
-            const exists=old.some(d=>poiOrvasRewardValid(d)===reward)||poiOrvasRewardOwned(kit,reward.type);
-            if(!exists&&!grant)continue;
-            mask|=bit;
-            if(!exists)drops=[...drops,{...drop,durability:poiEquipmentDurabilityMax(drop.type)}];
-           }
-           return mask!==kit.orvasRewards&&mask?{...kit,orvasRewards:mask,...(drops!==old?{armedDrops:drops}:{})}:kit;
-          }
-          function poiOrvasRewardRestore(kit,raw,minute=poiDungeonPopulationMinute()){
-           const when=raw?.version===1?raw.dead?.['davidTemple.david']:null;
-           return poiOrvasRewardGrant(kit,Number.isSafeInteger(when)&&when>=0&&when<=minute);
-          }
-          // END ORVAS REWARD CORE
           SOURCE
-          cat >.qa/art.js <<'SOURCE'
-          // BEGIN ORVAS TROPHY ART
-          const POI_ORVAS_EYES=Object.freeze([[-.093,.47,.201],[.093,.47,.201]]);
-          function poiOrvasHeadGeometry(m,x,y,z){
-           const P=(a,b,c)=>[x+a,y+b,z+c];
-           const stone=[.60,.566,.476],edge=[.76,.705,.593],shade=[.32,.30,.26],gold=[1.05,.77,.31];
-           // Fractured neck, layered brow and copper-gold iris in the original
-           // stone make the held item read as a trophy, not a wand.
-           cube(m,x,y+.045,z,.24,.115,.25,shade);
-           cube(m,x,y+.15,z,.30,.20,.29,stone);
-           cube(m,x,y+.32,z-.015,.35,.29,.33,stone);
-           cube(m,x,y+.54,z-.022,.27,.10,.286,edge);
-           for(const [a,b,f] of POI_ORVAS_EYES){
-            cube(m,x+a,y+b-.035,z+f-.030,.137,.11,.050,shade);
-            quad(m,P(a-.046,b-.056,f),P(a+.038,b-.045,f),P(a+.040,b+.037,f),P(a-.038,b+.028,f),gold);
-            tri(m,P(a-.024,b-.035,f+.002),P(a+.024,b-.026,f+.002),P(a,b+.026,f+.002),[1.35,1.18,.64]);
-           }
-           const strip=.198;
-           quad(m,P(-.128,.552,strip),P(.128,.552,strip),P(.102,.569,.127),P(-.102,.569,.127),edge);
-           tri(m,P(-.10,.31,.16),P(.08,.294,.156),P(.076,.330,.159),shade);
-          }
-          function poiOrvasGreatswordGeometry(m,x,y,z){
-           const P=(a,b,c)=>[x+a,y+b,z+c];
-           const blade=[.58,.56,.49],cut=[.80,.769,.655],dark=[.36,.33,.28],gold=[.72,.55,.28];
-           cube(m,x,y+.05,z,.23,.10,.20,gold);
-           cube(m,x,y+.09,z,.118,.44,.115,dark);
-           cube(m,x,y+.53,z,.86,.15,.19,dark);
-           cube(m,x,y+.56,z,.24,.12,.22,gold);
-           for(const side of [-1,1]){
-            const b=side,apex=P(0,3.14,0),base=P(.30*b,.67,0),shoulder=P(.346*b,2.83,0);
-            const face=P(.05*b,.67,.12),tip=P(.078*b,2.77,.09);
-            quad(m,base,shoulder,tip,face,cut);
-            tri(m,shoulder,apex,tip,cut);
-            quad(m,face,tip,P(0,2.79,.143),P(0,.67,.15),blade);
-            tri(m,tip,apex,P(0,2.79,.143),blade);
-            quad(m,P(.05*b,.67,-.12),P(.078*b,2.77,-.09),shoulder,base,cut);
-            tri(m,P(.078*b,2.77,-.09),apex,shoulder,cut);
-            quad(m,P(0,.67,-.15),P(0,2.79,-.143),P(.078*b,2.77,-.09),P(.05*b,.67,-.12),dark);
-            tri(m,P(0,2.79,-.143),apex,P(.078*b,2.77,-.09),blade);
-           }
-          }
-          function poiOrvasTwinGeometry(m,x,y,z){
-           const blades=mesh();poiOrvasGreatswordGeometry(blades,0,0,0);
-           for(const side of [-1,1])for(let i=0;i<blades.p.length;i+=3){
-            const a=side*.20,c=Math.cos(a),s=Math.sin(a),px=blades.p[i]*.66,py=blades.p[i+1]*.66;
-            m.p.push(x+side*.17+px*c-py*s,y+py*c+px*s,z+side*.10+blades.p[i+2]*.66);
-            m.n.push(blades.n[i]*c-blades.n[i+1]*s,blades.n[i+1]*c+blades.n[i]*s,blades.n[i+2]);
-            m.c.push(blades.c[i],blades.c[i+1],blades.c[i+2]);
-           }
-          }
-          // END ORVAS TROPHY ART
-          SOURCE
-          cat >.qa/combat.js <<'SOURCE'
-          // BEGIN ORVAS PLAYER BEAM
-          let poiOrvasPlayerBeam=null,poiOrvasBeamGpu=null;
-          const POI_ORVAS_BEAM_MS=210,POI_ORVAS_EYE_LIFT=.055,POI_ORVAS_EYE_AHEAD=.07;
-          function poiOrvasHeadPose(p,ms){
-           const raise=Math.min(1,ms/Math.max(1,p.hit*.78)),lower=Math.min(1,Math.max(0,(ms-p.hit-160)/Math.max(1,p.pose-p.hit-160)));
-           const t=(raise*raise*(3-2*raise))*(1-lower*lower*(3-2*lower));
-           return {strike:1.38*t,guard:.60*t,sweep:-.08*t,twist:0};
-          }
-          function poiOrvasTrophyBase(wrist){
-           return [wrist[0],wrist[1]+POI_ORVAS_EYE_LIFT,wrist[2]+POI_ORVAS_EYE_AHEAD];
-          }
-          function poiOrvasWorldEyes(shot){
-           const o=shot.aim,d={x:shot.dx,z:shot.dz},w=poiOrvasTrophyBase(poiPlayerWeaponHands(poiOrvasHeadPose(shot.profile,shot.profile.hit),0).right.wrist);
-           const h=poiCreekPlayerHeight(shot.contactAt)+o.y*1.4+.03;
-           return POI_ORVAS_EYES.map(e=>{
-            const x=w[0]+e[0],z=w[2]+e[2];
-            return {x:o.x+x*d.z+z*d.x,y:o.y,z:o.z-x*d.x+z*d.z,h:h+w[1]+e[1]};
-           });
-          }
-          function poiOrvasBeamResolve(shot,now){
-           if(!shot.aim||!poiEquipmentSpendWeapon('equipOrvasHead'))return false;
-           const d={x:shot.dx,z:shot.dz},eyes=poiOrvasWorldEyes({...shot,contactAt:now}),o=shot.aim,pass=poiAimWall(o),max=shot.profile.range;
-           const targets=poiAimTargetList(o,max+1,now);
-           const rays=eyes.map(e=>{
-            const leadX=e.x-o.x,leadZ=e.z-o.z,lead=Math.hypot(leadX,leadZ),heading=poiAimUnit(leadX,leadZ);
-            const open=!heading||poiAimWallLimit(o,heading,lead,pass)+POI_AIM_EPS>=lead;
-            const left=Math.max(0,max-(leadX*d.x+leadZ*d.z));
-            return {...e,end:open?poiAimWallLimit(e,d,left,pass):0};
-           });
-           const muzzle={x:(eyes[0].x+eyes[1].x)/2,z:(eyes[0].z+eyes[1].z)/2,y:o.y};
-           const q={kind:'beam',sx:muzzle.x-d.x*.28,sz:muzzle.z-d.z*.28,dx:d.x,dz:d.z,y:o.y};
-           let best=null,depth=Infinity,hitRay=-1;
-           for(const t of targets){
-            if(t.id.y!==o.y||!poiDavidArea(q,{...t,y:t.id.y}))continue;
-            const dx=t.x-muzzle.x,dz=t.z-muzzle.z,at=dx*d.x+dz*d.z,len=Math.hypot(dx,dz);
-            const line=poiAimUnit(dx,dz);
-            const free=rays.findIndex(r=>r.end>POI_AIM_EPS&&at<=r.end+POI_AIM_EPS);
-            if(free<0||at>=depth||!line||poiAimWallLimit(muzzle,line,len,pass)+POI_AIM_EPS<len)continue;
-            best=t;depth=at;hitRay=free;
-           }
-           if(best){
-            // The paired filaments are one attack, with one consumption and one
-            // damage event. Neither extends through its own first physical wall.
-            for(const r of rays)r.end=Math.min(r.end,depth);
-            poiPlayerDamageTarget([best.id,best.state],Math.round(best.x),Math.round(best.z),shot.profile.damage,shot.type,now,true);
-           }
-           poiOrvasPlayerBeam={rays,d,start:now,level:o.y,hitRay};
-           if(typeof poiAudioAllowed==='function'&&poiAudioAllowed()&&poiAudioEnabled&&poiAudioLevels.master&&poiAudioLevels.se){
-            poiAudioStart();
-            const ctx=poiAudioContext;
-            if(ctx?.state==='running')try{
-             const t=ctx.currentTime,g=.46;
-             poiPlayImpactBuffer(poiDavidAlienBuffer(ctx),t,g,(_source,node)=>{
-              node.gain.setValueAtTime(0,t);
-              node.gain.linearRampToValueAtTime(g,t+.025);
-              node.gain.setValueAtTime(g,t+.105);
-              node.gain.linearRampToValueAtTime(0,t+.195);
-             },.21);
-            }catch{}
-           }
-           return true;
-          }
-          function poiOrvasCutResolve(shot,now,kind,index=0){
-           const o=shot.aim,q={kind,sx:o.x,sz:o.z,dx:shot.dx,dz:shot.dz,y:o.y},pass=poiAimWall(o);
-           const range=kind==='sweep'?Math.max(POI_DAVID_SWEEP_FORWARD,POI_DAVID_SWEEP_SIDE):Math.hypot(3.55,1.5);
-           const hits=poiAimTargetList(o,range,now).filter(t=>{
-            if(t.id.y!==o.y||!poiDavidArea(q,{...t,y:t.id.y}))return false;
-            const x=t.x-o.x,z=t.z-o.z,n=Math.hypot(x,z),dir=poiAimUnit(x,z);
-            return dir&&poiAimWallLimit(o,dir,n,pass)+POI_AIM_EPS>=n;
-           });
-           if(!hits.length)return false;
-           if(!shot.orvasPaid&&!poiEquipmentSpendWeapon(shot.type))return false;
-           const damage=kind==='double'?POI_DAVID_PATTERNS.double.damage[index]:shot.profile.damage;
-           for(const t of hits)poiPlayerDamageTarget([t.id,t.state],Math.round(t.x),Math.round(t.z),damage,shot.type,now,true,false,o);
-           return true;
-          }
-          function poiOrvasTwinPose(ms){
-           const times=POI_DAVID_PATTERNS.double.hits;
-           const s=v=>{v=Math.max(0,Math.min(1,v));return v*v*(3-2*v)};
-           const angles=times.map((hit,i)=>{
-            if(ms<410)return -.98*s(ms/410);
-            if(ms<hit-145)return -.98;
-            if(ms<hit)return -.98+2.46*s((ms-hit+145)/145);
-            return 1.48*(1-s((ms-times[1]-105)/510));
-           });
-           return {strike:angles[0],guard:angles[1],sweep:0,twist:0,orvasTwin:angles};
-          }
-          function poiOrvasTwinFrame(a,now){
-           const i=a.orvasCursor??0,hit=POI_DAVID_PATTERNS.double.hits[i];
-           if(now<a.started+hit)return;
-           a.orvasCursor=i+1;
-           const aim=poiAimOrigin(now),before=poiEquippedWeapon(),
-            landed=poiOrvasCutResolve({...a,aim},now,'double',i);
-           if(landed&&!a.orvasPaid){a.orvasPaid=true;a.orvasWeaponAfterWear=poiEquippedWeapon()}
-           if(i===1||(!a.orvasPaid&&before!==poiEquippedWeapon()))poiPlayerWeaponPending=null;
-          }
-          function poiDrawOrvasPlayerBeam(now,vp){
-           const a=poiOrvasPlayerBeam,age=a?now-a.start:Infinity;
-           if(!a||!poiWalkActive||poiWalkLevel!==a.level||age>=POI_ORVAS_BEAM_MS){
-            if(poiOrvasBeamGpu){gl.deleteBuffer(poiOrvasBeamGpu.buf);poiOrvasBeamGpu=null}
-            poiOrvasPlayerBeam=null;return;
-           }
-           if(!poiOrvasBeamGpu){
-            const m=mesh(),d=a.d;
-            for(const r of a.rays){
-             if(r.end<=.01)continue;
-             const P=(len,s,y)=>[r.x+.5+d.x*len+d.z*s,r.h+y,r.z+.5+d.z*len-d.x*s];
-             quad(m,P(0,-.021,0),P(0,.021,0),P(r.end,.034,0),P(r.end,-.034,0),[1.30,.81,.33]);
-             quad(m,P(0,0,-.018),P(0,0,.018),P(r.end,0,.031),P(r.end,0,-.031),[1.35,1.20,.68]);
-            }
-            if(m.p.length)poiOrvasBeamGpu=upload(m);
-           }
-           if(!poiOrvasBeamGpu)return;
-           const alpha=1-Math.max(0,(age-110)/(POI_ORVAS_BEAM_MS-110));
-           gl.enable(gl.BLEND);gl.blendFunc(gl.CONSTANT_ALPHA,gl.ONE_MINUS_CONSTANT_ALPHA);
-           gl.blendColor(0,0,0,alpha);gl.depthMask(false);
-           try{draw(poiOrvasBeamGpu,vp)}
-           finally{gl.depthMask(true);gl.blendColor(0,0,0,0);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.disable(gl.BLEND)}
-          }
-          // END ORVAS PLAYER BEAM
-          SOURCE
-          cat >.qa/reset.py <<'SOURCE'
-          from pathlib import Path
-          import sys
-          src,out=map(Path,sys.argv[1:]);s=src.read_text()
-          def rep(a,b):
-           global s
-           assert s.count(a)==1,(a,s.count(a))
-           s=s.replace(a,b,1)
-          rep('function poiGameResetDecode(raw){','''const POI_ORVAS_RESET_ITEMS=Object.freeze(['equipOrvasHead','equipOrvasGreatsword','equipOrvasTwinGreatswords']);
-          function poiGameResetKit(){
-           const base={weapon:null,potions:POI_HOTBAR_POTION_START,worn:{...POI_FRESH_ARMOR}},slots=poiInventoryOrdinarySlots(base);
-           for(let i=0;i<POI_ORVAS_RESET_ITEMS.length;i++){
-            const type=POI_ORVAS_RESET_ITEMS[i],durability=poiEquipmentDurabilityMax(type);
-            if(!Number.isInteger(durability)||durability<=0||slots[i+2])throw Error('invalid Orvas reset equipment');
-            slots[i+2]={type,count:1,durability};
-           }
-           return JSON.stringify({version:1,weaponDurabilityVersion:2,...base,slots});
-          }
-          function poiGameResetSeedOwned(raw){
-           if(typeof raw!=='string')return false;
-           try{
-            const kit=JSON.parse(raw),s=kit?.slots;
-            return kit?.version===1&&kit.weapon===null&&kit.weaponDurabilityVersion===2&&
-              kit.potions===POI_HOTBAR_POTION_START&&Array.isArray(s)&&s.length===POI_HOTBAR_SIZE+POI_BAG_SAVED&&
-              s[0]?.type===POI_INVENTORY_SWORD&&s[0].count===1&&s[1]?.type===POI_INVENTORY_HERB&&s[1].count===kit.potions&&
-              POI_ORVAS_RESET_ITEMS.every((type,i)=>s[i+2]?.type===type&&s[i+2].count===1&&Number.isInteger(s[i+2].durability)&&s[i+2].durability>0)&&
-              s.slice(5).every(c=>c===null);
-           }catch(_e){return false}
-          }
-          function poiGameResetDecode(raw){''')
-          rep("  (keys.includes(WORKSHOP_RESUME_KEY)&&!poiGameResetBaseResume(d.before[WORKSHOP_RESUME_KEY])))throw Error('invalid reset scope');","""  (keys.includes(WORKSHOP_RESUME_KEY)&&!poiGameResetBaseResume(d.before[WORKSHOP_RESUME_KEY]))||
-            (Object.hasOwn(d,'seed')&&(d.phase!=='prepared'||!poiGameResetSeedOwned(d.seed))))throw Error('invalid reset scope');""")
-          rep("function poiGameResetArchive(storage,status,before){\n const raw=JSON.stringify({version:1,phase:status,before});","function poiGameResetArchive(storage,status,before,seed=null){\n const raw=JSON.stringify({version:1,phase:status,before,...(seed===null?{}:{seed})});")
-          rep("function poiGameResetRestore(storage,before){","function poiGameResetRestore(storage,before,seed=null){")
-          rep("  if(current!==null&&current!==value)throw Error('new game data has appeared');","  if(current!==null&&current!==value&&!(key===POI_HOTBAR_KEY&&current===seed))throw Error('new game data has appeared');")
-          rep("  if(value!==null&&storage.getItem(key)!==value)storage.setItem(key,value);","""  const current=storage.getItem(key);
-            if(value!==null&&current!==value)storage.setItem(key,value);
-            else if(value===null&&key===POI_HOTBAR_KEY&&seed!==null&&current===seed)storage.removeItem(key);""")
-          rep("if(archive.phase==='prepared')poiGameResetRestore(storage,archive.before);","if(archive.phase==='prepared')poiGameResetRestore(storage,archive.before,archive.seed??null);")
-          rep("function poiGameResetStorage(storage){\n let prepared=false,before;","function poiGameResetStorage(storage,seedOrvas=false){\n let prepared=false,before,seed=null;")
-          rep("  poiGameResetArchive(storage,'prepared',before);prepared=true;","""  if(seedOrvas){seed=poiGameResetKit();if(!poiGameResetSeedOwned(seed))throw Error('invalid reset seed')}
-            poiGameResetArchive(storage,'prepared',before,seed);prepared=true;""")
-          rep("  poiGameResetArchive(storage,'complete',before);\n  return {ok:true,before};", """  if(seed!==null){
-             if(storage.getItem(POI_HOTBAR_KEY)!==null)throw Error('new game data has appeared');
-             storage.setItem(POI_HOTBAR_KEY,seed);
-             if(storage.getItem(POI_HOTBAR_KEY)!==seed)throw Error('reset kit did not verify');
-            }
-            poiGameResetArchive(storage,'complete',before);
-            return {ok:true,before,...(seed===null?{}:{seed})};""")
-          rep("try{poiGameResetRestore(storage,before)}catch(_restore)","try{poiGameResetRestore(storage,before,seed)}catch(_restore)")
-          rep("function poiGameReset(){","function poiGameReset(seedOrvas=false){")
-          rep(" const result=poiGameResetStorage(localStorage);"," const result=poiGameResetStorage(localStorage,seedOrvas);")
-          rep("try{poiGameResetRestore(localStorage,result.before)}catch(_restore)","try{poiGameResetRestore(localStorage,result.before,result.seed??null)}catch(_restore)")
-          rep(" const result=poiGameReset();\n if(result.ok)return;"," const result=poiGameReset(true);\n if(result.ok)return;")
-          out.parent.mkdir(parents=True,exist_ok=True);out.write_text(s)
-          SOURCE
-          cat >.qa/tests/orvas-weapons-browser.mjs <<'SOURCE'
-          import assert from 'node:assert/strict';
-          import {createServer} from 'node:http';
-          import {createRequire} from 'node:module';
-          import {readFileSync} from 'node:fs';
-          import {Script} from 'node:vm';
-          let h=readFileSync(process.argv[2]??'world-editor.html','utf8');
-          const install=(a,b)=>{assert.equal(h.split(a).length,2,a);h=h.replace(a,b)};
-          const mark="if(facilityParams.get('test')==='1')window.__editorTest={";
-
-
-          install(mark,`
-           window.__orvas={
-            frame:()=>render(),
-            stage:index=>{
-             if(!workshopResumeRestorePosition({x:24,z:108,y:0,facing:1}))return false;
-             poiMonsterStates.clear();poiCombatLockReset();
-             return poiEquipHotbarItem(index)?.ok;
-            },
-            addTargets:targets=>{
-             const list=targets.map(([x,z,y])=>{
-              const o={x,z,y,type:'monsterSlime',rot:0},s=poiCombatActorMake(o);s.hp=100;s.townOwned=true;
-              poiMonsterStates.set(o,s);return s;
-             });
-             window.__orvas.targets=list;poiMonsterMeshDirty=true;
-            },
-            state:()=>{
-             const k=poiHotbarRead(),slots=poiInventorySlots(k),weapon=poiEquippedWeapon(),a=poiPlayerWeaponPending;
-             const beam=poiOrvasPlayerBeam;
-             return {weapon,ready:poiAttackReady,clock:performance.now(),pending:!!a,cursor:a?.orvasCursor,
-              used:slots.find(c=>c?.type===weapon)?.durability,hp:window.__orvas.targets?.map(s=>s.hp),
-              beam:beam?{rays:beam.rays,draw:!!poiOrvasBeamGpu}:null,start:poiWalkActionStarted,
-              name:POI_ORVAS_NAME,items:slots.slice(2,5).map(c=>c?.type)};
-            }
-           };`+mark);
-          install(' requestAnimationFrame(render);',' if(!window.__orvasManual)requestAnimationFrame(render);');
-          for(const [,js] of h.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(js);
-          if(process.env.ORVAS_NATIVE_PARSE_ONLY){console.log('Orvas weapons actual browser fixture parses');process.exit(0)}
-          const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
-          const srv=createServer((q,r)=>{r.setHeader('Content-Type','text/html; charset=utf-8');r.end(q.url==='/seed'?'<title>Seed</title>':h)});
-          await new Promise(r=>srv.listen(0,'127.0.0.1',r));
-          const root='http://127.0.0.1:'+srv.address().port;let browser;
-          try{
-           browser=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
-
-           const ctx=await browser.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.65});
-           const p=await ctx.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));p.setDefaultTimeout(18000);
-           await p.goto(root+'/?facility=base&facility-play=1&test=1',{waitUntil:'domcontentloaded'});
-           await p.locator('#pineStartupCover').waitFor({state:'hidden'});
-           const read=()=>p.evaluate(()=>window.__orvas.state());
-           const keys=['equipOrvasHead','equipOrvasGreatsword','equipOrvasTwinGreatswords'];
-           assert(!(await read()).items.some(x=>keys.includes(x)));
-           await p.locator('#poiLandscapeMenuToggle').click();await p.locator('[data-landscape-action="reset"]').click();
-           await p.locator('#poiResetGameDialog').waitFor({state:'visible'});
-           await Promise.all([p.waitForURL(/reset-camera=1/),p.locator('#poiResetGameConfirm').click()]);
-           await p.locator('#pineStartupCover').waitFor({state:'hidden'});
-           await p.clock.install({time:new Date('2026-04-01T10:00:00Z')});
-           await p.clock.pauseAt(await p.evaluate(()=>Date.now()+175));
-           await p.evaluate(()=>{window.__orvasManual=true});
-           const frame=async(ms=35)=>{await p.clock.fastForward(ms);await p.evaluate(()=>window.__orvas.frame());};
-           const until=async(check,limit=65)=>{let q=await read();for(let i=0;i<limit&&!check(q);i++){await frame();q=await read()}assert(check(q),JSON.stringify(q));return q};
-           const start=async(i,targets)=>{
-            await until(q=>q.clock>=q.ready&&!q.pending);
-            assert(await p.evaluate(i=>window.__orvas.stage(i),i));
-            const q=await read();assert.equal(q.weapon,keys[i-2]);assert(q.used>0);
-            const b=await p.locator('#poiWalkAction').boundingBox();assert(b);
-            await p.touchscreen.tap(b.x+b.width/2,b.y+b.height/2);
-            const held=await until(v=>v.pending&&v.start>=q.clock);
-            await p.evaluate(t=>window.__orvas.addTargets(t),targets);
-            return {q,held};
+          cat >.qa/tests/real-david-fire-foley.test.cjs <<'SOURCE'
+          const a=require('node:assert/strict'),{test}=require('node:test'),vm=require('node:vm'),fs=require('node:fs'),crypto=require('node:crypto');
+          const h=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
+          const exact=(first,last)=>{const x=h.indexOf(first),y=h.indexOf(last,x+first.length);a(x>=0&&y>x,first);return h.slice(x,y)};
+          test('all metal/flame masters are embedded exactly once with bounded 24kHz mono duration and clean tails',()=>{
+           const table=vm.runInNewContext(exact('const POI_RECORDED_FOLEY={','const poiRecordedFoleyCache')+';POI_RECORDED_FOLEY');
+           const items={
+            davidBladeSweep:[9600,'d2460f6fe00ae14e4f6fb7ce908f45cfcb12f47739a07bdd9da21d6ced7dc59a'],
+            davidSwordFirst:[6480,'26c5aff60be181dad9bbcabffe29d2d3e33fb4dda6490ceb5a09e3924a00cfcd'],
+            davidSwordSecond:[8400,'465cfa3222349c9f04f711225a9e03eb5a53e0466143eacf32501013489e5655'],
+            davidHeavyStomp:[27600,'b393593ad1d31dafb370fc06413a7a96f64240936ff0fb006066c91f2c46dde8'],
+            davidLeapStomp:[35040,'9232ab36dc816826bf640724486ca6f8fa090eb5b6733a12390d31b6d0962317'],
+            wandFlameLaunch:[4128,'5d4cdb5dd4abd03069a825a73fb6ef88ffdc2cb46570f1c398befd996db9b81a']
            };
-           assert.deepEqual((await read()).items,keys);
-           assert.equal((await read()).name,'オルヴァス');
-           let {q,held}=await start(2,[[32,108,0],[34,108,0]]);
-           let landed=await until(v=>!v.pending&&v.beam?.draw);
-           assert(landed.clock-held.start>=420);
-           assert.deepEqual(landed.hp,[52,100]);assert.equal(landed.used,q.used-1);
-           assert(landed.beam.rays.length===2&&landed.beam.rays[0].z!==landed.beam.rays[1].z);
-           ({q,held}=await start(3,[[28,108,0],[26,111,0],[23,108,0]]));
-           landed=await until(v=>!v.pending);
-           assert(landed.clock-held.start>=560);
-           assert.deepEqual(landed.hp,[54,54,100]);assert.equal(landed.used,q.used-1);
-           ({q,held}=await start(4,[[27,108,0],[26,111,0],[23,108,0]]));
-           const first=await until(v=>v.cursor===1);
-           assert(first.clock-held.start>=720);assert.deepEqual(first.hp,[72,100,100]);
-           landed=await until(v=>!v.pending);
-           assert(landed.clock-held.start>=1040);assert.deepEqual(landed.hp,[37,100,100]);assert.equal(landed.used,q.used-1);
-           console.log('Physical reset, then all three actual right-button attacks, matched timing, scope and wear',JSON.stringify({first:first.hp,landed:landed.hp}));
-           assert.deepEqual(errors,[]);
-           await ctx.close();
-          }finally{await browser?.close();await new Promise(r=>srv.close(r))}
-          SOURCE
-          cat >.qa/tests/orvas-rewards.test.cjs <<'SOURCE'
-          const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),test=require('node:test');
-          const html=fs.readFileSync(process.env.PRODUCT||'world-editor.html','utf8');
-          function grab(start,end){const i=html.indexOf(start),j=html.indexOf(end,i+1);return i>=0&&j>i?html.slice(i,j):''}
-          function fixture(){
-           const data={kit:{potions:2},writes:[],poiWalkActive:true,pineAIActive:false,poiWalkLevel:0,poiDungeonSpawnId:o=>o.authored?'davidTemple.david':null,
-            poiHotbarRead:()=>data.kit,poiDungeonPopulationMinute:()=>100,poiDungeonPopulationDecode:(p)=>p,
-            poiTownClockSave(){},poiEquipmentDurabilityMax:()=>80,poiInventoryOrdinarySlots:k=>k.slots||[],poiAnyChestHas:()=>false};
-           data.poiEconomyWrite=k=>{if(data.denied)return false;data.kit=k;data.writes.push(k);return true;};
-           const script=grab('// BEGIN ORVAS REWARD CORE','// END ORVAS REWARD CORE')+grab('function poiDungeonRememberDefeat(', 'function poiDungeonArrive(');
-           vm.createContext(data);vm.runInContext(script,data);
-           return {data,eval:code=>vm.runInContext(code,data)};
-          }
-          test('only authored defeat atomically grants both confirmed weapons once, including failed write retry',()=>{
-           const {data,eval:e}=fixture();
-           assert.equal(e("poiDungeonRememberDefeat({type:'monsterStoneDavid',y:0},{hp:0})"),false);
-           data.denied=true;
-           assert.equal(e("poiDungeonRememberDefeat({type:'monsterStoneDavid',authored:true,y:0},{hp:0})"),false);
-           assert.equal(data.kit.armedDrops,undefined);
-           data.denied=false;
-           assert.equal(e("poiDungeonRememberDefeat({type:'monsterStoneDavid',authored:true,y:0},{hp:0})"),true);
-           assert.deepEqual(Array.from(data.kit.armedDrops||[],d=>d.type),['equipOrvasHead','equipOrvasGreatsword','equipOrvasTwinGreatswords']);
-           assert.equal(data.kit.dungeonPopulation.dead['davidTemple.david'],100);
-           assert.equal(e("poiDungeonRememberDefeat({type:'monsterStoneDavid',authored:true,y:0},{hp:0})"),false);
-           assert.equal(data.writes.length,1);
+           for(const [key,[len,sha]] of Object.entries(items)){
+            const bytes=Buffer.from(table[key]||'','base64');
+            a.equal(bytes.length,len*2,key);a.equal(crypto.createHash('sha256').update(bytes).digest('hex'),sha,key);
+            a.equal(bytes.readInt16LE(0),0);a.equal(bytes.readInt16LE(bytes.length-2),0);
+            const samples=[];for(let i=0;i<len;i++)samples.push(bytes.readInt16LE(i*2)/32768);
+            const peak=samples.reduce((n,v)=>Math.max(n,Math.abs(v)),0);
+            a(key==='wandFlameLaunch'?peak>.45&&peak<.47:peak>.66&&peak<(key==='davidLeapStomp'?.83:.81),key+' peak');
+           }
           });
-          test('legacy genuine dead timestamp grants, corrupt/future timestamp never grants, marked consumption never regenerates',()=>{
-           const {eval:e}=fixture();
-           const raw=()=>e("poiOrvasRewardRestore({potions:2},{version:1,dead:{'davidTemple.david':50}},100)");
-           assert.equal(raw().armedDrops.length,3);
-           assert.equal(e("poiOrvasRewardRestore({potions:2},{version:1,dead:{'davidTemple.david':300}},100).armedDrops"),undefined);
-           assert.equal(e("poiOrvasRewardRestore({potions:2,orvasRewards:7},{version:1,dead:{'davidTemple.david':50}},100).armedDrops"),undefined);
-           const owned=e("poiOrvasRewardRestore({slots:[{type:'equipOrvasHead'}]},{version:1,dead:{'davidTemple.david':50}},100)");
-           assert.deepEqual(Array.from(owned.armedDrops,d=>d.type),['equipOrvasGreatsword','equipOrvasTwinGreatswords']);
+          test('real accepted wand cast starts one short flare sound even without contact; cooldown, unpaid, muted and hidden casts do not duplicate it',()=>{
+           let now=1000,charges=2,events=[],shots=0,visible=true;
+           const c={console,performance:{now:()=>now},document:{get hidden(){return !visible},querySelector:()=>null},poiWalkActive:true,poiInventoryAllowed:()=>true,
+            poiPlayerWeaponProfile:()=>({ready:610}),poiPlayerWeaponPending:null,poiAttackReady:0,poiWalkX:24,poiWalkZ:100,poiWalkLevel:0,poiWalkFacing:0,
+            poiPlayerWeaponFlightBegin:()=>{shots++},poiWalkAvatar:()=>{},poiAudioEnabled:true,poiAudioAllowed:()=>true,poiAudioStart:()=>{},
+            poiAudioContext:{state:'running',currentTime:3},poiAudioLevels:{master:1,se:1},POI_WEAPON_SE:{},facilitySite:{id:'base'},
+            poiTryRecordedFoley:(...args)=>events.push(args),
+            poiInventorySpendFireWand:()=>charges>0?(charges--,true):false};
+           const cast=vm.runInNewContext(exact('function poiSound(','function poiAudioSyncLifecycle')+exact('function poiPlayerCastFireWand(','function poiPlayerFlightMs(')+';poiPlayerCastFireWand',c);
+           a.equal(cast(0).ok,true);a.equal(cast(0).reason,'cooldown');
+           a.deepEqual(events,[['wandFlameLaunch',3,.52]]);a.equal(shots,1);
+           now=1800;visible=false;a.equal(cast(0).reason,'unavailable');a.equal(charges,1);
+           visible=true;c.poiAudioLevels.se=0;a.equal(cast(0).ok,true);
+           now=2500;a.equal(cast(0).reason,'storage');
+           a.equal(shots,2);a.equal(events.length,1);a.equal(charges,0);
           });
           SOURCE
-          cat >.qa/tests/orvas-beam.test.cjs <<'SOURCE'
-          const fs=require('node:fs'),assert=require('node:assert/strict'),test=require('node:test'),vm=require('node:vm');
-          const h=fs.readFileSync(process.env.PRODUCT||'world-editor.html','utf8');
-          function cut(a,b){const i=h.indexOf(a),j=h.indexOf(b,i+1);return i>=0&&j>=0?h.slice(i,j):''}
-          function execute({wall=Infinity,targets=[[2.6,0,0],[5,0,0]],wear=true}={}){
-           const hits=[],calls=[];
-           const c={poiAimWall:()=>((x)=>x<wall),poiAimTargetList:()=>targets.map(([x,z,y],idx)=>({id:{type:'monsterSlime',y,idx},x,z,state:{hp:50}})),
-            poiEquipmentSpendWeapon:t=>(calls.push(t),wear),poiPlayerDamageTarget:(pair,x,z,n)=>hits.push([pair[0].idx,n]),
-            poiPlayerWeaponHands:()=>({right:{wrist:[0,.71,.31]}}),poiOrvasHeadPose:()=>({}),poiCreekPlayerHeight:()=>0,poiSound:()=>{},
-            POI_DAVID_SWEEP_FORWARD:5.25,POI_DAVID_SWEEP_SIDE:4.2,window:{},performance:{now:()=>300}};
-           const src=cut('function poiDavidArea(', 'const POI_DAVID_LEAP_LOAD=')+cut('const POI_ORVAS_EYES=', 'function poiOrvasHeadGeometry')+cut('const POI_AIM_EPS=', 'function poiAimChooseLock')+cut('// BEGIN ORVAS PLAYER BEAM','function poiDrawOrvasPlayerBeam');
-           vm.createContext(c);vm.runInContext(src,c);
-           const rays=vm.runInContext("poiOrvasBeamResolve({type:'equipOrvasHead',profile:{range:8,damage:48},dx:1,dz:0,y:0,aim:{x:0,z:0,y:0}},300); poiOrvasPlayerBeam?.rays",c);
-           return {hits,calls,rays};
-          }
-          test('equipped trophy emits two real eye rays, first eligible target only, one wear',()=>{
-           const {hits,calls,rays}=execute();
-           assert.deepEqual(hits,[[0,48]]);assert.deepEqual(calls,['equipOrvasHead']);
-           assert.equal(rays.length,2);assert.notEqual(rays[0].z,rays[1].z);assert.equal(rays[0].end,rays[1].end);
-          });
-          test('eye rays stop on wall, never hit another floor, no emission if wear write denied',()=>{
-           let v=execute({wall:2});assert.deepEqual(v.hits,[]);assert(v.rays.every(r=>r.end<=1.5));
-           v=execute({targets:[[2,0,1],[4,0,0]]});assert.deepEqual(v.hits,[[1,48]]);
-           v=execute({wear:false});assert(!v.rays);assert.deepEqual(v.hits,[]);
-          });
-          test('exact boss shape geometry: wide flank is single sweep only; paired right/left use one input and two contacts',()=>{
-           const spans=[];
-           const c={poiAimWall:()=>()=>true,poiAimTargetList:()=>[[3.54,1.49],[4.2,1.7],[-1,0],[3.56,0]].map(([x,z],idx)=>({id:{idx,y:0},x,z,state:{hp:100}})),
-            poiEquipmentSpendWeapon:()=>{spans.push('wear');return true},poiPlayerDamageTarget:(pair,x,z,n)=>spans.push([pair[0].idx,n]),poiAimOrigin:()=>({x:0,z:0,y:0}),poiEquippedWeapon:()=>c.weapon,
-            poiPlayerWeaponPending:null,POI_DAVID_PATTERNS:{double:{hits:[720,1040],damage:[28,35]}},POI_DAVID_SWEEP_FORWARD:5.25,POI_DAVID_SWEEP_SIDE:4.2};
-           vm.createContext(c);
-           vm.runInContext(cut('function poiDavidArea(', 'const POI_DAVID_LEAP_LOAD=')+cut('const POI_AIM_EPS=', 'function poiAimChooseLock')+cut('// BEGIN ORVAS PLAYER BEAM','function poiDrawOrvasPlayerBeam'),c);
-           const run=s=>vm.runInContext(s,c);
-           run("poiOrvasCutResolve({type:'equipOrvasGreatsword',profile:{damage:46},dx:1,dz:0,aim:poiAimOrigin()},100,'sweep')");
-           assert(spans.some(x=>x[0]===1&&x[1]===46));assert(!spans.some(x=>x[0]===2));
-           spans.length=0;c.weapon='equipOrvasTwinGreatswords';
-           run("poiPlayerWeaponPending={type:'equipOrvasTwinGreatswords',started:100,dx:1,dz:0};");
-           run('poiOrvasTwinFrame(poiPlayerWeaponPending,819)');assert.deepEqual(spans,[]);
-           run('poiOrvasTwinFrame(poiPlayerWeaponPending,820)');assert.deepEqual(spans,['wear',[0,28]]);
-           run('poiOrvasTwinFrame(poiPlayerWeaponPending,1139)');assert.equal(spans.length,2);
-           run('poiOrvasTwinFrame(poiPlayerWeaponPending,1140)');assert.deepEqual(spans,['wear',[0,28],[0,35]]);
-           assert.equal(c.poiPlayerWeaponPending,null);
-          });
-          SOURCE
-          cat >.qa/tests/orvas-reset-kit-browser.mjs <<'SOURCE'
+          cat >.qa/tests/fire-wand-flare-browser.mjs <<'SOURCE'
           import assert from 'node:assert/strict';
           import {createServer} from 'node:http';
           import {createRequire} from 'node:module';
           import {readFileSync} from 'node:fs';
           import {Script} from 'node:vm';
-          const {argv,env}=process,file=argv[2]??'world-editor.html';
-          let html=readFileSync(file,'utf8');
-          const mark='  freeMovementPose:()=>({x:poiWalkViewX,z:poiWalkViewZ,level:poiWalkLevel}),';
-          assert.equal(html.split(mark).length,2);
-          html=html.replace(mark,mark+`
-            resetKitQA:()=>{const k=poiHotbarRead(),slots=poiInventorySlots(k);
-             return {walking:poiWalkActive,site:facilitySite?.id,pos:[poiWalkX,poiWalkZ,poiWalkLevel],
-              kit:{weapon:k.weapon,potions:k.potions,gold:k.gold??0,orvasRewards:k.orvasRewards??0,
-               slots:slots.map(c=>c?{type:c.type,count:c.count,durability:c.durability}:null)},
-              spawn:facilitySite?.spawn,max:['equipOrvasHead','equipOrvasGreatsword','equipOrvasTwinGreatswords'].map(poiEquipmentDurabilityMax),
-              raw:localStorage.getItem(POI_HOTBAR_KEY),backup:localStorage.getItem(POI_GAME_RESET_BACKUP),first:localStorage.getItem(POI_GAME_RESET_FIRST_BACKUP)};
-            },
+          const source=readFileSync(process.argv[2]??'world-editor.html','utf8');
+          const a='  freeMovementPose:()=>({x:poiWalkViewX,z:poiWalkViewZ,level:poiWalkLevel}),';assert.equal(source.split(a).length,2);
+          let html=source.replace(a,a+`
+           wandUiQA:{
+            move:(from,to)=>poiInventoryMove(from,to),
+            audio:()=>({events:window.__flareEvents??[],state:poiAudioContext?.state,isLive:!!window.__flareSource&&poiAudioTransient.has(window.__flareSource)}),
+            view:()=>({
+             armed:poiArmedWandIndex(),weapon:poiHotbarRead().weapon,held:window.__wandWorldType,
+             mesh:poiWalkMesh?.count??0,charges:poiInventorySlots(poiHotbarRead()).map(c=>c?.charges??null)
+            })
+           },
           `);
-          for(const [,js] of html.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(js);
-          if(env.ORVAS_RESET_LAYOUT_ONLY){console.log('Exact reset browser source parses');process.exit(0)}
-          const {chromium}=createRequire(import.meta.url)(env.PLAYWRIGHT_PACKAGE??'playwright');
-          const server=createServer((req,res)=>{res.setHeader('content-type','text/html;charset=utf-8');res.end(req.url==='/seed'?'<title>Reset proof sandbox</title>':html)});
-          await new Promise(r=>server.listen(0,'127.0.0.1',r));const url='http://127.0.0.1:'+server.address().port;
-          const keys=['equipOrvasHead','equipOrvasGreatsword','equipOrvasTwinGreatswords'];
-          const kitKey='world-workshop-hotbar-v1',resumeKey='world-workshop-resume-v1';
-          let browser,p,where='start';
-          const errors=[];
-          const ready=async()=>{await p.locator('#pineStartupCover').waitFor({state:'hidden',timeout:25000});
-           await p.waitForFunction(()=>!!window.__editorTest?.resetKitQA?.().walking,null,{timeout:13000});};
-          const snapshot=()=>p.evaluate(()=>window.__editorTest.resetKitQA());
-          const noOrvas=s=>assert.equal(s.kit.slots.filter(c=>keys.includes(c?.type)).length,0);
-          async function localPage(){p=await browser.newPage({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.7});p.on('pageerror',e=>errors.push(e.message));}
-          async function open(){await p.locator('#poiLandscapeMenuToggle').click();await p.locator('[data-landscape-action="reset"]').click();
-           await p.locator('#poiResetGameDialog').waitFor({state:'visible'});assert.equal(await p.evaluate(()=>document.activeElement.id),'poiResetGameCancel');}
-          function seeded(s){
-           const all=s.kit.slots,orvas=all.filter(c=>keys.includes(c?.type));
-           assert.deepEqual(orvas.map(c=>c.type),keys);assert(orvas.every((c,i)=>c.count===1&&c.durability===s.max[i]&&c.durability>0));
-           assert.deepEqual(all.slice(2,5).map(c=>c?.type),keys,'three explicit reset slots are inside the 9-slot shortcut bar');
-           assert.equal(all[0]?.type,'equipWoodSword');assert.equal(all[1]?.count,3);assert.equal(s.kit.potions,3);
-           assert.equal(s.kit.weapon,null);assert.equal(s.kit.orvasRewards,0);
-          }
+          const mesh='function poiBuildPlayerMesh(weapon,pose,gear,stride=0,r=0,x=0,y=0,z=0,heading=null,worldSpear=false){';
+          assert.equal(html.split(mesh).length,2);html=html.replace(mesh,mesh+'if(worldSpear)window.__wandWorldType=weapon;');
+          const audioStart=' poiAudioTransient.add(source);source.start(when);source.stop(when+(cap??(buffer.duration+.012)));';
+          assert.equal(html.split(audioStart).length,2);
+          html=html.replace(audioStart,audioStart+`
+           if(buffer===poiRecordedFoleyCache.get('wandFlameLaunch')){
+            const data=buffer.getChannelData(0),peak=data.reduce((m,x)=>Math.max(m,Math.abs(x)),0);
+            window.__flareSource=source;
+            (window.__flareEvents??=[]).push({length:buffer.length,duration:buffer.duration,rate:buffer.sampleRate,channels:buffer.numberOfChannels,
+             loop:source.loop,cap,volume,peak});
+           }
+          `);
+          for(const m of html.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(m[1]);
+          if(process.env.WAND_UI_LAYOUT_ONLY==='1'){console.log('wand cursor browser fixture parses exact source');process.exit(0)}
+          const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
+          const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(req.url==='/seed'?'<title>temporary QA</title>':html)});
+          await new Promise((y,n)=>server.listen(0,'127.0.0.1',y).once('error',n));
+          const origin='http://127.0.0.1:'+server.address().port;let browser;
           try{
-           browser=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
-           where='fresh cold session and inert reset-camera URL';
-           await localPage();await p.goto(url+'/?facility=base&facility-play=1&reset-camera=1&test=1',{waitUntil:'domcontentloaded'});await ready();noOrvas(await snapshot());await p.context().close();
-           where='old resume and inventory remain intact';
-           await localPage();await p.goto(url+'/seed');
-           const oldKit=JSON.stringify({version:1,weapon:null,potions:8,gold:1234});
-           const oldResume=JSON.stringify({version:1,route:'facility',id:'base',play:true,position:{x:45,z:41,y:0,facing:2},townLayout:5,townMapHeight:128,
-             view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.35,orbitDistance:5.5}});
-           await p.evaluate(([k,r,v,w])=>{localStorage.setItem(k,v);localStorage.setItem(r,w);localStorage.setItem('reset-qa-other','keep')},[kitKey,resumeKey,oldKit,oldResume]);
-           await p.goto(url+'/?resume=1&test=1',{waitUntil:'domcontentloaded'});await ready();
-           let s=await snapshot();assert.deepEqual(s.pos,[45,41,0]);assert.equal(s.kit.potions,8);assert.equal(s.kit.gold,1234);noOrvas(s);
-           await p.reload({waitUntil:'domcontentloaded'});await ready();s=await snapshot();noOrvas(s);assert.deepEqual(s.pos,[45,41,0]);assert.equal(s.kit.gold,1234);
-           where='real menu cancel cannot alter storage or position';
-           const before=s;
-           await open();await p.locator('#poiResetGameCancel').click();await p.locator('#poiResetGameDialog').waitFor({state:'hidden'});
-           s=await snapshot();assert.equal(s.raw,before.raw);assert.equal(s.backup,before.backup);assert.deepEqual(s.pos,before.pos);noOrvas(s);
-           where='real menu confirm writes exactly one of each and archives prior game';
-           await open();await Promise.all([p.waitForURL(/reset-camera=1/),p.locator('#poiResetGameConfirm').click()]);await ready();
-           s=await snapshot();seeded(s);assert.equal(s.kit.gold,0);assert.deepEqual(s.pos,[s.spawn.x,s.spawn.z,0]);assert.equal(await p.evaluate(()=>localStorage.getItem('reset-qa-other')),'keep');
-           assert.equal(JSON.parse(s.first).before[kitKey],before.raw);assert.equal(JSON.parse(s.backup).phase,'complete');
-           where='reload again is not an initialization or second grant';
-           const first=s.first;await p.reload({waitUntil:'domcontentloaded'});await ready();s=await snapshot();seeded(s);assert.equal(s.first,first);
-           where='second explicit initialization replaces rather than accumulating another set';
-           await open();await Promise.all([p.waitForEvent('framenavigated',{predicate:f=>f===p.mainFrame()}),p.locator('#poiResetGameConfirm').click()]);await ready();
-           s=await snapshot();seeded(s);assert.equal(s.first,first);assert.deepEqual(errors,[]);
-           console.log('Actual fresh/reload/cancel/confirm/repeat: only explicit initialization grants a single valid Orvas set, preserving starter and verified original archive.');
-          }catch(e){console.error(where,await snapshot().catch(()=>null),errors);throw e}
-          finally{await browser?.close();await new Promise(r=>server.close(r))}
+           browser=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+           const page=await(await browser.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:.75})).newPage();
+           const errors=[];page.on('pageerror',e=>errors.push(e.message));
+           await page.goto(origin+'/seed');
+           await page.evaluate(()=>{
+            const slots=Array(27).fill(null);slots[0]={type:'equipWoodSword',count:1,durability:90};slots[4]={type:'fireWand',count:1,charges:1};slots[6]={type:'fireWand',count:1,charges:2};
+            localStorage.setItem('world-workshop-hotbar-v1',JSON.stringify({version:1,weaponDurabilityVersion:2,weapon:'equipWoodSword',potions:0,gold:0,slots}));
+            localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,position:{x:24,z:91,y:0,facing:0},
+             townLayout:5,townMapHeight:128,view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.35,orbitDistance:5.5}}));
+           });
+           await page.goto(origin+'/?resume=1&test=1',{waitUntil:'domcontentloaded'});
+           await page.locator('#pineStartupCover').waitFor({state:'hidden'});
+           await page.waitForFunction(()=>window.__editorTest?.wandUiQA);
+           const view=()=>page.evaluate(()=>window.__editorTest.wandUiQA.view());
+           const button=i=>page.locator('#poiHotbar [data-hotbar-slot="'+i+'"]');
+           const selected=async(slot)=>assert.deepEqual(await page.locator('#poiHotbar [aria-pressed="true"]').evaluateAll(xs=>xs.map(x=>x.dataset.hotbarSlot)),slot===null?[]:[String(slot)]);
+           await selected(0);assert.equal((await view()).held,'equipWoodSword');
+           await button(4).tap();await selected(4);let q=await view();
+           assert(q.mesh>0);assert.equal(q.armed,4);assert.equal(q.held,'fireWand');assert.equal(q.weapon,'equipWoodSword');
+           await button(6).tap();await selected(6);q=await view();assert.equal(q.armed,6);assert.equal(q.held,'fireWand');
+           assert((await page.evaluate(()=>window.__editorTest.wandUiQA.move(6,{zone:'hotbar',index:5}))).ok);
+           await selected(5);q=await view();assert.equal(q.armed,5);assert.equal(q.charges[5],2);assert.equal(q.charges[4],1);
+           assert((await page.evaluate(()=>window.__editorTest.wandUiQA.move(5,{zone:'bag',index:0}))).ok);
+           await selected(null);q=await view();assert.equal(q.armed,9);assert.equal(q.held,'fireWand');
+           await button(4).tap();await selected(4);
+           const events=()=>page.evaluate(()=>window.__editorTest.wandUiQA.audio());
+           assert.equal((await events()).events.length,0);
+           await page.locator('#poiWalkAction').tap();await selected(0);
+           await page.waitForFunction(()=>window.__editorTest.wandUiQA.audio().events.length===1);
+           const audio=await events(),e=audio.events[0];assert.equal(audio.state,'running');
+           assert.deepEqual([e.rate,e.length,e.channels,e.loop,e.cap,e.volume],[24000,4128,1,false,null,.52]);
+           assert(Math.abs(e.duration-.172)<1e-6&&e.peak<=.461);
+           await page.waitForFunction(()=>!window.__editorTest.wandUiQA.audio().isLive);
+           assert.equal((await events()).events.length,1);
+           q=await view();assert.equal(q.armed,null);assert.equal(q.charges[4],null);assert.equal(q.charges[9],2);
+           await page.waitForFunction(()=>window.__editorTest.wandUiQA.view().held==='equipWoodSword');
+           await button(0).tap();await selected(0);
+           assert.deepEqual(errors,[]);
+           console.log('Native Fire Wand physical cast, one real 172-ms no-loop audio buffer, ended source cleanup and exactly one charge.');
+          }finally{await browser?.close();await new Promise(y=>server.close(y))}
           SOURCE
-          python .qa/build.py world-editor.html .qa/weapons.html
-          python .qa/reset.py .qa/weapons.html .qa/world-editor.html
-          test "$(git hash-object .qa/world-editor.html)" = 9f49a3f92a39e96fc8fd87c81a38c7f5325a2b0f
+          base64 -d >.qa/rendered/wandFlameLaunch.pcm <<'PCM'
+          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BAAFAAUABgAGAAcABwAHAAgACAAIAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAgACAAIAAgACAAHAAcABwAHAAYABgAGAAYABgAFAAUABQAFAAUABAAEAAQABAADAAMAAwADAAIAAgACAAIAAQABAAEAAQAAAAAAAAAAAAAA//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          PCM
+          python .qa/build.py world-editor.html .qa/world-editor.html
+          test "$(git hash-object .qa/world-editor.html)" = 58981ed357f7a05d6f14e28c25442f5d449cbda5
       - name: Run scoped units
         working-directory: .qa
         run: node --test tests/*.cjs
       - run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
-      - name: Actual confirmed reset and real weapon actions
+      - name: Touch arm and cast, exactly one real PCM source then cleanup
         working-directory: .qa
-        run: node tests/${{ matrix.suite }}-browser.mjs
+        run: node tests/fire-wand-flare-browser.mjs
