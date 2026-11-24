@@ -168,6 +168,15 @@ jobs:
            c.facilitySite={...c.facilitySite};
            assert.deepEqual(spawn(),{x:40,z:39,y:-1,facing:0});
           });
+          test('a live door and an exit trigger are not accepted even when walkable from a directed approach',()=>{
+           const {c,spawn}=setup(40,35,-1);
+           c.poiWalkPassableDoor=t=>t==='door';
+           c.world.push({x:40,z:39,y:-1,type:'door'});
+           c.block=new Set(['40,38','39,39']);
+           assert.deepEqual(spawn(),{x:41,z:39,y:-1,facing:0});
+           vm.runInContext('poiDefeatRememberEntry(40,40,-1,3)',c);
+           assert.deepEqual(spawn(),{x:41,z:39,y:-1,facing:0});
+          });
           SOURCE
           cat >.qa/tests/contextual-respawn-browser.mjs <<'SOURCE'
           import assert from 'node:assert/strict';
@@ -183,6 +192,7 @@ jobs:
           install(mark,`
            window.__deathArea={
             frame:()=>render(),
+            save:()=>workshopResumeWrite(),
             lethal:()=>{
              poiPlayerHP=1;
              return poiMobHitPlayer({type:'monsterSlime',y:poiWalkLevel},performance.now(),100);
@@ -238,9 +248,13 @@ jobs:
             if(mode==='snow-old'||mode==='snow-corrupt')assert.equal(before.entered,null);
             assert(await p.evaluate(()=>window.__deathArea.lethal()));
             const dead=await qa();assert.equal(dead.hp,0);assert.equal(dead.death?.opacity,0);
-            const end=await until(s=>s.death?.relocated);
             const want=mode==='mine'?[116,61,-1]:mode==='chapel'?[78,88,-1]:
              mode==='snow'||mode==='snow-old'?[12,0,0]:[before.home.x,before.home.z,0];
+            await p.evaluate(()=>window.__deathArea.save());
+            const during=await qa();
+            assert.deepEqual([during.save.position.x,during.save.position.z,during.save.position.y],want);
+            if(mode==='snow'||mode==='snow-old')assert(during.save.regionHp>0);
+            const end=await until(s=>s.death?.relocated);
             assert.deepEqual(end.p.slice(0,3),want,JSON.stringify({mode,before,end}));
             assert(end.hp>0&&end.death.blackAt-dead.death.start>=1650);
             assert.deepEqual([end.save.position.x,end.save.position.z,end.save.position.y],want);
