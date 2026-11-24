@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: acc0f84e64ef765b71e545c1b3937a7671616613
+          ref: 34007fafc3b4fd1c2ff7c2cfd22cd8f947002824
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -23,7 +23,7 @@ jobs:
         shell: bash
         run: |
           set -eu
-          test "$(git hash-object world-editor.html)" = 5c3bc9c78dad3c68c1e8311b57e2cb1b3c8fc9c7
+          test "$(git hash-object world-editor.html)" = e6de0488ef58e643d26db9344fe732c25d5bd96e
           mkdir -p .spike/tests
           cat >.spike/build.py <<'SOURCE'
           from pathlib import Path
@@ -1163,7 +1163,7 @@ jobs:
           try{
            browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
            args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
-           for(const profile of ['away','ordinary','seam','seam','ordinary']){
+           for(const profile of process.env.SNOW_MATCHED_STOCK_ONLY==='1'?['away','ordinary','ordinary']:['away','ordinary','seam','seam','ordinary']){
             const coldSnow=profile==='cold';
             const ctx=await browser.newContext({viewport:{width:844,height:390},deviceScaleFactor:.65,isMobile:true,hasTouch:true,serviceWorkers:'block'});
             const page=await ctx.newPage(),errors=[],remote=[],req=[];
@@ -2119,17 +2119,23 @@ jobs:
           SOURCE
           python .spike/build.py world-editor.html .spike/stream.html --default
           python .spike/horizon-safe.py .spike/stream.html .spike/world-editor.html
-          test "$(git hash-object .spike/world-editor.html)" = 1ec524cf8ccb128cb25cc688afbcdff961491ea5
+          test "$(git hash-object .spike/world-editor.html)" = ff562485a1cc940b58c88d2372bc90685a20762b
           cp .spike/world-editor.html .spike/base-stream.html
           python .spike/path-ast-trial.py .spike/base-stream.html .spike/world-editor.html
-          test "$(git hash-object .spike/world-editor.html)" = aab53065bb10e578ba6503d7ee58d26a0ec94d07
+          test "$(git hash-object .spike/world-editor.html)" = 9d84555e60fd6638f2638e8f55fd42548adedb2d
           cd .spike && node --test tests/*.cjs
       - if: matrix.probe != 'regressions'
         run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
       - if: startsWith(matrix.probe, 'seam')
         run: |
           USE_STREAM_DEFAULT=1 node .spike/tests/overland-browser.mjs .spike/world-editor.html
+          code=0
+          SNOW_PHASE_REPORT=1 node .spike/tests/snow-continuous-seam-browser.mjs .spike/world-editor.html || code=$?
+          echo 'STOCK PUBLISHED v275 SAME HOST'
+          SNOW_MATCHED_STOCK_ONLY=1 node .spike/tests/snow-matched-gpu-browser.mjs world-editor.html
+          echo 'CANDIDATE SAME HOST AND START CELL'
           node .spike/tests/snow-matched-gpu-browser.mjs .spike/world-editor.html
+          exit "$code"
       - if: matrix.probe == 'outlet'
         run: |
           USE_STREAM_DEFAULT=1 USE_STREAM_SIGN_PROOF=1 node .spike/tests/overland-outlet-browser.mjs .spike/world-editor.html
