@@ -143,7 +143,7 @@ try{
  p=await q.cold();s=await q.until(v=>v.slots.some(c=>c?.type==='orvasSoul'));
  assert.equal(s.ground.length,3);assert.equal(s.saved.orvasRewards,15);
  assert(s.slots.some(c=>c?.type==='slimeSoul'&&c.durability===29));
- phase='real confirmed reset retains only the three weapon starters, never the soul';
+ phase='real confirmed reset seeds weapons and one inactive usable soul; no ground or fight award';
  await p.locator('#poiLandscapeMenuToggle').tap();
  await p.locator('[data-landscape-action="reset"]').tap();
  await p.locator('#poiResetGameDialog').waitFor({state:'visible'});
@@ -151,7 +151,7 @@ try{
  await Promise.all([p.waitForURL(/reset-camera=1/),p.locator('#poiResetGameConfirm').tap()]);
  await p.locator('#pineStartupCover').waitFor({state:'hidden'});s=await q.see();
  assert.deepEqual(s.slots.slice(2,5).map(o=>o?.type),['equipOrvasHead','equipOrvasGreatsword','equipOrvasTwinGreatswords']);
- assert(s.slots.every(c=>c?.type!=='orvasSoul'));assert(!s.ground.some(d=>d.type==='orvasSoul'));
+ assert.deepEqual(s.slots.filter(c=>c?.type==='orvasSoul').map(c=>[c.count,c.durability]),[[1,1050]]);assert(!s.ground.some(d=>d.type==='orvasSoul'));assert(!s.actor&&!(s.saved?.orvasRewards));
  assert.deepEqual(q.errors,[]);await q.c.close();
  }
  if(scenario!=='pickup'){
@@ -166,6 +166,6 @@ try{
  assert(s.slots.every(c=>c?.type!=='orvasSoul'||!c));
  assert.deepEqual(q.errors,[]);
  }
- console.log('Canonical Orvas actual companion and player finishes, verified atomic visible floor reward, real walk pickup/reload and reset exclusion');
+ console.log('Canonical Orvas actual companion and player finishes, verified atomic visible floor reward, real walk pickup/reload and explicit reset provision');
 }catch(e){console.error(phase,last&&{...last,slots:last.slots.filter(Boolean),saved:last.saved?.orvasRewards});throw e}
 finally{await browser?.close();await new Promise(ok=>server.close(ok))}
