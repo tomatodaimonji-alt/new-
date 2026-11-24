@@ -19,7 +19,8 @@ test('both play controls use temporary facility play, and preserve primary save 
 });
 test('exports the current map, accepts checks/undo, and invalidates play meshes after edits',()=>{
  assert(near('function facilityDownload(){',540).includes('facilityExportMap(data())'));
- assert(near('function commit(){',330).includes('facilityInvalidateScenes()'));
+ const start=html.indexOf('function commit(){'),end=html.indexOf('\nfunction ',start);
+ assert(start>=0&&end>start&&html.slice(start,end).includes('facilityInvalidateScenes()'));
  assert(near('function restore(json){',290).includes('facilityLoadMap'));
  assert(!near('function changeCell(x,z){',130).includes('if(facilitySite||'));
 });

@@ -1711,7 +1711,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v319）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v320）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -19219,20 +19219,21 @@ function poiCompanionPlayerPoint(now){
 function poiCompanionAdvance(a,to,now,stop){
  const p=poiCompanionPosition(a),previous=a.freeAt;
  a.px=p.x;a.pz=p.z;a.freeAt=now;a.freeMoving=false;
- if(!to||typeof poiFreeAdvance!=='function')return false;
+ if(!to||typeof poiFreeAdvance!=='function'){a.localStallAt=null;return false}
  const dt=Math.max(0,Math.min(64,now-(previous??now)));
  let dx=to.x-p.x,dz=to.z-p.z,len=Math.hypot(dx,dz);
  const speed=dt*poiCompanionSpeed(a);
  let step=Math.min(Math.max(0,len-stop),speed);
  const scope=typeof poiCompanionNavScope==='function'?poiCompanionNavScope(a,to):null;
- const nook=scope&&step<.001&&speed>.001&&!poiCompanionNavGroundClear(a,p,to);
+ const nook=scope&&step<.001&&speed>.001&&
+  !(scope.followOnly?poiCompanionNearGroundClear(a,p,to,now):poiCompanionNavGroundClear(a,p,to));
  let waypoint=scope&&(a.localDetour||nook)?poiCompanionNavLeg(a,to,p,now,stop,scope,nook):null;
  if(!scope)a.localDetour=null;
  if(waypoint){dx=waypoint.x-p.x;dz=waypoint.z-p.z;len=Math.hypot(dx,dz);step=Math.min(len,speed)}
  if(step<.001||!len)return false;
  const cells=new Map(),edge=(x,z,fx,fz)=>{
-  const key=[x,z,fx,fz].join(',');
-  if(!cells.has(key))cells.set(key,poiCompanionCell(x,z,a.y,fx,fz));
+  const strict=!!(waypoint&&scope?.followOnly),key=[x,z,fx,fz,strict].join(',');
+  if(!cells.has(key))cells.set(key,(!strict||scope(x,z))&&poiCompanionCell(x,z,a.y,fx,fz));
   return cells.get(key);
  };
  const solve=(x,z)=>poiFreeAdvance(p.x,p.z,x,z,POI_COMPANION_FREE_RADIUS,edge,edge);
@@ -19244,7 +19245,11 @@ function poiCompanionAdvance(a,to,now,stop){
   if(!slides.length){if(!scope)return false;next=solve(0,0)}
   else next=slides.sort((a,b)=>b.distance-a.distance)[0];
  }
- if(scope&&next.distance<step*.19&&!waypoint){
+ const isBlocked=next.distance<step*.19||scope?.followOnly&&next.stopped&&
+  len-Math.hypot(to.x-next.x,to.z-next.z)<step*.18;
+ if(!scope?.followOnly||!isBlocked||waypoint)a.localStallAt=null;
+ else a.localStallAt??=now;
+ if(scope&&isBlocked&&!waypoint&&(!scope.followOnly||now-a.localStallAt>=POI_COMPANION_NAV_STALL)){
   waypoint=poiCompanionNavLeg(a,to,p,now,stop,scope,true);
   if(waypoint){
    const rx=waypoint.x-p.x,rz=waypoint.z-p.z,leg=Math.hypot(rx,rz);
@@ -19254,7 +19259,7 @@ function poiCompanionAdvance(a,to,now,stop){
    }
   }
  }
- if(next.distance<step*.19&&!waypoint&&typeof poiCompanionPlan==='function'){
+ if(next.distance<step*.19&&!waypoint&&!scope?.followOnly&&typeof poiCompanionPlan==='function'){
   const route=a.freeRoute??(a.freeRoute=poiCompanionPlan(a,{x:Math.round(to.x),z:Math.round(to.z)},now));
   if(route){
    const rx=route.x-p.x,rz=route.z-p.z,d=Math.hypot(rx,rz);
@@ -19308,18 +19313,49 @@ function poiFindLocalDetour(from,to,can,arrived,maxNodes=72,maxDepth=24){
  }
  return null;
 }
-function poiCompanionNavScope(a,to){
- if(facilitySite?.id!=='base'||a.y!==poiWalkLevel)return null;
- if(a.y===-1){
-  const b=facilitySite.mine?.bounds,inside=(x,z)=>b&&x>=b.x1&&x<=b.x2&&z>=b.z1&&z<=b.z2;
-  return inside(a.x,a.z)&&inside(to.x,to.z)?inside:null;
+const POI_COMPANION_NAV_STALL=145,POI_COMPANION_NAV_RADIUS=16;
+let poiCompanionSharedNavReady=0;
+const poiCompanionNavBarriers=new WeakMap();
+function poiCompanionNavWorldChanged(source){if(source)poiCompanionNavBarriers.delete(source)}
+function poiCompanionNavStairs(source){
+ let stairs=poiCompanionNavBarriers.get(source);
+ if(stairs)return stairs;
+ stairs=new Set();
+ for(const o of source)if(o.type==='guildStairUp'||o.type==='guildStairDown')stairs.add(o.x+','+o.z+','+o.y);
+ poiCompanionNavBarriers.set(source,stairs);return stairs;
+}
+function poiCompanionNavScope(a,to,following=a.freeFollows===true){
+ if(!facilitySite||a.y!==poiWalkLevel||!to)return null;
+ // Keep the established mine and intact authored bridge policies unchanged.
+ if(facilitySite.id==='base'){
+  if(a.y===-1){
+   const b=facilitySite.mine?.bounds,inside=(x,z)=>b&&x>=b.x1&&x<=b.x2&&z>=b.z1&&z<=b.z2;
+   if(inside(a.x,a.z)&&inside(to.x,to.z))return inside;
+  }else if(a.y===0&&facilityCreekIndex?.parts?.size){
+   for(const d of facilityCreekIndex.parts.values()){
+    if(Math.abs(a.x-d.x)+Math.abs(a.z-d.z)>15||Math.abs(to.x-d.x)+Math.abs(to.z-d.z)>15)continue;
+    return (x,z)=>Math.abs(x-d.x)+Math.abs(z-d.z)<=15;
+   }
+  }
  }
- if(a.y!==0||!facilityCreekIndex?.parts?.size)return null;
- for(const d of facilityCreekIndex.parts.values()){
-  if(Math.abs(a.x-d.x)+Math.abs(a.z-d.z)>15||Math.abs(to.x-d.x)+Math.abs(to.z-d.z)>15)continue;
-  return (x,z)=>Math.abs(x-d.x)+Math.abs(z-d.z)<=15;
- }
- return null;
+ if(!following||Math.abs(a.x-to.x)+Math.abs(a.z-to.z)>POI_COMPANION_NAV_RADIUS)return null;
+ const site=facilitySite,y=a.y,from={x:a.x,z:a.z};
+ const zone=(x,z)=>poiDungeonTravelKey(site,x,z,y);
+ const inside=(x,z)=>typeof poiDavidTempleEnclosedAt==='function'&&poiDavidTempleEnclosedAt(site,x,z,y);
+ const startZone=zone(from.x,from.z),temple=inside(from.x,from.z);
+ if(startZone!==zone(to.x,to.z)||temple!==inside(to.x,to.z))return null;
+ const allow=(x,z)=>Math.abs(x-from.x)+Math.abs(z-from.z)<=POI_COMPANION_NAV_RADIUS&&validPos(x,z)&&
+  zone(x,z)===startZone&&inside(x,z)===temple&&!poiOtherworldPortalAt(site,x,z,y)&&
+  !poiCompanionNavStairs(world).has(x+','+z+','+y);
+ allow.followOnly=true;
+ return allow;
+}
+function poiCompanionNearGroundClear(a,p,to,now){
+ // A close, idle follower needn't repeatedly collision-probe an unchanged pose.
+ const k=[p.x,p.z,to.x,to.z].map(x=>Math.round(x*8)).join(','),prior=a.localNearGround;
+ if(prior?.world===world&&prior.k===k&&now<prior.until)return prior.clear;
+ const clear=poiCompanionNavGroundClear(a,p,to);
+ a.localNearGround={world,k,until:now+125,clear};return clear;
 }
 function poiCompanionNavGroundClear(a,p,to){
  const dx=to.x-p.x,dz=to.z-p.z,len=Math.hypot(dx,dz);
@@ -19344,21 +19380,25 @@ function poiCompanionBridgeLift(a){
 function poiCompanionNavLeg(a,to,p,now,stop,scope,allowPlan){
  const end={x:Math.round(to.x),z:Math.round(to.z)};
  let q=a.localDetour;
- if(q&&(q.world!==world||q.y!==a.y||Math.abs(q.to.x-end.x)+Math.abs(q.to.z-end.z)>2))a.localDetour=q=null;
+ if(q&&(q.world!==world||q.y!==a.y||q.followOnly!==!!scope.followOnly||
+   Math.abs(q.to.x-end.x)+Math.abs(q.to.z-end.z)>2))a.localDetour=q=null;
  if(q){
   while(q.path.length&&Math.hypot(q.path[0].x-p.x,q.path[0].z-p.z)<.075)q.path.shift();
   if(q.path.length){
    const n=q.path[0];
-   if(n.x===a.x&&n.z===a.z||poiCompanionCell(n.x,n.z,a.y,a.x,a.z))return n;
+   if(scope(n.x,n.z)&&(n.x===a.x&&n.z===a.z||poiCompanionCell(n.x,n.z,a.y,a.x,a.z)))return n;
   }
   a.localDetour=q=null;
  }
- if(!allowPlan||now<(a.localPlanAt||0))return null;
+ if(!allowPlan||now<(a.localPlanAt||0)||now<poiCompanionSharedNavReady)return null;
  a.localPlanAt=now+650;
+ // Single search reservation across all followers, even if a future party
+ // can have more than the one live companion supported today.
+ poiCompanionSharedNavReady=now+190;
  const path=poiFindLocalDetour(a,end,(x,z,fx,fz)=>scope(x,z)&&poiCompanionCell(x,z,a.y,fx,fz),
   (x,z)=>Math.hypot(x-to.x,z-to.z)<=stop+.25&&poiCompanionNavGroundClear(a,{x,z},to));
  if(!path?.length)return null;
- a.localDetour={world,y:a.y,to:end,path};
+ a.localDetour={world,y:a.y,to:end,path,followOnly:!!scope.followOnly};
  return path[0];
 }
 function poiMineHostileDetour(o,s,patrol,to,now,allowPlan){
@@ -19796,8 +19836,8 @@ function poiCompanionTick(now){
     a.freeGoal=null;a.freeFollows=false;
    }else{
     const blockedNear=distance>1.1&&distance<POI_COMPANION_FOLLOW_BEGIN&&
-     typeof poiCompanionNavScope==='function'&&poiCompanionNavScope(a,player)&&
-     !poiCompanionNavGroundClear(a,origin,player);
+     !to&&typeof poiCompanionNavScope==='function'&&poiCompanionNavScope(a,player,true)&&
+     !poiCompanionNearGroundClear(a,origin,player,now);
     const follow=poiCompanionFollowWanted(a,distance)||blockedNear||!!a.localDetour;
     a.freeGoal=to===a?null:to||(follow?player:null);
     a.freeFollows=!to;
@@ -28287,7 +28327,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v319',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v320',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -28402,7 +28442,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v319';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v320';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -28617,7 +28657,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v319',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v320',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -36101,7 +36141,7 @@ let pineStockDepthExportOffset=0;
 function data(){return{format:'forest-world-v1',version:1,size:MAP_W,width:MAP_W,height:MAP_H,
  ...(MAP_W===128&&MAP_H===182?{workshopFacility:{version:1,floorOffset:pineStockDepthExportOffset,groundY:pineStockDepthExportOffset,stockDepth:1}}:{}),terrainHeights:[...terrainHeights.entries()].map(([key,h])=>{const [x,z]=key.split(',').map(Number);return{x,z,h}}),world:world.map(o=>({...o})),models:models.map(m=>({id:m.id,name:m.name,parts:m.parts.map(p=>({...p}))})),prefabs:prefabs.map(p=>({id:p.id,name:p.name,w:p.w,h:p.h,tiles:p.tiles.map(t=>({...t}))})),checks:pineCheckMarks.map(p=>({...p}))}}
 function snapshot(){undoStack.push(JSON.stringify(data()));if(undoStack.length>45)undoStack.shift();redoStack.length=0}
-function commit(){poiSnowEdgeFloorCache.delete(world);if(typeof poiSacredContactWallInvalidate==='function')poiSacredContactWallInvalidate(world);poiWildInvalidate();poiMiniInvalidate();if(facilitySite){facilityRefreshStairs();facilityInvalidateScenes();facilitySurfaceEdited=true;if(typeof poiTownNpcLightInvalidate==='function')poiTownNpcLightInvalidate()}worldMaxLevel=world.reduce((top,o)=>Math.max(top,o.y),0);dirty=true;cursorDirty=true;saveLocal();updateStats();workshopResumeWrite();if(poiWalkActive)poiMiniUpdate()}
+function commit(){poiSnowEdgeFloorCache.delete(world);if(typeof poiCompanionNavWorldChanged==='function')poiCompanionNavWorldChanged(world);if(typeof poiSacredContactWallInvalidate==='function')poiSacredContactWallInvalidate(world);poiWildInvalidate();poiMiniInvalidate();if(facilitySite){facilityRefreshStairs();facilityInvalidateScenes();facilitySurfaceEdited=true;if(typeof poiTownNpcLightInvalidate==='function')poiTownNpcLightInvalidate()}worldMaxLevel=world.reduce((top,o)=>Math.max(top,o.y),0);dirty=true;cursorDirty=true;saveLocal();updateStats();workshopResumeWrite();if(poiWalkActive)poiMiniUpdate()}
 function restore(json){
  if(facilitySite){const y=level;facilityLoadMap(JSON.parse(json));facilitySetEditLevel(y);}
  else loadData(JSON.parse(json));
