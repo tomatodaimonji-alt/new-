@@ -40,6 +40,11 @@ try{
    const context=new OfflineAudioContext(2,length,rate),state={time:0,writes:0};
    Object.defineProperty(context,'currentTime',{configurable:true,get:()=>state.time});
    Object.defineProperty(context,'state',{configurable:true,get:()=> 'running'});
+   let fieldReady=null;
+   if(zone==='outside'&&bundle.includes('const POI_MYSTIC_FIELD_OGG=')){
+    const nativeDecode=context.decodeAudioData.bind(context);
+    context.decodeAudioData=(...args)=>fieldReady=nativeDecode(...args);
+   }
    // Suspend at actual native audio checkpoints, fill the production
    // lookahead, then resume. Pre-scheduling all 12 seconds would exhaust
    // the true live-voice cap before OfflineAudioContext can emit onended.
@@ -71,9 +76,12 @@ try{
      state.time=4.1;poiSound('hit','equipWoodSword');
     }
     state.time=0;
-    return {levels:{...poiAudioLevels},tick:()=>poiOrchestraTick(state.time)};
+    return {levels:{...poiAudioLevels},tick:()=>poiOrchestraTick(state.time),fieldLoop:()=>!!poiOrchestraDecks.get('outside')?.fieldLoop};
    `);
    const r=launch(context,state,zone,levels,cues);
+   if(fieldReady){await fieldReady;state.time=.02;r.tick();state.time=0;
+    if(!r.fieldLoop())throw Error('outdoor native decode completed but its loop was not scheduled');
+   }
    const checkpoints=Array.from({length:59},(_,i)=>{
     const t=(i+1)*.2;return [t,context.suspend(t)];
    });
@@ -81,7 +89,7 @@ try{
    for(const [t,gate] of checkpoints){
     await gate;state.time=t;r.tick();await context.resume();
    }
-   return {...stats(await rendering),writes:state.writes,levels:r.levels};
+   return {...stats(await rendering),writes:state.writes,levels:r.levels,recorded:r.fieldLoop()};
   }
   const zones=['town','indoor','outside','mine','otherworld','chapel','market','northFort','battle'],full={master:100,bgm:100,se:100};
   const converted=[];
@@ -89,16 +97,23 @@ try{
   const normal={master:85,bgm:68,se:90};
   return {converted,
    before:await render(baseline,'town',normal,false),after:await render(audio,'town',normal,false),
+   fieldOnly:await render(audio,'outside',normal,false),
    muted:await render(audio,'town',{master:0,bgm:100,se:100},true),
    flat:await render(audio,'town',{master:100,bgm:0,se:0},true)};
  },{audio,baseline});
  for(const sample of results.converted){
   assert(sample.peakL>.015&&sample.peakL<.97,sample.zone+' combined render headroom '+JSON.stringify(sample));
   assert.equal(sample.clip,0);
-  assert(sample.delta<1e-6,'existing unpanned stereo routing is retained');
+  if(sample.recorded){assert.equal(sample.zone,'outside');assert(sample.delta>.001,'recorded stereo field stays stereo')}
+  else assert(sample.delta<1e-6,'existing unpanned stereo routing is retained');
   assert.equal(sample.writes,0);assert.deepEqual(sample.levels,{master:100,bgm:100,se:100});
  }
  assert(results.after.rmsL/results.before.rmsL>1.30,'BGM lift is audible on the waveform, not a slider-only change');
+ if(audio.includes('const POI_MYSTIC_FIELD_OGG=')){
+  assert.equal(results.fieldOnly.recorded,true);
+  assert(results.fieldOnly.rmsL>.021&&results.fieldOnly.rmsL<.085,'outdoor default volume is audible but leaves room for SE');
+  assert(results.fieldOnly.peakL<.65&&results.fieldOnly.peakR<.65,'outdoor music-only headroom');
+ }
  for(const muted of [results.muted,results.flat]){
   assert(muted.settledPeak<1e-5,'master and mute buses are silent after the preexisting gain ramp');
   assert.equal(muted.writes,0);
