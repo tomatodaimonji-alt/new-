@@ -141,7 +141,10 @@ try{
     await wait(p,()=>window.__editorTest.startupAudioQA().probe.events.filter(e=>e.bus==='bgm'&&e.loop&&e.duration>5&&e.stop===null&&!e.ended).length===1);
    }
    checkpoint=zone+' real cold reload cover';
-   await p.reload();await held(p,zone);await ready(p,zone);
+   // The game declares readiness through the real startup cover, not the
+   // document's unrelated full load event. Still wait for held + first frame.
+   await p.reload({waitUntil:'domcontentloaded',timeout:25000});
+   await held(p,zone);await ready(p,zone);
    assert.deepEqual(errors,[]);
   }catch(e){console.error(checkpoint,JSON.stringify(await snapshot(p).catch(()=>null)),errors);throw e}
   finally{await ctx.close()}

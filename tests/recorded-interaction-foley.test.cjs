@@ -21,7 +21,7 @@ test('wooden door entry and departure play separate recordings; stone and iron r
  assert.deepEqual(play('door-open','stone').map(x=>x.slice(0,2)),[['buffer','door-open-stone']]);
  assert.deepEqual(play('door-close','iron').map(x=>x.slice(0,2)),[['buffer','door-close-iron']]);
 });
-test('only real metallic melee uses distinct attack and contact recordings; one actual contact can also cue defeat',()=>{
+test('only real metallic melee uses recorded attack air; bladed contact uses separate organic Foley; one actual contact can also cue defeat',()=>{
  const {play}=harness();
  for(const type of ['equipIronSword','kitchenKnife']){
   assert.deepEqual(play('attack',type).map(x=>x.slice(0,2)),[['recorded','playerSteelSwing']]);
@@ -29,7 +29,11 @@ test('only real metallic melee uses distinct attack and contact recordings; one 
   assert.equal(hit[0][1],'playerSteelCut');assert.equal(hit[0][2],10);
   assert.deepEqual(hit[1].slice(0,2),['buffer','defeat']);
  }
- for(const type of ['equipWoodSword','equipWoodSpear','equipStoneSword','equipStoneMace','equipBoneSword','equipClub'])
+ for(const type of ['equipStoneSword','equipBoneSword']){
+  assert.ok(!play('attack',type).some(c=>c[0]==='recorded'),type);
+  assert.deepEqual(play('hit',type,false,true),[['recorded','playerSteelCut',10,.57]],type);
+ }
+ for(const type of ['equipWoodSword','equipWoodSpear','equipStoneMace','equipClub'])
   assert.ok(![...play('attack',type),...play('hit',type)].some(c=>c[0]==='recorded'),type);
 });
 test('successful pickup and chest route to cloth recording without stealing the separate gold cue or mixer mute',()=>{

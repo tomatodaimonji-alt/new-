@@ -80,7 +80,7 @@ try{
   invoke('chest-pickup','healingHerb');
  });
  assert.deepEqual(await ids(),['doorOpen','doorClose','doorOpen','doorClose','playerSteelSwing','playerSteelCut','itemPickup','itemPickup']);
- assert.deepEqual((await recordings()).map(c=>c.ms),[500,270,500,270,180,210,425,425]);
+ assert.deepEqual((await recordings()).map(c=>c.ms),[500,270,500,270,180,196,425,425]);
  for(const c of await recordings()){
   assert.equal(c.rate,24000);assert.equal(c.channels,1);
   if(c.id==='playerSteelSwing')assert.equal(c.level,.47);else if(c.id==='playerSteelCut')assert.equal(c.level,.57);else assert.ok(c.level>.5&&c.level<.8);

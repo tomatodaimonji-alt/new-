@@ -61,13 +61,12 @@ test('one grip-connected slow blade winds, sweeps the full angular envelope, and
   a.ok(Math.hypot(...hand)<1e-9);
  }
 });
-test('an all-slime sweep routes one soft contact while a mixed sweep keeps one standard material cue',()=>{
+test('all-slime and mixed sweeps each route one shared bladed contact',()=>{
  for(const mixed of [false,true]){
   const {api,env,sounds,wear,damage}=game();
   env.targets=[target('soft',0,1,-1,'monsterSlime'),target('peer',.7,1,-1,mixed?'monsterSkeleton':'monsterSlime')];
   api.start(id,10);api.frame(310);
   a.equal(wear.length,1);a.equal(damage.length,2);
-  a.deepEqual(sounds,mixed?[['hit',id,false,true]]:[['hit',id,false,true,'monsterSlime']]);
+  a.deepEqual(sounds,[['hit',id,false,true]]);
  }
 });
-

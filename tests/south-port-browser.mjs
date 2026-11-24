@@ -119,7 +119,8 @@ try{
   await p.goto(base+'/?resume=1&test=1');await ready(p);
   const initial=await q(p),stock=await economyInvariant(p),url=p.url();
   assert.deepEqual(initial.pos,pos(...complete[0]));
-  assert.equal(initial.location,'街道の宿場');
+  assert.equal(initial.location,'セルネア','the shared settlement name is visible from the older town');
+  assert.equal(initial.old.name,'街道の宿場','the original town identity remains intact');
   assert.equal(initial.old.inn,'並木の宿');assert.equal(initial.old.market,'街道市場');
   assert.deepEqual(xy(initial.old.oldMarketDoor),[102,112]);
   assert.deepEqual(xy(initial.old.oldInnDoor),[108,116]);
@@ -129,7 +130,7 @@ try{
   phase='old inn at a distance: no port draw/build';
   await walk(p,line(complete[0],far));
   const distant=await q(p);
-  assert.equal(distant.location,'街道の宿場');
+  assert.equal(distant.location,'セルネア');
   assert.equal(distant.local?.active,null,'port props are absent beyond the local eviction buffer');
   assert.equal(distant.local.vertices,0);
   assert.deepEqual(portActors(distant),[],'port residents are not even active by the old inn');

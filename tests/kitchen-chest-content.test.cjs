@@ -15,7 +15,8 @@ test('one canonical chest is reachable in the game-world cellar and never alters
 test('static item art, open-lid variant, shared icon generator, and recorded steel with distinct knife fallbacks are narrow',()=>{
  for(const id of ['kitchenChest','kitchenChestOpen','kitchenKnife','cannedFood'])assert(html.includes("case '"+id+"'"));
  assert.match(html,/function poiLootContentIcon\(type\)/);
- assert.match(html,/kitchenKnife:\s*\{material:'kitchenKnife',recordedSteel:true\}/); 
+ assert.match(html,/kitchenKnife:\s*\{playerBlade:true,material:'kitchenKnife',recordedSteel:true\}/); 
+ assert.match(html,/if\(player&&kind==='hit'&&sound\.playerBlade\)[\s\S]{0,130}poiTryRecordedFoley\('playerSteelCut',contact,\.57\)/);
  assert.match(html,/if\(sound\.recordedSteel&&[\s\S]{0,150}poiTryRecordedFoley\(kind==='attack'\?'steelSwing':'steelImpact'/);
  assert.match(html,/poiPlayImpactBuffer\(poiKitchenKnifeBuffer\('hit'\),contact,/);
  assert.match(html,/poiPlayImpactBuffer\(poiKitchenKnifeBuffer\('attack'\),now\+\.05,/);

@@ -33,8 +33,8 @@ function harness(id) {
   poiAudioStart();
   if(facilitySite?.id==='base')poiAudioMusicPhrase();
  `);
- const fx=(kind,weapon,timing=false,defeated=false)=>{
-  const start=nodes.length;run('poiSound('+JSON.stringify(kind)+','+JSON.stringify(weapon)+','+defeated+')');
+ const fx=(kind,weapon,timing=false,defeated=false,player=true)=>{
+  const start=nodes.length;run('poiSound('+JSON.stringify(kind)+','+JSON.stringify(weapon)+','+defeated+',false,null,'+player+')');
   return nodes.slice(start).filter(n=>n.kind==='noise'||n.kind==='osc').map(n=>{
    if(n.kind==='noise'&&n.next?.kind==='gain'){
     assert.equal(n.next.next.kind,'effects');
@@ -96,9 +96,14 @@ test('existing weapon materials have different offscreen cue profiles and respec
  const b=harness('base');
  const weapons=['equipStick','equipClub','equipWoodSword','equipStoneSword','equipIronSword'];
  for(const kind of ['attack','hit']){
-  const spectra=weapons.map(id=>JSON.stringify(b.fx(kind,id).map(r=>r[1])));
+  const spectra=weapons.map(id=>JSON.stringify(b.fx(kind,id,false,false,false).map(r=>r[1])));
   assert.equal(new Set(spectra).size,weapons.length);
  }
+ const playerSwing=weapons.map(id=>JSON.stringify(b.fx('attack',id).map(r=>r[1])));
+ assert.equal(new Set(playerSwing).size,weapons.length,'player miss profiles stay distinct');
+ const playerHit=weapons.map(id=>b.fx('hit',id));
+ assert.equal(new Set(playerHit.slice(0,3).map(JSON.stringify)).size,3,'stick, club and wood remain distinct');
+ assert.deepEqual(playerHit.slice(3),[[['buffer',196,.57,0]],[['buffer',196,.57,0]]]);
  b.run('poiAudioLevels.se=0');assert.deepEqual(b.fx('attack','equipWoodSword'),[]);
  b.run('poiAudioLevels.se=90;document.hidden=true');assert.deepEqual(b.fx('hit','equipWoodSword'),[]);
 });

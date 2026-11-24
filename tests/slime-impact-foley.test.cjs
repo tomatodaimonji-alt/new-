@@ -13,22 +13,22 @@ function setup(baked=true){
  const play=(...args)=>{calls.length=0;c.poiSound(...args);return calls.slice()};
  return {c,play};
 }
-test('knife and iron swing stay steel; slime hit and lethal each play only one soft recording at actual contact',()=>{
+test('knife and iron swing stay steel; slime shares the species-neutral recorded cut and normal common defeat',()=>{
  const {play}=setup();
  for(const type of ['kitchenKnife','equipIronSword']){
   assert.deepEqual(play('attack',type).map(v=>v.slice(0,2)),[['recorded','playerSteelSwing']]);
   for(const defeated of [false,true]){
    const hit=play('hit',type,defeated,true,'monsterSlime');
-   assert.deepEqual(hit.map(v=>v.slice(0,3)),[['recorded','slimeImpact',10]]);
+   assert.deepEqual(hit.map(v=>v.slice(0,3)),[['recorded','playerSteelCut',10],...(defeated?[['buffer','defeat',10.018]]:[])]);
   }
   assert.deepEqual(play('hit',type,true,true,'monsterSkeleton').map(v=>v.slice(0,2)),[['recorded','playerSteelCut'],['buffer','defeat']]);
  }
  assert.deepEqual(play('hit','equipWoodSword',false,true,'monsterSlime').map(v=>v.slice(0,2)),[['buffer','wood']]);
 });
-test('fallback remains one soft buffer, not synthesized steel, and respects mute',()=>{
+test('fallback remains a damp pulse before an independent defeated cue, not synthesized steel, and respects mute',()=>{
  const {c,play}=setup(false);
  assert.deepEqual(play('hit','kitchenKnife',true,true,'monsterSlime').map(v=>v.slice(0,2)),
-  [['recorded','slimeImpact'],['buffer','slime-soft-impact']]);
+  [['recorded','playerSteelCut'],['thud',10],['buffer','defeat']]);
  c.poiAudioLevels.se=0;
  assert.deepEqual(play('hit','kitchenKnife',true,true,'monsterSlime'),[]);
 });
@@ -43,32 +43,23 @@ test('real targeted damage and grouped iron sweep send the target material once'
  const actor=(type)=>({id:{type},state:{x:2,z:1,hp:100},x:2,z:1});
  const slime=actor('monsterSlime'),hard=actor('monsterSkeleton');
  c.poiPlayerDamageTarget([slime.id,slime.state],2,1,20,'kitchenKnife',7,false,true);
- assert.deepEqual(seen.splice(0),[['hit','kitchenKnife',false,true,'monsterSlime']]);
+ assert.deepEqual(seen.splice(0),[['hit','kitchenKnife',false,true]]);
  const shot={aim:{x:1,z:1},dx:1,dz:0,type:'equipIronSword',profile:{range:2,damage:30}};
  c.targets=[slime];c.poiSwordResolve(shot,8);
- assert.deepEqual(seen.splice(0),[['hit','equipIronSword',false,true,'monsterSlime']]);
+ assert.deepEqual(seen.splice(0),[['hit','equipIronSword',false,true]]);
  c.targets=[slime,hard];c.poiSwordResolve(shot,9);
  assert.equal(seen.length,1);
  assert.deepEqual(seen.pop(),['hit','equipIronSword',false,true]);
 });
-test('recording is separate from hard impact and decoded through the mono 24kHz Foley cache; missing data has a short damp fallback',()=>{
+test('former watery data is gone; shared recorded contact is short, cached and distinct from NPC metal',()=>{
  const c={atob:s=>Buffer.from(s,'base64').toString('latin1'),poiAudioContext:{
   createBuffer:(channels,frames,rate)=>{const data=new Float32Array(frames);return {channels,frames,rate,getChannelData:()=>data}}
  }};
  const f=vm.runInNewContext(extract('const POI_RECORDED_FOLEY=','function poiKitchenKnifePcm(')+
-  extract('function poiSlimeSoftImpactPcm(','function poiSurfaceFoleyPcm(')+
-  ';({poiRecordedFoley,poiSlimeSoftImpactPcm,POI_RECORDED_FOLEY})',c);
- const baked=Object.hasOwn(f.POI_RECORDED_FOLEY,'slimeImpact');
- if(process.env.REQUIRE_SLIME_IMPACT_RECORDING==='1')assert.ok(baked,'release requires the actual licensed recording');
- if(baked){
-  assert.notEqual(f.POI_RECORDED_FOLEY.slimeImpact,f.POI_RECORDED_FOLEY.steelImpact);
-  const b=f.poiRecordedFoley('slimeImpact');
-  assert.equal(b,f.poiRecordedFoley('slimeImpact'));
-  assert.equal(b.rate,24000);assert.equal(b.channels,1);assert(b.frames>=1200&&b.frames<=24000);
-  assert(b.getChannelData(0).some(v=>Math.abs(v)>.05));
- }
- const a=f.poiSlimeSoftImpactPcm(24000,0);
- assert.equal(a.length,3120);assert.equal(Math.abs(a[0]),0);assert(Math.abs(a.at(-1))<.002);
- const energy=xs=>Math.sqrt(xs.reduce((sum,v)=>sum+v*v,0)/xs.length);
- assert(energy(a.slice(60,650))>energy(a.slice(-900))*6);
+  ';({poiRecordedFoley,POI_RECORDED_FOLEY})',c);
+ assert(!Object.hasOwn(f.POI_RECORDED_FOLEY,'slimeImpact'));
+ assert.notEqual(f.POI_RECORDED_FOLEY.playerSteelCut,f.POI_RECORDED_FOLEY.steelImpact);
+ const b=f.poiRecordedFoley('playerSteelCut');
+ assert.equal(b,f.poiRecordedFoley('playerSteelCut'));assert.equal(b.rate,24000);assert.equal(b.channels,1);assert.equal(b.frames,4704);
+ assert(Math.max(...b.getChannelData(0).map(Math.abs))<=.521);
 });

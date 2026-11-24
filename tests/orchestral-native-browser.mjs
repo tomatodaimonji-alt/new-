@@ -14,7 +14,7 @@ let fixture=insert(source,anchor,`
    read:()=>({score:typeof poiOrchestraSnapshot==='function'?poiOrchestraSnapshot():null,
     geo:poiAudioMusicZone(),indoors:poiWalkIndoor(),
     region:poiRegionAt(facilitySite,poiWalkX,poiWalkZ,false,poiWalkLevel),
-    coords:[poiWalkX,poiWalkZ,poiWalkLevel],
+    coords:[poiWalkX,poiWalkZ,poiWalkLevel],hud:$('poiLocationName').textContent,
     ctx:poiAudioContext?.state??null,time:poiAudioContext?.currentTime??0,enabled:poiAudioAllowed(),timer:poiAudioInterval!==null,
     boss:[...poiMonsterStates].find(([o])=>o.type==='monsterNorthMinotaur'&&o.x===64&&o.z===13&&o.y===-1)?.[1]?.hp??null,
     graph:window.__scoreSpy.read([poiAudioMaster,poiAudioMusic,poiAudioAmbience,poiAudioEffects],
@@ -24,9 +24,9 @@ let fixture=insert(source,anchor,`
     // Test fixture position injection only. Browser plays through the exact
     // production timer and map geometry/spatial classifier on each move.
     const market=facilitySite.southRoad.town.market;
-    const points={town:[45,41,0],outside:[87,2,0],indoor:[41,30,0],market:[market.public.x,market.public.z,0],
+    const points={town:[45,41,0],outside:[87,2,0],indoor:[41,30,0],southSettlement:[market.public.x,market.public.z,0],
      mine:[115,59,-1],chapel:[76,80,-1],otherworld:[102,79,-1],northFort:[64,14,-1]};
-    const p=points[scene];if(!p)throw Error(scene);
+    const p=Array.isArray(scene)?scene:points[scene];if(!p)throw Error(scene);
     [poiWalkX,poiWalkZ,poiWalkLevel]=p;poiWalkFromX=poiWalkViewX=poiWalkX;poiWalkFromZ=poiWalkViewZ=poiWalkZ;
     poiWalkFacing=0;poiWalkStarted=-10000;poiWalkNextReady=0;poiFreePose=null;
     poiWalkRoof();poiWalkStatus();poiWalkAvatar();return p;
@@ -176,8 +176,30 @@ try{
  observed=await scene('indoor');assert(observed.indoors);assert(observed.score.decks.length<=2);
  observed=await scene('town');assert(observed.score.decks.length<=2);
  await wait(()=>window.__editorTest.orchestraNative.read().score?.decks.length===1);
- checkpoint='dungeon/market/north cue scheduling';
- for(const s of ['market','mine','chapel','otherworld','northFort'])await scene(s);
+ checkpoint='seam/port/main approach share one calm live WebAudio bus';
+ observed=await scene('southSettlement');
+ assert.equal(observed.geo,'market','historic market identity stays intact');
+ const settlement=observed.graph.decks.southSettlement.id,settlementFade=observed.graph.decks.southSettlement.actions;
+ for(const point of [[94,109,0],[93,108,0],[92,108,0],[92,109,0],[84,115,0],[93,110,0],[94,109,0],
+   [105,122,0],[105,123,0],[99,123,0],[93,123,0],[92,123,0],[93,108,0]]){
+  const before=(await qa()).time;await locate(point);
+  await wait(({t,p})=>{const r=window.__editorTest.orchestraNative.read();
+   return r.time>=t+.22&&r.coords.join()===p.join()}, {t:before,p:point});
+  const r=await qa();
+  assert.equal(r.score.active,'southSettlement','no change crossing '+point);
+  assert.equal(r.graph.decks.southSettlement.id,settlement,'same live Web Audio bus '+point);
+  assert.deepEqual(r.graph.decks.southSettlement.actions,settlementFade,'no new fade on the same tune '+point);
+  assert.equal(r.hud,'セルネア');
+ }
+ checkpoint='nearby real field is still the original recording';
+ await locate([83,108,0]);
+ await wait(()=>{
+  const r=window.__editorTest.orchestraNative.read(),id=r.graph.decks.outside?.id;
+  return r.score?.active==='outside'&&r.graph.played.some(e=>e.decoded&&e.loop&&e.duration>30&&e.links.includes(id));
+ });
+ assert.equal((await qa()).geo,'outside');
+ checkpoint='dungeon and north cue scheduling';
+ for(const s of ['mine','chapel','otherworld','northFort'])await scene(s);
  checkpoint='actual weapon touch does damage and enters battle';
  const before=await qa();assert(before.boss>0);
  await action.tap();

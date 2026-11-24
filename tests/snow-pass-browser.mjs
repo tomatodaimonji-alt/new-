@@ -66,13 +66,12 @@ try{
  assert.equal(await page.evaluate(()=>window.__editorTest.canStep(49,128,49,127)),false,'ordinary map/path checks cannot pass through the special link');assert.equal(refused.save.region,undefined);assert.equal(refused.kit,stock);
  await page.evaluate(()=>{Storage.prototype.setItem=window.__snowStorageWrite});
  await page.waitForFunction(()=>window.__editorTest.snowPassRegion().field);
- await page.evaluate(()=>window.__editorTest.snowInventoryQA.markMusic());
  await roll(1,'snowpass');
  await page.waitForFunction(()=>window.__editorTest.snowPassRegion().timing?.firstFrameMs>0);
  const entry=await state();
  assert.deepEqual([entry.area.width,entry.area.height,entry.area.actors,entry.area.hp],[24,29,0,69]);
  assert.deepEqual(entry.area.spawn,[12,0]);assert.equal(entry.p.x,12);assert.equal(entry.save.region,'snowpass');assert.equal(entry.kit,stock);
- assert.equal(entry.area.music,'outside');assert.equal(await page.evaluate(()=>window.__editorTest.snowInventoryQA.fieldSame()),true);
+ assert.equal(entry.area.music,'snow','entering the active snow pass picks its own scene');
  assert.deepEqual(await page.evaluate(()=>[window.__editorTest.snowInventoryQA.clock(),window.__editorTest.snowInventoryQA.weapon()]),[true,'equipWoodSword']);
  await page.waitForTimeout(225);await page.keyboard.press('ArrowDown');await at('snowpass',1);
  assert.equal(await page.evaluate(()=>window.__editorTest.snowInventoryQA.drop(1).ok),true);

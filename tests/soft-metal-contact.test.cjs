@@ -16,11 +16,15 @@ test('a bladed metal swing plays only quiet air/metal; confirmed contact plays o
   assert.deepEqual(play('attack',item),[['playerSteelSwing',10.05,.47]]);
   assert.deepEqual(play('hit',item,false,true,'monsterSkeleton'),[['playerSteelCut',10,.57]]);
   assert.deepEqual(play('hit',item,true,true,'monsterSkeleton'),[['playerSteelCut',10,.57],['defeat',10.018,.80]]);
-  assert.deepEqual(play('hit',item,true,true,'monsterSlime'),[['slimeImpact',10,.70]]);
+  assert.deepEqual(play('hit',item,true,true,'monsterSlime'),[['playerSteelCut',10,.57],['defeat',10.018,.80]]);
   assert.deepEqual(play('hit',item,false,false,null,false),[['steelImpact',10.108,.69]]);
  }
  assert.deepEqual(play('hit','equipWoodSword',false,true),[['wood',10,.78]]);
- assert.deepEqual(play('hit','equipStoneSword',false,true),[]);
+ for(const item of ['equipStoneSword','equipBoneSword']){
+  assert.deepEqual(play('hit',item,false,true,'monsterSlime'),[['playerSteelCut',10,.57]]);
+  assert.deepEqual(play('attack',item),[]); // pre-existing synthesized whoosh, never cut recording
+ }
+ assert.deepEqual(play('hit','equipStoneMace',false,true),[]);
  c.poiAudioLevels.se=0;assert.deepEqual(play('hit','equipIronSword',true,true),[]);
 });
 test('actual multi-enemy sweep schedules exactly one shared contact and no contact on air',()=>{
@@ -32,7 +36,7 @@ test('actual multi-enemy sweep schedules exactly one shared contact and no conta
  const actor=type=>({id:{type},state:{x:2,z:1,hp:100},x:2,z:1});
  const shot={aim:{x:1,z:1},dx:1,dz:0,type:'equipNorthMinotaurAxe',profile:{range:2.55,damage:30,frontArc:true}};
  c.targets=[];c.poiSwordResolve(shot,8);assert.deepEqual(calls.splice(0),[['playerSteelSwing',10,.47]]);
- c.targets=[actor('monsterSkeleton'),actor('monsterGoblin')];c.poiSwordResolve(shot,9);
+ c.targets=[actor('monsterSlime'),actor('monsterGoblin')];c.poiSwordResolve(shot,9);
  assert.deepEqual(calls.splice(0),[['playerSteelCut',10,.57]]);
  assert.deepEqual(c.targets.map(t=>t.state.hp),[70,70]);
 });
