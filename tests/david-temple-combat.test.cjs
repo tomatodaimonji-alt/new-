@@ -10,12 +10,13 @@ function setup(){
   poiMobHitPlayer:(obj,now,n)=>{c.damage.push({obj,now,n});c.stock-=n;return c.stock<=0},
   poiMonsterCanMove:()=>true,poiSound:id=>c.sounds.push(id),poiDavidAttackFoley:(q,_p,_b,i,phase)=>c.sounds.push({kind:q.kind,i,phase}),terrainY:()=>0,
   mesh:()=>({p:[],c:[]}),poiEnemyCuePoint:(x,z,y)=>[x+.5,.153+y*1.4,z+.5],
+  tri:(m,x,y,z,col)=>{m.c.push(col);m.p.push(...x,...y,...z)},
   quad:(m,...q)=>{m.c.push(q.pop());for(const p of q)m.p.push(...p)}
  
  };
  const api=vm.runInNewContext(cut('// BEGIN DAVID TEMPLE COMBAT','// END DAVID TEMPLE COMBAT')+
   cut('function poiAimWallLimit(','function poiAimChooseLock(')+cut('// BEGIN DAVID TEMPLE CUES','// END DAVID TEMPLE CUES')+
-  ';({step:poiDavidMobFrame,tick:poiDavidCombatFrame,pose:poiDavidPose,area:poiDavidArea,begin:poiDavidBegin,match:poiDavidMatch,incoming:poiDavidIncoming,cue:poiDavidCueGeometry})',Object.assign(c,{POI_AIM_EPS:1e-7}));
+  ';({step:poiDavidMobFrame,tick:poiDavidCombatFrame,pose:poiDavidPose,area:poiDavidArea,begin:poiDavidBegin,match:poiDavidMatch,incoming:poiDavidIncoming,cue:(q,b)=>({...poiDavidCueGeometry(q,b),beam:poiDavidThermalBeam(q,{x:q.dx,z:q.dz},poiDavidBeamReach(q,b,{x:q.dx,z:q.dz}),0)})})',Object.assign(c,{POI_AIM_EPS:1e-7}));
  return {c,s,api,boss};
 }
 test('only canonical authored room enables dormant encounter; no damage or patrol through threshold',()=>{
@@ -90,7 +91,7 @@ test('live private encounter clock selects all four kinds, not only the exposed 
 test('actual floor cue and elevated red beam end at a new wall and never outside the arena',()=>{
  const {api,c,boss}=setup(),q={kind:'beam',dx:0,dz:-1,sx:24,sz:104,y:0};
  const open=api.cue(q,boss);
- a(open.lane.p.length>60&&open.beam.p.length>12);a(open.beam.c.every(([r,g,b])=>r>=.99&&g<=.10&&b<=.09));
+ a(open.lane.p.length>60&&open.beam.p.length>12);a(open.beam.c.some(([r,g,b])=>r>=.99&&g>.70&&b>.40),'hot core');a(open.beam.c.some(([r,g,b])=>r>=.99&&g<.30&&b<.11),'distinct warm sheath');
  const ys=open.beam.p.filter((_,i)=>i%3===1),zs=open.beam.p.filter((_,i)=>i%3===2);
  a(Math.max(...ys)>4.7&&Math.min(...ys)<.70,'beam actually comes down from the eyes toward hit corridor');
  a(Math.min(...zs)>=96-1e-5,'ray respects room edge in front even at selected 14-tile nominal length');
