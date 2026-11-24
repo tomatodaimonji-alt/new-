@@ -1,6 +1,0 @@
-# 雪エリアの音：風花の峠 / 白嶺峠の風
-
-- **風花の峠**: 3Dワールド工房向けの新規48秒曲。旋律・和声・配置を新規作曲。フェルト調のピアノは減衰する弦の倍音を合成し、フルートのみ、既に本作に採用済みの CC0 実演素材（Versilian Studios Chamber Orchestra 2 Community Edition）から作成。ゲームや他者の曲の旋律・譜面・音源は使用していない。
-- **白嶺峠の風**: 帯域を抑えたノイズを膨らませて作成した単発の風音。外部素材なし。
-- フルート原音: [LDFlute_susNV_A4_v1_1.wav](https://github.com/sgossner/VSCO-2-CE/blob/440300901dfe9275fd84e0b7763af1f8443ae62e/Woodwinds/Flute/susNV/LDFlute_susNV_A4_v1_1.wav), 3,460,842 bytes, Git blob `3007213aa6264efe0619c7321bf2e8df7966b0a2`。録音 Sam Gossner / Simon Dalzell、サンプル編集 Elan Hickler / Soundemote。[公開元](https://versilian-studios.com/vsco-community/) · [CC0 1.0](https://github.com/sgossner/VSCO-2-CE/blob/440300901dfe9275fd84e0b7763af1f8443ae62e/LICENSE)。
-- Production embeds only the two mixed Oggs. No sample extraction or audio fetch on load. Rebuild with `python compose.py` (NumPy/SciPy, FFmpeg with libvorbis and the pinned existing field sample). `white-ridge.ogg` SHA-256 `b91b59e1b95d9fba64e783a95aa3f87c63b7156a07474bf69e559dc1c3c78fca`; `snow-gust.ogg` SHA-256 `6f978828ae81b9caa603fd6af54103f4e249aa0e3b3ab43d3a49dd44f2be26cb`. Both 24 kHz, score stereo and wind mono. Objective decoded seam, waveform and loudness checked; no physical Android playback claim.

@@ -1,6 +1,0 @@
-# Orvas defeat stone Foley
-The 640 ms defeat one-shot uses the same two verified [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) stone recordings already credited in [David stone Foley](david-stone-foley.md):
-- [stonehit2.wav by aerror](https://freesound.org/people/aerror/sounds/350749/): lower pitched natural heavy-rock break and three quieter staggered brittle chips. Source preview SHA-256 `f0acc02d5bcee8620338cb77d3f76e21cdc14476481d404a61823005755bfdee`.
-- [Stone Scrape by NikoletB](https://freesound.org/people/NikoletB/sounds/846425/): soft stone-on-stone roughness and one little late contact. Source preview SHA-256 `e6887fd65429d5787f812667e200a763f0c3b4639955b03f022cedeb9d8d710f`.
-
-Edited offline into 15,360 frames of mono 24 kHz signed PCM16LE, SHA-256 `1baf1fc978221f41547d63133e5162623d0720ff587c997d2daccb9839c376a1`. Sample peak .66 before spatial SE gain (at most .73). The effect starts only on lethal authored Orvas damage; ordinary damage keeps the existing recorded rock hit and non-Orvas defeat cues are unchanged. No synthesis, network media, or looping. Ground taps at about .20, .29, .40 and .51 seconds follow the collapse without additional audio sources.
