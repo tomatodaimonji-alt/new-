@@ -133,13 +133,30 @@ jobs:
           const frame=' requestAnimationFrame(render);';
           inject(frame,' if(!window.__davidCameraManual)requestAnimationFrame(render);');
           // Read actual GPU color/depth results after the production render, not a mock geometry pass.
+          const opaque=' poiDrawHitFlashSpan(poiWalkMesh,vp,0,poiWalkMesh.count,poiHitFlashAmount(poiPlayerHitFlashAt,now));';
+          inject(opaque,`
+           const avatarProbe=window.__davidCameraManual&&window.__davidCameraCapture===null;
+           let avatarBefore=null,aw=0,ah=0,ax=0,ay=0;
+           if(avatarProbe){
+            const w=gl.drawingBufferWidth,h=gl.drawingBufferHeight;
+            aw=Math.floor(w*.36);ah=Math.floor(h*.60);ax=Math.floor(w*.32);ay=Math.floor(h*.12);
+            avatarBefore=new Uint8Array(aw*ah*4);gl.readPixels(ax,ay,aw,ah,gl.RGBA,gl.UNSIGNED_BYTE,avatarBefore);
+           }
+           `+opaque+`
+           if(avatarBefore){
+            const after=new Uint8Array(avatarBefore.length);
+            gl.readPixels(ax,ay,aw,ah,gl.RGBA,gl.UNSIGNED_BYTE,after);
+            let opacity=0;for(let i=0;i<after.length;i+=4)if(Math.abs(after[i]-avatarBefore[i])+Math.abs(after[i+1]-avatarBefore[i+1])+Math.abs(after[i+2]-avatarBefore[i+2])>16)opacity++;
+            window.__davidOpaquePixels=opacity;
+           }
+           `);
           const tail=" if(typeof poiHitstopMarkDrawn==='function')poiHitstopMarkDrawn(performance.now());";
           inject(tail,tail+`
            if(window.__davidCameraManual){
             const w=gl.drawingBufferWidth,h=gl.drawingBufferHeight,x=Math.floor(w*.16),y=Math.floor(h*.17),cw=Math.floor(w*.68),ch=Math.floor(h*.65),pixels=new Uint8Array(cw*ch*4);
             gl.readPixels(x,y,cw,ch,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
             const bins=new Set();for(let i=0;i<pixels.length;i+=4)bins.add((pixels[i]>>5)+8*(pixels[i+1]>>5)+64*(pixels[i+2]>>5));
-            window.__davidCameraCapture={...window.__davidClipWitness,bins:bins.size,pixels:Array.from(pixels)};
+            window.__davidCameraCapture={...window.__davidClipWitness,bins:bins.size,opaque:window.__davidOpaquePixels,pixels:Array.from(pixels)};
            }
           `);
           for(const [,body] of html.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Script(body);
@@ -210,8 +227,8 @@ jobs:
            const wingBefore=await cap(true),wingAfter=await cap(false);
            assert(!wingBefore.clipped&&wingAfter.clipped&&wingAfter.arm<wingBefore.arm-.5,
             'same real input clamps the view clear of the solid authored entrance wing');
-           assert(wingAfter.bins>wingBefore.bins,'wing recovery improves actual rendered scene');
-           console.log('Actual entrance wing camera framebuffer',JSON.stringify({blocked:wingBefore.arm,safe:wingAfter.arm,bins:[wingBefore.bins,wingAfter.bins]}));
+           assert(wingAfter.opaque>100&&wingAfter.opaque>wingBefore.opaque+80,'real wing correction uncovers the opaque avatar, not merely the old stipple silhouette: '+JSON.stringify([wingBefore.opaque,wingAfter.opaque]));
+           console.log('Actual entrance wing camera framebuffer',JSON.stringify({blocked:wingBefore.arm,safe:wingAfter.arm,bins:[wingBefore.bins,wingAfter.bins],opaque:[wingBefore.opaque,wingAfter.opaque]}));
            assert.deepEqual(errors,[]);assert.equal((await get()).gpu,0);
            console.log('Real temple wall camera framebuffer',JSON.stringify({blocked:{arm:blocked.arm,bins:blocked.bins},safe:{arm:safe.arm,bins:safe.bins},ratio,limitsAfter}));
           } catch(e){console.error('David camera native:',phase);throw e}
