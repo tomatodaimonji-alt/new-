@@ -1707,7 +1707,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v317）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v318）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -19916,7 +19916,17 @@ function poiOrvasAllyEngage(a,now){
  if(leap)d.leapReady=now+POI_DAVID_LEAP_COOL;
  return a;
 }
+function poiCompanionImpactFlush(batch){
+ if(!batch?.hit||batch.played||typeof poiSound!=='function')return;
+ batch.played=true;
+ poiSound('hit',batch.weapon,batch.defeated,true);
+}
 function poiOrvasAllyHits(a,q,now,raw,angular=null){
+ // Aggregate successful health changes per physical strike. The moving
+ // beam's distinct cast remains one audible contact, not one per frame.
+ const batch=angular?(q.sweep.companionImpact??={weapon:null,hit:false,defeated:false}):
+  {weapon:q.kind==='sweep'||q.kind==='double'?'equipIronSword':null,hit:false,defeated:false};
+ const source={companion:true,companionImpact:batch};
  // Only the hostile registry is enumerated. Never route into player/ally
  // victim fallbacks, not even during the boss-style turning beam or splash.
  const pass=poiAimWall({y:q.y}),o={x:q.sx,z:q.sz,y:q.y},b=q.allyArena;
@@ -19933,8 +19943,9 @@ function poiOrvasAllyHits(a,q,now,raw,angular=null){
   }
   if(!hit||len>1e-6&&poiDavidRoomRay(q,b,{x:x/len,z:z/len},len,pass)+1e-6<len)continue;
   if(angular)q.sweep.victims.add(state);
-  q.landed++;poiPlayerDamageTarget([obj,state],Math.round(p.x),Math.round(p.z),raw,null,now,true,true,{companion:true});
+  q.landed++;poiPlayerDamageTarget([obj,state],Math.round(p.x),Math.round(p.z),raw,null,now,true,true,source);
  }
+ poiCompanionImpactFlush(batch);
 }
 function poiOrvasAllyStop(a,now,clearEffects=false){
  const d=a?.david,q=d?.attack;
@@ -20491,8 +20502,11 @@ function poiCompanionResolve(a,now,mode){
  const p=model?{x:model.x-.5,z:model.z-.5}:t.s;
  // Never home the lunge onto a target that left the committed footprint.
  if(now-q.hit<=100&&poiCompanionTargetLegal(a,t.o,t.s,true)&&t.s.x===q.tx&&t.s.z===q.tz&&
-    Math.hypot(p.x-(a.px??a.x),p.z-(a.pz??a.z))<=poiCompanionMeleeReach(a)&&poiCompanionAttackClear({x:a.px??a.x,z:a.pz??a.z},p,a.y)&&typeof poiPlayerDamageTarget==='function')
-  poiPlayerDamageTarget([t.o,t.s],t.s.x,t.s.z,poiCompanionType(a.id).attack,null,now,true,true,{companion:true});
+    Math.hypot(p.x-(a.px??a.x),p.z-(a.pz??a.z))<=poiCompanionMeleeReach(a)&&poiCompanionAttackClear({x:a.px??a.x,z:a.pz??a.z},p,a.y)&&typeof poiPlayerDamageTarget==='function'){
+  const batch={weapon:null,hit:false,defeated:false};
+  poiPlayerDamageTarget([t.o,t.s],t.s.x,t.s.z,poiCompanionType(a.id).attack,null,now,true,true,{companion:true,companionImpact:batch});
+  if(typeof poiCompanionImpactFlush==='function')poiCompanionImpactFlush(batch);
+ }
  return true;
 }
 // BEGIN HOSTILE ALLY TARGET CHOICE
@@ -24224,6 +24238,17 @@ function poiMonsterAt(x,z,reserveSlide=false,except=null){
  return null;
 }
 const POI_WILD_MAX=3;
+const POI_FIELD_NOTICE=6.5,POI_FIELD_ARCHER_NOTICE=8;
+const POI_WILD_BIRTH_MARGIN=.20;
+function poiWildBirthPlayer(now){
+ const p=typeof poiAimOrigin==='function'?poiAimOrigin(now):null;
+ return {x:poiWalkX,z:poiWalkZ,pose:p?.y===0&&Number.isFinite(p.x)&&Number.isFinite(p.z)?p:null};
+}
+function poiWildBeyondNotice(x,z,player,type){
+ const d=(type==='monsterSkelArcher'?POI_FIELD_ARCHER_NOTICE:POI_FIELD_NOTICE)+POI_WILD_BIRTH_MARGIN;
+ return Math.hypot(x-player.x,z-player.z)>d&&
+  (!player.pose||Math.hypot(x-player.pose.x,z-player.pose.z)>d);
+}
 // BEGIN OUTDOOR WILD RUNTIME
 const POI_REGIONAL_WILD_TYPES=new Set(['monsterSkelArcher','monsterSkelMage','monsterSkelLongStaff']);
 const poiRegionalWildRuntime=new Map();
@@ -24249,7 +24274,7 @@ function poiWildRegionalPick(home,player,rng,canTravel,canSpawn){
  const q=[{x:home.x,z:home.z}],seen=new Set([home.x+','+home.z]),choices=[];
  for(let i=0;i<q.length;i++){
   const p=q[i],x=p.x,z=p.z,d=Math.hypot(x-home.x,z-home.z);
-  if(d>=1.5&&d<=5&&Math.hypot(x-player.x,z-player.z)>=3&&canSpawn(x,z))choices.push(p);
+  if(d>=1.5&&d<=5&&poiWildBeyondNotice(x,z,player,home.type)&&canSpawn(x,z))choices.push(p);
   for(const [dx,dz] of [[1,0],[0,1],[-1,0],[0,-1]]){
    const u=x+dx,v=z+dz,k=u+','+v;
    if(seen.has(k)||Math.hypot(u-home.x,v-home.z)>5||!canTravel(u,v,x,z))continue;
@@ -24269,7 +24294,7 @@ function poiWildRegionalFrame(now,rng){
   if(state){poiRegionalWildRuntime.delete(obj);poiMonsterStates.delete(obj);poiMonsterMeshDirty=true}
  }
  if(occupied)return;
- const p={x:poiWalkX,z:poiWalkZ};
+ const p=poiWildBirthPlayer(now);
  const home=line.filter(o=>o.y===0&&POI_REGIONAL_WILD_TYPES.has(o.type)&&Math.hypot(p.x-o.x,p.z-o.z)<=12)
   .sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z))[0];
  if(!home)return;
@@ -24373,7 +24398,7 @@ function poiWildSpawnTerrain(){
  return poiWildTerrain;
 }
 function poiWildGateApproach(){return POI_WILD_GATES.find(g=>(!g.expansion||facilitySite?.townOffset)&&poiWildZone([g.approach],poiWalkX,poiWalkZ))}
-function poiWildGatePick(rng,gate=poiWildGateApproach()){
+function poiWildGatePick(rng,gate=poiWildGateApproach(),player=poiWildBirthPlayer(typeof performance==="undefined"?0:performance.now())){
  if(!gate)return null;
  const [fx,fz]=typeof poiThirdPerson!=='undefined'&&poiThirdPerson
   ?[Math.sin(poiCameraYaw),Math.cos(poiCameraYaw)]:[[0,-1],[1,0],[0,1],[-1,0]][poiWalkFacing]||[0,-1];
@@ -24383,7 +24408,7 @@ function poiWildGatePick(rng,gate=poiWildGateApproach()){
  // meadow, but are never spawn points; water and obstacles split regions.
  for(let i=0;i<queue.length;i++){
   const [x,z,steps]=queue[i],dx=x-x0,dz=z-z0,d=Math.hypot(dx,dz),key=x+','+z;
-  if(d>=4.5&&d<=10&&(dx*fx+dz*fz)/d<=.38&&poiWildZone([gate.meadow],x,z)&&
+  if(d>0&&d<=10&&(dx*fx+dz*fz)/d<=.38&&poiWildBeyondNotice(x,z,player,'monsterSlime')&&poiWildZone([gate.meadow],x,z)&&
      poiWildExterior(x,z,3)&&!blocked.has(key)&&terrainLevel(x,z)===0&&!poiMonsterAt(x,z,true))choices.push({x,z});
   if(steps>=12)continue;
   for(const [a,b] of [[1,0],[-1,0],[0,1],[0,-1]]){
@@ -24396,16 +24421,17 @@ function poiWildGatePick(rng,gate=poiWildGateApproach()){
  return choices.length?choices[Math.min(choices.length-1,Math.floor(rng()*choices.length))]:null;
 }
 function poiWildPick(rng){
+ const player=poiWildBirthPlayer(typeof performance==="undefined"?0:performance.now());
  const gate=poiWildGateApproach();
  // Never fall back to a point across the river if this meadow is blocked.
- if(gate)return poiWildGatePick(rng,gate);
+ if(gate)return poiWildGatePick(rng,gate,player);
  const [fx,fz]=[[0,-1],[1,0],[0,1],[-1,0]][poiWalkFacing]||[0,-1],blocked=poiWildSpawnTerrain();
  for(let i=0;i<24;i++){
   const angle=rng()*Math.PI*2,radius=7+rng()*4.5;
   const dx=Math.round(Math.cos(angle)*radius),dz=Math.round(Math.sin(angle)*radius),d=Math.hypot(dx,dz);
   if(d<7||d>12||(dx*fx+dz*fz)/d>.38)continue;
   const x=poiWalkX+dx,z=poiWalkZ+dz,key=x+','+z;
-  if(!poiWildExterior(x,z,3)||blocked.has(key)||facilityCreekIndex?.water.has(key)||
+  if(!poiWildBeyondNotice(x,z,player,'monsterSlime')||!poiWildExterior(x,z,3)||blocked.has(key)||facilityCreekIndex?.water.has(key)||
      terrainLevel(x,z)!==0||poiMonsterAt(x,z,true))continue;
   return {x,z};
  }
@@ -25936,7 +25962,7 @@ function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMo
  const dx=poiWalkX-state.x,dz=poiWalkZ-state.z,dist=Math.hypot(dx,dz);
  // Only a valid stationary ranged attempt precedes the existing chase/
  // patrol range; when no shot is possible, movement remains unchanged.
- if(allowed&&obj.type==='monsterSkelArcher'&&dist<=8&&(dist>6.5||!poiArmedBound(obj,poiWalkX,poiWalkZ))&&
+ if(allowed&&obj.type==='monsterSkelArcher'&&dist<=POI_FIELD_ARCHER_NOTICE&&(dist>POI_FIELD_NOTICE||!poiArmedBound(obj,poiWalkX,poiWalkZ))&&
     poiArmedAim(obj,state,poiWalkX,poiWalkZ)){
   if(now>=state.nextAttack)poiEnemyBeginPlayer(obj,state,now);
   continue;
@@ -25947,7 +25973,7 @@ function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMo
   continue;
  }
  const armed=typeof POI_ARMED_FOES==='object'?POI_ARMED_FOES[obj.type]:null;
- if(state.wildSpawn&&(dist>6.5||state.regionalWild&&!poiArmedBound(obj,poiWalkX,poiWalkZ))){
+ if(state.wildSpawn&&(dist>POI_FIELD_NOTICE||state.regionalWild&&!poiArmedBound(obj,poiWalkX,poiWalkZ))){
   if(poiWildRoamStep(obj,state,now))changed=true;
   continue;
  }
@@ -28210,7 +28236,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v317',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v318',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -28325,7 +28351,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v317';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v318';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -28540,7 +28566,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v317',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v318',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -29869,6 +29895,12 @@ function poiPlayerDamageTarget(monster,x,z,amount,weapon,now,silent=false,atCont
  }else if(!silent){
   if(atContact)poiSound('hit',weapon,state.hp===0,true);
   else poiSound('hit',weapon,state.hp===0);
+ }
+ // Stone has its own contact/shatter Foley above for player and ally alike.
+ // Only the shared effective damage path can mark an ordinary ally hit.
+ if(state.hp<before&&!stone&&source?.companionImpact){
+  source.companionImpact.hit=true;
+  if(state.hp===0)source.companionImpact.defeated=true;
  }
  if(state.hp<before&&typeof poiOrchestraCombat==='function')poiOrchestraCombat();
  if(state.hp<before&&!source?.companion&&typeof poiHitstopRequest==='function')poiHitstopRequest(now,weapon);
