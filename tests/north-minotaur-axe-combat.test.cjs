@@ -7,6 +7,7 @@ function game(){
   poiWalkX:0,poiWalkZ:0,poiWalkLevel:-1,poiWalkFacing:0,poiPlayerWeaponPending:null,document:{hidden:false},
   poiEquippedWeapon:()=>env.weapon??id,poiWalkAvatar(){},
   poiAimWall:()=>((x,z)=>!(x===-1&&z>=1)),
+  poiAimOrigin:()=>({x:0,z:0,y:-1}),
   poiAimTargetList:()=>env.targets,poiAimNewShot:shot=>({...shot,aim:{x:0,z:0,y:-1},dx:0,dz:1}),
   poiEquipmentSpendWeapon:x=>{wear.push(x);return true},
   poiSound:(...values)=>sounds.push(values),
@@ -17,7 +18,7 @@ function game(){
   cut('function poiSwordResolve(','function poiPlayerCastFireWand(')+
   cut('function poiPlayerWeaponFrame(','// A shoulder-led flat cut')+
   cut('// BEGIN WORLD MELEE REACH','// Visual release only:')+
-  ';({profile:poiPlayerWeaponProfile,pose:poiPlayerProfilePose,plan:poiWorldMeleePlan,rig:poiWorldMeleeRig,start:poiPlayerStartProfile,frame:poiPlayerWeaponFrame})',env);
+  ';({profile:poiPlayerWeaponProfile,pose:poiPlayerProfilePose,plan:poiWorldMeleePlan,rig:poiRigidHeldRotation,start:poiPlayerStartProfile,frame:poiPlayerWeaponFrame})',env);
  return {api,env,damage,sounds,wear};
 }
 const target=(label,x,z,y=-1,type='monsterSkeleton')=>({id:{label,y,type},state:{hp:60},x,z});
@@ -52,9 +53,12 @@ test('one grip-connected slow blade winds, sweeps the full angular envelope, and
  a.ok(a0.side>2.52&&a2.side< -2.52);a.ok(Math.abs(a1.side)<1e-7);
  const grip=[0,.64,0],g={x:.21,y:.85,z:.40},apex=[.4661,2.82886,0];
  for(const plan of [a0,a1,a2]){
-  const rig=api.rig(plan,g,apex,grip),hit=rig.point(...apex),hand=rig.point(...grip);
-  a.ok(Math.hypot(hit[0]-plan.side,hit[1]-plan.height,hit[2]-plan.forward)<1e-6);
-  a.deepEqual([...hand],[g.x,g.y,g.z]);
+  const rig=api.rig(plan,g,apex,grip,[1,1,1],(...v)=>v);
+  const shaft=apex.map((v,i)=>v-grip[i]),hit=rig(...shaft),hand=rig(0,0,0);
+  const aim=[plan.side-g.x,plan.height-g.y,plan.forward-g.z],gap=Math.hypot(...aim);
+  a.ok(Math.hypot(...hit.map((v,i)=>v-aim[i]*Math.hypot(...shaft)/gap))<1e-6);
+  a.ok(Math.abs(Math.hypot(...hit)-Math.hypot(...shaft))<1e-6);
+  a.ok(Math.hypot(...hand)<1e-9);
  }
 });
 test('an all-slime sweep routes one soft contact while a mixed sweep keeps one standard material cue',()=>{
@@ -66,3 +70,4 @@ test('an all-slime sweep routes one soft contact while a mixed sweep keeps one s
   a.deepEqual(sounds,mixed?[['hit',id,false,true]]:[['hit',id,false,true,'monsterSlime']]);
  }
 });
+

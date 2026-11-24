@@ -16,12 +16,12 @@ function setup(baked=true){
 test('knife and iron swing stay steel; slime hit and lethal each play only one soft recording at actual contact',()=>{
  const {play}=setup();
  for(const type of ['kitchenKnife','equipIronSword']){
-  assert.deepEqual(play('attack',type).map(v=>v.slice(0,2)),[['recorded','steelSwing']]);
+  assert.deepEqual(play('attack',type).map(v=>v.slice(0,2)),[['recorded','playerSteelSwing']]);
   for(const defeated of [false,true]){
    const hit=play('hit',type,defeated,true,'monsterSlime');
    assert.deepEqual(hit.map(v=>v.slice(0,3)),[['recorded','slimeImpact',10]]);
   }
-  assert.deepEqual(play('hit',type,true,true,'monsterSkeleton').map(v=>v.slice(0,2)),[['recorded','steelImpact'],['buffer','defeat']]);
+  assert.deepEqual(play('hit',type,true,true,'monsterSkeleton').map(v=>v.slice(0,2)),[['recorded','playerSteelCut'],['buffer','defeat']]);
  }
  assert.deepEqual(play('hit','equipWoodSword',false,true,'monsterSlime').map(v=>v.slice(0,2)),[['buffer','wood']]);
 });

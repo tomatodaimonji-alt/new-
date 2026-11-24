@@ -24,9 +24,9 @@ test('wooden door entry and departure play separate recordings; stone and iron r
 test('only real metallic melee uses distinct attack and contact recordings; one actual contact can also cue defeat',()=>{
  const {play}=harness();
  for(const type of ['equipIronSword','kitchenKnife']){
-  assert.deepEqual(play('attack',type).map(x=>x.slice(0,2)),[['recorded','steelSwing']]);
+  assert.deepEqual(play('attack',type).map(x=>x.slice(0,2)),[['recorded','playerSteelSwing']]);
   const hit=play('hit',type,true,true);
-  assert.equal(hit[0][1],'steelImpact');assert.equal(hit[0][2],10);
+  assert.equal(hit[0][1],'playerSteelCut');assert.equal(hit[0][2],10);
   assert.deepEqual(hit[1].slice(0,2),['buffer','defeat']);
  }
  for(const type of ['equipWoodSword','equipWoodSpear','equipStoneSword','equipStoneMace','equipBoneSword','equipClub'])
@@ -55,7 +55,7 @@ test('bundled recordings decode as 24kHz signed mono PCM on the existing cached 
   createBuffer:(channels,count,rate)=>{const data=new Float32Array(count);return {channels,count,rate,getChannelData:()=>data}}}, poiPlayImpactBuffer:(...args)=>calls.push(args)};
  const i=html.indexOf('const POI_RECORDED_FOLEY='),j=html.indexOf('function poiKitchenKnifePcm(',i);
  const meta=vm.runInNewContext(html.slice(i,j)+';({poiTryRecordedFoley,POI_RECORDED_FOLEY});',context);
- const foley=['doorOpen','doorClose','steelSwing','steelImpact','itemPickup'];
+ const foley=['doorOpen','doorClose','steelSwing','steelImpact','playerSteelSwing','playerSteelCut','itemPickup'];
  const found=foley.filter(id=>Object.hasOwn(meta.POI_RECORDED_FOLEY,id));
  if(process.env.REQUIRE_RECORDED_INTERACTION_FOLEY==='1')assert.deepEqual(found,foley,'shipping artifact must contain every verified recording');
  for(const id of [...found,'wood','defeat']){

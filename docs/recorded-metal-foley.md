@@ -1,0 +1,4 @@
+# Softer player metal weapon Foley
+The single player on-contact clip mixes a lightly low-passed version of the already credited steel impact with the short initial scrape/crunch from [Watermelon Slicing 2.m4a](https://freesound.org/people/Yin_Yang_Jake007/sounds/443467/) by Yin_Yang_Jake007 ([CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)). No real injury recording is used. The public high-quality preview was used and is identifiable by SHA-256 `d93ad007106338f4fb49eb6c0c49d6ee2ff86bc81d424b74dc17a5ea45d79949`. The slice is mono, band-passed and cut before the loud cutting-board impacts. The swing has only a short low-passed version of the prior metal swing (see the respective original-recording credits), with no produce layer.
+
+Weapon sound remains on the same SE bus. Original NPC metal, non-bladed impacts, slime, and defeat audio are unchanged. Each player contact has one 24 kHz native mono buffer shared by the knife, iron sword and Minotaur axe.

@@ -16,13 +16,13 @@ let fixture=insert(html,api,`
     s.hp=80;s.townOwned=true;
     s.actorFree={fromX:fx,fromZ:fz,x:fx,z:fz,start:performance.now()-400,ms:380,cells:c,endCells:c,heading:0};
     poiMonsterStates.set(o,s);poiMonsterMeshDirty=true;
-    window.__staffQA={frames:[],hits:[],bow:[],flights:[],arrows:[],events:keepEvents?window.__staffQA?.events??[]:[],s};poiAimLockAt=0;
+    window.__staffQA={frames:[],hits:[],bow:[],flights:[],arrows:[],events:keepEvents?window.__staffQA?.events??[]:[],s,target:[fx,fz],begin:[]};poiAimLockAt=0;
    },
    read:()=>{
     const q=window.__staffQA,p=poiFreePose;
     return {equipped:poiEquippedWeapon(),at:poiWalkActionStarted,ready:poiAttackReady,now:performance.now(),pending:!!poiPlayerWeaponPending,
      pad:!!poiAnalogContact,position:[poiWalkViewX,poiWalkViewZ],walking:!!p?.walking,distance:p?.distance??0,face:poiWalkFacing,
-     hp:q?.s?.hp,frames:q?.frames,hits:q?.hits,bow:q?.bow,flights:q?.flights,arrows:q?.arrows,events:q?.events};
+     hp:q?.s?.hp,target:q?.target,begin:q?.begin,idleRigid:window.__staffIdleRigid,frames:q?.frames,hits:q?.hits,bow:q?.bow,flights:q?.flights,arrows:q?.arrows,events:q?.events};
    }
   },`);
 assert.equal(fixture.split(' const p=poiWildPick(rng);').length,2);fixture=fixture.replace(' const p=poiWildPick(rng);',' const p=null;');
@@ -30,15 +30,27 @@ fixture=insert(fixture,'function poiWildRegionalFrame(now,rng){','return;');
 fixture=insert(fixture,'function poiMobFrame(now){','return;');
 const propEnd="   m.n.push(dx/n,ny/n,dz/n);m.c.push(prop.c[i],prop.c[i+1],prop.c[i+2]);\n  }";
 fixture=insert(fixture,propEnd,`
-  if(weapon==='equipLongStaff'&&worldSpear&&window.__staffQA&&pose?.staffStrike){
-   let peak=0;for(let i=3;i<prop.p.length;i+=3)if(prop.p[i+1]>prop.p[peak+1])peak=i;
-   const tip=m.p.length-prop.p.length+peak,free=poiFreePose;
-   window.__staffQA.frames.push({clock:performance.now(),started:poiWalkActionStarted,
+  if(weapon==='equipLongStaff'&&worldSpear){
+   let peak=0,tail=0,edge=0;
+   for(let i=3;i<prop.p.length;i+=3){
+    if(prop.p[i+1]>prop.p[peak+1])peak=i;
+    if(prop.p[i+1]<prop.p[tail+1])tail=i;
+    if(prop.p[i]>prop.p[edge])edge=i;
+   }
+   const start=m.p.length-prop.p.length,tip=start+peak,free=poiFreePose;
+   const size=(u,v)=>Math.hypot(...[0,1,2].map(d=>m.p[start+u+d]-m.p[start+v+d]));
+   const rigidLengths=[size(peak,tail),size(peak,edge),size(tail,edge)];
+   if(!pose?.staffStrike)window.__staffIdleRigid=rigidLengths;
+   if(window.__staffQA&&pose?.staffStrike)window.__staffQA.frames.push({clock:performance.now(),started:poiWalkActionStarted,
     moving:!!free?.walking,pad:!!poiAnalogContact,phase:pose.staffPhase,arc:pose.meleeReach?.arc,
-    tip:[m.p[tip]-x,m.p[tip+1]-y,m.p[tip+2]-z],origin:[x,z],stride,vertices:prop.p.length/3});
+    tip:[m.p[tip]-x,m.p[tip+1]-y,m.p[tip+2]-z],origin:[x,z],stride,vertices:prop.p.length/3,rigidLengths});
   }`);
+fixture=insert(fixture,'function poiPlayerStartProfile(type,now){',`
+ if(type==='equipLongStaff'&&window.__staffQA){
+  const o=poiAimOrigin(now);window.__staffQA.begin.push({clock:now,origin:[o.x,o.z]});
+ }`);
 fixture=insert(fixture,'function poiPlayerDamageTarget(monster,x,z,amount,weapon,now,silent=false,atContact=false,source=null){',`
- if(window.__staffQA&&(weapon==='equipLongStaff'||weapon==='equipWoodBow'))window.__staffQA.hits.push({amount,now,at:poiWalkActionStarted,pad:!!poiAnalogContact});`);
+ if(window.__staffQA&&(weapon==='equipLongStaff'||weapon==='equipWoodBow')){const o=poiAimOrigin(now);window.__staffQA.hits.push({amount,now,at:poiWalkActionStarted,pad:!!poiAnalogContact,origin:[o.x,o.z]});}`);
 fixture=insert(fixture,' const f=p.front,draw=p.draw,skin=[.77,.59,.43],highlight=[.84,.65,.48],wood=[.47,.29,.15],limb=[.69,.46,.22];',`
  if(window.__staffQA)window.__staffQA.bow.push({draw:pose.bowDraw,released:pose.bowReleased,front:P(f),origin:[x,z],
   pad:!!poiAnalogContact,walking:!!poiFreePose?.walking,at:poiWalkActionStarted,clock:performance.now()});`);
@@ -71,13 +83,19 @@ function verify(seq,moving){
  assert(hit&&hit.amount===20&&hit.now-seq.at>=209,'one actual 20 HP contact at original 210ms key or next frame');
  assert.equal(seq.hp,60);assert.equal(seq.hits.length,1);
  const fs=seq.frames.filter(f=>f.started===seq.at&&f.vertices>20);
- assert(fs.some(f=>['raise','hold'].includes(f.phase)),'actual windup mesh was painted');
- const early=fs.filter(f=>f.clock<hit.now&&['raise','hold','down'].includes(f.phase)).sort((a,b)=>b.tip[1]-a.tip[1])[0];
+ const early=fs.filter(f=>['raise','hold'].includes(f.phase)).sort((a,b)=>b.tip[1]-a.tip[1])[0];
  const contact=fs.find(f=>f.phase==='down'&&f.arc==='staff-down'&&f.clock>=hit.now-2&&f.clock-hit.now<125);
  assert(early&&contact, 'true overhead and downward live held geometry: '+JSON.stringify(fs));
+ const idle=seq.idleRigid;
+ assert(idle&&idle[0]>1.9,'substantial held branch is already long at idle');
+ assert(fs.length>=3&&fs.every(f=>f.rigidLengths.every((v,i)=>Math.abs(v-idle[i])<1e-6)),
+  'same two-thumb live prop does not stretch at any wind, contact or recovery frame');
  assert(early.tip[1]>1.65&&contact.tip[1]<1.25&&early.tip[1]-contact.tip[1]>.45,'tip actually falls from overhead');
  if(moving){
   assert(hit.pad&&early.pad&&contact.pad,'movement finger remains native-held at windup AND actual contact');
+  const begin=seq.begin.find(v=>v.clock===seq.at);
+  assert(begin&&move(begin.origin,seq.target)>2.10,'target was demonstrably outside the staff hitbox on the actual action press');
+  assert(move(hit.origin,seq.target)<2,'target entered hitbox through genuine moving input before the contact frame');
   const first=fs.find(frame=>frame.pad&&frame.moving&&frame.phase==='raise');
   assert(first&&move(first.origin,contact.origin)>.23,'avatar position advances from the first emitted windup frame through contact');
   assert(move(early.origin,contact.origin)>.08,'avatar keeps translating during and after the raised pose');
@@ -138,13 +156,13 @@ try{
  const left=center(await pad.boundingBox(),1),right=center(await action.boundingBox(),2),drag=t(left.x+33,left.y,1);
  await send('touchStart',[left]);await send('touchMove',[drag]);
  await tick(72);const staffWalk=await read();assert(staffWalk.pad&&staffWalk.walking&&staffWalk.position[0]>idle.position[0]+.10&&staffWalk.face===1);
- await page.evaluate(()=>{window.__staffQA.events=[];window.__staffSeedOnSecond=1.94;});
+ await page.evaluate(()=>{window.__staffQA.events=[];window.__staffSeedOnSecond=2.16;});
  await action.evaluate(el=>{
   for(const name of ['pointerdown','pointerup','pointercancel']){
    el.addEventListener(name,e=>{
     if(e.type==='pointerup'&&e.pointerType==='touch'&&!e.isPrimary&&e.isTrusted&&window.__staffSeedOnSecond){
-     // A known live target is placed within the original reach at the real
-     // right release, avoiding test harness latency outrunning its hitbox.
+     // A known live target is placed outside the original reach at the real
+     // right release, and must be entered by real walking before contact.
      window.__editorTest.movingStaffQA.seed(window.__staffSeedOnSecond,true);
      window.__staffSeedOnSecond=0;
     }

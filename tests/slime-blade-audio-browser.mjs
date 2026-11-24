@@ -42,7 +42,7 @@ const audioAnchor=' poiAudioTransient.add(source);source.start(when);source.stop
 fixture=replaceOnce(fixture,audioAnchor,audioAnchor+`
  if(window.__qaSlimeSamples){
   const id=[...poiRecordedFoleyCache].find(([,b])=>b===buffer)?.[0];
-  if(id&&['steelSwing','steelImpact','slimeImpact','defeat'].includes(id))
+  if(id&&['steelSwing','steelImpact','playerSteelSwing','playerSteelCut','slimeImpact','defeat'].includes(id))
    window.__qaSlimeSamples.push({id,when,volume,duration:buffer.duration,rate:buffer.sampleRate});
  }`);
 const server=createServer((req,res)=>{
@@ -89,7 +89,7 @@ try{
    const after=await read();
    assert.deepEqual(after.hps,[endHP],'live knife applies its unchanged 32 damage and can defeat a slime');
    assert.equal(after.durability,before.durability-1);
-   assert.deepEqual(after.samples.map(x=>x.id),['steelSwing','slimeImpact'],'real recorded knife swing and soft slime contact only, even on defeat: '+JSON.stringify(after.samples));
+   assert.deepEqual(after.samples.map(x=>x.id),['playerSteelSwing','slimeImpact'],'real recorded knife swing and soft slime contact only, even on defeat: '+JSON.stringify(after.samples));
    assert(after.samples.every(x=>x.duration>.035&&x.rate===24000&&x.volume>0),'decoded PCM played through a real output-bus source');
    assert(after.samples[1].when>=after.samples[0].when,'actual sound scheduler plays contact after the existing swing');
   }

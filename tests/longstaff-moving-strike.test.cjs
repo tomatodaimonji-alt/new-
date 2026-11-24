@@ -18,14 +18,14 @@ function play(id){
  }
  return {weapon,o,s,c,api,move,calls};
 }
-test('moving across cells and rotating the thumb does not cancel long staff pose or committed original hit',()=>{
+test('moving across cells and rotating the thumb does not cancel long staff pose or committed original hit from live body',()=>{
  const {api,s,c,move,calls}=play('equipLongStaff');
  const p=api.profile('equipLongStaff');a.deepEqual([p.range,p.damage,p.hit,p.ready,p.pose],[2,20,210,510,400]);
  a(api.begin('equipLongStaff',1000));a.equal(c.poiAttackReady,1510);
  const shot=api.pending();a(Math.abs(shot.dx-1)<1e-6);
- move();api.frame(1110);
+ move();c.poiFreePose.x=10.4;c.poiFreePose.z=10;api.frame(1110);
  a.equal(c.poiWalkActionStarted,1000,'pose continues on the genuine action clock');
- a.equal(api.pending(),shot,'queued hit stays committed to its original origin/direction');
+ a.equal(api.pending(),shot,'queued hit stays committed to its initial bearing at new origin');
  a(api.pose('equipLongStaff',1110-c.poiWalkActionStarted).staffStrike);
  api.frame(1209);a.equal(s.hp,100);a.equal(calls.length,0);
  api.frame(1210);a.equal(s.hp,80);a.equal(calls.length,1);a.equal(api.pending(),null);
