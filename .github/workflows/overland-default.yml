@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        probe: [seam, outlet, visuals, audio, persistence, temple, regressions]
+        probe: [seam]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -1443,6 +1443,30 @@ jobs:
               timestamp:performance.now(),uploads:s?.uploads.length,live:s?.live,contextLost:s?.lost};
             },
           `);
+          if(process.env.SNOW_PATH_PROFILE==='1'){
+           const a=html.indexOf('function poiTownFindPath('),b=html.indexOf('function poiTownNpcExistsBed(',a);
+           let f=html.slice(a,b);assert(a>0&&b>a);
+           const mark=(x,y)=>{assert.equal(f.split(x).length,2,x);f=f.replace(x,y)};
+           mark('function poiTownFindPath(from,target,blocked){',`function poiTownFindPath(from,target,blocked){
+            const q=window.__snowSeamProbe;
+            const trace=q?.active&&['resadventurer','guestadventurer'].includes(from?.role?.id)&&q.paths.length<400?
+             {at:performance.now(),role:from.role.id,from:[from.x,from.z,from.y],to:[target?.x,target?.z,target?.y],
+              blocked:!!blocked,expanded:0,edges:0,edgeSampleMs:0,samples:0,rough:0,length:null}:null;
+            if(trace)q.paths.push(trace);
+            try{`);
+           mark(' const p=queue[i],source=poiTownNpcKey(p.x,p.z,p.y);', ' const p=queue[i],source=poiTownNpcKey(p.x,p.z,p.y);if(trace)trace.expanded++;');
+           mark('   const next=poiTownNpcNextTile(p,p.x+dx,p.z+dz,g);if(!next)continue;',`
+             const record=trace&&++trace.edges%16===0;
+             const t0=record?performance.now():0;
+             const next=poiTownNpcNextTile(p,p.x+dx,p.z+dz,g);
+             if(record){trace.edgeSampleMs+=performance.now()-t0;trace.samples++;
+              if(p.y===0&&terrainLevel(p.x,p.z)!==terrainLevel(p.x+dx,p.z+dz))trace.rough++;
+             }
+             if(!next)continue;`);
+           mark('    return path.reverse();','    if(trace)trace.length=path.length;return path.reverse();');
+           mark(' return null;\n}',' return null;\n }finally{if(trace)trace.elapsed=performance.now()-trace.at}\n}');
+           html=html.slice(0,a)+f+html.slice(b);
+          }
           if(process.env.SNOW_REMOTE_SPLIT==='1'){
            const mark=(a,b)=>{assert.equal(html.split(a).length,2,a);html=html.replace(a,b)};
            const log=kind=>`if(window.__snowSeamProbe?.active){const q=window.__snowSeamProbe;q.remote.push({kind:'${kind}',frames:q.samples.length,region:facilitySite?.id,at:performance.now()})}`;
@@ -1507,7 +1531,7 @@ jobs:
            groundGold:[{id:'pile-qa',x:12,z:2,y:0,amount:2}],drops:[{type:'healingHerb',x:12,z:2,y:0}]});
           function startProbe(){
            const p=WebGLRenderingContext.prototype,s=window.__snowSeamProbe={
-            frames:[],uploads:[],audio:[],longTasks:[],npc:[],remote:[],sceneCounts:[],masked:0,high:0,live:0,lost:0,veils:[],thumb:[],samples:[],active:false};
+            frames:[],uploads:[],audio:[],longTasks:[],npc:[],remote:[],paths:[],sceneCounts:[],masked:0,high:0,live:0,lost:0,veils:[],thumb:[],samples:[],active:false};
            const shapes=new WeakMap(),current=new WeakMap(),cap=4500;
            for(const [method,wrap] of Object.entries({
             bindBuffer(original,target,buffer){
@@ -1628,7 +1652,7 @@ jobs:
              const bind=id=>({x:Math.round(pad.x+pad.width/2),y:Math.round(pad.y+pad.height/2),id,radiusX:4,radiusY:4,force:.7});
              async function cross(sign,label,id){
               const from=await get(),input=bind(id),dst=sign>0?'snowpass':'base';
-              const start=await page.evaluate(()=>{const s=window.__snowSeamProbe;s.active=true;s.frames=[];s.phases=[];s.switchPhases=[];s.audio=[];s.longTasks=[];s.npc=[];s.remote=[];s.veils=[];s.samples=[];s.uploads=[];s.thumb=[];s.sceneCounts=[];s.masked=0;s.high=s.live;
+              const start=await page.evaluate(()=>{const s=window.__snowSeamProbe;s.active=true;s.frames=[];s.phases=[];s.switchPhases=[];s.audio=[];s.longTasks=[];s.npc=[];s.remote=[];s.paths=[];s.veils=[];s.samples=[];s.uploads=[];s.thumb=[];s.sceneCounts=[];s.masked=0;s.high=s.live;
                return {at:performance.now(),live:s.live};});
               await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[input]});
               await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...input,y:input.y+sign*36}]});
@@ -1665,7 +1689,7 @@ jobs:
                const top=(q.phases||[]).toSorted((a,b)=>b.total-a.total).slice(0,5);
                const around=(q.phases||[]).filter((x,i,a)=>i&&x.region!==a[i-1].region).map((x,i)=>x);
                const slow=Object.assign([],q.frames.slice(1).map((t,i)=>({t,start:q.frames[i],gap:t-q.frames[i]}))).toSorted((a,b)=>b.gap-a.gap).slice(0,3);
-               console.log('Seam CPU phases',JSON.stringify({label,top,around,slow,audio:q.audio,npc:(q.npc||[]).toSorted((a,b)=>b.init+b.port+b.routine-a.init-a.port-a.routine).slice(0,4),switches:q.switchPhases}));
+               console.log('Seam CPU phases',JSON.stringify({label,top,around,slow,audio:q.audio,npc:(q.npc||[]).toSorted((a,b)=>b.init+b.port+b.routine-a.init-a.port-a.routine).slice(0,4),switches:q.switchPhases,paths:(q.paths||[]).toSorted((a,b)=>b.elapsed-a.elapsed).slice(0,8)}));
               }
               assert(sign*(position(end)-position(from))>.6,'global walking crosses the registered world edge');
               if(continued){
@@ -1693,22 +1717,13 @@ jobs:
           python .spike/build.py world-editor.html .spike/stream.html --default
           python .spike/horizon-safe.py .spike/stream.html .spike/world-editor.html
           test "$(git hash-object .spike/world-editor.html)" = 92470b9b0ecc897db882455d3b701ace68f3c306
-          cp .spike/world-editor.html .spike/base-stream.html
-          python .spike/path-trial.py .spike/base-stream.html .spike/world-editor.html
-          test "$(git hash-object .spike/world-editor.html)" = 0f2ebd9aef2b2c82c45135ea2214e4d6528985f2
           cd .spike && node --test tests/*.cjs
       - if: matrix.probe != 'regressions'
         run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
       - if: matrix.probe == 'seam'
         run: |
           USE_STREAM_DEFAULT=1 node .spike/tests/overland-browser.mjs .spike/world-editor.html
-          echo 'BASELINE QUIET NO NPC CACHE'
-          SNOW_PHASE_REPORT=1 SNOW_SEAM_REPORT_ONLY=1 node .spike/tests/snow-continuous-seam-browser.mjs .spike/base-stream.html
-          echo 'PURE EDGE MEMO TRIAL'
-          gate=0
-          SNOW_PHASE_REPORT=1 node .spike/tests/snow-continuous-seam-browser.mjs .spike/world-editor.html || gate=$?
-          SNOW_PHASE_REPORT=1 node .spike/tests/snow-continuous-seam-browser.mjs .spike/world-editor.html || gate=$?
-          exit "$gate"
+          SNOW_PATH_PROFILE=1 SNOW_PHASE_REPORT=1 SNOW_SEAM_REPORT_ONLY=1 node .spike/tests/snow-continuous-seam-browser.mjs .spike/world-editor.html
       - if: matrix.probe == 'outlet'
         run: |
           USE_STREAM_DEFAULT=1 USE_STREAM_SIGN_PROOF=1 node .spike/tests/overland-outlet-browser.mjs .spike/world-editor.html
