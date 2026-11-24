@@ -4,7 +4,7 @@ import {createRequire} from 'node:module';
 import {createServer} from 'node:http';
 import {Script} from 'node:vm';
 const html=readFileSync(process.argv[2]||'world-editor.html','utf8');
-const hook="  const arm=eye===desired?poiCameraDistance:Math.hypot(...eye.map((v,i)=>v-target[i]));";
+const hook="  const arm=eye===desired?radius:Math.hypot(...eye.map((v,i)=>v-target[i]));";
 assert.equal(html.split(hook).length,2);
 const fixture=html.replace(hook,`${hook}
   window.__sharedCameraProbe=()=>({arm,eye,desired,target,yaw:poiCameraYaw,walk:[poiWalkX,poiWalkZ,poiWalkLevel],
