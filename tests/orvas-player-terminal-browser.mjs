@@ -139,8 +139,9 @@ try{
  ({q,held}=await start(2,[],'wall'));
  landed=await until(v=>!v.pending&&v.beam?.draw);
  const markWall=paint(landed,'beam',held.start),wallDrops=landed.beam.rays.filter(r=>r.groundDrop);
- assert.equal(markWall.length,1,'ordinary wall-capped cast visibly contacts the floor before the wall');
- assert(wallDrops.length===2&&wallDrops.every(r=>r.groundDrop.at<r.end&&r.groundDrop.h<r.h));
+ assert.equal(markWall.length,1,'the actual struck surface receives one paired mark event');
+ assert(wallDrops.length===0&&landed.beam.rays.every(r=>r.wallImpact>0&&r.visualEnd<r.wallImpact),
+  'both actual near wall faces receive marks instead of mid-route ground burns '+JSON.stringify(landed.beam.rays));
  const stripes=await p.evaluate(()=>window.__orvas.verifyStripes());
  assert(stripes&&stripes.left>35&&stripes.right>35&&stripes.center===0&&stripes.error===0,JSON.stringify(stripes));
  console.log('Actual portable split GPU stripe',JSON.stringify(stripes));

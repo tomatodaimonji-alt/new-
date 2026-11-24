@@ -135,16 +135,17 @@ try{
    assert(second.uploads.slice(1).some(u=>u.reuse));
   }else if(label==='alternate'){
    const later=await until(s=>s.q?.done&&s.start[0]?.cells.length>first.start[0].cells.length,38,'rotating beam paints additional legal cells');
-   assert.equal(later.start.length,1);assert(later.start[0].cells.length<=70);assert(later.uploads.every((u,i)=>i===0||u.reuse));
+   assert.equal(later.start.length,1);assert(later.start[0].cells.length<=24);assert(later.uploads.every((u,i)=>i===0||u.reuse));
   }else if(label==='beam'){
    const stripes=await p.evaluate(()=>window.__editorTest.orvasTracesQA.verifyStripes());
    assert(stripes&&stripes.left>35&&stripes.right>35&&stripes.center===0&&stripes.error===0,JSON.stringify(stripes));
    console.log('Actual statue split GPU stripe',JSON.stringify(stripes));
-   assert.equal(first.start[0].kind,'beam');assert(first.start[0].cells.length>=3&&first.q.reach<14,'beam stops on the authored physical tunnel');
+   assert.equal(first.start[0].kind,'beam');assert(first.start[0].cells.length>=1&&first.start[0].cells.length<=2);
    for(const key of first.start[0].cells){
-    const [x,z]=key.split(',').map(Number),dx=x-first.q.sx,dz=z-first.q.sz;
-    assert(dx*first.q.dx+dz*first.q.dz>0&&Math.hypot(dx,dz)<=first.q.reach+.5);
-    assert(Math.abs(dx*first.q.dz-dz*first.q.dx)<.51);
+    const [kind,xyz]=key.split(':'),[x,z]=xyz.split(',').map(Number).map(a=>a/4);
+    const dx=x-first.q.sx-(kind==='wall'?.5:0),dz=z-first.q.sz-(kind==='wall'?.5:0);
+    assert(dx*first.q.dx+dz*first.q.dz>=first.q.reach-1.25&&Math.hypot(dx,dz)<=first.q.reach+.5,
+     JSON.stringify({key,q:first.q}));
    }
    if(out)await p.screenshot({path:out+'/orvas-trace-beam-active.png'});
    const after=await until(s=>!s.live&&s.now>first.now+1700,40,'GPU retires automatically');

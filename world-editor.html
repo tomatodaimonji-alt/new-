@@ -28211,7 +28211,7 @@ const POI_SWORD_PROFILE=Object.freeze({range:1.3,hit:108,ready:350,pose:296,swee
 const POI_UNARMED_WEAPON_GRADES=Object.freeze({speed:3,reach:1});
 // BEGIN ORVAS PLAYER BEAM
 let poiOrvasPlayerBeam=null,poiOrvasBeamGpu=null;
-const POI_ORVAS_BEAM_MS=510,POI_ORVAS_BEAM_POSE_MS=210,POI_ORVAS_EYE_LIFT=.035,POI_ORVAS_EYE_AHEAD=.13;
+const POI_ORVAS_BEAM_MS=765,POI_ORVAS_BEAM_POSE_MS=210,POI_ORVAS_EYE_LIFT=.035,POI_ORVAS_EYE_AHEAD=.13;
 function poiOrvasBeamAlpha(age){
  const rem=1-Math.max(0,Math.min(1,(age-110)/(POI_ORVAS_BEAM_MS-110)));
  return rem*rem;
@@ -28292,7 +28292,7 @@ function poiOrvasBeamResolve(shot,now){
     node.gain.linearRampToValueAtTime(g,t+.025);
     node.gain.setValueAtTime(g,t+.105);
     node.gain.linearRampToValueAtTime(g*.39,t+.205);
-    node.gain.linearRampToValueAtTime(g*.12,t+.345);
+    node.gain.linearRampToValueAtTime(g*.12,t+.465);
     node.gain.linearRampToValueAtTime(0,t+(POI_ORVAS_BEAM_MS-15)/1000);
    },POI_ORVAS_BEAM_MS/1000);
   }catch{}
@@ -33077,6 +33077,32 @@ function poiOrvasDualTube(m,x,z,d,from,to,h0,h1,phase,shell=false,bend=false){
   prior=ring;
  }
 }
+function poiOrvasBossOpticalEnds(q,d,reach,base,eye,floor,front,b,pass){
+ const cache=q.orvasOpticalTip;
+ if(cache&&cache.x===d.x&&cache.z===d.z&&cache.reach===reach)return cache.paths;
+ const e={sx:q.sx,sz:q.sz,y:q.y,radius:15};
+ const safe=typeof world!=='undefined'&&Array.isArray(world)&&b&&pass&&typeof poiOrvasTraceGround==='function';
+ const ground=safe?poiOrvasTraceGround(q,e,b,pass):null,paths=[];
+ for(const side of [-1,1]){
+  if(q.beamMask!==undefined&&!(q.beamMask&(side<0?1:2)))continue;
+  const x=q.sx+d.x*front+d.z*.151*side,z=q.sz+d.z*front-d.x*.151*side;
+  let length=reach-front-.025;
+  if(pass&&typeof poiDavidRoomRay==='function')length=Math.min(length,poiDavidRoomRay({sx:x,sz:z,y:q.y},b,d,length,pass)-.016);
+  if(length<=.012)continue;
+  const H=base+eye,landing=base+floor,dy=(landing-H)/length;
+  const face=safe&&poiOrvasWallContact(x,H,z,d,length,dy);
+  const end={x,z,length,h:landing,face:null,floor:false};
+  if(face&&face.at<=length+.15){
+   end.length=face.at-.008;end.h=H+dy*end.length;end.face=face;
+  }else if(ground){
+   const last=length-.09,g=ground(x+d.x*last,z+d.z*last);
+   if(g){end.length=last;end.h=g[1]+.003;end.floor=true}
+  }
+  paths.push(end);
+ }
+ if(safe)q.orvasOpticalTip={x:d.x,z:d.z,reach,paths};
+ return paths;
+}
 function poiDavidThermalBeam(q,ray,reach,now,reduced=false,fraction=1){
  const m=mesh();if(reach<=.42||fraction<=0)return m;
  const base=Number.isFinite(q.beamBase)?q.beamBase:terrainY(q.sx,q.sz)+q.y*1.4;
@@ -33086,24 +33112,17 @@ function poiDavidThermalBeam(q,ray,reach,now,reduced=false,fraction=1){
  const b=typeof facilitySite!=='undefined'?facilitySite?.davidTemple?.boss:null;
  if(q.opticalRays){
   for(const r of q.opticalRays){
-   const end=Math.min(q.opticalCenter??Infinity,r.visualEnd??r.visualLimit??r.end);
+   const end=r.visualEnd??Math.min(q.opticalCenter??Infinity,r.visualLimit??r.end);
    if(end>.012)poiOrvasDualTube(m,r.x+.5,r.z+.5,ray,0,end,r.h,r.h,phase);
   }
   m.coreCount=m.p.length/3;return m;
  }
- const pass=b&&typeof poiAimWall==='function'?poiAimWall({y:q.y}):null,paths=[];
- for(const side of [-1,1]){
-  if(q.beamMask!==undefined&&!(q.beamMask&(side<0?1:2)))continue;
-  const x=q.sx+ray.x*front+ray.z*.151*side,z=q.sz+ray.z*front-ray.x*.151*side;
-  let length=reach-front-.025;
-  if(pass&&typeof poiDavidRoomRay==='function'&&!Number.isFinite(q.beamBase))
-   length=Math.min(length,poiDavidRoomRay({sx:x,sz:z,y:q.y},b,ray,length,pass)-.016);
-  const t=Math.max(0,Math.min(1,fraction)),end=length*t;
-  if(end>.012)paths.push({x:x+.5,z:z+.5,end,h:base+eye+(floor-eye)*t});
- }
- for(const {x,z,end,h} of paths)poiOrvasDualTube(m,x,z,ray,0,end,base+eye,h,phase);
+ const pass=b&&typeof poiAimWall==='function'?poiAimWall({y:q.y}):null,
+  paths=poiOrvasBossOpticalEnds(q,ray,reach,base,eye,floor,front,b,pass),
+  t=Math.max(0,Math.min(1,fraction)),from=base+eye;
+ for(const p of paths)poiOrvasDualTube(m,p.x+.5,p.z+.5,ray,0,p.length*t,from,from+(p.h-from)*t,phase);
  m.coreCount=m.p.length/3;
- for(const {x,z,end,h} of paths)poiOrvasDualTube(m,x,z,ray,0,end,base+eye,h,phase,true);
+ for(const p of paths)poiOrvasDualTube(m,p.x+.5,p.z+.5,ray,0,p.length*t,from,from+(p.h-from)*t,phase,true);
  return m;
 }
 // END ORVAS SEPARATED OPTICAL TUBES
@@ -33401,43 +33420,110 @@ function poiOrvasScorchPaint(surface,i){
  if(surface==='soil')return i%2?[.13,.074,.041]:[.181,.112,.059];
  return i%2?[.106,.071,.056]:[.129,.086,.064];
 }
-function poiOrvasTraceBurn(e,ray,sx,sz,reach,ground,small=false){
- for(let r=small?.17:.52;r<=reach&&e.parts.length<ORVAS_TRACE_MAX_TILES;r+=.31){
-  const x=sx+ray.x*r,z=sz+ray.z*r,tx=Math.floor(x+.5),tz=Math.floor(z+.5),key=tx+','+tz;
-  if(e.cells.has(key))continue;
-  const cx=Math.max(tx-.29,Math.min(tx+.29,x)),cz=Math.max(tz-.29,Math.min(tz+.29,z));
-  // Do not let the wider fleck extend past the actual clipped ray.
-  const usable=(x,z)=>((x-sx)*ray.x+(z-sz)*ray.z)<=reach?ground(x,z):null;
-  usable.material=ground.material;
-  const center=usable(cx,cz),jitter=.5+.5*Math.sin(tx*17.51+tz*19.39);
-  if(!center)continue;
-  const m=mesh(),size=small?.66:1,rx=(.17+.035*jitter)*size,rz=(.15+.052*(1-jitter))*size;
-  const edges=[[-.95,-.35],[-.50,-.88],[.52,-.72],[.94,.26],[.22,.89],[-.55,.64]];
-  for(let i=0;i<edges.length;i++){
-   const a=edges[i],b=edges[(i+1)%edges.length],v=usable(cx+a[0]*rx,cz+a[1]*rz),w=usable(cx+b[0]*rx,cz+b[1]*rz);
-   if(v&&w)tri(m,center,v,w,poiOrvasScorchPaint(ground.material?.(cx,cz),i));
-  }
-  poiOrvasHairline(m,usable,cx-.13*size*ray.x,cz-.13*size*ray.z,cx+.015*ray.x-.028*ray.z,cz+.015*ray.z+.028*ray.x,.009,[.045,.031,.027]);
-  poiOrvasHairline(m,usable,cx+.015*ray.x-.028*ray.z,cz+.015*ray.z+.028*ray.x,cx+.15*size*ray.x,cz+.15*size*ray.z,.008,[.044,.030,.026]);
-  if(m.p.length){e.cells.add(key);e.parts.push(m)}
- }
+// BEGIN ORVAS PHYSICAL TIP WITNESSES
+function poiOrvasImpactNormal(nx,ny,nz,dx,dy,dz){
+ const n=Math.hypot(nx,ny,nz);if(n<1e-8)return null;
+ const sign=nx*dx+ny*dy+nz*dz>0?-1:1;
+ return [nx*sign/n,ny*sign/n,nz*sign/n];
 }
+function poiOrvasWallContact(x,y,z,d,span,dy=0){
+ if(span<.12||typeof poiWallCameraCandidates!=='function')return null;
+ const a=[x+.5,y,z+.5],v=[d.x,dy,d.z],b=[a[0]+d.x*(span+.23),y+dy*(span+.23),a[2]+d.z*(span+.23)];
+ let best=span+.23,hit=null;
+ for(const row of poiWallCameraCandidates(a,b)){
+  const s=row.s,o=[a[0]-row.x,a[1]-row.y,a[2]-row.z];
+  const entry=poiWallCameraSlab(s,o,v,best);
+  if(!Number.isFinite(entry)||entry<=1e-5)continue;
+  let normal=null,t=best;
+  if(s.tris){
+   for(let i=0;i<s.tris.length;i+=9){
+    const p=s.tris,ax=p[i],ay=p[i+1],az=p[i+2],ux=p[i+3]-ax,uy=p[i+4]-ay,uz=p[i+5]-az,
+     vx=p[i+6]-ax,vy=p[i+7]-ay,vz=p[i+8]-az,px=dy*vz-d.z*vy,py=d.z*vx-d.x*vz,pz=d.x*vy-dy*vx,
+     det=ux*px+uy*py+uz*pz;
+    if(Math.abs(det)<1e-9)continue;
+    const tx=o[0]-ax,ty=o[1]-ay,tz=o[2]-az,inv=1/det,u=(tx*px+ty*py+tz*pz)*inv;
+    if(u<0||u>1)continue;
+    const qx=ty*uz-tz*uy,qy=tz*ux-tx*uz,qz=tx*uy-ty*ux,w=(d.x*qx+dy*qy+d.z*qz)*inv;
+    if(w<0||u+w>1)continue;
+    const T=(vx*qx+vy*qy+vz*qz)*inv;
+    if(T>.02&&T<t){t=T;normal=poiOrvasImpactNormal(uy*vz-uz*vy,uz*vx-ux*vz,ux*vy-uy*vx,...v)}
+   }
+  }else{
+   t=entry;const p=o.map((x,i)=>x+v[i]*t),edge=s.min.flatMap((lo,i)=>[
+    {i,d:Math.abs(p[i]-lo),n:-1},{i,d:Math.abs(p[i]-s.max[i]),n:1}]).sort((a,b)=>a.d-b.d)[0];
+   const n=[0,0,0];n[edge.i]=edge.n;normal=poiOrvasImpactNormal(...n,...v);
+  }
+  if(!normal||t>=best)continue;
+  best=t;hit={at:t,h:y+dy*t,wx:a[0]+d.x*t,wz:a[2]+d.z*t,normal,row};
+ }
+ return hit;
+}
+function poiOrvasWallMark(m,e,d){
+ const [nx,ny,nz]=e.normal,n=Math.hypot(nx,nz);
+ if(n<.55)return false; // roofs are not wall faces
+ const ax=nz/n,az=-nx/n,bx=ny*az,by=1*n,bz=-ny*ax;
+ const offset=.014;
+ const P=(u,v)=>[e.wx+nx*offset+u*ax+v*bx,e.h+ny*offset+v*by,e.wz+nz*offset+u*az+v*bz];
+ // Probe the very same triangle surface around each dark facet to avoid
+ // hanging the entire mark over a jamb, corner or tapering column edge.
+ const cell=e.row;
+ const keep=(u,v)=>{
+  const p=P(u,v),o=[p[0]-cell.x+nx*.05,p[1]-cell.y+ny*.05,p[2]-cell.z+nz*.05],ray=[-nx,-ny,-nz];
+  const distance=cell.s.tris?poiWallCameraTriangles(cell.s.tris,o,ray,.105):
+   poiWallCameraSlab(cell.s,o,ray,.105);
+  return Number.isFinite(distance)&&Math.abs(distance-(offset+.05))<.019?p:null;
+ };
+ const center=P(0,0),shape=[[.02,.24],[.145,.085],[.115,-.133],[-.045,-.215],[-.176,-.041],[-.124,.132]];
+ for(let i=0;i<shape.length;i++){
+  const a=keep(...shape[i]),b=keep(...shape[(i+1)%shape.length]);if(a&&b)tri(m,center,a,b,i%2?[.108,.055,.030]:[.147,.078,.036]);
+ }
+ const ribbon=(x,y,u,v,w,color)=>{
+  const vtx=[keep(x-w,y),keep(u-w,v),keep(u+w,v),keep(x+w,y)];
+  if(vtx.every(Boolean))quad(m,...vtx,color);
+ };
+ ribbon(-.043,.171,.015,-.035,.017,[.028,.016,.012]);ribbon(.015,-.035,-.021,-.171,.014,[.032,.019,.015]);
+ ribbon(.015,-.035,.105,.091,.010,[.049,.021,.015]);
+ return m.p.length>0;
+}
+function poiOrvasFloorMark(m,ground,x,z,d){
+ const C=ground(x,z),local=(u,v)=>[x+d.x*u+d.z*v,z+d.z*u-d.x*v];
+ if(!C)return false;
+ const N=[[-.26,-.060],[-.16,-.112],[.104,-.111],[.25,.016],[.13,.109],[-.13,.099]];
+ for(let i=0;i<N.length;i++){
+  const a=ground(...local(...N[i])),b=ground(...local(...N[(i+1)%N.length]));
+  if(a&&b)tri(m,[C[0],C[1]+.003,C[2]],a,b,poiOrvasScorchPaint(ground.material?.(x,z),i));
+ }
+ const dark=[.028,.018,.015],burn=[.29,.115,.047];
+ poiOrvasHairline(m,ground,...local(-.35,.021),...local(-.066,-.031),.019,dark);
+ poiOrvasHairline(m,ground,...local(-.066,-.031),...local(.28,.029),.018,dark);
+ poiOrvasHairline(m,ground,...local(-.066,-.031),...local(-.22,-.112),.011,dark);
+ poiOrvasHairline(m,ground,...local(.13,-.012),...local(.025,.091),.012,dark);
+ poiOrvasHairline(m,ground,...local(-.22,.059),...local(.067,.041),.010,burn);
+ return m.p.length>0;
+}
+// END ORVAS PHYSICAL TIP WITNESSES
 function poiOrvasBeamTrace(q,b,now,angle=0){
  if(!q?.executed||q.kind!=='beam'||!poiWalkActive||q.y!==poiWalkLevel)return false;
  const fresh=!q.orvasBeamGround,e=q.orvasBeamGround??=poiOrvasTraceEvent(q,'beam',now);
  if(e.owner!==facilitySite||(e.pushed&&!poiOrvasGroundTraces.includes(e)))return false;
- if(!fresh&&Math.abs(angle-e.lastAngle)<.071&&!q.sweep?.done)return false;
- const previous=e.lastAngle??0,samples=fresh?1:Math.min(18,Math.max(1,Math.ceil(Math.abs(angle-previous)/.075)));
- const ground=poiOrvasTraceGround(q,e,b),length=e.parts.length;
- for(let k=1;k<=samples&&e.parts.length<ORVAS_TRACE_MAX_TILES;k++){
-  const ray=poiDavidBeamRay(q,previous+(angle-previous)*k/samples);
-  const reach=poiDavidBeamReach(q,b,ray)-.10;
-  poiOrvasTraceBurn(e,ray,q.sx,q.sz,reach,ground);
+ if(!fresh&&Math.abs(angle-e.lastAngle)<.075&&!q.sweep?.done)return false;
+ const d=poiDavidBeamRay(q,angle),reach=poiDavidBeamReach(q,b,d),pass=poiAimWall({y:q.y});
+ const base=terrainY(q.sx,q.sz)+q.y*1.4,eye=typeof POI_DAVID_EYE_Y==='number'?POI_DAVID_EYE_Y:4.75;
+ const front=typeof POI_DAVID_EYE_FRONT==='number'?POI_DAVID_EYE_FRONT:.29;
+ const paths=poiOrvasBossOpticalEnds(q,d,reach,base,eye,.68,front,b,pass);
+ const ground=poiOrvasTraceGround(q,e,b,pass),count=e.parts.length;
+ for(const p of paths){
+  if(e.parts.length>=24)break;
+  const x=p.x+d.x*p.length,z=p.z+d.z*p.length;
+  const key=(p.face?'wall:':'floor:')+Math.round(x*4)+','+Math.round(z*4)+','+Math.round(p.h*4);
+  if(e.cells.has(key))continue;
+  const m=mesh(),ok=p.face?poiOrvasWallMark(m,p.face,d):p.floor&&poiOrvasFloorMark(m,ground,x,z,d);
+  if(ok){e.cells.add(key);e.parts.push(m)}
  }
- e.lastAngle=angle;e.seen=now;
- if(!e.pushed&&e.parts.length){e.pushed=true;poiOrvasTracePush(e)}
- else if(e.parts.length!==length)poiOrvasGroundDirty=true;
- return e.parts.length!==length;
+ e.lastAngle=angle;if(e.parts.length===count)return false;
+ e.seen=now;
+ if(!e.pushed){e.pushed=true;poiOrvasTracePush(e)}else poiOrvasGroundDirty=true;
+ return true;
 }
 function poiOrvasTraceBladeFleck(m,ground,x,z,heading,index,scale=1){
  for(let i=0;i<5;i++){
@@ -33472,6 +33558,17 @@ function poiOrvasPlayerGroundImpact(o,rays,d,now,pass,centerEnd,hitRay=-1){
  for(const r of rays){
   const range=r.visualLimit??r.end,cap=Math.min(range,Number.isFinite(centerEnd)?centerEnd:range);
   if(cap<=1.25)continue;
+  const face=poiOrvasWallContact(r.x,r.h,r.z,d,cap);
+  if(face&&Math.hypot(face.normal[0],face.normal[2])>=.55){
+   // Keep the optical tip against the actual near-side wall, and the
+   // mark sticks out only a tiny epsilon from that very same triangle.
+   r.visualEnd=face.at-.008;r.wallImpact=face.at;
+   const wall=mesh();
+   if(poiOrvasWallMark(wall,face,d)){
+    e.parts.push(wall);e.cells.add('wall:'+Math.round(face.wx*4)+','+Math.round(face.wz*4)+','+Math.round(face.h*4));
+   }
+   continue;
+  }
   const point=t=>ground(r.x+d.x*t,r.z+d.z*t);
   // The stock chamber often limits the beam to a wall before max range.
   // Bend into an actual floor just before that obstacle, never through it.
@@ -33490,22 +33587,10 @@ function poiOrvasPlayerGroundImpact(o,rays,d,now,pass,centerEnd,hitRay=-1){
    if(valid){contact={at,h:p[1],blendStart,x:r.x,z:r.z,h0:r.h};break}
   }
   if(!contact)continue;
-  const x=r.x+d.x*contact.at,z=r.z+d.z*contact.at,m=mesh(),C=ground(x,z);
-  const local=(u,v)=>[x+d.x*u+d.z*v,z+d.z*u-d.x*v];
-  const N=[[-.36,-.074],[-.22,-.124],[.14,-.116],[.29,.016],[.15,.118],[-.19,.102]];
-  for(let i=0;i<N.length;i++){
-   const a=ground(...local(...N[i])),b=ground(...local(...N[(i+1)%N.length]));
-   if(a&&b&&C)tri(m,[C[0],C[1]+.003,C[2]],a,b,poiOrvasScorchPaint(ground.material?.(x,z),i));
-  }
-  const dark=[.028,.018,.015],burn=[.29,.115,.047];
-  poiOrvasHairline(m,ground,...local(-.43,.021),...local(-.066,-.031),.022,dark);
-  poiOrvasHairline(m,ground,...local(-.066,-.031),...local(.33,.029),.021,dark);
-  poiOrvasHairline(m,ground,...local(-.066,-.031),...local(-.27,-.113),.012,dark);
-  poiOrvasHairline(m,ground,...local(.13,-.012),...local(.02,.103),.013,dark);
-  poiOrvasHairline(m,ground,...local(-.30,.063),...local(.085,.047),.010,burn);
-  if(m.p.length){
+  const x=r.x+d.x*contact.at,z=r.z+d.z*contact.at,m=mesh();
+  if(poiOrvasFloorMark(m,ground,x,z,d)){
    r.groundDrop=contact;r.visualEnd=contact.blendStart;
-   e.parts.push(m);e.cells.add(Math.floor(x+.5)+','+Math.floor(z+.5));
+   e.parts.push(m);e.cells.add('floor:'+Math.floor(x+.5)+','+Math.floor(z+.5));
   }
  }
  if(!e.parts.length)return false;
