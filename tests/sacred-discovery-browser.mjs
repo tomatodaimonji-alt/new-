@@ -14,7 +14,7 @@ replace(testApi,testApi+`
    const map=poiLocalFrame,canvas=$('poiMiniMap'),minictx=canvas.getContext('2d');
    const pixel=(x,z)=>{
     if(!map||x<map.crop.x1||x>map.crop.x2||z<map.crop.z1||z>map.crop.z2)return null;
-    const px=Math.floor((x-map.crop.x1+.5)*canvas.width/41),pz=Math.floor((z-map.crop.z1+.5)*canvas.height/41);
+    const px=Math.floor((canvas.width-canvas.height)/2+(x-map.crop.x1+.5)*canvas.height/41),pz=Math.floor((z-map.crop.z1+.5)*canvas.height/41);
     return [...minictx.getImageData(px,pz,1,1).data];
    };
    const mini=map?{concealed:map.concealed,temple:[pixel(22,158),pixel(28,158),pixel(24,164)],

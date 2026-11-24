@@ -1,0 +1,53 @@
+name: Isolated wider closed minimap QA
+on:
+  push:
+    branches: [dot/workshop-wide-hud-map-qa]
+permissions:
+  contents: read
+jobs:
+  strict:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: |
+          test "$(git hash-object world-editor.html)" = "5a4c9eeaaece246ef7a86c1e97b0167340edbfa3"
+          python .qa-hud-map/build.py world-editor.html checked.html
+          test "$(git hash-object checked.html)" = "4142c7a9084dd78ed131bf352863ed122818c5b6"
+          mv checked.html world-editor.html
+          if ! node --test tests/*.test.cjs > "$RUNNER_TEMP/strict.out" 2>&1; then
+            grep -E '^not ok |^  location:|^  error:|^# (tests|pass|fail|duration)' "$RUNNER_TEMP/strict.out" | tail -250
+            exit 1
+          fi
+          grep -E '^# (tests|pass|fail|duration)' "$RUNNER_TEMP/strict.out"
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        test: [mini-map-wide-browser, area-card-layout-browser, local-minimap-browser, sacred-discovery-browser, local-map-shell-browser]
+    env:
+      FACILITY_SCREENSHOTS: screenshots
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save playwright@1.56.1
+      - run: npx playwright install chromium
+      - run: |
+          test "$(git hash-object world-editor.html)" = "5a4c9eeaaece246ef7a86c1e97b0167340edbfa3"
+          python .qa-hud-map/build.py world-editor.html checked.html
+          test "$(git hash-object checked.html)" = "4142c7a9084dd78ed131bf352863ed122818c5b6"
+          node tests/${{ matrix.test }}.mjs checked.html
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ matrix.test }}-wide
+          path: screenshots
+          if-no-files-found: ignore
+          retention-days: 3
