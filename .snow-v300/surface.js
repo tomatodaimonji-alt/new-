@@ -86,6 +86,9 @@ function* poiOverlandChunkRows(q,region){
   }
  }
  for(const o of region.batches.get(id)||[]){
+  // This outdoor renderer never owns the authored temple's close reveal.
+  // A looking-back snow player must not expose its normally hidden facade.
+  if(typeof poiSacredTempleVisualMember==='function'&&poiSacredTempleVisualMember(region.layout,o))continue;
   const t=o.type,y=o.y*1.4+height(o.x,o.z)*TERRAIN_STEP;
   if(poiIsMonster(t)||RESIDENTIAL_ROOFS.has(t))continue;
   if(isFloor(t)){if(o.y>0){const q=mesh();addFloorTile(q,o.x,o.z,t,region.width*region.height);shiftMesh(m,q,y)}}
@@ -163,7 +166,8 @@ function poiOverlandPreviewTick(){
  poiOverlandCommands=[];poiOverlandDrawn=[];poiOverlandDrawing=false;
  const site=facilitySite?.id;
  const registered=site==='base'||site==='snowpass'||site==='milda'&&typeof poiMildaMap==='function';
- const templeGround=site==='base'&&poiWalkViewZ>=128&&poiWalkViewX<48;
+ const templeGround=site==='base'&&(poiWalkViewZ>=128&&poiWalkViewX<48||
+  typeof poiSacredTempleViewAmount==='function'&&poiSacredTempleViewAmount()>0);
  const eligible=registered&&!templeGround&&poiWalkActive&&poiWalkLevel===0&&!cameraTopDown&&!pineAIActive&&facilityVisibilityOwner()===null;
  if(!eligible){
   poiOverlandSignClear();poiOverlandClear();poiOverlandBake=null;
