@@ -29,13 +29,14 @@ const anchor='  freeMovementPose:()=>({x:poiWalkViewX,z:poiWalkViewZ,level:poiWa
 const insert=(s,k,v)=>{assert.equal(s.split(k).length,2,k);return s.replace(k,k+v)};
 let fixture=insert(html,anchor,`
   davidQA:{
+   render:()=>render(),
    // Only the independent attack context picks a specific pattern. Real
    // walking, choice/wake, delivery, HP and the renderer stay production.
    prepare:kind=>{
     const pair=[...poiMonsterStates].find(([id])=>id.type==='monsterStoneDavid');
     if(!pair)return false;
     const [o,s]=pair;
-    if(!s.david?.awake)return false;
+    if(!s.david?.awake||!s.david.wakeDone)return false;
     s.x=s.fromX=o.x;s.z=s.fromZ=o.z;
     if(!workshopResumeRestorePosition({x:24,z:101,y:0,facing:2}))return false;
     s.david.attack=null;s.david.next=-Infinity;
@@ -55,8 +56,11 @@ let fixture=insert(html,anchor,`
    }
   },`);
 fixture=fixture.replace('function poiDavidBeamSide(roll=Math.random())','function poiDavidBeamSide(roll=.8)');
-fixture=insert(fixture,'   const {x:cx,y,z:cz,attack,heading,david}=poiMonsterPose(obj,s,now),part=mesh();', "\n   if(obj.type==='monsterStoneDavid'&&s.david?.returning){const f=window.__davidFrames;f.returnFrames.push([s.x,s.z,cx-.5,cz-.5]);}");
+fixture=insert(fixture,'   const {x:cx,y,z:cz,attack,heading,david}=poiMonsterPose(obj,s,now),part=mesh();', "\n   if(obj.type==='monsterStoneDavid'&&s.david?.returning){const f=window.__davidFrames,b=poiDavidMatch(obj);f.returnFrames.push([s.x,s.z,cx-.5,cz-.5,now,poiDavidIn(b,{x:cx-.5,z:cz-.5,y:obj.y})]);}");
 fixture=insert(fixture,'function poiDavidCease(o,s,b,now){', "\n if(s.david?.awake&&!s.david.returning)window.__davidFrames.returnAnchor=[s.x,s.z];");
+const manualRaf=' requestAnimationFrame(render);';
+assert.equal(fixture.split(manualRaf).length,2);
+fixture=fixture.replace(manualRaf,' if(!window.__davidManualReturn)requestAnimationFrame(render);');
 fixture=insert(fixture,'function render(){','\n window.__davidFrames?.next();');
 fixture=insert(fixture,' if(!poiDavidCue){','window.__davidFrames.cue.builds++;window.__davidFrames.cue.byStart[q.start]=(window.__davidFrames.cue.byStart[q.start]||0)+1;');
 fixture=insert(fixture,' const priorHP=poiPlayerHP;',"\n if(obj.type==='monsterStoneDavid')window.__davidFrames.contacts.push({start:poiDavidActive?.s?.david?.attack?.start,raw,amount,now,hp:Math.max(0,priorHP-amount)});");
@@ -99,13 +103,14 @@ const economy={version:1,weapon:'equipWoodSword',potions:0,gold:37,claimedCaches
 const editor={format:'forest-world-v1',version:1,width:30,height:30,size:30,world:[{x:2,y:0,z:2,type:'stonewall',rot:1}],models:[],prefabs:[],terrainHeights:[],checks:[]};
 const qa=p=>p.evaluate(()=>window.__editorTest.davidQA.state());
 const wait=(p,fn,arg=null,timeout=9000)=>p.waitForFunction(fn,arg,{polling:35,timeout});
-async function start(browser){
+async function start(browser,clocked=false){
  const ctx=await browser.newContext({viewport:{width:844,height:390},deviceScaleFactor:.7,isMobile:true,hasTouch:true});
  await ctx.addInitScript(install);const p=await ctx.newPage(),errors=[];
  p.on('pageerror',e=>errors.push(e.stack||e.message));
  p.on('console',m=>{if(m.type()==='error')m.args().at(-1)?.evaluate(e=>e?.stack||e?.message||String(e)).then(x=>errors.push(m.text()+' '+x),()=>errors.push(m.text()))});
  p.setDefaultTimeout(15000);
  try{
+  if(clocked)await p.clock.install({time:new Date('2026-04-01T10:00:00Z')});
   await p.goto(url+'/seed');
   await p.evaluate(({save,economy,editor})=>{
    localStorage.setItem('world-workshop-resume-v1',JSON.stringify(save));
@@ -138,11 +143,10 @@ async function step(p,key,x,z){
 function assertNativeReturn(v,label){
  assert(v.returnAnchor&&(v.returnAnchor[0]!==24||v.returnAnchor[1]!==104),label+' starts genuinely displaced');
  assert(v.returnFrames.length>=2,label+' emits distinct renderer poses during return');
- const legal=frame=>frame[0]>=13&&frame[0]<=35&&frame[1]>=93&&frame[1]<=115;
- assert(v.returnFrames.every(legal),label+' remains inside arena cells');
+ assert(v.returnFrames.every(frame=>frame[5]),label+' rendered body stays within actual authored arena');
  for(let i=1;i<v.returnFrames.length;i++){
-  const [x,z]=v.returnFrames[i], [a,b]=v.returnFrames[i-1];
-  assert(Math.abs(x-a)+Math.abs(z-b)<=1,label+' step-by-step return cells');
+  const [,,x,z,t]=v.returnFrames[i], [,,a,b,u]=v.returnFrames[i-1];
+  assert(Math.hypot(x-a,z-b)<=Math.max(.06,(t-u)*.0048+.025),label+' consecutive real render poses remain speed-bounded');
  }
  assert(v.returnFrames.some(([, ,x,z])=>Math.abs(x-Math.round(x))+Math.abs(z-Math.round(z))>.01),label+' real visual interpolation between cells');
 }
@@ -151,33 +155,43 @@ try{
  if(screenshots)await mkdir(screenshots,{recursive:true});
  browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
   args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
- const {p,ctx,errors}=await start(browser);
+ const {p,ctx,errors}=await start(browser,true);
  try{
   let s;
+  await p.clock.pauseAt(await p.evaluate(()=>Date.now()+140));
+  await p.evaluate(()=>{window.__davidManualReturn=true});
+  const frame=async()=>{await p.clock.fastForward(60);await p.evaluate(()=>window.__editorTest.davidQA.render());};
+  const until=async(fn,limit=65)=>{for(let i=0;i<limit;i++){const q=await qa(p);if(fn(q))return q;await frame()}throw Error('no expected production state during bounded manual frames')};
+  const actualKey=async(z,key)=>{
+   await until(q=>q.now>=q.step,15);
+   await p.keyboard.press(key);for(let i=0;i<4;i++)await frame();
+   assert.deepEqual((await qa(p)).pos,[24,z,0],'trusted keyboard reaches prior canonical tile');
+  };
   checkpoint='real old v270 save outside doorway';
   const far=await qa(p);assert.deepEqual(far.pos,[24,91,0]);
   assert.equal(far.status,'ready');
-  await wait(p,t=>window.__editorTest.davidQA.state().now>=t+1150,far.now);
+  await until(q=>q.now>=far.now+1150);
   const rested=await qa(p);assert(!rested.statue?.d?.awake);assert(!rested.statue?.d?.attack);
   assert.deepEqual(rested.cue,{lane:0,beam:0,builds:0,byStart:{}},'dormant room uploads no attack mesh');
   if(far.statue&&rested.statue)assert.deepEqual([rested.statue.x,rested.statue.z,rested.statue.hp,rested.statue.pose],[far.statue.x,far.statue.z,far.statue.hp,far.statue.pose],'distant boss/pose does not move or advance combat');
   checkpoint='physical crossing and awakening without any warp/cover';
   for(const z of [92,93,94,95,96,97,98]){
-   await step(p,'ArrowDown',24,z);s=await qa(p);
+   await actualKey(z,'ArrowDown');s=await qa(p);
    assert.equal(s.travel,far.travel);assert.equal(s.opens,far.opens);assert.equal(s.url,far.url);assert.equal(s.status,'ready');assert.equal(s.scene,'surface');
   }
-  await wait(p,()=>window.__editorTest.davidQA.state().statue?.d?.awake);
+  await until(q=>q.statue?.d?.awake);
   s=await qa(p);assert.equal(s.statue.hp,1050,'tuned David is deliberately beyond ordinary early-game weapons');
   if(screenshots)await p.screenshot({path:screenshots+'/david-temple-wake.png'});
   checkpoint='approach produces real boss displacement before physical retreat';
-  await wait(p,()=>{const s=window.__editorTest.davidQA.state().statue;return s?.d?.awake&&(s.x!==24||s.z!==104)});
+  await until(q=>q.statue?.d?.wakeDone&&(q.statue.x!==24||q.statue.z!==104),120);
   checkpoint='physical retreat cancels any chase or threat into exterior';
-  for(const z of [97,96,95,94,93,92,91])await step(p,'ArrowUp',24,z);
+  for(const z of [97,96,95,94,93,92,91])await actualKey(z,'ArrowUp');
   const back=await qa(p);
-  await wait(p,t=>window.__editorTest.davidQA.state().now>=t+1550,back.now);
-  s=await qa(p);assert.deepEqual(s.pos,[24,91,0]);assert(!s.statue?.d?.attack);
-  assert(!s.statue?.d?.awake||s.statue.d.returning,'crossing exterior cancels any future strike immediately');
-  await wait(p,()=>{const s=window.__editorTest.davidQA.state().statue;return !s?.d?.awake&&(!s||s.x===24&&s.z===104)});
+  assert(!back.statue?.d?.attack);
+  assert(!back.statue?.d?.awake||back.statue.d.returning,'crossing exterior cancels any future strike immediately');
+  for(let i=0;i<95&&(await qa(p)).statue?.d?.awake;i++)await frame();
+  assert(!(await qa(p)).statue?.d?.awake&& (await qa(p)).statue.x===24&& (await qa(p)).statue.z===104);
+  await p.clock.resume();
   s=await qa(p);
   assert.equal(s.hp,back.hp);assert.equal(s.travel,far.travel);assert.equal(s.opens,far.opens);
   assertNativeReturn(s,'physical exit');

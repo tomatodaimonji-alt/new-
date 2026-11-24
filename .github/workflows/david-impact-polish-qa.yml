@@ -1,0 +1,30 @@
+name: Independent David ordinary and jump impact QA
+on:
+  push:
+    branches: ['dot/workshop-david-impact-polish-qa']
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [stomp, leap]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: test "$(git hash-object world-editor.html)" = 84b64de0ac6f0146668aebc2cbba2b45ad6480c3
+      - run: npm install --no-save playwright@1.58.2 && npx playwright install chromium
+      - run: node tests/david-impact-polish-browser.mjs world-editor.html --${{ matrix.mode }}
+  strict:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: |
+          code=0
+          node --test --test-reporter=tap tests/*.cjs >strict.log 2>&1 || code=$?
+          grep -E '^(not ok|# tests|# pass|# fail)' strict.log || true
+          exit "$code"
