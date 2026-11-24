@@ -6,7 +6,9 @@ import {createServer} from 'node:http';
 const html=readFileSync(process.argv[2]||'world-editor.html','utf8');
 const fixtureNeedle=' const p=poiWildPick(rng);';
 assert.equal(html.split(fixtureNeedle).length,2);
-const fixture=html.replace(fixtureNeedle,' const p=null;'); // deterministically remove unrelated random field encounters
+const regionalNeedle='function poiWildRegionalFrame(now,rng){';
+assert.equal(html.split(regionalNeedle).length,2);
+const fixture=html.replace(fixtureNeedle,' const p=null;').replace(regionalNeedle,regionalNeedle+'return;'); // pure movement fixture: no unrelated regular or regional encounters
 const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
 const server=createServer((req,res)=>{
  res.setHeader('Content-Type','text/html; charset=utf-8');
@@ -178,4 +180,5 @@ try{
  await simultaneousAction(browser);
  console.log('PASS native floating thumb center, deadzone, diagonal/bridge legal walk, two-thumb orbit, release/cancel and portrait rotation');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
+
 

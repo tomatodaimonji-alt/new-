@@ -1585,7 +1585,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 })();
 // END PINE STARTUP COVER
 </script>
-<div id="app" inert><header><h1>3Dワールド工房（v261）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v262）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -2058,6 +2058,11 @@ palette.push(
  {id:'poiFortGate',name:'大城門・開門',cat:'decor',icon:'▣'}
 );
 palette.push({id:'poiCanalQuay',name:'運河・石の護岸',cat:'decor',icon:'▤'});
+palette.push(
+ {id:'poiPortSkiff',name:'小さな漁舟',cat:'decor',icon:'⛵'},
+ {id:'poiPortNet',name:'漁網と木箱',cat:'decor',icon:'▩'},
+ {id:'poiPortFishStall',name:'魚の露店',cat:'decor',icon:'▤'}
+);
 const catalog=new Map(palette.map(p=>[p.id,p]));let selected='wall',mode='place',rotation=0,level=0,hideUpper=false,worldMaxLevel=0,world=[],models=[],prefabs=[],undoStack=[],redoStack=[],hover=null,dragPainting=false,yaw=Math.PI/4,zoom=1,panX=0,panZ=0,dirty=true,sceneMesh=null,cursorMesh=null,cursorDirty=true,modelParts=[],activeModelId=null;
 let pineObjectSelection=null,pineSelectedTile=null,pineMoveArmed=false;
 const byId=id=>catalog.get(id)||models.find(m=>m.id===id)||prefabs.find(p=>p.id===id);
@@ -3807,7 +3812,116 @@ function poiArmSkeleton(m,id,x,y,z){
   m.n.push(nx*c-ny*s,ny*c+nx*s,prop.n[i+2]);m.c.push(prop.c[i],prop.c[i+1],prop.c[i+2]);
  }
 }
+// BEGIN FISHING PORT ART
+// Tiny authored set; terrain, blockers and market gameplay live elsewhere.
+function poiPortPropGeometry(m,id,x,y,z){
+ const V=(u,h,w)=>[x+u,y+h,z+w];
+ const B=(u,h,w,a,b,c,col)=>cube(m,x+u,y+h,z+w,a,b,c,col);
+ const Q=(a,b,c,d,col)=>quad(m,V(...a),V(...b),V(...c),V(...d),col);
+ const T=(a,b,c,col)=>tri(m,V(...a),V(...b),V(...c),col);
+ const oak=[.49,.32,.19],warm=[.64,.45,.29],dark=[.31,.22,.16],rope=[.76,.68,.46];
+ const line=(a,b,w,col)=>{
+  const lx=b[0]-a[0],lz=b[2]-a[2],len=Math.hypot(lx,lz)||1;
+  const dx=lz*w/len,dz=-lx*w/len;
+  Q([a[0]-dx,a[1],a[2]-dz],[b[0]-dx,b[1],b[2]-dz],
+   [b[0]+dx,b[1],b[2]+dz],[a[0]+dx,a[1],a[2]+dz],col);
+ };
+ function crate(cx,h,cz,w,d,size){
+  B(cx,h,cz,w,size,d,oak);
+  for(const i of [-1,1]){
+   B(cx+i*(w*.5-.032),h-.005,cz,.052,size+.038,d+.028,dark);
+   B(cx,h+size*.10,cz+i*d*.51,w,.039,.022,warm);
+   B(cx,h+size*.73,cz+i*d*.51,w,.041,.022,warm);
+  }
+ }
+ switch(id){
+ case 'poiPortSkiff':{
+  // Tapered but broad planked hull with a single high prow at north.
+  const ring=[[0,-1.13,.43],[-.33,-.69,.30],[-.475,-.15,.27],[-.425,.52,.25],
+   [-.275,1.02,.31],[.275,1.02,.31],[.425,.52,.25],[.475,-.15,.27],[.33,-.69,.30]];
+  const base=ring.map(([u,w])=>[u*.61,-.055,w*.78]);
+  const stripe=ring.map(([u,w,h])=>[u*.92,h*.70,w*.94]);
+  const cap=ring.map(([u,w,h])=>[u,h,w]),inside=ring.map(([u,w,h])=>[u*.89,h-.027,w*.92]);
+  const sole=ring.map(([u,w])=>[u*.56,.062,w*.75]);
+  for(let i=0;i<ring.length;i++){
+   const j=(i+1)%ring.length;
+   Q(base[i],base[j],stripe[j],stripe[i],i%2?[.22,.30,.30]:[.27,.35,.34]);
+   Q(stripe[i],stripe[j],cap[j],cap[i],i%2?[.25,.46,.43]:[.31,.54,.50]);
+   Q(cap[i],cap[j],inside[j],inside[i],[.78,.69,.48]);
+   Q(inside[j],inside[i],sole[i],sole[j],i%2?warm:oak);
+   T([0,.062,0],sole[i],sole[j],i%2?dark:oak);
+  }
+  for(const u of [-.18,-.06,.06,.18])B(u,.069,0,.10,.029,1.34,warm);
+  for(const w of [-.49,.08,.57]){
+   const a=w===.08?.80:.66;
+   B(0,.177,w,a,.062,.172,oak);B(0,.224,w,a,.023,.176,warm);
+  }
+  // Pair of stowed oars; caps and painted ends survive at play zoom.
+  for(const sign of [-1,1]){
+   const u=sign*.24;
+   line([u,.265,-.67],[u+sign*.08,.265,.63],.018,dark);
+   Q([u-.046,.266,-.72],[u-.062,.266,-.93],[u+.040,.266,-.93],[u+.047,.266,-.72],warm);
+  }
+  const post=[0,.385,-.88];B(post[0],post[1]-.13,post[2],.07,.14,.078,dark);
+  for(let i=0;i<10;i++){
+   const at=i*Math.PI/5,next=(i+1)*Math.PI/5;
+   line([.115*Math.cos(at),.248,.28+.090*Math.sin(at)],[.115*Math.cos(next),.248,.28+.090*Math.sin(next)],.014,rope);
+  }
+  return true;
+ }
+ case 'poiPortNet':{
+  crate(-.18,.007,.08,.46,.59,.32);
+  crate(.235,.007,.19,.35,.37,.205);
+  const sheet=[[-.41,.357,-.21],[.045,.357,-.21],[.045,.350,.37],[-.41,.350,.37]];
+  Q(sheet[0],sheet[3],sheet[2],sheet[1],[.30,.40,.32]);
+  const net=[.67,.70,.48],shadow=[.49,.55,.37];
+  for(let i=0;i<6;i++){
+   const u=-.401+.087*i;
+   line([u,.364,-.207],[u+.016,.361,.355],.007,i%2?net:shadow);
+   // A hanging vertical side uses its own ribbons, so it reads from the quay.
+   Q([u+.007,.358,.381],[u-.007,.358,.381],[u+.009,.116,.397],[u+.024,.116,.397],net);
+  }
+  for(let i=0;i<6;i++){
+   const w=-.195+.104*i;
+   line([-.405,.363,w],[.034,.360,w+.024],.007,i%2?net:shadow);
+  }
+  for(const h of [.153,.200,.247,.294,.341])Q([-.398,h,.40],[.048,h,.40],[.048,h+.012,.40],[-.398,h+.012,.40],shadow);
+  for(const u of [-.35,-.17,.00])B(u,.349,.346,.044,.047,.055,[.83,.57,.30]);
+  return true;
+ }
+ case 'poiPortFishStall':{
+  const seagreen=[.34,.55,.52],lining=[.46,.61,.55];
+  for(const u of [-.39,.39])for(const w of [-.27,.27])B(u,0,w,.090,.76,.08,dark);
+  B(0,.56,.27,.80,.064,.056,oak);B(0,.12,.255,.79,.045,.089,warm);
+  B(0,.695,0,.995,.098,.64,warm);
+  B(0,.675,-.329,.98,.073,.04,seagreen);
+  // A muted striped cloth, hung over the shopper side of the counter.
+  for(let i=0;i<7;i++){
+   const u=-.355+i*.115,col=i%2?[.74,.74,.55]:lining;
+   const l=.049;
+   Q([u+l,.684,-.355],[u-l,.684,-.355],[u-l,.797,-.338],[u+l,.797,-.338],col);
+   Q([u-l,.797,-.338],[u-l,.798,.143],[u+l,.798,.143],[u+l,.797,-.338],col);
+  }
+  const silver=[.66,.76,.77],blue=[.31,.47,.54],pale=[.82,.85,.76],eye=[.13,.20,.22];
+  function fish(u,w,len,s){
+   const ddy=.835,V2=(a,b,h)=>[u+s*a*len,ddy+h,w+b*len];
+   const nose=V2(.47,0,0),tail=V2(-.33,0,0),ridge=V2(.11,0,.045),front=V2(.08,-.21,.004),back=V2(.08,.21,.002);
+   const facet=(a,b,c,col)=>s>0?T(a,b,c,col):T(a,c,b,col);
+   facet(nose,front,ridge,silver);facet(nose,ridge,back,pale);facet(front,tail,ridge,blue);facet(ridge,tail,back,silver);
+   facet(tail,V2(-.55,-.17,.008),V2(-.55,.17,.008),blue);
+   B(u+s*len*.32,ddy+.020,w,.017,.012,.015,eye);
+  }
+  fish(-.22,-.16,.29,1);fish(.20,-.12,.32,-1);fish(-.18,.057,.28,-1);fish(.19,.083,.26,1);
+  crate(.12,.013,.14,.35,.30,.24);crate(-.25,.011,.17,.25,.28,.18);
+  return true;
+ }
+ default:return false;
+ }
+}
+// END FISHING PORT ART
+
 function decoBase(m,id,x,y,z,r=0){
+ if((id==='poiPortSkiff'||id==='poiPortNet'||id==='poiPortFishStall')&&poiPortPropGeometry(m,id,x,y,z))return;
  if(oldTownShopDetails(m,id,x,y,z))return;
  if(oldTownFacadeGeometry(m,id,x,y,z))return;
  if(id==='oldTownTower'){oldTownTowerGeometry(m,x,y,z);return;}
@@ -13209,7 +13323,8 @@ const POI_WILD_ROAM_LEASH=5,POI_WILD_ROAM_STEP=.68;
 function poiWildProtectedArea(x,z,site=facilitySite){
  const n=site?.northTrail,pond=n?.marsh?.pond?.bounds;
  const inside=p=>p&&x>=p.x1&&x<=p.x2&&z>=p.z1&&z<=p.z2;
- return inside(pond)||!!n?.regions?.some(r=>r.outdoorLandmark&&inside(r.bounds));
+ return (typeof poiSouthPortContains==='function'&&poiSouthPortContains(site,x,z,0))||
+  inside(pond)||!!n?.regions?.some(r=>r.outdoorLandmark&&inside(r.bounds));
 }
 function poiWildNearResident(x,z,pad=1){
  if(typeof poiTownNpcActors==='undefined')return false;
@@ -14670,6 +14785,112 @@ function poiTownDailyRoutine(a,clock,now,budget,plan=poiTownDailyPlan(a.role,clo
  return true;
 }
 // END TOWN DAILY LIFE
+// BEGIN SOUTH PORT RESIDENTS
+const POI_PORT_NPC_ENTER=5,POI_PORT_NPC_LEAVE=9;
+function poiPortNpcContains(bounds,p,pad=0){
+ return !!bounds&&p?.y===bounds.y&&p.x>=bounds.x1-pad&&p.x<=bounds.x2+pad&&p.z>=bounds.z1-pad&&p.z<=bounds.z2+pad;
+}
+function poiPortNpcRoles(site){
+ const port=site?.id==='base'?site.southPort:null;
+ const {market,fisher,bounds}=port||{};
+ if(!bounds||!market||!fisher)return [];
+ const roles=[{id:'portfishseller',name:'クレア',role:'port-local',type:'humanMerchant',
+  home:market.rest,work:market.work,prep:market.prep,portBounds:bounds},
+ {id:'portfisher',name:'ネリ',role:'port-local',type:'humanVillager',
+  home:fisher.rest,work:fisher.berth,portBounds:bounds}];
+ return roles.filter(r=>[r.home,r.work,...(r.id==='portfishseller'?[r.prep]:[])].every(
+  p=>poiPortNpcContains(bounds,p)&&poiTownNpcStance(p)));
+}
+function poiPortNpcPlan(role,minute){
+ if(role.id==='portfishseller'){
+  if(minute<360||minute>=1245)return {goal:role.home,label:'port-off-duty',recessed:true};
+  if(minute<435||minute>=730&&minute<775||minute>=985&&minute<1030)
+   return {goal:role.prep,label:'fish-prep',recessed:false};
+  if(minute>=1125)return {goal:role.home,label:'port-rest',recessed:false};
+  return {goal:role.work,label:'fish-stall',recessed:false};
+ }
+ if(minute<310||minute>=1275)return {goal:role.home,label:'port-off-duty',recessed:true};
+ if(minute>=660&&minute<780||minute>=1100)return {goal:role.home,label:'net-mending',recessed:false};
+ return {goal:role.work,label:'fishing',recessed:false};
+}
+function poiPortNpcTryStart(a,prefer,now){
+ const {role}=a;
+ const reserved=new Set(poiTownNpcActors.filter(o=>o!==a&&!o.death&&!o.recessed).map(o=>o.x+','+o.z+','+o.y));
+ if(poiWalkLevel===role.portBounds.y)reserved.add(poiWalkX+','+poiWalkZ+','+poiWalkLevel);
+ const candidates=[prefer,role.home,role.work];
+ for(const anchor of candidates){
+  const p=typeof poiTownDailySpawn==='function'?poiTownDailySpawn(anchor,role,reserved):anchor;
+  if(!poiPortNpcContains(role.portBounds,p)||!poiTownNpcStance(p)||reserved.has(p.x+','+p.z+','+p.y)||
+     typeof poiTownNpcPlayerBlocksStep==='function'&&poiTownNpcPlayerBlocksStep(p,p,now)||
+     typeof poiTownNpcActorOccupied==='function'&&poiTownNpcActorOccupied(p.x,p.z,p.y,a))continue;
+  Object.assign(a,p,{fromX:p.x,fromZ:p.z,fromY:p.y,moveAt:null,path:null,nextPlan:0,goal:null,goalKey:null,actorLeg:null,recessed:false});
+  return true;
+ }
+ return false;
+}
+function poiPortNpcSync(clock,now){
+ const port=facilitySite?.id==='base'?facilitySite.southPort:null;
+ const existing=!!poiTownNpcActors.at(-1)?.role.portBounds;
+ // Use the common surface query when present, and don't validate route
+ // anchors or create any actor object while the district is far away.
+ const pad=existing?POI_PORT_NPC_LEAVE:POI_PORT_NPC_ENTER;
+ const near=!!port&&(typeof poiSouthPortNear==='function'?poiSouthPortNear(pad):
+  poiPortNpcContains(port.bounds,{x:poiWalkX,z:poiWalkZ,y:poiWalkLevel},pad));
+ if(near===existing)return false;
+ if(!near){
+  if(typeof poiTownDialogue!=='undefined'&&poiTownDialogue?.actor?.role.portBounds)poiTownDialogueClose();
+  poiTownNpcActors=poiTownNpcActors.filter(a=>!a.role.portBounds);
+  poiTownNpcVersion++;return true;
+ }
+ const roles=poiPortNpcRoles(facilitySite);
+ if(!roles.length)return false;
+ for(const role of roles){
+  const plan=poiPortNpcPlan(role,clock.minute);
+  const a={role,...poiTownNpcLoadout({role}),...role.home,index:poiTownNpcActors.length,hp:POI_TOWN_RESIDENT_HP,
+   activity:'port-off-duty',recessed:true,attacks:0,coins:0,potions:0,bedId:null,bedUntil:null,restUntil:null,
+   path:null,nextPlan:0,attackAt:0,encounterAt:0};
+  if(!plan.recessed&&poiPortNpcTryStart(a,plan.goal,now))
+   a.activity=a.x===plan.goal.x&&a.z===plan.goal.z?plan.label:'port-walk';
+  poiTownNpcActors.push(a);
+ }
+ poiTownNpcVersion++;return true;
+}
+function poiPortNpcRoutine(a,clock,now,budget){
+ if(!a.role?.portBounds)return false;
+ const {goal,label,recessed}=poiPortNpcPlan(a.role,clock.minute);
+ if(a.recessed){
+  if(recessed||!poiPortNpcTryStart(a,a.role.home,now))return true;
+  poiTownNpcVersion++;
+ }
+ const arrived=poiTownNpcMove(a,goal,'port-walk',now,budget);
+ if(recessed&&arrived){
+  // Keep the final physical step visible until its movement completes.
+  if(Number.isFinite(a.moveAt)&&now-a.moveAt<POI_TOWN_RESIDENT_TICK)return true;
+  a.recessed=true;poiTownNpcVersion++;
+ }
+ poiTownNpcAct(a,arrived?label:'port-walk');
+ return true;
+}
+function poiPortNpcCounter(a,dx,dz,g){
+ if(a?.role?.id!=='portfishseller'||a.activity!=='fish-stall'||Math.abs(dx)+Math.abs(dz)!==1)return false;
+ const {public:p,stall,work}=facilitySite?.southPort?.market||{};
+ const at=(q,x,z,y)=>q?.x===x&&q.z===z&&q.y===y;
+ const x=poiWalkX,z=poiWalkZ,y=poiWalkLevel;
+ if(!at(p,x,z,y)||!at(stall,x+dx,z+dz,y)||!at(work,x+2*dx,z+2*dz,y)||
+    !at(a,work.x,work.z,y)||!poiTownNpcStance(a,g))return false;
+ const tiles=g.cells.get(poiTownNpcKey(stall.x,stall.z,y))||[];
+ if(!tiles.includes('poiPortFishStall')||!tiles.every(t=>t==='poiPortFishStall'||isFloor(t)))return false;
+ for(const [obj,m] of poiMonsterStates)
+  if(m.hp>0&&obj.y===y&&((m.x===a.x&&m.z===a.z)||(m.x===stall.x&&m.z===stall.z)))return false;
+ return true;
+}
+function poiPortMarekTopic(actor){
+ const p=typeof facilitySite!=='undefined'&&facilitySite?.id==='base'?facilitySite.southPort:null;
+ const entry=p?.entrance||p?.entry;
+ if(actor?.role?.id!=='southmerchant'||!entry||!p.name)return null;
+ return '宿場から街道を南へ。道が西へ折れるところを曲がっていくと、'+p.name+'に着くよ。';
+}
+// END SOUTH PORT RESIDENTS
 const POI_TOWN_RESIDENT_HP=100,POI_TOWN_RESIDENT_MELEE=13;
 function poiTownNpcInit(clock){
  if(poiTownNpcActors.length)return;
@@ -14758,7 +14979,8 @@ function poiTownNpcActorSettle(a,now){
 }
 function poiTownNpcActorLegal(a,g,goal,x,z,fx,fz){
  const tile={x,z,y:a.y};
- if(!poiActorSameGrade(x,z,fx,fz)||poiTownNpcActorPinned(a,tile,g,goal)||poiMonsterAt(x,z,true)||poiTownNpcActorOccupied(x,z,a.y,a)||
+ if(a.role?.portBounds&&!poiPortNpcContains(a.role.portBounds,tile)||
+    !poiActorSameGrade(x,z,fx,fz)||poiTownNpcActorPinned(a,tile,g,goal)||poiMonsterAt(x,z,true)||poiTownNpcActorOccupied(x,z,a.y,a)||
     poiTownNpcActors.some(b=>b!==a&&!b.recessed&&!b.death&&b.x===x&&b.z===z&&b.y===a.y))return false;
  const next=poiTownNpcNextTile({x:fx,z:fz,y:a.y},x,z,g);
  return !!next&&next.y===a.y;
@@ -14826,8 +15048,10 @@ function poiTownNpcMove(a,want,label,now,budget){
  if(poiTownNpcHere(a,want)){poiTownNpcFace(a,want.facing);return true}
  if(!a.path?.length){
   if(now<a.nextPlan||budget.plans<=0)return false;
-  const detour=a.playerDetour?(from,to)=>
-   Math.abs(to.x-poiWalkX)<=2&&Math.abs(to.z-poiWalkZ)<=2&&poiTownNpcPlayerBlocksStep(from,to,now):undefined;
+  const bounds=a.role?.portBounds;
+  const detour=bounds||a.playerDetour?(from,to)=>
+   bounds&&!poiPortNpcContains(bounds,to)||a.playerDetour&&
+    Math.abs(to.x-poiWalkX)<=2&&Math.abs(to.z-poiWalkZ)<=2&&poiTownNpcPlayerBlocksStep(from,to,now):undefined;
   budget.plans--;a.path=poiTownFindPath(a,want,detour);
   if(!a.path?.length){a.nextPlan=now+1800;return false}
  }
@@ -15165,6 +15389,7 @@ function poiToolshopSupplyRoutine(a,clock,now,budget){
 }
 // END TOOLSHOP SUPPLY ROUTINE
 function poiTownNpcRoutine(a,clock,now,budget){
+ if(typeof poiPortNpcRoutine==='function'&&poiPortNpcRoutine(a,clock,now,budget))return;
  if(typeof poiTownDutyRoutine==='function'&&poiTownDutyRoutine(a,clock,now,budget))return;
  if(a.role.role==='visitor'){
   if(typeof poiTownDailyRoutine!=='function'||!poiTownDailyRoutine(a,clock,now,budget))poiTownNpcVisitorRoutine(a,clock,now,budget);
@@ -15242,7 +15467,7 @@ function poiTownNpcRoutine(a,clock,now,budget){
 const POI_TOWN_JOB_LABELS=Object.freeze({
  guildkeeper:'ギルド受付',innkeeper:'宿屋の主人',diningkeeper:'食堂の店主',workshopkeeper:'工房の職人',
  toolkeeper:'道具屋の店主',stablekeeper:'厩舎番',towncook:'食堂の料理人',westpeddler:'行商人',canalcourier:'運河の配達人',
- resadventurer:'冒険者',guestadventurer:'冒険者',southmerchant:'宿場の商人',northgatekeeper:'北門の見張り',northwatchworker:'夜回り',northscout:'北の斥候',nightporter:'宿屋前の夜番'
+ resadventurer:'冒険者',guestadventurer:'冒険者',southmerchant:'宿場の商人',northgatekeeper:'北門の見張り',northwatchworker:'夜回り',northscout:'北の斥候',nightporter:'宿屋前の夜番',portfishseller:'魚売り',portfisher:'漁師'
 });
 function poiTownNpcDisplayName(role){
  const name=role?.name||'',job=Object.prototype.hasOwnProperty.call(POI_TOWN_JOB_LABELS,role?.id)?POI_TOWN_JOB_LABELS[role.id]:'';
@@ -15263,6 +15488,8 @@ const POI_TOWN_SPEECH=Object.freeze({
  workshopkeeper:'刃物も道具も、手入れしてやれば長く使えるよ。',
  toolkeeper:'草原に出る前に、薬草を持ったか確認していくといい。',
  stablekeeper:'馬は落ち着いてる。厩の近くでは、走らずに通っておくれ。',
+ portfishseller:'朝揚がった魚はね、背がまだ海の色をしてるんだよ。',
+ portfisher:'潮がゆるんだら舟を出す。それまでは桟橋で網を繕ってるよ。',
  southmerchant:'街道の宿場へようこそ。長い道だったろう。必要な品があれば声をかけてくれ。'
 });
 let poiTownDialogue=null,poiTownDialoguePrompt=null;
@@ -15275,6 +15502,8 @@ const POI_NPC_EXTRA_SPEECH=Object.freeze({
  towncook:['熱いうちに食べるのが一番だよ。','午後の仕込みをする前に、食材を切っておかなくちゃ。'],
  workshopkeeper:['手に馴染んだ道具ほど、大切に使いたいものだ。'],
  stablekeeper:['今日は馬の調子もいい。外は歩きやすそうだね。'],
+ portfishseller:['夕方は干物を返す時間。潮風でゆっくり乾かすと、うまみが残るよ。','この港は小さいから、朝の魚も昼にはなくなるんだ。'],
+ portfisher:['水面が静かでも、足元の流れは別ものさ。桟橋の先では足元に気をつけて。','岸の明かりが見えたら、そろそろ帰る時間だな。'],
  southmerchant:['店の裏は荷ほどき場だ。通りからは表の入口が近いよ。','日が落ちたら向かいの宿に戻る。旅の支度は明るいうちがいいよ。']
 });
 const POI_NPC_MENU_LABELS={talk:'話す',status:'状態',request:'依頼',quest:'クエスト','quest-accept':'受ける','quest-report':'報告する',shop:'買い物する',stay:'泊まる',sell:'アイテムを売る',
@@ -15305,6 +15534,7 @@ function poiNpcMenuRows(d){
  if(d.sleeping)return [];
  const row=id=>({id,label:POI_NPC_MENU_LABELS[id]});
  const quests=d.actor.role.id==='guildkeeper'&&typeof poiQuestsForClerk==='function'?poiQuestsForClerk():[];
+ if(d.page==='root'&&d.actor.role.portBounds)return ['talk','status','back'].map(row);
  if(d.page==='root')return ['talk','status','request',...(quests.length?['quest']:[]),'back'].map(row);
  if(d.page==='quest')return [...quests.map(q=>({id:'quest:'+q.id,
   label:q.label+(({accepted:'（受注済み）',surveyed:'（報告可能）',reported:'（報告済み）'})[poiNpcQuestProgress(q.id)]||''),quest:q})),row('back')];
@@ -15610,7 +15840,9 @@ function poiNpcMenuChoose(id,now=performance.now()){
  if(id==='back')return poiNpcMenuBack(now);
  if(id==='talk'){
   const topics=POI_NPC_EXTRA_SPEECH[d.actor.role.id]||['夕方になると門の外は暗くなる。帰り道は覚えておくといいよ。','町へ戻ると、ようやく一息つけるね。'];
-  d.topic=d.text=topics[(d.topicIndex++)%topics.length];
+  const port=typeof poiPortMarekTopic==='function'?poiPortMarekTopic(d.actor):null;
+  const index=(d.topicIndex++)%(topics.length+(port?1:0));
+  d.topic=d.text=index===topics.length?port:topics[index];
  }else if(id==='quest'){
   d.page='quest';d.index=0;d.text='どのクエストを見ますか？';
  }else if(row.quest){
@@ -15686,6 +15918,7 @@ function poiTownDialogueMovingTarget(a,now,dx,dz,held){
 // Speak over one real countertop, never through walls or the short end
 // of a long counter. Samples are tied to the actual live cell/floor.
 function poiTownCounterTalkReachable(a,dx,dz,g){
+ if(a?.role?.portBounds)return typeof poiPortNpcCounter==='function'&&poiPortNpcCounter(a,dx,dz,g);
  const x=poiWalkX+dx,z=poiWalkZ+dz,y=poiWalkLevel;
  if(!a||(Math.abs(dx)+Math.abs(dz)!==1)||a.y!==y||a.x!==x+dx||a.z!==z+dz)return false;
  const types=g.cells.get(poiTownNpcKey(x,z,y))||[];
@@ -15966,6 +16199,7 @@ function poiTownResidentsFrame(now){
  const clock=poiTownClockSnapshot();if(!clock)return;
  if(poiTownNpcBook&&clock.absoluteMinute>=poiTownNpcBook.until)poiTownNpcBook=null;
  poiTownNpcInit(clock);
+ if(typeof poiPortNpcSync==='function')poiPortNpcSync(clock,now);
  const budget={plans:2};
  const speaker=poiTownDialogueUpdate(now);
  for(const a of poiTownNpcActors)if(a!==speaker&&poiTownNpcRecover(a,now))poiTownNpcRoutine(a,clock,now,budget);
@@ -16202,7 +16436,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v261',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v262',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -16317,7 +16551,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v261';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v262';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -16532,7 +16766,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v261',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v262',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -18740,6 +18974,7 @@ function poiWalkCanStep(x,z,fromX,fromZ,exceptMonster,skipNpcTile=false){
  // Check every occupied object on this cell. Door frames are walkable, but
  // an unrelated solid object placed in the doorway must still block passage.
  const cell=world.filter(o=>o.y===poiWalkLevel&&o.x===x&&o.z===z&&(!poiWalkActive||!poiIsMonster(o.type)));
+ if(typeof poiSouthPortWaterBlocked==='function'&&poiSouthPortWaterBlocked(x,z,poiWalkLevel,cell))return false;
  if(facilitySite&&poiWalkLevel!==0&&!facilityValidLanding(x,z,poiWalkLevel))return false;
  if(!facilitySite&&poiWalkLevel>0&&!cell.some(o=>isFloor(o.type)||o.type==='guildStairDown'||o.type==='guildStairUp'))return false;
  if(poiWalkActive&&((exceptMonster?poiMonsterAt(x,z,true,exceptMonster):poiMonsterAt(x,z,true))||
@@ -18814,6 +19049,7 @@ function poiRegionAt(site,x,z,legacy=false,floor=null){
   const realm=typeof poiDungeonTravelKey==='function'?poiDungeonTravelKey(site,x,z,floor):
    typeof poiOtherworldIn==='function'&&poiOtherworldIn(site,x,z,floor)?'otherworld':null;
   if(realm){name=site[realm].name;difficulty=site[realm].difficulty}
+  else if(typeof poiSouthPortContains==='function'&&poiSouthPortContains(site,x,z,floor)){name=site.southPort.name;difficulty=0}
   else if(typeof poiSouthTownContains==='function'&&poiSouthTownContains(site,x,z,floor)){name=site.southRoad.town.name;difficulty=0}
   else if(!inTown&&!inGuild&&name==='外'&&typeof poiNorthTrailRegion==='function'){
    const trail=poiNorthTrailRegion(site,x,z,floor);
@@ -20071,10 +20307,15 @@ function pinePlayJoinedNaturalGrade(kind,site,walking){
  return walking&&site?.id==='base'&&(kind==='earth'||kind==='moss'||/^grass(?:Meadow|Wild|Forest|Dry|Tuft|Flowers|Pebbles|Patch|Weeds|Trampled)?$/.test(kind));
 }
 function makeScene(){
+ const localBatch=typeof poiFacilityLocalBuild==='undefined'?null:poiFacilityLocalBuild;
  const wallFade=poiWalkActive&&facilitySite?[]:null,storeyFade=wallFade?[]:null;
  const cut=facilitySite&&!facilityBuildFullSurface?facilityVisibilityOwner():null;
  const sharedParts=facilityBuildFullSurface?[]:null;
- const m=mesh(),visible=world.filter(o=>{
+ const localGradeSources=[],m=mesh(),visible=(localBatch||world).filter(o=>{
+  if(!localBatch&&poiWalkActive&&typeof poiFacilityLocalMember==='function'&&poiFacilityLocalMember(o)){
+   if(poiWalkLevel>=0&&o.y===0&&o.type==='lantern')localGradeSources.push(o);
+   return false;
+  }
   if(facilitySite&&!facilityObjectVisible(o,cut))return false;
   if(poiWalkActive&&poiIsMonster(o.type))return false;
   // The guild facade nameplate hides with the roof when the player enters.
@@ -20082,7 +20323,7 @@ function makeScene(){
   if(pineGameActive&&poiWalkActive&&o.y>0&&poiIsRoofPiece(o.type))return false;
   return !hideUpper||o.y<=level;
  });
- const {blockers:pineShadows,lamps:pineWarmLamps}=pineFloorLightingSources(visible);
+ const {blockers:pineShadows,lamps:pineWarmLamps}=pineFloorLightingSources(localGradeSources.length?visible.concat(localGradeSources):visible);
  // Store both exact bakes of the few surviving upper floors just outside
  // lodging. Entering its roof cut no longer constructs a second town VBO.
  const lodgingIndex=facilityBuildFullSurface&&facilitySite?.id==='base'?
@@ -20099,8 +20340,8 @@ function makeScene(){
   if(y<=0)continue;
   for(const cell of cells)lodgingLighting.blockers.delete(cell+','+y);
  }
- const gradeKey=facilityGradeKey(pineWarmLamps),cachedGrade=facilityGradeGet(gradeKey);
- const buildSharedGrade=facilityGradeMayRemember(gradeKey);
+ const gradeKey=localBatch?null:facilityGradeKey(pineWarmLamps),cachedGrade=localBatch?null:facilityGradeGet(gradeKey);
+ const buildSharedGrade=!localBatch&&facilityGradeMayRemember(gradeKey);
  const grade=buildSharedGrade?mesh():m;
  const townGuild=facilitySite?.id==='base'?facilitySite.buildings?.find(b=>b.id==='townGuild'):null;
  const inTownGuild=(x,z)=>townGuild&&x>=townGuild.x1&&x<=townGuild.x2&&z>=townGuild.z1&&z<=townGuild.z2;
@@ -20119,7 +20360,7 @@ function makeScene(){
   const i=z*(MAP_W+1)+x;
   return baseGrass[i]||(baseGrass[i]=pineEastGroundColor(x,z,floors,baseOffset));
  }:null;
- if(!cachedGrade){
+ if(!cachedGrade&&!localBatch){
  if(!facilitySite||facilityViewLevel()>=0)for(let z=0;z<MAP_H;z++)for(let x=0;x<MAP_W;x++){
   if(facilitySite&&facilityStairOpenings.has(facilityCellKey(x,z,0))){
    const h=terrainY(x,z);
@@ -21311,7 +21552,9 @@ function render(){
  const daylight=poiTownSceneLight();gl.uniform3f(loc.daylight,...daylight);
  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
  poiOcclusionBegin(p,now);
- draw(sceneMesh?.ground,p.vp);poiDrawSceneOcclusion(sceneMesh,p.vp);facilityDrawRoofs(p.vp);poiDrawGameRoofs(p.vp);
+ draw(sceneMesh?.ground,p.vp);poiDrawSceneOcclusion(sceneMesh,p.vp);
+ if(typeof facilityDrawLocalScene==='function')facilityDrawLocalScene(p.vp);
+ facilityDrawRoofs(p.vp);poiDrawGameRoofs(p.vp);
  poiOcclusionEnd();
  poiDrawEditorGhostRoof(p.vp);
  drawSignOverlays(p.vp,daylight);pineDrawEditCursor(p.vp);
@@ -24412,7 +24655,70 @@ function buildFacilitySite(id){
  southRoad.creek=extendTownWorldSouthCreek(expanded);
  southRoad.town=extendTownWorldSouthTown(expanded,southRoad);
  const northFort=extendTownWorldNorthFort(expanded.map.world,northTrail);
- return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad,northFort};
+ const southPort=extendTownWorldSouthPort(expanded.map.world);
+ return {...expanded,townOffset:townOffset+margin,mine,otherworld,chapel,armedEncounters,northTrail,southRoad,northFort,southPort};
+}
+
+// The first southern coast uses the old 128x128 save frame, away from the inn.
+function extendTownWorldSouthPort(world){
+ const y=0,P=(x,z,facing)=>({x,z,y,...(facing===undefined?{}:{facing})}),key=(x,z)=>x+','+z;
+ const old=new Map();
+ for(const o of world.filter(o=>o.y===y)){
+  const k=key(o.x,o.z);if(!old.has(k))old.set(k,[]);old.get(k).push(o.type);
+ }
+ const floors=new Map(),water=[],props=[],index=world.length;
+ const put=(x,z,type)=>{
+  const k=key(x,z);if(old.has(k))return;
+  floors.set(k,{x,z,y,type,rot:0});
+ };
+ const route=(points)=>{
+  const output=[];let [x,z]=points[0];output.push(P(x,z));
+  for(const [tx,tz] of points.slice(1)){
+   if(x!==tx&&z!==tz)throw Error('Non-cardinal port road');
+   while(x!==tx||z!==tz){x+=Math.sign(tx-x);z+=Math.sign(tz-z);output.push(P(x,z));}
+  }
+  return output;
+ };
+ const name='潮待ちの港',bounds={x1:73,x2:92,z1:109,z2:127,y};
+ const approach=route([[105,111],[105,123],[84,123],[84,120]]),entrance=P(91,123);
+ const dock={end:P(73,118),waterAhead:P(72,118),route:route([[84,120],[79,120],[79,118],[73,118]])};
+ const market={stall:P(84,116),public:P(84,115,2),work:P(84,117,0),prep:P(86,117,3),rest:P(86,120,3)};
+ const fisher={berth:P(77,117,2),rest:P(81,121,3)};
+ const future=[124,125,126,127].map(z=>P(105,z));
+ // Sheltered inlet tapers north and opens out of the southern map edge.
+ for(let z=109;z<=127;z++){
+  const outer=z<113?69:66,inner=z<114?74:z>123?76:75;
+  for(let x=outer;x<=inner;x++)put(x,z,'sea');
+ }
+ for(let z=112;z<=125;z++)for(let x=76;x<=83;x++)
+  if(!floors.has(key(x,z))&&(x>77||z>=115&&z<=122))put(x,z,(x+z)%6===0?'grassDry':'earth');
+ for(let z=114;z<=120;z++)for(let x=81;x<=88;x++)
+  put(x,z,x>=83&&x<=87?'roadCutStoneFull':'roadGravelFull');
+ for(const {x,z} of approach)put(x,z,z>=122?'roadGravelFull':'roadCutStoneFull');
+ for(const {x,z} of dock.route)put(x,z,x<=77?'woodfloorDark':'roadCutStoneFull');
+ put(fisher.berth.x,fisher.berth.z,"woodfloorDark");
+ for(const [x,z,type,rot=0] of [
+  [74,119,'poiPortSkiff',1],[71,116,'poiPortSkiff',2],
+  [78,119,'poiPortNet',0],[84,116,'poiPortFishStall',0],
+  [81,116,'barrel'],[82,116,'crate'],[87,115,'crate'],[88,118,'benchWood',1],
+  [84,114,'lantern',2],[87,118,'lantern',1],[78,121,'lantern',1],
+  [77,115,'rockSandstone',2],[77,122,'rockSandstone',1],[76,114,'rockMossy'],
+  [78,124,'bushFern'],[89,121,'rockCluster'],[91,122,'ruinStonePost',1],
+  [88,113,'treeBirch'],[90,118,'treePine'],[87,125,'tallGrass'],[91,125,'treeBirch']
+ ]){
+  if(old.has(key(x,z)))throw Error('Port prop overlaps original map: '+[x,z,type]);
+  props.push({x,z,y,type,rot});
+ }
+ for(const {x,z} of [...approach,...dock.route]){
+  const k=key(x,z),original=old.get(k);
+  if(original&&!original.every(t=>/^(road|woodfloor|grass|earth|stone)/.test(t))||
+     !original&&!floors.has(k)||props.some(o=>o.x===x&&o.z===z))
+   throw Error('Port route is not clear: '+k);
+ }
+ for(const o of floors.values()){world.push(o);if(o.type==='sea')water.push(P(o.x,o.z));}
+ world.push(...props);
+ return {name,difficulty:0,bounds,entrance,market,fisher,dock,approach,water,props,future,
+  authored:{index,count:world.length-index}};
 }
 
 // Delay the guardian encounter until after the western storeroom. Preserve
@@ -26255,6 +26561,7 @@ function workshopResumeApplyView(v){
  poiSyncCameraModeUI();dirty=true;cursorDirty=true;
 }
 function workshopResumeRestorePosition(p){
+ if(typeof poiSouthPortRecoverPosition==='function')p=poiSouthPortRecoverPosition(p);
  // The two former shortcut doorways now have walls. Preserve that exact
  // old save's floor, facing and nearby room instead of restarting in town.
  if(p&&facilitySite?.id==='base'&&p.y===-1){
@@ -26717,6 +27024,80 @@ function facilitySurfaceView(cut){
   storeyFade:facilitySurface.storeyFade.filter(r=>!removeStorey(r))};
 }
 // END FACILITY SHARED SURFACE
+// BEGIN FACILITY LOCAL SCENE
+let poiFacilityLocalBuild=null,poiFacilityLocalScene=null,poiFacilityLocalBuilds=0,poiFacilityLocalDraws=0;
+function poiSouthPortContains(site,x,z,y,padding=0){
+ const b=site?.id==='base'?site.southPort?.bounds:null;
+ return !!b&&y===(b.y??0)&&x>=b.x1-padding&&x<=b.x2+padding&&z>=b.z1-padding&&z<=b.z2+padding;
+}
+function poiSouthPortNear(padding=0){
+ return !!poiWalkActive&&poiSouthPortContains(facilitySite,poiWalkX,poiWalkZ,poiWalkLevel,padding);
+}
+const poiSouthPortIndexes=new WeakMap();
+function poiSouthPortIndex(site){
+ const p=site?.id==='base'?site.southPort:null;
+ if(!p)return null;
+ let index=poiSouthPortIndexes.get(p);
+ if(!index){
+  const key=o=>o.x+','+o.z+','+o.y+','+o.type;
+  index={water:new Set((p.water||[]).map(o=>o.x+','+o.z)),props:new Set((p.props||[]).map(key)),key};
+  poiSouthPortIndexes.set(p,index);
+ }
+ return index;
+}
+function poiSouthPortWaterBlocked(x,z,y,cell){
+ return y===0&&!!poiSouthPortIndex(facilitySite)?.water.has(x+','+z)&&cell.some(o=>o.type==='sea');
+}
+function poiSouthPortRecoverPosition(p){
+ if(!p||p.y!==0||!poiSouthPortIndex(facilitySite)?.water.has(p.x+','+p.z)||
+    !world.some(o=>o.x===p.x&&o.z===p.z&&o.y===p.y&&o.type==='sea'))return p;
+ const port=facilitySite.southPort,dist=o=>(p.x-o.x)**2+(p.z-o.z)**2;
+ const dry=[...(port.dock?.route||[]),...(port.approach||[])].filter(o=>o.y===0).sort((a,b)=>dist(a)-dist(b));
+ const prior=poiWalkLevel;
+ try{
+  poiWalkLevel=0;
+  const safe=dry.find(o=>poiWalkCanStep(o.x,o.z));
+  return safe?{...p,x:safe.x,z:safe.z}:p;
+ }finally{poiWalkLevel=prior}
+}
+function poiFacilityLocalMember(o){
+ // Grade is the shared world mesh. Only the explicitly authored port
+ // props are keyed into this local batch; unrelated legacy objects and
+ // all world/export records are unchanged.
+ const index=poiSouthPortIndex(facilitySite);
+ return !!index?.props.has(index.key(o));
+}
+function facilityLocalSceneStatus(){
+ const s=poiFacilityLocalScene;
+ return {active:s?.id??null,vertices:s?.mesh.count??0,builds:poiFacilityLocalBuilds,draws:poiFacilityLocalDraws};
+}
+function facilityClearLocalScene(){
+ if(!poiFacilityLocalScene)return;
+ gl.deleteBuffer(poiFacilityLocalScene.mesh.buf);
+ poiFacilityLocalScene=null;
+}
+function facilityDrawLocalScene(vp){
+ const overview=(typeof pineAIActive!=='undefined'&&pineAIActive)||(typeof cameraTopDown!=='undefined'&&cameraTopDown);
+ const inspect=overview&&poiWalkActive&&poiWalkLevel===0&&facilitySite?.id==='base'&&!!facilitySite.southPort;
+ const loaded=poiFacilityLocalScene;
+ if(loaded&&(loaded.world!==world||loaded.site!==facilitySite||!inspect&&!poiSouthPortNear(17)))facilityClearLocalScene();
+ if(!poiFacilityLocalScene&&(inspect||poiSouthPortNear(13))){
+  // Only this filter runs at the threshold, not every frame. makeScene's
+  // local context skips the full-map ground bake/shadow cache and offers
+  // the same wall/roof/object geometry using only this bounded batch.
+  const objects=world.filter(poiFacilityLocalMember);
+  if(!objects.length)return;
+  poiFacilityLocalBuild=objects;
+  try{
+   poiFacilityLocalScene={id:'southPort',mesh:makeScene(),world,site:facilitySite};
+   poiFacilityLocalBuilds++;
+  }finally{poiFacilityLocalBuild=null}
+ }
+ const m=poiFacilityLocalScene?.mesh;
+ if(m?.count){draw(m,vp);poiFacilityLocalDraws++}
+}
+// END FACILITY LOCAL SCENE
+
 function facilityRenderScene(){
  const cut=facilityVisibilityOwner(),floorKey=facilitySite.id==='guildsaved'?poiWalkLevel:facilitySite.id==='guildrenewal'?poiWalkLevel:0;
  const townGuildCut=cut!==null&&facilitySite.buildings[cut]?.id==='townGuild';
@@ -26833,6 +27214,7 @@ function facilityDrawRoofs(vp){
  }
 }
 function facilityInvalidateScenes(){
+ if(typeof facilityClearLocalScene==='function')facilityClearLocalScene();
  facilityWatchtowerCameraWalls=null;
  facilityEntranceGuides=null;
  facilityGradeInvalidate();
@@ -26957,6 +27339,7 @@ function facilityBoot(resume,playOnOpen=false){
   if(!facilityLeaving&&JSON.stringify(data())!==facilityInitialMap){e.preventDefault();e.returnValue='';}
  });
  if(facilityParams.get('test')==='1')window.__editorTest={
+  localSceneStatus:()=>facilityLocalSceneStatus(),
   freeMovementPose:()=>({x:poiWalkViewX,z:poiWalkViewZ,level:poiWalkLevel}),
   activeMonsterWorldPoses:()=>[...poiMonsterStates].filter(([o,v])=>v.hp>0&&o.y===poiWalkLevel)
    .map(([o,v])=>({type:o.type,x:v.x,z:v.z,wild:!!v.wildSpawn,moving:!!v.actorFree,pose:poiMonsterPose(o,v,performance.now())})),

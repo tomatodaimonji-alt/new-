@@ -17,7 +17,9 @@ test('the pictured Game World facade board is omitted from normal and cached ful
  const visible=visibility({...site,id:'base'});
  assert.equal(visible(authored[0]),false);
  assert.equal(visible(authored[0],null),false,'full surface uses the same predicate');
- assert.match(h,/world\.filter\(o=>\{\s*if\(facilitySite&&!facilityObjectVisible\(o,cut\)\)return false/);
+ const sceneStart=h.indexOf('(localBatch||world).filter(o=>{');
+ const sceneEnd=h.indexOf('if(facilitySite&&!facilityObjectVisible(o,cut))return false;',sceneStart);
+ assert.ok(sceneStart>=0&&sceneEnd>sceneStart&&sceneEnd-sceneStart<420,'shared and local scene paths retain the same visibility predicate');
  assert.match(h,/!groups\.has\(o\.type\)\|\|\(facilitySite&&!facilityObjectVisible\(o\)\)/,'label overlay uses the same predicate');
 });
 test('same frontage door, other signs, sample guild and guild name stay intact',()=>{
@@ -32,3 +34,4 @@ test('same frontage door, other signs, sample guild and guild name stay intact',
  assert.equal(visibility({id:'guildsaved',buildings:[]})(sign),true);
  assert(sample().world.some(o=>o.x===14&&o.z===20&&o.type==='guildFacadeSign'));
 });
+

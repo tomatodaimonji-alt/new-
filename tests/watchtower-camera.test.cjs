@@ -45,5 +45,7 @@ test('edit invalidation, other routes, and the rest of the base are not clipped'
  assert.equal(run('base',-1,false,null),'tower','distant B1 sections retain their existing branch');
  assert.equal(run('base',-1,true,'chapel'),'tower','other realm remains on its previous route');
  assert.equal(run('kitchen',-1,true,null),'tower','standalone sessions retain their previous route');
- assert.match(html,/function facilityInvalidateScenes\(\)\{\s*facilityWatchtowerCameraWalls=null/);
+ const invalidate=html.indexOf('function facilityInvalidateScenes(){');
+ assert.ok(invalidate>=0&&html.slice(invalidate,invalidate+240).includes('facilityWatchtowerCameraWalls=null;'),'global edits still invalidate watchtower wall geometry');
 });
+

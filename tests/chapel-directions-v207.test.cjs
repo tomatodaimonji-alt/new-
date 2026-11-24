@@ -1,12 +1,33 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),{test}=require('node:test');
 const h=fs.readFileSync(process.env.QA_HTML||'world-editor.html','utf8');
 const slice=(a,b)=>{const i=h.indexOf(a),j=h.indexOf(b,i+1);assert.ok(i>=0&&j>i,'features present');return h.slice(i,j)};
+function talk(id,port){
+ const actor={role:{id}}, d={actor,sleeping:false,rows:[{id:'talk'}],topicIndex:0};
+ const c={poiTownDialogue:d,facilitySite:{id:'base',southPort:port},poiTownDialogueTarget:()=>actor,
+  poiNpcMenuRender:()=>{},poiShopSync:()=>{}};
+ vm.createContext(c);
+ vm.runInContext(slice('const POI_NPC_EXTRA_SPEECH=','const POI_NPC_MENU_LABELS=')+
+  (h.includes('function poiPortMarekTopic(')?slice('function poiPortMarekTopic(','// END SOUTH PORT RESIDENTS'):'')+
+  slice('function poiNpcMenuChoose(','// A flexible greeting'),c);
+ return ()=>{assert.equal(c.poiNpcMenuChoose('talk',100),true);assert.equal(d.topic,d.text);return d.text};
+}
 test('first explicit innkeeper Talk points from east gate through ruins and distinguishes slow wet and dry west',()=>{
- const c={};vm.createContext(c);
- const {innkeeper}=vm.runInContext(slice('const POI_NPC_EXTRA_SPEECH=','const POI_NPC_MENU_LABELS=')+'\nPOI_NPC_EXTRA_SPEECH',c);
- assert.match(innkeeper[0],/東門.*川下.*崩れた石壁.*階段/);
- assert.match(innkeeper[0],/西.*濡れず.*まっすぐ.*浅瀬.*足/);
- assert.match(h,/topics\[\(d.topicIndex\+\+\)%topics.length\]/);
+ const next=talk('innkeeper',{name:'潮待ちの港',entrance:{x:91,z:123,y:0}});
+ const first=next();
+ assert.match(first,/東門.*川下.*崩れた石壁.*階段/);
+ assert.match(first,/西.*濡れず.*まっすぐ.*浅瀬.*足/);
+ assert(!next().includes('潮待ちの港'),'only Marek gives the optional clue');
+ assert(!next().includes('潮待ちの港'));
+ assert.equal(next(),first,'same original innkeeper topic cycle');
+});
+test('only Marek receives one extra route topic, with his first two unaffected',()=>{
+ const topics=talk('southmerchant',{name:'潮待ちの港',entrance:{x:91,z:123,y:0}}),
+       original=talk('southmerchant',null);
+ const first=original();assert.match(first,/店の裏は荷ほどき場/);assert.equal(topics(),first);
+ const second=original();assert.match(second,/向かいの宿/);assert.equal(topics(),second);
+ if(h.includes('function poiPortMarekTopic('))
+  assert.match(topics(),/南.*西.*潮待ちの港/);
+ assert.equal(topics(),first);assert.equal(original(),first);
 });
 test('waymark reads only exact live Surface stone from adjacent facing, never through a modal',()=>{
  const sign={x:119,z:84,y:0,type:'ruinStonePost'};

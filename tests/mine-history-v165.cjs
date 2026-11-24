@@ -12,7 +12,25 @@ function beforeMineDepths(world){
   [5799,121,50,'stonewall'],[5828,115,57,'mosswall']])restored.splice(i,0,{x,z,y:-1,type,rot:0});
  return restored;
 }
+// Drop only the authored southern-port suffix; the whole live v261 input
+// before it (world order, map size, building and encounter metadata) is fixed.
+function beforeSouthPort(site){
+ if(!site.southPort)return site;
+ const {southPort,...historical}=site;
+ const {index,count}=southPort.authored;
+ assert.equal(index,8473,'port starts after the entire v261 world');
+ assert(Number.isInteger(count)&&count>0&&index+count===site.map.world.length,'port records are the exact final world suffix');
+ const world=site.map.world.slice(0,index);
+ const prior={...historical,map:{...site.map,world}};
+ const digest=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
+ assert.equal(digest(world),
+  '49466e43ba72fa3d8ce839bbbd5083a37d086e3542c4a103426b883aff3027c2','v261 world is unchanged before the port');
+ assert.equal(digest(prior),
+  'ae7ebaaf64266ed5cf398afa0027f1720fe1869e01ca6c9aa46ed2faabfbcfdf','v261 full site is unchanged except the appended port');
+ return prior;
+}
 function beforeNorthFort(site){
+ site=beforeSouthPort(site);
  if(!site.northFort)return site;
  const {northFort,...historical}=site;
  const {scoutCamp,...northTrail}=site.northTrail;
@@ -194,4 +212,4 @@ function beforeAbandonedMine(site){
  assert.equal(digest,exactMine,'only the exact v167 mine records are exempt; untouched v166 mine records are pinned separately');
  return {...other,map:{...map,world:world.slice(0,oldLength)}};
 }
-module.exports={beforeNorthFort,beforeSouthTown,beforeSouthCreek,beforeMineLongApproach,beforeSouthRoad,beforeArtisanPlant,beforeChapelApproach,beforeMinePrep,beforeChapelWest,beforeAbandonedMine,beforeMineDepths,beforeOtherworld,beforeMineEntry,beforeChapel,beforeArmedEncounters,beforeNorthTrail,beforeForestWatchPost,beforePondMarsh,beforeWayfarer,beforeOtherworldDepths};
+module.exports={beforeSouthPort,beforeNorthFort,beforeSouthTown,beforeSouthCreek,beforeMineLongApproach,beforeSouthRoad,beforeArtisanPlant,beforeChapelApproach,beforeMinePrep,beforeChapelWest,beforeAbandonedMine,beforeMineDepths,beforeOtherworld,beforeMineEntry,beforeChapel,beforeArmedEncounters,beforeNorthTrail,beforeForestWatchPost,beforePondMarsh,beforeWayfarer,beforeOtherworldDepths};
