@@ -86,7 +86,7 @@ try{
  const cdp=await c.newCDPSession(p),box=await p.locator('#poiAnalogPad').boundingBox();assert(box);
  const x=box.x+box.width*.45,y=box.y+box.height*.5,id=71;
  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y,id}]});
- await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:y+42,id}]});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:y-42,id}]});
  try{await p.waitForFunction(()=>window.__editorTest.outdoorQA.z()>=129,null,{timeout:10000,polling:80})}
  finally{await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]})}
  last=await sample();assert(last.z>=129);assert.equal(last.err,0);

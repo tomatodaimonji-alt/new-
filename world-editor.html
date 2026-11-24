@@ -33314,6 +33314,7 @@ uniform vec4 uSacredEdge;
 uniform float uSacredTempleHide;
 uniform vec3 uStreamPropReveal;
 uniform vec4 uOutdoorSight;
+uniform vec4 uSharedCanopy;
 uniform vec3 uSacredColor;
 uniform vec4 uLootHighlight;
 uniform OCCP vec4 uOcclusionShape;
@@ -33385,12 +33386,18 @@ void main(){
   float veil=uSacredEdge.w*parcel*smoothstep(11.0,41.0,distanceToPlayer);
   color=mix(color,uSacredEdge.xyz,veil);
  }
+ if(uSharedCanopy.w>0.0){
+  float d=length(vLootXZ-uSharedCanopy.xy);
+  float weight=.44*smoothstep(uSharedCanopy.z,24.0,d)+.33*smoothstep(30.0,42.0,d)+.23*smoothstep(45.0,uSharedCanopy.w,d);
+  // Keep silhouettes opaque; soften contrast rather than hide navigation.
+  color=mix(color,vec3(.48,.56,.58)*uTownDaylight,.14*weight);
+ }
  gl_FragColor=vec4(color,1.0);
 }`;
 function sh(t,src){const s=gl.createShader(t);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s}
 let program;try{program=gl.createProgram();gl.attachShader(program,sh(gl.VERTEX_SHADER,VERT));gl.attachShader(program,sh(gl.FRAGMENT_SHADER,FRAG));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program))}catch(e){window.pineStartup.fail(e);return}
 gl.useProgram(program);gl.enable(gl.DEPTH_TEST);gl.depthMask(true);gl.depthFunc(gl.LESS);gl.clearColor(0,0,0,0);const loc={p:gl.getAttribLocation(program,'aPos'),n:gl.getAttribLocation(program,'aNorm'),c:gl.getAttribLocation(program,'aCol'),mvp:gl.getUniformLocation(program,'uMVP'),
- daylight:gl.getUniformLocation(program,'uTownDaylight'),lootHighlight:gl.getUniformLocation(program,'uLootHighlight'),occlusionShape:gl.getUniformLocation(program,'uOcclusionShape'),occlusionInfo:gl.getUniformLocation(program,'uOcclusionInfo'),hitFlash:gl.getUniformLocation(program,'uHitFlash'),sacredFog:gl.getUniformLocation(program,'uSacredFog'),sacredEdge:gl.getUniformLocation(program,'uSacredEdge'),streamPropReveal:gl.getUniformLocation(program,'uStreamPropReveal'),outdoorSight:gl.getUniformLocation(program,'uOutdoorSight'),sacredTempleHide:gl.getUniformLocation(program,'uSacredTempleHide'),sacredColor:gl.getUniformLocation(program,'uSacredColor')};
+ daylight:gl.getUniformLocation(program,'uTownDaylight'),lootHighlight:gl.getUniformLocation(program,'uLootHighlight'),occlusionShape:gl.getUniformLocation(program,'uOcclusionShape'),occlusionInfo:gl.getUniformLocation(program,'uOcclusionInfo'),hitFlash:gl.getUniformLocation(program,'uHitFlash'),sacredFog:gl.getUniformLocation(program,'uSacredFog'),sacredEdge:gl.getUniformLocation(program,'uSacredEdge'),streamPropReveal:gl.getUniformLocation(program,'uStreamPropReveal'),outdoorSight:gl.getUniformLocation(program,'uOutdoorSight'),sharedCanopy:gl.getUniformLocation(program,'uSharedCanopy'),sacredTempleHide:gl.getUniformLocation(program,'uSacredTempleHide'),sacredColor:gl.getUniformLocation(program,'uSacredColor')};
 try{initSignProgram()}catch(e){console.warn('2D sign textures unavailable',e)}
 function mult(a,b){const c=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++)for(let k=0;k<4;k++)c[j*4+i]+=a[k*4+i]*b[j*4+k];return c}
 function ortho(l,r,b,t,n,f){return new Float32Array([2/(r-l),0,0,0,0,2/(t-b),0,0,0,0,-2/(f-n),0,-(r+l)/(r-l),-(t+b)/(t-b),-(f+n)/(f-n),1])}
@@ -40959,6 +40966,20 @@ function poiUniformOutdoorMissing(active,area,stream,covered,key,x,z){
  return !covered.has(key)&&(active!==area||stream||area==='base'&&poiSquareFieldAt(x,z));
 }
 // END UNIFORM OUTDOOR POLICY
+// BEGIN SHARED CANOPY WEIGHT
+const POI_SHARED_CANOPY=POI_UNIFORM_OUTDOOR;
+const POI_SHARED_CANOPY_NEAR=18,POI_SHARED_CANOPY_SOFT=48;
+function poiSharedCanopyBand(){return [POI_SHARED_CANOPY_NEAR,POI_SHARED_CANOPY_SOFT]}
+function poiSharedCanopyMember(site,o){
+ return o.y===0&&/^tree(?:Oak|Pine|Cedar|Birch|Willow)$/.test(o.type)&&
+  (site.id==='snowpass'||site.id==='base'&&poiSacredForestMember(o,site));
+}
+function poiSharedCanopyDraw(x,z,draw){
+ if(!POI_UNIFORM_OUTDOOR||!poiOutdoorFrame)return draw();
+ gl.uniform4f(loc.sharedCanopy,x,z,POI_SHARED_CANOPY_NEAR,POI_SHARED_CANOPY_SOFT);
+ try{draw()}finally{gl.uniform4f(loc.sharedCanopy,0,0,0,0)}
+}
+// END SHARED CANOPY WEIGHT
 // BEGIN OUTDOOR GEOGRAPHY LOD
 const POI_OUTDOOR_FAR_OUT=48;
 const POI_OUTDOOR_FAR_PEAK=768*1024,POI_OUTDOOR_FAR_SLOTS=160;
@@ -41087,15 +41108,17 @@ function poiOutdoorMesh(q){
    if(below<h)terrainSide(m,x,z,h,below,side);
   }
  }
- const ground=m.p.length/3,objects=q.uniformGroundOnly?[]:a.props.get(q.i+','+q.j)||[];
+ const ground=m.p.length/3,objects=(a.props.get(q.i+','+q.j)||[]).filter(o=>
+  !q.uniformGroundOnly||!q.uniformExtra&&poiSharedCanopyMember(a.layout,o));
  const drawLandmark=o=>{
   const h=(a.terrain.get(o.x+','+o.z)||0)*TERRAIN_STEP;
   if(/^tree/.test(o.type))poiOutdoorCrown(m,a,o,h);
   else deco(m,o.type,o.x+.5,h,o.z+.5,o.rot||0);
  };
- for(const o of objects)if(poiOutdoorLocalCanopy(a,o))drawLandmark(o);
+ const isCanopy=o=>POI_SHARED_CANOPY?poiSharedCanopyMember(a.layout,o):poiOutdoorLocalCanopy(a,o);
+ for(const o of objects)if(isCanopy(o))drawLandmark(o);
  const canopy=m.p.length/3;
- for(const o of objects)if(!poiOutdoorLocalCanopy(a,o))drawLandmark(o);
+ for(const o of objects)if(!isCanopy(o))drawLandmark(o);
  let x0=q.x0,x1=q.x1,z0=q.z0,z1=q.z1,y0=-.02,y1=hi;
  for(let i=0;i<m.p.length;i+=3){
   const [x,y,z]=[m.p[i],m.p[i+1],m.p[i+2]];
@@ -41193,7 +41216,9 @@ function poiOutdoorLate(vp,stream){
    const propEnd=n?e.ground:e.gpu.count;
    if(propEnd>e.ground){
     poiOutdoorSet(x+.5,z+.5,3);
-    draw(e.gpu,cam(q),e.ground,propEnd-e.ground);
+    const split=POI_SHARED_CANOPY?Math.min(propEnd,e.canopy):e.ground;
+    if(split>e.ground)poiSharedCanopyDraw(x+.5,z+.5,()=>draw(e.gpu,cam(q),e.ground,split-e.ground));
+    if(propEnd>split)draw(e.gpu,cam(q),split,propEnd-split);
    }
    if(!groundBuilt||propEnd>e.ground)poiOutdoorProbe.drawn.push({key:q.key,ground:groundBuilt?0:e.ground,props:propEnd-e.ground,backing:!!q.uniformGroundOnly});
   }
@@ -41209,16 +41234,23 @@ function poiStreamPropOpacity(now,born){
 }
 function poiStreamPropDraw(m,vp,x,z,now){
  const opacity=poiStreamPropOpacity(now,m.revealBorn??-Infinity),first=m.propsFirst??0;
- if(!(opacity<1)||first>=m.count){draw(m,vp);return}
+ const canopy=POI_SHARED_CANOPY?m.canopyFirst:undefined;
+ const painted=Number.isInteger(canopy)&&canopy>=first&&canopy<m.count;
+ const fading=opacity<1&&first<m.count;
+ if(!painted&&!fading){draw(m,vp);return}
  if(first)draw(m,vp,0,first);
- gl.uniform3f(loc.streamPropReveal,x,z,1-opacity);
- try{draw(m,vp,first,m.count-first)}
+ if(fading)gl.uniform3f(loc.streamPropReveal,x,z,1-opacity);
+ try{
+  if(!painted){draw(m,vp,first,m.count-first);return}
+  if(canopy>first)draw(m,vp,first,canopy-first);
+  poiSharedCanopyDraw(x,z,()=>draw(m,vp,canopy,m.count-canopy));
+ }
  finally{gl.uniform3f(loc.streamPropReveal,0,0,0)}
 }
 // END STREAM PROP REVEAL
 function* poiOverlandChunkRows(q,region){
  const m=mesh(),{floors}=region.index,id=q.i+','+q.j;
- const groundRows=new Uint8Array(8);
+ const groundRows=new Uint8Array(8),canopy=POI_SHARED_CANOPY?mesh():null;
  const height=(x,z)=>region.terrain.get(x+','+z)||0;
  const local=facilitySite?.id===region.id,offset=region.id==='base'?(local?facilitySite.townOffset:22)||0:0;
  const ambient=region.id==='base'?(x,z)=>pineEastGroundColor(x,z,floors,offset):null;
@@ -41257,6 +41289,10 @@ function* poiOverlandChunkRows(q,region){
    const sides=wallFaceState(o,region.walls);
    wallBlock(m,t,o.x+.5,y,o.z+.5,o.rot||0,sides.visible,sides.exterior);
   }
+  else if(canopy&&poiSharedCanopyMember(region.layout,o)){
+   if(poiSacredForestMember(o,region.layout))poiSacredTreeGeometry(canopy,o,height(o.x,o.z)*TERRAIN_STEP,region.layout);
+   else if(!local||!pineDrawBaseTree(canopy,o)&&!pineDrawEastNature(canopy,o))deco(canopy,t,o.x+.5,y,o.z+.5,o.rot||0);
+  }
   else if(typeof poiSacredForestMember==='function'&&poiSacredForestMember(o,region.layout))
    poiSacredTreeGeometry(m,o,height(o.x,o.z)*TERRAIN_STEP,region.layout);
   else if(!local||!pineDrawBaseTree(m,o)&&!pineDrawEastNature(m,o))deco(m,t,o.x+.5,y,o.z+.5,o.rot||0);
@@ -41266,13 +41302,14 @@ function* poiOverlandChunkRows(q,region){
   if(!local||!pineGuildFantasyRoof(m,group))residentialRoofGeometry(m,group,region.roofLookup,true);
   yield;
  }
+ if(canopy?.p.length){m.canopyFirst=m.p.length/3;shiftMesh(m,canopy,0)}
  return m;
 }
 function poiOverlandUpload(q,m){
  const bytes=m.p.length*12,held=[...poiOverlandMeshes.values()].reduce((n,m)=>n+m.bytes,0);
  if(!bytes||held+bytes>POI_OVERLAND_GPU_LIMIT)return false;
  if(typeof poiOutdoorTrimForDetailed==='function')poiOutdoorTrimForDetailed(bytes,held);
- const r=upload(m);r.bytes=bytes;r.propsFirst=m.propsFirst;r.groundRows=m.groundRows;
+ const r=upload(m);r.bytes=bytes;r.propsFirst=m.propsFirst;r.groundRows=m.groundRows;r.canopyFirst=m.canopyFirst;
  r.revealBorn=poiOverlandEngaged?performance.now():-Infinity;
  let x0=Infinity,y0=Infinity,z0=Infinity,x1=-Infinity,y1=-Infinity,z1=-Infinity;
  for(let i=0;i<m.p.length;i+=3){
@@ -42946,7 +42983,7 @@ function poiSacredDrawScene(vp){
   if(!gpu){
    const m=mesh();
    for(const o of b.objects)poiSacredTreeGeometry(m,o);
-   gpu=upload(m);gpu.revealBorn=inspect?-Infinity:performance.now();
+   gpu=upload(m);if(POI_SHARED_CANOPY)gpu.canopyFirst=0;gpu.revealBorn=inspect?-Infinity:performance.now();
    loaded.set(k,gpu);poiSacredBuilds++;
   }
   if(inspect)draw(gpu,vp);
