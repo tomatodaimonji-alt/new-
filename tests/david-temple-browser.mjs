@@ -51,13 +51,14 @@ let fixture=insert(html,anchor,`
     return {pos:[poiWalkX,poiWalkZ,poiWalkLevel],url:location.href,
      status:$('pineStartupCover').dataset.state,opens:f.coverShows,travel:poiDungeonEntranceSerial,step:poiWalkNextReady,
      now:performance.now(),hp:poiPlayerHP,scene:facilityViewLevel()<0?'cellar':'surface',
-     draw:f.last,cue:f.cue,contacts:f.contacts,timing:f.timing,statue:id?{x:s.x,z:s.z,hp:s.hp,d:s.david??null,pose:poiDavidPose(s,performance.now())}:null};
+     draw:f.last,cue:f.cue,contacts:f.contacts,timing:f.timing,canceled:f.canceled,statue:id?{x:s.x,z:s.z,hp:s.hp,d:s.david??null,pose:poiDavidPose(s,performance.now())}:null};
    }
   },`);
 fixture=insert(fixture,'function render(){','\n window.__davidFrames?.next();');
 fixture=insert(fixture,' if(!poiDavidCue){','window.__davidFrames.cue.builds++;window.__davidFrames.cue.byStart[q.start]=(window.__davidFrames.cue.byStart[q.start]||0)+1;');
 fixture=insert(fixture,' const priorHP=poiPlayerHP;',"\n if(obj.type==='monsterStoneDavid')window.__davidFrames.contacts.push({start:poiDavidActive?.s?.david?.attack?.start,raw,amount,now,hp:Math.max(0,priorHP-amount)});");
 fixture=insert(fixture,'   const i=q.cursor++,late=now-q.hits[i];',"\n   { const impact=window.__davidFrames; (impact.timing[q.start]??=[]).push({i,late:now-q.hits[i],inside:poiDavidArea(q,p),clear:poiDavidLine({x:q.sx,z:q.sz},p,b)}); }");
+fixture=insert(fixture,' if(q&&(poiDavidHidden()||q.interrupted||now-q.lastFrameAt>750)){',"\n  window.__davidFrames.canceled[q.start]={gap:now-q.lastFrameAt,hidden:poiDavidHidden(),interrupted:!!q.interrupted};");
 fixture=insert(fixture,' if(q&&now>=q.until){d.attack=null;poiMonsterMeshDirty=true}',"\n if(window.__davidFrames.onlySelected)return false;");
 fixture=insert(fixture,'draw(poiDavidCue.lane,vp)',';window.__davidFrames.cue.lane++;');
 fixture=insert(fixture,'draw(poiDavidCue.beam,vp)',';window.__davidFrames.cue.beam++;');
@@ -75,7 +76,7 @@ await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',resolve).once('e
 const url='http://127.0.0.1:'+server.address().port;
 const install=()=>{
  let frame=0,draws=0,vertices=0;
- const summary=window.__davidFrames={coverShows:0,cue:{lane:0,beam:0,builds:0,byStart:{}},contacts:[],timing:{},last:null,next(){
+ const summary=window.__davidFrames={coverShows:0,cue:{lane:0,beam:0,builds:0,byStart:{}},contacts:[],timing:{},canceled:{},last:null,next(){
   if(frame>0)this.last={frame,draws,vertices};frame++;draws=0;vertices=0;
  }};
  for(const Proto of [globalThis.WebGLRenderingContext?.prototype,globalThis.WebGL2RenderingContext?.prototype].filter(Boolean)){
@@ -174,31 +175,42 @@ try{
  try{
   for(const kind of ['sweep','double','stomp','beam']){
    checkpoint='genuine '+kind+' live pose and contact';
-   const t=await battle.p.evaluate(kind=>window.__editorTest.davidQA.prepare(kind),kind);
-   assert(t,kind+' test selects through the real boss commit entry');
-   const pre=await qa(battle.p);
-   assert.equal(pre.statue.d.attack.kind,kind);
-   assert.equal(pre.statue.d.attack.start,t);
-   assert.equal(pre.statue.d.attack.hits.length,kind==='double'?2:1);
-   assert.equal(pre.hp,100,'no anticipation damage on selected '+kind);
-   await wait(battle.p,kind=>{
-    const r=window.__editorTest.davidQA.state();
-    return r.statue?.pose?.kind===kind&&r.statue.pose.phase!=='dormant'&&r.draw?.draws>0;
-   },kind);
-   await wait(battle.p,({kind,cue})=>{const r=window.__editorTest.davidQA.state();
-    return r.statue?.pose?.kind===kind&&r.cue.lane>cue.lane;}, {kind,cue:pre.cue});
-   const raw={sweep:[30],double:[28,35],stomp:[39],beam:[47]}[kind];
-   await wait(battle.p,({start,hits})=>window.__editorTest.davidQA.state().contacts.filter(a=>a.start===start).length>=hits,{start:t,hits:raw.length});
-   const hit=await qa(battle.p),contacts=hit.contacts.filter(a=>a.start===t);
-   assert.deepEqual(contacts.map(a=>a.raw),raw,kind+' commits each authored damage exactly once');
-   assert(hit.hp<100&&hit.hp>0,kind+' one window is threatening but survivable');
-   if(kind==='double')assert(contacts[1].now-contacts[0].now>=319.999,'live double hits never bunch under frame lag');
-   assert.equal(hit.hp,100-contacts.reduce((n,a)=>n+a.amount,0),'real starter armor remains in the damage path');
-   assert.equal(hit.cue.byStart[t],1,'cue mesh is cached for the exact committed '+kind);
-   if(kind==='beam')await wait(battle.p,n=>window.__editorTest.davidQA.state().cue.beam>n,pre.cue.beam);
-   else assert.equal(hit.cue.beam,pre.cue.beam);
-   if(screenshots)await battle.p.screenshot({path:screenshots+'/david-temple-'+kind+'-contact.png'});
+   let passed=false;
+   for(let attempt=0;attempt<4&&!passed;attempt++){
+    const t=await battle.p.evaluate(kind=>window.__editorTest.davidQA.prepare(kind),kind);
+    assert(t,kind+' test selects through the real boss commit entry');
+    const pre=await qa(battle.p);
+    assert.equal(pre.statue.d.attack.kind,kind);
+    assert.equal(pre.statue.d.attack.start,t);
+    assert.equal(pre.statue.pose.kind,kind);assert.equal(pre.statue.pose.phase,"windup");
+    assert.equal(pre.statue.d.attack.hits.length,kind==='double'?2:1);
+    assert.equal(pre.hp,100,'no anticipation damage on selected '+kind);
+    const raw={sweep:[30],double:[28,35],stomp:[39],beam:[47]}[kind];
+    await wait(battle.p,({start,hits})=>{
+     const v=window.__editorTest.davidQA.state();
+     return v.canceled[start]||v.contacts.filter(a=>a.start===start).length>=hits;
+    },{start:t,hits:raw.length});
+    const hit=await qa(battle.p),contacts=hit.contacts.filter(a=>a.start===t);
+    if(contacts.length<raw.length&&hit.canceled[t]){
+     const reason=hit.canceled[t];
+     assert(reason.gap>750&&!reason.hidden&&!reason.interrupted,'only measured foreground CI render starvation warrants retry');
+     console.log('Retry',kind,'after measured frame discontinuity',reason.gap,'ms');
+     continue;
+    }
+    assert.deepEqual(contacts.map(a=>a.raw),raw,kind+' commits each authored damage exactly once');
+    assert(hit.hp<100&&hit.hp>0,kind+' one window is threatening but survivable');
+    if(kind==='double')assert(contacts[1].now-contacts[0].now>=319.999,'live double hits never bunch under frame lag');
+    assert.equal(hit.hp,100-contacts.reduce((n,a)=>n+a.amount,0),'real starter armor remains in the damage path');
+    assert.equal(hit.cue.byStart[t],1,'cue mesh is cached for the exact committed '+kind);
+    assert(hit.cue.lane>pre.cue.lane&&hit.draw.draws>0,'actual WebGL floor cue drawn');
+    if(kind==='beam')await wait(battle.p,n=>window.__editorTest.davidQA.state().cue.beam>n,pre.cue.beam);
+    else assert.equal(hit.cue.beam,pre.cue.beam);
+    console.log(kind,contacts.map(a=>a.raw),hit.hp);
+    passed=true;
+   }
+   assert(passed,'No uninterrupted real native frame sample for '+kind);
   }
+  if(screenshots)await battle.p.screenshot({path:screenshots+'/david-temple-arena.png'});
   assert.deepEqual(battle.errors,[]);
  }catch(e){console.error(checkpoint,JSON.stringify(await qa(battle.p).catch(()=>null)),battle.errors);throw e}
  finally{await battle.ctx.close()}
