@@ -637,6 +637,19 @@ jobs:
            a.equal(visible(vp,[1.2,-.5,-.5,2,.5,.5]),false);
            a.equal(visible(vp,[-2,-.5,-.5,-1.2,.5,.5]),false);
           });
+          test('streamed actors keep every conservatively visible distant model; normal maps are unchanged',()=>{
+           const whole=fs.readFileSync('surface.js','utf8'),take=(a,b)=>whole.slice(whole.indexOf('function '+a+'('),whole.indexOf('function '+b+'('));
+           const ctx={terrainY:()=>0,poiOverlandDrawing:true,poiWalkViewX:0,poiWalkViewZ:0};
+           const visible=vm.runInNewContext(take('poiOverlandActorVisible','poiOverlandNeighborVP')+
+            take('poiOverlandBoxVisible','poiOverlandPresent')+';poiOverlandActorVisible',ctx);
+           const zoomOutVP=[.0125,0,0,0,0,.1,0,0,0,0,.0125,0,0,0,0,1];
+           a.equal(visible(zoomOutVP,50,0,0),true,'long zoom-out still draws a model inside the projection');
+           a.equal(visible(zoomOutVP,81,0,0),true,'clip boundary padding keeps weapon and stride geometry');
+           a.equal(visible(zoomOutVP,85,0,0),false,'outside padded frustum can skip model generation');
+           a.equal(visible(zoomOutVP,0,30,0),true,'nearby actors always stay present');
+           ctx.poiOverlandDrawing=false;
+           a.equal(visible(zoomOutVP,85,0,0),true,'the legacy renderer is not altered');
+          });
           SOURCE
           cat >.spike/tests/snow-ridge-horizon.test.cjs <<'SOURCE'
           const fs=require('node:fs'),vm=require('node:vm'),a=require('node:assert/strict'),{test}=require('node:test');
@@ -1007,7 +1020,7 @@ jobs:
            groundGold:[{id:'pile-qa',x:12,z:2,y:0,amount:2}],drops:[{type:'healingHerb',x:12,z:2,y:0}]});
           function startProbe(){
            const p=WebGLRenderingContext.prototype,s=window.__snowSeamProbe={
-            frames:[],uploads:[],sceneCounts:[],masked:0,high:0,live:0,lost:0,veils:[],thumb:[],samples:[],active:false};
+            frames:[],uploads:[],audio:[],sceneCounts:[],masked:0,high:0,live:0,lost:0,veils:[],thumb:[],samples:[],active:false};
            const shapes=new WeakMap(),current=new WeakMap(),cap=4500;
            for(const [method,wrap] of Object.entries({
             bindBuffer(original,target,buffer){
@@ -1047,6 +1060,13 @@ jobs:
              return r;
             }
            })){const original=p[method];p[method]=function(...args){return wrap.call(this,original,...args)}}
+           const audioClass=globalThis.AudioContext||globalThis.webkitAudioContext;
+           const decode=audioClass?.prototype?.decodeAudioData;
+           if(decode)audioClass.prototype.decodeAudioData=function(bytes,done,fail){
+            const row={at:performance.now(),bytes:bytes.byteLength};if(s.active)s.audio.push(row);
+            const result=decode.call(this,bytes,value=>{row.end=performance.now();if(done)done(value)},fail);
+            return result;
+           };
            addEventListener('webglcontextlost',()=>s.lost++,true);
            for(const event of ['pointerdown','pointerup','pointercancel'])addEventListener(event,e=>{
             if(s.active&&e.pointerType==='touch'&&e.isTrusted)s.thumb.push({event,id:e.pointerId,time:performance.now()});
@@ -1088,14 +1108,15 @@ jobs:
             await ctx.route('**/*',r=>r.request().url().startsWith(origin)?r.continue():(remote.push(r.request().url()),r.abort()));
             await page.addInitScript(startProbe);
             await page.goto(origin+'/seed');
-            await page.evaluate(({coldSnow,initialKit,profile})=>{
+            await page.evaluate(({coldSnow,initialKit,profile,muted})=>{
+             if(muted)localStorage.setItem('world-workshop-audio-v2',JSON.stringify({master:0,bgm:0,se:0}));
              localStorage.setItem('world-workshop-hotbar-v1',initialKit);
              localStorage.setItem('world-workshop-town-clock-v1','{"version":1,"gameMs":330000}');
              localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
               ...(coldSnow?{region:'snowpass',regionHp:78}:{}),
               position:coldSnow?{x:12,z:3,y:0,facing:0}:profile==='away'?{x:54,z:112,y:0,facing:2}:{x:49,z:125,y:0,facing:2},townLayout:5,townMapHeight:128,
               view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:.37,orbitPitch:.24,orbitDistance:5.5}}));
-            },{coldSnow,initialKit,profile});
+            },{coldSnow,initialKit,profile,muted:process.env.SNOW_PROFILE_MUTED==='1'});
             await page.goto(origin+'/?resume=1&test=1'+(process.env.SNOW_SEAM_QUERY??''));
             await page.locator('#pineStartupCover').waitFor({state:'hidden',timeout:20000});
             const get=()=>page.evaluate(()=>window.__editorTest?.seamlessSnowQA());
@@ -1116,7 +1137,7 @@ jobs:
              const bind=id=>({x:Math.round(pad.x+pad.width/2),y:Math.round(pad.y+pad.height/2),id,radiusX:4,radiusY:4,force:.7});
              async function cross(sign,label,id){
               const from=await get(),input=bind(id),dst=sign>0?'snowpass':'base';
-              const start=await page.evaluate(()=>{const s=window.__snowSeamProbe;s.active=true;s.frames=[];s.phases=[];s.switchPhases=[];s.veils=[];s.samples=[];s.uploads=[];s.thumb=[];s.sceneCounts=[];s.masked=0;s.high=s.live;
+              const start=await page.evaluate(()=>{const s=window.__snowSeamProbe;s.active=true;s.frames=[];s.phases=[];s.switchPhases=[];s.audio=[];s.veils=[];s.samples=[];s.uploads=[];s.thumb=[];s.sceneCounts=[];s.masked=0;s.high=s.live;
                return {at:performance.now(),live:s.live};});
               await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[input]});
               await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...input,y:input.y+sign*36}]});
@@ -1141,7 +1162,8 @@ jobs:
               if(process.env.SNOW_PHASE_REPORT){
                const top=(q.phases||[]).toSorted((a,b)=>b.total-a.total).slice(0,5);
                const around=(q.phases||[]).filter((x,i,a)=>i&&x.region!==a[i-1].region).map((x,i)=>x);
-               console.log('Seam CPU phases',JSON.stringify({label,top,around,switches:q.switchPhases}));
+               const slow=Object.assign([],q.frames.slice(1).map((t,i)=>({t,start:q.frames[i],gap:t-q.frames[i]}))).toSorted((a,b)=>b.gap-a.gap).slice(0,3);
+               console.log('Seam CPU phases',JSON.stringify({label,top,around,slow,audio:q.audio,switches:q.switchPhases}));
               }
               assert(sign*(position(end)-position(from))>.6,'global walking crosses the registered world edge');
               if(continued){
@@ -1175,7 +1197,10 @@ jobs:
       - if: matrix.probe == 'seam'
         run: |
           USE_STREAM_DEFAULT=1 node .spike/tests/overland-browser.mjs .spike/world-editor.html
-          SNOW_PHASE_REPORT=1 node .spike/tests/snow-continuous-seam-browser.mjs .spike/world-editor.html
+          gate=0
+          SNOW_PHASE_REPORT=1 node .spike/tests/snow-continuous-seam-browser.mjs .spike/world-editor.html || gate=$?
+          SNOW_PHASE_REPORT=1 SNOW_PROFILE_MUTED=1 SNOW_SEAM_REPORT_ONLY=1 node .spike/tests/snow-continuous-seam-browser.mjs .spike/world-editor.html
+          exit "$gate"
       - if: matrix.probe == 'outlet'
         run: USE_STREAM_DEFAULT=1 node .spike/tests/overland-outlet-browser.mjs .spike/world-editor.html
       - if: matrix.probe == 'visuals'
