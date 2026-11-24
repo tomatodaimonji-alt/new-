@@ -13,6 +13,7 @@ const site=JSON.parse(JSON.stringify(vm.runInNewContext(html.slice(begin,end)+";
 const bow='equipWoodBow',wand='fireWand';
 const cases=[
  {name:'bow-south-hit',type:bow,x:105,z:80,y:0,facing:2,toX:105,toZ:88,range:8,damage:22,target:'monsterSkelArcher'},
+ {name:'bow-south-lethal',type:bow,x:105,z:80,y:0,facing:2,toX:105,toZ:88,range:8,damage:22,target:'monsterSkelArcher',lethal:true},
  {name:'bow-west-miss',type:bow,x:110,z:70,y:0,facing:3,toX:102,toZ:70,range:8,damage:0},
  {name:'flame-east-hit',type:wand,x:97,z:88,y:0,facing:1,toX:105,toZ:88,range:8,damage:34,target:'monsterSkelArcher'}
 ];
@@ -23,18 +24,24 @@ for(const c of cases){
  if(c.target)assert(site.armedEncounters.some(t=>t.type===c.target&&t.y===c.y&&Math.hypot(t.x-c.toX,t.z-c.toZ)===2),c.name+' fixture birth is local but distinct from authored loot anchor');
  assert(!tiles.some(t=>/wall|tree|gate/i.test(t.type)),c.name+' unobstructed authored endpoint');
 }
-if(process.env.RANGED_LAYOUT_ONLY==='1'){
- console.log('PASS v200 authored ranged fixtures and eight-cell native flame weapon profile');
- process.exit(0);
-}
-
 // Expose the production mesh sampler on this disposable HTTP fixture only.
 const hook='  playerWeapon:()=>';
 assert(html.includes(hook)&&html.includes('function poiPlayerProjectileSample('),'integrated renderer must expose a common actual projectile sampler');
 const observedHtml=stableRegionalCombat(html,'monsterSkelArcher')
  .replace("function poiEnemyBeginPlayer(obj,s,now){","function poiEnemyBeginPlayer(obj,s,now){\n if(s.regionalWild&&obj.type==='monsterSkelArcher')return false;")
+ .replace(' poiRecordedFoleyCache.set(id,buffer);return buffer;',
+  ' window.__rangedFoley?.set(buffer,id);poiRecordedFoleyCache.set(id,buffer);return buffer;')
  .replace(hook,`  rangedProjection:()=>poiPlayerWeaponVisual?poiPlayerProjectileSample(poiPlayerWeaponVisual,performance.now()):null,
+  rangedAudioPrepareLethal:()=>{const target=[...poiMonsterStates].find(([id,s])=>id.type==='monsterSkelArcher'&&s.x===105&&s.z===88);
+   if(!target)return false;target[1].hp=21;return true;},
 ${hook}`);
+if(process.env.RANGED_LAYOUT_ONLY==='1'){
+ for(const [,body] of observedHtml.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new vm.Script(body);
+ assert(observedHtml.includes('window.__rangedFoley?.set(buffer,id)'));
+ assert(observedHtml.includes('rangedAudioPrepareLethal:'));
+ console.log('PASS eight-cell authored ranged fixtures and actual sound-spy injection parse');
+ process.exit(0);
+}
 const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_PACKAGE??'playwright');
 const server=createServer((req,res)=>{
  res.setHeader('Content-Type','text/html; charset=utf-8');
@@ -52,6 +59,16 @@ const map=page=>page.evaluate(()=>window.__editorTest.data());
 const stock=page=>page.evaluate(k=>localStorage.getItem(k),kitKey);
 async function launch(browser,c){
  const ctx=await browser.newContext({viewport:{width:390,height:740},deviceScaleFactor:1,isMobile:true,hasTouch:true});
+ await ctx.addInitScript(()=>{
+  const ids=window.__rangedFoley=new WeakMap(),heard=window.__rangedFoleyHeard=[];
+  const start=AudioBufferSourceNode.prototype.start;
+  AudioBufferSourceNode.prototype.start=function(...args){
+   const result=start.apply(this,args),id=ids.get(this.buffer);
+   if(id==='bowDraw'||id==='arrowPenetration'||id==='defeat')
+    heard.push({id,ms:Math.round(this.buffer.duration*1000),rate:this.buffer.sampleRate,channels:this.buffer.numberOfChannels});
+   return result;
+  };
+ });
  const page=await ctx.newPage(),errors=[];
  page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(12000);
  await page.goto(origin+'/seed');
@@ -80,16 +97,17 @@ async function trail(browser,c){
  try{
   const original=await map(page),url=page.url();
   if(c.target)await page.waitForFunction(type=>window.__editorTest.facility().combat.actors.some(t=>t.type===type&&t.level===0),c.target);
+  if(c.lethal)assert(await page.evaluate(()=>window.__editorTest.rangedAudioPrepareLethal()));
   const target=(await state(page)).combat.actors.find(t=>t.type===c.target&&t.level===c.y);
   if(c.target){
-   assert(target?.hp>c.damage);
+   assert(c.lethal?target?.hp===21:target?.hp>c.damage);
    assert.deepEqual([target.x,target.z],[c.toX,c.toZ],c.name+' launches from outside the authored enemy leash');
   }
   if(c.type===bow){
    await page.locator(bar).tap();
    assert.equal((await state(page)).inventory.weapon,bow);
   }
-  const initial=await state(page);
+  const initial=await state(page),audioBefore=await page.evaluate(()=>window.__rangedFoleyHeard.length);
   assert.equal(initial.inventory.hotbar[1].type,c.type);
   // Record the actual render-time projectile object in the page rather than
   // attempting a remote screenshot precisely during the short flight.
@@ -113,7 +131,7 @@ async function trail(browser,c){
    const s=window.__editorTest,view=s.playerWeapon();
    const seen=window.__rangedSamples.some(v=>v.visual?.type===c.type);
    const enemy=c.target&&s.facility().combat.actors.find(t=>t.type===c.target&&t.level===c.y);
-   return seen&&!view.pending&&(!c.target||enemy?.hp===hp-c.damage);
+   return seen&&!view.pending&&(!c.target||enemy?.hp===Math.max(0,hp-c.damage));
   },{c,hp:target?.hp??0},{timeout:9000}).catch(async error=>{
   const failure=await page.evaluate(({type})=>({
    state:window.__editorTest.facility().combat.actors.filter(t=>t.type===type),
@@ -166,6 +184,12 @@ async function trail(browser,c){
    assert.equal(after.inventory.weapon,null,'wand arming does not overwrite the saved equipped-weapon field');
    assert.equal(after.inventory.hotbar[1].charges,4,'one successful attack consumes exactly one charge');
   }
+  const audio=(await page.evaluate(()=>window.__rangedFoleyHeard)).slice(audioBefore);
+  const newArrow=audio.filter(e=>e.id==='arrowPenetration');
+  const expected=c.type===bow&&c.target?1:0;
+  assert.equal(newArrow.length,expected,c.name+' one actual AudioBuffer on body contact, none on flight/miss/wand');
+  if(expected)assert.deepEqual(newArrow[0],{id:'arrowPenetration',ms:110,rate:24000,channels:1});
+  if(c.lethal)assert.deepEqual(audio.map(e=>e.id),['bowDraw','arrowPenetration','defeat']);
   const final=await stock(page);
   assert.equal(JSON.parse(final).gold,12);
   assert.equal(JSON.parse(final).quests,undefined);
@@ -183,8 +207,8 @@ let browser;
 try{
  browser=await chromium.launch({headless:true,
   ...(process.env.CHROMIUM_EXECUTABLE?{executablePath:process.env.CHROMIUM_EXECUTABLE}:{}),
-  args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
+  args:['--autoplay-policy=no-user-gesture-required','--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
  for(const c of cases.filter(c=>!process.env.RANGED_CASE||process.env.RANGED_CASE===c.name))await trail(browser,c);
- console.log('PASS native portrait five-cell directional arrow hit/miss, eight-cell flame hit, and single saved charge');
+ console.log('PASS actual eight-cell arrow hit/miss/kill PCM and unchanged native fire trajectory, saved durability and single charge');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
 

@@ -20,8 +20,7 @@ function shop(){
 test('canonical staffed shop menu opens only from the guest side in base play',()=>{
  const {ctx,ids,clerk}=shop();
  assert.equal(ctx.poiTownDialogueAction(100),true);assert.equal(ctx.poiShopIsOpen(),true);
- assert(!ctx.poiTownDialogueSnapshot().actions.some(r=>r.id==='shop'));
- ctx.poiNpcMenuChoose('request',100);assert(ctx.poiTownDialogueSnapshot().actions.some(r=>r.id==='shop'));
+ assert.deepEqual(Array.from(ctx.poiTownDialogueSnapshot().actions,r=>r.label),['買う','売る','戻る']);
  assert.equal(ids.poiGoldValue.textContent,'9');
  ctx.poiShopClose();clerk.activity='go-home';assert.equal(ctx.poiTownDialogueAction(101),true,'a reachable off-duty resident can still talk');
  ctx.poiNpcMenuChoose('request',101);assert(!ctx.poiTownDialogueSnapshot().actions.some(r=>r.id==='shop'),'off-duty clerk cannot sell fixed shop stock');
@@ -36,7 +35,7 @@ test('canonical staffed shop menu opens only from the guest side in base play',(
 test('only an explicitly confirmed, still-valid 6G shop order invokes purchase',()=>{
  const {ctx,purchases}=shop();
  assert.equal(ctx.poiNpcMenuChoose('confirm',100),false);
- ctx.poiTownDialogueAction(100);ctx.poiNpcMenuChoose('request',100);ctx.poiNpcMenuChoose('shop',101);ctx.poiNpcMenuChoose('trade:shop-herb',102);
+ ctx.poiTownDialogueAction(100);ctx.poiNpcMenuChoose('shop',101);ctx.poiNpcMenuChoose('trade:shop-herb',102);
  assert.match(ctx.poiTownDialogueSnapshot().text,/6G/);assert.equal(purchases(),0);
  ctx.poiNpcMenuChoose('confirm',103);assert.equal(purchases(),1);
  assert.match(ctx.poiTownDialogueSnapshot().text,/薬草を1個買った/);
@@ -46,7 +45,7 @@ test('only an explicitly confirmed, still-valid 6G shop order invokes purchase',
 test('only a successful fixed shop transaction starts the visible sale gesture',()=>{
  const {ctx}=shop(),events=[];
  Object.assign(ctx,{poiTownNpcGesture:(a,k,t)=>events.push([a.role.id,k,t]),poiTownMotionClock:199});
- ctx.poiTownDialogueAction(100);ctx.poiNpcMenuChoose('request',100);ctx.poiNpcMenuChoose('shop',101);ctx.poiNpcMenuChoose('trade:shop-herb',102);ctx.poiNpcMenuChoose('confirm',103);
+ ctx.poiTownDialogueAction(100);ctx.poiNpcMenuChoose('shop',101);ctx.poiNpcMenuChoose('trade:shop-herb',102);ctx.poiNpcMenuChoose('confirm',103);
  assert.deepEqual(events,[['toolkeeper','trade-sell',199]]);
  ctx.poiEconomyBuyPotion=()=>({ok:false,reason:'funds'});
  ctx.poiNpcMenuChoose('trade:shop-herb',104);ctx.poiNpcMenuChoose('confirm',105);

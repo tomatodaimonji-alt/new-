@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
 const html=fs.readFileSync(process.env.HTML||'world-editor.html','utf8');
 function fixture(){
- const actor={role:{id:'toolkeeper',role:'keeper',name:'道具屋',work:{x:5,z:3,y:0}},x:5,z:3,y:0,activity:'work'};
+ const actor={role:{id:'towncook',role:'keeper',name:'料理人',work:{x:5,z:3,y:0}},x:5,z:3,y:0,activity:'work'};
  const spoke=[],ended=[],trades=[],c=vm.createContext({$:()=>null,performance:{now:()=>100},poiTownNpcActive:()=>true,
   poiTownNpcActors:[actor],poiWalkX:5,poiWalkZ:5,poiWalkLevel:0,poiWalkFacing:0,poiMonsterStates:new Map(),
   world:[{x:5,z:4,y:0,type:'counterLuxury',rot:0}],
@@ -20,7 +20,7 @@ test('a real desk opens glass menus, direction wraps, confirmation trades and Ba
  assert.equal(c.poiTownDialogueAction(200),true);assert.equal(actor.facing,2);
  assert.deepEqual(state().actions.map(x=>x.id),['talk','status','request','back']);
  c.poiNpcMenuStep(-1);assert.equal(state().index,3);
- c.poiNpcMenuChoose('request',210);assert.deepEqual(state().actions.map(x=>x.id),['shop','sell','buy','recruit','back']);
+ c.poiNpcMenuChoose('request',210);assert.deepEqual(state().actions.map(x=>x.id),['sell','buy','recruit','back']);
  c.poiNpcMenuChoose('recruit',220);assert.equal(state().text,'今は忙しい');
  c.poiNpcMenuChoose('buy',230);c.poiNpcMenuChoose('trade:h',240);
  assert.equal(trades.length,0);assert(c.poiNpcTradeSessionMatches(actor,'buy'));

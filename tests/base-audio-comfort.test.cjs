@@ -140,9 +140,9 @@ test('indoor steps and material-aware door openings use short distinct cached ef
  assert.deepEqual(b.fx('step','outdoor'),[['filter',490,.225,25],['osc',100,.12,20]]);
  assert.deepEqual(k.fx('step','indoor'),[['filter',670,.29,16],['osc',117,.16,14]]);
  const doorClipMs=(id,old)=>b.run(`Object.hasOwn(POI_RECORDED_FOLEY,'${id}')?Math.round(poiRecordedFoley('${id}').duration*1000):${old}`);
- assert.deepEqual(b.fx('door-open','wood'),[['buffer',doorClipMs('doorOpen',285),.64,0]]);
+ assert.deepEqual(b.fx('door-open','wood'),[['buffer',doorClipMs('doorOpen',285),.38,0]]);
  assert.deepEqual(b.fx('door-close','wood',true),[['buffer',doorClipMs('doorClose',164),.68,0,24]]);
- assert.deepEqual(b.fx('door-open','stone'),[['buffer',310,.64,0]]);
+ assert.deepEqual(b.fx('door-open','stone'),[['buffer',310,.38,0]]);
  assert.deepEqual(b.fx('door-close','stone',true),[['buffer',180,.68,0,24]]);
  b.run('poiAudioLevels.se=0');assert.deepEqual(b.fx('door-open','stone'),[]);assert.deepEqual(b.fx('door-close','wood'),[]);assert.deepEqual(b.fx('step','indoor'),[]);
 });

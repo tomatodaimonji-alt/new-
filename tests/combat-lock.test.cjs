@@ -23,6 +23,7 @@ function setup(){
  };
  vm.createContext(c);
  vm.runInContext(cut('// BEGIN ANGULAR COMBAT MATH','// BEGIN PLAYER WEAPON PROFILES')+
+  cut('// BEGIN PLAYER BARE HAND RIG','// END PLAYER BARE HAND RIG')+
   cut('function poiWalkAvatar(','const POI_MONSTER_BREAK_MS='),c);
  const enemy=(dx,dz,y=0)=>{
   const state={x:origin.x+dx,z:origin.z+dz,hp:40};const obj={type:'monsterSlime',x:state.x,z:state.z,y};targets.set(obj,state);return state;

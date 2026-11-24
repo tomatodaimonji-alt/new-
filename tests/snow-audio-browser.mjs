@@ -89,7 +89,7 @@ try{
  },{region,active});
  const set=(id,value)=>page.locator(id).evaluate((e,v)=>{e.value=String(v);e.dispatchEvent(new Event('input',{bubbles:true}))},value);
  await page.locator('#pineStartupCover').waitFor({state:'hidden'});
- const canvas=page.locator('canvas').first();
+ const canvas=page.locator('#view');
  // Real user interaction unlocks WebAudio without moving away from the seam.
  await page.keyboard.press('Shift');if(!(await state())?.audioTime)await canvas.click({position:{x:15,y:110}});
  await area('base','outside');await wait(0);

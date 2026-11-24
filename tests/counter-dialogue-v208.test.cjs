@@ -15,7 +15,7 @@ function setup(id,x,z,facing){
   poiTownNpcNextTile:()=>null,poiTownDialogueMovingTarget:()=>Infinity,
   poiTownPlayerService:()=>id==='innkeeper'?'book':null,poiShopCheckout:()=>id==='toolkeeper'};
  vm.createContext(c);const start=h.includes('function poiTownCounterTalkReachable(')?'function poiTownCounterTalkReachable(':'function poiTownDialogueTarget(';
- vm.runInContext(slice(start,'function poiTownDialogueSnapshot(')+slice('function poiNpcMenuService(','function poiNpcAtWork('),c);
+ vm.runInContext(slice(start,'function poiTownDialogueSnapshot(')+slice('function poiNpcToolshopCounter(','function poiNpcAtWork('),c);
  return {c,actor,world,rebuild};
 }
 test('all five live service counters retain guild/inn/shop talk and enable workshop/dining talk',()=>{

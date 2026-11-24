@@ -125,7 +125,7 @@ async function geometry(page){
    right:q.right,bottom:q.bottom,background:css.backgroundColor}};
   const mini=document.querySelector('#poiMiniHud');
   return {speech:r(p),menu:r(m),stage:r(document.querySelector('#viewWrap')),mini:mini.hidden?null:r(mini),
-   compact:m.hasAttribute('data-compact'),nested:p.contains(m),
+   compact:m.hasAttribute('data-compact'),counterSide:m.hasAttribute('data-counter-side'),nested:p.contains(m),
    dialogs:[...document.querySelectorAll('dialog[open]')].map(d=>d.id),width:innerWidth,height:innerHeight};
  },{speechPanel,market});
 }
@@ -137,7 +137,10 @@ function priorPanel(before,during){
 function aboveLeft(d){
  assert.equal(d.nested,false,'choice panel is independent, not a child of the message card');
  assert(d.menu.w>0&&d.menu.h>0);
- assert(Math.abs(d.menu.x-d.speech.x)<=2,'choice pane starts aligned to the left of the original speech card');
+ if(d.counterSide){
+  assert(d.mini&&d.menu.x>=d.mini.right+3,'counter fallback starts just right of the minimap HUD: '+JSON.stringify(d));
+  assert(d.menu.right<=Math.min(d.width,d.stage.right)-6,'safe right margin retained');
+ }else assert(Math.abs(d.menu.x-d.speech.x)<=2,'choice pane starts aligned to the left of the original speech card');
  assert(d.menu.bottom<=d.speech.y+1&&d.speech.y-d.menu.bottom<=16,'choice pane sits directly above speech, not on top of it');
  assert(d.menu.x>=d.stage.x-1&&d.menu.right<=Math.min(d.width,d.stage.right)+1&&d.menu.y>=Math.max(0,d.stage.y)-1,
   'choice pane fits phone game viewport');
@@ -161,28 +164,40 @@ async function exercise(browser,{width,id,x,z,facing,service}){
   priorPanel(before,root);aboveLeft(root);
   assert.equal(await page.locator(speech).isVisible(),false);
   const actions=await page.locator(choices).evaluateAll(nodes=>nodes.map(e=>e.dataset.npcAction));
-  assert.deepEqual(actions,['talk','status','request','back']);
-  assert.equal(await page.locator(choices+'[aria-current="true"]').getAttribute('data-npc-action'),'talk');
+  assert.deepEqual(actions,service?['shop','sell','back']:['talk','status','request','back']);
+  assert.equal(await page.locator(choices+'[aria-current="true"]').getAttribute('data-npc-action'),service?'shop':'talk');
   const position=(await state(page)).position,attack=(await state(page)).combat.actionAt;
+  if(service){
+   // The direct counter root dismisses on a direction. The blocked east
+   // step faces the actual counter without leaving the customer position.
+   await dpad(page,'e').tap();await page.locator(market).waitFor({state:'hidden'});
+   assert.deepEqual((await state(page)).position,position);
+   await openDialogue(page);
+   assert.equal(await choice(page,'shop').count(),1);
+  }
+  assert.equal((await state(page)).combat.actionAt,attack);
+  await choice(page,service||'request').tap();
+  // v265+ intentionally dismisses root conversations on movement. A
+  // submenu still owns directions without moving and genuinely wraps.
+  const selected=page.locator(choices+'[aria-current="true"]');
+  const first=await selected.getAttribute('data-npc-action');
+  assert.equal(first,service?'trade:shop-herb':'sell');
   await dpad(page,'n').tap();
-  assert.equal(await page.locator(choices+'[aria-current="true"]').getAttribute('data-npc-action'),'back');
+  assert.equal(await selected.getAttribute('data-npc-action'),'back');
   await dpad(page,'s').tap();
-  assert.equal(await page.locator(choices+'[aria-current="true"]').getAttribute('data-npc-action'),'talk');
+  assert.equal(await selected.getAttribute('data-npc-action'),first);
   assert.deepEqual((await state(page)).position,position);
   assert.equal((await state(page)).combat.actionAt,attack);
-  await choice(page,'request').tap();
-  if(service)await choice(page,service).tap();
   const sub=await geometry(page);
   priorPanel(before,sub);aboveLeft(sub);
   if(service&&width===390){
    assert.equal(sub.compact,true,'compact options should fit in the measured phone gap: '+JSON.stringify(sub));
-   assert.ok(sub.menu.y>=sub.mini.bottom+2,'choices must stay below the HUD: '+JSON.stringify(sub));
+   assert.ok(sub.menu.y>=sub.mini.bottom+2||sub.menu.x>=sub.mini.right+3,'choices must not overlap the HUD: '+JSON.stringify(sub));
   }
   assert.equal(await choice(page,service?'trade:shop-herb':'buy').count(),1);
   if(out)await page.screenshot({path:out+'/v176-choices-'+id+'-'+width+'.png'});
   await page.keyboard.press('Escape');
-  if(service)await page.keyboard.press('Escape');
-  assert.equal(await choice(page,'talk').count(),1,'back reopens root rather than closing');
+  assert.equal(await choice(page,service||'talk').count(),1,'back reopens the correct entry menu rather than closing');
   await choice(page,'back').tap();
   await page.locator(market).waitFor({state:'hidden'});
   assert.deepEqual(await readStock(page),stock,'view or dismiss choices does not buy anything');

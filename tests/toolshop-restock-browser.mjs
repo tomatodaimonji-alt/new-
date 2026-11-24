@@ -159,7 +159,7 @@ async function run(browser){
   await worker(page,'toolkeeper');
   await page.locator(action).tap();
   await page.locator(menu).waitFor({state:'visible'});
-  await choice(page,'request').tap();await choice(page,'shop').tap();
+  await choice(page,'shop').tap();
   const row=choice(page,'trade:shop-herb');await row.waitFor({state:'visible'});
   assert.match(await row.innerText(),/薬草\s*6\s*G.*[（(]7[）)]/,'fixed shop shows seven legitimately delivered herbs at old 6G');
   if(out)await page.screenshot({path:out+'/v193-returned-retail-stock.png'});

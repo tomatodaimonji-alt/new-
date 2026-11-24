@@ -108,7 +108,7 @@ test('short space below mini HUD uses paired options without overlapping it',()=
  const css=html.match(/#poiNpcMenu\[data-compact\]\{([^}]+)\}/)?.[1];
  assert.match(css||'',/grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
  const target={setAttribute(){},removeAttribute(){},getBoundingClientRect:()=>({top:215,bottom:243})};
- const attrs={},menu={children:[target],hidden:false,toggleAttribute:(k,v)=>attrs[k]=v,
+ const attrs={},menu={children:[target],hidden:false,removeAttribute:k=>delete attrs[k],toggleAttribute:(k,v)=>attrs[k]=v,
   style:{setProperty:(_k,v)=>attrs.room=v},getBoundingClientRect:()=>({left:8,right:216,width:208,top:215,bottom:247})};
  const stage={getBoundingClientRect:()=>({top:50})},mini={getBoundingClientRect:()=>({left:5,right:106,bottom:204})};
  const c={poiTownDialogue:{index:0},$:k=>({poiNpcMenu:menu,viewWrap:stage,poiMiniHud:mini}[k])};
@@ -123,3 +123,4 @@ test('last choice scrolls into the independent menu instead of moving the speech
  vm.runInNewContext(snippet('function poiNpcMenuMark(','function poiNpcMenuRender('),c);
  c.poiNpcMenuMark();assert.equal(menu.scrollTop,63);
 });
+

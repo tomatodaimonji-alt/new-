@@ -83,7 +83,7 @@ try{
  assert.deepEqual((await recordings()).map(c=>c.ms),[500,270,500,270,180,196,425,425]);
  for(const c of await recordings()){
   assert.equal(c.rate,24000);assert.equal(c.channels,1);
-  if(c.id==='playerSteelSwing')assert.equal(c.level,.47);else if(c.id==='playerSteelCut')assert.equal(c.level,.57);else assert.ok(c.level>.5&&c.level<.8);
+  if(c.id==='doorOpen')assert.equal(c.level,.38);else if(c.id==='doorClose')assert.equal(c.level,.68);else if(c.id==='playerSteelSwing')assert.equal(c.level,.47);else if(c.id==='playerSteelCut')assert.equal(c.level,.57);else assert.ok(c.level>.5&&c.level<.8);
  }
  assert.equal(await page.evaluate(k=>localStorage.getItem(k),kitKey),kit);
  assert.deepEqual(errors,[]);

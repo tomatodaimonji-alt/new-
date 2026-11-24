@@ -100,7 +100,7 @@ async function spend(browser){
   const before=await raw(page),cell=page.locator(slot);
   assert(await cell.evaluate(e=>e.hasAttribute('data-gold-shortcut')));
   assert.equal((await cell.locator('.hotbar-count').innerText()).trim(),'6');
-  await openTalk(page,r);await choose(page,'request');await choose(page,'shop');
+  await openTalk(page,r);await choose(page,'shop');
   assert.match(await page.locator(option('trade:shop-herb')).innerText(),/薬草 6G/);
   await choose(page,'trade:shop-herb');assert.equal(await raw(page),before,'preview must not spend coins');
   await choose(page,'confirm');
