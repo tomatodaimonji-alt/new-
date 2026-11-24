@@ -20,7 +20,7 @@ test('shortcut equips a wand cursor immediately, even with no target, and clears
   poiWorldToScreen:(_,x,y,z)=>{projected.push({x,y,z});return {x:x*20,y:200-y*50}},
   poiAimUnit:(x,z)=>{const len=Math.hypot(x,z);return len?{x:x/len,z:z/len}:null},poiAimWall:()=>()=>true,poiAimWallLimit:(_o,_dir,range)=>Math.min(range,c.wall??Infinity),terrainY:()=>0,facilitySite:null
  };
- const a=vm.runInNewContext('let poiAimMarker=null;\n'+cut('let poiArmedWand=null;','function poiUseBagItem(')+cut('function poiHotbarUse(','function poiCombatActorMake(')+cut('const POI_COMBAT_TORSO_HEIGHT=','// BEGIN PLAYER WEAPON PROFILES')+';({use:poiHotbarUse,draw:poiAimRenderMarker,armed:poiArmedWandIndex})',c);
+ const a=vm.runInNewContext('let poiAimMarker=null;\n'+cut('function poiSacredInteriorHostileVisible(','let poiSacredInteriorVbo')+cut('let poiArmedWand=null;','function poiUseBagItem(')+cut('function poiHotbarUse(','function poiCombatActorMake(')+cut('const POI_COMBAT_TORSO_HEIGHT=','// BEGIN PLAYER WEAPON PROFILES')+';({use:poiHotbarUse,draw:poiAimRenderMarker,armed:poiArmedWandIndex})',c);
  const draw=()=>{projected.length=0;a.draw(1000,null,layer);return projected.at(-1)};
  draw();assert.equal(marker.hidden,true);
  a.use(0);assert.equal(a.armed(),0);

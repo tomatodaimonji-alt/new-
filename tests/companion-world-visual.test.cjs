@@ -20,7 +20,7 @@ test('world gauge follows the sampled identical head pose and current durable li
  const team={site:{id:'base'},x:12,z:9,y:0,fx:11,fz:9,stepAt:100,stepMs:200,id:'slimeSoul',hurtAt:0};
  let kit={companionSoul:{active:'slimeSoul'},slots:[{type:'slimeSoul',durability:36}]};
  const elements=[],layer={append:e=>elements.push(e)},trace=[],ep={x:12.3,y:.6,z:9.5};
- const ctx=vm.createContext({poiCompanionActor:team,poiCompanionSame:()=>true,poiCompanionPlace:()=>team,poiCompanionAllowed:()=>true,
+ const ctx=vm.createContext({poiOverlandDrawing:false,poiCompanionActor:team,poiCompanionSame:()=>true,poiCompanionPlace:()=>team,poiCompanionAllowed:()=>true,
   poiWalkX:12,poiWalkZ:9,poiCompanionMesh:null,poiCompanionMeshKey:'',poiCompanionTemplate:null,
   terrainY:()=>0,poiCompanionPose:()=>({hop:0}),poiMonsterPose:()=>({...ep}),mesh:()=>({p:[],n:[],c:[]}),deco:m=>{m.p.push(0,0,0);m.n.push(0,1,0);m.c.push(.26,.73,.88)},
   rot2:(x,z)=>[x,z],upload:(m,buf)=>({buf:buf??{},count:m.p.length/3}),gl:{DYNAMIC_DRAW:1},draw(){},
