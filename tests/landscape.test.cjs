@@ -66,6 +66,6 @@ test('ambient color is scoped to implicit grade-only base grass and leaves scatt
  assert.match(html,/const ambientTint=floors\.has\(x\+','\+z\)&&kind===original\?null:groundCorner;/);
  assert.match(html,/kind=poiSacredInteriorGrade\(facilitySite,x,z,original,poiWalkActive\)/);
  assert.match(html,/return t\.interiorFloors\.has\(x\+','\+z\)\?'grass':type;/);
- assert.match(html,/const a=ambientTint\(x0,z0\),b=ambientTint\(x0,z1\),d=ambientTint\(x1,z0\),e=ambientTint\(x1,z1\)/);
+ assert.match(html,/const a=ambientTint\(x0,z0,c\),b=ambientTint\(x0,z1,c\),d=ambientTint\(x1,z0,c\),e=ambientTint\(x1,z1,c\)/);
  assert.match(html,/kind==='grass'\? \(n>\.72\?1:0\)/);
 });

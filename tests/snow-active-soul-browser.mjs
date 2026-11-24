@@ -10,7 +10,8 @@ assert.equal(h.split(key).length,2,'native play instrumentation inserts into tes
 let html=h.replace(key,key+`
   snowAllyQA:()=>{
    const snap=poiCompanionSnapshot(performance.now()),kit=poiHotbarRead(),actor=poiCompanionActor;
-   const actual=actor&&{x:actor.x,z:actor.z,y:actor.y,site:actor.site?.id,serial:actor.travel,
+   if(actor&&!window.__snowNativeInitialAlly)window.__snowNativeInitialAlly=actor;
+   const actual=actor&&{same:actor===window.__snowNativeInitialAlly,x:actor.x,z:actor.z,y:actor.y,site:actor.site?.id,serial:actor.travel,
     legal:actor.x>=0&&actor.x<MAP_W&&actor.z>=0&&actor.z<MAP_H,mesh:typeof poiCompanionOrvasPose==='function'};
    return {scene:facilitySite?.id,player:[poiWalkX,poiWalkZ,poiWalkLevel],serial:poiOtherworldTravelSerial,
     actual,active:snap.active,hp:snap.hp,mode:snap.mode,soulSlots:poiInventorySlots(kit)
@@ -261,7 +262,7 @@ try{
     return q.scene===wanted&&q.actual?.site===wanted&&q.actual?.serial===q.serial&&q.actual.legal&&q},wanted,{polling:30,timeout:7000});
    const a=await h.jsonValue();
    assert.equal(a.active,'orvasSoul');assert.equal(a.mode,'follow');assert.equal(a.hp,773);
-   assert(a.actual.mesh&&a.actual.y===0);
+   assert(a.actual.same&&a.actual.mesh&&a.actual.y===0,'same physical Orvas survives the crossing');
    assert.deepEqual(a.soulSlots,[['orvasSoul',773],['slimeSoul',29]]);
    return a;
   };
@@ -289,7 +290,18 @@ try{
      },{dst,sign},{polling:25,timeout:1600})).jsonValue();
     }catch(e){if(!end)throw new Error(label+' failed to cross despite real drag '+JSON.stringify(await get()),{cause:e})}
     const q=await page.evaluate(()=>{const s=window.__snowSeamProbe;s.active=false;return s});
-    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    // Finish the timing sample at the same original distance. Then keep the
+    // very same trusted thumb held long enough for the slower, same Orvas to
+    // follow across: parking beside the border correctly leaves it behind.
+    let walked;
+    try{
+     walked=await (await page.waitForFunction(({dst,sign})=>{
+      const s=window.__editorTest.seamlessSnowQA();
+      return s.region===dst&&(sign>0?s.pose.z>=3.20:s.pose.z<=134.80)&&s;
+     },{dst,sign},{polling:25,timeout:4200})).jsonValue();
+     assert.equal(walked.pointer,firstPointer.pointer,'same trusted touch remains held on the longer walk');
+    }catch(e){throw new Error(label+' unable to walk to companion follow distance '+JSON.stringify({player:await get(),ally:await page.evaluate(()=>window.__editorTest.snowAllyQA())}),{cause:e})}
+    finally{await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});}
     const summary={label,from:from.region,to:end?.region,start:firstPointer,end,continued,
      elapsed:(continued??end).timestamp-start.at,frames:q.frames.length,sceneCounts:q.sceneCounts,veils:q.veils,lost:q.lost,
      liveAtStart:start.live,peak:q.high,settled:q.live,largestUpload:Math.max(0,...q.uploads.map(u=>u.bytes)),
@@ -319,7 +331,7 @@ try{
     }
     console.log('Snow seam timing / bytes / trusted touch',JSON.stringify({...summary,gates}));
     violations.push(...Object.entries(gates).filter(([,ok])=>!ok).map(([gate])=>label+':'+gate));
-    const ally=await check(dst);
+    const ally=await check(dst).catch(async e=>{throw new Error(label+' same Orvas did not physically catch up '+JSON.stringify({walked,ally:await page.evaluate(()=>window.__editorTest.snowAllyQA())}),{cause:e});});
     assert(ally.serial>allyFrom.serial,'actor belonged to actual new travel identity, not parked in old realm');
     const wanted=dst==='snowpass'?'snow':'outside';
     const audio=await (await page.waitForFunction(wanted=>{const q=window.__editorTest.snowAllyQA();

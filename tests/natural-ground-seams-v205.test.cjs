@@ -26,6 +26,6 @@ test('join is deliberately opted in only for natural y0 Game World Play grade',(
  for(const kind of ['roadMossFull','woodfloor','stone','water','river'])assert(!c.pinePlayJoinedNaturalGrade(kind,{id:'base'},true));
  assert(!c.pinePlayJoinedNaturalGrade('earth',{id:'base'},false));
  assert(!c.pinePlayJoinedNaturalGrade('earth',{id:'kitchen'},true));
- assert.match(h,/ambientTint\|\|eastBlend,pinePlayJoinedNaturalGrade\(kind,facilitySite,poiWalkActive\)/);
+ assert.match(h,/ambientTint\|\|eastBlend\),pinePlayJoinedNaturalGrade\(kind,facilitySite,poiWalkActive\)/);
  assert.deepEqual(tile(87,43,'roadMossFull',true),tile(87,43,'roadMossFull',false));
 });

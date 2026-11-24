@@ -10,12 +10,12 @@ test('new east sleeve keeps every published tile and real old snow coordinate',(
  const n=10655,baseDigest='026ecfd1bef6315cc20b09861bac7fb3d2ecf60560bd7e2102fdb3ac6516f623',
   snowDigest='daa1dbdd951646dc3ba4d4562158508051300f5dd16f2a4ddd6a0dfbf11af253';
  if(old){
-  a.equal(old.base.map.world.length,n);a.equal(digest(old.base.map.world),baseDigest);a.equal(digest(old.snow),snowDigest);
+  a.equal(digest(old.base.map.world.slice(0,n)),baseDigest);a.equal(digest(old.snow),snowDigest);
  }
  a.equal(digest(q.base.map.world.slice(0,n)),baseDigest);
  a.equal(digest(q.snow),snowDigest);
  const add=q.base.map.world.slice(n);
- a.equal(add.length,176);a(add.every(o=>o.y===0&&q.own(o.x,o.z)));
+ a.equal(add.length,293);a(add.every(o=>o.y===0&&(q.own(o.x,o.z)||o.x===47&&o.z>=139&&o.z<168)));
  a.equal(new Set(add.map(key)).size,add.length);
  const route=[{x:49,z:127,y:0},...q.route];
  a.deepEqual([...Object.values(route.at(-1))],[60,138,0]);
@@ -42,5 +42,5 @@ test('stored snow local coordinates (including old west shoulder) and scoped new
  const read=(x,z,region,y=0)=>f(JSON.stringify({version:1,route:'facility',id:'base',play:true,region,position:{x,z,y,facing:0},townLayout:5,townMapHeight:182}));
  a.equal(read(0,12,'snowpass').position.x,0);a.equal(read(0,12,'snowpass').region,'snowpass');
  for(const p of [[49,127],[60,138],[24,158]])a.equal(read(...p).position.z,p[1]);
- for(const p of [[65,138],[60,139],[48,140],[60,128,undefined,-1]])a.equal(read(...p).position,null);
+ for(const p of [[72,138],[60,139],[48,140],[60,128,undefined,-1]])a.equal(read(...p).position,null);
 });
