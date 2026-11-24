@@ -31134,19 +31134,43 @@ function poiWallCameraCandidates(target,desired){
  }
  return rows;
 }
+// BEGIN ORDINARY HOME CAMERA ARM
+const POI_HOME_CAMERA_IDS=new Set(['cottage','rowhouse','gardener']);
+const poiHomeCameraPlans=new WeakMap();
+let poiHomeCameraArmState=null;
+function poiHomeCameraZone(site,x,z,y){
+ if(y!==0||!site?.buildings||!(site.id==='base'||site.id==='homes'||POI_HOME_CAMERA_IDS.has(site.id)))return false;
+ let plans=poiHomeCameraPlans.get(site.buildings);
+ if(!plans){plans=site.buildings.filter(b=>POI_HOME_CAMERA_IDS.has(b.id));poiHomeCameraPlans.set(site.buildings,plans);}
+ return plans.some(b=>x>=b.x1-1.45&&x<=b.x2+1.45&&z>=b.z1-1.45&&z<=b.z2+1.45);
+}
+function poiHomeCameraLimit(raw,desired,dir,now){
+ const old=poiHomeCameraArmState;
+ const dt=old?Math.min(.1,Math.max(0,(now-old.time)/1000)):0;
+ const same=old&&old.world===world&&now-old.time<400&&
+  Math.abs(old.desired-desired)<.24&&old.dir.reduce((v,e,i)=>v+e*dir[i],0)>.985;
+ // Contract when real geometry requires, release neither into it nor
+ // into a doorway's one-frame clear gap; no new angles are chosen here.
+ const n=same?Math.min(raw,old.n+9.5*dt):raw;
+ poiHomeCameraArmState={world,time:now,dir,desired,n};
+ return n;
+}
+// END ORDINARY HOME CAMERA ARM
 function facilitySharedWallCameraEye(target,desired){
  const sacred=typeof poiDavidTempleEnclosedAt==='function'&&
   poiDavidTempleEnclosedAt(facilitySite,target[0]-.5,target[2]-.5,poiWalkLevel);
  if(!poiWalkActive||!sacred&&(!poiThirdPerson||cameraTopDown)||pineAIActive)return desired;
  const ray=desired.map((v,i)=>v-target[i]),distance=Math.hypot(...ray),h=Math.hypot(ray[0],ray[2]);
  if(distance<1e-5)return desired;
- const rows=poiWallCameraCandidates(target,desired);if(!rows.length)return desired;
+ const ordinary=!sacred&&poiHomeCameraZone(facilitySite,target[0]-.5,target[2]-.5,poiWalkLevel);
+ if(!ordinary)poiHomeCameraArmState=null;
+ const rows=poiWallCameraCandidates(target,desired);if(!rows.length&&!ordinary)return desired;
  const side=h>1e-6?[ray[2]/h*.09,0,-ray[0]/h*.09]:[.09,0,0];
  const offsets=[[0,0,0],side,[-side[0],0,-side[2]],[0,.07,0],[0,-.07,0]];
- const march=(d,max)=>{
+ const march=(d,max,sx=0,sz=0)=>{
   let closest=max;
   for(const {s,x,y,z} of rows){
-   const local=[target[0]-x,target[1]-y,target[2]-z];
+   const local=[target[0]+sx-x,target[1]-y,target[2]+sz-z];
    for(let j=0;j<offsets.length;j++){
     const q=offsets[j],o=[local[0]+q[0],local[1]+q[1],local[2]+q[2]],near=poiWallCameraSlab(s,o,d,closest);
     if(!Number.isFinite(near))continue;
@@ -31160,6 +31184,21 @@ function facilitySharedWallCameraEye(target,desired){
  let direction=ray.map(v=>v/distance);
  const first=march(direction,distance),sideLimit=Math.max(.006,first*h/distance-.025);
  let n=arm(first,distance);
+ if(ordinary){
+  // Nearest obstruction ahead/sideways changes at cell corners. A
+  // conservative local envelope prepares the arm just before the edge
+  // but the exact player's current hard ray always remains the ceiling.
+  const gap=.32,margin=.53;
+  if(h>1e-6&&rows.length){
+   const dx=ray[0]/h*gap,dz=ray[2]/h*gap;
+   for(const [sx,sz] of [[dx,dz],[-dx,-dz],[-dz,dx],[dz,-dx]]){
+    const peek=arm(march(direction,Math.min(distance,n+margin),sx,sz),distance);
+    n=Math.min(n,peek+margin);
+   }
+  }
+  const stable=poiHomeCameraLimit(n,distance,direction,performance.now());
+  return stable>=distance-1e-5?desired:target.map((v,i)=>v+direction[i]*stable);
+ }
  if(n>=distance)return desired;
  if(n<1.8&&h>1e-6&&ray[1]>=0){
   // Keep the player's requested bearing. An alternate short arm may tuck
@@ -31277,7 +31316,9 @@ function parameters(){
   const x=poiWalkViewX+.5,z=poiWalkViewZ+.5;
   const ground=poiCreekPlayerHeight(performance.now())+poiWalkLevel*1.4;
   const skyOutdoor=poiSkyCanLookUp();
+  const homeAngle=!sacredView&&poiHomeCameraZone(facilitySite,poiWalkViewX,poiWalkViewZ,poiWalkLevel);
   const pitch=!poiThirdPerson?(cameraTopDown?.71:.49):
+   homeAngle?Math.max(-.16,poiCameraPitch):
    poiCameraPitch<.15&&skyOutdoor?poiCameraPitch:Math.max(.12,poiCameraPitch);
   const horizontal=radius*Math.cos(pitch);
   const desired=[x-horizontal*Math.sin(bearing),ground+1.1+radius*Math.sin(pitch),z-horizontal*Math.cos(bearing)];

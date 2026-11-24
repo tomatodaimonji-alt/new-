@@ -1,0 +1,44 @@
+name: Verify exact east residential camera alongside roofed sacred behavior
+on:
+  push:
+    branches: [dot/workshop-next-ordinary-camera-qa]
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        script: [ordinary-house-baseline, ordinary-house-camera-browser, shared-wall-camera-browser, david-sacred-portrait-browser]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save playwright@1.56.1
+      - run: npx playwright install chromium
+      - if: matrix.script == 'ordinary-house-baseline'
+        run: |
+          git show HEAD^:world-editor.html > baseline.html
+          node tests/ordinary-house-camera-browser.mjs baseline.html --baseline
+      - if: matrix.script != 'ordinary-house-baseline'
+        run: node tests/${{ matrix.script }}.mjs
+  unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          if node --test tests/*.cjs > "$RUNNER_TEMP/unit.out" 2>&1; then
+            tail -8 "$RUNNER_TEMP/unit.out"
+          else
+            grep -E '^not ok |^  location:|^  error:|^# (tests|pass|fail|duration)' "$RUNNER_TEMP/unit.out" | cut -c1-350 | tail -200
+            exit 1
+          fi
