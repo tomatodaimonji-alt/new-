@@ -1689,7 +1689,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v315）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v316）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -19189,8 +19189,14 @@ function poiCompanionAdvance(a,to,now,stop){
  a.px=p.x;a.pz=p.z;a.freeAt=now;a.freeMoving=false;
  if(!to||typeof poiFreeAdvance!=='function')return false;
  const dt=Math.max(0,Math.min(64,now-(previous??now)));
- const dx=to.x-p.x,dz=to.z-p.z,len=Math.hypot(dx,dz);
- const step=Math.min(Math.max(0,len-stop),dt*poiCompanionSpeed(a));
+ let dx=to.x-p.x,dz=to.z-p.z,len=Math.hypot(dx,dz);
+ const speed=dt*poiCompanionSpeed(a);
+ let step=Math.min(Math.max(0,len-stop),speed);
+ const scope=typeof poiCompanionNavScope==='function'?poiCompanionNavScope(a,to):null;
+ const nook=scope&&step<.001&&speed>.001&&!poiCompanionNavGroundClear(a,p,to);
+ let waypoint=scope&&(a.localDetour||nook)?poiCompanionNavLeg(a,to,p,now,stop,scope,nook):null;
+ if(!scope)a.localDetour=null;
+ if(waypoint){dx=waypoint.x-p.x;dz=waypoint.z-p.z;len=Math.hypot(dx,dz);step=Math.min(len,speed)}
  if(step<.001||!len)return false;
  const cells=new Map(),edge=(x,z,fx,fz)=>{
   const key=[x,z,fx,fz].join(',');
@@ -19203,10 +19209,20 @@ function poiCompanionAdvance(a,to,now,stop){
  let next=solve(dx*step/len,dz*step/len);
  if(clip(next)){
   const slides=[solve(dx*step/len,0),solve(0,dz*step/len)].filter(p=>p.distance>.001&&!clip(p));
-  if(!slides.length)return false;
-  next=slides.sort((a,b)=>b.distance-a.distance)[0];
+  if(!slides.length){if(!scope)return false;next=solve(0,0)}
+  else next=slides.sort((a,b)=>b.distance-a.distance)[0];
  }
- if(next.distance<step*.19&&typeof poiCompanionPlan==='function'){
+ if(scope&&next.distance<step*.19&&!waypoint){
+  waypoint=poiCompanionNavLeg(a,to,p,now,stop,scope,true);
+  if(waypoint){
+   const rx=waypoint.x-p.x,rz=waypoint.z-p.z,leg=Math.hypot(rx,rz);
+   if(leg>.001){
+    const t=Math.min(1,speed/leg),d=solve(rx*t,rz*t);
+    if(!clip(d)&&d.distance>next.distance)next=d;
+   }
+  }
+ }
+ if(next.distance<step*.19&&!waypoint&&typeof poiCompanionPlan==='function'){
   const route=a.freeRoute??(a.freeRoute=poiCompanionPlan(a,{x:Math.round(to.x),z:Math.round(to.z)},now));
   if(route){
    const rx=route.x-p.x,rz=route.z-p.z,d=Math.hypot(rx,rz);
@@ -19237,6 +19253,102 @@ function poiCompanionCell(x,z,y,fx,fz){
  if(poiWalkX===x&&poiWalkZ===z||!poiWalkCanStep(x,z,fx,fz))return false;
  return !(typeof poiTownNpcActorOccupied==='function'&&poiTownNpcActorOccupied(x,z,y));
 }
+function poiFindLocalDetour(from,to,can,arrived,maxNodes=72,maxDepth=24){
+ const key=(x,z)=>x+','+z,heur=(x,z)=>Math.abs(x-to.x)+Math.abs(z-to.z);
+ const open=[{x:from.x,z:from.z,d:0,h:heur(from.x,from.z),prev:null}],cost=new Map([[key(from.x,from.z),0]]);
+ for(let rank=0;rank<maxNodes&&open.length;rank++){
+  let pick=0;
+  for(let i=1;i<open.length;i++)if(open[i].d+open[i].h<open[pick].d+open[pick].h||
+   open[i].d+open[i].h===open[pick].d+open[pick].h&&open[i].h<open[pick].h)pick=i;
+  const p=open.splice(pick,1)[0];
+  if(p.d!==cost.get(key(p.x,p.z)))continue;
+  if(p.prev&&arrived(p.x,p.z)){
+   const path=[];
+   for(let q=p;q.prev;q=q.prev)path.push({x:q.x,z:q.z});
+   return path.reverse();
+  }
+  if(p.d>=maxDepth)continue;
+  for(const [dx,dz] of [[0,-1],[1,0],[0,1],[-1,0]]){
+   const x=p.x+dx,z=p.z+dz,k=key(x,z),d=p.d+1;
+   if(d>=(cost.get(k)??Infinity)||!can(x,z,p.x,p.z))continue;
+   cost.set(k,d);open.push({x,z,d,h:heur(x,z),prev:p});
+  }
+ }
+ return null;
+}
+function poiCompanionNavScope(a,to){
+ if(facilitySite?.id!=='base'||a.y!==poiWalkLevel)return null;
+ if(a.y===-1){
+  const b=facilitySite.mine?.bounds,inside=(x,z)=>b&&x>=b.x1&&x<=b.x2&&z>=b.z1&&z<=b.z2;
+  return inside(a.x,a.z)&&inside(to.x,to.z)?inside:null;
+ }
+ if(a.y!==0||!facilityCreekIndex?.parts?.size)return null;
+ for(const d of facilityCreekIndex.parts.values()){
+  if(Math.abs(a.x-d.x)+Math.abs(a.z-d.z)>15||Math.abs(to.x-d.x)+Math.abs(to.z-d.z)>15)continue;
+  return (x,z)=>Math.abs(x-d.x)+Math.abs(z-d.z)<=15;
+ }
+ return null;
+}
+function poiCompanionNavGroundClear(a,p,to){
+ const dx=to.x-p.x,dz=to.z-p.z,len=Math.hypot(dx,dz);
+ if(len<=.72||typeof poiFreeAdvance!=='function')return true;
+ const step=len-.70,can=(x,z,fx,fz)=>poiCompanionCell(x,z,a.y,fx,fz);
+ const q=poiFreeAdvance(p.x,p.z,dx*step/len,dz*step/len,POI_COMPANION_FREE_RADIUS,can,can);
+ return !q.stopped&&Math.hypot(q.x-(p.x+dx*step/len),q.z-(p.z+dz*step/len))<.08;
+}
+function poiCompanionBridgeLift(a){
+ if(a.y!==0||facilitySite?.id!=='base'||!facilityCreekIndex?.parts?.size)return 0;
+ const p=poiCompanionPosition(a),key=(x,z)=>x+','+z;
+ const {parts,bridgeHeight,water}=facilityCreekIndex;
+ const x=a.x,z=a.z,ground=terrainY(x,z),k=key(x,z),own=parts.get(k),h=bridgeHeight.get(k)??ground;
+ for(const [dx,dz,offset] of [[1,0,p.x-x],[0,1,p.z-z]]){
+  const dir=Math.sign(offset);if(!dir)continue;
+  const tx=x+dx*dir,tz=z+dz*dir,k=key(tx,tz),neighbor=parts.get(k),span=own||neighbor;
+  if(!span||!(span.rot%2===1?dx:dz)||!neighbor&&water.has(k))continue;
+  return h+( (bridgeHeight.get(k)??terrainY(tx,tz))-h)*Math.abs(offset)-ground;
+ }
+ return h-ground;
+}
+function poiCompanionNavLeg(a,to,p,now,stop,scope,allowPlan){
+ const end={x:Math.round(to.x),z:Math.round(to.z)};
+ let q=a.localDetour;
+ if(q&&(q.world!==world||q.y!==a.y||Math.abs(q.to.x-end.x)+Math.abs(q.to.z-end.z)>2))a.localDetour=q=null;
+ if(q){
+  while(q.path.length&&Math.hypot(q.path[0].x-p.x,q.path[0].z-p.z)<.075)q.path.shift();
+  if(q.path.length){
+   const n=q.path[0];
+   if(n.x===a.x&&n.z===a.z||poiCompanionCell(n.x,n.z,a.y,a.x,a.z))return n;
+  }
+  a.localDetour=q=null;
+ }
+ if(!allowPlan||now<(a.localPlanAt||0))return null;
+ a.localPlanAt=now+650;
+ const path=poiFindLocalDetour(a,end,(x,z,fx,fz)=>scope(x,z)&&poiCompanionCell(x,z,a.y,fx,fz),
+  (x,z)=>Math.hypot(x-to.x,z-to.z)<=stop+.25&&poiCompanionNavGroundClear(a,{x,z},to));
+ if(!path?.length)return null;
+ a.localDetour={world,y:a.y,to:end,path};
+ return path[0];
+}
+function poiMineHostileDetour(o,s,patrol,to,now,allowPlan){
+ if(patrol?.name!=='mine'||poiWalkLevel!==-1||!poiMonsterCrowdNormal(o))return false;
+ const same=s.mineDetour?.goal?.x===to.x&&s.mineDetour.goal.z===to.z;
+ if(!same)s.mineDetour=null;
+ const can=(x,z,fx,fz)=>poiDungeonPatrolCanFight(o,x,z,patrol)&&poiMineEarlyMayMove(o,x,z)&&
+  poiOtherworldEnemyMayFight(o,x,z)&&poiMonsterCanMove(x,z,s,fx,fz);
+ if(!s.mineDetour?.path.length&&allowPlan&&now>=(s.minePlanAt||0)){
+  s.minePlanAt=now+760;
+  const path=poiFindLocalDetour(s,to,can,(x,z)=>Math.abs(x-to.x)+Math.abs(z-to.z)===1,50,14);
+  if(path?.length)s.mineDetour={goal:{x:to.x,z:to.z},path};
+ }
+ const n=s.mineDetour?.path[0];
+ if(!n)return false;
+ if(!can(n.x,n.z,s.x,s.z)){s.mineDetour=null;return false}
+ const dx=n.x-s.x,dz=n.z-s.z;
+ s.mineDetour.path.shift();
+ s.fromX=s.x;s.fromZ=s.z;s.x=n.x;s.z=n.z;s.moveStarted=now;
+ s.facing=dx?(dx>0?3:1):(dz<0?2:0);poiMonsterMeshDirty=true;return true;
+}
+
 function poiCompanionDirection(from,to){
  const dx=to.x-from.x,dz=to.z-from.z;
  return Math.abs(dx)>=Math.abs(dz)?[[Math.sign(dx)||1,0],[0,Math.sign(dz)||1],[0,-(Math.sign(dz)||1)],[-(Math.sign(dx)||1),0]]:
@@ -19651,7 +19763,10 @@ function poiCompanionTick(now){
    if(!to&&latch){
     a.freeGoal=null;a.freeFollows=false;
    }else{
-    const follow=poiCompanionFollowWanted(a,distance);
+    const blockedNear=distance>1.1&&distance<POI_COMPANION_FOLLOW_BEGIN&&
+     typeof poiCompanionNavScope==='function'&&poiCompanionNavScope(a,player)&&
+     !poiCompanionNavGroundClear(a,origin,player);
+    const follow=poiCompanionFollowWanted(a,distance)||blockedNear||!!a.localDetour;
     a.freeGoal=to===a?null:to||(follow?player:null);
     a.freeFollows=!to;
    }
@@ -20009,6 +20124,7 @@ function poiCompanionWorldPose(a,now){
  const x=a.freeDx??a.x-a.fx,z=a.freeDz??a.z-a.fz,facing=Math.abs(x)>Math.abs(z)?(x>0?3:1):(z<0?2:0);
  if(a.id==='orvasSoul'&&typeof poiCompanionOrvasPose==='function'){
   const pose=poiCompanionOrvasPose(a,now,facing);
+  if(typeof poiCompanionBridgeLift==='function')pose.y+=poiCompanionBridgeLift(a);
   return typeof poiCompanionSeamRender==='function'?poiCompanionSeamRender(a,pose):pose;
  }
  const actor={type:'monsterSlime',x:a.x,z:a.z,y:a.y};
@@ -20018,6 +20134,7 @@ function poiCompanionWorldPose(a,now){
  const art=poiMonsterPose(actor,state,now);
  art.y+=terrainY(a.x,a.z)-terrainY(physical.x,physical.z)+poiCompanionPose(a,now).hop;
  const pose={...art,facing};
+ if(typeof poiCompanionBridgeLift==='function')pose.y+=poiCompanionBridgeLift(a);
  return typeof poiCompanionSeamRender==='function'?poiCompanionSeamRender(a,pose):pose;
 }
 function poiCompanionWorldVisible(a){
@@ -20420,6 +20537,7 @@ function poiCompanionHostileChase(o,s,now,patrol){
   return true;
  }
  if(s.actorFree&&poiMonsterActorSettle(o,s,now))return true;
+ if(s.mineDetour&&poiMineHostileDetour(o,s,patrol,goal,now,false))return true;
  for(const [dx,dz] of poiCompanionDirection(s,goal)){
   const x=s.x+dx,z=s.z+dz;
   if((x===goal.x&&z===goal.z)||Math.hypot(x-goal.x,z-goal.z)>=Math.hypot(s.x-goal.x,s.z-goal.z)||
@@ -20430,7 +20548,7 @@ function poiCompanionHostileChase(o,s,now,patrol){
   s.fromX=s.x;s.fromZ=s.z;s.x=x;s.z=z;s.moveStarted=now;s.facing=dx?(dx>0?3:1):(dz<0?2:0);
   poiMonsterMeshDirty=true;return true;
  }
- return false;
+ return typeof poiMineHostileDetour==='function'&&poiMineHostileDetour(o,s,patrol,goal,now,true);
 }
 // BEGIN COMPANION DAVID
 const POI_COMPANION_DAVID_NOTICE=5.6,POI_COMPANION_DAVID_ENGAGE=7.5,POI_COMPANION_DAVID_RELEASE=9.2;
@@ -25842,6 +25960,7 @@ function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMo
  }
  if(obj.type==='monsterMineGuard'){if(poiMineGuardFrame(obj,state,now))changed=true;continue}
  if(dist>6.5){if(state.actorFree&&poiMonsterActorSettle(obj,state,now))continue;if(pineGameActive&&Math.random()<.32){const [rx,rz]=[[0,1],[0,-1],[1,0],[-1,0]][Math.floor(Math.random()*4)],nx=state.x+rx,nz=state.z+rz;if((state.wildSpawn||Math.max(Math.abs(nx-24),Math.abs(nz-24))>=10)&&poiMineEarlyMayMove(obj,nx,nz)&&poiMonsterCanMove(nx,nz,state)){state.fromX=state.x;state.fromZ=state.z;state.x=nx;state.z=nz;state.moveStarted=now;state.facing=rx?rx>0?3:1:rz<0?2:0;changed=true}}continue;}if(typeof poiEnemyAdjacent==='function'?poiEnemyAdjacent(obj,state,poiWalkX,poiWalkZ):Math.abs(dx)+Math.abs(dz)===1){if(state.actorFree&&poiMonsterActorSettle(obj,state,now))continue;if(now>=state.nextAttack)poiEnemyBeginPlayer(obj,state,now);continue}
+ if(state.mineDetour&&typeof poiMineHostileDetour==='function'&&poiMineHostileDetour(obj,state,patrol,{x:poiWalkX,z:poiWalkZ},now,false)){changed=true;continue}
  if(typeof poiMonsterChaseFree==='function'&&poiMonsterChaseFree(obj,state,now,patrol,armed)){changed=true;continue}
  if(state.actorFree&&poiMonsterActorSettle(obj,state,now))continue;
  const steps=[[Math.sign(dx),0],[0,Math.sign(dz)]].filter(([sx,sz])=>sx||sz).sort((a,b)=>Math.abs(a[0]*dx+a[1]*dz)>Math.abs(b[0]*dx+b[1]*dz)?-1:1);
@@ -25849,6 +25968,7 @@ function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMo
     (poiEnemyDiagonalType(obj)||armed&&!(typeof poiNorthWatchGuard==='function'&&poiNorthWatchGuard(obj))))
   steps.push([-Math.sign(dx),0],[0,-Math.sign(dz)]);
  for(const [sx,sz] of steps){const nx=state.x+sx,nz=state.z+sz;if((!pineGameActive||Math.max(Math.abs(nx-24),Math.abs(nz-24))>=10)&&poiMineEarlyMayMove(obj,nx,nz)&&(!patrol||poiDungeonPatrolCanFight(obj,nx,nz,patrol))&&(!armed||poiArmedBound(obj,nx,nz))&&(typeof poiOtherworldEnemyMayFight!=='function'||poiOtherworldEnemyMayFight(obj,nx,nz))&&poiMonsterCanMove(nx,nz,state)){state.fromX=state.x;state.fromZ=state.z;state.x=nx;state.z=nz;state.moveStarted=now;state.facing=sx?sx>0?3:1:sz<0?2:0;changed=true;break}}
+ if(state.moveStarted!==now&&typeof poiMineHostileDetour==='function'&&poiMineHostileDetour(obj,state,patrol,{x:poiWalkX,z:poiWalkZ},now,true))changed=true;
  if(state.moveStarted!==now&&typeof poiMonsterCrowdNormal==='function'&&poiMonsterCrowdNormal(obj)){
   if(!crowdRead){crowd=poiMonsterCrowdPrepare(now);crowdRead=true}
   if(crowd&&poiMonsterCrowdStep(obj,state,now,patrol,crowd))changed=true;
@@ -28072,7 +28192,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v315',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v316',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -28187,7 +28307,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v315';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v316';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -28402,7 +28522,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v315',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v316',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -34624,7 +34744,7 @@ function poiOrvasBossOpticalEnds(q,d,reach,base,eye,floor,front,b,pass){
   if(length<=.012)continue;
   const H=base+eye,landing=base+floor,dy=(landing-H)/length;
   const face=safe&&poiOrvasWallContact(x,H,z,d,length,dy);
-  const end={x,z,length,h:landing,face:null,floor:false};
+  const end={x,z,length,h:landing,face:null,floor:false,eyeSide:side};
   if(face&&face.at<=length+.15){
    end.length=face.at-.008;end.h=H+dy*end.length;end.face=face;
   }else if(ground){
@@ -35110,10 +35230,118 @@ function poiOrvasFloorMark(m,ground,x,z,d){
  return m.p.length>0;
 }
 // END ORVAS PHYSICAL TIP WITNESSES
+function poiOrvasSweepGroundSample(g,x,z,height){
+ const p=g(x,z);
+ return p&&Math.abs(p[1]-height)<=.105?p:null;
+}
+function poiOrvasSweepGroundEdge(g,a,b){
+ // Check each actual grid boundary, not only periodic samples. A diagonal
+ // corner can cross a missing cell for much less than one sample interval.
+ const cuts=[0,1];
+ for(const j of [0,2]){
+  const lo=Math.min(a[j],b[j]),hi=Math.max(a[j],b[j]),d=b[j]-a[j];
+  if(d)for(let k=Math.floor(lo)+1;k<hi;k++)cuts.push((k-a[j])/d);
+ }
+ cuts.sort((a,b)=>a-b);
+ for(let i=1;i<cuts.length;i++){
+  const t=(cuts[i-1]+cuts[i])*.5;
+  const x=a[0]+(b[0]-a[0])*t,z=a[2]+(b[2]-a[2])*t,y=a[1]+(b[1]-a[1])*t;
+  if(!poiOrvasSweepGroundSample(g,x-.5,z-.5,y-.008))return false;
+ }
+ return true;
+}
+function poiOrvasSweepWallSample(row,p,n){
+ const o=[p[0]-row.x+n[0]*.055,p[1]-row.y+n[1]*.055,p[2]-row.z+n[2]*.055],ray=n.map(v=>-v);
+ const at=row.s.tris?poiWallCameraTriangles(row.s.tris,o,ray,.11):poiWallCameraSlab(row.s,o,ray,.11);
+ return Number.isFinite(at)&&Math.abs(at-.055)<.015;
+}
+function poiOrvasSweepRibbon(m,g,last,next){
+ if(last.kind!==next.kind)return false;
+ const a=last.p,b=next.p,d=b.map((v,i)=>v-a[i]),len=Math.hypot(...d);
+ if(len<.008||len>.39)return false;
+ const at=t=>a.map((v,i)=>v+d[i]*t);
+ let sample,n;
+ if(next.kind==='floor'){
+  const flat=Math.hypot(d[0],d[2]);if(flat<.008||Math.abs(d[1])>.13)return false;
+  n=[-d[2]/flat,0,d[0]/flat];
+  sample=(p,w)=>{
+   const v=poiOrvasSweepGroundSample(g,p[0]+n[0]*w,p[2]+n[2]*w,p[1]);
+   return v&&[v[0],v[1]+.008,v[2]];
+  };
+ }else{
+  const f=next.face,k=last.face,N=f.normal;
+  if(Math.hypot(N[0],N[2])<.55||N.reduce((n,v,i)=>n+v*k.normal[i],0)<.997||
+     N.reduce((n,v,i)=>n+v*d[i],0)**2>.0001)return false;
+  const cross=[N[1]*d[2]-N[2]*d[1],N[2]*d[0]-N[0]*d[2],N[0]*d[1]-N[1]*d[0]],w=Math.hypot(...cross);
+  if(w<1e-6)return false;n=cross.map(x=>x/w);
+  sample=(p,r)=>{
+   const v=p.map((x,i)=>x+n[i]*r);
+   return (poiOrvasSweepWallSample(k.row,v,N)||poiOrvasSweepWallSample(f.row,v,N))?v.map((x,i)=>x+N[i]*.017):null;
+  };
+ }
+ const size=Math.max(1,Math.ceil(len/(next.kind==='wall'?.048:.076))),rows=[];
+ for(let i=0;i<=size;i++){
+  const p=at(i/size),width=.045+.009*Math.sin(p[0]*7.1+p[2]*6.7);
+  if(!sample(p,0))return false;
+  const l=sample(p,width),r=sample(p,-width);
+  if(!l||!r)return false;
+  rows.push([l,r]);
+ }
+ if(next.kind==='floor')for(let i=1;i<rows.length;i++){
+  const [l,r]=rows[i-1],[nl,nr]=rows[i];
+  const same=[r,nl,nr].every(p=>Math.floor(p[0])===Math.floor(l[0])&&Math.floor(p[2])===Math.floor(l[2]));
+  if(!same&&![[l,nl],[nl,nr],[nr,r],[r,l],[l,nr]].every(([p,q])=>poiOrvasSweepGroundEdge(g,p,q)))return false;
+ }
+ for(let i=1;i<rows.length;i++){
+  const [l,r]=rows[i-1],[nl,nr]=rows[i];
+  if(next.kind==='wall')quad(m,r,nr,nl,l,[.134,.066,.036]);
+  else quad(m,l,nl,nr,r,poiOrvasScorchPaint(g.material?.((a[0]+b[0])*.5,(a[2]+b[2])*.5),0));
+ }
+ return true;
+}
+function poiOrvasSweepOpticalSample(q,e,b,angle,pass,ground){
+ const d=poiDavidBeamRay(q,angle),reach=poiDavidBeamReach(q,b,d);
+ const base=terrainY(q.sx,q.sz)+q.y*1.4,eye=typeof POI_DAVID_EYE_Y==='number'?POI_DAVID_EYE_Y:4.75;
+ const front=typeof POI_DAVID_EYE_FRONT==='number'?POI_DAVID_EYE_FRONT:.29;
+ const tips=poiOrvasBossOpticalEnds(q,d,reach,base,eye,.68,front,b,pass),checked=new Map();
+ for(const tip of tips){
+  if(tip.face){
+   const f=tip.face;checked.set(tip.eyeSide,{kind:'wall',p:[f.wx,f.h,f.wz],face:f});
+  }else if(tip.floor){
+   const x=tip.x+d.x*tip.length,z=tip.z+d.z*tip.length,g=ground(x,z);
+   if(g)checked.set(tip.eyeSide,{kind:'floor',p:[x,g[1],z]});
+  }
+ }
+ return checked;
+}
+function poiOrvasSweepTrace(q,e,b,now,angle){
+ const from=e.sweepAngle??0,gap=angle-from;
+ if(Math.abs(gap)<1e-6)return false;
+ const pass=poiAimWall({y:q.y}),ground=poiOrvasTraceGround(q,e,b,pass);
+ const m=e.sweepMesh??=mesh(),before=m.p.length;
+ // A slow frame covers all traversed angles from the true straight start.
+ // Short spans and surface probes prevent a chord over an occluder or lip.
+ const steps=Math.min(80,Math.ceil(Math.abs(gap)/.021));
+ let tips=e.sweepTips??poiOrvasSweepOpticalSample(q,e,b,from,pass,ground);
+ for(let i=1;i<=steps;i++){
+  const next=poiOrvasSweepOpticalSample(q,e,b,from+gap*i/steps,pass,ground);
+  if(m.p.length<15500)for(const [side,p] of next){
+   const last=tips.get(side);if(last)poiOrvasSweepRibbon(m,ground,last,p);
+  }
+  tips=next;
+ }
+ e.sweepAngle=angle;e.sweepTips=tips;
+ if(m.p.length===before)return false;
+ if(!e.sweepPlaced){e.sweepPlaced=true;e.parts.push(m)}
+ e.seen=now;
+ if(!e.pushed){e.pushed=true;poiOrvasTracePush(e)}else poiOrvasGroundDirty=true;
+ return true;
+}
 function poiOrvasBeamTrace(q,b,now,angle=0){
  if(!q?.executed||q.kind!=='beam'||!poiWalkActive||q.y!==poiWalkLevel)return false;
  const fresh=!q.orvasBeamGround,e=q.orvasBeamGround??=poiOrvasTraceEvent(q,'beam',now);
  if(e.owner!==facilitySite||(e.pushed&&!poiOrvasGroundTraces.includes(e)))return false;
+ if(q.sweep)return q.sweep.start!==null&&poiOrvasSweepTrace(q,e,b,now,angle);
  if(!fresh&&Math.abs(angle-e.lastAngle)<.075&&!q.sweep?.done)return false;
  const d=poiDavidBeamRay(q,angle),reach=poiDavidBeamReach(q,b,d),pass=poiAimWall({y:q.y});
  const base=terrainY(q.sx,q.sz)+q.y*1.4,eye=typeof POI_DAVID_EYE_Y==='number'?POI_DAVID_EYE_Y:4.75;
