@@ -11,7 +11,7 @@ function rig(block=()=>false){
 test('continuous diagonal commits real fractional world coordinates before any tile crossing',()=>{
  const f=rig();f.advance(4,4,42);
  a(f.body.px>0&&f.body.px<.5);a(f.body.pz>0&&f.body.pz<.5);a(Math.abs(f.body.px-f.body.pz)<1e-7);
- a.deepEqual([f.body.x,f.body.z],[0,0]);f.advance(4,4,101);f.advance(4,4,157);
+ a.deepEqual([f.body.x,f.body.z],[0,0]);for(let ms=102;ms<=342;ms+=60)f.advance(4,4,ms);
  a(f.body.px>.5&&f.body.pz>.5);a.deepEqual([f.body.x,f.body.z],[1,1]);
 });
 test('uses swept radius to prevent diagonal clipping between two touching walls',()=>{
