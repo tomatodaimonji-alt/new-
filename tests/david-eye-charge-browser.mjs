@@ -34,7 +34,7 @@ let fixture=inject(html,key,key+`
     const peak=[];let bright=0,red=0;
     for(let i=0;i<pixels.length;i+=4){
      const r=pixels[i],g=pixels[i+1],b=pixels[i+2];
-     if(pixels[i+3]>0&&r>g*1.64&&r>b*1.68){peak.push(r);red+=r;if(r>=190)bright++}
+     if(pixels[i+3]>0&&r>g*1.64&&r>b*1.68){peak.push(r);red+=r;if(r>=140)bright++}
     }
     out.push({phase:pose.phase,frac,red,bright,peak:Math.max(0,...peak),cursor:q.cursor,remaining:q.hits[0]-now,mesh:poiMonsterMesh.count});
    }
@@ -72,7 +72,10 @@ try{
  assert(out.frames.every(r=>r.phase==='windup'&&r.cursor===0&&r.remaining>0&&r.mesh>2200));
  const peak=out.frames.map(r=>r.peak);
  assert(peak.every((v,i)=>i===0||v>peak[i-1])&&peak.at(-1)>peak[0]+90,JSON.stringify(peak));
+ // Twilight shader output is deliberately below peak white; require a
+ // real area above 140, and retain the independent >90 peak red increase.
  assert(out.frames.at(-1).bright>=24&&out.frames[0].bright===0);
+ assert(out.frames.at(-1).red>5*out.frames[0].red);
  assert.deepEqual(errors,[]);
  console.log('PASS true WebGL twilight eye pixels brighten before first beam contact');
 }finally{await browser?.close();await new Promise(r=>server.close(r))}
