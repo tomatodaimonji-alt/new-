@@ -18,8 +18,10 @@ let fixture=inject(html,key,key+`
   },`);
 fixture=inject(fixture,' requestAnimationFrame(render);',' if(!window.__wallSkyManual)requestAnimationFrame(render);');
 fixture=inject(fixture,'function poiTownClockFrame(now){','function poiTownClockFrame(now){if(window.__wallSkyManual)return;');
-fixture=inject(fixture,'  const arm=eye===desired?poiCameraDistance:Math.hypot(...eye.map((v,i)=>v-target[i]));',`
-  const arm=eye===desired?poiCameraDistance:Math.hypot(...eye.map((v,i)=>v-target[i]));
+const eyeAnchor=fixture.match(/  const arm=eye===desired\?(?:radius|poiCameraDistance):Math\.hypot\(\.\.\.eye\.map\(\(v,i\)=>v-target\[i\]\)\);/)?.[0];
+assert(eyeAnchor,'actual perspective arm');
+fixture=inject(fixture,eyeAnchor,`
+${eyeAnchor}
   if(window.__wallSkyManual)window.__wallSkyWitness={clipped:eye!==desired,arm};`);
 fixture=inject(fixture,' poiScreenNoteCaptureFrame();',`
  if(window.__wallSkyManual){
@@ -83,8 +85,9 @@ try{
  };
  const dayGreen=c=>c[1]>c[2]+3&&c[1]>110;
  const nightBlue=c=>c[2]>c[1]+10&&Math.max(...c)<150;
+ const sealed=html.includes('function poiDavidTempleEnclosedAt(');
  let clippedForDay=null;
- for(const [label,x,z,dir] of [['south ring',24,118,-1],['entrance wing',29,95,1]]){
+ for(const [label,x,z,dir] of (sealed?[['south ring exterior',24,123,-1],['entrance wing exterior',29,91,1]]:[['south ring',24,118,-1],['entrance wing',29,95,1]])){
   checkpoint=label;
   assert(await set(x,z,0,Math.PI/2,-.145));
   let clear=null,close=null;
@@ -108,6 +111,11 @@ try{
   assert.equal(await page.evaluate(()=>window.__editorTest.setTownTime(720)),true);
   const day=await grab('day clipped');
   assert(day.clipped&&day.sky&&day.clock===720&&day.rgb.some(c=>c[2]>150));
+  if(sealed){
+   checkpoint='actual sacred roof stays opaque at the same sky clock';
+   assert(await set(24,100,0,0,-.145));const roof=await render();
+   assert.equal(roof.state[2],0);assert.equal(roof.sky,false);
+  }
   checkpoint='actual mine floor still has no sky';
   assert(await set(109,60,-1,0,.16));const mine=await render();assert.equal(mine.state[2],-1);assert.equal(mine.sky,false);
  }

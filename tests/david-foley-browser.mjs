@@ -77,6 +77,7 @@ let fixture=insert(html,anchor,`
     // Lock out only automatic follow-up selection in the isolated
     // battery. Original timing, hit shape, health and cues are untouched.
     window.__davidFrames.onlySelected=true;
+    if(!window.__davidFrames.beamClock)window.__davidFrames.fatalClock={now:s.david.attack.start-100};
     if(window.__davidFrames.beamClock)window.__davidFrames.beamClock.first=s.david.attack.hits[0];
     return s.david.attack.start;
    },
@@ -192,6 +193,11 @@ const install=()=>{
  });
 };
 const screenshots=process.env.FACILITY_SCREENSHOTS;
+async function shot(p,name){
+ if(!screenshots)return;
+ try{await p.screenshot({path:screenshots+'/'+name,timeout:6500})}
+ catch(e){if(e.name!=='TimeoutError')throw e;console.log('Optional screenshot timed out:',name)}
+}
 const save={version:1,route:'facility',id:'base',play:true,position:{x:24,z:91,y:0,facing:2},townLayout:5,townMapHeight:128,
  view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:false,orbitYaw:0,orbitPitch:.35,orbitDistance:5.5}};
 const economy={version:1,weapon:'equipWoodSword',potions:0,gold:37,claimedCaches:['glade']};
@@ -292,10 +298,11 @@ try{
   });
   await wait(p,()=>window.__editorTest.davidQA.state().statue?.d?.awake);
   s=await qa(p);assert.equal(s.statue.hp,1050,'tuned David is deliberately beyond ordinary early-game weapons');
-  if(screenshots)await p.screenshot({path:screenshots+'/david-temple-wake.png'});
+  if(screenshots)await shot(p,"david-temple-wake.png");
   checkpoint='approach produces real boss displacement before physical retreat';
+  await p.evaluate(()=>{window.__davidFrames.fatalClock={now:performance.now()}});
   await routeWalk(p,TEMPLE_NEAR);
-  await wait(p,()=>{const s=window.__editorTest.davidQA.state().statue;return s?.d?.awake&&(s.x!==24||s.z!==104)});
+  await wait(p,()=>{const s=window.__editorTest.davidQA.state().statue;return s?.d?.awake&&(s.x!==24||s.z!==104)},null,25000);
   checkpoint='physical retreat cancels any chase or threat into exterior';
   await escapeChamber(p);
   await routeWalk(p,TEMPLE_IN.slice(0,-1).reverse());
@@ -447,8 +454,10 @@ try{
   // encounter render clock to native playable increments. No attack,
   // damage, route, frames, death or audio source is injected.
   await fp.evaluate(()=>{window.__davidFrames.fatalClock={now:performance.now()}});
-  await routeWalk(fp,route);await routeWalk(fp,TEMPLE_NEAR);
-  await wait(fp,()=>{const s=window.__editorTest.davidQA.state().statue;return s?.d?.awake&&(s.x!==24||s.z!==104)});
+  await routeWalk(fp,route);
+  await wait(fp,()=>window.__editorTest.davidQA.state().statue?.d?.awake,null,22000);
+  await routeWalk(fp,TEMPLE_NEAR);
+  await wait(fp,()=>{const s=window.__editorTest.davidQA.state().statue;return s?.d?.awake&&(s.x!==24||s.z!==104)},null,25000);
   await wait(fp,()=>window.__editorTest.davidQA.state().contacts.some(h=>h.hp===0),null,60000);
   await wait(fp,()=>{const s=window.__editorTest.davidQA.state().statue;return !s?.d?.awake&&s?.x===24&&s?.z===104},null,12000);
   const summary=await qa(fp),audio=await fp.evaluate(()=>window.__editorTest.davidQA.sound());

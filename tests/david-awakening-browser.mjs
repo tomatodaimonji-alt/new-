@@ -65,7 +65,7 @@ try{
  await p.goto(url+'/seed');
  await p.evaluate(()=>{
   localStorage.setItem('world-workshop-resume-v1',JSON.stringify({version:1,route:'facility',id:'base',play:true,
-   position:{x:24,z:100,y:0,facing:2},townLayout:5,townMapHeight:128,
+   position:{x:24,z:101,y:0,facing:2},townLayout:5,townMapHeight:128,
    view:{yaw:0,zoom:1.05,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:0,orbitPitch:.16,orbitDistance:6.3}}));
   localStorage.setItem('world-workshop-town-clock-v1','{"version":1,"gameMs":360000}');
  });
@@ -73,7 +73,7 @@ try{
  const val=()=>p.evaluate(()=>window.__editorTest.wakeQA.data());
  await p.waitForFunction(()=>{const q=window.__editorTest?.wakeQA.data();return q?.frames.some(f=>f.phase==='dormant')});
  const old=await val();
- assert.deepEqual(old.player,[24,100,0]);assert.equal(old.started,false);
+ assert.deepEqual(old.player,[24,101,0]);assert.equal(old.started,false);assert(!old.d?.awake,"at three tiles the real statue remains dormant");
  if(screenshots)await capture(p,'david-awakening-01-dormant.png');
  // Pause only the test clock, not the production actor or motion. Each
  // small time step still calls the original world draw and gameplay loop.
@@ -81,17 +81,13 @@ try{
  await p.clock.pauseAt((await p.evaluate(()=>Date.now()))+3000);
  const advance=async()=>{await p.clock.fastForward(56);await p.evaluate(()=>window.__editorTest.wakeQA.draw());return val()};
  // Trusted input in third person yaw 0: ArrowUp physically enters +z.
- const enter=async z=>{
-  await p.keyboard.press('ArrowUp');
-  let q;
-  for(let i=0;i<20;i++){q=await advance();if(q.player[0]===24&&q.player[1]===z&&q.now>=q.nextStep)return q}
-  assert.fail(JSON.stringify({want:z,got:q?.player,d:q?.d}));
- };
- const lip=await enter(101);
- assert(!lip.d?.awake,'arena lip at three tiles is still dormant');
- let live=await enter(102);
+ let live=await val();
+ for(let i=0;i<24&&live.player[1]===101;i++){
+  if(i%6===0&&live.now>=live.nextStep)await p.keyboard.press('ArrowUp');
+  live=await advance();
+ }
  for(let i=0;i<10&&!live.d?.awake;i++)live=await advance();
- assert(live.player[0]===24&&live.player[1]===102&&live.d?.awake,JSON.stringify({player:live.player,d:live.d}));
+ assert(live.player[0]===24&&live.player[1]===102&&live.d?.awake,JSON.stringify({player:live.player,now:live.now,nextStep:live.nextStep,d:live.d}));
  let pullShot=false;
  for(let i=0;i<64&&!(live.started&&(live.d?.attack||live.frames.some(f=>f.z!==104)));i++){
   live=await advance();
