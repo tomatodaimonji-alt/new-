@@ -51,12 +51,13 @@ let fixture=insert(html,anchor,`
     return {pos:[poiWalkX,poiWalkZ,poiWalkLevel],url:location.href,
      status:$('pineStartupCover').dataset.state,opens:f.coverShows,travel:poiDungeonEntranceSerial,step:poiWalkNextReady,
      now:performance.now(),hp:poiPlayerHP,scene:facilityViewLevel()<0?'cellar':'surface',
-     draw:f.last,cue:f.cue,contacts:f.contacts,statue:id?{x:s.x,z:s.z,hp:s.hp,d:s.david??null,pose:poiDavidPose(s,performance.now())}:null};
+     draw:f.last,cue:f.cue,contacts:f.contacts,timing:f.timing,statue:id?{x:s.x,z:s.z,hp:s.hp,d:s.david??null,pose:poiDavidPose(s,performance.now())}:null};
    }
   },`);
 fixture=insert(fixture,'function render(){','\n window.__davidFrames?.next();');
 fixture=insert(fixture,' if(!poiDavidCue){','window.__davidFrames.cue.builds++;window.__davidFrames.cue.byStart[q.start]=(window.__davidFrames.cue.byStart[q.start]||0)+1;');
 fixture=insert(fixture,' const priorHP=poiPlayerHP;',"\n if(obj.type==='monsterStoneDavid')window.__davidFrames.contacts.push({start:poiDavidActive?.s?.david?.attack?.start,raw,amount,hp:Math.max(0,priorHP-amount)});");
+fixture=insert(fixture,'   const i=q.cursor++;',"\n   { const impact=window.__davidFrames; (impact.timing[q.start]??=[]).push({i,late:now-q.hits[i],inside:poiDavidArea(q,p),clear:poiDavidLine({x:q.sx,z:q.sz},p,b)}); }");
 fixture=insert(fixture,'draw(poiDavidCue.lane,vp)',';window.__davidFrames.cue.lane++;');
 fixture=insert(fixture,'draw(poiDavidCue.beam,vp)',';window.__davidFrames.cue.beam++;');
 fixture=insert(fixture,'function poiWildRegionalFrame(now,rng){','return;');
@@ -73,7 +74,7 @@ await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',resolve).once('e
 const url='http://127.0.0.1:'+server.address().port;
 const install=()=>{
  let frame=0,draws=0,vertices=0;
- const summary=window.__davidFrames={coverShows:0,cue:{lane:0,beam:0,builds:0,byStart:{}},contacts:[],last:null,next(){
+ const summary=window.__davidFrames={coverShows:0,cue:{lane:0,beam:0,builds:0,byStart:{}},contacts:[],timing:{},last:null,next(){
   if(frame>0)this.last={frame,draws,vertices};frame++;draws=0;vertices=0;
  }};
  for(const Proto of [globalThis.WebGLRenderingContext?.prototype,globalThis.WebGL2RenderingContext?.prototype].filter(Boolean)){
