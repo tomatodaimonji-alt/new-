@@ -11,11 +11,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        probe: [seam, outlet, visuals, audio, persistence, temple, path-parity, regressions]
+        probe: [seam, outlet, visuals, audio, persistence, temple, companion, path-parity, regressions]
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: fe80e8e5cebb82f8f883bc78c6c8058db4f87ad2
+          ref: acc0f84e64ef765b71e545c1b3937a7671616613
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -23,7 +23,7 @@ jobs:
         shell: bash
         run: |
           set -eu
-          test "$(git hash-object world-editor.html)" = b0ae568d35e75e3ddfea2ac07e4c902ec262ee2a
+          test "$(git hash-object world-editor.html)" = 5c3bc9c78dad3c68c1e8311b57e2cb1b3c8fc9c7
           mkdir -p .spike/tests
           cat >.spike/build.py <<'SOURCE'
           from pathlib import Path
@@ -82,8 +82,8 @@ jobs:
               " const warm=typeof poiOverlandIndexCache!=='undefined'?poiOverlandIndexCache.get(world)?.townCells:null;\n const cells=warm||new Map();\n for(const o of warm?[]:world){\n  const k=poiTownNpcKey(o.x,o.z,o.y);")
           sub("function loadData(o){const {newW", "function loadData(o,quietPresentation=false){const {newW")
           sub("cursorDirty=true;refreshPalette();}\nfunction displayJSON", "cursorDirty=true;if(!quietPresentation)refreshPalette();}\nfunction displayJSON")
-          sub("function facilityLoadMap(map){\n const normalized=facilityExportMap(map);\n loadData(normalized);",
-              "function facilityLoadMap(map,quietPresentation=false){\n const normalized=facilityExportMap(map);\n loadData(normalized,quietPresentation);")
+          sub("function facilityLoadMap(map){","function facilityLoadMap(map,quietPresentation=false){")
+          sub(" loadData(normalized);\n const floorOffset=", " loadData(normalized,quietPresentation);\n const floorOffset=")
           sub(" if(onBase)facilityLoadMap(map);",
               " if(onBase)facilityLoadMap(map,POI_OVERLAND_SPIKE&&dest.region==='snowpass');")
           sub("function poiWalkReset(x,z){","function poiWalkReset(x,z,quietPresentation=false){")
@@ -1634,7 +1634,7 @@ jobs:
            groundGold:[{id:'pile-qa',x:12,z:2,y:0,amount:2}],drops:[{type:'healingHerb',x:12,z:2,y:0}]});
           function startProbe(){
            const p=WebGLRenderingContext.prototype,s=window.__snowSeamProbe={
-            frames:[],uploads:[],audio:[],longTasks:[],npc:[],remote:[],paths:[],sceneCounts:[],masked:0,high:0,live:0,lost:0,veils:[],thumb:[],samples:[],active:false};
+            frames:[],uploads:[],audio:[],longTasks:[],animation:[],npc:[],remote:[],paths:[],sceneCounts:[],masked:0,high:0,live:0,lost:0,veils:[],thumb:[],samples:[],active:false};
            const shapes=new WeakMap(),current=new WeakMap(),cap=4500;
            for(const [method,wrap] of Object.entries({
             bindBuffer(original,target,buffer){
@@ -1677,6 +1677,13 @@ jobs:
            if(typeof PerformanceObserver!=='undefined'&&PerformanceObserver.supportedEntryTypes?.includes('longtask')){
             const observer=new PerformanceObserver(list=>{if(s.active)for(const e of list.getEntries())s.longTasks.push({at:e.startTime,duration:e.duration,name:e.name})});
             observer.observe({type:'longtask'});
+           }
+           if(typeof PerformanceObserver!=='undefined'&&PerformanceObserver.supportedEntryTypes?.includes('long-animation-frame')){
+            const observer=new PerformanceObserver(list=>{if(s.active)for(const e of list.getEntries())s.animation.push({
+             at:e.startTime,duration:e.duration,blocking:e.blockingDuration,render:e.renderStart,layout:e.styleAndLayoutStart,
+             scripts:e.scripts.map(x=>({fn:x.sourceFunctionName,invoker:x.invoker,at:x.startTime,exec:x.executionStart,duration:x.duration,pause:x.pauseDuration,layout:x.forcedStyleAndLayoutDuration}))
+            })});
+            observer.observe({type:'long-animation-frame'});
            }
            const audioClass=globalThis.AudioContext||globalThis.webkitAudioContext;
            const decode=audioClass?.prototype?.decodeAudioData;
@@ -1755,7 +1762,7 @@ jobs:
              const bind=id=>({x:Math.round(pad.x+pad.width/2),y:Math.round(pad.y+pad.height/2),id,radiusX:4,radiusY:4,force:.7});
              async function cross(sign,label,id){
               const from=await get(),input=bind(id),dst=sign>0?'snowpass':'base';
-              const start=await page.evaluate(()=>{const s=window.__snowSeamProbe;s.active=true;s.frames=[];s.phases=[];s.switchPhases=[];s.audio=[];s.longTasks=[];s.npc=[];s.remote=[];s.paths=[];s.veils=[];s.samples=[];s.uploads=[];s.thumb=[];s.sceneCounts=[];s.masked=0;s.high=s.live;
+              const start=await page.evaluate(()=>{const s=window.__snowSeamProbe;s.active=true;s.frames=[];s.phases=[];s.switchPhases=[];s.audio=[];s.longTasks=[];s.animation=[];s.npc=[];s.remote=[];s.paths=[];s.veils=[];s.samples=[];s.uploads=[];s.thumb=[];s.sceneCounts=[];s.masked=0;s.high=s.live;
                return {at:performance.now(),live:s.live};});
               await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[input]});
               await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...input,y:input.y+sign*36}]});
@@ -1792,7 +1799,7 @@ jobs:
                const top=(q.phases||[]).toSorted((a,b)=>b.total-a.total).slice(0,5);
                const around=(q.phases||[]).filter((x,i,a)=>i&&x.region!==a[i-1].region).map((x,i)=>x);
                const slow=Object.assign([],q.frames.slice(1).map((t,i)=>({t,start:q.frames[i],gap:t-q.frames[i]}))).toSorted((a,b)=>b.gap-a.gap).slice(0,3);
-               console.log('Seam CPU phases',JSON.stringify({label,top,around,slow,audio:q.audio,npc:(q.npc||[]).toSorted((a,b)=>b.init+b.port+b.routine-a.init-a.port-a.routine).slice(0,4),switches:q.switchPhases,paths:(q.paths||[]).toSorted((a,b)=>b.elapsed-a.elapsed).slice(0,8)}));
+               console.log('Seam CPU phases',JSON.stringify({label,top,around,slow,audio:q.audio,frameAttribution:(q.animation||[]).toSorted((a,b)=>b.duration-a.duration).slice(0,4),npc:(q.npc||[]).toSorted((a,b)=>b.init+b.port+b.routine-a.init-a.port-a.routine).slice(0,4),switches:q.switchPhases,paths:(q.paths||[]).toSorted((a,b)=>b.elapsed-a.elapsed).slice(0,8)}));
               }
               assert(sign*(position(end)-position(from))>.6,'global walking crosses the registered world edge');
               if(continued){
@@ -1819,22 +1826,21 @@ jobs:
           SOURCE
           python .spike/build.py world-editor.html .spike/stream.html --default
           python .spike/horizon-safe.py .spike/stream.html .spike/world-editor.html
-          test "$(git hash-object .spike/world-editor.html)" = 92470b9b0ecc897db882455d3b701ace68f3c306
+          test "$(git hash-object .spike/world-editor.html)" = 1ec524cf8ccb128cb25cc688afbcdff961491ea5
           cp .spike/world-editor.html .spike/base-stream.html
           python .spike/path-ast-trial.py .spike/base-stream.html .spike/world-editor.html
-          test "$(git hash-object .spike/world-editor.html)" = 01b0505aaf00197244638ff8838b41af7104d43a
+          test "$(git hash-object .spike/world-editor.html)" = aab53065bb10e578ba6503d7ee58d26a0ec94d07
           cd .spike && node --test tests/*.cjs
       - if: matrix.probe != 'regressions'
         run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
       - if: matrix.probe == 'seam'
         run: |
           USE_STREAM_DEFAULT=1 node .spike/tests/overland-browser.mjs .spike/world-editor.html
-          echo 'BASELINE QUIET NO NPC CACHE'
-          SNOW_PHASE_REPORT=1 SNOW_SEAM_REPORT_ONLY=1 node .spike/tests/snow-continuous-seam-browser.mjs .spike/base-stream.html
-          echo 'EXACT-TIE BOUNDED A* TRIAL'
+          echo 'AUDIBLE ORIGINAL GATE'
           gate=0
           SNOW_PHASE_REPORT=1 node .spike/tests/snow-continuous-seam-browser.mjs .spike/world-editor.html || gate=$?
-          SNOW_PHASE_REPORT=1 node .spike/tests/snow-continuous-seam-browser.mjs .spike/world-editor.html || gate=$?
+          echo 'MUTED AB DIAGNOSTIC SAME PRODUCT'
+          SNOW_PROFILE_MUTED=1 SNOW_SEAM_REPORT_ONLY=1 SNOW_PHASE_REPORT=1 node .spike/tests/snow-continuous-seam-browser.mjs .spike/world-editor.html
           exit "$gate"
       - if: matrix.probe == 'outlet'
         run: |
@@ -1855,6 +1861,8 @@ jobs:
         run: |
           node tests/david-temple-browser.mjs .spike/world-editor.html
           node .spike/tests/david-streamed-browser.mjs .spike/world-editor.html
+      - if: matrix.probe == 'companion'
+        run: node tests/monster-companion-combat-browser.mjs .spike/world-editor.html
       - if: matrix.probe == 'path-parity'
         run: node .spike/tests/snow-authored-npc-path-parity-browser.mjs .spike/world-editor.html
       - if: matrix.probe == 'regressions'
