@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {createRequire} from 'node:module';
-import {readFileSync} from 'node:fs';
+import {mkdirSync,readFileSync} from 'node:fs';
 import {Script} from 'node:vm';
 const h=readFileSync(process.argv[2]??'world-editor.html','utf8');let html=h;
 function inject(a,b){assert.equal(html.split(a).length,2,a);html=html.replace(a,b);}
@@ -93,16 +93,31 @@ try{
  const slot=n=>'#poiHotbar [data-hotbar-slot="'+n+'"]',command=m=>'#poiCompanionCommands [data-companion-command="'+m+'"]';
  const menu=(q,n)=>{assert.deepEqual(q.cursor,[n]);assert(q.open&&!q.modal&&q.role==='dialog');assert.deepEqual(q.labels,labels);};
  const initial=await until(q=>q.actor==='slimeSoul');assert.equal(initial.mode,'follow');assert.equal(initial.hp,22);assert.equal(initial.orvasHp,123);
+ const start=await point('#poiAnalogPad',1),held={...start,y:start.y-45};
+ if(process.env.SOUL_BEHAVIOR_NATIVE!=='1'){
  where='one true inactive soul tap with live left thumb and armed wand';
  assert.equal((await tap(slot(4))).wand,4);
- const start=await point('#poiAnalogPad',1),held={...start,y:start.y-45};
  await touch('touchStart',[start]);await touch('touchMove',[held]);
  const left=await until(q=>q.contact!==null&&q.walking);const picked=await tap(slot(5),[held]);
- menu(picked,5);assert(picked.disabled);assert.equal(picked.active,'slimeSoul');assert.equal(picked.weapon,'equipWoodSword');assert.equal(picked.wand,4);
+ menu(picked,5);
+ const anchor=await p.locator(slot(5)).boundingBox(),popup=await p.locator('#poiCompanionCommands').boundingBox();
+ const rows=await p.locator('#poiCompanionCommands button').evaluateAll(nodes=>nodes.map(n=>{const r=n.getBoundingClientRect();return [r.x,r.y,r.width,r.height]}));
+ const style=await p.locator('#poiCompanionCommands').evaluate(n=>{const c=getComputedStyle(n);return {surface:c.backgroundColor,theme:c.getPropertyValue('--workshop-panel-surface').trim()}});
+ assert(Math.abs(anchor.y-popup.y-popup.height-7)<1.6,JSON.stringify({anchor,popup}));
+ assert(Math.abs(anchor.x+anchor.width/2-popup.x-popup.width/2)<1.6,JSON.stringify({anchor,popup}));
+ assert(rows.every((r,i)=>r[0]===rows[0][0]&&r[2]===rows[0][2]&&(!i||r[1]>rows[i-1][1]+rows[i-1][3])),JSON.stringify(rows));
+ const channels=s=>s.match(/[\d.]+/g)?.map(Number);
+ assert.deepEqual(channels(style.surface),channels(style.theme));assert(channels(style.surface)?.at(-1)<.9,JSON.stringify(style));
+ if(process.env.FACILITY_SCREENSHOTS){
+  mkdirSync(process.env.FACILITY_SCREENSHOTS,{recursive:true});
+  await p.screenshot({path:process.env.FACILITY_SCREENSHOTS+'/soul-slot-popup-actual.png',timeout:15000});
+ }
+ assert(picked.disabled);assert.equal(picked.active,'slimeSoul');assert.equal(picked.weapon,'equipWoodSword');assert.equal(picked.wand,4);
  const moving=await until(q=>Math.hypot(q.xy[0]-left.xy[0],q.xy[1]-left.xy[1])>.06,16);
  assert.equal(moving.contact,left.contact);
  const returned=await tap(command('back'),[held]);assert(!returned.open);assert.deepEqual(returned.cursor,[5]);assert.equal(returned.active,'slimeSoul');
  assert.equal(returned.contact,left.contact);await touch('touchEnd',[]);
+ }
  if(process.env.SOUL_BEHAVIOR_NATIVE==='1'){
   where='native analog pressure, ordinary companion species rate and four/two follow hysteresis';
   const axis=await p.evaluate(()=>window.__editorTest.soulMenuQA.walkAxis());assert(axis.length>=7,JSON.stringify(axis));
@@ -157,7 +172,7 @@ try{
  assert(await p.evaluate(()=>window.__editorTest.soulMenuQA.hurt(123)));
  const gone=await step();assert(!gone.open);assert.equal(gone.orvasHp,null);assert.equal(gone.active,null);assert(!gone.cursor.includes(5));
  assert.deepEqual(errors,[]);await cdp.detach();await ctx.close();
- console.log('PASS exact real four commands, exact cursor, simultaneous movement, autonomous fight/follow cancel, durability and zero terminal',JSON.stringify({old:left.mode,hit:landed.damage,restored:reload.orvasHp}));
+ console.log('PASS exact real four commands, exact cursor, simultaneous movement, autonomous fight/follow cancel, durability and zero terminal',JSON.stringify({old:initial.mode,hit:landed.damage,restored:reload.orvasHp}));
  }
 }catch(e){console.error(where,JSON.stringify(last));throw e}
 finally{await browser?.close();await new Promise(r=>server.close(r))}
