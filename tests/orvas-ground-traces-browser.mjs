@@ -10,6 +10,40 @@ put(ap,ap+`
  orvasTracesQA:{
   hold:()=>{window.__orvasManual=true},
   frame:()=>render(),
+  verifyStripes:()=>{
+   const q=poiDavidActive?.s?.david?.attack,g=poiDavidCue?.beam;
+   if(!q||!g)return null;const d=q.sweep&&q.sweep.start!==null?poiDavidBeamRay(q,q.sweep.angle):{x:q.dx,z:q.dz};
+   return (function(s,g,origin,dir,mid,span){
+ if(!g?.buf)return null;
+ const prev=gl.getParameter(gl.FRAMEBUFFER_BINDING),view=gl.getParameter(gl.VIEWPORT),depth=gl.isEnabled(gl.DEPTH_TEST);
+ const f=gl.createFramebuffer(),tex=gl.createTexture(),n=64;
+ gl.bindTexture(gl.TEXTURE_2D,tex);
+ gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+ gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,n,n,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+ gl.bindFramebuffer(gl.FRAMEBUFFER,f);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tex,0);
+ try{
+  gl.viewport(0,0,n,n);gl.disable(gl.DEPTH_TEST);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
+  const dx=dir.x,dz=dir.z,x=origin.x,z=origin.z,sideSpan=.42;
+  const vp=new Float32Array([dx/span,dz/sideSpan,0,0,0,0,0,0,dz/span,-dx/sideSpan,0,0,
+   -(dx*x+dz*z+mid)/span,-(dz*x-dx*z)/sideSpan,0,1]);
+  draw(g,vp,0,g.coreCount??g.count);
+  const data=new Uint8Array(n*n*4);gl.readPixels(0,0,n,n,gl.RGBA,gl.UNSIGNED_BYTE,data);
+  let left=0,right=0,center=0,maxL=0,maxR=0;
+  for(let j=0;j<n;j++)for(let i=10;i<54;i++){
+   const k=(j*n+i)*4;if(!data[k+3]||data[k]<30)continue;
+   const y=(j/n*2-1)*sideSpan;
+   if(y<-.055){left++;maxL=Math.max(maxL,data[k]);}
+   if(y>.055){right++;maxR=Math.max(maxR,data[k]);}
+   if(Math.abs(y)<.039)center++;
+  }
+  return {left,right,center,maxL,maxR,error:gl.getError()};
+ }finally{
+  gl.bindFramebuffer(gl.FRAMEBUFFER,prev);gl.viewport(...view);
+  if(depth)gl.enable(gl.DEPTH_TEST);
+  gl.deleteTexture(tex);gl.deleteFramebuffer(f);
+ }
+})(null,g,{x:q.sx+.5,z:q.sz+.5},d,1.05,.53);
+  },
   seed:()=>{
    const b=facilitySite?.davidTemple?.boss;if(!b)return false;
    return workshopResumeRestorePosition({x:b.x,z:b.z-2,y:b.y,facing:2});
@@ -103,6 +137,9 @@ try{
    const later=await until(s=>s.q?.done&&s.start[0]?.cells.length>first.start[0].cells.length,38,'rotating beam paints additional legal cells');
    assert.equal(later.start.length,1);assert(later.start[0].cells.length<=70);assert(later.uploads.every((u,i)=>i===0||u.reuse));
   }else if(label==='beam'){
+   const stripes=await p.evaluate(()=>window.__editorTest.orvasTracesQA.verifyStripes());
+   assert(stripes&&stripes.left>35&&stripes.right>35&&stripes.center===0&&stripes.error===0,JSON.stringify(stripes));
+   console.log('Actual statue split GPU stripe',JSON.stringify(stripes));
    assert.equal(first.start[0].kind,'beam');assert(first.start[0].cells.length>=3&&first.q.reach<14,'beam stops on the authored physical tunnel');
    for(const key of first.start[0].cells){
     const [x,z]=key.split(',').map(Number),dx=x-first.q.sx,dz=z-first.q.sz;

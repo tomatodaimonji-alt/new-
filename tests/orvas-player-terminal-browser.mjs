@@ -11,9 +11,55 @@ const mark="if(facilityParams.get('test')==='1')window.__editorTest={";
 install(mark,`
  window.__orvas={
   frame:()=>render(),
+  verifyStripes:()=>{
+   const a=poiOrvasPlayerBeam,rs=a?.rays;if(!rs?.length)return null;
+   const d=a.d,g=poiOrvasBeamGpu,x=(rs[0].x+rs[1].x)*.5+.5,z=(rs[0].z+rs[1].z)*.5+.5;
+   return (function(s,g,origin,dir,mid,span){
+ if(!g?.buf)return null;
+ const prev=gl.getParameter(gl.FRAMEBUFFER_BINDING),view=gl.getParameter(gl.VIEWPORT),depth=gl.isEnabled(gl.DEPTH_TEST);
+ const f=gl.createFramebuffer(),tex=gl.createTexture(),n=64;
+ gl.bindTexture(gl.TEXTURE_2D,tex);
+ gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+ gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,n,n,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+ gl.bindFramebuffer(gl.FRAMEBUFFER,f);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tex,0);
+ try{
+  gl.viewport(0,0,n,n);gl.disable(gl.DEPTH_TEST);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
+  const dx=dir.x,dz=dir.z,x=origin.x,z=origin.z,sideSpan=.42;
+  const vp=new Float32Array([dx/span,dz/sideSpan,0,0,0,0,0,0,dz/span,-dx/sideSpan,0,0,
+   -(dx*x+dz*z+mid)/span,-(dz*x-dx*z)/sideSpan,0,1]);
+  draw(g,vp,0,g.coreCount??g.count);
+  const data=new Uint8Array(n*n*4);gl.readPixels(0,0,n,n,gl.RGBA,gl.UNSIGNED_BYTE,data);
+  let left=0,right=0,center=0,maxL=0,maxR=0;
+  for(let j=0;j<n;j++)for(let i=10;i<54;i++){
+   const k=(j*n+i)*4;if(!data[k+3]||data[k]<30)continue;
+   const y=(j/n*2-1)*sideSpan;
+   if(y<-.055){left++;maxL=Math.max(maxL,data[k]);}
+   if(y>.055){right++;maxR=Math.max(maxR,data[k]);}
+   if(Math.abs(y)<.039)center++;
+  }
+  return {left,right,center,maxL,maxR,error:gl.getError()};
+ }finally{
+  gl.bindFramebuffer(gl.FRAMEBUFFER,prev);gl.viewport(...view);
+  if(depth)gl.enable(gl.DEPTH_TEST);
+  gl.deleteTexture(tex);gl.deleteFramebuffer(f);
+ }
+})(null,g,{x,z},d,.93,.53);
+  },
   stage:(index,mode)=>{
    const b=facilitySite.davidTemple.boss;
-   if(!workshopResumeRestorePosition({x:b.x+(mode==='wall'?-12:0),z:b.z+(mode==='wall'?3:4),y:b.y,facing:mode==='wall'?3:1}))return false;
+   if(mode==='grass'||mode==='soil'){
+    const kind=t=>mode==='grass'?/^(grass|moss|roadGrass)/i.test(t):/^(earth|sand|soil|roadDirt|roadGravel)/i.test(t);
+    let found=false;
+    for(const o of world){
+     if(o.y!==0||o.z<82||o.x<42||!isFloor(o.type)||!kind(o.type))continue;
+     const x=o.x-3,z=o.z,q={kind:'sweep',sx:x,sz:z,dx:1,dz:0,y:0};
+     const e=poiOrvasTraceEvent(q,'sweep',0);e.radius=5;
+     const floor=poiOrvasTraceGround(q,e,null);
+     if(!floor(x+2.85,z)||floor.material(x+2.85,z)!==mode)continue;
+     if(workshopResumeRestorePosition({x,z,y:0,facing:1})){found=true;break}
+    }
+    if(!found)return false;
+   }else if(!workshopResumeRestorePosition({x:b.x+(mode==='wall'?-12:0),z:b.z+(mode==='wall'?3:4),y:b.y,facing:mode==='wall'?3:1}))return false;
    poiMonsterStates.clear();poiCombatLockReset();
    return poiEquipHotbarItem(index)?.ok;
   },
@@ -31,7 +77,7 @@ install(mark,`
    return {weapon,ready:poiAttackReady,clock:performance.now(),pending:!!a,cursor:a?.orvasCursor,
     used:slots.find(c=>c?.type===weapon)?.durability,hp:window.__orvas.targets?.map(s=>s.hp),
     beam:beam?{rays:beam.rays,draw:!!poiOrvasBeamGpu}:null,start:poiWalkActionStarted,
-    marks:poiOrvasGroundTraces.filter(e=>e.player).map(e=>({kind:e.kind,start:e.start,x:e.x,z:e.z,tiles:e.cells.size,points:e.parts.reduce((n,m)=>n+m.p.length/3,0)})),
+    marks:poiOrvasGroundTraces.filter(e=>e.player).map(e=>({kind:e.kind,start:e.start,x:e.x,z:e.z,tiles:e.cells.size,points:e.parts.reduce((n,m)=>n+m.p.length/3,0),grass:e.parts.some(m=>m.c.some((c,i)=>i%3===0&&c===.18&&m.c[i+1]===.16)),soil:e.parts.some(m=>m.c.some((c,i)=>i%3===0&&c===.20&&m.c[i+1]===.112))})),
     draws:window.__orvasPlayerTraceDraws??[],
     name:POI_ORVAS_NAME,items:slots.slice(2,5).map(c=>c?.type)};
   }
@@ -84,24 +130,31 @@ try{
  assert(landed.clock-held.start>=420);
  assert.deepEqual(landed.hp,[52,100]);assert.equal(landed.used,q.used-1);
  const paint=(s,kind,at)=>s.marks.filter(e=>e.kind===kind&&e.start>=at&&s.draws.some(d=>d.start===e.start&&d.count>0));
- assert.equal(paint(landed,'beam',held.start).length,0,'target-stopped beam does not burn floor below air');
- assert(landed.beam.rays.every(r=>!r.groundDrop));
+ const behind=paint(landed,'beam',held.start);
+ assert.equal(behind.length,1,'real terrain beyond first target receives one two-tip mark event');
+ assert(landed.beam.rays.every(r=>r.groundDrop&&r.groundDrop.at>r.end+2&&r.groundDrop.at<r.visualLimit),
+  JSON.stringify(landed.beam.rays));
+ const firstStrike=landed.hp.slice();await frame(150);assert.deepEqual((await read()).hp,firstStrike,'no follow-up HP loss from visual continuation');
  ({q,held}=await start(2,[],'wall'));
  landed=await until(v=>!v.pending&&v.beam?.draw);
- assert(landed.beam.rays.every(r=>!r.groundDrop),'wall-stopped ray has no floor endpoint');
- assert.equal(paint(landed,'beam',held.start).length,0);
+ const markWall=paint(landed,'beam',held.start),wallDrops=landed.beam.rays.filter(r=>r.groundDrop);
+ assert.equal(markWall.length,1,'ordinary wall-capped cast visibly contacts the floor before the wall');
+ assert(wallDrops.length===2&&wallDrops.every(r=>r.groundDrop.at<r.end&&r.groundDrop.h<r.h));
+ const stripes=await p.evaluate(()=>window.__orvas.verifyStripes());
+ assert(stripes&&stripes.left>35&&stripes.right>35&&stripes.center===0&&stripes.error===0,JSON.stringify(stripes));
+ console.log('Actual portable split GPU stripe',JSON.stringify(stripes));
  ({q,held}=await start(2,[]));
  landed=await until(v=>!v.pending&&v.beam?.draw);
  const marks=paint(landed,'beam',held.start),drops=landed.beam.rays.filter(r=>r.groundDrop);
  assert.equal(marks.length,1);assert(marks[0].tiles>=1&&marks[0].tiles<=2);
- assert(drops.length&&drops.every(r=>r.groundEligible&&r.groundDrop.at<=r.end&&r.groundDrop.at>r.end-1.25));
+ assert(drops.length===2&&drops.every(r=>r.groundEligible&&r.groundDrop.at<=r.end&&r.groundDrop.at>r.end-1.25));
  for(const r of drops)assert(r.h>r.groundDrop.h+.1&&r.visualEnd===r.groundDrop.blendStart);
  assert(landed.beam.rays.length===2&&landed.beam.rays[0].z!==landed.beam.rays[1].z);
  ({q,held}=await start(3,[[28,108,0],[26,111,0],[23,108,0]]));
  landed=await until(v=>!v.pending);
  assert(landed.clock-held.start>=560);
  assert.deepEqual(landed.hp,[54,54,100]);assert.equal(landed.used,q.used-1);
- assert.equal(paint(landed,'sweep',held.start).length,1);
+ assert.equal(paint(landed,'sweep',held.start).length,1,'single sideways sweep leaves its own shallow marks');
  ({q,held}=await start(4,[[27,108,0],[26,111,0],[23,108,0]]));
  const first=await until(v=>v.cursor===1);
  assert(first.clock-held.start>=720);assert.deepEqual(first.hp,[72,100,100]);
@@ -111,6 +164,12 @@ try{
  const twin=paint(landed,'double',held.start);
  assert.equal(twin.length,2);assert(twin[1].start-twin[0].start>=280);
  assert(Math.hypot(twin[0].x-twin[1].x,twin[0].z-twin[1].z)>.13);
+ for(const material of ['grass','soil']){
+  ({q,held}=await start(3,[],material));
+  const local=await until(v=>!v.pending&&paint(v,'sweep',held.start).length===1);
+  const scar=paint(local,'sweep',held.start)[0];assert(scar[material],JSON.stringify(scar));
+  assert.equal(local.used,q.used,'empty cosmetic ground cut does not wear the weapon');
+ }
  console.log('Player traces',JSON.stringify({marks,twin}));
  console.log('Physical reset, then all three actual right-button attacks, matched timing, scope and wear',JSON.stringify({first:first.hp,landed:landed.hp}));
  assert.deepEqual(errors,[]);
