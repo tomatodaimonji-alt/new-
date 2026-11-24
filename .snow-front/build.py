@@ -89,7 +89,7 @@ rep(' const eligible=registered&&!templeGround&&poiWalkActive&&poiWalkLevel===0&
  }
  const eligible=outdoor&&!templeGround;''')
 rep(' facilityDrawRoofs(p.vp);poiDrawGameRoofs(p.vp);}',
-    " facilityDrawRoofs(p.vp);poiDrawGameRoofs(p.vp);poiSnowTempleNeighborDraw(p.vp);}")
+    " facilityDrawRoofs(p.vp);poiDrawGameRoofs(p.vp);if(typeof poiSnowTempleNeighborDraw==='function')poiSnowTempleNeighborDraw(p.vp);}")
 # Last outlet predicate needs real ground, not a special road gate.
 # Existing direct editor return still uses that old guaranteed road through POI_SNOW_PASS.base.
 dst.parent.mkdir(parents=True,exist_ok=True);dst.write_text(s)

@@ -55,7 +55,7 @@ try{
    const after=await (await p.waitForFunction(({dst,axis,index,dir})=>{const a=window.__editorTest?.snowFrontQA();
     return a?.scene===dst&&dir[axis]*(a.global[axis]+.5-index)>.55&&a},v,{polling:18,timeout:9000})).jsonValue();
    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
-   a.equal(after.error,0);a.equal(after.veil,false);a.equal(after.switches,1);
+   a.equal(after.error,0);a.equal(after.veil,false);a.equal(after.switches-start.switches,1);
    a.equal(near.pointer,after.pointer);a.notEqual(after.pointer,null);
    a(Math.abs(after.global[1-v.axis]-start.global[1-v.axis])<.12,'non-crossing axis stays fixed');
    a(Math.max(...after.light.map((n,i)=>Math.abs(n-near.light[i])))<.10,'the same night clock hands off continuously');
