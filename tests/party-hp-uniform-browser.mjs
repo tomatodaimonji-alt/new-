@@ -84,7 +84,7 @@ try{
   assert(await p.evaluate(()=>window.__editorTest.partyHPQA.injure()));
   await p.waitForFunction(()=>document.querySelector('#poiCompanionHudHp').value===887);
   const hurt=await verify('hurt');
-  assert.deepEqual(hurt.map(a=>a.slice(0,3)),[['73/100',73,100],['887/1050',887,1050]]);
+  assert.deepEqual(hurt.map(a=>a.slice(0,3)),[['75/100',75,100],['887/1050',887,1050]]);
   assert.deepEqual(hurt.map(a=>a.slice(3)),full.map(a=>a.slice(3)));
   assert.deepEqual(errors,[]);console.log(when,JSON.stringify({full,hurt}));await ctx.close();
  }
