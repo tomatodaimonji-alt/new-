@@ -15,7 +15,7 @@ test('separate damage, speed and reach rows are generated from canonical profile
  const c=fixture();
  for(const [type,damage,speed,reach] of [['equipWoodSword',45,4,1],['fireWand',34,2,5],['kitchenKnife',30,5,1]]){
   const s=c.poiItemDetailWeaponStats(type);assert.deepEqual([s.damage,s.speed,s.reach],[damage,speed,reach]);
-  c.poiItemDetailRenderWeaponStats(type);
+  c.poiItemDetailRenderEquipment({type});c.poiItemDetailRenderWeaponStats(type);
   assert.equal(c.$('poiItemDetailAttack').textContent,String(damage));
   assert.equal(c.$('poiItemDetailWeaponSpeed').textContent,'★'.repeat(speed)+'☆'.repeat(5-speed));
   assert.equal(c.$('poiItemDetailWeaponReach').textContent,'★'.repeat(reach)+'☆'.repeat(5-reach));
@@ -26,9 +26,12 @@ test('weapon rows clear for consumables and armor; shared description and detail
  const c=fixture(),sword={type:'equipWoodSword',count:1},herb={type:'healingHerb',count:3};
  assert.match(c.poiItemDetailDescription(sword),/攻撃力：45/);
  assert.doesNotMatch(c.poiItemDetailDescription(sword,false),/攻撃力|攻撃範囲/);
- assert.match(c.poiItemDetailDescription({type:'armorIronTorso'},false),/防御力：8/);
+ assert.match(c.poiItemDetailDescription({type:'armorIronTorso'}),/防御力：8/);
+ assert.doesNotMatch(c.poiItemDetailDescription({type:'armorIronTorso'},false),/防御力/);
+ c.poiItemDetailRenderEquipment({type:'armorIronTorso'});
+ assert.equal(c.$('poiItemDetailDefense').textContent,'8');
  assert.match(c.poiItemDetailDescription(herb,false),/所持数：3/);
- c.poiItemDetailRenderWeaponStats('equipWoodSword');c.poiItemDetailRenderWeaponStats(herb.type);
+ c.poiItemDetailRenderWeaponStats('equipWoodSword');c.poiItemDetailRenderWeaponStats(herb.type);c.poiItemDetailRenderEquipment(herb);
  assert.equal(c.$('poiItemDetailWeaponStats').hidden,true);
  assert.equal(c.$('poiItemDetailAttack').textContent,'');
  assert.match(h,/id="poiItemDetailWeaponStats"[^>]*hidden/);
