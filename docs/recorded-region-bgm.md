@@ -5,7 +5,7 @@ seven regional cue IDs are supplied. The playback transport and assets for the p
 
 | Existing scene key | New title | Role |
 |---|---|---|
-| town | 灯火の謎 | Warm suspended lantern tune with oboe/flute dialogue |
+| town | 朝靄の灯 | Quiet harp opening, soft low strings and a late entrance for flute |
 | indoor (shared asset for Selnea) | 潮霧の窓辺 | Open, fresh coastal flute/harp chamber ambience |
 | mine | 石脈のささやき | 3-meter negative space, detuned-feeling shadow and distant replies |
 | otherworld | 鏡の向こうの星 | Asymmetric 5-meter floating phrases, displaced harmonies |
@@ -19,13 +19,14 @@ License: instrument takes are
 [CC0-1.0](https://github.com/sgossner/VSCO-2-CE/blob/440300901dfe9275fd84e0b7763af1f8443ae62e/LICENSE).
 Original recordings credited by the upstream README to Sam Gossner and
 Simon Dalzell, cutting to Elan Hickler/Soundemote. Precise path, commit,
-Git hash, SHA-256 and file size are in `recorded-region-bgm-manifest.json`. Recorded oboe staccatos are lengthened with a
-phase-matched portion of the same recording. Horn is actual muted F
+Git hash, SHA-256 and file size are in `recorded-region-bgm-manifest.json`. Legacy scores that feature oboe use recorded staccatos lengthened
+with a phase-matched portion of the same recording. The current town cue
+uses no oboe in the recording or the fallback score. Horn is actual muted F
 horn; strings are actual recorded viola sections. No game recordings
 or new third-party melodies were incorporated.
 
 Verification: 32 kHz stereo Vorbis, exact authored frame count for all
-seven; 40.00–50.91 seconds each; 1,742,601 Ogg bytes total; -21.5 to -20.3
+seven; 40.00–61.71 seconds each; 1,751,970 Ogg bytes total; -23.3 to -20.3
 LUFS and maximum true peak -8 dBTP. Maximum decoded circular seam sample
 step .005521. Source pitches, loudness, mono mix and loop boundaries were verified programmatically.
 
