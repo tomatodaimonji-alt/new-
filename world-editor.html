@@ -1722,7 +1722,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v332）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v333）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -26775,9 +26775,58 @@ function poiPortNpcSync(clock,now){
  }
  poiTownNpcVersion++;return true;
 }
+// BEGIN PORT CATCH
+const POI_PORT_CATCH_MINUTES=24;
+const POI_PORT_FISH_RECEIVE=Object.freeze({x:83,z:117,y:0,facing:1});
+function poiPortFishObserve(a,clock,now){
+ if(a.role?.id!=='portfisher'||facilitySite?.id!=='base')return false;
+ const berth=facilitySite.southPort?.fisher?.berth,abs=clock.absoluteMinute,day=Math.floor(abs/1440);
+ const g=poiTownNpcGraph(),t=(x,z,type)=>g.cells.get(poiTownNpcKey(x,z,0))?.includes(type);
+ if(a.recessed||a.activity!=='fishing'||!berth||!poiTownNpcHere(a,berth)||poiTownNpcStepT(a,now)<1||
+    !Number.isSafeInteger(abs)||abs<0||!Number.isFinite(now)||!t(75,117,'sea')||!t(78,119,'poiPortNet')){
+  a.portFishing=null;return false;
+ }
+ const prev=a.portFishing,delta=prev?abs-prev.minute:0,gap=prev?now-prev.tick:Infinity;
+ const span=prev?.day===day&&delta>=0&&delta<=2&&gap>=0&&gap<=800?prev.span+delta:0;
+ a.portFishing={day,minute:abs,tick:now,span:Math.min(POI_PORT_CATCH_MINUTES,span)};
+ if(span<POI_PORT_CATCH_MINUTES||a.portCatchDay===day)return false;
+ const p=poiTownNpcPurseRead();
+ if(!p||p.fish.held>1)return false;
+ if(p.fish.day>=day){a.portCatchDay=day;return false}
+ // One actual catch yields two portions. It is not money, outside sales,
+ // a player item, or evidence of any catch made while offsite.
+ p.fish.day=day;p.fish.held+=2;p.fish.total+=2;
+ if(!poiTownNpcPurseSave(p))return false;
+ a.portCatchDay=day;return true;
+}
+function poiPortFishConsign(a,clock,now,budget){
+ if(a.role?.id!=='portfisher'||a.recessed||facilitySite?.id!=='base'||clock.minute<435||clock.minute>=1100)return false;
+ const port=facilitySite.southPort,work=port?.market?.work,stall=port?.market?.stall;
+ const c=poiTownNpcActors.find(b=>b.role?.id==='portfishseller');
+ if(!work||!stall||c?.recessed||c?.activity!=='fish-stall'||!poiTownNpcHere(c,work)||poiTownNpcStepT(c,now)<1)return false;
+ const g=poiTownNpcGraph(),at=POI_PORT_FISH_RECEIVE;
+ if(!g.cells.get(poiTownNpcKey(stall.x,stall.z,stall.y))?.includes('poiPortFishStall')||!poiTownNpcStance(at,g))return false;
+ const p=poiTownNpcPurseRead();if(!p)return false;
+ const count=Math.min(p.fish.held-1,4-p.fish.stall);
+ if(count<=0)return false;
+ a.portFishing=null;
+ if(!poiTownNpcMove(a,at,'port-walk',now,budget)||!poiTownNpcHere(a,at)||poiTownNpcStepT(a,now)<1){
+  poiTownNpcAct(a,'port-walk');return true;
+ }
+ p.fish.held-=count;p.fish.stall+=count;
+ if(!poiTownNpcPurseSave(p))return true;
+ poiTownNpcAct(a,'port-walk');
+ return true;
+}
+function poiPortFishTalk(a){
+ if(a?.role?.id!=='portfishseller'||facilitySite?.id!=='base')return null;
+ return poiTownNpcPurseRead()?.fish.stall>0?'ネリが届けてくれた魚があるよ。これはまだ売りに出してないよ。':null;
+}
+// END PORT CATCH
 function poiPortNpcRoutine(a,clock,now,budget){
  if(!a.role?.portBounds)return false;
  const {goal,label,recessed}=poiPortNpcPlan(a.role,clock.minute);
+ if(!recessed&&typeof poiPortFishConsign==='function'&&poiPortFishConsign(a,clock,now,budget))return true;
  if(a.recessed){
   if(recessed||!poiPortNpcTryStart(a,a.role.home,now))return true;
   poiTownNpcVersion++;
@@ -26789,6 +26838,7 @@ function poiPortNpcRoutine(a,clock,now,budget){
   a.recessed=true;poiTownNpcVersion++;
  }
  poiTownNpcAct(a,arrived?label:'port-walk');
+ if(typeof poiPortFishObserve==='function')poiPortFishObserve(a,clock,now);
  return true;
 }
 function poiPortNpcCounter(a,dx,dz,g){
@@ -26883,13 +26933,19 @@ function poiTownNpcPurseKnown(a){
 function poiTownNpcPurseRead(){
  const empty=()=>({coins:0,herbs:0,night:-1});
  const openingFood=()=>({inn:2,supplier:8,day:-1,eaten:0,northMeal:-1});
- const origin=()=>({version:1,issued:0,guestadventurer:empty(),resadventurer:empty(),toolkeeper:0,innkeeper:0,towncook:0,diningkeeper:0,shift:{day:-1,served:0,xp:0},food:openingFood(),procDay:-1,procSerial:0,order:null});
+ const emptyFish=()=>({day:-1,held:0,stall:0,total:0});
+ const origin=()=>({version:1,issued:0,fish:emptyFish(),guestadventurer:empty(),resadventurer:empty(),toolkeeper:0,innkeeper:0,towncook:0,diningkeeper:0,shift:{day:-1,served:0,xp:0},food:openingFood(),procDay:-1,procSerial:0,order:null});
  const integer=(n,min,max)=>Number.isSafeInteger(n)&&n>=min&&n<=max;
  try{
   const raw=localStorage.getItem(POI_NPC_PURSE_KEY);
   if(raw===null)return origin();
   const p=JSON.parse(raw);
   if(p?.version!==1||!integer(p.issued,0,Number.MAX_SAFE_INTEGER))return null;
+  if(!Object.hasOwn(p,'fish'))p.fish=emptyFish();
+  const fish=p.fish;
+  if(!fish||!integer(fish.day,-1,Math.floor(1e7/1440))||!integer(fish.held,0,3)||!integer(fish.stall,0,4)||
+     !integer(fish.total,0,7)||fish.total%2!==0||fish.held+fish.stall!==fish.total||
+     (fish.day===-1)!==(fish.total===0))return null;
   if(Object.hasOwn(p,'northPatrolDay')&&!integer(p.northPatrolDay,0,Math.floor(1e7/1440)))delete p.northPatrolDay;
   if(!Object.hasOwn(p,'towncook')&&!Object.hasOwn(p,'food')){p.towncook=0;p.food=openingFood()}
   if(!Object.hasOwn(p,'diningkeeper')&&!Object.hasOwn(p,'shift')){p.diningkeeper=0;p.shift={day:-1,served:0,xp:0}}
@@ -28192,7 +28248,8 @@ function poiNpcMenuChoose(id,now=performance.now()){
  if(id==='talk'){
   const report=d.actor.role.id==='northscout'&&typeof poiTownScoutReport==='function'&&poiTownScoutReport(poiTownClockSnapshot());
   const usualTopics=POI_NPC_EXTRA_SPEECH[d.actor.role.id]||['夕方になると門の外は暗くなる。帰り道は覚えておくといいよ。','町へ戻ると、ようやく一息つけるね。'];
-  const topics=report?[report,...usualTopics]:usualTopics;
+  const fish=typeof poiPortFishTalk==='function'&&poiPortFishTalk(d.actor);
+  const topics=report?[report,...usualTopics]:fish?[fish,...usualTopics]:usualTopics;
   const port=typeof poiPortMarekTopic==='function'?poiPortMarekTopic(d.actor):null;
   const length=topics.length+(port?1:0),index=(poiNpcTalkCursor.get(d.actor)||0)%length;
   poiNpcTalkCursor.set(d.actor,(index+1)%length);
@@ -28894,7 +28951,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v332',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v333',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -29009,7 +29066,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v332';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v333';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -29224,7 +29281,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v332',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v333',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
