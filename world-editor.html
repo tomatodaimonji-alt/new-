@@ -1721,7 +1721,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v361）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v362）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -2062,6 +2062,14 @@ const facilityParams=new URLSearchParams(location.search);
 const POI_OUTDOOR_LOD=facilityParams.get('outdoor-lod')!=='0';
 const startupEditor=facilityParams.get('startup-editor')==='1';
 const facilityReturn=startupEditor||facilityParams.get('facility-return')==='1';
+const frontierBoot=!startupEditor&&!facilityParams.has('editor')&&
+ (facilityParams.get('facility')==='base'||(!facilityReturn&&!facilityParams.has('facility')));
+// The new map has different coordinates. Keep its progress and reset isolated.
+const localStorage=frontierBoot?{
+ getItem:k=>window.localStorage.getItem('frontier-v1:'+k),
+ setItem:(k,v)=>window.localStorage.setItem('frontier-v1:'+k,v),
+ removeItem:k=>window.localStorage.removeItem('frontier-v1:'+k)
+}:window.localStorage;
 const WORKSHOP_RESUME_KEY='world-workshop-resume-v1';
 let workshopResumeReady=false,workshopResumeLeaving=false,workshopResumeRaw='',workshopResumeTag='empty',workshopAdventureResumeQuiet=false;
 let facilitySite=null,facilityRoofMeshes=[],facilityExportFallback=null;
@@ -2531,31 +2539,44 @@ function detailedTree(m,id,x,y,z){
 
 // Characters use low-poly silhouettes. +Z is front; the ordinary deco()
 // rotation path handles all four placement directions.
+// Rounded, tapered low-poly rings; keep the existing walk, hand and armor anchors.
+function humanRingProfile(m,x,y,z,rings,color,sides=10){
+ const ring=([h,rx,rz,dx=0,dz=0])=>Array.from({length:sides},(_,i)=>{
+  const a=2*Math.PI*i/sides;return [x+dx+rx*Math.cos(a),y+h,z+dz+rz*Math.sin(a)];
+ });
+ let a=ring(rings[0]);
+ for(const shape of rings.slice(1)){
+  const b=ring(shape);
+  for(let i=0;i<sides;i++){const j=(i+1)%sides;quad(m,a[i],b[i],b[j],a[j],color)}
+  a=b;
+ }
+}
 function characterHuman(m,x,y,z,villager,armPose=null,gear=null,modest=false){
  const torsoType=poiHumanGearType(gear?.torso),legsType=poiHumanGearType(gear?.legs);
  const tunic=torsoType==='starterTunic'?[.48,.53,.43]:poiRoleClothingTone(torsoType);
- const skin=[.77,.59,.43],shade=[.63,.46,.35],hair=[.28,.20,.13];
- const cloth=[.32,.47,.39],linen=[.75,.71,.57],boot=[.26,.21,.18];
+ const skin=[.77,.59,.43],shadow=[.65,.47,.36],hair=[.24,.17,.12],cloth=[.32,.47,.39],linen=[.75,.71,.57],boot=[.25,.20,.17];
+ const shorts=[.30,.31,.29],profile=(xx,zz,r,c,n)=>humanRingProfile(m,x+xx,y,z+zz,r,c,n);
  for(const side of [-1,1]){
-  const xx=x+side*.115;
-  cube(m,xx,y,z,.155,.52,.19,villager?boot:skin);
-  if(villager)cube(m,xx,y+.37,z,.17,.24,.21,cloth);
+  const xx=side*.112;
+  profile(xx,0,[[.0,0,0,0,.038],[.012,.067,.114,0,.038],[.064,.069,.110,0,.036],
+   [.133,.051,.060],[.31,.071,.075],[.43,.069,.072],[.61,.092,.088],[.64,0,0]],villager?boot:skin,8);
+  if(villager||modest&&!legsType){
+   profile(xx,0,[[.38,0,0],[.39,.084,.090],[.53,.098,.101],[.62,.102,.106],[.65,0,0]],villager?cloth:shorts,8);
+  }
  }
- cube(m,x,y+.49,z,.39,.48,.26,villager?cloth:skin);
- // Plain shorts cover the live rig without inventing a shirt; editor
- // humans retain their original clothes and palette.
- if(modest&&!legsType){
-  cube(m,x,y+.441,z,.395,.126,.268,[.30,.31,.29]);
-  for(const side of [-1,1])cube(m,x+side*.115,y+.345,z,.17,.13,.208,[.30,.31,.29]);
- }
+ profile(0,0,[[.465,0,0],[.49,.145,.105],[.58,.195,.124],[.68,.162,.110],
+  [.855,.211,.128],[.938,.216,.130],[1.006,.152,.103],[1.042,.064,.068],[1.062,0,0]],villager?cloth:skin);
+ if(modest&&!legsType)profile(0,0,[[.49,0,0],[.50,.163,.122],[.59,.202,.131],[.62,.184,.124],[.63,0,0]],shorts);
  for(const side of [-1,1]){
-  const start=m.p.length;
-  cube(m,x+side*.272,y+.53,z,.135,.46,.17,villager?linen:skin);
-  cube(m,x+side*.272,y+.49,z+.028,.145,.12,.17,skin);
-  if(tunic)cube(m,x+side*.272,y+.739,z,.151,.247,.185,tunic);
+  const start=m.p.length,xx=side*.235;
+  profile(xx,0,[[.434,0,0,side*.022,.031],[.456,.041,.050,side*.026,.033],
+   [.51,.051,.056,side*.031,.033],[.556,.040,.047,side*.035,.018],
+   [.681,.055,.060,side*.040],[.786,.062,.067,side*.035],[.897,.079,.086,side*.018],
+   [.956,.074,.079],[1.009,0,0]],villager?linen:skin,8);
+  if(tunic)profile(xx,0,[[.738,0,0],[.744,.066,.076,side*.038],[.856,.080,.091,side*.026],
+   [.937,.086,.094],[1.020,0,0]],tunic,8);
   if(m.townParts)m.townParts[side>0?'right':'left']=[start,m.p.length];
-  const angle=armPose?.[side===1?'strike':'guard']||0;
-  const sweep=side===1?(armPose?.sweep||0):0;
+  const angle=armPose?.[side===1?'strike':'guard']||0,sweep=side===1?(armPose?.sweep||0):0;
   if(angle||sweep){
    const rotate=characterArmRotation(angle,sweep),shoulder=y+.965,pivotX=x+side*.272;
    for(let i=start;i<m.p.length;i+=3){
@@ -2565,26 +2586,27 @@ function characterHuman(m,x,y,z,villager,armPose=null,gear=null,modest=false){
    }
   }
  }
- cube(m,x,y+.94,z,.14,.11,.14,skin);
- cube(m,x,y+1.05,z,.35,.37,.34,skin);
- cube(m,x,y+1.365,z-.035,.38,.10,.37,hair);
+ profile(0,0,[[1.005,0,0],[1.024,.071,.068],[1.165,.058,.056],[1.185,0,0]],skin);
+ profile(0,0,[[1.173,0,0,0,.033],[1.185,.073,.076,0,.020],[1.231,.103,.103,0,.009],
+  [1.300,.120,.111],[1.368,.119,.112],[1.411,.096,.094,0,-.009],[1.456,0,0]],skin,12);
+ profile(0,-.010,[[1.311,0,0,0,-.051],[1.327,.102,.074,0,-.035],[1.383,.124,.116],
+  [1.429,.111,.102],[1.455,.078,.073],[1.464,0,0]],hair,12);
  for(const side of [-1,1]){
-  cube(m,x+side*.086,y+1.225,z+.176,.036,.041,.014,[.19,.19,.17]);
+  profile(side*.115,0,[[1.255,0,0],[1.276,.017,.020],[1.313,.018,.022],[1.330,0,0]],skin,6);
+  profile(side*.050,.110,[[1.306,0,0],[1.311,.016,.006],[1.326,.015,.006],[1.330,0,0]],[.20,.17,.15],6);
  }
- cube(m,x,y+1.095,z+.179,.09,.028,.01,shade);
+ tri(m,[x-.016,y+1.276,z+.115],[x+.015,y+1.276,z+.115],[x,y+1.295,z+.143],shadow);
+ tri(m,[x,y+1.295,z+.143],[x+.015,y+1.276,z+.115],[x,y+1.329,z+.109],skin);
+ tri(m,[x,y+1.329,z+.109],[x-.016,y+1.276,z+.115],[x,y+1.295,z+.143],skin);
  if(gear)for(const cell of [gear.head,gear.torso,gear.legs,gear.feet]){
   const type=typeof cell==='string'?cell:cell?.type;
   if(type&&!poiRoleClothingGeometry(m,type,x,y,z))poiStarterGearGeometry(m,type,x,y,z);
  }
  if(villager){
-  // Simple tunic, belt and cap distinguish a working villager.
-  cube(m,x,y+.48,z+.142,.405,.15,.039,[.46,.30,.20]);
-  cube(m,x,y+.53,z+.164,.09,.11,.025,[.79,.68,.37]);
-  cube(m,x,y+1.38,z,.43,.13,.40,[.39,.30,.20]);
-  cube(m,x,y+1.32,z+.14,.44,.05,.16,[.39,.30,.20]);
+  profile(0,0,[[.57,.193,.128],[.604,.200,.132],[.645,.184,.124]],[.44,.30,.20]);
+  cube(m,x,y+.59,z+.135,.076,.064,.025,[.74,.61,.34]);
  }
 }
-
 
 const POI_TOWN_ROLE_OUTFIT_IDS=new Set(['armorValdiaCrown','armorValdiaRobe','armorPeddlerMantle','armorWatchHelm','armorWatchJacket','armorScoutMantle','armorInnVest','armorWorkerVest','armorFisherOilskin']);
 function poiHumanGearType(cell){return typeof cell==='string'?cell:cell?.type||null}
@@ -5133,21 +5155,11 @@ case 'humanBare':case 'humanVillager':{
  break;}
 case 'humanMerchant':{
  // Brown tunic, pale apron, shoulder pack and money pouch: recognizable from above.
- const cloth=[.47,.30,.19],apron=[.73,.60,.39],skin=[.78,.58,.41],hair=[.29,.19,.12],bag=[.42,.27,.16];
- for(const s of [-1,1]){
-  cube(m,x+s*.13,y,z,.13,.41,.18,[.30,.25,.20]);
-  const start=m.p.length;
-  cube(m,x+s*.30,y+(m.townParts?.43:.53),z,.13,m.townParts?.50:.40,.16,cloth);
-  cube(m,x+s*.30,y+(m.townParts?.36:.20),z+(m.townParts?.036:.055),.13,.12,.14,skin);
-  if(m.townParts)m.townParts[s>0?'right':'left']=[start,m.p.length];
- }
- cube(m,x,y+.43,z,.45,.57,.32,cloth);
- cube(m,x,y+.46,z+.174,.29,.40,.026,apron);
- cube(m,x,y+.96,z,.15,.13,.15,skin);
- cube(m,x,y+1.08,z,.34,.32,.32,skin);
- cube(m,x,y+1.34,z-.04,.39,.12,.37,hair);
- cube(m,x,y+1.38,z,.46,.055,.43,[.52,.35,.19]);
- cube(m,x-.105,y+1.16,z+.169,.037,.033,.014,hair);cube(m,x+.105,y+1.16,z+.169,.037,.033,.014,hair);
+ const bag=[.42,.27,.16],human=mesh();
+ if(m.townParts)human.townParts={};
+ characterHuman(human,x,y,z,false,null,{torso:'armorMerchantCoat'},true);
+ if(m.townParts)for(const k of ['right','left'])m.townParts[k]=human.townParts[k].map(i=>i+m.p.length);
+ for(let i=0;i<human.p.length;i+=3){m.p.push(human.p[i],human.p[i+1],human.p[i+2]);m.n.push(human.n[i],human.n[i+1],human.n[i+2]);m.c.push(human.c[i],human.c[i+1],human.c[i+2]);}
  cube(m,x-.34,y+.48,z-.12,.22,.34,.27,bag);
  cube(m,x-.34,y+.53,z+.03,.18,.10,.035,[.78,.61,.30]);
  cube(m,x+.32,y+.35,z+.10,.19,.23,.16,bag);
@@ -21485,7 +21497,7 @@ function poiSnowGroundSave(drops,gold){
 }
 // END SNOW GROUND NAMESPACE
 
-function poiHotbarHasKit(){return facilitySite?.id==='base'||(typeof poiSnowGroundActive==='function'&&poiSnowGroundActive())}
+function poiHotbarHasKit(){return facilitySite?.id==='frontier'||facilitySite?.id==='base'||(typeof poiSnowGroundActive==='function'&&poiSnowGroundActive())}
 // Version 1 saves keep their original condition ratio, with no write on read.
 function poiMigrateWeaponDurability(saved){
  if(saved.weaponDurabilityVersion===2)return;
@@ -29748,7 +29760,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v361',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v362',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -29863,7 +29875,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v361';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v362';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -30078,7 +30090,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v361',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v362',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -31817,11 +31829,11 @@ function poiPlayerArmCrate(m,origin,end,ww,dd,register,color){
  const u=poiPlayerArmUnit(end.map((q,i)=>q-origin[i])),ref=Math.abs(u[0])>.95?[0,0,1]:[1,0,0];
  const dot=u.reduce((v,p,i)=>v+p*ref[i],0),a=poiPlayerArmUnit(ref.map((p,i)=>p-dot*u[i]));
  const b=[u[1]*a[2]-u[2]*a[1],u[2]*a[0]-u[0]*a[2],u[0]*a[1]-u[1]*a[0]];
- const ring=p=>[[-1,-1],[1,-1],[1,1],[-1,1]].map(([x,z])=>
-  register(p.map((v,i)=>v+a[i]*ww*x/2+b[i]*dd*z/2)));
- const q=ring(origin),r=ring(end);
- for(let i=0;i<4;i++){const j=(i+1)%4;quad(m,q[i],q[j],r[j],r[i],color)}
- quad(m,q[3],q[2],q[1],q[0],color);quad(m,r[0],r[1],r[2],r[3],color);
+ const ring=(p,k)=>Array.from({length:8},(_,i)=>{
+  const angle=2*Math.PI*i/8;return register(p.map((v,j)=>v+k*(a[j]*ww*Math.cos(angle)+b[j]*dd*Math.sin(angle))/2));
+ });
+ const q=ring(origin,.94),r=ring(end,.71),qc=register(origin),rc=register(end);
+ for(let i=0;i<8;i++){const j=(i+1)%8;quad(m,q[i],q[j],r[j],r[i],color);tri(m,qc,q[j],q[i],color);tri(m,rc,r[i],r[j],color);}
 }
 function poiDrawPlayerBlockArms(m,arms,gear,rotate,x,y,z){
  const P=p=>{const [a,b]=rotate(p[0],p[2]);return [x+a,y+p[1],z+b]};
@@ -33005,6 +33017,8 @@ function poiSacredDepthVoid(site,x,z){
 }
 function poiWalkCanStep(x,z,fromX,fromZ,exceptMonster,skipNpcTile=false){
  if(!validPos(x,z)||poiWalkLevel===0&&poiEastNatureBlocked(facilitySite,x,z))return false;
+ const frontier=facilitySite?.id==='frontier'&&poiWalkLevel===0;
+ if(frontier&&frontierGroundKind(x,z)==='river'&&!facilitySite.decks.has(x+','+z))return false;
  const north=facilitySite?.id==='base'?(facilitySite.townOffset||0):null;
  // This offset rampart's physical wall sits on the outer edge of the tile.
  // Keep the lane on the interior side accessible without crossing the wall.
@@ -33043,7 +33057,7 @@ function poiWalkCanStep(x,z,fromX,fromZ,exceptMonster,skipNpcTile=false){
  return !cell.some(o=>{
   if(dungeonRoute&&o.type===dungeonRoute.portal.type)return !poiOtherworldTraversal(dungeonRoute,fromX,fromZ,poiWalkLevel);
   if(isFloor(o.type)||poiWalkPassableDoor(o.type)||nonBlocking.has(o.type)||o.type==='guildStairUp'||o.type==='guildStairDown')return false;
-  if(o===deck||creek?.shallows.get(key)===o.type)return false;
+  if(o===deck||creek?.shallows.get(key)===o.type||frontier&&facilitySite.decks.has(key)&&BRIDGE_IDS.has(o.type))return false;
   if(o.type==='poiCanalQuay')return false;
   const realmGate=facilitySite?.id==='base'?facilitySite.otherworld?.gate:null;
   if(realmGate&&o.x===realmGate.x&&o.z===realmGate.z&&o.y===realmGate.y&&o.type===realmGate.type&&poiOtherworldGateOpen())return false;
@@ -34154,7 +34168,9 @@ function poiWalkSet(active){
   poiSpawnX=spawn.x;poiSpawnZ=spawn.z;
   poiWalkReset(spawn.x,spawn.z);
   poiCameraYaw=0;poiCameraPitch=.35;poiCameraDistance=5.5;
-  poiThirdPerson=false;cameraTopDown=false;poiSyncCameraModeUI();
+  poiThirdPerson=false;cameraTopDown=false;
+  if(facilitySite?.id==='frontier'){yaw=0;zoom=1.03;poiCameraYaw=Math.PI*1.5;}
+  poiSyncCameraModeUI();
  }
  poiWalkActive=active;
  if(active)poiAudioStart();else poiAudioStop();
@@ -34895,6 +34911,7 @@ function poiAngledWallRecord(records,m,o,sides,start,trim=false){
 // BEGIN FACILITY SHARED GRADE
 let facilityGrade=null;
 function facilityGradeKey(lamps){
+ if(facilitySite?.id==='frontier'&&poiWalkActive)return 'frontier-ground';
  if(!facilitySite||!poiWalkActive||facilityViewLevel()<0)return null;
  // Only general lanterns spill across floors. Cutaways can hide those;
  // their absence would change baked ground color, so retain that distinction.
@@ -35002,7 +35019,8 @@ function makeScene(){
  const spatialGrade=buildSharedGrade&&facilityBuildFullSurface&&facilitySite?.id==='base'&&!facilitySurfaceEdited;
  const gradeRanges=[];let gradeParcel=null,gradeStart=0;
  if(!cachedGrade&&!localBatch){
- if(!facilitySite||facilityViewLevel()>=0)for(const [x,z,parcel] of stockGradeWalk(MAP_W,MAP_H,spatialGrade)){
+ if(facilitySite?.id==='frontier')frontierGround(grade);
+ else if(!facilitySite||facilityViewLevel()>=0)for(const [x,z,parcel] of stockGradeWalk(MAP_W,MAP_H,spatialGrade)){
   if(spatialGrade&&gradeParcel!==parcel){
    const end=grade.p.length/3;stockGradeRange(grade,gradeStart,end,gradeRanges);
    gradeStart=end;gradeParcel=parcel;
@@ -35937,7 +35955,7 @@ function facilityWatchtowerCloseFov(distance){
 // BEGIN OUTDOOR SKY
 function poiSkyCanLookUp(){
  return poiWalkActive&&poiThirdPerson&&!cameraTopDown&&!pineAIActive&&
-  (facilitySite?.id==='base'||facilitySite?.id==='snowpass')&&poiWalkLevel===0&&!poiWalkIndoor();
+  (facilitySite?.id==='base'||facilitySite?.id==='snowpass'||facilitySite?.id==='frontier')&&poiWalkLevel===0&&!poiWalkIndoor();
 }
 const POI_ORBIT_LOOKUP_LIMIT=-1.02,POI_ORBIT_LOW_EYE=-.16;
 function poiOrbitHigherDome(){
@@ -41084,7 +41102,83 @@ function pineTownGuildGroundFloor(tiles){
 function pineOutsideMeadowCell(x,z){
  return z<0||z>47||x<1||x>66||(z>20&&x>62)||(z<4&&x>46);
 }
+// BEGIN FRONTIER LANDSCAPE
+const FRONTIER_W=128,FRONTIER_H=64,FRONTIER_SECTOR=64,FRONTIER_PARCEL=8,FRONTIER_BACKDROP=64;
+function frontierRiver(x,z){
+ const main=z>=10&&z<=54?Math.abs(x-64-3*Math.sin((z-30)*.14))-3.6:99;
+ const lake=(cx,cz,rx,rz)=>(Math.hypot((x-cx)/rx,(z-cz)/rz)-1)*Math.min(rx,rz);
+ return Math.min(main,lake(63,11,9.8,7.3),lake(63,53,11.6,7.1));
+}
+function frontierTrack(x){return 30.5+1.35*Math.sin((x-64)*.14)*Math.min(1,Math.max(0,(Math.abs(x-64)-7)/9))}
+function frontierGroundKind(x,z){
+ if(x>=43&&x<=49&&z>=21&&z<=26)return 'woodfloorLight';
+ if(frontierRiver(x+.5,z+.5)<0)return 'river';
+ if((x-47)**2+(z-30)**2<=14)return 'stone';
+ if(x>=21&&x<=109&&Math.abs(z+.5-frontierTrack(x+.5))<1.52)return 'roadDirtFull';
+ return 'grass';
+}
+function frontierSite(){
+ const world=[],buildings=[],footprint=[];
+ const put=(x,z,type,rot=0,y=0)=>world.push({x,z,y,type,rot});
+ const decks=new Set();
+ for(let z=29;z<=31;z++)for(let x=58;x<=69;x++){
+  put(x,z,x===58||x===69?'bridgeWoodEnd':'bridgeWood',x===69?3:1);
+  decks.add(x+','+z);
+ }
+ for(let z=0;z<FRONTIER_H;z++)for(let x=0;x<FRONTIER_W;x++){
+  const kind=frontierGroundKind(x,z),h=((Math.imul(x+71,73856093)^Math.imul(z+53,19349663))>>>0)%997;
+  if(kind==='woodfloorLight'){
+   const corner=(x===43||x===49)&&(z===21||z===26);
+   const rot=z===26?0:x===43?1:z===21?2:x===49?3:null;
+   footprint.push({x,z});
+   if(rot!==null)put(x,z,corner?'woodwallAll':'woodwall'+(x===46&&z===26?'Door':z===26||z===21?'Window':''),rot);
+   put(x,z,'roofHip',0,1);
+  }else if(kind==='grass'&&x>5&&x<122&&z>3&&z<61&&Math.hypot(x-51,z-30)>11&&
+     !(x>=75&&x<=91&&z>=26&&z<=36)&&!decks.has(x+','+z)){
+   if(h<14&&frontierRiver(x+.5,z+.5)>1.5)put(x,z,h%3===0?'treeBirch':h%3===1?'treePine':'treeCedar',h%4);
+   else if(h>=14&&h<29)put(x,z,h%2?'flowerField':'rockMossy',h%4);
+  }
+  if(kind!=='grass')put(x,z,kind);
+ }
+ for(const [x,z,type,rot] of [[43,24,'lantern',0],[44,22,'bed',0],[48,23,'chairWood',1],
+    [51,27,'rockMossy',0],[53,33,'treeBirch',0],[48,28,'humanVillager',1],[75,32,'humanMerchant',2],[81,28,'monsterSlime',0],[87,34,'monsterSlime',2]])put(x,z,type,rot);
+ buildings.push({id:'frontierHouse',name:'川辺の小屋',x1:43,x2:49,z1:21,z2:26,turn:0,entrance:{x:46,z:26},
+  footprint,floorFootprints:{0:footprint}});
+ return {id:'frontier',name:'川辺の原野',spawn:{x:51,z:30},decks,buildings,
+  map:{format:'forest-world-v1',version:1,width:FRONTIER_W,height:FRONTIER_H,size:FRONTIER_W,world,models:[],prefabs:[],checks:[]}};
+}
+function frontierGround(m){
+ const shade=(x,z)=>{
+  const d=frontierRiver(x,z),noise=.029*Math.sin(x*.22+z*.19)+.021*Math.sin(z*.55-x*.34);
+  const green=[.335+noise,.46+noise,.275+noise*.55];
+  const mix=(a,b,t)=>a.map((v,i)=>v+(b[i]-v)*Math.min(1,Math.max(0,t)));
+  let c=mix([.42+noise,.47+noise,.31+noise],green,(d-.2)/1.5);
+  if(d<.2)c=mix([.16+noise*.48,.36+noise*.7,.42+noise*.65],c,(d+1.4)/1.6);
+  const road=x>=21&&x<=109&&Math.abs(z-frontierTrack(x))<2&&(d>0);
+  if(road)c=mix(c,[.53+noise,.44+noise,.31+noise],Math.min((2-Math.abs(z-frontierTrack(x)))*1.6,(x-21)*.65,(109-x)*.65));
+  if((x-47.5)**2+(z-30.5)**2<14)c=mix(c,[.56+noise,.53+noise,.45+noise],.78);
+  if(x>=43&&x<=50&&z>=21&&z<=27)c=mix(c,[.51,.35,.21],.95);
+  return c;
+ };
+ const cell=(x,z,s)=>{
+  const a=[x,-.012,z],b=[x,-.012,z+s],c=[x+s,-.012,z+s],d=[x+s,-.012,z];
+  const ca=shade(x,z),cb=shade(x,z+s),cc=shade(x+s,z+s),cd=shade(x+s,z);
+  for(const [p,t] of [[a,ca],[b,cb],[c,cc],[a,ca],[c,cc],[d,cd]]){
+   m.p.push(...p);m.c.push(...t);m.n.push(0,1,0);
+  }
+ };
+ // Submit one complete ground buffer; parcel boundaries are never visible or aged out.
+ for(let pz=-FRONTIER_BACKDROP;pz<FRONTIER_H+FRONTIER_BACKDROP;pz+=FRONTIER_PARCEL)
+  for(let px=-FRONTIER_BACKDROP;px<FRONTIER_W+FRONTIER_BACKDROP;px+=FRONTIER_PARCEL){
+   const inside=px>=0&&px<FRONTIER_W&&pz>=0&&pz<FRONTIER_H;
+   if(!inside){cell(px,pz,FRONTIER_PARCEL);continue}
+   for(let z=pz;z<pz+FRONTIER_PARCEL;z++)for(let x=px;x<px+FRONTIER_PARCEL;x++)cell(x,z,1);
+  }
+}
+// END FRONTIER LANDSCAPE
+
 function buildFacilitySite(id){
+ if(id==='frontier')return frontierSite();
  const legacy=buildFacilitySiteLegacyFrame(id);
  if(id!=='base'||!legacy)return legacy;
  const townOffset=12,axes=new Set(['x','z','x1','x2','z1','z2']);
@@ -43054,7 +43148,7 @@ const POI_GAME_RESET_BACKUP='world-workshop-game-reset-backup-v1';
 const POI_GAME_RESET_FIRST_BACKUP='world-workshop-game-reset-first-backup-v1';
 let poiGameResetDeparture=false,poiGameResetBlocked=false;
 function poiGameResetBaseResume(raw){
- try{const d=workshopResumeDecode(raw);return d?.route==='facility'&&d.id==='base'}catch(_e){return false}
+ try{const d=workshopResumeDecode(raw);return d?.route==='facility'&&(d.id==='base'||d.id==='frontier')}catch(_e){return false}
 }
 const POI_ORVAS_RESET_ITEMS=Object.freeze(['equipOrvasHead','equipOrvasGreatsword','equipOrvasTwinGreatswords']);
 function poiGameResetKit(){
@@ -43170,7 +43264,7 @@ function poiGameResetStorage(storage,seedOrvas=false){
  }
 }
 function poiGameResetAllowed(){
- return facilitySite?.id==='base'&&poiWalkActive&&!pineAIActive&&!poiGameResetDeparture&&!poiGameResetBlocked&&
+ return (facilitySite?.id==='base'||facilitySite?.id==='frontier')&&poiWalkActive&&!pineAIActive&&!poiGameResetDeparture&&!poiGameResetBlocked&&
   (typeof poiPlayerDying!=='function'||!poiPlayerDying());
 }
 function poiGameReset(seedOrvas=false){
@@ -43178,7 +43272,7 @@ function poiGameReset(seedOrvas=false){
  let target;
  try{
   target=new URL(location.href);const test=target.searchParams.get('test')==='1';
-  target.search='';target.hash='';target.searchParams.set('facility','base');target.searchParams.set('facility-play','1');
+  target.search='';target.hash='';target.searchParams.set('facility',facilitySite.id==='frontier'?'base':facilitySite.id);target.searchParams.set('facility-play','1');
   target.searchParams.set('reset-camera','1');
   if(test)target.searchParams.set('test','1');
  }catch(_e){return {ok:false,reason:'navigation'}}
@@ -46424,7 +46518,7 @@ function workshopResumePermitted(params){
  return [...params.keys()].every(k=>k==='revision')&&/^\d{1,20}$/.test(params.get('revision')||'');
 }
 function workshopResumeRead(){
- if(startupEditor||!workshopResumePermitted(facilityParams))return null;
+ if(startupEditor||!frontierBoot&&!workshopResumePermitted(facilityParams))return null;
  try{return workshopResumeDecode(localStorage.getItem(WORKSHOP_RESUME_KEY))}catch(e){return null}
 }
 function workshopResumeMapTag(text){
@@ -46442,7 +46536,7 @@ function workshopResumeView(e){
 }
 function workshopResumeWrite(override,seed=false){
  if(facilitySite?.id==='guildsaved')return;
- if(facilitySite?.id==='base'&&(typeof poiGameResetDeparture!=='undefined'&&(poiGameResetDeparture||poiGameResetBlocked)))return;
+ if((facilitySite?.id==='base'||facilitySite?.id==='frontier')&&(typeof poiGameResetDeparture!=='undefined'&&(poiGameResetDeparture||poiGameResetBlocked)))return;
  if(!workshopResumeReady||(workshopResumeLeaving&&!override))return;
  const route=facilitySite?'facility':pineGameActive?'adventure':poiWalkActive?'map-play':'editor';
  const record=override||{version:1,route,id:facilitySite?.id==='snowpass'?'base':facilitySite?.id??null,play:poiWalkActive,
@@ -47661,14 +47755,14 @@ function poiSacredFrontierHaze(base,region,x,z,y){
 let poiFieldHazeFrame=null,poiFieldHazeActive=false,poiFieldHazeRegionId=null;
 function poiFieldHazeEligible(site,p){
  return poiWalkActive&&!cameraTopDown&&!pineAIActive&&p?.y===0&&!facilitySurfaceEdited&&
-  (site?.id==='base'?poiSquareFieldSite(site):site?.id==='snowpass'&&site===poiOverlandSnow&&poiSnowPassBase?.edited===false)&&
+  (site?.id==='frontier'?poiThirdPerson:site?.id==='base'?poiSquareFieldSite(site):site?.id==='snowpass'&&site===poiOverlandSnow&&poiSnowPassBase?.edited===false)&&
   !poiSacredFogOn&&!poiSacredEdgeOn;
 }
 function poiFieldHazePrepare(now){
  const site=facilitySite,p=poiWalkActive?poiAimOrigin(now):null;
  poiFieldHazeFrame=null;
  if(!poiFieldHazeEligible(site,p))return;
- const world=poiOverlandGlobal(site.id,p.x,p.z);
+ const world=site.id==='frontier'?[p.x,p.z]:poiOverlandGlobal(site.id,p.x,p.z);
  if(!world?.every(Number.isFinite))return;
  const minute=Math.floor(poiTownClockGameMs/POI_TOWN_MINUTE_MS%1440);
  // Negative strength keeps the 48-tile range without applying a color veil in the sacred woods.
@@ -47679,7 +47773,7 @@ function poiFieldHazePrepare(now){
 }
 function poiFieldHazeRegion(id){
  if(!poiFieldHazeActive||poiFieldHazeRegionId===id)return;
- const [x,z]=id==='base'||id==='snowpass'?poiOverlandLocal(id,...poiFieldHazeFrame.world)??[]:[];
+ const [x,z]=id==='frontier'&&poiFieldHazeFrame.id===id?poiFieldHazeFrame.world:id==='base'||id==='snowpass'?poiOverlandLocal(id,...poiFieldHazeFrame.world)??[]:[];
  if(!Number.isFinite(x)||!Number.isFinite(z)){
   gl.uniform3f(loc.fieldHaze,0,0,0);poiFieldHazeRegionId=null;return;
  }
@@ -49451,10 +49545,10 @@ await window.pineStartup.checkpoint(2,'ワールドと保存データを読み�
 if(poiGameFrozen())await new Promise(poiGameWhenForeground);
 try{if(!startupEditor&&poiGameResetPending(localStorage))poiGameResetBlocked=!poiGameResetRecover(localStorage)}catch(_e){}
 const workshopResume=workshopResumeRead();
-const facilityRequested=startupEditor?null:facilityParams.get('facility')??(workshopResume?.route==='facility'?workshopResume.id:null);
+const facilityRequested=frontierBoot?'frontier':startupEditor?null:facilityParams.get('facility')??(workshopResume?.route==='facility'?workshopResume.id:null);
 const guildRenewalRequested=facilityRequested==='guildrenewal';
 const guildOriginalRequested=facilityRequested==='guildsaved';
-const facilityRecord=guildOriginalRequested?{id:'guildsaved',name:PINE_ADVENTURERS_GUILD_NAME}:guildRenewalRequested
+const facilityRecord=frontierBoot?{id:'frontier',name:'川辺の原野'}:guildOriginalRequested?{id:'guildsaved',name:PINE_ADVENTURERS_GUILD_NAME}:guildRenewalRequested
  ?{id:'guildrenewal',name:'冒険者ギルド・上階改修版'}
  :FACILITY_SITES.find(record=>record.id===facilityRequested);
 if(facilityRecord){
@@ -49465,7 +49559,7 @@ if(facilityRecord){
  else if(guildRenewalRequested)toast('上階改修の見本を開けません。元の保存データは変更していません。');
 }
 if(facilitySite){
- facilityBoot(workshopResume,facilityPlayOnOpen(facilityParams,facilitySite.id));
+ facilityBoot(workshopResume,frontierBoot&&!workshopResume?.play||facilityPlayOnOpen(facilityParams,facilitySite.id));
  await startupFirstRender();
  return;
 }
