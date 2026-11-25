@@ -1,0 +1,24 @@
+name: Verify exact v336 ordinary low-room camera
+on:
+  push:
+    branches: [dot/workshop-low-room-v336]
+jobs:
+  scoped:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: test "$(git hash-object world-editor.html)" = "ea42da28b718024613d40a54f202c5fd83d4f3bc" && git show HEAD^:world-editor.html > /tmp/v335.html && test "$(git hash-object /tmp/v335.html)" = "c5bcb77b1b7f7c0fa8e57a7a6aa99cedb0a8002d"
+      - run: node tests/low-room-camera.test.cjs && node tests/hotbar-after-pad.test.cjs
+      - run: npm install --no-save playwright@1.58.2 && npx playwright install chromium
+      - run: LOW_ROOM_BASELINE=1 FACILITY_SCREENSHOTS=/tmp/room-views node tests/low-room-camera-browser.mjs /tmp/v335.html && FACILITY_SCREENSHOTS=/tmp/room-views node tests/low-room-camera-browser.mjs world-editor.html
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: paired-room-views
+          path: /tmp/room-views
