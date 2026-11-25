@@ -1,45 +1,24 @@
-name: Private rotation and gate-residency measured optimization, no default
+name: Private single paired stock shader attribution
 on:
   push:
-    branches: [dot/workshop-player-base-verify-hybrid-wall-opt-v320]
+    branches: [dot/workshop-stock-wall-attribution-once]
 jobs:
-  native:
+  once:
     runs-on: ubuntu-24.04
-    timeout-minutes: 7
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { backend: stock-ref, tier: near }
-          - { backend: stock-opt, tier: near }
-          - { backend: stream-ref, tier: near }
-          - { backend: stream-opt, tier: near }
-          - { backend: stream-control, tier: near }
-          - { backend: stock-fallback, tier: near }
-          - { backend: stream-opt, tier: far }
-    env:
-      HYBRID_BACKEND: ${{ matrix.backend }}
-      HYBRID_TIER: ${{ matrix.tier }}
-      FACILITY_SCREENSHOTS: screenshots
+    timeout-minutes: 6
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install --no-save playwright@1.58.2
-      - run: npx playwright install chromium
-      - run: node tests/hybrid-wall-opt-browser.mjs
+      - run: npm install --no-save playwright@1.58.2 && npx playwright install chromium
+      - run: |
+          export HYBRID_BACKEND=stock-opt HYBRID_TIER=near FACILITY_SCREENSHOTS=results
+          WALL_ATTR_VARIANT=embedded node tests/stock-wall-attribution.mjs
+          WALL_ATTR_VARIANT=cheap node tests/stock-wall-attribution.mjs
+          node -e 'const a=require("./results/embedded.json"),b=require("./results/cheap.json");const p=a.raster.pixels,q=b.raster.pixels,k=Object.keys(p).filter(x=>q[x]),m=k.map(x=>Math.max(...p[x].map((v,i)=>Math.abs(v-q[x][i])))).sort((a,b)=>a-b);console.log(JSON.stringify({wallCommon:k.length,maskIoU:k.length/(Object.keys(p).length+Object.keys(q).length-k.length),rgbP95:m[Math.floor((m.length-1)*.95)],body:[a.stats.body,b.stats.body],raw:[a.stats.raw,b.stats.raw]}));'
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: wall-opt-${{ matrix.backend }}-${{ matrix.tier }}
-          path: screenshots
-          if-no-files-found: ignore
-  unit:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: node --test tests/hybrid-{gate-policy,fort-wall,wall-opt}.test.cjs
+          name: attribution
+          path: results
