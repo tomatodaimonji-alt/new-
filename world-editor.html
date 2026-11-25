@@ -1722,7 +1722,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v322）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v323）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -26374,7 +26374,21 @@ function poiTownNpcExistsBed(b){
 function poiTownNpcRelease(){
  for(const [obj,state] of poiMonsterStates)if(state.townOwned){poiMonsterStates.delete(obj);poiMonsterMeshDirty=true}
 }
-function poiTownResidentsReset(){
+// BEGIN TOWN ADVENTURER MEMORY
+// A live overworld transfer recreates display actors; only carry logical,
+// already-applied character outcomes, never an attack or a booking.
+const poiTownAdventurerMemory=new Map();
+function poiTownRememberAdventurers(){
+ for(const a of poiTownNpcActors){
+  if(a.role.role!=='adventurer')continue;
+  poiTownAdventurerMemory.set(a.role.id,{
+   hp:a.death?POI_TOWN_RESIDENT_HP:a.hp,coins:a.coins,potions:a.potions
+  });
+ }
+}
+// END TOWN ADVENTURER MEMORY
+function poiTownResidentsReset(keepProgress=false){
+ if(keepProgress)poiTownRememberAdventurers();else poiTownAdventurerMemory.clear();
  poiTownDialogueClose();poiTownAmbientClose();
  if(poiTownNpcActors.length)poiTownNpcRelease();
  poiTownNpcActors=[];poiTownNpcBook=null;poiTownNpcNext=0;poiTownNpcNav=null;poiTownNpcVersion++;
@@ -26474,6 +26488,40 @@ const POI_TOWN_VISITOR_DAY=Object.freeze({
  towncook:{from:855,to:905,stop:[48,42,1],label:'market-browse'},
  canalcourier:{from:1055,to:1200,stop:[58,44,0],label:'evening-delivery',alternate:true}
 });
+// BEGIN TOWN VISITOR CHOICES
+function poiTownVisitorChoose(c){
+ if(!Number.isFinite(c.m)||!Number.isFinite(c.ends))return null;
+ const score={meal:c.mealNeed?14:0,market:c.personality==='market'?9:5,
+  company:c.hasCompany?(c.personality==='social'?12:6):0};
+ let best=null,bestScore=0;
+ for(const name of ['meal','company','market']){
+  const d=c.distance[name];
+  if(!c.reachable[name]||!(d>=0)||!score[name]||c.ends-c.m<8+d*2)continue;
+  const n=score[name]-d*.28;
+  if(n>bestScore){bestScore=n;best=name}
+ }
+ return best;
+}
+function poiTownVisitorChoice(a,clock,plan){
+ const day=Math.floor(clock.absoluteMinute/1440),slot=day*1440+plan.freeUntil;
+ if(a.choiceSlot===slot)return a.choiceStop;
+ a.choiceSlot=slot;a.choiceStop=null;
+ if(a.y!==0||Math.abs(a.x-poiWalkX)+Math.abs(a.z-poiWalkZ)>20||poiWalkLevel!==0)return null;
+ const meal=poiTownDailyPoint([39,39,3]),market=plan.label==='market-browse'?plan.goal:poiTownDailyPoint([52,44,0]),
+  company=a.role.public,personality=a.role.id==='northtraveler'?'social':'market';
+ const distance={},reachable={};
+ for(const [key,p] of [['meal',meal],['market',market],['company',company]]){
+  distance[key]=Math.abs(a.x-p.x)+Math.abs(a.z-p.z);
+  reachable[key]=distance[key]<=14&&poiTownDailyRoad(p);
+ }
+ const hasCompany=reachable.company&&poiTownNpcActors.some(b=>b!==a&&!b.recessed&&!b.death&&b.y===company.y&&
+  Math.abs(b.x-company.x)+Math.abs(b.z-company.z)<=2);
+ const name=poiTownVisitorChoose({m:clock.minute,ends:plan.freeUntil,personality,distance,reachable,hasCompany,
+  mealNeed:a.mealDay!==day&&(clock.minute>=845+(a.index%4)*8||a.role.id==='northtraveler')});
+ if(name)a.choiceStop={name,day,goal:{meal,market,company}[name],label:{meal:'meal-break',market:'market-browse',company:'visit'}[name]};
+ return a.choiceStop;
+}
+// END TOWN VISITOR CHOICES
 function poiTownDailyPoint(values){
  return {x:values[0],z:values[1],y:0,facing:values[2]};
 }
@@ -26515,7 +26563,7 @@ function poiTownDailyPlan(role,clock){
  if(!visit)return null;
  if(m>=visit.from&&m<visit.to&&(!visit.alternate||odd)){
   const stop=poiTownDailyPoint(visit.stop);
-  if(poiTownDailyRoad(stop))return {goal:stop,label:visit.label,recessed:false};
+  if(poiTownDailyRoad(stop))return {goal:stop,label:visit.label,recessed:false,freeUntil:visit.label==='evening-delivery'?null:visit.to};
  }
  if(!poiTownNpcVisiting(role,m))return {goal:role.home,label:'offsite',recessed:true};
  const goal=poiTownNpcVisitorGoal(role,m);
@@ -26537,7 +26585,13 @@ function poiTownDailySpawn(p,role,reserved){
 }
 function poiTownDailyRoutine(a,clock,now,budget,plan=poiTownDailyPlan(a.role,clock)){
  if(!plan)return false;
- const {role}=a,{goal,label,recessed}=plan;
+ const {role}=a;
+ const {recessed}=plan;
+ let {goal,label}=plan,choice=null;
+ if(plan.freeUntil&&role.role==='visitor'&&!recessed){
+  choice=poiTownVisitorChoice(a,clock,plan);
+  if(choice)({goal,label}=choice);
+ }
  if(recessed&&a.recessed)return true;
  if(a.recessed){a.recessed=false;poiTownNpcVersion++}
  const going=label==='work'&&role.role==='keeper'?'going-work':
@@ -26545,6 +26599,7 @@ function poiTownDailyRoutine(a,clock,now,budget,plan=poiTownDailyPlan(a.role,clo
   role.role==='night-porter'?recessed?'porter-off-duty':'porter-walk':
   label==='evening-walk'?'going-evening':label;
  const arrived=poiTownNpcMove(a,goal,going,now,budget);
+ if(arrived&&choice?.name==='meal'&&!a.actorLeg)a.mealDay=choice.day;
  if(recessed&&arrived){a.recessed=true;poiTownNpcVersion++}
  if(arrived&&label==='going-home'){
   const bed=poiTownNpcExistsBed(role.bed);
@@ -26688,7 +26743,8 @@ function poiTownNpcInit(clock){
   if(!recessed)reserved.add(p.x+','+p.z+','+p.y);
   const morning=clock.absoluteMinute-clock.minute+POI_TOWN_WAKE+(clock.minute>=POI_TOWN_WAKE?1440:0);
   const {weapon,gear}=poiTownNpcLoadout({role});
-  return {role,weapon,gear,...p,index,...(returning?{supplyCarrying:true}:{}),hp:POI_TOWN_RESIDENT_HP,activity:returning?'supply-return':recessed?'offsite':duty?.label||daily?.label||'idle',recessed,attacks:0,coins:0,potions:0,bedId:bed?.id??null,
+  const personal=role.role==='adventurer'?poiTownAdventurerMemory.get(role.id):null;
+  return {role,weapon,gear,...p,index,...(returning?{supplyCarrying:true}:{}),hp:personal?.hp??POI_TOWN_RESIDENT_HP,activity:returning?'supply-return':recessed?'offsite':duty?.label||daily?.label||'idle',recessed,attacks:0,coins:personal?.coins??0,potions:personal?.potions??0,bedId:bed?.id??null,
    bedUntil:bed?morning:null,restUntil:null,path:null,nextPlan:0,attackAt:0,encounterAt:0};
  });
  poiTownNpcVersion++;
@@ -28349,7 +28405,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v322',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v323',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -28464,7 +28520,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v322';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v323';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -28679,7 +28735,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v322',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v323',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -42241,7 +42297,7 @@ function poiSnowPassApply(dest,now,cold=false,prepared=poiSnowPassPrepare(dest,c
  const {onBase,base,incoming,map}=prepared,hp=poiPlayerHP,cooldown=poiAttackReady;
  const companionSeam=typeof poiCompanionSeamCapture==='function'?poiCompanionSeamCapture(dest,now,cold):null;
  if(onBase)poiSnowPassBase=base;
- poiWalkFrameNoRegionRemote();
+ poiWalkFrameNoRegionRemote(!cold);
  facilitySite=incoming;
  if(onBase)facilityLoadMap(map,POI_OVERLAND_SPIKE&&dest.region==='snowpass');
  else poiSnowPassRestoreBaseMap(base);
@@ -42304,8 +42360,8 @@ function poiSnowPassDrawMeasured(){
   if(poiSnowPassPending){poiSnowPassPending=false;poiSnowPassVeil(false)}
  }
 }
-function poiWalkFrameNoRegionRemote(){
- poiStopRepeat(typeof poiOverlandKeepAnalog!=='undefined'&&poiOverlandKeepAnalog);poiPlayerWeaponCancel();poiEnemyCancelPlayer();poiTownResidentsReset();
+function poiWalkFrameNoRegionRemote(keepTownProgress=false){
+ poiStopRepeat(typeof poiOverlandKeepAnalog!=='undefined'&&poiOverlandKeepAnalog);poiPlayerWeaponCancel();poiEnemyCancelPlayer();poiTownResidentsReset(keepTownProgress);
  poiInventoryReleaseMesh();facilityInvalidateScenes();
  if(poiEconomyMesh){gl.deleteBuffer(poiEconomyMesh.buf);poiEconomyMesh=null;poiEconomyMeshDirty=true}
  if(poiMonsterMesh){gl.deleteBuffer(poiMonsterMesh.buf);poiMonsterMesh=null}
