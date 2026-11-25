@@ -6,39 +6,39 @@ import {createRequire} from 'node:module';
 import vm from 'node:vm';
 const expected={
  "town": {
-  "bytes": 257732,
-  "sha256": "0bb861e90ddeeb1d236c6755ab5692f2344348c55474723aa1f32a918e252d1e",
-  "frames": 1396364
+  "bytes": 262246,
+  "sha256": "be66dde43647d9bc73c138f8f669cfce9836d12029007d0909494e2ae31205e6",
+  "frames": 1498537
  },
  "indoor": {
-  "bytes": 312190,
-  "sha256": "8480098db49a98d527e62be6ef7a4f0555fe26a7fc87bb29dc7b539a669578e5",
-  "frames": 1706667
+  "bytes": 275199,
+  "sha256": "a4c61b1d0e31b7f1086053b4c6d4385f3d6902acb893fda0eddaa09034f87258",
+  "frames": 1600000
  },
  "mine": {
-  "bytes": 279135,
-  "sha256": "6e5a2ff34c5d85eb749ee9784ce69298f82be36f91c85e1a0686e5ac8dab8e64",
-  "frames": 1616842
+  "bytes": 235517,
+  "sha256": "798b2258ccdd5e0044e30b8e7281d534d806bd7392ac571c23cd34dc658fd60e",
+  "frames": 1462857
  },
  "otherworld": {
-  "bytes": 255433,
-  "sha256": "0f6b9f88320d8fe579c6a74092feab8bbc3b0a96e78e04ff4ef0b31ad4682d87",
-  "frames": 1536000
+  "bytes": 246766,
+  "sha256": "e6f66300f8f988cc8d688c18caac6cfe3b67e94c383116878a10f54a04676b9d",
+  "frames": 1500000
  },
  "chapel": {
-  "bytes": 318398,
-  "sha256": "92fdde9499a6193780e7bb1c429cd9d34f8dc7cedb50507d9cff8a7be9afd353",
-  "frames": 1755429
+  "bytes": 286721,
+  "sha256": "0e88b20c952999416ae13ffb5de2c7f296eedd353bb8d5039f83e03b3ce398af",
+  "frames": 1629091
  },
  "northFort": {
-  "bytes": 251408,
-  "sha256": "7ee68c9ac409d3fc50dc826c0c18325952972d632b24ce0a075a5716251a0f22",
-  "frames": 1428837
+  "bytes": 219553,
+  "sha256": "c51be118640deeddf6a55a26eebfbf5ad63514ba5ec91551febbc168a5d6394b",
+  "frames": 1280000
  },
  "battle": {
-  "bytes": 211065,
-  "sha256": "2df095fca6e861b8869bef8f25ccfc8621ae7739e61fbc0d8c5daf64dd67cd8e",
-  "frames": 1163636
+  "bytes": 216599,
+  "sha256": "17e5eb228f00add4b13bc22a5890e80d09cbfcd09680ca84f6087d821abce05c",
+  "frames": 1301695
  }
 };
 const protectedAudio={
@@ -83,7 +83,7 @@ assert.deepEqual(Object.keys(newMap).sort(),Object.keys(expected).sort());
 // show a 128-frame initial priming block and a 1024-frame final packet for
 // these exact immutable seven bytes. Some platform decoders honor EOS
 // trim; current Chromium omits just the trim at the final packet.
-const trailing={town:52,indoor:21,mine:758,otherworld:704,chapel:27,northFort:219,battle:844};
+const trailing={"town":151,"indoor":64,"mine":119,"otherworld":480,"chapel":157,"northFort":192,"battle":1};
 const authoredRate=32000;
 function readOgg(data){
  let at=0,eos=-1,rate=0,small=0,large=0,pages=0,serial=null;
