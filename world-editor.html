@@ -1722,7 +1722,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v343）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v344）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -6771,6 +6771,46 @@ function roadTile(m,x,z,id,mask,area){
 
 // Terrain tint is ambient in the base route, not a second terrain mesh or
 // a blanket of saved floor tiles. Exported props and accents remain editable.
+// BEGIN WELL PLAZA TONES
+function poiWellPlazaPlan(site,objects){
+ if(site?.id!=='base'||!site.spawn)return null;
+ let well=null,d=Infinity;
+ for(const o of objects)if(o.type==='wellStone'&&o.y===0){
+  const n=Math.hypot(o.x-site.spawn.x,o.z-site.spawn.z);
+  if(n<d){well=o;d=n;}
+ }
+ return well&&d<18?{x:well.x,z:well.z}:null;
+}
+function poiWellPlazaTint(m,x,z,kind,plan){
+ if(!plan||!m?.c?.length)return;
+ const vegetation=/^grass/.test(kind),stone=/^(?:road|earth)/i.test(kind);
+ if(!vegetation&&!stone)return;
+ const span=Math.max(0,Math.min(1,(16-Math.hypot(x-plan.x,z-plan.z))/10));
+ const mix=span*span*(3-2*span);
+ if(mix<=0)return;
+ // Preserve baked local light/shadows, brighten the reflected warm daylight
+ // rather than replacing it with a flat colour or a new lighting pass.
+ const k=vegetation?.18:.62;
+ for(let i=0;i<m.c.length;i+=3){
+  const r=m.c[i],g=m.c[i+1],b=m.c[i+2],l=.22*r+.62*g+.16*b,t=mix*k;
+  const target=vegetation?[.96*r+.14*l,.85*g+.12*l,.88*b+.20*l]:
+   [r+.050+Math.max(0,.57-l)*.26,g+.025+Math.max(0,.57-l)*.25,b+.006+Math.max(0,.57-l)*.21];
+  for(let j=0;j<3;j++)m.c[i+j]=Math.max(0,Math.min(1,m.c[i+j]+(target[j]-m.c[i+j])*t));
+ }
+}
+function poiWellPlazaWood(m,start,o,plan){
+ if(!plan||o.y!==0||!['benchWood','oldTownAwning','barrel','crate'].includes(o.type)||
+    facilityFloorOwner(o.x,o.z,o.y)!==null)return;
+ const q=Math.max(0,Math.min(1,(13-Math.hypot(o.x-plan.x,o.z-plan.z))/8)),t=q*q*(3-2*q);
+ for(let i=start*3;t>0&&i<m.c.length;i+=3){
+  const r=m.c[i],g=m.c[i+1],b=m.c[i+2],l=.22*r+.62*g+.16*b;
+  m.c[i]=Math.min(1,r+t*(.016+.08*l));
+  m.c[i+1]=Math.min(1,g+t*(.020+.08*l));
+  m.c[i+2]=Math.min(1,b+t*(.015+.065*l));
+ }
+}
+// END WELL PLAZA TONES
+
 function pineBaseNatureTint(x,z){
  const local=(cx,cz,rx,rz)=>Math.max(0,1-Math.hypot((x-cx)/rx,(z-cz)/rz));
  const woods=Math.max(local(6,3,12,9),local(61,4,15,12),
@@ -29019,7 +29059,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v343',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v344',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -29134,7 +29174,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v343';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v344';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -29349,7 +29389,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v343',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v344',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -34164,6 +34204,8 @@ function makeScene(){
  const gradeKey=localBatch?null:facilityGradeKey(gradeLamps),cachedGrade=localBatch?null:facilityGradeGet(gradeKey);
  const buildSharedGrade=!localBatch&&facilityGradeMayRemember(gradeKey);
  const grade=buildSharedGrade?mesh():m;
+ const wellPlaza=facilityBuildFullSurface&&!facilitySurfaceEdited?
+  poiWellPlazaPlan(facilitySite,world):null;
  const townGuild=facilitySite?.id==='base'?facilitySite.buildings?.find(b=>b.id==='townGuild'):null;
  const inTownGuild=(x,z)=>townGuild&&x>=townGuild.x1&&x<=townGuild.x2&&z>=townGuild.z1&&z<=townGuild.z2;
  const townGuildWood=(x,z,type)=>inTownGuild(x,z)&&/^woodfloor(?:Light|Dark)?$/.test(type);
@@ -34213,6 +34255,7 @@ function makeScene(){
    if(!canalQuays.has(x+','+z)&&!(creekWater&&x-baseOffset>=67&&facilityWoodlandBank(tmp,x,z,kind,woodlandRiver,groundCorner))&&floors.has(x+','+z))shoreline(tmp,x,z,floors);
   }
   pineBakeFloorLighting(tmp,x,z,0,pineShadows,gradeLamps);
+  if(wellPlaza)poiWellPlazaTint(tmp,x,z,kind,wellPlaza);
   shiftMesh(grade,tmp,terrainY(x,z));
   const isWater=['river','water','lake','sea'].includes(kind);
   if(isWater){
@@ -34382,6 +34425,7 @@ function makeScene(){
   else if(!poiWalkActive&&typeof poiSacredForestMember==='function'&&poiSacredForestMember(o))poiSacredTreeGeometry(m,o);
   else if(!pineDrawBaseTree(m,o)&&!pineDrawEastNature(m,o))deco(m,o.type,o.x+.5,o.y*1.4+terrainY(o.x,o.z),o.z+.5,o.rot||0);
   if(isWallId(o.type)||/^poiDavidWall/.test(o.type))pineBakeWallWarmth(m,start,o,pineShadows,pineWarmLamps);
+  if(wellPlaza)poiWellPlazaWood(m,start,o,wellPlaza);
   if(sides.length)poiAngledWallRecord(wallFade,m,o,sides,start);
   poiAngledStoreyRecord(storeyFade,m,o,start);
   if(sacredParts&&start<m.p.length/3&&typeof poiSacredTempleVisualMember==='function'&&poiSacredTempleVisualMember(facilitySite,o))
