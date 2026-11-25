@@ -1722,7 +1722,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v331）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v332）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -28894,7 +28894,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v331',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v332',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -29009,7 +29009,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v331';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v332';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -29224,7 +29224,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v331',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v332',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -42099,6 +42099,100 @@ const POI_OUTDOOR_FAR_PEAK=768*1024,POI_OUTDOOR_FAR_SLOTS=160;
 let poiOutdoorFrame=null,poiOutdoorSpecs=new WeakMap(),poiOutdoorCaches=new Map(),poiOutdoorFarBytes=0;
 let poiOutdoorPlan=null;
 let poiOutdoorProbe={built:0,drawn:[],maxBakeMs:0};
+// Additional physical ground only; all original allocations have unconditional priority.
+const POI_ADD_GROUND_LIMIT=192*1024;
+let poiAddGroundBytes=0,poiAddGroundCache=new Map(),poiAddGroundPlan=null;
+function poiAddGroundLimit(near,legacy){
+ return Math.max(0,Math.min(POI_ADD_GROUND_LIMIT,POI_OUTDOOR_FAR_PEAK-legacy,POI_OVERLAND_GPU_LIMIT-near-legacy));
+}
+function poiAddGroundDrop(k){
+ const e=poiAddGroundCache.get(k);if(!e)return;
+ gl.deleteBuffer(e.gpu.buf);poiAddGroundCache.delete(k);poiAddGroundBytes-=e.bytes;
+}
+function poiAddGroundTrim(near,legacy){
+ if(!poiAddGroundBytes)return;
+ const limit=poiAddGroundLimit(near,legacy);
+ for(const k of poiAddGroundCache.keys()){
+  if(poiAddGroundBytes<=limit)break;
+  poiAddGroundDrop(k);
+ }
+}
+function poiAddGroundClear(){
+ if(!poiAddGroundPlan&&!poiAddGroundCache.size)return;
+ for(const k of poiAddGroundCache.keys())poiAddGroundDrop(k);
+ poiAddGroundPlan=null;
+}
+function poiAddGroundCells(a,gx,gz){
+ const radius=30,out=[];
+ for(let j=Math.max(0,Math.floor((gz-radius)/8));j<Math.min(Math.ceil(a.height/8),Math.ceil((gz+radius)/8));j++)
+  for(let i=Math.max(0,Math.floor((gx-radius)/8));i<Math.min(Math.ceil(a.width/8),Math.ceil((gx+radius)/8));i++){
+   const x0=i*8,z0=j*8,x1=Math.min(a.width,x0+8),z1=Math.min(a.height,z0+8);
+   // Conservative full parcels: never omit part of an authoritative tile.
+   const furthest=Math.hypot(Math.max(Math.abs(x0-gx),Math.abs(x1-gx)),Math.max(Math.abs(z0-gz),Math.abs(z1-gz)));
+   if(furthest>radius)continue;
+   out.push({a,i,j,x0,z0,x1,z1,key:a.id+':'+i+','+j,
+    d:Math.hypot(gx-Math.max(x0,Math.min(x1,gx)),gz-Math.max(z0,Math.min(z1,gz)))});
+  }
+ return out.sort((a,b)=>a.d-b.d||a.key.localeCompare(b.key));
+}
+function poiAddGroundBuild(q){
+ const m=mesh(),a=q.a,has=(x,z)=>a.owns(x,z)&&!facilityStairOpenings.has(x+','+z+',0')&&!poiDavidTempleEnclosedAt(a.layout,x,z,0);
+ let box=[q.x0,0,q.z0,q.x1,0,q.z1];
+ for(const [x,x1,z,raw,kind]of poiOutdoorGroundRuns(q,a,has)){
+  const y=raw*TERRAIN_STEP-.006,c=poiOutdoorGroundTone(a.id,x,z,kind);
+  quad(m,[x,y,z],[x,y,z+1],[x1,y,z+1],[x1,y,z],c);
+ }
+ if(a.terrain.size)for(let z=q.z0;z<q.z1;z++)for(let x=q.x0;x<q.x1;x++){
+  if(!has(x,z))continue;
+  const h=a.terrain.get(x+','+z)||0;
+  if(h)for(const [dx,dz,side] of [[-1,0,3],[1,0,1],[0,-1,0],[0,1,2]]){
+   if(!has(x+dx,z+dz))continue;
+   const below=a.terrain.get((x+dx)+','+(z+dz))||0;
+   if(below<h)terrainSide(m,x,z,h,below,side);
+  }
+ }
+ for(let i=0;i<m.p.length;i+=3)for(let k=0;k<3;k++){
+  box[k]=Math.min(box[k],m.p[i+k]);box[k+3]=Math.max(box[k+3],m.p[i+k]);
+ }
+ return {m,bytes:m.p.length*12,box};
+}
+function poiAddGroundFrame(vp,stream,active,g,areas,held){
+ const source=areas.find(a=>a.id===active);
+ if(!stream||!source||!poiWalkActive||poiWalkLevel!==0||facilitySurfaceEdited||cameraTopDown||pineAIActive||
+    facilityVisibilityOwner()!==null||poiDavidTempleEnclosedAt(facilitySite,poiWalkViewX,poiWalkViewZ,0)||
+    (source.id==='base'&&(!poiSquareFieldSite(source.layout)||source.layout!==facilitySite||source.world!==world))||
+    (source.id==='snowpass'&&(!poiOverlandSnow||source.layout!==poiOverlandSnow||source.world!==poiOverlandSnow.map.world))){
+  poiAddGroundClear();return;
+ }
+ const [x,z]=poiOverlandLocal(active,...g),gx=Math.floor(x)+.5,gz=Math.floor(z)+.5;
+ if(poiAddGroundPlan?.source!==source||poiAddGroundPlan.gx!==gx||poiAddGroundPlan.gz!==gz){
+  const a=active==='base'?{...source,width:POI_SQUARE_FIELD_SIDE,height:POI_SQUARE_FIELD_SIDE}:source,list=poiAddGroundCells(a,gx,gz);
+  poiAddGroundPlan={source,gx,gz,list,keys:new Set(list.map(q=>q.key)),tried:new Map()};
+ }
+ const {list,keys,tried}=poiAddGroundPlan,detail=new Set(poiOverlandCommands.map(q=>q.key));
+ for(const k of poiAddGroundCache.keys())if(!keys.has(k)||detail.has(k)||poiOutdoorCaches.has(k))poiAddGroundDrop(k);
+ poiAddGroundTrim(held,poiOutdoorFarBytes);
+ for(const q of list){
+  const available=poiAddGroundLimit(held,poiOutdoorFarBytes)-poiAddGroundBytes;
+  if(available<=0)break;
+  if(poiAddGroundCache.has(q.key)||detail.has(q.key)||poiOutdoorCaches.has(q.key)||poiOverlandGroundDrawn.has(q.key)||
+     (tried.get(q.key)??0)>available)continue;
+  const {m,bytes,box}=poiAddGroundBuild(q);
+  if(bytes>0&&bytes<=available){
+   const gpu=upload(m);
+   if(gpu?.buf){poiAddGroundCache.set(q.key,{gpu,bytes,box,q});poiAddGroundBytes+=bytes;}
+  }else tried.set(q.key,bytes||Infinity);
+  break; // one optional ground-only bake per frame; never delay original submission
+ }
+ for(const [k,e]of poiAddGroundCache){
+  const q=e.q,px=x+.5,pz=z+.5;
+  if(Math.hypot(Math.max(Math.abs(q.x0-px),Math.abs(q.x1-px)),Math.max(Math.abs(q.z0-pz),Math.abs(q.z1-pz)))>30||
+     poiOverlandGroundDrawn.has(k)||poiOutdoorCaches.has(k)||!poiOverlandBoxVisible(vp,e.box))continue;
+  draw(e.gpu,vp);
+ }
+ // Deliberately never publish these slots as gameplay/actor supports.
+}
+
 function poiOutdoorLandmark(spec,o){
  if(o.y!==0||!spec.owns(o.x,o.z)||typeof poiSacredTempleVisualMember==='function'&&poiSacredTempleVisualMember(spec.layout,o))return false;
  return /^(tree(?:Pine|Cedar|Oak|Birch|Willow)|rockMossy|poiFortGate)$/.test(o.type);
@@ -42109,12 +42203,12 @@ function poiOutdoorLocalCanopy(spec,o){
  const same=p=>p.x===o.x&&p.z===o.z&&p.type===o.type;
  return !!(spec.layout.southForest?.props?.some(same)||spec.layout.southPort?.props?.some(same));
 }
-function poiOutdoorGroundRuns(q,spec){
+function poiOutdoorGroundRuns(q,spec,owns=spec.owns){
  const out=[],floors=spec.index.floors,ground=spec.id==='snowpass'?'poiSnowGround':'grass';
  for(let z=q.z0;z<q.z1;z++){
   let last=null;
   for(let x=q.x0;x<q.x1;x++){
-   if(!spec.owns(x,z)){last=null;continue}
+   if(!owns(x,z)){last=null;continue}
    const key=x+','+z,h=spec.terrain.get(key)??0;
    const raw=floors.get(key)||ground,t=poiSacredInteriorGrade(spec.layout,x,z,raw,true);
    const kind=/^(road)/i.test(t)&&t!=='roadRoyalFull'&&spec.id!=='snowpass'?'road':
@@ -42247,6 +42341,7 @@ function poiOutdoorTrimForDetailed(bytes,held){
  while(poiOutdoorFarBytes&&bytes+held+poiOutdoorFarBytes>POI_OVERLAND_GPU_LIMIT){
   const k=poiOutdoorCaches.keys().next().value;if(k===undefined)break;poiOutdoorDrop(k);
  }
+ if(poiAddGroundBytes)poiAddGroundTrim(held+bytes,poiOutdoorFarBytes);
 }
 function poiOutdoorSet(x,z,mode,match=0){
  gl.uniform4f(loc.outdoorSight,x,z,mode,match);
@@ -42260,6 +42355,7 @@ function poiOutdoorLodMayRun(){
 let poiStockOutdoorWarm=null;
 const POI_STOCK_OUTDOOR_WARM_TILES=6;
 function poiStockOutdoorWarmClear(reason){
+ if(poiAddGroundPlan||poiAddGroundBytes)poiAddGroundClear();
  for(const k of poiOutdoorCaches.keys())poiOutdoorDrop(k);
  poiStockOutdoorWarm=null;poiOutdoorPlan=null;
  poiOutdoorFrame=null;poiOutdoorProbe.drawn=[];
@@ -42279,6 +42375,7 @@ function poiStockOutdoorWarmBlock(){
 }
 function poiOutdoorLodBegin(){
  if(!poiOutdoorLodMayRun()){
+  if(poiAddGroundPlan||poiAddGroundBytes)poiAddGroundClear();
   const reason=poiStockOutdoorWarmBlock();
   if(reason===null){
    poiStockOutdoorWarm.parked=true;poiOutdoorFrame=null;poiOutdoorProbe.drawn=[];return;
@@ -42322,6 +42419,7 @@ function poiOutdoorLate(vp,stream){
   const q=order[i],{m,ground,canopy,bounds}=poiOutdoorMesh(q),bytes=m.p.length*12;
   started++;
   if(poiOutdoorFarBytes+bytes>budget){rejected.set(q.key,bytes);continue}
+  if(poiAddGroundBytes&&bytes)poiAddGroundTrim(held,poiOutdoorFarBytes+bytes);
   const gpu=bytes?upload(m):null;
   poiOutdoorCaches.set(q.key,{gpu,ground,canopy,bounds,bytes,source:q.a.world});
   poiOutdoorFarBytes+=bytes;poiOutdoorProbe.built++;
@@ -42344,6 +42442,8 @@ function poiOutdoorLate(vp,stream){
    if(!groundBuilt||propEnd>e.ground)poiOutdoorProbe.drawn.push({key:q.key,ground:groundBuilt?0:e.ground,props:propEnd-e.ground});
   }
  }finally{poiOutdoorSet(0,0,0)}
+ if(stream)poiAddGroundFrame(vp,stream,id,g,areas,held);
+ else if(poiAddGroundPlan||poiAddGroundBytes)poiAddGroundClear();
 }
 // END OUTDOOR GEOGRAPHY LOD
 
