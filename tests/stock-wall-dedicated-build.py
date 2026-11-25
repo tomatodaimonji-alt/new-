@@ -15,7 +15,7 @@ assert {'p','n','c','hybridWallRot','hybridWallFace','hybridWallBand','hybridWal
 assert len(props)==14,props
 def literal(d):return '{'+','.join(f"{k}:'{v}'" for k,v in d.items())+'}'
 before='let program;try{program=gl.createProgram();'
-put(before,'const poiWallDedicatedRequested=new URLSearchParams(location.search).get("dedicated-wall")==="1";\nlet poiWallProgram=null,poiWallLoc=null;\n'+before)
+put(before,'const poiWallDedicatedRequested=facilityParams.get("test")==="1"&&facilityParams.get("dedicated-wall")==="1";\nlet poiWallProgram=null,poiWallLoc=null;\n'+before)
 put('gl.attachShader(program,sh(gl.VERTEX_SHADER,VERT));','''if(poiWallDedicatedRequested&&(typeof gl.drawArraysInstanced==='function'||gl.getExtension('ANGLE_instanced_arrays'))){
  try{
   poiWallProgram=gl.createProgram();
@@ -37,15 +37,22 @@ writes=set(re.findall(r"gl.uniform[1234]f\(loc\.(\w+),",src))
 assert writes==props.keys()-{'mvp'},(writes,props)
 src=re.sub(r"gl\.(uniform[1234]f)\(loc\.(\w+),",r"poiWallUniformWrite('\1','\2',",src)
 put("try{initSignProgram()}catch(e)",'''const poiWallUniformState=Object.create(null);
+let poiWallUniformActive=false;
 function poiWallUniformWrite(method,key,...args){
- gl[method](loc[key],...args);
- if(poiWallProgram)poiWallUniformState[key]=[method,args];
+ gl[method]((poiWallUniformActive?poiWallLoc:loc)[key],...args);
+ if(poiWallProgram&&!poiWallUniformActive)poiWallUniformState[key]=[method,args];
 }
 function poiWallUniformUse(){
  if(!poiWallProgram)return loc;
  gl.useProgram(poiWallProgram);
+ poiWallUniformActive=true;
  for(const [key,[method,args]] of Object.entries(poiWallUniformState))gl[method](poiWallLoc[key],...args);
  return poiWallLoc;
+}
+function poiWallUniformRestore(){
+ if(!poiWallUniformActive)return;
+ gl.useProgram(program);
+ poiWallUniformActive=false;
 }
 try{initSignProgram()}catch(e)''')
 a=src.index('function poiHybridWallDraw(vp){')
@@ -56,6 +63,7 @@ wall=wall.replace('  try{','  if(!sets.size){if(spec.id!==id)poiSacredFrontierFo
 wall=wall.replace('   if(spec.id!==id)poiSacredFrontierFogRegion(id);\n   for(const a', '   for(const a')
 cleanup='gl.vertexAttrib4f(a,0,0,0,1)}\n  }'
 assert wall.count(cleanup)==1
-wall=wall.replace(cleanup,cleanup[:-3]+'   if(poiWallProgram)gl.useProgram(program);\n   if(spec.id!==id)poiSacredFrontierFogRegion(id);\n  }')
+wall=wall.replace(cleanup,cleanup[:-3]+'   poiWallUniformRestore();\n   if(spec.id!==id)poiSacredFrontierFogRegion(id);\n  }')
 src=src[:a]+wall+src[b:]
+put("k==='hybrid-wall-opt')&&params.get(k)==='1'", "k==='hybrid-wall-opt'||k==='dedicated-wall'&&params.get('test')==='1')&&params.get(k)==='1'")
 Path(sys.argv[2]).write_text(src)

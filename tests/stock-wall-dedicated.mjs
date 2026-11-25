@@ -44,6 +44,7 @@ try{
  b=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
  const ctx=await b.newContext({viewport:{width:844,height:390},deviceScaleFactor:.68,isMobile:true,hasTouch:true}),p=await ctx.newPage(),errors=[];
  p.on('pageerror',e=>errors.push(e.message));
+ const notices=[];p.on('console',m=>{if(m.type()==='error'||m.type()==='warning')notices.push(m.text())});
  await p.addInitScript(({backend,fallback})=>{window.__hybridBackend=backend;window.__hybridNoAngle=fallback;
   function mark(t){(window.__gateRaw??=[]).push(t);if(window.__gateRaw.length>180)window.__gateRaw.shift();requestAnimationFrame(mark)}
   requestAnimationFrame(mark);
@@ -56,12 +57,23 @@ try{
    view:{yaw:0,zoom:1,panX:0,panZ:0,level:0,hideUpper:false,top:false,third:true,orbitYaw:yaw,orbitPitch:.11,orbitDistance:5.6}}));
  },{x,z,yaw});
  await p.goto(url+'/?resume=1&test=1&uniform-outdoor=1&uniform-shell=1&uniform-split=1&hybrid-gate=1'+(enabled?'&hybrid-wall=1':'')+(optimized?'&hybrid-wall-opt=1':'')+(dedicated?'&dedicated-wall=1':''));
- await p.locator('#pineStartupCover').waitFor({state:'hidden',timeout:45000});
+ const startup=()=>p.evaluate(()=>({route:location.href,facility:document.querySelector('#app')?.classList.contains('facilitySession'),
+  ready:typeof window.__editorTest?.gateQA==='function',keys:Object.keys(window.__editorTest??{}),
+  cover:document.querySelector('#pineStartupCover')?.textContent?.trim()}));
+ try{
+  await p.locator('#pineStartupCover').waitFor({state:'hidden',timeout:45000});
+  const proof=await startup();
+  a(proof.facility&&proof.ready,JSON.stringify(proof));
+  console.log(JSON.stringify({startup:'passed',variant:dedicated?'dedicated':'embedded',...proof}));
+ }catch(e){console.error('first startup blocker',await startup(),{errors,notices});throw e}
+
  const read=()=>p.evaluate(()=>window.__editorTest.gateQA());
  try{await p.waitForFunction(({stream,x,z})=>{
   const q=window.__editorTest?.gateQA();return q?.stream===stream&&q.gate&&q.pose[0]===x&&q.pose[1]===z&&q.frame.length>=38;
  },{x,z,stream:backend==='stream'},{timeout:18000,polling:125})}
- catch(e){const q=await read();delete q.frame;delete q.raw;console.error('setup',q,errors);throw e}
+ catch(e){const q=await p.evaluate(()=>({qa:window.__editorTest?.gateQA?.(),api:Object.keys(window.__editorTest??{}),
+  startup:document.querySelector('#pineStartupCover')?.textContent?.trim(),where:location.href}));
+  if(q.qa){delete q.qa.frame;delete q.qa.raw} console.error('setup',q,{errors,notices});throw e}
  const q=await read();a.equal(q.programSplit,dedicated);a(q.weights[expected]>.94,JSON.stringify(q.weights));if(optimized){a(q.layers.filter(Boolean).length===1&&q.layers[expected]>0,JSON.stringify(q.layers));}
  else a(q.layers[0]>q.layers[1]&&q.layers[1]>q.layers[2]);
  a(q.near+q.coarse+q.gateBytes+q.wallBytes<=4*1024*1024&&q.err===0,JSON.stringify(q));
