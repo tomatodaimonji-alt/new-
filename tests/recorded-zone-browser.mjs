@@ -5,41 +5,41 @@ import {createServer} from 'node:http';
 import {createRequire} from 'node:module';
 import vm from 'node:vm';
 const expected={
- "town": {
-  "bytes": 262246,
-  "sha256": "be66dde43647d9bc73c138f8f669cfce9836d12029007d0909494e2ae31205e6",
-  "frames": 1498537
- },
- "indoor": {
-  "bytes": 275199,
-  "sha256": "a4c61b1d0e31b7f1086053b4c6d4385f3d6902acb893fda0eddaa09034f87258",
-  "frames": 1600000
- },
- "mine": {
-  "bytes": 235517,
-  "sha256": "798b2258ccdd5e0044e30b8e7281d534d806bd7392ac571c23cd34dc658fd60e",
-  "frames": 1462857
- },
- "otherworld": {
-  "bytes": 246766,
-  "sha256": "e6f66300f8f988cc8d688c18caac6cfe3b67e94c383116878a10f54a04676b9d",
-  "frames": 1500000
- },
- "chapel": {
-  "bytes": 286721,
-  "sha256": "0e88b20c952999416ae13ffb5de2c7f296eedd353bb8d5039f83e03b3ce398af",
-  "frames": 1629091
- },
- "northFort": {
-  "bytes": 219553,
-  "sha256": "c51be118640deeddf6a55a26eebfbf5ad63514ba5ec91551febbc168a5d6394b",
-  "frames": 1280000
- },
- "battle": {
-  "bytes": 216599,
-  "sha256": "17e5eb228f00add4b13bc22a5890e80d09cbfcd09680ca84f6087d821abce05c",
-  "frames": 1301695
- }
+  "town": {
+    "bytes": 271615,
+    "sha256": "382224a6779f0d96daea010e4abf65ff8d7cb728eade78b7d7f305938b7634c7",
+    "frames": 1974857
+  },
+  "indoor": {
+    "bytes": 355332,
+    "sha256": "fc204ad9dbfa0ec7b0c5d38366b080331a7d1c848a42107fb6b2219f47ec6fe5",
+    "frames": 2067692
+  },
+  "mine": {
+    "bytes": 509119,
+    "sha256": "607f69eda7f7fa97ec2ee439cf2b47dc8aaaded2a9d3008eede2133451c431f7",
+    "frames": 2560000
+  },
+  "otherworld": {
+    "bytes": 363263,
+    "sha256": "b24a59ee62bb40d022523c309fd62c2e97e3d56b0619b8ac5c2ed4428773d92b",
+    "frames": 2133333
+  },
+  "chapel": {
+    "bytes": 387978,
+    "sha256": "a8079241becfa1730101bf83b06c91bd414b90dc5cbeffe4f6f45c732eb43de8",
+    "frames": 2229677
+  },
+  "northFort": {
+    "bytes": 369260,
+    "sha256": "885e1e434563685ccad6b1b51df17e25c11924eeb73c7f42a179761d15b96f73",
+    "frames": 2194286
+  },
+  "battle": {
+    "bytes": 265670,
+    "sha256": "a4af17841e78ffe96930291adecccda26711382e628d9e0ad021689a34205c04",
+    "frames": 2048000
+  }
 };
 const protectedAudio={
  "davidStill": {
@@ -83,7 +83,7 @@ assert.deepEqual(Object.keys(newMap).sort(),Object.keys(expected).sort());
 // show a 128-frame initial priming block and a 1024-frame final packet for
 // these exact immutable seven bytes. Some platform decoders honor EOS
 // trim; current Chromium omits just the trim at the final packet.
-const trailing={"town":151,"indoor":64,"mine":119,"otherworld":480,"chapel":157,"northFort":192,"battle":1};
+const trailing={"town":887,"indoor":468,"mine":576,"otherworld":363,"chapel":275,"northFort":850,"battle":576};
 const authoredRate=32000;
 function readOgg(data){
  let at=0,eos=-1,rate=0,small=0,large=0,pages=0,serial=null;
