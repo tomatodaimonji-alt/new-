@@ -1722,7 +1722,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v324）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v325）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -26778,6 +26778,78 @@ function poiTownGatewayRoutine(a,clock,now,budget){
  return true;
 }
 // END TOWN GATEWAY VISITORS
+// BEGIN TOWN NPC CANONICAL PURSE
+const POI_NPC_PURSE_KEY='world-workshop-base-npc-purse-v1';
+const POI_NPC_PURSE_GUESTS=Object.freeze({guestadventurer:'inn-west',resadventurer:'inn-south'});
+function poiTownNpcPurseKnown(a){
+ return typeof facilitySite!=='undefined'&&facilitySite?.id==='base'&&a?.role?.role==='adventurer'&&Object.hasOwn(POI_NPC_PURSE_GUESTS,a.role.id);
+}
+function poiTownNpcPurseRead(){
+ const empty=()=>({coins:0,herbs:0,night:-1});
+ const openingFood=()=>({inn:2,supplier:8,day:-1});
+ const origin=()=>({version:1,issued:0,guestadventurer:empty(),resadventurer:empty(),toolkeeper:0,innkeeper:0,towncook:0,food:openingFood()});
+ const integer=(n,min,max)=>Number.isSafeInteger(n)&&n>=min&&n<=max;
+ try{
+  const raw=localStorage.getItem(POI_NPC_PURSE_KEY);
+  if(raw===null)return origin();
+  const p=JSON.parse(raw);
+  if(p?.version!==1||!integer(p.issued,0,Number.MAX_SAFE_INTEGER))return null;
+  if(!Object.hasOwn(p,'towncook')&&!Object.hasOwn(p,'food')){p.towncook=0;p.food=openingFood()}
+  for(const id of ['toolkeeper','innkeeper','towncook'])if(!integer(p[id],0,p.issued))return null;
+  const f=p.food;
+  if(!f||!integer(f.inn,0,10)||!integer(f.supplier,0,10)||f.inn+f.supplier!==10||
+     !integer(f.day,-1,Math.floor(Number.MAX_SAFE_INTEGER/1440)))return null;
+  for(const id of Object.keys(POI_NPC_PURSE_GUESTS)){
+   const q=p[id];if(!q||!integer(q.coins,0,99)||!integer(q.herbs,0,1)||!integer(q.night,-1,Number.MAX_SAFE_INTEGER))return null;
+  }
+  return p.toolkeeper+p.innkeeper+p.towncook+p.guestadventurer.coins+p.resadventurer.coins===p.issued?p:null;
+ }catch(_e){return null}
+}
+function poiTownNpcPurseAccount(id,p=poiTownNpcPurseRead()){
+ if(Object.hasOwn(POI_NPC_PURSE_GUESTS,id))return p?.[id]??{coins:0,herbs:0,night:-1};
+ return {coins:['toolkeeper','innkeeper','towncook'].includes(id)?p?.[id]??0:0,herbs:0,night:-1};
+}
+function poiTownNpcPurseHydrate(a){
+ if(!poiTownNpcPurseKnown(a)&&!(typeof facilitySite!=='undefined'&&facilitySite?.id==='base'&&['toolkeeper','innkeeper','towncook'].includes(a?.role?.id)))return a;
+ const q=poiTownNpcPurseAccount(a.role.id);
+ a.coins=q.coins;a.potions=q.herbs;
+ return a;
+}
+function poiTownNpcPurseSave(p){
+ try{localStorage.setItem(POI_NPC_PURSE_KEY,JSON.stringify(p));return true}catch(_e){return false}
+}
+function poiTownNpcPurseApply(a,kind,bed=null,absoluteMinute=null){
+ if(!poiTownNpcPurseKnown(a))return 'legacy';
+ const p=poiTownNpcPurseRead(),id=a.role.id;if(!p)return 'wait';
+ const q=p[id],amount=POI_ECONOMY_PRICE;
+ if(kind==='hunt'){
+  const add=Math.min(99-q.coins,POI_ECONOMY_COIN);
+  if(add<=0)return 'ok';
+  if(!Number.isSafeInteger(p.issued+add))return 'wait';
+  p.issued+=add;q.coins+=add;
+ }else if(kind==='herb'){
+  if(q.herbs!==0||q.coins<amount)return 'no-funds';
+  q.coins-=amount;q.herbs=1;p.toolkeeper+=amount;
+ }else if(kind==='consume'){
+  if(!q.herbs)return 'empty';q.herbs=0;
+ }else if(kind==='lodging'){
+  if(POI_NPC_PURSE_GUESTS[id]!==bed?.id||a.npcInnBooking!==bed.id||
+     !Number.isSafeInteger(absoluteMinute)||absoluteMinute<0)return 'wait';
+  const day=Math.floor(absoluteMinute/1440);
+  if(q.night>=day)return 'duplicate';
+  if(q.coins<amount)return 'no-funds';
+  q.coins-=amount;q.night=day;p.innkeeper+=amount;
+ }else return 'wait';
+ if(!poiTownNpcPurseSave(p))return 'wait';
+ a.coins=q.coins;a.potions=q.herbs;
+ if((kind==='herb'||kind==='lodging')&&typeof poiTownNpcActors!=='undefined'){
+  const vendor=kind==='herb'?'toolkeeper':'innkeeper';
+  const clerk=poiTownNpcActors.find(x=>x?.role?.id===vendor);
+  if(clerk)clerk.coins=p[vendor];
+ }
+ return 'ok';
+}
+// END TOWN NPC CANONICAL PURSE
 function poiTownNpcInit(clock){
  if(poiTownNpcActors.length)return;
  const merchant=typeof poiSouthMarketRole==='function'?poiSouthMarketRole():null;
@@ -26807,8 +26879,9 @@ function poiTownNpcInit(clock){
   const morning=clock.absoluteMinute-clock.minute+POI_TOWN_WAKE+(clock.minute>=POI_TOWN_WAKE?1440:0);
   const {weapon,gear}=poiTownNpcLoadout({role});
   const personal=role.role==='adventurer'?poiTownAdventurerMemory.get(role.id):null;
-  return {role,weapon,gear,...p,index,...(returning?{supplyCarrying:true}:{}),hp:personal?.hp??POI_TOWN_RESIDENT_HP,activity:returning?'supply-return':recessed?'offsite':duty?.label||daily?.label||'idle',recessed,attacks:0,coins:personal?.coins??0,potions:personal?.potions??0,bedId:bed?.id??null,
+  const actor={role,weapon,gear,...p,index,...(returning?{supplyCarrying:true}:{}),hp:personal?.hp??POI_TOWN_RESIDENT_HP,activity:returning?'supply-return':recessed?'offsite':duty?.label||daily?.label||'idle',recessed,attacks:0,coins:personal?.coins??0,potions:personal?.potions??0,bedId:bed?.id??null,
    bedUntil:bed?morning:null,restUntil:null,path:null,nextPlan:0,attackAt:0,encounterAt:0};
+  return typeof poiTownNpcPurseHydrate==='function'?poiTownNpcPurseHydrate(actor):actor;
  });
  poiTownNpcVersion++;
 }
@@ -27047,6 +27120,8 @@ function poiTownNpcResolve(a,now){
    const amount=(typeof poiTownNpcAttackPower==='function'?poiTownNpcAttackPower(a):null)??POI_TOWN_RESIDENT_MELEE;
    const weapon=typeof poiTownNpcLoadout==='function'?poiTownNpcLoadout(a).weapon:'equipWoodSword';
    const before=state.hp;
+   const paid=before<=amount&&typeof poiTownNpcPurseApply==='function'?poiTownNpcPurseApply(a,'hunt'):'legacy';
+   if(paid!=='wait'){
    a.attacks++;a.lastHitAt=now;state.hp=Math.max(0,state.hp-amount);
    if(typeof poiHitFlashMonster==='function')poiHitFlashMonster(state,before,now);
    poiMonsterMeshDirty=true;
@@ -27056,7 +27131,8 @@ function poiTownNpcResolve(a,now){
     if(!state.hp&&typeof poiMonsterBreak==='function')poiMonsterBreak(obj,state,now);
    }
    if(!state.hp){
-    a.coins=Math.min(99,(a.coins||0)+POI_ECONOMY_COIN);poiTownNpcReleaseHunt(a);return;
+    if(paid==='legacy')a.coins=Math.min(99,(a.coins||0)+POI_ECONOMY_COIN);poiTownNpcReleaseHunt(a);return;
+   }
    }
   }
  }
@@ -27120,17 +27196,26 @@ function poiTownNpcFight(a,now,budget){
 }
 function poiTownNpcEmergencyHeal(a){
  if(!a.potions||a.hp>=35)return false;
- a.potions--;a.hp=Math.min(100,a.hp+POI_HOTBAR_HEAL);return true;
+ const paid=typeof poiTownNpcPurseApply==='function'?poiTownNpcPurseApply(a,'consume'):'legacy';
+ if(paid!=='ok'&&paid!=='legacy')return false;
+ if(paid==='legacy')a.potions--;a.hp=Math.min(100,a.hp+POI_HOTBAR_HEAL);return true;
 }
 function poiTownNpcShop(a,now,budget){
  if(now<(a.shopHoldUntil||0)){poiTownNpcAct(a,'buy-toolshop');return true}
+ if(now<(a.shopRetryAt||0)){poiTownNpcAct(a,'going-toolshop');return true}
  if(a.target||a.potions||(a.coins||0)<POI_ECONOMY_PRICE||a.hp<=84)return false;
  const clerk=poiTownNpcActors.find(r=>r.role.id==='toolkeeper'),desk=clerk?.role.public;
  if(!desk||clerk.activity!=='work'||!poiTownNpcHere(clerk,clerk.role.work))return false;
  const records=world.filter(o=>o.x===desk.x+1&&o.y===desk.y&&o.z===desk.z);
  if(!records.some(o=>o.type==='counterLuxury'&&o.rot===1)||!records.some(o=>o.type==='poiLedgerPapers'))return false;
  if(!poiTownNpcMove(a,desk,'going-toolshop',now,budget)){poiTownNpcAct(a,'going-toolshop');return true}
- a.coins-=POI_ECONOMY_PRICE;a.potions=1;a.shopHoldUntil=now+1500;
+ const canonical=typeof poiTownNpcPurseKnown==='function'&&poiTownNpcPurseKnown(a);
+ if(canonical&&poiTownNpcStepT(a,now)<1)return true;
+ const paid=canonical?poiTownNpcPurseApply(a,'herb'):'legacy';
+ if(paid==='wait'){a.shopRetryAt=now+1500;poiTownNpcAct(a,'going-toolshop');return true}
+ if(paid!=='ok'&&paid!=='legacy'){poiTownNpcPurseHydrate(a);return false}
+ if(paid==='legacy'){a.coins-=POI_ECONOMY_PRICE;a.potions=1}
+ a.shopHoldUntil=now+1500;
  poiTownNpcGesture(a,'trade-buy',now);poiTownNpcGesture(clerk,'trade-sell',now);
  poiTownAmbientSpeak('shop',a,clerk,now);
  poiTownNpcAct(a,'buy-toolshop');return true;
@@ -27276,10 +27361,52 @@ function poiToolshopSupplyRoutine(a,clock,now,budget){
  return true;
 }
 // END TOOLSHOP SUPPLY ROUTINE
+// BEGIN TOWN NPC FUNDED FOOD
+const POI_NPC_FOOD_KITCHEN=Object.freeze({x:26,z:42,y:0,facing:3});
+const POI_NPC_FOOD_INN=Object.freeze({x:42,z:31,y:0,facing:0});
+function poiTownNpcFundedFood(a,clock,now,budget){
+ if(a.role?.id!=='towncook'||facilitySite?.id!=='base')return false;
+ const g=poiTownNpcGraph(),m=clock.minute;
+ if(m<720||m>=840||!g.cells.get(poiTownNpcKey(25,41,0))?.includes('kitchenCounter')||
+    !g.cells.get(poiTownNpcKey(41,33,0))?.some(type=>/Door/.test(type))||
+    !poiTownNpcStance(POI_NPC_FOOD_KITCHEN,g)||!poiTownNpcStance(POI_NPC_FOOD_INN,g)){
+  a.npcFoodTrip=false;return false;
+ }
+ if(!a.npcFoodTrip){
+  if(!poiTownNpcFoodEligible(poiTownNpcPurseRead(),clock.absoluteMinute))return false;
+  if(!poiTownNpcHere(a,POI_NPC_FOOD_KITCHEN)){
+   poiTownNpcMove(a,POI_NPC_FOOD_KITCHEN,'going-visit',now,budget);return true;
+  }
+  if(poiTownNpcStepT(a,now)<1)return true;
+  a.npcFoodTrip=true;
+ }
+ const arrived=poiTownNpcMove(a,POI_NPC_FOOD_INN,'going-visit',now,budget);
+ if(arrived&&poiTownNpcStepT(a,now)>=1&&poiTownNpcHostReady()){
+  if(now<(a.npcFoodRetryAt||0))return true;
+  // One persisted snapshot changes the cash and the food simultaneously.
+  const p=poiTownNpcPurseRead();
+  if(!poiTownNpcFoodEligible(p,clock.absoluteMinute)){a.npcFoodTrip=false;return false}
+  p.innkeeper-=4;p.towncook+=4;p.food.supplier-=2;p.food.inn+=2;
+  p.food.day=Math.floor(clock.absoluteMinute/1440);
+  if(!poiTownNpcPurseSave(p)){a.npcFoodRetryAt=now+380;return true}
+  a.coins=p.towncook;
+  const host=poiTownNpcActors.find(b=>b.role?.id==='innkeeper');
+  if(host)host.coins=p.innkeeper;
+  a.npcFoodTrip=false;
+  poiTownNpcAct(a,'evening-delivery');
+ }
+ return true;
+}
+function poiTownNpcFoodEligible(p,minute){
+ return !!p&&Number.isSafeInteger(minute)&&minute>=0&&p.food.day<Math.floor(minute/1440)&&
+  p.innkeeper>=4&&p.food.inn<=2&&p.food.supplier>=2;
+}
+// END TOWN NPC FUNDED FOOD
 function poiTownNpcRoutine(a,clock,now,budget){
  if(typeof poiPortNpcRoutine==='function'&&poiPortNpcRoutine(a,clock,now,budget))return;
  if(typeof poiTownGatewayRoutine==='function'&&poiTownGatewayRoutine(a,clock,now,budget))return;
  if(typeof poiTownDutyRoutine==='function'&&poiTownDutyRoutine(a,clock,now,budget))return;
+ if(typeof poiTownNpcFundedFood==='function'&&poiTownNpcFundedFood(a,clock,now,budget))return;
  if(a.role.role==='visitor'){
   if(typeof poiTownDailyRoutine!=='function'||!poiTownDailyRoutine(a,clock,now,budget))poiTownNpcVisitorRoutine(a,clock,now,budget);
   return;
@@ -27300,11 +27427,22 @@ function poiTownNpcRoutine(a,clock,now,budget){
  let bed=POI_TOWN_INN_BEDS.find(b=>b.id===a.bedId);
  if(bed&&(!poiTownNpcExistsBed(bed)||clock.absoluteMinute>=a.bedUntil||
     (!traveler&&a.restUntil!==null&&clock.absoluteMinute>=a.restUntil))){
+  a.npcInnBooking=null;a.npcInnPaidFor=null;
   a.bedId=null;a.restUntil=null;bed=null;
  }
  if(bed){
   if(a.gestureKind==='check-in-guest'&&now-a.gestureAt<700)return;
   if(poiTownNpcMove(a,bed.stand,'going-inn-bed',now,budget)){
+   if(a.npcInnBooking===bed.id&&a.npcInnPaidFor!==bed.id&&typeof poiTownNpcPurseKnown==='function'&&poiTownNpcPurseKnown(a)){
+    if(poiTownNpcStepT(a,now)<1)return;
+    const paid=poiTownNpcPurseApply(a,'lodging',bed,clock.absoluteMinute);
+    if(paid==='wait')return;
+    if(paid!=='ok'){
+     a.npcInnRefusedUntil=a.bedUntil;a.npcInnBooking=null;a.npcInnPaidFor=null;
+     a.bedId=null;a.restUntil=null;return;
+    }
+    a.npcInnPaidFor=bed.id;
+   }
    a.hp=100;
    if(!traveler&&a.restUntil===null)a.restUntil=clock.absoluteMinute+20;
    poiTownNpcAct(a,traveler&&night?'sleep-inn':'rest-inn');
@@ -27314,12 +27452,22 @@ function poiTownNpcRoutine(a,clock,now,budget){
  // A traveler has no private home: reach the desk before closing, or wait
  // in the lobby for the host. A resident can book the same spare guest room
  // for an injury, but gives it back after a short rest.
+ if(role.role==='adventurer'&&clock.absoluteMinute<a.npcInnRefusedUntil){
+  poiTownNpcReleaseHunt(a);
+  poiTownNpcMove(a,role.public,'errand',now,budget);poiTownNpcAct(a,'errand');
+  return;
+ }
  if(role.role==='adventurer'&&((traveler&&(night||m>=16*60+20))||(!night&&a.hp<=84))){
   poiTownNpcReleaseHunt(a);
   poiTownNpcMove(a,POI_TOWN_INN.desk,'seek-inn',now,budget);poiTownNpcAct(a,'seek-inn');
   if(poiTownNpcHere(a,POI_TOWN_INN.desk)&&poiTownNpcHostReady()){
    const free=poiTownNpcFindBed(role.id);
    if(free){
+    const canonical=typeof poiTownNpcPurseKnown==='function'&&poiTownNpcPurseKnown(a);
+    if(canonical&&(POI_NPC_PURSE_GUESTS[role.id]!==free.id||poiTownNpcPurseAccount(role.id).coins<POI_ECONOMY_PRICE)){
+     a.npcInnRefusedUntil=clock.absoluteMinute+45;return;
+    }
+    a.npcInnBooking=canonical?free.id:null;a.npcInnPaidFor=null;
     a.bedId=free.id;a.restUntil=null;a.bedUntil=Math.floor(clock.absoluteMinute/1440+1)*1440+POI_TOWN_WAKE;
     const host=poiTownNpcActors.find(r=>r.role.id===POI_TOWN_INN.hostId);
     poiTownNpcGesture(a,'check-in-guest',now);
@@ -28472,7 +28620,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v324',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v325',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -28587,7 +28735,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v324';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v325';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -28802,7 +28950,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v324',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v325',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -41377,7 +41525,7 @@ function poiGameResetDecode(raw){
  const d=JSON.parse(raw);
  if(d?.version!==1||!['prepared','complete','restored'].includes(d.phase)||!d.before||Array.isArray(d.before))throw Error('invalid reset archive');
  const keys=Object.keys(d.before),always=[POI_HOTBAR_KEY,POI_TOWN_CLOCK_KEY];
- if(!always.every(k=>keys.includes(k))||keys.some(k=>!always.includes(k)&&k!==WORKSHOP_RESUME_KEY&&(typeof POI_LOCAL_MAP_KEY==='undefined'||k!==POI_LOCAL_MAP_KEY))||
+ if(!always.every(k=>keys.includes(k))||keys.some(k=>!always.includes(k)&&k!==WORKSHOP_RESUME_KEY&&(typeof POI_LOCAL_MAP_KEY==='undefined'||k!==POI_LOCAL_MAP_KEY)&&(typeof POI_NPC_PURSE_KEY==='undefined'||k!==POI_NPC_PURSE_KEY))||
   keys.some(k=>d.before[k]!==null&&typeof d.before[k]!=='string')||
   (keys.includes(WORKSHOP_RESUME_KEY)&&!poiGameResetBaseResume(d.before[WORKSHOP_RESUME_KEY]))||
   (Object.hasOwn(d,'seed')&&(d.phase!=='prepared'||!poiGameResetSeedOwned(d.seed))))throw Error('invalid reset scope');
@@ -41431,6 +41579,9 @@ function poiGameResetStorage(storage,seedOrvas=false){
   before={[POI_HOTBAR_KEY]:storage.getItem(POI_HOTBAR_KEY),[POI_TOWN_CLOCK_KEY]:storage.getItem(POI_TOWN_CLOCK_KEY)};
   if(typeof POI_LOCAL_MAP_KEY!=='undefined'){
    const survey=storage.getItem(POI_LOCAL_MAP_KEY);if(survey!==null)before[POI_LOCAL_MAP_KEY]=survey;
+  }
+  if(typeof POI_NPC_PURSE_KEY!=='undefined'){
+   const purse=storage.getItem(POI_NPC_PURSE_KEY);if(purse!==null)before[POI_NPC_PURSE_KEY]=purse;
   }
   const resume=storage.getItem(WORKSHOP_RESUME_KEY);
   if(poiGameResetBaseResume(resume))before[WORKSHOP_RESUME_KEY]=resume;
