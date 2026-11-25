@@ -1721,7 +1721,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v368）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v369）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -2562,11 +2562,13 @@ function frontierHumanShape(m,look){
  const slender=look.kind==='female',scale=slender?.93:1;
  const profile=(x,z,rows,c,n=10)=>humanRingProfile(m,x,0,z,rows,c,n);
  for(const side of [-1,1]){
-  const x=side*(slender?.105:.113);
+  const x=side*(slender?.105:.113),first=m.p.length;
   profile(x,0,[[0,0,0,0,.031],[.016,.067,.11,0,.031],[.08,.064,.104,0,.03],
    [.15,.058,.073],[.215,.059,.070],[.221,0,0]],boot,8);
+  const bootEnd=m.p.length;
   profile(x,0,[[.182,0,0],[.186,.060,.068],[.343,.064,.073],[.453,.076,.081],
    [.557,.087,.092],[.59,0,0]],legs,8);
+  if(m.townParts)(m.townParts.soles??=[]).push([first,bootEnd,m.p.length]);
  }
  profile(0,0,[[.487,0,0],[.505,.205*scale,.135],[.611,.192*scale,.124],
   [.732,.16*scale,.105],[.84,.19*scale,.123],[.939,.222*scale,.128],[1.005,.162*scale,.104],
@@ -7859,6 +7861,8 @@ function houseFacadeDetails(m,visible,record=null){
 // Bridge orientation convention (identical for wood and stone):
 // 0: north-south, 1: east-west, 2: south-north, 3: west-east.
 // Bridge handrails are only on the outside edges of the complete bridge width.
+const WOOD_BRIDGE_DECK_BASE=.27,WOOD_BRIDGE_PLANK_THICKNESS=.095;
+const WOOD_BRIDGE_DECK_TOP=WOOD_BRIDGE_DECK_BASE+WOOD_BRIDGE_PLANK_THICKNESS-.30;
 const BRIDGE_IDS=new Set(['bridgeWood','bridgeWoodEnd','bridgeStone','bridgeStoneEnd']);
 function bridgeDirection(rot){return ((rot||0)%4+4)%4;}
 function bridgeAligned(a,b){return a&&b&&BRIDGE_IDS.has(a.type)&&BRIDGE_IDS.has(b.type)&&
@@ -8258,7 +8262,7 @@ function bridgeConnectedGeometry(m,o,lookup){
  if(wood){
   B(0,.12,0,.985,.235,.985,dark);
   // Recessed plank seams avoid overlapping deck polygons at shared boundaries.
-  for(let i=0;i<5;i++){const zz=-.40+i*.20;B(0,.27,zz,.972,.095,.183,i%2?timber:highlight);}
+  for(let i=0;i<5;i++){const zz=-.40+i*.20;B(0,WOOD_BRIDGE_DECK_BASE,zz,.972,WOOD_BRIDGE_PLANK_THICKNESS,.183,i%2?timber:highlight);}
  }else{
   B(0,.08,0,.99,.29,.99,stone);
   B(0,.35,0,1,.10,1,cap);
@@ -29766,7 +29770,10 @@ function poiTownResidentsDraw(now,vp){
    const sample=poiTownNpcVisualPosition(p,now,!!rate),{x,z,t}=sample;
    a.visual={...sample,moving:rate>0,cadence:rate||cadence};
    const h=(x,z)=>p.y===0?(facilityCreekIndex?.bridgeHeight?.get(x+','+z)??terrainY(x,z)):terrainY(x,z);
-   const ground=(t===1?h(p.x,p.z):h(a.fromX,a.fromZ)*(1-t)+h(p.x,p.z)*t)+(p.y===0&&a.role.role==='kingdom-citizen'?poiKingdomPalaceHeight(x,z):0);
+   const footFit=facilitySite?.id==='frontier'&&p.y===0&&part.townParts?.soles&&!bed;
+   const ground=footFit?frontierWalkSurface(x+.5,z+.5):
+    (t===1?h(p.x,p.z):h(a.fromX,a.fromZ)*(1-t)+h(p.x,p.z)*t)+(p.y===0&&a.role.role==='kingdom-citizen'?poiKingdomPalaceHeight(x,z):0);
+   const firstVertex=m.p.length;
    const y=ground+p.y*1.4+(bed?.57:.025),r=[2,3,0,1][p.facing]||0;
    const heading=motion.kind==='walk'&&Number.isFinite(sample.heading)?sample.heading:null,c=Math.cos(heading??0),ss=Math.sin(heading??0);
    const rotate=heading===null?(xx,zz)=>rot2(xx,zz,r):(xx,zz)=>[xx*c-zz*ss,xx*ss+zz*c];
@@ -29814,6 +29821,7 @@ function poiTownResidentsDraw(now,vp){
     m.n.push(dx,bed?-nz:ny,dz);
     m.c.push(Math.min(1,part.c[i]+hurt),part.c[i+1]*(1-hurt*.39),part.c[i+2]*(1-hurt*.35));
    }
+   if(footFit)frontierFitSoles(m,part.townParts.soles.map(r=>r.map(i=>i+firstVertex)),y,.88);
    const shipment=a.southShipmentRun;
    if(!bed&&shipment&&!shipment.returning&&shipment.index>1){
     const [dx,dz]=rotate(0,.27),cx=x+.5+dx,cz=z+.5+dz;
@@ -29854,7 +29862,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v368',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v369',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -29969,7 +29977,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v368';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v369';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -30184,7 +30192,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v368',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v369',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -32393,6 +32401,8 @@ function poiBuildPlayerMesh(weapon,pose,gear,stride=0,r=0,x=0,y=0,z=0,heading=nu
   m.n.push(nx,body.n[i+1],nz);
   m.c.push(body.c[i],body.c[i+1],body.c[i+2]);
  }
+ if(look&&worldSpear&&facilitySite?.id==='frontier'&&poiWalkLevel===0&&body.townParts.soles)
+  frontierFitSoles(m,body.townParts.soles,y,.90);
  const quietArms=look&&(!pose||fistPose?.phase==='rest')?frontierQuietArms(fist,stride):null;
  if(fist){
   if(quietArms)poiDrawPlayerBlockArms(m,quietArms,gear,rotate,x,y,z);
@@ -33098,14 +33108,8 @@ function facilityRefreshCreek(){
  facilityCreekIndex={water,parts,shallows,terrace,bridgeHeight,hasWater:water.size>0};
 }
 function poiCreekPlayerHeight(now){
- if(poiWalkLevel===0&&facilitySite?.id==='frontier'){
-  const x=poiWalkViewX+.5,z=poiWalkViewZ+.5,h=frontierSampleHeight(x,z);
-  const deck=Math.min(x-58,70-x,z-29,32-z);
-  const top=.067;
-  if(deck>=0)return Math.max(top,h);
-  if(deck>-.45&&frontierRiver(x,z)>0)return h+(top-h)*frontierSmooth(-.45,0,deck);
-  return h;
- }
+ if(poiWalkLevel===0&&facilitySite?.id==='frontier')
+  return frontierWalkSurface(poiWalkViewX+.5,poiWalkViewZ+.5);
  if(poiWalkLevel===0&&facilitySite?.id==='base'&&!facilitySurfaceEdited&&
     poiWalkX>=227&&poiWalkX<=235&&poiWalkZ>=73&&poiWalkZ<=86)
   return poiKingdomPalaceHeight(poiWalkViewX,poiWalkViewZ);
@@ -35493,11 +35497,62 @@ function stockGradeRange(m,start,end,ranges){
  }
  ranges.push({start,end,bounds:b});
 }
+// BEGIN FRONTIER WALK SUPPORT
+// The classic tile mesh has real raised faces (not a painted texture).
+const FRONTIER_TILE_LIFT=.005,FRONTIER_SLAB_TOP=.13;
+function frontierTileKind(x,z){return facilitySite?.templeTiles?.get(x+','+z)??frontierGroundKind(x,z)}
+const frontierSupportCaches=new WeakMap();
+function frontierSupportCache(site){
+ if(!site)return null;
+ let cache=frontierSupportCaches.get(site);
+ if(!cache){cache=new Map();frontierSupportCaches.set(site,cache)}
+ return cache;
+}
+function frontierSurfaceHeight(x,z,cache=frontierSupportCache(facilitySite)){
+ const ix=Math.floor(x),iz=Math.floor(z),dx=x-ix,dz=z-iz,key=iz*512+ix;
+ let tile=cache?.get(key);
+ if(!tile){
+  const type=frontierTileKind(ix,iz),slab=type==='stone'||type==='woodfloorLight'||ROAD_IDS.has(type);
+  tile=[frontierHeight(ix,iz),frontierHeight(ix+1,iz),frontierHeight(ix,iz+1),frontierHeight(ix+1,iz+1),
+   FRONTIER_TILE_LIFT+(slab?FRONTIER_SLAB_TOP:0),ix>=58&&ix<70&&iz>=29&&iz<32];
+  cache?.set(key,tile);
+ }
+ const [a,b,c,d,rise,bridge]=tile;
+ const y=a+(dx<dz?(c-a)*(dz-dx)+(d-a)*dx:(b-a)*(dx-dz)+(d-a)*dz)+rise;
+ return bridge?Math.max(y,WOOD_BRIDGE_DECK_TOP):y;
+}
+function frontierWalkSurface(x,z){
+ const weight=v=>frontierSmooth(-.18,.18,v-Math.round(v));
+ const u=weight(x),v=weight(z);
+ if((u===0||u===1)&&(v===0||v===1))return frontierSurfaceHeight(x,z);
+ const x0=x-.36*u,x1=x+.36*(1-u),z0=z-.36*v,z1=z+.36*(1-v),cache=frontierSupportCache(facilitySite);
+ const a=frontierSurfaceHeight(x0,z0,cache),b=frontierSurfaceHeight(x1,z0,cache),
+  c=frontierSurfaceHeight(x0,z1,cache),d=frontierSurfaceHeight(x1,z1,cache);
+ return (a+(b-a)*u)*(1-v)+(c+(d-c)*u)*v;
+}
+function frontierFitSoles(m,ranges,rootY,scale){
+ const cache=frontierSupportCache(facilitySite);
+ for(const [start,bootEnd,end] of ranges){
+  let delta=-Infinity,minY=Infinity;
+  for(let i=start+1;i<bootEnd;i+=3)minY=Math.min(minY,m.p[i]);
+  const seen=new Set();
+  for(let i=start;i<bootEnd;i+=3){
+   const x=m.p[i],y=m.p[i+1],z=m.p[i+2];
+   if(y>minY+.026*scale)continue;
+   const stamp=x+','+y+','+z;if(seen.has(stamp))continue;seen.add(stamp);
+   delta=Math.max(delta,frontierSurfaceHeight(x,z,cache)+.012-y);
+  }
+  if(!Number.isFinite(delta)||Math.abs(delta)<.00001)continue;
+  for(let i=start+1;i<end;i+=3)
+   m.p[i]+=delta*(1-frontierSmooth(.20,.48,(m.p[i]-rootY)/scale));
+ }
+}
+// END FRONTIER WALK SUPPORT
 function frontierClassicTiles(target,water=false){
  const area=FRONTIER_W*FRONTIER_H,temple=facilitySite?.davidTemple;
  const shade=temple?pineFloorLightingSources(facilitySite.map.world.slice(temple.authored.index)):null;
  for(let z=0;z<FRONTIER_H;z++)for(let x=0;x<FRONTIER_W;x++){
-  let type=facilitySite?.templeTiles?.get(x+','+z)??frontierGroundKind(x,z);
+  let type=frontierTileKind(x,z);
   const wet=type==='river';
   if(wet!==water)continue;
   const t=mesh(),h=frontierTreeHabitat(x,z),seed=surfaceNoise(x*17+12,z*19+31);
@@ -35515,7 +35570,7 @@ function frontierClassicTiles(target,water=false){
   for(let i=0;i<t.p.length;i+=3){
    const dx=t.p[i]-x,dz=t.p[i+2]-z;
    const ground=dx<dz?c0+(c2-c0)*(dz-dx)+(c3-c0)*dx:c0+(c1-c0)*(dx-dz)+(c3-c0)*dz;
-   t.p[i+1]+=wet?-.041:ground+.005;
+   t.p[i+1]+=wet?-.041:ground+FRONTIER_TILE_LIFT;
    if(!wet&&t.n[i+1]>.999){
     const slopeX=dx<dz?c3-c2:c1-c0,slopeZ=dx<dz?c2-c0:c3-c1,n=Math.hypot(slopeX,1,slopeZ);
     t.n[i]=-slopeX/n;t.n[i+1]=1/n;t.n[i+2]=-slopeZ/n;
@@ -35544,28 +35599,31 @@ function frontierVillageGeometry(){
   // Dull sapwood at each irregular hewn top, with occasional flatter cuts.
   const cap=i%9===0?.10:.19+.06*Math.sin(i*4.13);
   naturalBranch(m,u,y+height-.014,v,u+across*.045,y+height+cap,v-.032,r*rough,i%9===0?r*.44:.024,cut.map(c=>c*(.84+.035*(i%5))));
+  return [x,y,z,leanX,leanZ,height];
  };
  const village=FRONTIER_VILLAGE;
+ const mortise=([x,y,z,lx,lz,height],h)=>{
+  const inset=.073/village.r,k=h/height;
+  return [x+lx*k+(village.x-x)*inset,y+h,z+lz*k+(village.z-z)*inset];
+ };
  for(const [arc,path] of frontierVillageArcs().entries()){
+  const posts=[];
   for(let i=0;i<path.length;i++){
    const [x,z]=path[i],j=arc*277+i*2;
    const edge=i===0||i===path.length-1,r=edge?.235:.16+.034*(.5+.5*Math.sin(j*2.169));
    const h=edge?2.96:2.30+.28*Math.sin(j*1.853)+.16*(.5+.5*Math.cos(j*3.19));
-   log(x,z,r,h,j,i%2?1:-1);
+   posts.push(log(x,z,r,h,j,i%2?1:-1));
    if(i===0)continue;
    const [a,b]=path[i-1],ux=(x+a)*.5,uz=(z+b)*.5,offset=.033*Math.sin(j*7.13);
    const u=ux+(ux-village.x)*offset/village.r,v=uz+(uz-village.z)*offset/village.r;
    log(u,v,.17+.029*Math.cos(j*1.81),2.29+.17*Math.sin(j*4.13)+.19*Math.cos(j*2.71),j-1,i%2?-1:1);
-   const t=.93,sx=village.x+(x-village.x)*t,sz=village.z+(z-village.z)*t,
-    [rootX,rootZ]=path[Math.max(0,i-2)],tx=village.x+(rootX-village.x)*t,tz=village.z+(rootZ-village.z)*t;
    if(i%2===0||i===path.length-1){
-    // Interior support is behind the upright trunks; only occasional braces show.
-    const y=frontierSampleHeight(sx,sz),w=frontierSampleHeight(tx,tz);
-    for(const h of [.61,1.68])naturalBranch(m,tx,w+h,tz,sx,y+h,sz,.077,.074,rail);
+    // Both ends follow the actual lean of their posts and sit inside the wood.
+    for(const h of [.70,1.77])naturalBranch(m,...mortise(posts[Math.max(0,i-2)],h),...mortise(posts[i],h),.077,.074,rail);
    }
    if(i%11===0){
-    const y=frontierSampleHeight(x,z),yi=frontierSampleHeight(sx,sz);
-    naturalBranch(m,sx,yi-.058,sz,x,y+1.64,z,.088,.069,rail);
+    const inset=.48/village.r,sx=x+(village.x-x)*inset,sz=z+(village.z-z)*inset;
+    naturalBranch(m,sx,frontierSampleHeight(sx,sz)-.067,sz,...mortise(posts[i],1.77),.088,.069,rail);
    }
   }
  }
