@@ -1,0 +1,27 @@
+name: Valdia source audio preparation
+on:
+  push:
+    branches: ['dot/valdia-acoustic-prep-v357']
+permissions:
+  contents: read
+jobs:
+  audio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - shell: bash
+        run: |
+          mkdir candidates
+          ua="ValdiaMusicPrep/1.0 (https://github.com/tomatodaimonji-alt/new-; public CC audio attribution)"
+          get() { curl -fsSL -A "$ua" --max-time 55 --retry 1 "$1" -o "$2"; }
+          get 'https://upload.wikimedia.org/wikipedia/commons/0/09/Alisa_Gladyseva-Romanza_Espa%C3%B1ola.ogv' /tmp/romanza.ogv
+          ffmpeg -hide_banner -v error -i /tmp/romanza.ogv -vn -map_metadata -1 -ar 32000 -c:a pcm_s16le candidates/romanza.wav
+          if get 'https://upload.wikimedia.org/wikipedia/commons/f/f4/02Branle_gayVAttaignant.ogg' /tmp/branle.ogg; then
+            echo '315532189ffdcca9db4009a1b426049f68a749e0  /tmp/branle.ogg' | sha1sum -c -
+            ffmpeg -hide_banner -v error -i /tmp/branle.ogg -vn -map_metadata -1 -ar 32000 -c:a pcm_s16le candidates/branle.wav
+          fi
+          sha1sum /tmp/romanza.ogv
+      - uses: actions/upload-artifact@v4
+        with:
+          name: valdia-licensed-audio-sources
+          path: candidates
