@@ -8,7 +8,11 @@ assert.equal(before.split(anchor).length,2);
 const html=before.replace(anchor,anchor+`
  npcJourneyQA:(seed=false)=>{
   const a=poiTownNpcActors.find(a=>a.role.id==='resadventurer');
-  if(seed&&facilitySite?.id==='base'&&a)Object.assign(a,{hp:88,coins:9,potions:1});
+  if(seed&&facilitySite?.id==='base'&&a){
+   for(let k=0;k<5;k++)if(poiTownNpcPurseApply(a,'hunt')!=='ok')throw Error('test purse could not seed');
+   if(poiTownNpcPurseApply(a,'herb')!=='ok')throw Error('test purse herb could not seed');
+   a.hp=88;
+  }
   return {region:facilitySite?.id,z:poiWalkViewZ,a:a&&{hp:a.hp,coins:a.coins,potions:a.potions}};
  },
 `);
