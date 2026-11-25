@@ -1722,7 +1722,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v341）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v342）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -29019,7 +29019,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v341',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v342',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -29134,7 +29134,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v341';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v342';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -29349,7 +29349,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v341',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v342',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -34912,7 +34912,67 @@ function poiLowRoomCameraSlice(room,target,d,n,length,rows,march,arm,now){
  return eyeAt(d,n);
 }
 // END LOW STOCK ROOM CAMERA
-function facilitySharedWallCameraEye(target,desired){
+// BEGIN COTTAGE THRESHOLD
+let poiCottageFrame=null;
+function poiCottageMix(site,x,z,y){
+ if(y!==0||!poiWalkActive||!poiThirdPerson||cameraTopDown||pineAIActive||facilitySurfaceEdited||
+    (site?.id!=='base'&&site?.id!=='homes'))return null;
+ const index=site.buildings.findIndex(v=>v.id==='cottage'),b=site.buildings[index],d=b?.entrance;
+ if(!d||b.permanentRoof||!b.floorFootprints?.[0]?.length||Object.keys(b.floorFootprints).some(k=>Number(k)>0&&b.floorFootprints[k]?.length))return null;
+ const [dx,dz]=rot2(0,1,b.turn||0),u=x-d.x,v=z-d.z;
+ const depth=-(u*dx+v*dz),across=Math.abs(u*dz-v*dx);
+ const inside=facilityFloorOwner(Math.floor(x+.5),Math.floor(z+.5),y)===index;
+ if(!inside&&(across>.52||depth<-2.35||depth>.92))return null;
+ const t=Math.max(0,Math.min(1,(depth+.72)/1.57)),mix=t*t*(3-2*t);
+ const arm=Math.max(0,Math.min(1,(depth+1.32)/1.60)),armMix=arm*arm*(3-2*arm);
+ const out=Math.max(0,Math.min(1,(-depth-1.18)/1.17)),outMix=out*out*(3-2*out);
+ return {index,b,mix,armMix,outMix};
+}
+function poiCottageFrontCell(b,x,z,dx,dz){
+ const reach=Math.hypot(dx,dz);
+ if(reach<.001)return false;
+ return dx/reach<-.27&&x===b.x1||dx/reach>.27&&x===b.x2||
+        dz/reach<-.27&&z===b.z1||dz/reach>.27&&z===b.z2;
+}
+function poiCottageOpacity(mix){
+ const t=Math.max(0,Math.min(1,mix/.54));
+ return 1-.967*t*t*(3-2*t);
+}
+// END COTTAGE THRESHOLD
+function poiCottageRoofCut(frame,now){
+ if(!frame?.cottage||!facilityRoofMeshes[frame.cottage.index]?.roofFade?.length)return null;
+ const {eye,target,cottage}=frame,delta=eye.map((v,i)=>v-target[i]),length=Math.hypot(...delta);
+ if(length<.7||delta[1]<.15)return null;
+ const dir=delta.map(v=>v/length),side=[Math.cos(poiCameraYaw),-Math.sin(poiCameraYaw)];
+ const origins=[[target[0],target[1]-.65,target[2]],target,
+  [target[0]+side[0]*.30,target[1]-.4,target[2]+side[1]*.30],
+  [target[0]-side[0]*.30,target[1]-.4,target[2]-side[1]*.30]];
+ const roof=facilityRoofMeshes[cottage.index],parts=[];
+ for(const p of roof.roofFade)if(poiAngledRoofHits(p,origins,dir,length))parts.push([p.start,p.end],...p.extras);
+ if(!parts.length)return null;
+ return {roof,index:cottage.index,parts:poiAngledRangeMerge(parts),alpha:poiCottageOpacity(cottage.mix)};
+}
+function poiCottageWalls(frame,m){
+ const {cottage,eye,target}=frame,{b}=cottage,spans=[];
+ const dx=eye[0]-target[0],dz=eye[2]-target[2];
+ for(const [cell,parts] of poiLowRoomIndexedWalls(m,b)){
+  const [x,z]=cell.split(',').map(Number);
+  if(poiCottageFrontCell(b,x,z,dx,dz))for(const part of parts)spans.push([part.start,part.end]);
+ }
+ return poiAngledRangeMerge(spans);
+}
+function poiCottageForeground(vp){
+ const q=poiOcclusionFrame.cottageRoof;if(!q)return;
+ gl.enable(gl.BLEND);gl.blendFunc(gl.CONSTANT_ALPHA,gl.ONE_MINUS_CONSTANT_ALPHA);
+ gl.blendColor(0,0,0,q.alpha);gl.depthMask(false);
+ try{for(const [a,b] of q.parts)draw(q.roof,vp,a,b-a)}
+ finally{
+  gl.depthMask(true);gl.blendColor(0,0,0,0);
+  gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.disable(gl.BLEND);
+ }
+}
+
+function facilitySharedWallCameraEye(target,desired,cottage=null){
  poiLowRoomCameraFrame=null;
  const sacred=typeof poiDavidTempleEnclosedAt==='function'&&
   poiDavidTempleEnclosedAt(facilitySite,target[0]-.5,target[2]-.5,poiWalkLevel);
@@ -34945,6 +35005,23 @@ function facilitySharedWallCameraEye(target,desired){
  let direction=ray.map(v=>v/distance);
  const first=march(direction,distance),sideLimit=Math.max(.006,first*h/distance-.025);
  let n=arm(first,distance);
+ if(cottage&&!sacred){
+  const b=cottage.b,soft=new Set(rows.filter(r=>{
+   const o=r.o;
+   return o?.y===0&&poiCottageFrontCell(b,o.x,o.z,direction[0],direction[2])&&
+    poiAngledWallSides(o).some(p=>p.owner===b.id);
+  }));
+  // Only the very same camera-facing, authored wall we fade may be
+  // crossed by the camera ray. Collision for the player is unchanged.
+  const safe=soft.size&&cottage.armMix>0?arm(march(direction,distance,0,0,soft),distance):n;
+  const weight=Math.max(cottage.armMix,cottage.outMix);
+  const stock=Math.min(n,poiHomeCameraDoorCap(facilitySite,target[0]-.5,target[2]-.5));
+  const good=stock+(safe-stock)*weight;
+  const eye=good>=distance-1e-5?desired:target.map((v,i)=>v+direction[i]*good);
+  if([...soft].some(r=>eye.every((v,i)=>v-[r.x,r.y,r.z][i]>r.s.min[i]-.025&&v-[r.x,r.y,r.z][i]<r.s.max[i]+.025)))
+   return target.map((v,i)=>v+direction[i]*n);
+  return eye;
+ }
  if(low)return poiLowRoomCameraSlice(low,target,direction,n,distance,rows,march,arm,performance.now());
  if(ordinary){
   // Nearest obstruction ahead/sideways changes at cell corners. A
@@ -35090,7 +35167,10 @@ function parameters(){
   // Under the genuine permanent roof use a physical local camera even
   // when the previous outdoor view was orthographic; no wall cutaway.
   const bearing=poiThirdPerson?poiCameraYaw:yaw+Math.PI;
-  const radius=poiThirdPerson?poiCameraDistance:(cameraTopDown?3.6:5.1);
+  const cottage=!sacredView?poiCottageMix(facilitySite,poiWalkViewX,poiWalkViewZ,poiWalkLevel):null;
+  const lens=cottage?Math.max(cottage.mix,.5*cottage.armMix):0;
+  const outsideRadius=poiThirdPerson?poiCameraDistance:(cameraTopDown?3.6:5.1);
+  const radius=cottage?outsideRadius+(Math.min(outsideRadius,3.45)-outsideRadius)*lens:outsideRadius;
   // Independent orbit camera: walking changes the avatar's direction, not the camera.
   const x=poiWalkViewX+.5,z=poiWalkViewZ+.5;
   const ground=poiCreekPlayerHeight(performance.now())+poiWalkLevel*1.4;
@@ -35098,8 +35178,9 @@ function parameters(){
   const lowRoom=poiThirdPerson&&!sacredView?poiLowRoomCameraArea(facilitySite,poiWalkViewX,poiWalkViewZ,poiWalkLevel):null;
   const homeAngle=!sacredView&&poiHomeCameraZone(facilitySite,poiWalkViewX,poiWalkViewZ,poiWalkLevel);
   const higher=poiThirdPerson&&!cameraTopDown&&(skyOutdoor||sacredView);
-  const pitch=!poiThirdPerson?(cameraTopDown?.71:.49):
+  let pitch=!poiThirdPerson?(cameraTopDown?.71:.49):
    homeAngle||higher?Math.max(POI_ORBIT_LOW_EYE,poiCameraPitch):Math.max(.12,poiCameraPitch);
+  if(cottage)pitch+=(Math.max(pitch,.72)-pitch)*lens;
   const horizontal=radius*Math.cos(pitch);
   const desired=[x-horizontal*Math.sin(bearing),ground+1.1+radius*Math.sin(pitch),z-horizontal*Math.cos(bearing)];
   if(pitch<.12){
@@ -35110,11 +35191,12 @@ function parameters(){
    if(desired[1]<floor)desired[1]=floor;
   }
   const target=[x,ground+(lowRoom?1.05:1.1),z];
-  if(lowRoom)desired[1]=Math.max(ground+.22,Math.min(ground+1.30,desired[1]));
-  const eye=typeof facilitySharedWallCameraEye==='function'?facilitySharedWallCameraEye(target,desired):desired;
+  if(lowRoom&&!cottage)desired[1]=Math.max(ground+.22,Math.min(ground+1.30,desired[1]));
+  const eye=typeof facilitySharedWallCameraEye==='function'?facilitySharedWallCameraEye(target,desired,cottage):desired;
+  if(cottage)poiCottageFrame={cottage,target,eye};
   const arm=eye===desired?radius:Math.hypot(...eye.map((v,i)=>v-target[i]));
   const near=eye!==desired&&arm<1.81?.08:.45;
-  const fov=lowRoom||eye!==desired?facilityWatchtowerCloseFov(arm):Math.PI/3;
+  const fov=lowRoom&&!cottage||eye!==desired?facilityWatchtowerCloseFov(arm):Math.PI/3;
   const lensTarget=poiDavidRevealLook(eye,target,performance.now());
   const viewTarget=poiOrbitHigherLens(eye,lensTarget,poiCameraPitch,higher);
   let sky=null;
@@ -35211,11 +35293,11 @@ function poiAngledRoofPart(m,start,tiles,limit=600){
  for(let i=0;i<tri.length;i++)for(let j=0;j<9;j++)surface[i*9+j]=m.p[tri[i].i+j];
  return {start,end,min,max,surface,extras:[],tiles:new Set(tiles.map(o=>o.x+','+o.z+','+o.y))};
 }
-function poiAngledRoofHits(part,origins,d){
+function poiAngledRoofHits(part,origins,d,maxDistance=7){
  if(!part?.surface.length)return false;
  const {min,max,surface:p}=part,[dx,dy,dz]=d;
  for(const [x,y,z] of origins){
-  let lo=.035,hi=7;
+  let lo=.035,hi=maxDistance;
   for(let a=0;a<3;a++){
    const from=a===0?x:a===1?y:z,step=d[a];
    if(Math.abs(step)<1e-6){if(from<min[a]-.02||from>max[a]+.02){lo=1;hi=0;break}continue}
@@ -35537,7 +35619,7 @@ function poiDrawLowRoomForeground(vp){
  // Draw only the actual obstructing faces after opaque actors/architecture.
  // The normal depth test keeps those faces from washing over nearer geometry.
  gl.enable(gl.BLEND);gl.blendFunc(gl.CONSTANT_ALPHA,gl.ONE_MINUS_CONSTANT_ALPHA);
- gl.blendColor(0,0,0,.033);gl.depthMask(false);
+ gl.blendColor(0,0,0,poiOcclusionFrame.localRoomAlpha??.033);gl.depthMask(false);
  try{poiDrawSceneOcclusion(m,vp,spans,true)}
  finally{
   gl.depthMask(true);gl.blendColor(0,0,0,0);
@@ -35583,6 +35665,14 @@ function poiOcclusionBegin(p,now){
   return;
  }
  if(!poiThirdPerson){poiOcclusionFrame=poiAngledWallOcclusion(p,now);return}
+ if(poiCottageFrame?.cottage.mix>0){
+  const spans=poiCottageWalls(poiCottageFrame,sceneMesh);
+  poiOcclusionFrame={active:spans.length>0,spans,
+   localRoomForeground:spans.length?sceneMesh:null,localRoomAlpha:poiCottageOpacity(poiCottageFrame.cottage.mix),
+   cottageRoof:poiCottageRoofCut(poiCottageFrame,now)};
+  gl.uniform4f(loc.occlusionInfo,0,0,0,0);
+  return;
+ }
  const mask=poiOcclusionFrame=poiAvatarOcclusion(p,now);
  if(!mask.active)return;
  const {foot,head,depthGate,ground,radius,height}=mask,inv=1/height;
@@ -36973,7 +37063,7 @@ function render(){
  if(typeof poiCompanionTick==='function')poiCompanionTick(now);
  if(typeof poiTownResidentsFrame==='function'&&
     !(typeof poiHitstopPending==='function'&&poiHitstopPending()))poiTownResidentsFrame(now);
- const p=parameters();poiSkyBackdrop(p);
+ poiCottageFrame=null;const p=parameters();poiSkyBackdrop(p);
  const sacredPeek=typeof poiSacredTunnelPresentation==='function'&&poiWalkActive&&!pineAIActive&&
   poiSacredTunnelPresentation(facilitySite,poiWalkViewX,poiWalkViewZ,poiWalkLevel);
  if(typeof poiDavidImpactVp==='function')p.vp=poiDavidImpactVp(p,now);
@@ -37049,7 +37139,7 @@ function render(){
  }
  if(davidBeam)poiDrawDavidBeam(now,p.vp,davidBeam);
  if(alliedDavidBeam)poiDrawDavidBeam(now,p.vp,alliedDavidBeam);
- poiDrawLowRoomForeground(p.vp);
+ poiDrawLowRoomForeground(p.vp);poiCottageForeground(p.vp);
  poiRenderEnemyHealth(now,p.vp);poiRenderDamageLabels(now,p.vp);if(typeof poiHealingCastDraw==="function")poiHealingCastDraw(now,p.vp);poiMineUnlockDraw(p.vp);poiTownDialogueDraw(now,p.vp);pineDrawChecks(p.vp);
  facilityDrawEntranceGuides(p);
  poiScreenNoteCaptureFrame();
@@ -44959,7 +45049,10 @@ function facilityDrawRoofs(vp){
   const sacred=facilitySite.buildings[i]?.id==='davidTemple'&&typeof poiSacredTempleViewAmount==='function'?poiSacredTempleViewAmount():1;
   if(sacred<1)gl.uniform1f(loc.sacredTempleHide,1-sacred);
   try{
-   if(spans?.length)poiDrawSceneOcclusion(facilityRoofMeshes[i],vp,spans);
+   const cottage=poiOcclusionFrame.cottageRoof;
+   if(cottage?.index===i&&cottage.roof===facilityRoofMeshes[i]){
+    for(const [a,b] of poiVisibleMeshRanges(0,cottage.roof.count,cottage.parts))draw(cottage.roof,vp,a,b-a);
+   }else if(spans?.length)poiDrawSceneOcclusion(facilityRoofMeshes[i],vp,spans);
    else draw(facilityRoofMeshes[i],vp);
   }finally{if(sacred<1)gl.uniform1f(loc.sacredTempleHide,0)}
  }
