@@ -1722,7 +1722,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v330）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v331）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -26475,7 +26475,58 @@ function poiTownDutyPlan(role,m){
  return {recessed:off,start:m>=630&&m<990?role.work:role.home,label:off?'off-duty':
   m<480?'scout-briefing':m<900?'scout-camp':'scout-report'};
 }
+// BEGIN TOWN SCOUT REPORT
+const POI_TOWN_SCOUT_REPORT_ROUTE=Object.freeze(['gate','entry','branch','work','branch','entry','gate','home']);
+function poiTownScoutObserve(a,clock,mark,now){
+ if(a.role?.id!=='northscout'||facilitySite?.id!=='base'||!Number.isSafeInteger(clock.absoluteMinute)||clock.absoluteMinute<0)return false;
+ const m=clock.minute,day=Math.floor(clock.absoluteMinute/1440),p=a.role[mark==='briefing'?'home':mark];
+ if(!p||!poiTownNpcHere(a,p)||poiTownNpcStepT(a,now)<1)return false;
+ if(mark==='briefing'){
+  if(m>=360&&m<480&&a.northReport?.day!==day)a.northReport={day,leg:0};
+  return false;
+ }
+ const r=a.northReport;
+ if(!r||r.day!==day||POI_TOWN_SCOUT_REPORT_ROUTE[r.leg]!==mark||
+    (r.leg<4?(m<480||m>=900):(m<900||m>=1140)))return false;
+ if(r.leg!==7){r.leg++;return false}
+ if(now<(r.retryAt||0))return false;
+ r.retryAt=now+1800;
+ const kit=poiTownNpcPurseRead();
+ if(!kit)return false;
+ if((kit.northPatrolDay??-1)>=day){r.leg=8;return false}
+ kit.northPatrolDay=day;
+ if(!poiTownNpcPurseSave(kit))return false;
+ r.leg=8;
+ return true;
+}
+// Observe deferred cardinal arrivals before next scheduled movement. This
+// records the original route; it never changes when the scout advances.
+function poiTownScoutFlush(a,clock,now){
+ const pending=a.northPatrolPending;
+ if(!pending)return;
+ if(Math.floor(pending.clock.absoluteMinute/1440)!==Math.floor(clock.absoluteMinute/1440)){
+  a.northPatrolPending=null;return;
+ }
+ const target=a.role[pending.mark==='briefing'?'home':pending.mark];
+ if(!poiTownNpcHere(a,target)){a.northPatrolPending=null;return}
+ if(poiTownNpcStepT(a,now)<1)return;
+ a.northPatrolPending=null;
+ poiTownScoutObserve(a,pending.clock,pending.mark,now);
+}
+function poiTownScoutArrived(a,clock,mark,now){
+ if(poiTownNpcStepT(a,now)>=1)poiTownScoutObserve(a,clock,mark,now);
+ else a.northPatrolPending={clock,mark};
+}
+function poiTownScoutReport(clock){
+ if(facilitySite?.id!=='base'||!Number.isSafeInteger(clock?.absoluteMinute))return null;
+ const date=poiTownNpcPurseRead()?.northPatrolDay;
+ if(!Number.isSafeInteger(date)||date<0)return null;
+ const delta=Math.floor(clock.absoluteMinute/1440)-date;
+ return delta===0||delta===1?(delta===0?'今日は':'昨日は')+'北門から野営地まで往復した。砦の中までは見ていない。':null;
+}
+// END TOWN SCOUT REPORT
 function poiTownDutyRoutine(a,clock,now,budget){
+ if(a.role?.id==='northscout'&&typeof poiTownScoutFlush==='function')poiTownScoutFlush(a,clock,now);
  const {role}=a,m=clock.minute,plan=poiTownDutyPlan(role,m);
  if(!plan)return false;
  if(role.role==='watch'){
@@ -26490,7 +26541,8 @@ function poiTownDutyRoutine(a,clock,now,budget){
  if(a.recessed){a.recessed=false;poiTownNpcVersion++}
  if(m>=360&&m<480){
   a.scoutRoute=null;
-  poiTownNpcMove(a,role.home,'scout-briefing',now,budget);
+  if(poiTownNpcMove(a,role.home,'scout-briefing',now,budget)&&typeof poiTownScoutArrived==='function')
+   poiTownScoutArrived(a,clock,'briefing',now);
   poiTownNpcAct(a,'scout-briefing');return true;
  }
  const out=m>=480&&m<900;
@@ -26504,6 +26556,8 @@ function poiTownDutyRoutine(a,clock,now,budget){
  }
  const end=a.scoutLeg===route.length-1,label=end?(out?'scout-camp':'scout-report'):out?'scout-out':'scout-return';
  const arrived=poiTownNpcMove(a,route[a.scoutLeg],label,now,budget);
+ if(arrived&&typeof poiTownScoutArrived==='function')poiTownScoutArrived(a,clock,
+  (out?['gate','entry','branch','work']:['branch','entry','gate','home'])[a.scoutLeg],now);
  if(arrived&&!end)a.scoutLeg++;
  if(arrived&&end&&!out&&plan.recessed){a.recessed=true;poiTownNpcVersion++}
  poiTownNpcAct(a,label);
@@ -26836,6 +26890,7 @@ function poiTownNpcPurseRead(){
   if(raw===null)return origin();
   const p=JSON.parse(raw);
   if(p?.version!==1||!integer(p.issued,0,Number.MAX_SAFE_INTEGER))return null;
+  if(Object.hasOwn(p,'northPatrolDay')&&!integer(p.northPatrolDay,0,Math.floor(1e7/1440)))delete p.northPatrolDay;
   if(!Object.hasOwn(p,'towncook')&&!Object.hasOwn(p,'food')){p.towncook=0;p.food=openingFood()}
   if(!Object.hasOwn(p,'diningkeeper')&&!Object.hasOwn(p,'shift')){p.diningkeeper=0;p.shift={day:-1,served:0,xp:0}}
   for(const id of ['toolkeeper','innkeeper','towncook','diningkeeper'])if(!integer(p[id],0,p.issued))return null;
@@ -28135,7 +28190,9 @@ function poiNpcMenuChoose(id,now=performance.now()){
   d.index=0;poiNpcMenuRender(now);poiShopSync();return true;
  }
  if(id==='talk'){
-  const topics=POI_NPC_EXTRA_SPEECH[d.actor.role.id]||['夕方になると門の外は暗くなる。帰り道は覚えておくといいよ。','町へ戻ると、ようやく一息つけるね。'];
+  const report=d.actor.role.id==='northscout'&&typeof poiTownScoutReport==='function'&&poiTownScoutReport(poiTownClockSnapshot());
+  const usualTopics=POI_NPC_EXTRA_SPEECH[d.actor.role.id]||['夕方になると門の外は暗くなる。帰り道は覚えておくといいよ。','町へ戻ると、ようやく一息つけるね。'];
+  const topics=report?[report,...usualTopics]:usualTopics;
   const port=typeof poiPortMarekTopic==='function'?poiPortMarekTopic(d.actor):null;
   const length=topics.length+(port?1:0),index=(poiNpcTalkCursor.get(d.actor)||0)%length;
   poiNpcTalkCursor.set(d.actor,(index+1)%length);
@@ -28837,7 +28894,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v330',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v331',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -28952,7 +29009,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v330';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v331';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -29167,7 +29224,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v330',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v331',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
