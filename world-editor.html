@@ -1722,7 +1722,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v323）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v324）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -26716,18 +26716,81 @@ function poiPortMarekTopic(actor){
 }
 // END SOUTH PORT RESIDENTS
 const POI_TOWN_RESIDENT_HP=100,POI_TOWN_RESIDENT_MELEE=13;
+// BEGIN TOWN GATEWAY VISITORS
+// Origin and gateway IDs remain stable when an actual external town is added.
+// Offsite is not a house, bed or portal in the player world.
+const POI_TOWN_GATEWAY_VISITORS=Object.freeze([
+ {id:'westbasketweaver',name:'セラ',type:'humanVillager',originId:'west-weavers-town',gatewayId:'base-west-arch',
+  arrives:480,leaves:1040,edge:[0,43,1],gate:[[22,49,1],[24,49,1]],work:[50,42,0],public:[48,42,0]},
+ {id:'northlamplearner',name:'ヨナ',type:'humanVillager',originId:'north-lamp-town',gatewayId:'base-old-north-arch',
+  arrives:600,leaves:1180,edge:[39,0,2],gate:[[34,21,2],[34,23,2]],work:[65,39,2],public:[63,42,2]}
+]);
+function poiTownGatewayRoles(){
+ if(facilitySite?.id!=='base')return [];
+ const g=poiTownNpcGraph(),point=([x,z,facing])=>({x,z,y:0,facing});
+ return POI_TOWN_GATEWAY_VISITORS.flatMap(v=>{
+  const {id,name,type,originId,gatewayId,arrives,leaves}=v;
+  const home=point(v.edge),gateway=v.gate.map(point),work=point(v.work),pub=point(v.public);
+  const [a,b]=gateway,mid={x:(a.x+b.x)/2,z:(a.z+b.z)/2,y:0};
+  // A custom map may remove this arch. Do not create a stranded commuter.
+  if(!g.cells.get(poiTownNpcKey(mid.x,mid.z,0))?.includes('poiFortGate')||
+     ![home,a,b,work,pub].every(p=>poiTownNpcStance(p,g))||
+     !poiTownNpcNextTile(a,mid.x,mid.z,g)||!poiTownNpcNextTile(mid,b.x,b.z,g))return [];
+  return [{id,name,type,originId,gatewayId,arrives,leaves,home,gateway,work,public:pub,role:'gateway-visitor'}];
+ });
+}
+function poiTownGatewayUnseen(p,budget){
+ // Use conservative full avatar-volume frustum test, not just center or LOS
+ // guess. Near players cannot stream actors across this boundary even when
+ // looking away. At most one extra camera calculation per resident tick.
+ const x=poiWalkViewX-p.x,z=poiWalkViewZ-p.z;
+ if(x*x+z*z<=12*12)return false;
+ const vp=budget.gatewayVp||(budget.gatewayVp=parameters().vp),y=terrainY(p.x,p.z);
+ return !!vp&&!poiOverlandBoxVisible(vp,[p.x-.4,y-.45,p.z-.4,p.x+1.4,y+2.15,p.z+1.4]);
+}
+function poiTownGatewayRoutine(a,clock,now,budget){
+ if(a.role.role!=='gateway-visitor')return false;
+ const r=a.role,m=clock.minute,active=m>=r.arrives&&m<r.leaves;
+ if(a.recessed){
+  if(!active||poiTownNpcActors.some(b=>b!==a&&!b.recessed&&poiTownNpcHere(b,r.home))||
+     poiTownNpcPlayerBlocksStep(r.home,r.home,now)||!poiTownGatewayUnseen(r.home,budget))return true;
+  a.gatewayStep=0;a.recessed=false;poiTownNpcVersion++;
+ }
+ const step=a.gatewayStep??0;
+ if(active){
+  const goal=r.gateway[step]||(m>=r.arrives+200&&m<r.arrives+340?r.public:r.work);
+  const arrived=poiTownNpcMove(a,goal,'going-visit',now,budget);
+  if(arrived&&poiTownNpcStepT(a,now)>=1&&step<2)a.gatewayStep=step+1;
+  poiTownNpcAct(a,arrived&&step>=2?'visit':'going-visit');
+  return true;
+ }
+ // Reverse whichever gate stages were actually reached before closing.
+ // Never teleport the last stride or remove a visible/engaged visitor.
+ const back=step>0?r.gateway[step-1]:r.home;
+ const goal={...back,facing:(back.facing+2)%4};
+ const arrived=poiTownNpcMove(a,goal,'leaving-visit',now,budget);
+ if(arrived&&poiTownNpcStepT(a,now)>=1){
+  if(step>0)a.gatewayStep=step-1;
+  else if(poiTownDialogue?.actor!==a&&poiTownAmbient?.guest!==a&&poiTownAmbient?.host!==a&&
+     poiTownGatewayUnseen(r.home,budget)){a.recessed=true;poiTownNpcVersion++}
+ }
+ poiTownNpcAct(a,a.recessed?'offsite':'leaving-visit');
+ return true;
+}
+// END TOWN GATEWAY VISITORS
 function poiTownNpcInit(clock){
  if(poiTownNpcActors.length)return;
  const merchant=typeof poiSouthMarketRole==='function'?poiSouthMarketRole():null;
  const duty=typeof poiTownDutyRoles==='function'?poiTownDutyRoles():[];
  const daily=typeof poiTownDailyRoles==='function'?poiTownDailyRoles():[];
- const roster=[...POI_TOWN_RESIDENT_ROLES,...(merchant?[merchant]:[]),...duty,...daily];
+ const gateways=typeof poiTownGatewayRoles==='function'?poiTownGatewayRoles():[];
+ const roster=[...POI_TOWN_RESIDENT_ROLES,...(merchant?[merchant]:[]),...duty,...daily,...gateways];
  const reserved=new Set();
  poiTownNpcActors=roster.map((role,index)=>{
   const visitor=role.role==='visitor';
   const duty=typeof poiTownDutyPlan==='function'?poiTownDutyPlan(role,clock.minute):null;
   const daily=typeof poiTownDailyPlan==='function'?poiTownDailyPlan(role,clock):null;
-  const recessed=duty?.recessed??daily?.recessed??(visitor&&!poiTownNpcVisiting(role,clock.minute));
+  const recessed=role.role==='gateway-visitor'||(duty?.recessed??daily?.recessed??(visitor&&!poiTownNpcVisiting(role,clock.minute)));
   const night=clock.minute<POI_TOWN_WAKE||clock.minute>=20*60;
   const assigned=role.role==='adventurer'&&POI_TOWN_INN_BEDS.find(b=>b.residentId===role.id);
   // Like the residents' private beds, an assigned guest room can be
@@ -27215,6 +27278,7 @@ function poiToolshopSupplyRoutine(a,clock,now,budget){
 // END TOOLSHOP SUPPLY ROUTINE
 function poiTownNpcRoutine(a,clock,now,budget){
  if(typeof poiPortNpcRoutine==='function'&&poiPortNpcRoutine(a,clock,now,budget))return;
+ if(typeof poiTownGatewayRoutine==='function'&&poiTownGatewayRoutine(a,clock,now,budget))return;
  if(typeof poiTownDutyRoutine==='function'&&poiTownDutyRoutine(a,clock,now,budget))return;
  if(a.role.role==='visitor'){
   if(typeof poiTownDailyRoutine!=='function'||!poiTownDailyRoutine(a,clock,now,budget))poiTownNpcVisitorRoutine(a,clock,now,budget);
@@ -27290,6 +27354,7 @@ function poiTownNpcRoutine(a,clock,now,budget){
 }
 // BEGIN TOWN DIALOGUE
 const POI_TOWN_JOB_LABELS=Object.freeze({
+ westbasketweaver:'籠編み職人',northlamplearner:'灯具職人の見習い',
  guildkeeper:'ギルド受付',innkeeper:'宿屋の主人',diningkeeper:'食堂の店主',workshopkeeper:'工房の職人',
  toolkeeper:'道具屋の店主',stablekeeper:'厩舎番',towncook:'食堂の料理人',westpeddler:'行商人',canalcourier:'運河の配達人',
  resadventurer:'冒険者',guestadventurer:'冒険者',southmerchant:'宿場の商人',northgatekeeper:'北門の見張り',northwatchworker:'夜回り',northscout:'北の斥候',nightporter:'宿屋前の夜番',portfishseller:'魚売り',portfisher:'漁師'
@@ -27299,6 +27364,8 @@ function poiTownNpcDisplayName(role){
  return name&&job?name+'（'+job+'）':name;
 }
 const POI_TOWN_SPEECH=Object.freeze({
+ westbasketweaver:'西の街から来たよ。ここの食堂で使う籠の寸法を見に来たんだ。',
+ northlamplearner:'北の街から通ってる。日暮れの通りを見て、灯りを置く場所を覚えてるんだ。',
  guildkeeper:'ようこそ。町の外に出るなら、帰りの門を覚えておくといいですよ。',
  innkeeper:'旅の疲れは早めに取るもんだ。空き部屋は受付で聞いておくれ。',
  nightporter:'宿の前の明かりを見て回ってる。部屋のことは宿の主人に聞いておくれ。',
@@ -28405,7 +28472,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v323',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v324',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -28520,7 +28587,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v323';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v324';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -28735,7 +28802,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v323',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v324',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
