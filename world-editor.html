@@ -1721,7 +1721,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v354）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v355）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -26711,7 +26711,9 @@ function poiTownRoleChoice(role,gear){
 }
 function poiTownNpcLoadout(a){
  const role=a?.role||{};
- const authored=Object.hasOwn(POI_TOWN_ROLE_OUTFITS,role.id)?POI_TOWN_ROLE_OUTFITS[role.id]:null;
+ const authored=Object.hasOwn(POI_TOWN_ROLE_OUTFITS,role.id)?POI_TOWN_ROLE_OUTFITS[role.id]:
+  role.role==='kingdom-citizen'&&role.type==='humanKnight'?
+   {gear:{...POI_TOWN_NPC_KNIGHT_GEAR,head:role.job==='王様'?null:'armorWatchHelm'},weapon:role.job==='王様'?null:'equipWoodSpear'}:null;
  const adventurer=role.role==='adventurer',guild=role.id==='guildkeeper',cook=role.id==='towncook'||role.id==='diningkeeper';
  const weapon=a?.weapon!==undefined?a.weapon:authored?.weapon??(guild?'equipBallpointPen':cook?'equipFryingPan':adventurer?'equipWoodSword':null);
  const usual=authored?.gear||(guild?POI_TOWN_NPC_GUILD_GEAR:cook?POI_TOWN_NPC_COOK_GEAR:adventurer?POI_TOWN_NPC_KNIGHT_GEAR:
@@ -26760,6 +26762,10 @@ function poiTownNpcGraph(){
 }
 function poiTownNpcStance(p,g=poiTownNpcGraph()){
  const {x,z,y}=p,k=poiTownNpcKey(x,z,y);
+ if(y===0&&x>=MAP_W&&x<POI_SQUARE_FIELD_SIDE&&z>=58&&z<=122){
+  const area=poiEastNatureData(facilitySite),type=area?.tiles.get(x+','+z);
+  return !!area&&type!=='wall'&&type!=='tree'&&type!=='river';
+ }
  if(x<0||x>=MAP_W||z<0||z>=MAP_H||(typeof poiSacredDepthVoid==='function'&&poiSacredDepthVoid(facilitySite,x,z)))return false;
  if(g.walk.has(k))return g.walk.get(k);
  const types=g.cells.get(k)||[],xy=x+','+z,deck=y===0?g.bridge.get(xy):null;
@@ -27102,6 +27108,49 @@ function poiTownDailyRoad(point){
  const g=poiTownNpcGraph(),types=g.cells.get(poiTownNpcKey(point.x,point.z,point.y));
  return !!types?.some(t=>t.startsWith('road'))&&poiTownNpcStance(point,g);
 }
+const POI_KINGDOM_CITIZENS=Object.freeze([
+ ['king','アルヴェン','王様','humanKnight',[[231,84,2],[230,84,2]]],
+ ['marshal','ダリオン','近衛騎士','humanKnight',[[221,87,2],[221,93,0],[224,90,1]]],
+ ['guard-west','オーデン','門番','humanKnight',[[180,88,2],[180,92,0]]],
+ ['guard-bailey','ティナ','騎士','humanKnight',[[216,89,1],[217,92,2],[214,93,2]]],
+ ['market-tea','メルナ','茶葉商','humanMerchant',[[190,86,2],[191,88,1],[192,87,3]]],
+ ['market-cloth','カレン','布商','humanMerchant',[[196,86,2],[196,88,3],[195,86,0]]],
+ ['market-food','バート','露店商','humanMerchant',[[190,94,0],[192,92,1],[192,94,3]]],
+ ['inn','エリカ','宿屋の主人','humanMerchant',[[201,80,2],[201,82,3],[200,80,2]]],
+ ['baker','ドミニク','パン職人','humanVillager',[[187,80,1],[188,82,3],[187,81,0]]],
+ ['porter','ナギル','荷運び人','humanVillager',[[205,92,2],[207,91,1],[208,94,3]]],
+ ['scribe','ルーシェ','書記','humanVillager',[[228,92,1],[227,89,0],[225,92,2]]],
+ ['visitor','ソフィ','旅人','humanVillager',[[198,91,3],[197,92,2],[199,94,0]]],
+ ['smith','ロディ','鍛冶職人','humanVillager',[[187,101,0],[188,100,1],[186,100,3]]],
+ ['resident','イーラ','住人','humanVillager',[[193,76,0],[193,72,3],[193,80,2]]]
+]);
+function poiKingdomCitizenRoles(site){
+ const k=poiKingdomData(site);if(!k)return [];
+ return POI_KINGDOM_CITIZENS.flatMap(([id,name,job,type,path],index)=>{
+  const stops=path.map(([x,z,facing])=>({x,z,y:0,facing}));
+  if(stops.some(p=>k.solid.has(p.x+','+p.z)))return [];
+  return [{id:'vald-'+id,name,job,type,stops,index,home:stops[0],work:stops[0],public:stops[1],role:'kingdom-citizen'}];
+ });
+}
+function poiKingdomCitizenPlan(role,clock){
+ if(role.role!=='kingdom-citizen')return null;
+ const day=clock.minute>=7*60+role.index*3&&clock.minute<20*60+role.index*2;
+ const guard=role.type==='humanKnight',king=role.job==='王様';
+ const goal=day||guard?role.stops[((Math.floor(clock.minute/(74+role.index*3))+role.index)%role.stops.length)]:role.home;
+ return {goal,label:king?'royal-audience':guard?'watch-post':day?'visit':'going-home',recessed:!day&&!guard};
+}
+function poiKingdomCitizenRoutine(a,clock,now,budget){
+ const plan=poiKingdomCitizenPlan(a.role,clock);if(!plan)return false;
+ // Do not plan walks for the kingdom while playing in Rievel.
+ if(Math.abs(a.x-poiWalkViewX)>44||Math.abs(a.z-poiWalkViewZ)>36)return true;
+ if(plan.recessed&&a.recessed)return true;
+ if(a.recessed){a.recessed=false;poiTownNpcVersion++}
+ const arrived=poiTownNpcMove(a,plan.goal,plan.label,now,budget);
+ poiTownNpcAct(a,arrived?plan.label:plan.recessed?'going-home':'going-visit');
+ if(plan.recessed&&arrived&&poiTownNpcStepT(a,now)>=1&&poiTownGatewayUnseen(a,budget)){a.recessed=true;poiTownNpcVersion++}
+ return true;
+}
+
 function poiTownDailyRoles(){
  if(!(facilitySite?.id==='base'&&facilitySite.buildings?.some(b=>b.id==='lodging')))return [];
  const home=poiTownDailyPoint([38,38,1]),first=poiTownDailyPoint([39,39,3]),
@@ -27112,6 +27161,7 @@ function poiTownDailyRoles(){
 }
 function poiTownDailyPlan(role,clock){
  if(typeof poiTownNpcGraph!=='function')return null;
+ if(role.role==='kingdom-citizen')return poiKingdomCitizenPlan(role,clock);
  const m=clock.minute,odd=Math.floor((clock.absoluteMinute??m)/1440)%2===0;
  if(role.role==='night-porter'){
   const on=m>=1160||m<350;
@@ -27623,7 +27673,7 @@ function poiTownNpcInit(clock){
  const duty=typeof poiTownDutyRoles==='function'?poiTownDutyRoles():[];
  const daily=typeof poiTownDailyRoles==='function'?poiTownDailyRoles():[];
  const gateways=typeof poiTownGatewayRoles==='function'?poiTownGatewayRoles():[];
- const roster=[...POI_TOWN_RESIDENT_ROLES,...(merchant?[merchant]:[]),...duty,...daily,...gateways];
+ const roster=[...POI_TOWN_RESIDENT_ROLES,...(merchant?[merchant]:[]),...duty,...daily,...gateways,...poiKingdomCitizenRoles(facilitySite)];
  const reserved=new Set();
  poiTownNpcActors=roster.map((role,index)=>{
   if(typeof poiHumanPartyAway==='function'&&poiHumanPartyAway(role.id))return null;
@@ -28325,6 +28375,7 @@ function poiTownNpcPaidShift(a,clock,now,budget){
 }
 // END TOWN NPC PAID SHIFT
 function poiTownNpcRoutine(a,clock,now,budget){
+ if(poiKingdomCitizenRoutine(a,clock,now,budget))return;
  if(typeof poiPortNpcRoutine==='function'&&poiPortNpcRoutine(a,clock,now,budget))return;
  if(typeof poiTownNpcProcCourier==='function'&&poiTownNpcProcCourier(a,clock,now,budget))return;
  if(typeof poiTownNpcProcure==='function'&&poiTownNpcProcure(a,clock,now,budget))return;
@@ -28434,7 +28485,7 @@ const POI_TOWN_JOB_LABELS=Object.freeze({
  resadventurer:'冒険者',guestadventurer:'冒険者',southmerchant:'宿場の商人',northgatekeeper:'北門の見張り',northwatchworker:'夜回り',northscout:'北の斥候',nightporter:'宿屋前の夜番',portfishseller:'魚売り',portfisher:'漁師'
 });
 function poiTownNpcDisplayName(role){
- const name=role?.name||'',job=Object.prototype.hasOwnProperty.call(POI_TOWN_JOB_LABELS,role?.id)?POI_TOWN_JOB_LABELS[role.id]:'';
+ const name=role?.name||'',job=role?.job||(Object.prototype.hasOwnProperty.call(POI_TOWN_JOB_LABELS,role?.id)?POI_TOWN_JOB_LABELS[role.id]:'');
  return name&&job?name+'（'+job+'）':name;
 }
 const POI_TOWN_SPEECH=Object.freeze({
@@ -29192,7 +29243,7 @@ function poiTownStreetTry(now,vp){
  if(poiTownStreetBlocked(now)||facilityFloorOwner(poiWalkX,poiWalkZ,poiWalkLevel,true)!==null)return;
  const local=[],player={x:poiWalkX,z:poiWalkZ};
  // Cap both collection and expensive grid traces, even on editor-expanded maps.
- for(let i=0;i<Math.min(24,poiTownNpcActors.length)&&local.length<8;i++){
+ for(let i=0;i<Math.min(40,poiTownNpcActors.length)&&local.length<8;i++){
   const a=poiTownNpcActors[i];
   if(poiTownStreetEligible(a,now)&&poiTownStreetPoint(a,vp))local.push(a);
  }
@@ -29571,7 +29622,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v354',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v355',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -29686,7 +29737,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v354';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v355';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -29901,7 +29952,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v354',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v355',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -32906,7 +32957,7 @@ function poiRegionAt(site,x,z,legacy=false,floor=null){
   const inTown=POI_SAFE_TOWN.some(([x1,z1,x2,z2])=>localX>=x1&&localX<=x2&&localZ>=z1&&localZ<=z2);
   const guild=site.buildings?.find(b=>b.id==='townGuild');
   const inGuild=guild&&x>guild.x1&&x<guild.x2&&z>guild.z1&&z<guild.z2;
-  name=inGuild?guild.name:inTown?'リーヴェル':'外';difficulty=inTown?0:1;
+  name=inGuild?guild.name:inTown?'リーヴェル':poiKingdomContains(site,x,z,floor)?POI_KINGDOM_NAME:'外';difficulty=name==='外'?1:0;
   const mine=site.mine,b=mine?.bounds,e=mine?.entrance,s=mine?.stairs;
   if((b&&floor===b.y&&x>=b.x1&&x<=b.x2&&z>=b.z1&&z<=b.z2)||
      (e&&s&&floor===e.y&&Math.abs(x-e.x)<=2&&z>=s.z&&z<=e.z+1)){name='廃坑';difficulty=3}
@@ -33148,24 +33199,29 @@ function poiLocalBlocked(row,site,y,x,z){
 }
 const poiLocalTones=['#3a5043','#587764','#a3926b','#477984','#bcb49b','#efc180','#ceab71',
  '#b2ccd1','#f0cd89','#83aaa4','#b1c4b3','#cfbb80','#92cad8'];
+function poiFieldSurveyScope(rank){
+ return rank<POI_LOCAL_W*POI_LOCAL_H?'base:0:outerfield':'base:0:outerfield-2';
+}
+function poiFieldSurveyIndex(rank){return rank%(POI_LOCAL_W*POI_LOCAL_H)}
 function poiLocalCapture(x,z,y,site,realmKey,realm,concealed,quests){
  const crop=poiLocalCrop(x,z),hasSite=site&&/^[a-z0-9_-]{1,36}$/.test(site.id),scope=hasSite?site.id+':'+y+':'+(realmKey||'surface'):null;
  const map=poiLocalTopologyFor(site,concealed),row=map.levels.get(y);
  const bits=scope?poiLocalSurvey(scope):null; // Temporary editor preview is never recorded.
  const door=poiWalkDoorOpen;
  const field=y===0&&!realm&&typeof poiSquareFieldSite==='function'&&poiSquareFieldSite(site);
- let fieldBits=null;
+ const fieldPages=new Map();
  const surface=(tx,tz,mark)=>{
   const i=field?poiSquareFieldRank(tx,tz):-1;
   if(i<0)return mark?poiLocalMark(bits,tx,tz):poiLocalKnown(bits,tx,tz);
   if(!bits)return false;
-  fieldBits??=poiLocalSurvey('base:0:outerfield');
-  return mark?poiLocalMark(fieldBits,i%POI_LOCAL_W,Math.floor(i/POI_LOCAL_W)):
-   poiLocalKnown(fieldBits,i%POI_LOCAL_W,Math.floor(i/POI_LOCAL_W));
+  const scope=poiFieldSurveyScope(i),j=poiFieldSurveyIndex(i);
+  let page=fieldPages.get(scope);if(!page){page=poiLocalSurvey(scope);fieldPages.set(scope,page);}
+  return mark?poiLocalMark(page,j%POI_LOCAL_W,Math.floor(j/POI_LOCAL_W)):
+   poiLocalKnown(page,j%POI_LOCAL_W,Math.floor(j/POI_LOCAL_W));
  };
  const access=(x,z)=>x>=0&&z>=0&&(field?poiOverlandSquareOwner(x,z)==='base':x<MAP_W&&z<MAP_H)&&
   (!realm||x>=realm.x1&&x<=realm.x2&&z>=realm.z1&&z<=realm.z2);
- const temple=concealed&&site?.davidTemple,closed=(tx,tz)=>!access(tx,tz)||(temple&&poiSacredMiniEntrance(temple,tx,tz))||poiLocalBlocked(row,site,y,tx,tz);
+ const temple=concealed&&site?.davidTemple,closed=(tx,tz)=>!access(tx,tz)||(temple&&poiSacredMiniEntrance(temple,tx,tz))||poiLocalBlocked(row,site,y,tx,tz)||field&&poiKingdomData(site)?.solid.has(tx+','+tz);
  const indoor=poiWalkIndoor(),fog=typeof poiSacredFogStrength==='function'?poiSacredFogStrength(site,x,z,y):0,
   radius=poiLocalSightRadius(indoor,fog);
  const sample=poiLocalSample;
@@ -33186,7 +33242,7 @@ function poiLocalCapture(x,z,y,site,realmKey,realm,concealed,quests){
  const tile=(tx,tz)=>{
   if(!access(tx,tz)||(temple&&poiSacredMiniEntrance(temple,tx,tz)))return 0;
   const eastern=field?poiEastNatureData(site)?.tiles.get(tx+','+tz):null;
-  const tone=eastern==='river'?3:eastern==='bridge'||eastern==='earth'?2:eastern==='tree'?1:null;
+  const tone=eastern==='river'?3:eastern==='wall'?4:eastern==='bridge'||eastern==='earth'||eastern==='road'?2:eastern==='tree'?1:null;
   return ((tx===x&&tz===z)||surface(tx,tz,false))?1+(tone??row?.cats[poiLocalBit(tx,tz)]??0):0;
  };
  const cells=new Uint8Array(POI_LOCAL_SIDE**2);
@@ -33327,7 +33383,7 @@ function poiLocalAtlas(f){
  const layer=document.createElement('canvas');
  layer.width=bounds.x2-bounds.x1;layer.height=bounds.z2-bounds.z1;
  const g=layer.getContext('2d'),other=id==='base'?'snowpass':'base';
- const known=poiLocalSurveys?.get(other+':0:surface'),extra=poiLocalSurveys?.get('base:0:outerfield');
+ const known=poiLocalSurveys?.get(other+':0:surface'),extra=poiLocalSurveys?.get('base:0:outerfield')||poiLocalSurveys?.get('base:0:outerfield-2');
  const inactive=bounds.global&&(known||other==='base'&&extra)?
   other==='base'?poiSnowPassBase?.site:(poiOverlandSnow??=poiSnowPassMap()):null;
  const categories=new Map();
@@ -33354,9 +33410,10 @@ function poiLocalAtlas(f){
     if(other==='base'&&inactive.davidTemple&&poiSacredMiniEntrance(inactive.davidTemple,u,v))continue;
     const rank=other==='base'?poiSquareFieldRank(u,v):-1;
     if(rank>=0){
-     if(poiLocalKnown(extra,rank%POI_LOCAL_W,Math.floor(rank/POI_LOCAL_W))){
+     const j=poiFieldSurveyIndex(rank),page=poiLocalSurveys?.get(poiFieldSurveyScope(rank));
+     if(poiLocalKnown(page,j%POI_LOCAL_W,Math.floor(j/POI_LOCAL_W))){
       const eastern=poiEastNatureData(inactive)?.tiles.get(u+','+v);
-      tone=eastern==='river'?4:eastern==='bridge'||eastern==='earth'?3:eastern==='tree'?2:1;
+      tone=eastern==='river'?4:eastern==='wall'?5:eastern==='bridge'||eastern==='earth'||eastern==='road'?3:eastern==='tree'?2:1;
      }
     }else if(poiLocalKnown(known,u,v))tone=1+(categories.get(poiLocalBit(u,v))??0);
    }
@@ -35443,7 +35500,7 @@ function poiWallCameraTriangles(tris,o,d,max){
  return hit;
 }
 function poiWallCameraCandidates(target,desired){
- const index=poiWallCameraIndex(world),rows=[],pad=1.62,loY=Math.min(target[1],desired[1])-.18,hiY=Math.max(target[1],desired[1])+.18;
+ const index=poiWallCameraIndex(world),rows=poiWalkLevel===0?poiKingdomCameraRows(facilitySite,target,desired):[],pad=1.62,loY=Math.min(target[1],desired[1])-.18,hiY=Math.max(target[1],desired[1])+.18;
  const a=Math.floor((Math.min(target[0],desired[0])-pad)/4),b=Math.floor((Math.max(target[0],desired[0])+pad)/4);
  const c=Math.floor((Math.min(target[2],desired[2])-pad)/4),d=Math.floor((Math.max(target[2],desired[2])+pad)/4);
  const door=typeof poiWalkDoorOpen==='undefined'?null:poiWalkDoorOpen;
@@ -43048,7 +43105,7 @@ function poiOverlandIndex(world,ground=t=>/^(road|grass|earth|snow|stone)/i.test
 
 // Bounded real surface prototype; only enabled on explicit QA launch.
 const POI_OVERLAND_SPIKE=true;
-const POI_OVERLAND_GPU_LIMIT=4*1024*1024-96*1024; // reserve eastern ground fallback
+const POI_OVERLAND_GPU_LIMIT=4*1024*1024-160*1024; // reserve eastern ground fallback
 let poiOverlandMeshes=new Map(),poiOverlandIndexCache=new WeakMap(),poiOverlandSnow=null,poiOverlandMilda=null,poiOverlandCommands=[],poiOverlandDrawn=[],poiOverlandDrawing=false,poiOverlandEngaged=false,poiOverlandBake=null,poiOverlandStats={builds:0,maxBakeMs:0,frames:0};
 function poiOverlandScope(id,x,z,pad=0){
  const hasMilda=typeof poiMildaMap==='function';
@@ -43206,7 +43263,7 @@ function poiAddGroundBuild(q){
 // A single cheap physical floor under the East chunks. The detailed and
 // coarse queues can both miss a slot while panning or under memory pressure.
 let poiEastUnderlayGPU=null;
-const POI_EAST_UNDERLAY_BYTES=96*1024;
+const POI_EAST_UNDERLAY_BYTES=160*1024;
 function poiEastUnderlayClear(){
  if(!poiEastUnderlayGPU)return;
  gl.deleteBuffer(poiEastUnderlayGPU.gpu.buf);
@@ -43215,8 +43272,8 @@ function poiEastUnderlayClear(){
 function poiEastUnderlayMesh(a){
  const m=mesh(),water=poiEastRiverVisual(a.layout),floors=a.index.floors;
  const tone=(x,z)=>pineEastGroundColor(x,z,floors,a.layout.townOffset??22);
- for(let z0=0;z0<a.height;z0+=8)for(let x0=128;x0<a.width;x0+=8){
-  const xEnd=Math.min(x0+8,a.width),zEnd=Math.min(z0+8,a.height),rects=[],prev=new Map();
+ for(let z0=0;z0<a.height;z0+=8)for(let x0=128;x0<a.width;x0+=x0>=184?16:8){
+  const xEnd=Math.min(x0+(x0>=184?16:8),a.width),zEnd=Math.min(z0+8,a.height),rects=[],prev=new Map();
   const tile=(x,z)=>{
    if(!a.owns(x,z))return null;
    const key=x+','+z;return (a.terrain.get(key)??0)*2+(water?.has(key)?1:0);
@@ -43669,7 +43726,7 @@ function poiOutdoorLodMayRun(){
 let poiStockOutdoorWarm=null;
 const POI_STOCK_OUTDOOR_WARM_TILES=6;
 function poiStockOutdoorWarmClear(reason){
- poiEastUnderlayClear();
+ poiEastUnderlayClear();poiKingdomClear();
  if(reason==='context-loss')poiSeamVAO=null;
  if((poiSeamRolePlan||poiSeamRoles.size)&&!(poiSeamRoleTravel&&(reason==='region-change'||reason==='map-load')))poiSeamRoleClear();
  if(poiAddGroundPlan||poiAddGroundBytes)poiAddGroundClear();
@@ -43766,6 +43823,7 @@ function poiOutdoorLate(vp,stream){
  const seam=poiSeamRoleBegin(stream,id,g,areas,poiOutdoorPlan.list);
  poiEastUnderlayFrame(vp,id,g,areas);
  poiAddGroundFrame(vp,stream,id,g,areas,held);
+ poiKingdomDraw(vp,id,g);
  if(seam)poiSeamRoleRender(vp,seam,id,g,held);
 }
 // END OUTDOOR GEOGRAPHY LOD
@@ -44078,9 +44136,12 @@ function poiOverlandResumeAnalog(c,old,now){
 // BEGIN SNOW PASS PROTOTYPE
 const POI_SNOW_PASS=Object.freeze({id:'snowpass',name:'白嶺峠',width:24,height:29,base:{x:60,z:138},snow:{x:12,z:0}});
 // BEGIN SQUARE FIELD
-const POI_SQUARE_FIELD_SIDE=184;
+const POI_SQUARE_FIELD_SIDE=248;
 function poiSquareFieldRank(x,z){
- if(!Number.isInteger(x)||!Number.isInteger(z)||x<0||z<0||x>=184||z>=184)return -1;
+ if(!Number.isInteger(x)||!Number.isInteger(z)||x<0||z<0||x>=POI_SQUARE_FIELD_SIDE||z>=POI_SQUARE_FIELD_SIDE)return -1;
+ // Append new land after the 13920 legacy ranks; never shift existing exploration.
+ if(z>=184)return 13920+64*184+(z-184)*248+x;
+ if(x>=184)return 13920+z*64+x-184;
  if(z<128)return x>=128?z*56+x-128:-1;
  if(z<168)return x>=72?7168+(z-128)*112+x-72:-1;
  if(z<182)return x>=48?11648+(z-168)*136+x-48:-1;
@@ -44088,7 +44149,7 @@ function poiSquareFieldRank(x,z){
 }
 function poiSquareFieldAt(x,z){return poiSquareFieldRank(x,z)>=0}
 function poiSquareFieldNear(x,z,pad=0){
- return x>=-pad&&z>=-pad&&x<184+pad&&z<184+pad&&
+ return x>=-pad&&z>=-pad&&x<POI_SQUARE_FIELD_SIDE+pad&&z<POI_SQUARE_FIELD_SIDE+pad&&
   (x>=128-pad||x>=72-pad&&z>=128-pad||x>=48-pad&&z>=168-pad||z>=182-pad);
 }
 function poiSquareFieldSite(site){
@@ -44121,6 +44182,11 @@ function poiEastNatureData(site){
   visit(x,z,'bridge');
  }
  for(const o of nature.trees){visit(o.x,o.z,'tree');pad(o.x,o.z,o.type,(o.x+o.z)%4)}
+ const kingdom=poiKingdomData(site);
+ for(const [point,type] of kingdom.floors){
+  const [x,z]=point.split(',').map(Number);pad(x,z,type);tiles.set(point,'road');
+ }
+ for(const point of kingdom.solid)tiles.set(point,'wall');
  return poiEastNatureTiles={tiles,rows,water};
 }
 // Render the connected river independently of its grid collision mask.
@@ -44244,9 +44310,198 @@ function poiEastRiverDraw(m,water,x,z,details=true){
 }
 function poiEastNatureBlocked(site,x,z){
  const type=poiEastNatureData(site)?.tiles.get(x+','+z);
- return type==='river'||type==='tree';
+ return type==='river'||type==='tree'||type==='wall';
 }
 let poiEastNatureTiles=null;
+const POI_KINGDOM_NAME='ヴァルディア';
+function poiKingdomPlan(base){
+ const bounds={x1:178,x2:246,z1:64,z2:116},solid=new Set(),floors=new Map(),meshes=[];
+ const key=(x,z)=>x+','+z;
+ const pave=(x1,z1,x2,z2,type)=>{for(let z=z1;z<=z2;z++)for(let x=x1;x<=x2;x++)floors.set(key(x,z),type)};
+ const mark=(x1,z1,x2,z2)=>{for(let z=z1;z<=z2;z++)for(let x=x1;x<=x2;x++)solid.add(key(x,z))};
+ const box=(style,x1,z1,x2,z2,h,extra={})=>meshes.push({style,x1,z1,x2,z2,h,...extra});
+ const wall=(x1,z1,x2,z2,h)=>{mark(x1,z1,x2,z2);box('wall',x1,z1,x2,z2,h)};
+ const tower=(x,z,h,roof=false)=>{mark(x-1,z-1,x+1,z+1);box(roof?'tower-roof':'tower',x-1,z-1,x+1,z+1,h)};
+ const gate=(x,z,h)=>{box('gate',x,z-1,x,z+1,h);tower(x,z-3,h+1);tower(x,z+3,h+1)};
+ pave(176,89,178,91,'roadCutStoneFull');
+ pave(179,88,241,92,'roadCutStoneFull');
+ pave(187,82,204,98,'roadCobbleFull');
+ pave(179,79,216,81,'roadCobbleFull');pave(179,99,216,101,'roadCobbleFull');
+ pave(192,66,194,114,'roadGravelFull');pave(214,66,216,114,'roadGravelFull');
+ pave(220,78,241,103,'roadCutStoneFull');
+ pave(180,66,183,113,'roadGravelFull');
+ wall(178,64,246,64,3.25);wall(178,116,246,116,3.25);
+ wall(178,65,178,88,3.25);wall(178,92,178,115,3.25);
+ wall(246,65,246,115,3.25);
+ for(const [x,z] of [[178,64],[178,116],[246,64],[246,116],[211,64],[211,116],[246,90]])tower(x,z,4.7);
+ gate(178,90,4.8);
+ // A second gate opens into a proper bailey, in the same continuous world.
+ wall(218,76,243,76,4.3);wall(218,105,243,105,4.3);
+ wall(218,77,218,88,4.3);wall(218,92,218,104,4.3);wall(243,77,243,104,4.3);
+ for(const [x,z] of [[218,76],[218,105],[243,76],[243,105]])tower(x,z,7.3,true);
+ gate(218,90,5.4);
+ const building=(id,x1,z1,x2,z2,shape,tone=0,enterable=false)=>({id,x1,z1,x2,z2,shape,tone,enterable,
+  floorHeight:shape==='keep'?6:shape==='stall'?2:3,door:{x:Math.floor((x1+x2)/2),z:z2}});
+ const buildings=[
+  building('west-gate-lodge',181,83,184,86,'house',1),
+  building('west-watch',181,94,184,97,'house',2),
+  building('plaza-inn',195,73,202,78,'house',0),
+  building('clothier',197,102,203,107,'house',2),
+  building('forge',185,102,190,108,'house',1),
+  building('bakery',185,73,190,78,'house',2),
+  building('north-homes',185,67,190,70,'house',1),
+  building('north-row',196,67,204,70,'house',3),
+  building('hall',206,73,212,79,'house',1),
+  building('arches-quarter',207,82,212,86,'house',0),
+  building('dye-yard',207,95,212,98,'house',3),
+  building('carpenter',206,103,212,109,'house',0),
+  building('south-house',197,110,204,113,'house',3),
+  building('south-store',185,111,190,114,'house',0),
+  building('upper-yard',226,80,237,86,'keep',0,true),
+  building('south-wing',227,97,237,102,'house',1)
+ ];
+ for(const [x,z,t] of [[189,84,0],[194,84,1],[199,84,2],[189,95,1],[194,95,3],[199,95,0]])
+  buildings.push(building('stall-'+x+'-'+z,x,z,x+1,z+1,'stall',t));
+ for(const b of buildings){
+  const {x1,z1,x2,z2,door}=b;
+  if(b.enterable){
+   mark(x1,z1,x2,z1);mark(x1,z1,x1,z2);mark(x2,z1,x2,z2);
+   mark(x1,z2,door.x-2,z2);mark(door.x+2,z2,x2,z2);
+   pave(x1+1,z1+1,x2-1,z2,'roadRoyalFull');
+  }else mark(x1,z1,x2,z2);
+  box(b.shape,x1,z1,x2,z2,b.floorHeight*(b.shape==='stall'?.82:1.4),b);
+ }
+ // A dry fountain court, deliberately outside the open through-lane.
+ mark(202,85,203,86);box('fountain',202,85,203,86,1.6);
+ mark(233,94,234,95);box('fountain',233,94,234,95,1.6);
+ for(const [x,z] of [[185,87],[185,93],[200,87],[200,93],[210,87],[210,93],[223,87],[223,93],[240,87],[240,93]])
+  box('banner',x,z,x,z,3.7);
+ return {name:POI_KINGDOM_NAME,bounds,solid,floors,meshes,buildings,gate:base.gate};
+}
+let poiKingdomCache=null,poiKingdomGPU=null;
+function poiKingdomData(site){
+ if(!poiSquareFieldSite(site))return null;
+ return poiKingdomCache??=poiKingdomPlan(makeEasternExpansion().kingdom);
+}
+function poiKingdomContains(site,x,z,y){
+ const b=y===0?poiKingdomData(site)?.bounds:null;
+ return !!b&&x>=b.x1&&x<=b.x2&&z>=b.z1&&z<=b.z2;
+}
+function poiKingdomClear(){
+ if(!poiKingdomGPU)return;
+ gl.deleteBuffer(poiKingdomGPU.buf);poiKingdomGPU=null;
+}
+function poiKingdomGeometry(q){
+ const m=mesh(),wall=[.55,.53,.46],cream=[.69,.65,.53],cap=[.77,.73,.63],shade=[.29,.28,.25];
+ const walls=[[.80,.71,.53],[.64,.59,.49],[.75,.68,.54],[.68,.61,.48]];
+ const roofs=[[.34,.21,.17],[.25,.33,.38],[.36,.26,.24],[.25,.32,.28]];
+ for(const d of q.meshes){
+  const {style,x1,z1,x2,z2,h,tone=0}=d;
+  const w=x2-x1+1,l=z2-z1+1,x=(x1+x2+1)/2,z=(z1+z2+1)/2;
+  const c=(a,y,b,w,h,l,t)=>cube(m,a,y,b,w,h,l,t);
+  if(style==='wall'||style==='tower'||style==='tower-roof'){
+   c(x,0,z,w,h,l,wall);c(x,.18,z,w+.09,.22,l+.09,shade);
+   c(x,h-.34,z,w+.18,.23,l+.18,cap);
+   if(style==='wall'){
+    const long=w>=l,n=long?w:l;
+    for(let j=.4;j<n;j+=1.55)c(long?x1+j:x,h,long?z:z1+j,long?.63:w+.09,.45,long?l+.09:.63,cream);
+   }else{
+    c(x,h,z,w+.32,.19,l+.32,cream);
+    for(const ax of [-1,1])for(const az of [-1,1])c(x+ax*1.26,h+.18,z+az*1.26,.65,.64,.65,cap);
+    if(style==='tower-roof'){
+     const a=[x-w*.56,h+.81,z-l*.56],b=[x+w*.56,h+.81,z-l*.56],c=[x+w*.56,h+.81,z+l*.56],e=[x-w*.56,h+.81,z+l*.56],p=[x,h+3.4,z];
+     for(const [v,u] of [[a,b],[b,c],[c,e],[e,a]])tri(m,v,u,p,roofs[1]);
+    }
+   }
+  }else if(style==='gate'){
+   const u=x1+.5;
+   c(u,h-1.5,z,1.28,1.5,3.18,cream);c(u,h-.25,z,1.62,.23,3.24,cap);
+   for(const s of [-1,1])for(let i=0;i<4;i++)c(u,h-2.75+i*.31,z+s*(1.36-i*.22),1.18,.34,.38,wall);
+  }else if(style==='banner'){
+   c(x,0,z,.12,h,.12,shade);c(x,h-.12,z,.16,.12,1.0,cap);
+   c(x,h-1.27,z+.21,.055,1.15,.66,[.26,.31,.53]);c(x-.035,h-.91,z+.21,.02,.13,.43,[.79,.66,.35]);
+  }else if(style==='fountain'){
+   const stone=[.56,.61,.63],water=[.25,.50,.59];
+   c(x,.04,z,2,.24,2,stone);c(x,.27,z,1.73,.045,1.73,water);
+   for(const v of [-1,1]){c(x+v*.92,.27,z,.16,.26,1.97,stone);c(x,.27,z+v*.92,1.97,.26,.16,stone)}
+   c(x,.27,z,.44,1.18,.44,stone);c(x,1.33,z,.98,.13,.98,stone);c(x,1.46,z,.74,.03,.74,water);
+  }else if(style==='stall'){
+   for(const px of [-.79,.79])for(const pz of [-.79,.79])c(x+px,0,z+pz,.102,1.58,.102,[.42,.29,.18]);
+   c(x,.67,z,w*.89,.18,l*.65,[.56,.37,.22]);
+   for(let i=0;i<6;i++){
+    const a=x1+i*w/6,b=x1+(i+1)*w/6,col=i%2?cream:[[.63,.22,.20],[.22,.46,.46],[.62,.48,.21],[.30,.39,.58]][tone];
+    quad(m,[a,1.53,z+l*.55],[b,1.53,z+l*.55],[b,1.95,z-l*.55],[a,1.95,z-l*.55],col);
+   }
+  }else{
+   const timber=[.34,.26,.20],col=walls[tone],r=roofs[tone];
+   if(d.enterable){
+    const gate=d.door.x+.5;
+    c(x,0,z1+.36,w,h,.72,col);c(x1+.36,0,z,.72,h,l,col);c(x2+.64,0,z,.72,h,l,col);
+    const wl=gate-1.5-x1,wr=x2+1-gate-1.5;
+    c(x1+wl/2,0,z2+.64,wl,h,.72,col);c(gate+1.5+wr/2,0,z2+.64,wr,h,.72,col);
+    c(gate,3.2,z2+.64,3,h-3.2,.72,col);
+    c(x,h-.22,z,w+.32,.24,l+.37,cap);
+   }else{
+    c(x,0,z,w,h,l,col);c(x,0,z,w+.08,.37,l+.08,[.48,.46,.39]);
+    c(x,h*.54,z,w+.11,.10,l+.11,timber);c(x,h-.19,z,w+.15,.16,l+.15,timber);
+    c(x+.25,0,z2+1.015,.75,1.34,.08,timber);
+   }
+   const e=h,peak=h+(style==='keep'?2.5:1.45),front=z2+1.26,back=z1-.26,left=x1-.26,right=x2+1.26;
+   quad(m,[left,e,back],[x,peak,back],[x,peak,front],[left,e,front],r.map(v=>v*.86));
+   quad(m,[x,peak,back],[right,e,back],[right,e,front],[x,peak,front],r);
+   tri(m,[right,e,front],[x,peak,front],[left,e,front],col);
+   tri(m,[left,e,back],[x,peak,back],[right,e,back],col);
+   for(let u=x1+.77;u<x2+.6;u+=1.63){
+    c(u,h*.59,front-.246,.61,.69,.045,timber);c(u,h*.65,front-.202,.43,.42,.045,[.26,.36,.41]);
+    c(u,h*.54,front-.184,.78,.073,.12,cap);
+   }
+   if(style==='keep')for(const s of [-1,1]){
+    c(x+s*3.8,h-.1,z,.94,1.87,.94,wall);c(x+s*3.8,h+1.64,z,1.13,.18,1.13,cap);
+   }
+  }
+ }
+ return m;
+}
+// Geometry added beyond the original atlas participates in the normal
+// third-person camera cast. A room is four walls, not a filled rectangle.
+function poiKingdomCameraRows(site,target,desired){
+ if(Math.max(target[0],desired[0])<176||Math.min(target[2],desired[2])>119||
+    Math.max(target[2],desired[2])<62)return [];
+ const town=poiKingdomData(site);if(!town)return [];
+ if(!town.cameraRows){
+  const rows=[];
+  const box=(x0,z0,x1,z1,h,y=0)=>{
+   if(x1>x0&&z1>z0)rows.push({x:0,y:0,z:0,s:{min:[x0,y,z0],max:[x1,h,z1],tris:null}});
+  };
+  for(const d of town.meshes){
+   const {style,x1,z1,x2,z2,h}=d;
+   if(style==='banner'||style==='stall'||style==='fountain')continue;
+   if(style==='gate'){box(x1-.15,z1-.10,x2+1.15,z2+1.10,h,h-2.45);continue;}
+   if(d.enterable){
+    const x=d.door.x+.5;
+    box(x1,z1,x2+1,z1+.72,h);box(x1,z1,x1+.72,z2+1,h);
+    box(x2+.28,z1,x2+1,z2+1,h);box(x1,z2+.28,x-1.5,z2+1,h);
+    box(x+1.5,z2+.28,x2+1,z2+1,h);box(x-1.5,z2+.28,x+1.5,z2+1,h,3.2);
+    box(x1-.26,z1-.26,x2+1.26,z2+1.26,h+2.45,h);
+    continue;
+   }
+   const roof=style==='house'?1.45:style==='tower-roof'?3.4:style==='tower'?.84:.45;
+   box(x1-.10,z1-.10,x2+1.10,z2+1.10,h+roof);
+  }
+  town.cameraRows=rows;
+ }
+ return town.cameraRows.filter(({s})=>[0,1,2].every(i=>
+  Math.min(target[i],desired[i])<=s.max[i]+.3&&Math.max(target[i],desired[i])>=s.min[i]-.3));
+}
+function poiKingdomDraw(vp,id,g){
+ const k=id==='base'?poiKingdomData(facilitySite):null,b=k?.bounds;
+ if(!b||facilitySurfaceEdited||g[0]+49<b.x1||g[1]+49<b.z1||g[1]-49>b.z2||
+  !poiOverlandBoxVisible(vp,[b.x1,0,b.z1,b.x2+1,13,b.z2+1]))return;
+ if(!poiKingdomGPU){const m=poiKingdomGeometry(k);if(!m.p.length)return;poiKingdomGPU=upload(m)}
+ poiOutdoorSet(g[0]+.5,g[1]+.5,3);
+ try{draw(poiKingdomGPU,vp)}finally{poiOutdoorSet(0,0,0)}
+}
+
 function makeEasternExpansion(){
  const nature={x1:128,x2:175,z1:57,z2:115,structures:[],water:[],crossings:[],trees:[]};
  const kingdom={x1:176,x2:247,z1:62,z2:117,gate:{x:176,z:90},districts:[
@@ -44302,7 +44557,8 @@ function makeEasternExpansion(){
 // disjoint rows of different sites; region-local GPU bins and saves do not move.
 const POI_OVERLAND_PATCHES=Object.freeze([
  ['base',0,0,184,139],['base',0,139,48,168],['base',72,139,184,168],['base',0,168,184,184],
- ['snowpass',48,139,48+POI_SNOW_PASS.width,139+POI_SNOW_PASS.height]
+ ['snowpass',48,139,48+POI_SNOW_PASS.width,139+POI_SNOW_PASS.height],
+ ['base',184,0,248,184],['base',0,184,248,248]
 ]);
 let poiOverlandSquare=null;
 function poiOverlandSquareIndex(){
