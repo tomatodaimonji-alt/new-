@@ -1,0 +1,4 @@
+# Recorded area music
+The town, the indoor/セルネア arrangement, mine, otherworld, chapel, north fort, and battle loops use recorded instruments from [VSCO 2 Community Edition](https://github.com/sgossner/VSCO-2-CE/tree/440300901dfe9275fd84e0b7763af1f8443ae62e), [CC0 1.0](https://github.com/sgossner/VSCO-2-CE/blob/440300901dfe9275fd84e0b7763af1f8443ae62e/LICENSE). Recordings: Sam Gossner and Simon Dalzell. Sample editing: Elan Hickler / Soundemote. Existing Workshop compositions and their original tempos are unchanged. The asset manifest lists source take paths and exact hashes.
+ 
+The Orvas temple, outdoor field, and Snow recordings and ambience are unchanged. The current room/settlement routing is unchanged. No network access is needed for BGM during play; these audio loops are embedded and decoded only when used. The previous synthesizer remains a compatibility fallback if a particular engine cannot play a new recording.
