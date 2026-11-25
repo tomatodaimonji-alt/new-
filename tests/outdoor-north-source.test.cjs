@@ -6,13 +6,14 @@ function runtime(){
   wallExteriorLookup:()=>new Map(),poiSacredGroundLights:()=>({blockers:new Map(),lamps:[]}),poiSacredInteriorSconce:()=>false,poiTownNpcKey:(...v)=>v.join(','),residentialRoofComponents:()=>[],
   isFloor:t=>/^(grass|poiSnowGround)$/.test(t),poiSacredInteriorGrade:(_a,_x,_z,t)=>t,poiSnowGroundEdgeTint:()=>null,
   ROAD_DIAGONALS:new Set(),ROAD_IDS:new Set(),PINE_EAST_NATURE_TONES:{},TERRAIN_STEP:.2,shoreline:()=>{},pineBakeFloorLighting:()=>{},terrainSide:()=>{},
-  poiOverlandEngaged:false,POI_OVERLAND_GPU_LIMIT:4194304,poiOverlandStats:{builds:0},upload:m=>({buf:{},count:m.p.length/3})});
+  poiForestFront:null,poiOutdoorFarBytes:0,poiAddGroundBytes:0,poiOverlandEngaged:false,POI_OVERLAND_GPU_LIMIT:4194304,poiOverlandStats:{builds:0},upload:m=>({buf:{},count:m.p.length/3})});
  vm.runInContext(cut('const POI_OVERLAND_ORIGINS=','// END OVERLAND STREAM PLANNING')+
   h.match(/^const POI_SNOW_PASS=.*$/m)[0]+cut('const POI_SQUARE_FIELD_SIDE=','// END SQUARE FIELD')+
   cut('const POI_OVERLAND_PATCHES=','// END SPARSE OVERLAND SQUARE')+
   cut('function poiOverlandSpecFor(','function poiOverlandAreas(')+
   cut('function* poiOverlandChunkRows(','function poiOverlandBakeFrame(')+
-  cut('function poiCompactPriority(','function poiSeamRoleSources(')+`
+  cut('function poiCompactPriority(','function poiSeamRoleSources(')+
+  cut('function poiForestFrontReserve(','function poiForestFrontTick(')+`
   const mesh=()=>({p:[]}),addFloorTile=m=>m.p.push(0,0,0),shiftMesh=(m,t)=>m.p.push(...t.p);
   const shape=(id,width,height)=>({id,davidTemple:{depth:1},map:{world:[],width,height}});
   const home=shape('base',128,182),snow=shape('snowpass',24,29);

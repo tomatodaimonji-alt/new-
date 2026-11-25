@@ -55,7 +55,7 @@ test('actual local guard keeps original sacred fog/edge, indoor/roof/editor/fore
  [
   "function poiOverlandUpload(",
   "function poiOverlandBakeFrame(",
-  "d6207bb1198c7f70168228b1421752492e6c8742d9d2626adc4b420423bee0b4"
+  "f093ceb912838083e902b1b30c81e54e0870a4c3e115adba7ac8e64ac3f84be9"
  ],
  [
   "function poiWalkIndoor(",
