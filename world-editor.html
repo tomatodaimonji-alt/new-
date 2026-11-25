@@ -1721,7 +1721,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v357）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v358）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -26824,7 +26824,7 @@ function poiTownNpcGraph(){
 }
 function poiTownNpcStance(p,g=poiTownNpcGraph()){
  const {x,z,y}=p,k=poiTownNpcKey(x,z,y);
- if(y===0&&x>=MAP_W&&x<POI_SQUARE_FIELD_SIDE&&z>=58&&z<=122){
+ if(y===0&&x>=MAP_W&&x<POI_SQUARE_FIELD_SIDE&&z>=44&&z<=126){
   const area=poiEastNatureData(facilitySite),type=area?.tiles.get(x+','+z);
   return !!area&&type!=='wall'&&type!=='tree'&&type!=='river';
  }
@@ -27193,6 +27193,18 @@ function poiKingdomCitizenRoles(site){
   if(stops.some(p=>k.solid.has(p.x+','+p.z)))return [];
   return [{id:'vald-'+id,name,job,type,stops,index,home:stops[0],work:stops[0],public:stops[1],role:'kingdom-citizen'}];
  });
+ const roster=['セヴラン','ミレイ','ガリス','ノーラ','ルグラン','エリオ','サナ','ベルト','リサ','ヨルム','マイア','エッダ'];
+ const names=['騎士団長','副団長','騎士','騎士','近衛騎士','騎士','衛兵','騎士','騎士','騎士','見習い騎士','見習い騎士'];
+ const formations=k.knightQuarter?.yard.slots||[];
+ for(let i=0;i<formations.length;i++){
+  const [x,z]=formations[i],pos=(x,z,facing=2)=>({x,z,y:0,facing});
+  const home=pos(194+i%6*2,49+Math.floor(i/6)*3);
+  const form=pos(x,z,0),night=i===4||i===6||i===9;
+  const round=pos(x,i%2===0?56:62,0),watch=night?pos(i===4?193:i===6?205:209,63,2):round;
+  if([home,form,watch,round].some(p=>k.solid.has(p.x+','+p.z)))continue;
+  people.push({id:'vald-guard-company-'+i,name:roster[i],job:names[i],type:'humanKnight',stops:[home,form,round],
+   index:15+i,home,work:round,public:form,role:'kingdom-citizen',knightDuty:{form,round,watch,night}});
+ }
  const g=k.greengrocer;
  if(g?.merchant&&g.public)people.push({id:POI_VALDIA_GROCER_ID,name:'ロゼ',job:'八百屋の店主',type:'humanMerchant',
   index:14,home:g.merchant,work:g.merchant,public:g.public,stops:[g.merchant],role:'kingdom-citizen'});
@@ -27200,6 +27212,13 @@ function poiKingdomCitizenRoles(site){
 }
 function poiKingdomCitizenPlan(role,clock){
  if(role.role!=='kingdom-citizen')return null;
+ if(role.knightDuty){
+  const {form,round,watch,night}=role.knightDuty,m=clock.minute,day=m>=6*60+20+role.index%4*7&&m<20*60+50+role.index%5*11;
+  if(m>=8*60+47&&m<9*60+45)return {goal:form,label:'knight-drill',recessed:false};
+  if(!day)return night?{goal:watch,label:'watch-post',recessed:false}:{goal:role.home,label:'going-home',recessed:true};
+  const inHall=(Math.floor(m/(59+role.index%3*13))+role.index)%3===0;
+  return {goal:inHall?role.home:round,label:inHall?'work':'watch-post',recessed:false};
+ }
  const day=clock.minute>=7*60+role.index*3&&clock.minute<20*60+role.index*2;
  if(role.id===POI_VALDIA_GROCER_ID)return {goal:role.work,label:day?'work':'going-home',recessed:!day};
  const guard=role.type==='humanKnight',king=role.job==='王様';
@@ -28556,7 +28575,7 @@ function poiTownNpcDisplayName(role){
  return name&&job?name+'（'+job+'）':name;
 }
 const POI_TOWN_SPEECH=Object.freeze({
- 'vald-greengrocer':'いらっしゃい。朝のうちに届いた野菜だよ。棚の前からどうぞ。',
+ 'vald-greengrocer':'いらっしゃい。朝採れの野菜、店先で見ていって。',
  'vald-king':'市場を通ってきたか。あそこで交わす言葉に、この国のことがいちばんよく表れる。',
  westbasketweaver:'西の街から来たよ。ここの食堂で使う籠の寸法を見に来たんだ。',
  northlamplearner:'北の街から通ってる。日暮れの通りを見て、灯りを置く場所を覚えてるんだ。',
@@ -28613,6 +28632,11 @@ function poiNpcTradeSessionMatches(actor,mode,code=null,sourceIndex=null){
   (mode!=='sell'||code===null||d.pending.offer.sourceIndex===sourceIndex)&&
   (actor.role.id!=='toolkeeper'||d.toolshopCounter&&poiNpcToolshopCounter(actor))&&
   poiTownDialogueTarget(performance.now())===actor;
+}
+function poiValdiaGrocerRecoverPosition(p){
+ if(!p||p.y!==0||p.x<185||p.x>190||p.z<73||p.z>78)return p;
+ const pub=poiKingdomData(facilitySite)?.greengrocer?.public;
+ return pub?{...p,x:pub.x,z:pub.z,facing:pub.facing}:p;
 }
 function poiValdiaAtCounter(actor,dx=0,dz=-1){
  const shop=poiKingdomData(facilitySite)?.greengrocer,p=shop?.public,m=shop?.merchant;
@@ -29296,11 +29320,27 @@ function poiTownStreetBlocked(now){
   (typeof poiAimAttack!=='undefined'&&poiAimAttack&&now-poiAimAttack.started<950)||
   document.querySelector('dialog[open],.modal.open,:is(#poiBagPanel,#poiNpcMenu,#poiNpcTradePanel,#poiNpcInventory,#poiLandscapeMenu,#poiSoundPanel,#poiScreenNoteLayer):not([hidden])'));
 }
+function poiValdiaStreetEligible(a){
+ const r=a.role;
+ return r.role==='kingdom-citizen'&&r.job!=='王様'&&(
+  r.type==='humanKnight'?['knight-drill','knight-rest','knight-muster','going-visit','visit'].includes(a.activity):
+  ['visit','work','meal-break','market-browse','errand','evening-walk','going-visit','knight-rest'].includes(a.activity));
+}
+function poiValdiaStreetCooldown(n){return 9000+(n%4)*1250}
+const POI_VALDIA_STREET_LINES=[
+ ['噴水の前で待ち合わせだったね。','そう。通りを少し見てから行こう。'],
+ ['騎士団の広場、もう見た？','北の門を抜けたところだよね。'],
+ ['いい匂い。パンが焼けたのかな。','あとで寄ろうか。'],
+ ['南門からだと城がよく見えるね。','中庭もきれいだよ。'],
+ ['次の交代まで少し休もう。','じゃあ、広場で一息つこう。'],
+ ['朝から人が多いね。','露店が開く時間だからね。']
+];
+let poiValdiaStreetNext=0,poiValdiaLastPair=null;
 function poiTownStreetEligible(a,now){
  return !a.recessed&&!a.death&&!a.bedId&&!a.target&&a.hitAt==null&&!a.actorLeg&&!a.supplyCarrying&&
   !a.southShipmentRun&&(!a.gestureKind||now-a.gestureAt>=1120)&&!poiTownNpcSleeping(a)&&
-  POI_TOWN_STREET_IDLE.has(a.activity)&&a.y===poiWalkLevel&&
-  Math.hypot(a.x-poiWalkX,a.z-poiWalkZ)<=6.5&&poiTownNpcStepT(a,now)===1&&
+  (POI_TOWN_STREET_IDLE.has(a.activity)||poiValdiaStreetEligible(a))&&a.y===poiWalkLevel&&
+  Math.hypot(a.x-poiWalkX,a.z-poiWalkZ)<=(a.role.role==='kingdom-citizen'?8.4:6.5)&&poiTownNpcStepT(a,now)===1&&
   !facilityDoorTiles.has(facilityCellKey(a.x,a.z,a.y))&&facilityFloorOwner(a.x,a.z,a.y)===null;
 }
 function poiTownStreetClear(a,b){
@@ -29313,27 +29353,34 @@ function poiTownStreetPoint(a,vp){
  return pt&&pt.x>=10&&pt.y>=12&&pt.x<=canvas.clientWidth-10&&pt.y<=canvas.clientHeight-4?pt:null;
 }
 function poiTownStreetTry(now,vp){
- if(poiTownAmbient||now<poiTownStreetNext||!poiTownNpcActive())return;
+ const val=poiKingdomContains(facilitySite,poiWalkX,poiWalkZ,poiWalkLevel);
+ if(poiTownAmbient||now<(val?poiValdiaStreetNext:poiTownStreetNext)||!poiTownNpcActive())return;
  if(poiTownStreetScanAt===null){poiTownStreetScanAt=now+2800;return}
  if(now<poiTownStreetScanAt)return;
- poiTownStreetScanAt=now+750;
+ poiTownStreetScanAt=now+(val?580:750);
  if(poiTownStreetBlocked(now)||facilityFloorOwner(poiWalkX,poiWalkZ,poiWalkLevel,true)!==null)return;
  const local=[],player={x:poiWalkX,z:poiWalkZ};
  // Cap both collection and expensive grid traces, even on editor-expanded maps.
- for(let i=0;i<Math.min(40,poiTownNpcActors.length)&&local.length<8;i++){
-  const a=poiTownNpcActors[i];
+ const actors=val?poiTownNpcActors.filter(poiValdiaStreetEligible):poiTownNpcActors;
+ for(let i=0;i<Math.min(val?56:40,actors.length)&&local.length<8;i++){
+  const a=actors[i];
   if(poiTownStreetEligible(a,now)&&poiTownStreetPoint(a,vp))local.push(a);
  }
  let checks=0;
  for(let i=0;i<local.length;i++)for(let j=i+1;j<local.length;j++){
   const a=local[i],b=local[j],dx=b.x-a.x,dz=b.z-a.z,d=dx*dx+dz*dz;
-  if(d===0||d>8)continue;
+  if(d===0||d>(val?14:8))continue;
   if(++checks>12)return;
+  const pair=val?[a.role.id,b.role.id].sort().join(':'):null;
+  if(val&&pair===poiValdiaLastPair?.key&&now<poiValdiaLastPair.until)continue;
   if(!poiTownStreetClear(a,b)||!poiTownStreetClear(player,a)||!poiTownStreetClear(player,b))continue;
   const facing=Math.abs(dx)>=Math.abs(dz)?(dx>0?1:3):(dz>0?2:0),other=(facing+2)%4;
-  const prior=[a.facing,b.facing],lines=POI_TOWN_STREET_LINES[poiTownStreetLine++%POI_TOWN_STREET_LINES.length];
-  poiTownAmbient={venue:'street',guest:a,host:b,lines,phase:0,start:now,until:now+3100,sightCheck:now+160,prior,faces:[facing,other]};
-  poiTownStreetNext=now+27000;
+  const pool=val?POI_VALDIA_STREET_LINES:POI_TOWN_STREET_LINES;
+  const prior=[a.facing,b.facing],serial=poiTownStreetLine++,lines=pool[serial%pool.length];
+  poiTownAmbient={venue:'street',guest:a,host:b,lines,phase:0,start:now,until:now+(val?4700:3100),sightCheck:now+160,
+   speechTurn:val?2180:1450,prior,faces:[facing,other]};
+  if(val){poiValdiaStreetNext=now+poiValdiaStreetCooldown(serial);poiValdiaLastPair={key:pair,until:now+21000};}
+  else poiTownStreetNext=now+27000;
   poiTownNpcFace(a,facing);poiTownNpcFace(b,other);
   return;
  }
@@ -29398,7 +29445,7 @@ function poiTownDialogueDraw(now,vp){
   poiTownStreetValidate(now,vp);poiTownStreetTry(now,vp);
  }
  const d=poiTownAmbient;if(!d)return;
- d.phase=now-d.start<(d.venue==='street'?1450:1000)?0:1;
+ d.phase=now-d.start<(d.venue==='street'?(d.speechTurn??1450):1000)?0:1;
  const a=d.phase?d.host:d.guest,el=poiTownDialogueElement();
  if(!poiTownNpcActive()||now>=d.until||!poiTownAmbientNear(a)){poiTownAmbientClose();return}
  if(!el)return;
@@ -29699,7 +29746,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v357',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v358',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -29814,7 +29861,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v357';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v358';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -30029,7 +30076,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v357',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v358',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -33840,7 +33887,8 @@ function poiWalkDoorFoley(door,fromLevel,onCue){
  poiWalkDoorOpen=after;
  if(before?.key===after?.key)return false;
  if(before&&before.x===poiWalkFromX&&before.z===poiWalkFromZ&&before.y===fromLevel&&
-    world.some(o=>o.x===before.x&&o.z===before.z&&o.y===before.y&&o.type===before.type)){
+    (before.type==='valdiaHouseDoor'?!!poiValdiaHouseDoorAt(facilitySite,before.x,before.z,before.y):
+     world.some(o=>o.x===before.x&&o.z===before.z&&o.y===before.y&&o.type===before.type))){
   poiSound('door-close',before.material);onCue?.();
  }
  if(after){poiSound('door-open',after.material);onCue?.()}
@@ -33913,7 +33961,7 @@ function poiWalkEnterCell(dx,dz,now,continuous=false,onDoorCue){
  // Only a successful crossing of a closed leaf can open or close it.
  // Use the destination data at the current floor, not ground coordinates.
  const door=stairCell.find(({type})=>poiWalkPassableDoor(type)&&
-  (type==='door'||/Door$/.test(type)));
+  (type==='door'||/Door$/.test(type)))??poiValdiaHouseDoorAt(facilitySite,poiWalkX,poiWalkZ,poiWalkLevel);
  const wet=typeof poiChapelWater==='function'&&poiChapelWater(poiWalkX,poiWalkZ,'shallows');
  poiWalkStepMs=typeof poiChapelStepMs==='function'?poiChapelStepMs(poiWalkX,poiWalkZ,wet):POI_WALK_MS;
  if(!continuous){poiWalkStarted=now;poiWalkNextReady=now+poiWalkStepMs}
@@ -44338,7 +44386,7 @@ function poiEastGroundMode(water,kind,x,z){
  if(!water)return 0;
  if(kind==='river'&&water.has(x+','+z))return 1;
  if(/^(roadCutStoneFull|roadCobbleFull)$/.test(kind)&&
-    x>=178&&x<=246&&z>=64&&z<=116)return 3;
+    x>=178&&x<=246&&z>=44&&z<=126)return 3;
  return poiEastSmoothRoad(kind,x,z)?2:0;
 }
 function poiEastGroundPaint(m,water,floors,mode,x,z,details=true){
@@ -44423,7 +44471,7 @@ function poiKingdomPalaceHeight(x,z){
  return 2.4*Math.max(0,Math.min(1,(85-z)/3))+2.1*Math.max(0,Math.min(1,(77-z)/3));
 }
 function poiKingdomPlan(base){
- const bounds={x1:178,x2:246,z1:64,z2:116},solid=new Set(),floors=new Map(),meshes=[];
+ const bounds={x1:178,x2:246,z1:44,z2:124},solid=new Set(),floors=new Map(),meshes=[];
  const key=(x,z)=>x+','+z;
  const pave=(x1,z1,x2,z2,type)=>{for(let z=z1;z<=z2;z++)for(let x=x1;x<=x2;x++)floors.set(key(x,z),type)};
  const mark=(x1,z1,x2,z2)=>{for(let z=z1;z<=z2;z++)for(let x=x1;x<=x2;x++)solid.add(key(x,z))};
@@ -44438,53 +44486,95 @@ function poiKingdomPlan(base){
  pave(192,66,194,114,'roadGravelFull');pave(214,66,216,114,'roadGravelFull');
  pave(220,71,241,103,'roadCutStoneFull');
  pave(180,66,183,113,'roadGravelFull');
- wall(178,64,246,64,3.25);wall(178,116,246,116,3.25);
- wall(178,65,178,88,3.25);wall(178,92,178,115,3.25);
- wall(246,65,246,115,3.25);
- for(const [x,z] of [[178,64],[178,116],[246,64],[246,116],[211,64],[211,116],[246,90]])tower(x,z,4.7);
+ // The old northern wall becomes an inner ward with a five-tile arch.
+ wall(178,64,197,64,3.25);wall(203,64,246,64,3.25);
+ wall(178,44,246,44,3.25);
+ wall(178,124,228,124,3.25);wall(234,124,246,124,3.25);
+ wall(178,45,178,88,3.25);wall(178,92,178,123,3.25);
+ wall(246,45,246,123,3.25);
+ for(const [x,z] of [[178,44],[178,124],[246,44],[246,124],[211,44],[211,124],[246,90],[178,64],[246,64]])tower(x,z,4.7);
+ box('palace-front-gate',198,64,202,64,4.85);
+ for(const x of [227,235])tower(x,124,6.4,true);
+ box('palace-front-gate',229,124,233,124,5.75);
+ pave(198,63,202,65,'roadCutStoneFull');pave(203,65,205,65,'roadCobbleFull');
+ pave(205,65,205,78,'roadGravelFull');
+ pave(229,103,233,126,'roadCutStoneFull');
+ pave(181,116,241,118,'roadCobbleFull');
+ pave(201,120,229,120,'roadGravelFull');
+ pave(184,117,186,123,'roadGravelFull');
+ pave(217,116,219,123,'roadGravelFull');
+ for(const [x,z,r] of [[194,119,1],[197,122,0],[207,122,1],[213,119,0],[221,122,1],[224,117,0],[239,119,0]]){
+  mark(x,z,x,z);box('valdia-garden-tree',x,z,x,z,r?2.5:3.6,{r});
+ }
+ for(const [x,z] of [[201,119],[209,119],[220,119],[226,120],[237,116]]){
+  box('valdia-street-lamp',x,z,x,z,2.84);
+ }
+ for(const [x,z] of [[207,118],[215,121],[223,119],[238,118]]){
+  box('valdia-garden-seat',x,z,x,z,.72);
+ }
  gate(178,90,4.8);
  // A second gate opens into a proper bailey, in the same continuous world.
- wall(218,70,243,70,5.3);wall(218,105,243,105,4.8);
+ wall(218,70,243,70,5.3);wall(218,105,229,105,4.8);wall(233,105,243,105,4.8);
+ pave(230,104,232,115,'roadRoyalFull');
+ for(const x of [228,234])tower(x,105,7.8,true);
+ box('palace-front-gate',230,105,232,105,6.1);
  wall(218,71,218,88,5.3);wall(218,92,218,104,4.8);wall(243,71,243,104,5.3);
  for(const [x,z] of [[218,70],[218,105],[243,70],[243,105]])tower(x,z,8.8,true);
  gate(218,90,5.4);
  const building=(id,x1,z1,x2,z2,shape,tone=0,enterable=false)=>({id,x1,z1,x2,z2,shape,tone,enterable,
   floorHeight:shape==='keep'?6:shape==='stall'?2:3,...(enterable?{door:{x:Math.floor((x1+x2)/2),z:z2}}:{})});
- // One real shop and one upstairs residence. The pair of counter tiles
- // separates the service sides; the east aisle stays clear around it.
+ // Produce is served through a real working street hatch, not a public room.
  const greengrocer={
-  door:{x:187,z:78,y:0,facing:2},
-  merchant:{x:188,z:75,y:0,facing:0},public:{x:188,z:77,y:0,facing:2},
-  counter:{x1:187,z1:76,x2:188,z2:76}
+  merchant:{x:188,z:77,y:0,facing:2},public:{x:188,z:79,y:0,facing:0},
+  counter:{x1:187,z1:78,x2:189,z2:78}
  };
- const home=(id,x1,z1,x2,z2,tone,roofType,room=null)=>({
-  ...building(id,x1,z1,x2,z2,'valdia-home',tone,!!room),roofType,room,
-  floorHeight:room==='guild'?2.72:room==='inn'?2.48:2.25
+ const home=(id,x1,z1,x2,z2,tone,roofType,floorHeight,room=null,wing=null,finish='wood')=>({
+  ...building(id,x1,z1,x2,z2,'valdia-home',tone,!!room),roofType,room,floorHeight,wing,finish
+ });
+ const wing=(id,x1,x2,out,room)=>({
+  ...building(id,x1,94,x2,103,'palace-wing',0),enterable:true,floorHeight:4.2,room,
+  entry:{x:out>0?x2:x1,z:98,out}
  });
  const buildings=[
-  home('west-gate-lodge',181,83,184,86,1,2),
-  home('west-watch',181,94,184,97,2,0),
-  home('plaza-inn',195,73,202,78,0,1,'inn'),
-  home('clothier',197,102,203,107,2,1,'clothier'),
-  home('forge',185,102,190,108,1,2),
-  {...building('greengrocer',185,73,190,78,'greengrocer',2,true),housingAbove:true},
-  home('bakery',185,67,190,70,1,1,'bakery'),
-  home('north-row',196,67,204,70,3,2),
-  home('hall',206,73,212,79,1,0,'guild'),
-  home('arches-quarter',207,82,212,86,0,0),
-  home('dye-yard',207,95,212,98,3,2),
-  home('carpenter',206,103,212,109,0,1,'carpenter'),
-  home('south-house',197,110,204,113,3,2),
-  home('south-store',185,111,190,114,0,0),
+  home('west-gate-lodge',180,82,184,85,3,4,1.95,null,[180,86,181,86,.69],'stone'),
+  home('west-watch',181,95,183,98,1,0,2.78,null,null,'stone'),
+  home('plaza-inn',195,73,202,78,0,3,2.83,'inn',[203,74,204,76,.70]),
+  home('clothier',197,102,204,107,2,4,2.27,'clothier',[195,103,196,105,.62]),
+  home('forge',184,103,190,108,4,5,1.91,null,[184,102,186,102,.70],'stone'),
+  {...building('greengrocer',185,73,190,78,'greengrocer',2),housingAbove:true},
+  home('bakery',185,67,190,70,4,1,2.13,'bakery',[190,66,191,66,.68],'stone'),
+  home('north-row',197,66,204,70,3,2,2.45,null,[195,67,196,69,.77]),
+  home('hall',206,73,212,79,1,4,2.96,'guild',[211,71,213,72,.72],'stone'),
+  home('arches-quarter',208,82,213,85,0,0,2.57,null,[207,83,207,84,.62]),
+  home('dye-yard',209,96,213,98,5,3,2.04,null,null),
+  home('carpenter',206,103,212,109,2,1,2.34,'carpenter',[213,104,213,106,.66]),
+  home('south-house',198,111,203,114,5,2,2.66,null,null),
+  home('south-store',187,111,191,114,3,5,1.83,null,null,'stone'),
   {...building('upper-yard',221,73,241,86,'keep',0,true),floorHeight:8.5},
-  building('south-wing',227,97,237,102,'house',1)
+  wing('palace-west-wing',221,226,1,'archives'),
+  wing('palace-east-wing',236,241,-1,'council')
  ];
  for(const [x,z,t,stock] of [[189,84,0,'tea'],[194,84,1,'cloth'],[199,84,2,'produce'],
   [189,95,1,'bread'],[194,95,3,'pottery'],[199,95,0,'preserves']])
   buildings.push({...building('stall-'+x+'-'+z,x,z,x+1,z+1,'stall',t),stock,front:z<90?1:-1});
  for(const b of buildings){
   const {x1,z1,x2,z2,door}=b;
-  if(b.enterable){
+  if(b.shape==='palace-wing'){
+   mark(x1,z1,x2,z1);mark(x1,z2,x2,z2);mark(x1,z1,x1,z2);mark(x2,z1,x2,z2);
+   solid.delete(key(b.entry.x,b.entry.z));
+   pave(x1+1,z1+1,x2-1,z2-1,'roadRoyalFull');
+   pave(b.entry.x,b.entry.z,b.entry.x+b.entry.out,b.entry.z,'roadRoyalFull');
+   mark(x1+1,99,x1+1,99);mark(x2-1,99,x2-1,99);
+   mark(x1+1,95,x1+1,96);mark(x2-1,101,x2-1,102);
+   box(b.shape,x1,z1,x2,z2,b.floorHeight*1.4,b);
+   continue;
+  }
+  if(b.id==='greengrocer'){
+   mark(x1,z1,x2,z1);mark(x1,z1,x1,z2);mark(x2,z1,x2,z2);
+   mark(x1,z2,x2,z2);
+   pave(x1+1,z1+1,x2-1,z2-1,'woodfloorLight');
+   pave(greengrocer.counter.x1,z2+1,greengrocer.counter.x2,z2+1,'roadCutStoneFull');
+  }else if(b.enterable){
    mark(x1,z1,x2,z1);mark(x1,z1,x1,z2);mark(x2,z1,x2,z2);
    if(b.shape==='valdia-home'){
     mark(x1,z2,door.x-1,z2);mark(door.x+1,z2,x2,z2);
@@ -44495,13 +44585,16 @@ function poiKingdomPlan(base){
     mark(x1,z2,door.x-2,z2);mark(door.x+2,z2,x2,z2);
     pave(x1+1,z1+1,x2-1,z2,'roadRoyalFull');
    }
-   if(b.id==='greengrocer'){
-    const c=greengrocer.counter;mark(c.x1,c.z1,c.x2,c.z2);
-    pave(x1+1,z1+1,x2-1,z2,'woodfloorLight');
-   }
   }else mark(x1,z1,x2,z2);
+  if(b.wing){const [a,c,d,e]=b.wing;mark(a,c,d,e);}
   box(b.shape,x1,z1,x2,z2,b.floorHeight*(b.shape==='stall'?.82:1.4),b);
  }
+ // The north lane reaches the ovens; the work courts are offset south.
+ pave(187,71,193,71,'roadGravelFull');
+ pave(198,79,198,80,'roadCutStoneFull');
+ pave(209,80,210,80,'roadCutStoneFull');
+ pave(200,108,205,108,'roadGravelFull');
+ pave(209,110,215,110,'roadGravelFull');
  // Side aisles remain at grade. A broad approach climbs to the king's
  // audience terrace, then rises to a second dais without an area change.
  mark(227,74,227,85);mark(235,74,235,85);
@@ -44522,10 +44615,34 @@ function poiKingdomPlan(base){
  box('valdia-piazza-inlay',187,82,204,98,0);
  for(const [x,z] of [[186,87],[186,93],[205,87],[205,93],[213,87],[213,93]])
   box('valdia-street-lamp',x,z,x,z,2.84);
- mark(233,94,234,95);box('fountain',233,94,234,95,1.6);
+ // A clear central axis leads from the south gate to the real keep door.
+ pave(230,87,232,104,'roadRoyalFull');
+ box('palace-court',227,87,235,104,0);
+ for(const x of [228,234]){
+  mark(x,94,x,96);box('palace-reflecting-pool',x,94,x,96,.38);
+  box('valdia-street-lamp',x,91,x,91,2.84);
+ }
+ for(const x of [222,240]){
+  mark(x,88,x,88);mark(x,92,x,92);
+  box('palace-loggia',x,87,x,94,7.25);
+ }
  for(const [x,z] of [[185,87],[185,93],[200,87],[200,93],[210,87],[210,93],[223,87],[223,93],[240,87],[240,93]])
   box('banner',x,z,x,z,3.7);
- return {name:POI_KINGDOM_NAME,bounds,solid,floors,meshes,buildings,gate:base.gate,greengrocer};
+ const hall={x1:192,z1:48,x2:212,z2:55,gate:[200,202]};
+ const yard={x1:187,z1:56,x2:216,z2:62,slots:[]};
+ for(const v of [57,59,61])for(const u of [196,199,203,206])yard.slots.push([u,v]);
+ const {x1:ax,z1:az,x2:bx,z2:bz,gate:[g0,g1]}=hall;
+ // The timber floor, genuine threshold and clear parade blocks are playable in one world.
+ pave(yard.x1,yard.z1,yard.x2,yard.z2,'roadGravelFull');
+ pave(199,56,202,65,'roadCutStoneFull');
+ pave(193,56,210,56,'roadCobbleFull');
+ pave(ax+1,az+1,bx-1,bz-1,'woodfloorLight');pave(g0,bz,g1,bz,'roadRoyalFull');
+ mark(ax,az,bx,az);mark(ax,az,ax,bz);mark(bx,az,bx,bz);mark(ax,bz,g0-1,bz);mark(g1+1,bz,bx,bz);
+ mark(194,51,196,51);mark(208,51,210,51);
+ for(const u of [188,214])for(const v of [57,59,60])mark(u,v,u,v);
+ box('valdia-knight-hall',ax,az,bx,bz,5.4,hall);
+ box('valdia-knight-yard',yard.x1,yard.z1,yard.x2,yard.z2,3.4);
+ return {name:POI_KINGDOM_NAME,bounds,solid,floors,meshes,buildings,gate:base.gate,greengrocer,knightQuarter:{hall,yard}};
 }
 let poiKingdomCache=null,poiKingdomGPU=null;
 function poiKingdomData(site){
@@ -44542,13 +44659,13 @@ function poiKingdomNoWild(site,x,z,pad=0){
 }
 // An old save underneath one of the new palace walls must not reset to Rievel.
 function poiKingdomRecoverPalacePosition(p){
- if(!p||p.y!==0||p.x<217||p.x>244||p.z<69||p.z>86)return p;
+ if(!p||p.y!==0||p.x<217||p.x>244||p.z<69||p.z>106)return p;
  const k=poiKingdomData(facilitySite);
  if(!k?.solid.has(p.x+','+p.z))return p;
  for(let d=1;d<=8;d++)for(let dz=d;dz>=-d;dz--){
   const z=p.z+dz,dx=d-Math.abs(dz);
   for(const x of dx?[p.x-dx,p.x+dx]:[p.x]){
-   if(x>=217&&x<=245&&z>=68&&z<=90&&validPos(x,z)&&
+   if(x>=217&&x<=245&&z>=68&&z<=112&&validPos(x,z)&&
       !k.solid.has(x+','+z)&&!poiEastNatureBlocked(facilitySite,x,z))
     return {...p,x,z};
   }
@@ -44556,7 +44673,7 @@ function poiKingdomRecoverPalacePosition(p){
  return p;
 }
 function poiKingdomClear(){
- poiValdiaHomesClear();
+ poiValdiaKnightHallClear();poiValdiaHomesClear();poiValdiaDoorsClear();
  if(!poiKingdomGPU)return;
  gl.deleteBuffer(poiKingdomGPU.buf);poiKingdomGPU=null;
 }
@@ -44565,9 +44682,10 @@ function poiValdiaHomeGeometry(d,cut){
  const m=mesh(),{x1,z1,x2,z2,h,tone=0,door,room,roofType=0}=d;
  const w=x2-x1+1,l=z2-z1+1,x=(x1+x2+1)/2,z=(z1+z2+1)/2,F=z2+1,B=z1,L=x1,R=x2+1;
  const wood=[.35,.245,.169],frame=[.44,.319,.218],sand=[.77,.70,.57],sill=[.65,.62,.53],glass=[.30,.40,.44];
- const plaster=[[.83,.74,.60],[.73,.68,.55],[.83,.77,.63],[.70,.73,.64]][tone];
- const stone=[[.64,.59,.50],[.57,.55,.49],[.67,.62,.50],[.59,.62,.55]][tone];
- const roof=[[.46,.27,.20],[.26,.37,.42],[.45,.32,.26],[.31,.40,.32]][tone];
+ const plaster0=[[.83,.74,.60],[.73,.68,.55],[.83,.77,.63],[.70,.73,.64],[.73,.67,.62],[.82,.68,.61]][tone];
+ const stone=[[.64,.59,.50],[.57,.55,.49],[.67,.62,.50],[.59,.62,.55],[.61,.55,.51],[.66,.61,.53]][tone];
+ const roof=[[.46,.27,.20],[.26,.37,.42],[.45,.32,.26],[.31,.40,.32],[.40,.23,.17],[.39,.29,.36]][tone];
+ const plaster=d.finish==='stone'?stone.map(v=>v*1.13):plaster0;
  const tint=(c,v)=>c.map(a=>a*v);
  const c=(a,y,b,w,h,l,t)=>{if(w>.001&&h>.001&&l>.001)cube(m,a,y,b,w,h,l,t)};
  const strip=(x0,z0,x3,z3,hh,col)=>c((x0+x3)/2,0,(z0+z3)/2,x3-x0,hh,z3-z0,col);
@@ -44582,7 +44700,7 @@ function poiValdiaHomeGeometry(d,cut){
  if(d.enterable)rim();else c(x,0,z,w,h,l,plaster);
  if(!cut){
   const f=F+.012,b=B-.012;
-  for(let j=0;j<3;j++)for(let k=L-((j%2)*.49);k<R;k+=.98){
+  for(let j=0;j<(d.finish==='stone'?Math.ceil(h*.64):3);j++)for(let k=L-((j%2)*.49);k<R;k+=.98){
    const u=Math.max(k,L+.018),v=Math.min(k+.94,R-.012);
    for(const [a,b] of seg){
     const q=Math.max(u,a),t=Math.min(v,b);
@@ -44628,28 +44746,64 @@ function poiValdiaHomeGeometry(d,cut){
    c(e+.62,2.30,F+.51,.105,.44,.39,wood);
    c(e+.62,2.377,F+.51,.122,.278,.267,badge);
   }
-  const E=h,pk=h+(roofType===1?1.76:roofType===2?1.30:1.50);
-  const xa=L-.27,xb=R+.27,za=B-.30,zb=F+.30;
-  if(roofType===1){
-   tri(m,[xa,E,za],[xa,E,zb],[xa,pk,z],plaster);tri(m,[xb,E,zb],[xb,E,za],[xb,pk,z],plaster);
+  // Common stock timber sections, but hillside saltboxes, civic hips,
+  // narrow gables and broad eaves give each block its own silhouette.
+  const E=h,xa=L-.27,xb=R+.27,za=B-.30,zb=F+.30;
+  const rise=[1.53,1.83,1.28,2.06,1.63,1.14][roofType]||1.53,pk=h+rise;
+  if(roofType===4||roofType===5){
+   const a=[xa,E,za],b=[xb,E,za],u=[xb,E,zb],v=[xa,E,zb];
+   const along=w>=l,jog=Math.max(.42,Math.min(w,l)*(roofType===4?.30:.43)),
+    A=along?[xa+jog,pk,z]:[x,pk,za+jog],Bv=along?[xb-jog,pk,z]:[x,pk,zb-jog];
+   if(along){
+    quad(m,a,A,Bv,b,tint(roof,.87));quad(m,u,Bv,A,v,roof);
+    tri(m,a,v,A,tint(roof,.94));tri(m,b,Bv,u,tint(roof,1.12));
+    c(x,pk-.055,z,Bv[0]-A[0]+.16,.105,.11,wood);
+   }else{
+    quad(m,a,v,Bv,A,tint(roof,.94));quad(m,u,b,A,Bv,roof);
+    tri(m,a,A,b,tint(roof,.87));tri(m,u,Bv,v,tint(roof,1.12));
+    c(x,pk-.055,z,.11,.105,Bv[2]-A[2]+.16,wood);
+   }
+   if(roofType===4){
+    const F=zb-.18;
+    for(const u of [x-1.24,x+1.24]){
+     c(u,h-.17,F,.81,.63,.23,plaster);c(u,h-.03,F+.136,.51,.32,.042,glass);
+     c(u,h-.20,F+.153,.89,.074,.17,sill);
+     tri(m,[u-.47,h+.46,F+.18],[u+.47,h+.46,F+.18],[u,h+.82,F+.18],tint(roof,.8));
+    }
+   }
+  }else if(roofType===1||roofType===3){
+   const zz=roofType===3?z-l*.21:z;
+   tri(m,[xa,E,za],[xa,E,zb],[xa,pk,zz],plaster);tri(m,[xb,E,zb],[xb,E,za],[xb,pk,zz],plaster);
    for(let j=0;j<4;j++){
-    const a=j/4,b=(j+1)/4,v1=za+(z-za)*a,v2=za+(z-za)*b,u1=zb+(z-zb)*a,u2=zb+(z-zb)*b,y1=E+(pk-E)*a,y2=E+(pk-E)*b;
+    const a=j/4,b=(j+1)/4,v1=za+(zz-za)*a,v2=za+(zz-za)*b,u1=zb+(zz-zb)*a,u2=zb+(zz-zb)*b,y1=E+(pk-E)*a,y2=E+(pk-E)*b;
     quad(m,[xa,y1,v1],[xa,y2,v2],[xb,y2,v2],[xb,y1,v1],tint(roof,.94+j*.038));
     quad(m,[xb,y1,u1],[xb,y2,u2],[xa,y2,u2],[xa,y1,u1],tint(roof,1.01+j*.038));
    }
-   c(x,pk-.04,z,w+.63,.113,.135,wood);
+   c(x,pk-.04,zz,w+.63,.113,.135,wood);
   }else{
-   tri(m,[xb,E,zb],[x,pk,zb],[xa,E,zb],plaster);tri(m,[xa,E,za],[x,pk,za],[xb,E,za],plaster);
+   const xx=roofType===2?x+w*.08:x;
+   tri(m,[xb,E,zb],[xx,pk,zb],[xa,E,zb],plaster);tri(m,[xa,E,za],[xx,pk,za],[xb,E,za],plaster);
    for(let j=0;j<4;j++){
-    const a=j/4,b=(j+1)/4,u1=xa+(x-xa)*a,u2=xa+(x-xa)*b,v1=xb+(x-xb)*a,v2=xb+(x-xb)*b,y1=E+(pk-E)*a,y2=E+(pk-E)*b;
+    const a=j/4,b=(j+1)/4,u1=xa+(xx-xa)*a,u2=xa+(xx-xa)*b,v1=xb+(xx-xb)*a,v2=xb+(xx-xb)*b,y1=E+(pk-E)*a,y2=E+(pk-E)*b;
     quad(m,[u1,y1,za],[u2,y2,za],[u2,y2,zb],[u1,y1,zb],tint(roof,.94+j*.036));
     quad(m,[v1,y1,zb],[v2,y2,zb],[v2,y2,za],[v1,y1,za],tint(roof,1.01+j*.037));
    }
-   c(x,pk-.043,z,.13,.115,l+.67,wood);
+   c(xx,pk-.043,z,.13,.115,l+.67,wood);
+  }
+  if(d.wing){
+   const [ax,az,bx,bz,scale]=d.wing,wx=(ax+bx+1)/2,wz=(az+bz+1)/2,ww=bx-ax+1,wl=bz-az+1,H=h*scale;
+   c(wx,0,wz,ww,H,wl,tint(stone,1.12));c(wx,.015,wz,ww+.11,.42,wl+.09,stone);
+   c(wx,H-.16,wz,ww+.15,.154,wl+.15,wood);
+   const u=ax-.19,v=bx+1.19,q=az-.18,r=bz+1.19,P=[wx,H+.93,wz],p=[u,H,q],s=[v,H,q],t=[v,H,r],b=[u,H,r];
+   // Dormered attached side bays read as one building; they have no door or interior.
+   for(const [a,v,i] of [[p,s,.87],[s,t,1.03],[t,b,1.06],[b,p,.92]])tri(m,v,a,P,tint(roof,i));
+   if(ww>=2){
+    c(wx,1.06,bz+1.04,.55,.47,.083,wood);c(wx,1.134,bz+1.09,.38,.31,.044,glass);
+   }
   }
   for(const side of [L-.18,R+.18])c(side,h-.084,z,.14,.126,l+.6,wood);
   for(const side of [B-.22,F+.22])c(x,h-.081,side,w+.6,.127,.14,wood);
-  if(room==='inn'||room==='bakery'||tone%2===1){
+  if(room==='inn'||room==='bakery'||(roofType!==4&&roofType!==5&&tone%2===1)){
    const u=L+1.05,v=B+1; c(u,h+.39,v,.58,1.64,.65,stone);c(u,h+1.88,v,.72,.19,.79,sill);
    c(u,h+2.07,v,.46,.025,.51,[.27,.25,.22]);
   }
@@ -44712,6 +44866,69 @@ function poiValdiaHomeGeometry(d,cut){
  }
  return m;
 }
+function poiValdiaHouseDoorAt(site,x,z,y){
+ if(y!==0||facilitySurfaceEdited||x<178||x>216||z<64||z>116)return null;
+ const q=poiKingdomData(site);
+ const b=q?.buildings.find(b=>b.shape==='valdia-home'&&b.enterable&&b.door?.x===x&&b.door.z===z);
+ return b?{x,z,y,type:'valdiaHouseDoor'}:null;
+}
+function poiValdiaDoorMotion(state,opens,now){
+ const elapsed=Math.max(0,now-state.last);state.last=now;
+ state.value=Math.max(0,Math.min(1,state.value+(opens?1:-1)*elapsed/(opens?250:315)));
+ return state.value;
+}
+function poiValdiaDoorGeometry(b,amount){
+ const m=mesh(),w=.906,h=2.13,hinge=b.door.x+.051,z=b.door.z+.925;
+ const plank=[[.44,.296,.185],[.48,.322,.196],[.51,.35,.224],[.455,.302,.183],[.493,.325,.191]];
+ const beam=[.306,.203,.135],iron=[.224,.239,.229],brass=[.60,.466,.248];
+ const cc=(u,y,z,w,h,d,col)=>cube(m,u,y,z,w,h,d,col);
+ for(let i=0;i<5;i++)cc(w/5*(i+.5),.027,0,w/5-.004,h-.026,.092,plank[i]);
+ for(const y of [.13,1.73]){
+  cc(w*.5,y,.045,w,.157,.037,beam);cc(w*.5,y,-.049,w,.15,.038,beam);
+  cc(.129,y+.035,.074,.228,.085,.019,iron);
+  cc(.047,y+.022,.081,.085,.11,.021,iron);
+  cc(.231,y+.056,.084,.022,.022,.018,brass);
+ }
+ cc(w-.106,.914,.064,.114,.194,.035,iron);
+ cc(w-.107,.985,.101,.080,.067,.064,brass);
+ cc(w-.107,.962,-.084,.078,.078,.052,brass);
+ const t=amount*amount*(3-2*amount)*1.54,C=Math.cos(t),S=Math.sin(t);
+ for(let i=0;i<m.p.length;i+=3){
+  const x=m.p[i],v=m.p[i+2],nx=m.n[i],nz=m.n[i+2];
+  m.p[i]=hinge+x*C+v*S;m.p[i+2]=z-x*S+v*C;
+  m.n[i]=nx*C+nz*S;m.n[i+2]=-nx*S+nz*C;
+ }
+ return m;
+}
+const poiValdiaDoorGpu=new Map(),poiValdiaDoorStates=new Map();
+function poiValdiaDoorsClear(){
+ for(const gpu of poiValdiaDoorGpu.values())gl.deleteBuffer(gpu.buf);
+ poiValdiaDoorGpu.clear();poiValdiaDoorStates.clear();
+}
+function poiValdiaDoorsDraw(k,vp,g){
+ const now=performance.now();
+ for(const b of k.buildings){
+  const door=b.door;
+  if(!door||!b.enterable||b.shape!=='valdia-home')continue;
+  const {x,z}=door;
+  if(Math.hypot(x-g[0],z-g[1])>49)continue;
+  const opens=poiWalkActive&&poiWalkLevel===0&&((poiWalkX===x&&poiWalkZ===z)||
+   Math.abs(poiWalkViewX-x)<.42&&Math.abs(poiWalkViewZ-z)<.65);
+  let state=poiValdiaDoorStates.get(b.id);
+  if(!state){state={last:now,value:opens?1:0};poiValdiaDoorStates.set(b.id,state)}
+  const index=Math.round(poiValdiaDoorMotion(state,opens,now)*12);
+  if(!poiOverlandBoxVisible(vp,[x-.06,0,z-.10,x+1.07,2.2,z+1.10]))continue;
+  // The near wall is intentionally cut away when viewing an interior.
+  // Retain an open leaf but don't leave a closed door floating by itself.
+  const room=poiValdiaHomeAt(k,poiWalkViewX+.5,poiWalkViewZ+.5);
+  const bearing=poiThirdPerson?poiCameraYaw:yaw+Math.PI;
+  if(index===0&&room===b&&Math.cos(bearing)<0)continue;
+  const key=b.id+':'+index;
+  let gpu=poiValdiaDoorGpu.get(key);
+  if(!gpu){gpu=upload(poiValdiaDoorGeometry(b,index/12));poiValdiaDoorGpu.set(key,gpu)}
+  draw(gpu,vp);
+ }
+}
 function poiValdiaHomeAt(k,px,pz){
  return k.buildings.find(b=>b.shape==='valdia-home'&&b.enterable&&px>b.x1+.67&&px<b.x2+.33&&pz>b.z1+.63&&pz<b.z2+.84)||null;
 }
@@ -44722,14 +44939,37 @@ function poiValdiaHomesClear(){
 }
 function poiValdiaHomesDraw(k,vp,g){
  const room=poiWalkActive?poiValdiaHomeAt(k,poiWalkViewX+.5,poiWalkViewZ+.5):null;
- for(const b of k.buildings)if(b.shape==='valdia-home'&&g[0]+49>=b.x1&&g[0]-49<=b.x2&&g[1]+49>=b.z1&&g[1]-49<=b.z2&&
-   poiOverlandBoxVisible(vp,[b.x1-.32,0,b.z1-.34,b.x2+1.32,b.floorHeight*1.4+2.1,b.z2+1.34])){
+ for(const b of k.buildings)if(b.shape==='valdia-home'){
+   const [ax,az,bx,bz]=b.wing||[b.x1,b.z1,b.x2,b.z2];
+   const left=Math.min(ax,b.x1),right=Math.max(bx,b.x2),back=Math.min(az,b.z1),front=Math.max(bz,b.z2);
+   if(g[0]+49<left||g[0]-49>right||g[1]+49<back||g[1]-49>front||
+      !poiOverlandBoxVisible(vp,[left-.32,0,back-.34,right+1.32,b.floorHeight*1.4+2.1,front+1.34]))continue;
    const bearing=poiThirdPerson?poiCameraYaw:yaw+Math.PI;
    const cut=b===room?1+(Math.sin(bearing)<0?1:0)+(Math.cos(bearing)>=0?2:0):0,key=b.id+':'+cut;
    let v=poiValdiaHomeGpu.get(key);
    if(!v)poiValdiaHomeGpu.set(key,v=upload(poiValdiaHomeGeometry({...b,h:b.floorHeight*1.4},cut)));
    draw(v,vp);
  }
+}
+
+// Shared stone, slate and timber blocks, with a separate hall roof/cutaway mesh.
+function poiValdiaKnightHallContains(b,x,z){return !!b&&x>b.x1+.6&&x<b.x2+.40&&z>b.z1+.6&&z<b.z2+.83}
+let poiValdiaKnightHallGpu=new Map();
+function poiValdiaKnightHallClear(){
+ for(const v of poiValdiaKnightHallGpu.values())gl.deleteBuffer(v.buf);
+ poiValdiaKnightHallGpu.clear();
+}
+function poiValdiaKnightHallDraw(k,vp,g){
+ const b=k.knightQuarter?.hall;
+ if(!b||g[0]+49<b.x1||g[0]-49>b.x2||g[1]+49<b.z1||g[1]-49>b.z2||
+  !poiOverlandBoxVisible(vp,[b.x1-.3,0,b.z1-.3,b.x2+1.3,9.5,b.z2+1.3]))return;
+ const cut=poiWalkActive&&poiValdiaKnightHallContains(b,poiWalkViewX+.5,poiWalkViewZ+.5);
+ let gpu=poiValdiaKnightHallGpu.get(cut);
+ if(!gpu){
+  gpu=upload(poiKingdomGeometry({meshes:[{...b,style:'valdia-knight-hall',h:5.4,renderHall:true,cut}]}));
+  poiValdiaKnightHallGpu.set(cut,gpu);
+ }
+ draw(gpu,vp);
 }
 
 function poiKingdomGeometry(q){
@@ -44764,6 +45004,96 @@ function poiKingdomGeometry(q){
    const u=x1+.5;
    c(u,h-1.5,z,1.28,1.5,3.18,cream);c(u,h-.25,z,1.62,.23,3.24,cap);
    for(const s of [-1,1])for(let i=0;i<4;i++)c(u,h-2.75+i*.31,z+s*(1.36-i*.22),1.18,.34,.38,wall);
+  }else if(style==='palace-front-gate'){
+   const lime=[.71,.67,.58],trim=[.81,.74,.61],dark=[.43,.43,.42],blue=[.26,.34,.48],metal=[.77,.61,.31];
+   const zh=z2+.64,top=4.0;
+   c(x,top,zh,w+.65,h-top,1.29,lime);c(x,h-.24,zh,w+.89,.23,1.47,trim);
+   for(const s of [-1,1])c(x+s*1.78,0,zh,.32,top,.95,dark);
+   for(let j=0;j<11;j++){
+    const a=j*Math.PI/11,b=(j+1)*Math.PI/11,P=(t,k)=>[x+Math.cos(t)*k,top+Math.sin(t)*k,zh+.65];
+    quad(m,P(a,1.53),P(b,1.53),P(b,1.76),P(a,1.76),j%2?lime:trim);
+   }
+   c(x,5.03,zh+.71,.76,.62,.13,blue);
+   tri(m,[x-.37,5.04,zh+.795],[x+.37,5.04,zh+.795],[x,4.73,zh+.795],blue);
+   c(x,5.16,zh+.80,.28,.09,.024,metal);
+  }else if(style==='palace-court'){
+   const line=[.53,.50,.44],pale=[.67,.63,.52],blue=[.45,.48,.50];
+   for(const side of [-1,1]){
+    const u=x+side*2.64;
+    c(u,.044,z,.09,.012,l-.45,line);
+    c(u+side*.16,.043,z,.065,.014,l-.45,pale);
+   }
+   for(const v of [z1+.38,z2+.61])c(x,.043,v,w-.2,.014,.115,line);
+   // Flush diamond inlay: decoration, not a navigation obstacle.
+   const q=z1+5.37;
+   for(const [r,col,dy] of [[1.17,line,.049],[.94,pale,.052],[.72,blue,.055],[.41,pale,.058]])
+    quad(m,[x-r,dy,q],[x,dy,q-r],[x+r,dy,q],[x,dy,q+r],col);
+  }else if(style==='palace-reflecting-pool'){
+   const stone=[.64,.61,.53],deep=[.38,.48,.51],water=[.28,.48,.55];
+   c(x,.018,z,.84,.21,l-.12,stone);c(x,.23,z,.63,.018,l-.35,water);
+   for(const s of [-1,1]){
+    c(x+s*.37,.22,z,.105,.17,l-.12,stone);
+    c(x,.22,z+s*(l-.23)/2,.83,.17,.105,stone);
+   }
+   for(let j=0;j<4;j++)c(x+(j%2?-.13:.13),.249,z-.83+j*.52,.20,.004,.025,deep);
+  }else if(style==='palace-loggia'){
+   const pale=[.71,.66,.57],dark=[.48,.45,.41],blue=[.24,.31,.42],trim=[.75,.69,.56];
+   // Stone links carry the visual mass of the main keep toward the new wings.
+   for(const v of [z1+1.5,z1+5.5]){
+    c(x,0,v,.77,.31,.78,dark);
+    c(x,.28,v,.64,h-1.13,.64,pale);
+    c(x,h-.87,v,.82,.24,.83,trim);
+   }
+   c(x,h-.66,z,1.04,.52,l,pale);c(x,h-.15,z,1.34,.21,l+.25,trim);
+   for(let j=0;j<4;j++)c(x,h+.06,z1+.73+j*1.93,1.05,.48,.57,blue);
+  }else if(style==='palace-wing'){
+   const pale=[.70,.67,.59],dark=[.44,.43,.40],trim=[.76,.70,.58],blue=[.24,.31,.42],
+    pane=[.29,.42,.55],gold=[.76,.61,.32],wood=[.41,.30,.22],leaf=[.27,.41,.29];
+   const sign=d.entry.out,fx=sign>0?x2+1:x1,rx=sign>0?x1:x2+1,door=d.entry.z,
+    mainZ=door+.50,wallThickness=.47;
+   c(x,0,z1+.235,w,h,wallThickness,pale);c(x,0,z2+.765,w,h,wallThickness,pale);
+   c(rx+sign*.235,0,z,wallThickness,h,l,pale);
+   c(fx-sign*.235,0,(z1+door)/2,wallThickness,h,door-z1,pale);
+   c(fx-sign*.235,0,(door+z2+2)/2,wallThickness,h,z2-door,pale);
+   c(fx-sign*.235,3.05,mainZ,wallThickness,h-3.05,1,pale);
+   c(fx+sign*.015,.0,mainZ-.49,.29,2.79,.12,trim);c(fx+sign*.015,.0,mainZ+.49,.29,2.79,.12,trim);
+   c(fx+sign*.017,2.79,mainZ,.31,.24,1.18,trim);
+   for(const y of [.28,3.37,h-.20]){
+    c(fx+sign*.025,y,z,.12,.10,l,trim);c(rx-sign*.008,y,z,.12,.10,l,trim);
+   }
+   const vx=fx+sign*.08;
+   for(const v of [z1+2,z2-1.4]){
+    c(vx,1.52,v,.115,1.21,.87,dark);c(vx+sign*.063,1.64,v,.025,.94,.61,pane);
+    c(vx+sign*.078,1.60,v,.023,1.04,.078,trim);
+    c(vx+sign*.079,2.04,v,.019,.065,.70,trim);
+    c(vx,1.42,v,.25,.13,1.01,trim);
+   }
+   // Internal partition has a real central gap and room-specific furniture.
+   c(x1+.99,0,99.5,2.00,2.94,.38,pale);c(x2+.01,0,99.5,2.00,2.94,.38,pale);
+   c(x,2.72,99.5,w-1.04,.28,.42,trim);
+   const rug=d.room==='archives'?[.39,.44,.52]:[.56,.33,.28];
+   c(x,.034,z1+2.60,2.27,.012,2.77,rug);c(x,.034,z2-1.98,2.27,.012,2.65,rug);
+   if(d.room==='archives'){
+    for(const pos of [z1+1.58,z1+2.5]){
+     c(x1+1.45,.0,pos,.75,1.63,.79,wood);
+     for(let j=0;j<4;j++){
+      c(x1+1.45,.11+j*.36,pos,.81,.061,.90,trim);
+      for(let k=0;k<4;k++)c(x1+1.20+k*.15,.175+j*.36,pos,.126,.24,.45,k%2?leaf:blue);
+     }
+    }
+   }else{
+    c(x1+1.47,.0,z1+2.27,.69,.79,1.57,wood);c(x1+1.47,.77,z1+2.27,.88,.14,1.82,trim);
+    c(x1+1.39,.915,z1+2.27,.33,.045,.38,[.80,.74,.58]);
+   }
+   c(x2-.51,0,z2-1.04,.82,.49,1.67,wood);
+   c(x2-.51,.49,z2-1.04,.86,.091,1.73,gold);
+   const lft=x1-.19,rgt=x2+1.19,back=z1-.20,front=z2+1.20,peak=h+2.37;
+   c(x,h-.16,z,w+.35,.19,l+.40,trim);
+   quad(m,[lft,h,back],[x,peak,back],[x,peak,front],[lft,h,front],blue);
+   quad(m,[x,peak,back],[rgt,h,back],[rgt,h,front],[x,peak,front],blue.map(v=>v*.87));
+   tri(m,[rgt,h,front],[x,peak,front],[lft,h,front],pale);
+   tri(m,[lft,h,back],[x,peak,back],[rgt,h,back],pale);
+   c(x,peak-.04,z,.15,.11,l+.42,trim);
   }else if(style==='keep'){
    const limestone=[.72,.68,.60],shadow=[.50,.48,.44],seam=[.63,.59,.53],lapis=[.22,.30,.42],
     lapisDark=[.18,.24,.34],gold=[.78,.62,.30],ink=[.23,.23,.22],linen=[.67,.61,.48];
@@ -44836,6 +45166,82 @@ function poiKingdomGeometry(q){
    tri(m,[left,h,back],[right,h,back],[x,ridge,rb],lapisDark);
    tri(m,[right,h,front],[left,h,front],[x,ridge,rf],lapis);
    c(x,ridge-.05,(rb+rf)/2,.18,.13,rf-rb,gold);c(x,h-.17,z,w+.54,.19,l+.54,cap);
+  }else if(style==='valdia-knight-hall'){
+   if(!d.renderHall)continue;
+   const stone=[.66,.64,.57],light=[.75,.72,.63],base=[.53,.51,.46],slate=[.25,.33,.38],
+    slate2=[.32,.39,.42],navy=[.21,.29,.46],gilt=[.73,.58,.33],timber=[.37,.26,.19],glass=[.37,.47,.49];
+   const F=z2+1,B=z1,L=x1,R=x2+1,cut=d.cut??false,H=cut?.34:h,back=cut?2.55:h;
+   const slab=(a,b,u,v,Y,col)=>c((a+u)*.5,0,(b+v)*.5,u-a,Y,v-b,col);
+   const [g0,g1]=d.gate;
+   slab(L,B,R,B+.63,back,stone);slab(L,B+.62,L+.68,F,H,stone);slab(R-.68,B+.62,R,F,H,stone);
+   for(const [a,b] of [[L,g0+.045],[g1+.955,R]])slab(a,F-.68,b,F,H,stone);
+   for(const s of [-1,1]){
+    const x=201.5+s*1.52;c(x,0,F-.275,.44,cut?.34:3.39,.58,base);
+    if(!cut)c(x,3.13,F-.26,.52,.18,.66,light);
+   }
+   // Furniture sits over actual solid cells (side equipment tables and end benches).
+   for(const u of [194.5,195.5,196.5,208.5,209.5,210.5]){
+    c(u,0,51.5,.83,.82,.78,timber);c(u,.81,51.5,.98,.10,.85,[.52,.40,.27]);
+    c(u,.92,51.51,.61,.094,.42,u%2<1?[.43,.43,.40]:[.31,.39,.50]);
+   }
+   c(201.5,.025,52.7,2.8,.013,4.35,navy);
+   for(const s of [-1,1]){
+    c(201.5+s*1.31,.04,52.7,.035,.007,4.35,gilt);
+    c(201.5+s*3.02,1.22,B+.655,.95,1.20,.082,navy);
+    c(201.5+s*3.02,2.39,B+.704,1.04,.085,.091,gilt);
+    c(201.5+s*3.02,1.60,B+.706,.11,.54,.067,gilt);
+   }
+   if(!cut){
+    c(201.5,3.36,F-.32,3.12,h-3.36,.70,stone);c(201.5,3.32,F+.03,3.33,.20,.24,light);
+    c(x,h-.18,z,w+.39,.16,l+.39,light);
+    for(const s of [-1,1]){
+     const u=201.5+s*6.45;
+     // Two carved buttresses and lintelled, mullioned blue front windows.
+     c(u-s*3.0,0,F-.06,.61,4.60,.88,base);c(u-s*3.0,4.47,F-.06,.78,.24,.94,light);
+     for(const j of [-1,1]){
+      const wx=u+j*1.15;
+      c(wx,1.50,F+.019,1.09,1.75,.10,base);c(wx,1.62,F+.073,.85,1.47,.027,glass);
+      c(wx,1.67,F+.094,.073,1.38,.047,light);c(wx,2.15,F+.094,.83,.057,.047,light);
+      c(wx,1.45,F+.102,1.25,.086,.31,light);
+     }
+     const p=201.5+s*1.53; c(p,3.27,F+.29,.83,1.95,.075,navy);
+     c(p,5.15,F+.33,1.11,.12,.10,gilt);c(p,3.84,F+.35,.11,.76,.035,gilt);
+    }
+    const e=h,peak=h+2.18;
+    for(const [a,b,r,lift] of [[L-.26,198.60,peak,0],[204.40,R+.26,peak,0],[198.43,204.57,peak+.85,.89]]){
+     const H=e+lift,A=[a,H,B-.28],D=[b,H,B-.28],C=[b,H,F+.32],W=[a,H,F+.32];
+     const p=[a,r,z],q=[b,r,z];
+     quad(m,A,p,q,D,slate);quad(m,C,q,p,W,slate2);
+     tri(m,A,W,p,stone);tri(m,D,q,C,stone);
+     c((a+b)*.5,r-.045,z,b-a+.13,.12,.14,base);
+    }
+    c(201.5,5.29,F-.20,1.40,1.06,.22,navy);
+    for(const [dx,dy,w,h] of [[0,.13,.12,.71],[-.27,.26,.09,.52],[.27,.26,.09,.52],[0,.13,.75,.11]])c(201.5+dx,5.35+dy,F-.052,w,h,.08,gilt);
+   }
+  }else if(style==='valdia-knight-yard'){
+   const stone=[.66,.63,.55],trim=[.47,.46,.41],flag=[.24,.31,.50],gilt=[.73,.57,.30];
+   // Flush floor lines remain walkable for patrols and formation rows.
+   const band=(a,b,u,v,col)=>quad(m,[a,.031,b],[a,.031,v],[u,.031,v],[u,.031,b],col);
+   for(const side of [x1+.75,x2+.24])band(side-.12,z1+.30,side+.12,z2+.84,trim);
+   for(const side of [z1+.33,z2+.62])band(x1+.75,side-.07,x2+.24,side+.07,trim);
+   for(const dz of [57.27,59.27,61.27])band(193.6,dz,208.5,dz+.055,stone);
+   for(const sx of [191.25,212.75]){
+    for(const sz of [56.80,60.85]){
+     c(sx,.03,sz,.54,.24,.54,stone);c(sx,.21,sz,.13,3.14,.13,trim);
+     c(sx,3.22,sz,.76,.103,.095,gilt);c(sx,.95,sz-.063,.68,2.11,.043,flag);
+     c(sx,1.60,sz-.093,.076,.84,.035,gilt);
+    }
+    for(const s of [57.65,60.05])c(sx,.024,s,.34,.085,.95,stone);
+   }
+   for(const sx of [188.48,214.52])for(const sz of [57.65,59.25,60.85]){
+    c(sx,.03,sz,.84,.24,.52,stone);c(sx,.24,sz,.76,.10,.46,trim);
+    c(sx,.32,sz,.69,.05,.42,[.40,.31,.22]);
+    for(let j=-1;j<=1;j++){
+     c(sx+j*.174,.35,sz,.156,.14+(j+j*j)*.06,.29,[.41,.52,.34]);
+     const px=sx+j*.17, y=.56+(j*j)*.07;
+     tri(m,[px-.13,.40,sz-.12],[px+.13,.40,sz-.12],[px,y,sz+.045],[.55,.59,.39]);
+    }
+   }
   }else if(style==='palace-rise'){
    const light=[.72,.66,.54],dark=[.49,.44,.36],red=[.52,.28,.24],gold=[.72,.53,.29];
    const top=(u,v,dy=0)=>[u,poiKingdomPalaceHeight(231,v-.5)+.032+dy,v];
@@ -44914,6 +45320,19 @@ function poiKingdomGeometry(q){
     strip(x1+.15,a-.044,x2+.85,a+.044,.021,border);
     for(let u=x1+1.2;u<x2;u+=2)strip(u-.044,a-.11,u+.044,a+.11,.024,stone);
    }
+  }else if(style==='valdia-garden-tree'){
+   const bark=[.35,.245,.178],stone=[.55,.53,.47],leaf=[.33,.44,.26];
+   c(x,.0,z,.65,.19,.65,stone);c(x,.19,z,.185,h*.71,.18,bark);
+   const orbit=(i,r,y)=>[x+r*Math.cos(i*Math.PI/3),y,z+r*Math.sin(i*Math.PI/3)];
+   for(let k=0;k<2;k++)for(let i=0;i<6;i++){
+    const r=d.r?.52:.75,p=h*.57+k*.57,t=leaf.map((n,j)=>n+(i%2?-.025:.014)+k*(j===1?.058:.032));
+    const a=orbit(i,r-k*.15,p),b=orbit(i+1,r-k*.15,p);
+    tri(m,a,[x,p+.82,z],b,t);tri(m,b,[x,p-.35,z],a,t.map(v=>v*.86));
+   }
+  }else if(style==='valdia-garden-seat'){
+   const wood=[.45,.317,.214],stone=[.58,.55,.47];
+   for(const s of [-1,1])c(x+s*.36,0,z,.115,.40,.32,stone);
+   c(x,.382,z,.88,.095,.39,wood);c(x,.517,z-.16,.88,.112,.065,wood);
   }else if(style==='valdia-street-lamp'){
    const metal=[.31,.34,.33],copper=[.41,.51,.43],gold=[.94,.70,.32];
    c(x,0,z,.27,.17,.27,metal);c(x,.17,z,.083,2.00,.083,metal);
@@ -44992,49 +45411,62 @@ function poiKingdomGeometry(q){
     for(let j=0;j<3;j++)frame(.42+j*.11,.90,.30,.086,.09,.14,tea?[.42,.48,.29]:[.66,.47,.30]);
    }
   }else if(style==='greengrocer'){
-   const stone=[.63,.58,.47],wood=[.40,.29,.183],shelf=[.55,.37,.22],plaster=[.76,.70,.53],green=[.31,.42,.31];
-   const gate=d.door.x+.5,e=h+2.76,front=z2+1.28,back=z1-.22,left=x1-.24,right=x2+1.24,peak=e+1.68;
-   const wl=gate-1.5-x1,wr=x2+1-gate-1.5;
-   c(x,0,z1+.34,w,h,.68,stone);c(x1+.34,0,z,.68,h,l,stone);c(x2+.66,0,z,.68,h,l,stone);
-   if(wl>0)c(x1+wl/2,0,z2+.65,wl,h,.69,stone);
-   if(wr>0)c(gate+1.5+wr/2,0,z2+.65,wr,h,.69,stone);
-   c(gate,3.10,z2+.64,3,h-3.10,.72,wood);
-   // Upstairs residence supported by a timber ring above the shop entrance.
-   c(x,h,z,w+.20,2.76,l+.20,plaster);c(x,h-.13,z,w+.47,.23,l+.44,wood);
-   c(x,e-.155,z,w+.28,.16,l+.24,wood);
-   for(const u of [x1+.18,x1+1.91,x1+4.06,x2+.82])
-    c(u,h,z2+1.13,.125,2.73,.093,wood);
-   for(const u of [x1+1.04,x1+3.01,x1+4.92]){
-    c(u,h+.98,z2+1.13,.67,1.02,.107,wood);c(u,h+1.11,z2+1.20,.44,.76,.025,[.30,.41,.47]);
-    c(u,h+1.42,z2+1.224,.45,.071,.028,wood);c(u,h+1.06,z2+1.21,.80,.077,.17,cap);
+   const stone=[.64,.59,.50],plaster=[.76,.69,.53],wood=[.35,.26,.18],oak=[.56,.39,.235],
+     green=[.35,.47,.34],linen=[.78,.71,.53],glass=[.29,.35,.37];
+   const hatch=q.greengrocer.counter,a=hatch.x1,b=hatch.x2+1,u=(a+b)*.5,front=z2+.81,
+     e=h+2.48,roofFront=z2+1.29,back=z1-.22,left=x1-.24,right=x2+1.24,peak=e+1.72;
+   c(x,0,z1+.315,w,h,.63,stone);c(x1+.275,0,z,.55,h,l,stone);c(x2+.725,0,z,.55,h,l,stone);
+   c((a+x1)*.5,0,front,a-x1,h,.39,plaster);
+   c((b+x2+1)*.5,0,front,x2+1-b,h,.39,plaster);
+   c(u,0,front,b-a,.84,.42,stone);
+   c(u,2.46,front,b-a,h-2.46,.39,plaster);
+   c(u,.84,front+.19,b-a+.20,.14,.82,oak);
+   c(u,.66,front+.542,b-a+.16,.15,.059,wood);
+   for(const xx of [a+.035,b-.035]){
+    c(xx,.96,front+.19,.15,1.55,.14,wood);
+    c(xx,2.38,front+.22,.30,.14,.22,oak);
+    c(xx,.68,front+.47,.15,.27,.23,oak);
    }
-   quad(m,[left,e,back],[x,peak,back],[x,peak,front],[left,e,front],[.26,.22,.18]);
-   quad(m,[x,peak,back],[right,e,back],[right,e,front],[x,peak,front],[.35,.277,.218]);
-   tri(m,[right,e,front],[x,peak,front],[left,e,front],plaster);tri(m,[left,e,back],[x,peak,back],[right,e,back],plaster);
-   for(let j=0;j<9;j++){
-    const a=gate-1.49+j*.332,b=a+.334,col=j%2?[.76,.69,.51]:green;
-    quad(m,[a,2.95,z2+1.87],[b,2.95,z2+1.87],[b,3.40,z2+.95],[a,3.40,z2+.95],col);
-    quad(m,[a,2.95,z2+1.87],[a,2.82,z2+1.87],[b,2.82,z2+1.87],[b,2.95,z2+1.87],col);
+   c(u,2.45,front+.155,b-a+.25,.22,.20,wood);
+   // Painted shutters folded open outside the timber serving hatch.
+   for(const s of [-1,1])for(let j=0;j<6;j++){
+    const xx=s<0?a-.72+j*.109:b+.072+j*.109;
+    c(xx,1.015,front+.247,.105,1.35,.09,j%2?green:[.31,.41,.30]);
    }
-   // Counter exactly over plan's (187–188,76) squares. Service and
-   // aisle walk cells remain clear; shelves hug the far and left walls.
-   c(188,0,76.44,1.85,.83,.69,wood);c(188,.81,76.44,1.96,.13,.79,shelf);
-   c(188,.17,76.821,1.69,.11,.037,[.56,.41,.26]);
-   for(const u of [186.55,187.76,188.97]){
-    c(u,.39,z1+.82,1.11,.10,.39,shelf);c(u,.95,z1+.82,1.11,.10,.39,shelf);c(u,1.53,z1+.82,1.11,.10,.39,shelf);
-    for(let i=0;i<4;i++)fruit(u-.36+i*.23,1.085+(i%2)*.012,z1+.84,.078,i%2?[.63,.32,.14]:[.34,.49,.18]);
+   for(const s of [-1,1])for(const y of [1.24,2.07])c(s<0?a-.39:b+.39,y,front+.30,.68,.09,.05,wood);
+   // House floor sits above the stall: framed windows and a common roof.
+   c(x,h,z,w+.20,2.48,l+.20,plaster);c(x,h-.14,z,w+.40,.21,l+.42,wood);
+   c(x,e-.13,z,w+.24,.15,l+.24,wood);
+   for(const v of [x1+.20,x1+1.97,x1+4.03,x2+.82])c(v,h,z2+1.13,.12,2.43,.09,wood);
+   for(const v of [x1+1.05,x1+3.01,x1+4.94]){
+    c(v,h+.68,z2+1.13,.68,1.02,.11,wood);c(v,h+.80,z2+1.20,.43,.77,.027,glass);
+    c(v,h+1.15,z2+1.23,.45,.058,.032,wood);c(v,h+.75,z2+1.20,.83,.075,.17,cap);
    }
-   const crops=[[.64,.22,.13],[.70,.43,.17],[.34,.53,.21]];
+   quad(m,[left,e,back],[x,peak,back],[x,peak,roofFront],[left,e,roofFront],[.33,.24,.19]);
+   quad(m,[x,peak,back],[right,e,back],[right,e,roofFront],[x,peak,roofFront],[.42,.31,.24]);
+   tri(m,[right,e,roofFront],[x,peak,roofFront],[left,e,roofFront],plaster);
+   tri(m,[left,e,back],[x,peak,back],[right,e,back],plaster);
+   for(let j=0;j<10;j++){
+    const xa=a-.23+j*.353,xb=xa+.355,col=j%2?linen:green,zNear=z2+1.00,zFar=z2+2.02;
+    quad(m,[xa,2.64,zFar],[xb,2.64,zFar],[xb,3.12,zNear],[xa,3.12,zNear],col);
+    quad(m,[xa,2.64,zFar],[xa,2.50,zFar],[xb,2.50,zFar],[xb,2.64,zFar],col);
+   }
+   // Produce crates face the street, rotated so the cashier remains visible.
+   const colors=[[.66,.28,.18],[.72,.47,.21],[.32,.56,.23]];
    for(let j=0;j<3;j++){
-    const u=187.35+j*.62;
-    c(u,.938,76.38,.48,.075,.38,shelf);
-    for(const side of [-1,1])c(u+side*.22,1.00,76.38,.039,.11,.36,wood);
-    for(let k=0;k<5;k++)fruit(u+((k%3)-1)*.114,1.053+(k%2)*.016,76.24+Math.floor(k/3)*.145,.071,crops[j]);
+    const xx=a+.37+j*1.10, zz=front+.39;
+    c(xx,.978,zz,.61,.068,.36,oak);
+    for(const s of [-1,1])c(xx+s*.283,1.04,zz,.045,.13,.365,wood);
+    for(let k=0;k<6;k++)fruit(xx+(k%3-1)*.144,1.096+(k%2)*.025,zz-.09+Math.floor(k/3)*.128,.082,colors[j]);
    }
-   // A carved carrot-and-leaf trade sign, not a bogus door.
-   c(gate,3.47,z2+1.06,.77,.52,.10,wood);
-   tri(m,[gate-.17,3.57,z2+1.12],[gate+.17,3.71,z2+1.12],[gate+.05,3.85,z2+1.12],[.83,.42,.17]);
-   tri(m,[gate+.085,3.78,z2+1.12],[gate+.23,3.77,z2+1.12],[gate+.225,3.91,z2+1.12],[.42,.64,.28]);
+   for(const xx of [a+.35,a+1.48,b-.45]){
+    c(xx,.62,z2-1.54,.91,.093,.46,oak);c(xx,1.20,z2-1.54,.91,.093,.46,oak);
+    for(let j=0;j<4;j++)fruit(xx-.29+.18*j,1.32,z2-1.52,.082,colors[j%3]);
+   }
+   const sign=b+.27,sv=z2+1.14;
+   c(sign,1.74,sv,.46,.62,.11,wood);c(sign,1.81,sv+.073,.35,.48,.048,linen);
+   tri(m,[sign-.13,1.88,sv+.107],[sign+.14,2.01,sv+.107],[sign+.03,2.16,sv+.107],[.76,.39,.16]);
+   tri(m,[sign+.046,2.09,sv+.109],[sign+.155,2.14,sv+.109],[sign+.111,2.23,sv+.109],green);
   }else{
    const timber=[.34,.26,.20],col=walls[tone],r=roofs[tone];
    if(d.enterable){
@@ -45075,8 +45507,8 @@ function poiKingdomGeometry(q){
 // Geometry added beyond the original atlas participates in the normal
 // third-person camera cast. A room is four walls, not a filled rectangle.
 function poiKingdomCameraRows(site,target,desired){
- if(Math.max(target[0],desired[0])<176||Math.min(target[2],desired[2])>119||
-    Math.max(target[2],desired[2])<62)return [];
+ if(Math.max(target[0],desired[0])<176||Math.min(target[2],desired[2])>127||
+    Math.max(target[2],desired[2])<42)return [];
  const town=poiKingdomData(site);if(!town)return [];
  if(!town.cameraRows){
   const rows=[];
@@ -45085,7 +45517,7 @@ function poiKingdomCameraRows(site,target,desired){
   };
   for(const d of town.meshes){
    const {style,x1,z1,x2,z2,h}=d;
-   if(style==='banner'||style==='stall'||style==='fountain'||style==='valdia-market-fountain'||style==='valdia-piazza-inlay'||style==='valdia-street-lamp')continue;
+   if(style==='banner'||style==='stall'||style==='fountain'||style==='valdia-market-fountain'||style==='valdia-piazza-inlay'||style==='valdia-street-lamp'||style==='valdia-garden-seat')continue;
    if(style==='valdia-home'){
     const first=rows.length;
     if(d.enterable){
@@ -45096,7 +45528,43 @@ function poiKingdomCameraRows(site,target,desired){
      box(u+.035,z2+.65,u+.965,z2+1,h,2.16);
      box(x1-.27,z1-.30,x2+1.27,z2+1.30,h+2.1,h);
     }else box(x1-.10,z1-.10,x2+1.1,z2+1.1,h+2.1);
+    if(d.wing){const [u,v,s,t,scale]=d.wing;box(u-.17,v-.17,s+1.17,t+1.17,h*scale+.96);}
     for(let i=first;i<rows.length;i++)rows[i].home=d.id;
+    continue;
+   }
+   if(style==='greengrocer'){
+    const hatch=town.greengrocer.counter;
+    box(x1,z1,x2+1,z1+.63,h);box(x1,z1,x1+.55,z2+1,h);box(x2+.45,z1,x2+1,z2+1,h);
+    box(x1,z2+.55,hatch.x1,z2+1,h);
+    box(hatch.x2+1,z2+.55,x2+1,z2+1,h);
+    box(hatch.x1,z2+.55,hatch.x2+1,z2+1,.98);
+    box(hatch.x1,z2+.55,hatch.x2+1,z2+1,h,2.46);
+    box(x1-.24,z1-.22,x2+1.24,z2+1.24,h+4.4,h);
+    continue;
+   }
+   if(style==='palace-court'||style==='palace-reflecting-pool')continue;
+   if(style==='palace-front-gate'){box(x1-.3,z1-.1,x2+1.3,z2+1.1,h,4);continue;}
+   if(style==='palace-loggia'){
+    box(x1+.14,z1+1.11,x2+.86,z1+1.89,h);
+    box(x1+.14,z1+5.11,x2+.86,z1+5.89,h);
+    box(x1-.17,z1,x2+1.17,z2+1,h+.54,h-.68);
+    continue;
+   }
+   if(style==='palace-wing'){
+    const d0=d.entry.z,out=d.entry.out,f=out>0?x2+.53:x1,r=out>0?x1:x2+.53;
+    box(x1,z1,x2+1,z1+.47,h);box(x1,z2+.53,x2+1,z2+1,h);
+    box(r,z1,r+.47,z2+1,h);
+    box(f,z1,f+.47,d0,h);box(f,d0+1,f+.47,z2+1,h);box(f,d0,f+.47,d0+1,h,3.05);
+    box(x1-.19,z1-.20,x2+1.19,z2+1.20,h+2.4,h);
+    continue;
+   }
+   if(style==='valdia-knight-yard')continue;
+   if(style==='valdia-knight-hall'){
+    const first=rows.length,[a,b]=d.gate;
+    box(x1,z1,x2+1,z1+.63,h);box(x1,z1,x1+.68,z2+1,h);box(x2+.32,z1,x2+1,z2+1,h);
+    box(x1,z2+.32,a+.045,z2+1,h);box(b+.955,z2+.32,x2+1,z2+1,h);
+    box(a+.045,z2+.32,b+.955,z2+1,h,3.36);box(x1-.26,z1-.28,x2+1.26,z2+1.32,h+3.05,h);
+    for(let i=first;i<rows.length;i++)rows[i].knightHall=true;
     continue;
    }
    if(style==='palace-rise'){
@@ -45127,8 +45595,9 @@ function poiKingdomCameraRows(site,target,desired){
   }
   town.cameraRows=rows;
  }
- const home=poiValdiaHomeAt(town,target[0],target[2]);
- return town.cameraRows.filter(({s,home:id})=>(!home||id!==home.id)&&[0,1,2].every(i=>
+ const home=poiValdiaHomeAt(town,target[0],target[2]),
+  insideHall=poiValdiaKnightHallContains(town.knightQuarter?.hall,target[0],target[2]);
+ return town.cameraRows.filter(({s,home:id,knightHall})=>(!home||id!==home.id)&&!(insideHall&&knightHall)&&[0,1,2].every(i=>
   Math.min(target[i],desired[i])<=s.max[i]+.3&&Math.max(target[i],desired[i])>=s.min[i]-.3));
 }
 function poiKingdomDraw(vp,id,g){
@@ -45137,7 +45606,7 @@ function poiKingdomDraw(vp,id,g){
   !poiOverlandBoxVisible(vp,[b.x1,0,b.z1,b.x2+1,20,b.z2+1]))return;
  if(!poiKingdomGPU){const m=poiKingdomGeometry(k);if(!m.p.length)return;poiKingdomGPU=upload(m)}
  poiOutdoorSet(g[0]+.5,g[1]+.5,3);
- try{draw(poiKingdomGPU,vp);poiValdiaHomesDraw(k,vp,g)}finally{poiOutdoorSet(0,0,0)}
+ try{draw(poiKingdomGPU,vp);poiValdiaHomesDraw(k,vp,g);poiValdiaKnightHallDraw(k,vp,g);poiValdiaDoorsDraw(k,vp,g)}finally{poiOutdoorSet(0,0,0)}
 }
 
 function makeEasternExpansion(){
@@ -45634,6 +46103,7 @@ function workshopResumeRestorePosition(p){
  if(typeof poiDavidTempleRecoverPosition==='function')p=poiDavidTempleRecoverPosition(p);
  if(typeof poiSacredRecoverPosition==='function')p=poiSacredRecoverPosition(p);
  p=poiKingdomRecoverPalacePosition(p);
+ p=poiValdiaGrocerRecoverPosition(p);
  // The two former shortcut doorways now have walls. Preserve that exact
  // old save's floor, facing and nearby room instead of restarting in town.
  if(p&&facilitySite?.id==='base'&&p.y===-1){
