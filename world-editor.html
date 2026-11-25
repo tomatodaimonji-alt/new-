@@ -1595,7 +1595,10 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
 
 
 #poiWalkPad:has(:is(#poiNpcInventory,#poiBagPanel,#poiNpcTradePanel):not([hidden])) #poiCompanionHud{visibility:hidden}
-#poiPartyHud #poiCompanionHud[hidden]{display:none!important}
+#poiPartyHud .poiPartyCard[data-party-slot=companion][hidden]{display:none!important}
+#poiPartyCards .poiPartyCard[data-companion]{pointer-events:auto;touch-action:manipulation;cursor:pointer}
+#poiWalkPad:has(:is(#poiNpcInventory,#poiBagPanel,#poiNpcTradePanel):not([hidden])) #poiPartyCards .poiPartyCard[data-companion]{pointer-events:none}
+#poiCompanionCommands[data-party-anchor]{top:var(--soul-slot-after);bottom:auto;max-height:calc(100dvh - var(--soul-slot-after) - 8px)}
 /* BEGIN STORAGE PARTY LANE */
 /* Only the real inventory/chest should coexist with the live party HUD.
    NPC/trade hiding and [hidden] on the party or ally still win. */
@@ -1722,7 +1725,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v346）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v347）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -18967,6 +18970,8 @@ function poiIsMonster(type){return Object.prototype.hasOwnProperty.call(POI_MONS
 // BEGIN MONSTER COMPANION CORE
 const POI_COMPANION_SPEC=Object.freeze({
  slimeSoul:Object.freeze({enemy:'monsterSlime',name:'スライムの魂',hp:36,attack:6,roll:.22,icon:'◈'}),
+ goblinSoul:Object.freeze({enemy:'monsterGoblin',name:'ゴブリンの魂',hp:55,attack:10,roll:.21,icon:'◈'}),
+ skeletonSoul:Object.freeze({enemy:'monsterSkeleton',name:'スケルトンの魂',hp:45,attack:9,roll:.21,icon:'◈'}),
  orvasSoul:Object.freeze({enemy:'monsterStoneDavid',name:'オルヴァスの魂',
   hp:typeof POI_MONSTER_STATS!=='undefined'?(POI_MONSTER_STATS.monsterStoneDavid?.hp??1050):1050,
   attack:16,roll:0,icon:'◈'})
@@ -18981,11 +18986,49 @@ function poiCompanionNormalizeMode(mode){
  if(mode==='fight'||mode==='auto')return 'fight';
  return null;
 }
+// The legacy first-active fields remain readable by pre-party saves/tools.
+const POI_PARTY_LIMIT=3;
+function poiPartySoulRecord(pending,members){
+ const solo=members[0];
+ return pending||solo?{version:1,pending,active:solo?.id??null,...(solo?{mode:solo.mode,members}:{})}:null;
+}
 function poiCompanionDecode(raw){
  if(raw?.version!==1)return null;
- const pending=poiCompanionType(raw.pending)?raw.pending:null,active=poiCompanionType(raw.active)?raw.active:null;
- const mode=active?poiCompanionNormalizeMode(raw.mode):null;
- return pending||active?{version:1,pending,active,...(mode?{mode}:{})}:null;
+ const pending=poiCompanionType(raw.pending)?raw.pending:null;
+ const input=Array.isArray(raw.members)?raw.members.slice(0,12):[{id:raw.active,mode:raw.mode}];
+ const members=[];
+ for(const r of input)if(poiCompanionType(r?.id)&&!members.some(q=>q.id===r.id)&&members.length<POI_PARTY_LIMIT)
+  members.push({id:r.id,mode:poiCompanionNormalizeMode(r.mode)??'fight'});
+ return poiPartySoulRecord(pending,members);
+}
+function poiPartySoulMembers(kit,slots=poiInventorySlots(kit)){
+ return (poiCompanionDecode(kit?.companionSoul)?.members??[]).flatMap(r=>{
+  const cell=slots.find(c=>c?.type===r.id),spec=poiCompanionType(r.id),hp=cell?.durability??spec.hp;
+  return cell&&hp>0?[{...r,kind:'monster',hp,maxHp:spec.hp,name:spec.name.replace(/の魂$/,'')}]:[];
+ });
+}
+function poiPartyMembers(kit){
+ if(!kit)return [];
+ const humans=typeof poiHumanPartyMembers==='function'?poiHumanPartyMembers(kit):[];
+ return [...poiPartySoulMembers(kit),...humans].slice(0,POI_PARTY_LIMIT);
+}
+function poiPartyHasRoom(kit=poiHotbarRead()){
+ return poiPartyMembers(kit).length<POI_PARTY_LIMIT;
+}
+function poiPartyActive(kit,id){
+ return (poiCompanionDecode(kit?.companionSoul)?.members??[]).some(row=>row.id===id);
+}
+function poiPartySoulWrite(kit,records){
+ const pending=poiCompanionDecode(kit.companionSoul)?.pending??null;
+ const record=poiPartySoulRecord(pending,records.map(({id,mode})=>({id,mode})));
+ const next={...kit};
+ if(record)next.companionSoul=record;else delete next.companionSoul;
+ return next;
+}
+function poiPartyDenySummon(){
+ const message='これ以上召喚できない。';
+ if(typeof poiMessagePush!=='function'||!poiMessagePush(message,'notice'))if(typeof toast==='function')toast(message);
+ return {ok:false,reason:'party-full'};
 }
 function poiCompanionReconcile(kit){
  const record=poiCompanionDecode(kit?.companionSoul);
@@ -19003,8 +19046,9 @@ function poiCompanionReconcile(kit){
  });
  if(changed)kit=poiInventoryEdited(kit,cells);
  const pending=record?.pending&&!seen.has(record.pending)?record.pending:null;
- const active=record?.active&&seen.has(record.active)?record.active:null;
- if(pending||active)return {...kit,companionSoul:{version:1,pending,active,...(active&&record.mode?{mode:record.mode}:{})}};
+ const members=poiPartySoulMembers({...kit,companionSoul:record});
+ const nextRecord=poiPartySoulRecord(pending,members.map(({id,mode})=>({id,mode})));
+ if(nextRecord)return {...kit,companionSoul:nextRecord};
  if(Object.hasOwn(kit,'companionSoul')){const next={...kit};delete next.companionSoul;return next}
  return kit;
 }
@@ -19047,7 +19091,7 @@ function poiSoulFloorDecode(raw){
 function poiSoulFloorWorld(p){return typeof poiSnowGroundMatch!=='function'||poiSnowGroundMatch(p)}
 function poiSoulFloorAt(kit,type){return kit.soulDrops?.find(p=>p.type===type)??null}
 function poiSoulFloorOwn(kit,type){
- return !!(kit.companionSoul?.active===type||poiSoulFloorAt(kit,type)||poiInventorySlots(kit).some(c=>c?.type===type));
+ return !!(poiPartyActive(kit,type)||poiSoulFloorAt(kit,type)||poiInventorySlots(kit).some(c=>c?.type===type));
 }
 function poiSoulFloorRead(kit,saved){
  const old=kit.armedDrops||[],legacy=old.find(p=>p?.type==='orvasSoul'&&p.id==='orvas-soul');
@@ -19111,11 +19155,11 @@ function poiSoulFloorMigratePending(now){
  if(!owned&&!location)return;
  const next={...kit};
  if(location)next.soulDrops=[...(kit.soulDrops||[]),{...location,type,durability:spec.hp}];
- if(kit.companionSoul.active)next.companionSoul={...kit.companionSoul,pending:null};else delete next.companionSoul;
+ if(poiPartySoulMembers(kit).length)next.companionSoul={...kit.companionSoul,pending:null};else delete next.companionSoul;
  if(poiEconomyWrite(next)&&typeof poiShopSync==='function')poiShopSync();
 }
 function poiSoulFloorInventoryDrop(kit,cells,index,cell){
- if(kit.companionSoul?.active===cell.type)return {ok:false,reason:'active-soul'};
+ if(poiPartyActive(kit,cell.type))return {ok:false,reason:'active-soul'};
  if(poiSoulFloorAt(kit,cell.type))return {ok:false,reason:'occupied'};
  const {location,reason}=poiDropGroundLocation(kit,true);
  if(!location)return {ok:false,reason};
@@ -19155,7 +19199,7 @@ function poiSoulFloorWalkover(x,z,now){
 function poiSoulFloorCollect(item,walkover=false){
  if(!poiInventoryAllowed())return false;
  const kit=poiHotbarRead(),list=kit.soulDrops??[];
- if(!list.includes(item)||kit.companionSoul?.active===item.type||poiInventorySlots(kit).some(c=>c?.type===item.type))return false;
+ if(!list.includes(item)||poiPartyActive(kit,item.type)||poiInventorySlots(kit).some(c=>c?.type===item.type))return false;
  const {slots,accepted}=poiInventoryAccept(kit,item.type,1,item);
  if(accepted!==1){if(!walkover)toast('持ち物に空きがありません。');return false}
  const next=poiInventoryEdited({...kit,soulDrops:list.filter(d=>d!==item)},slots);
@@ -19296,26 +19340,18 @@ function poiSoulFloorReset(){
 
 function poiCompanionUse(kit,index){
  if(!poiCompanionAllowed())return {ok:false,reason:'unavailable'};
- const cell=poiInventorySlots(kit)[index],spec=poiCompanionType(cell?.type);
- if(!spec)return {ok:false,reason:'type'};
- const active=kit.companionSoul?.active===cell.type?null:cell.type;
- const pending=kit.companionSoul?.pending??null,next={...kit};
- if(active||pending)next.companionSoul={version:1,active,pending};else delete next.companionSoul;
- if(!poiEconomyWrite(next))return {ok:false,reason:'storage'};
- if(!active&&poiCompanionActor?.id===cell.type&&typeof poiCompanionRecallDetach==='function')
-  poiCompanionRecallDetach(poiCompanionActor,typeof performance!=='undefined'?performance.now():0,'manual',kit);
- poiCompanionActor=null;poiCompanionTarget=null;poiEconomyRefresh();
- if(typeof toast==='function')toast(active?spec.name+'の仲間を呼んだ。':'仲間を魂に戻した。');
- return {ok:true,reason:null};
+ const id=poiInventorySlots(kit)[index]?.type;
+ return poiCompanionType(id)?poiCompanionCommand(poiPartyActive(kit,id)?'dismiss':'summon',performance.now(),id):{ok:false,reason:'type'};
 }
 function poiCompanionNormal(o,s){
  return !!(o&&s&&!s.townOwned&&!s.townHunt&&!s.northReturnFoe&&POI_COMPANION_MELEE.has(o.type)&&
   !(typeof poiChapelEliteMatch==='function'&&poiChapelEliteMatch(o)));
 }
 function poiCompanionPlayerContact(o,s,now){
- if(!poiCompanionActor||!poiCompanionNormal(o,s)||s.hp<=0||poiCompanionMode()==='follow'||
-    poiCompanionFightLatch(poiCompanionActor))return;
- poiCompanionTarget={o,s,until:now+2100};
+ if(!poiCompanionNormal(o,s)||s.hp<=0)return;
+ for(const a of poiPartyActors())if(poiCompanionMode(poiHotbarRead(),a.id)!=='follow')poiPartyWith(a.id,()=>{
+  if(!poiCompanionFightLatch(a))poiCompanionTarget={o,s,until:now+2100};
+ });
 }
 // BEGIN COMPANION FRACTIONAL FOLLOW
 const POI_COMPANION_FREE_RADIUS=.20,POI_COMPANION_FOLLOW_BEGIN=4,POI_COMPANION_FOLLOW_STOP=2;
@@ -19575,7 +19611,7 @@ function poiCompanionSpawn(id,now){
  const dirs=poiCompanionDirection(p,{x:typeof poiWalkFromX==='number'?poiWalkFromX:x-1,z:typeof poiWalkFromZ==='number'?poiWalkFromZ:z});
  for(const [dx,dz] of dirs){
   const tx=x+dx,tz=z+dz;
-  if(!poiCompanionCell(tx,tz,where.y,x,z))continue;
+  if(!poiCompanionCell(tx,tz,where.y,x,z)||poiPartyActors().some(a=>a.id!==id&&poiCompanionSame(a,where)&&a.x===tx&&a.z===tz))continue;
   return {...where,id,x:tx,z:tz,fx:tx,fz:tz,stepAt:now-1,stepMs:1,next:now+120,nextHit:now+620,swingAt:-Infinity,hurtAt:-Infinity};
  }
  return null;
@@ -19681,7 +19717,7 @@ function poiCompanionSummonOpacity(a,now){
  const t=Math.max(0,Math.min(1,(now-e.start)/450));
  return .05+.95*t*t*(3-2*t);
 }
-function poiCompanionSummonDraw(now,vp){
+function poiCompanionSummonDrawOne(now,vp){
  const e=poiCompanionSummonEvent,age=e?now-e.start:Infinity;
  if(age<0||age>=POI_COMPANION_SUMMON_MS||e.actor!==poiCompanionActor||poiWalkLevel!==e.actor.y)return;
  if(!poiCompanionSummonGpu){
@@ -19723,7 +19759,7 @@ function poiCompanionSeamEdge(region,dest){
  const link=poiSnowPassLink(region,x,z,0,nx,nz);
  return link?.region===dest.region&&link.x===dest.x&&link.z===dest.z?{x,z,nx,nz}:null;
 }
-function poiCompanionSeamCapture(dest,now,cold){
+function poiCompanionSeamCaptureOne(dest,now,cold){
  const a=poiCompanionActor,from=facilitySite?.id;
  if(cold||!a||a.y!==0||poiWalkLevel!==0||!poiCompanionAllowed())return null;
  const edge=poiCompanionSeamEdge(from,dest);
@@ -19737,7 +19773,7 @@ function poiCompanionSeamCapture(dest,now,cold){
  return {a,edge,to:dest.region,dest,source:{id:from,site:facilitySite,world,terrain:terrainHeights,creek:facilityCreekIndex,
   width:MAP_W,height:MAP_H,monsters:poiMonsterStates,rows:null},path:null,planAt:0,last:now};
 }
-function poiCompanionSeamCommit(ticket,now){
+function poiCompanionSeamCommitOne(ticket,now){
  if(!ticket||ticket.a!==poiCompanionActor)return;
  const a=ticket.a;poiCompanionTarget=null;
  if(ticket.join){
@@ -19892,9 +19928,9 @@ function poiCompanionSeamVisible(a){
 }
 // END COMPANION SEAM WALK
 
-function poiCompanionTick(now){
+function poiCompanionTickOne(now,member,kit){
  if(typeof poiCompanionSummonPrune==='function')poiCompanionSummonPrune(now);
- if(typeof poiOrvasAllyRouteFrame==='function')poiOrvasAllyRouteFrame(now);
+ if(poiPartyContextId==='orvasSoul'&&typeof poiOrvasAllyRouteFrame==='function')poiOrvasAllyRouteFrame(now);
  if(typeof document!=='undefined'&&document.hidden)return;
  if(!poiCompanionAllowed()){
   poiCompanionActor=null;poiCompanionTarget=null;
@@ -19904,9 +19940,8 @@ function poiCompanionTick(now){
   }
   return;
  }
- poiCompanionClaim(now);
- const kit=poiHotbarRead(),id=kit.companionSoul?.active;
- if(!poiCompanionType(id)||!poiInventorySlots(kit).some(c=>c?.type===id)){
+ const id=member?.hp>0?member.id:null;
+ if(!id){
   poiCompanionActor=null;poiCompanionTarget=null;
   if(typeof poiCompanionSeamFrame==='function')poiCompanionSeamFrame(now);
   return;
@@ -19922,7 +19957,7 @@ function poiCompanionTick(now){
   if(poiCompanionActor&&typeof poiCompanionHudSync==='function')poiCompanionHudSync();
   return;
  }
- const a=poiCompanionActor,mode=poiCompanionMode(kit);
+ const a=poiCompanionActor,mode=member.mode;
  const blocked=typeof document!=='undefined'&&
     document.querySelector('dialog[open],.modal.open,:is(#poiBagPanel,#poiLandscapeMenu,#poiNpcMenu,#poiScreenNoteLayer):not([hidden])');
  if(blocked){
@@ -20213,16 +20248,16 @@ function poiCompanionAttackClear(src,dst,y){
 }
 function poiCompanionHurt(damage,now){
  const a=poiCompanionActor,kit=poiHotbarRead();
- if(!a||!Number.isFinite(damage)||damage<=0||kit.companionSoul?.active!==a.id)return false;
+ if(!a||!Number.isFinite(damage)||damage<=0)return false;
+ if(typeof poiHumanPartySpec==='function'&&poiHumanPartySpec(a.id)){
+  const ok=poiHumanPartyHurt(a.id,damage,now);if(ok){a.hurtAt=now;const m=poiPartyMembers(poiHotbarRead()).find(x=>x.id===a.id);a.partyDown=!(m?.hp>0);poiEconomyRefresh();}return ok;
+ }
+ if(!poiPartyActive(kit,a.id))return false;
  const slots=poiInventorySlots(kit).slice(),index=slots.findIndex(c=>c?.type===a.id),cell=slots[index];
  if(!cell)return false;
  const hp=Math.max(0,(cell.durability??poiCompanionType(a.id).hp)-Math.max(1,Math.round(damage)));
  slots[index]=hp?{...cell,durability:hp}:null;
- const next=poiInventoryEdited(kit,slots);
- if(!hp){
-  if(kit.companionSoul?.pending)next.companionSoul={version:1,pending:kit.companionSoul.pending,active:null};
-  else delete next.companionSoul;
- }
+ const next=poiInventoryEdited(hp?kit:poiPartySoulWrite(kit,poiPartySoulMembers(kit).filter(r=>r.id!==a.id)),slots);
  if(!poiEconomyWrite(next))return false;
  if(!hp){
   poiCompanionActor=null;poiCompanionTarget=null;
@@ -20236,7 +20271,7 @@ function poiCompanionHurt(damage,now){
  }else a.hurtAt=now;
  poiEconomyRefresh();return true;
 }
-function poiCompanionEnemyContact(hit,state,now){
+function poiCompanionEnemyContactOne(hit,state,now){
  const a=poiCompanionActor;
  if(!a||!hit||hit.companionVictim&&hit.companionVictim!==a||poiCompanionSeenContacts.has(hit)||!poiCompanionSame(a,poiCompanionPlace())||
     !poiCompanionNormal(hit.obj,state)||hit.y!==a.y||
@@ -20249,11 +20284,11 @@ function poiCompanionEnemyContact(hit,state,now){
  return poiCompanionHurt(amount,now);
 }
 function poiCompanionSnapshot(now){
- const a=poiCompanionActor,f=poiCompanionFlight,kit=poiHotbarHasKit()?poiHotbarRead():null;
+ const a=poiPartyPrimary(),f=poiCompanionFlight,kit=poiHotbarHasKit()?poiHotbarRead():null;
  const slots=kit?poiInventorySlots(kit):[];
  const claimed=slots.find(c=>kit?.companionSoul?.active&&c?.type===kit.companionSoul.active)||slots.find(c=>poiCompanionType(c?.type));
  return {token:claimed?.type??null,hp:claimed?.durability??null,active:kit?.companionSoul?.active??null,mode:poiCompanionMode(kit),
-  pending:kit?.companionSoul?.pending??null,flight:f?{x:f.x,z:f.z,y:f.y,start:f.start,arrives:f.arrives,type:f.type}:null,
+  party:poiPartyMembers(kit),pending:kit?.companionSoul?.pending??null,flight:f?{x:f.x,z:f.z,y:f.y,start:f.start,arrives:f.arrives,type:f.type}:null,
   actor:a?{x:a.x,z:a.z,y:a.y,pose:poiCompanionPose(a,now),target:(a.allyTarget??poiCompanionTarget)?.o?.type??null}:null};
 }
 // BEGIN ORVAS COMPANION GEOMETRY
@@ -20330,7 +20365,11 @@ function poiCompanionWorldPose(a,now){
   if(typeof poiCompanionBridgeLift==='function')pose.y+=poiCompanionBridgeLift(a);
   return typeof poiCompanionSeamRender==='function'?poiCompanionSeamRender(a,pose):pose;
  }
- const actor={type:'monsterSlime',x:a.x,z:a.z,y:a.y};
+ if(typeof poiHumanPartySpec==='function'&&poiHumanPartySpec(a.id)){
+  const pose=poiHumanPartyWorldPose(a,now);
+  return poiCompanionSeamRender(a,pose);
+ }
+ const actor={type:poiCompanionType(a.id)?.enemy??'monsterSlime',x:a.x,z:a.z,y:a.y};
  const physical=poiCompanionPosition(a);
  const state={x:physical.x,z:physical.z,fromX:physical.x,fromZ:physical.z,moveStarted:a.stepAt,guardMoveMs:a.stepMs,facing,
   playerAttack:a.attackMotion??null,slimeRecoverUntil:a.slimeRecoverUntil};
@@ -20348,7 +20387,7 @@ function poiCompanionWorldVisible(a){
   (typeof poiDungeonVisualVisible!=='function'||poiDungeonVisualVisible(a.x,a.z,a.y));
 }
 let poiCompanionWorldActor=null,poiCompanionDrawPose=null,poiCompanionWorldBar=null,poiCompanionWorldBarKit=null,poiCompanionWorldBarCell=null;
-function poiDrawCompanion(now,vp){
+function poiDrawCompanionOne(now,vp){
  const a=poiCompanionActor;
  if(!poiCompanionWorldVisible(a)){poiCompanionWorldActor=null;return}
  if(poiOverlandDrawing&&!poiOverlandActorVisible(vp,a.x,a.z,a.y,a.site?.id)){poiCompanionWorldActor=null;return}
@@ -20358,10 +20397,8 @@ a.id+':'+a.x+':'+a.z+':'+a.y+':'+(fast?'fast:':'idle:')+Math.floor(now/(fast?32:
  if(!poiCompanionMesh||key!==poiCompanionMeshKey||poiCompanionWorldActor!==a){
   const m=mesh();
   if(pose.orvas&&typeof poiCompanionOrvasMesh==='function')poiCompanionOrvasMesh(m,pose);
-  else{
-  if(!poiCompanionTemplate){poiCompanionTemplate=mesh();deco(poiCompanionTemplate,'monsterSlime',0,0,0,0)}
-  poiAppendWildSlimeVisual(m,poiCompanionTemplate,pose,pose.facing);
-  }
+  else if(pose.human&&typeof poiHumanPartyMesh==='function')poiHumanPartyMesh(m,a,pose,now);
+  else poiPartyMonsterMesh(m,a,pose,now);
   if(m.p.length)poiCompanionMesh=upload(m,poiCompanionMesh?.buf,gl.DYNAMIC_DRAW);
   poiCompanionMeshKey=key;poiCompanionWorldActor=a;poiCompanionDrawPose=pose;
  }
@@ -20378,19 +20415,15 @@ a.id+':'+a.x+':'+a.z+':'+a.y+':'+(fast?'fast:':'idle:')+Math.floor(now/(fast?32:
   poiDrawMonsterHitFlash(poiCompanionMesh,vp,now);
  }else draw(poiCompanionMesh,vp);
 }
-function poiDrawCompanionHealth(now,vp,layer){
+function poiDrawCompanionHealthOne(now,vp,layer){
  const a=poiCompanionActor;
  let bar=poiCompanionWorldBar;
  const hide=()=>{if(bar)bar.el.hidden=true};
  if(!poiCompanionWorldVisible(a)||poiCompanionWorldActor!==a||!poiCompanionDrawPose){hide();return}
- const kit=poiHotbarRead(),spec=poiCompanionType(a.id);
- if(poiCompanionWorldBarKit!==kit||poiCompanionWorldBarCell?.type!==a.id){
-  poiCompanionWorldBarKit=kit;poiCompanionWorldBarCell=poiInventorySlots(kit).find(c=>c?.type===a.id);
- }
- const hp=poiCompanionWorldBarCell?.durability;
- if(!spec||kit.companionSoul?.active!==a.id||!(hp>0)){hide();return}
+ const kit=poiHotbarRead(),member=poiPartyMembers(kit).find(m=>m.id===a.id),hp=member?.hp;
+ if(!(hp>0)){hide();return}
  const display=poiCompanionDrawPose;
- const bounds=display.orvas?{crown:'orvas'}:poiEnemyHealthEnvelope('monsterSlime');
+ const bounds=display.orvas?{crown:'orvas'}:display.human?{top:1.82,radius:.33}:poiEnemyHealthEnvelope(poiCompanionType(a.id).enemy);
  const p=poiEnemyHealthAnchor(vp,display,bounds);
  if(!p||p.x<0||p.x>canvas.clientWidth||p.y<0||p.y>canvas.clientHeight){hide();return}
  if(!bar){
@@ -20399,8 +20432,8 @@ function poiDrawCompanionHealth(now,vp,layer){
   bar=poiCompanionWorldBar={el,x:null,y:null,hp:null,max:null};
  }
  bar.el.hidden=false;
- if(bar.id!==a.id){bar.id=a.id;bar.el.setAttribute('aria-label','仲間の'+spec.name+'のHP');}
- if(bar.max!==spec.hp){bar.max=spec.hp;bar.el.max=spec.hp}
+ if(bar.id!==a.id){bar.id=a.id;bar.el.setAttribute('aria-label','仲間の'+member.name+'のHP');}
+ if(bar.max!==member.maxHp){bar.max=member.maxHp;bar.el.max=member.maxHp}
  if(bar.hp!==hp){bar.hp=hp;bar.el.value=hp}
  const x=Math.round(p.x),y=Math.round(p.y)-(bounds.crown?8:POI_ENEMY_BAR_GAP);
  if(bar.x!==x||bar.y!==y){
@@ -20458,7 +20491,7 @@ function poiCompanionRecallSound(e,now){
 function poiCompanionRecallMake(a,now,reason,kit){
  const shared=a&&typeof poiCompanionSeamVisible==='function'&&poiCompanionSeamVisible(a)&&
    poiCompanionWorldActor===a&&!!poiCompanionDrawPose;
- if(!a||!['manual','player-death'].includes(reason)||kit?.companionSoul?.active!==a.id||
+ if(!a||!['manual','player-death'].includes(reason)||!poiPartyActive(kit,a.id)||
     !shared&&!poiCompanionSame(a,poiCompanionPlace())||
     !poiInventorySlots(kit).some(c=>c?.type===a.id&&(c.durability??poiCompanionType(a.id).hp)>0)||
     typeof mesh!=='function'||typeof upload!=='function'||typeof gl==='undefined'||!gl)return false;
@@ -20468,10 +20501,7 @@ function poiCompanionRecallMake(a,now,reason,kit){
  if(!pose||![pose.x,pose.y,pose.z].every(Number.isFinite))return false;
  const m=mesh();
  if(pose.orvas)poiCompanionOrvasMesh(m,pose);
- else{
-  if(!poiCompanionTemplate){poiCompanionTemplate=mesh();deco(poiCompanionTemplate,'monsterSlime',0,0,0,0)}
-  poiAppendWildSlimeVisual(m,poiCompanionTemplate,pose,pose.facing);
- }
+ else poiPartyMonsterMesh(m,a,pose,now);
  if(!m.p.length)return false;
  const opacity=typeof poiCompanionSummonOpacity==='function'?poiCompanionSummonOpacity(a,now):1;
  poiCompanionRecallCancel();
@@ -20493,11 +20523,11 @@ function poiCompanionRecallDetach(a,now,reason,kit){
  return true;
 }
 let poiCompanionRejoinTicket=null;
-function poiCompanionPlayerDeathDetach(now){
+function poiCompanionPlayerDeathDetachOne(now){
  const a=poiCompanionActor;
  if(!a||typeof poiHotbarHasKit!=='function'||!poiHotbarHasKit())return false;
- const kit=poiHotbarRead(),id=kit.companionSoul?.active;
- if(id!==a.id||!poiInventorySlots(kit).some(c=>c?.type===id&&(c.durability??poiCompanionType(id).hp)>0))return false;
+ const kit=poiHotbarRead(),id=a.id;
+ if(!poiPartyActive(kit,id)||!poiInventorySlots(kit).some(c=>c?.type===id&&(c.durability??poiCompanionType(id).hp)>0))return false;
  const place=poiCompanionPlace();
  poiCompanionRejoinTicket={id,site:place.site,travel:place.travel,world,death:poiPlayerDeath};
  return poiCompanionRecallDetach(a,now,'player-death',kit);
@@ -20516,7 +20546,7 @@ function poiCompanionRecallRejoin(a,now){
  if(typeof poiCompanionSummonIntent==='function'&&(typeof poiCompanionSummonTicket==='undefined'||!poiCompanionSummonTicket))poiCompanionSummonIntent(a.id,now);
  return true;
 }
-function poiCompanionRecallReset(){
+function poiCompanionRecallResetOne(){
  poiCompanionRecallCancel();
  const ticket=poiCompanionRejoinTicket;
  if(ticket&&(poiPlayerDeath!==ticket.death||!ticket.death?.relocated))poiCompanionRejoinTicket=null;
@@ -20528,7 +20558,7 @@ function poiCompanionRecallTransform(q,vp,s,x,y,z){
  }
  return q;
 }
-function poiCompanionRecallDraw(now,vp){
+function poiCompanionRecallDrawOne(now,vp){
  const e=poiCompanionRecallEvent;
  if(!e)return;
  const q=poiCompanionRecallFrame(e,now);
@@ -20568,47 +20598,39 @@ if(typeof window!=='undefined'&&typeof window.addEventListener==='function')
 // BEGIN COMPANION V2 AI
 const POI_COMPANION_TETHER=5.6,POI_COMPANION_NOTICE=4.25;
 const POI_COMPANION_MODES=new Set(['fight','follow']);
-function poiCompanionMode(kit=poiHotbarRead()){
- const m=poiCompanionNormalizeMode(kit?.companionSoul?.mode);
+function poiCompanionMode(kit=poiHotbarRead(),id=poiCompanionActor?.id??kit?.companionSoul?.active){
+ const m=poiPartyMembers(kit).find(r=>r.id===id)?.mode;
  return POI_COMPANION_MODES.has(m)?m:'fight';
 }
 function poiCompanionCommand(mode,now=performance.now(),token=null){
  if(!poiCompanionAllowed())return {ok:false,reason:'unavailable'};
- const kit=poiHotbarRead(),active=kit.companionSoul?.active,id=token??active;
+ const kit=poiHotbarRead(),id=token??kit.companionSoul?.active;
  const spec=poiCompanionType(id);
- const index=spec?poiInventorySlots(kit).findIndex(c=>c?.type===id&&!(c.durability<=0)):-1;
- if(index<0)return {ok:false,reason:'inactive'};
- if(mode==='dismiss')return active===id?poiCompanionUse(kit,index):{ok:false,reason:'inactive'};
- const summon=mode==='summon',change=active!==id;
- if(summon&&!change||!summon&&change)return {ok:false,reason:'inactive'};
- mode=summon?'fight':poiCompanionNormalizeMode(mode);
- if(!POI_COMPANION_MODES.has(mode))return {ok:false,reason:'type'};
- if((change||mode!==poiCompanionMode(kit))&&!poiEconomyWrite({...kit,companionSoul:{
-    ...kit.companionSoul,version:1,active:id,pending:kit.companionSoul?.pending??null,mode}}))
-  return {ok:false,reason:'storage'};
- poiCompanionTarget=null;
- if(change){
-  poiCompanionActor=null;
-  if(summon&&typeof poiCompanionSummonIntent==='function')poiCompanionSummonIntent(id,now);
+ if(!spec||!poiInventorySlots(kit).some(c=>c?.type===id&&(c.durability??spec.hp)>0))
+  return {ok:false,reason:'inactive'};
+ const members=poiPartySoulMembers(kit),m=members.find(c=>c.id===id);
+ if(mode==='summon'&&!m){
+  if(!poiPartyHasRoom(kit))return poiPartyDenySummon();
+  if(!poiEconomyWrite(poiPartySoulWrite(kit,[...members,{id,mode:'fight'}])))return {ok:false,reason:'storage'};
+  poiPartyWith(id,()=>poiCompanionSummonIntent(id,now));
   if(typeof toast==='function')toast(spec.name.replace(/の魂$/,'')+'を仲間として呼んだ。');
- }
- if(poiCompanionActor){
-  const a=poiCompanionActor;
-  a.scanAt=now;a.next=Math.min(a.next,now);a.freeGoal=null;a.freeRoute=null;
-  if(mode==='follow'&&a.attackMotion?.pending)a.attackMotion.pending=false;
-  if((mode==='flee'||mode==='follow')&&a.id==='orvasSoul'&&typeof poiOrvasAllyStop==='function'){
-   poiOrvasAllyStop(a,now,true);a.allyTarget=null;
-  }
-  if(mode==='follow'){a.fightLatch=null;a.followLeader=false;}
-  if(mode==='fight'&&!poiCompanionFightLatch(a)&&typeof poiAimLocked!=='undefined'&&poiAimLocked){
-   const {id:o,state:s}=poiAimLocked;
-   if(poiCompanionTargetLegal(a,o,s,true)){
-    if(a.id==='orvasSoul'){a.allyTarget={o,s};a.fightLatch=a.allyTarget;}
-    else poiCompanionTarget={o,s,until:now+1000};
+ }else if(mode==='dismiss'&&m){
+  if(!poiEconomyWrite(poiPartySoulWrite(kit,members.filter(c=>c.id!==id))))return {ok:false,reason:'storage'};
+  poiPartyWith(id,()=>poiCompanionRecallDetach(poiCompanionActor,now,'manual',kit));
+  if(typeof toast==='function')toast('仲間を魂に戻した。');
+ }else if(m&&POI_COMPANION_MODES.has(mode)){
+  if(m.mode!==mode&&!poiEconomyWrite(poiPartySoulWrite(kit,members.map(r=>r.id===id?{id,mode}:r))))return {ok:false,reason:'storage'};
+  poiPartyWith(id,()=>{
+   const a=poiCompanionActor;if(!a)return;
+   a.scanAt=now;a.next=Math.min(a.next,now);a.freeGoal=null;a.freeRoute=null;poiCompanionTarget=null;
+   if(mode==='follow'){
+    if(a.attackMotion)a.attackMotion.pending=false;
+    if(a.id==='orvasSoul'){poiOrvasAllyStop(a,now,true);a.allyTarget=null;}
+    a.fightLatch=null;a.followLeader=false;
    }
-  }
- }
- if(typeof poiEconomyRefresh==='function')poiEconomyRefresh();
+  });
+ }else return {ok:false,reason:'inactive'};
+ poiEconomyRefresh();
  return {ok:true,reason:null};
 }
 function poiCompanionTethered(a){
@@ -20657,7 +20679,7 @@ function poiCompanionCommit(a,t,now){
  if(!t||a.attackMotion?.pending||now<(a.nextHit||0)||!poiCompanionTargetLegal(a,t.o,t.s,true))return false;
  const origin={x:a.px??a.x,z:a.pz??a.z},dx=t.s.x-origin.x,dz=t.s.z-origin.z,d=Math.hypot(dx,dz);
  if(d<.01||d>poiCompanionMeleeReach(a))return false;
- const delay=a.id==='orvasSoul'?380:typeof POI_SLIME_CONTACT_MS==='number'?POI_SLIME_CONTACT_MS:132;
+ const delay=a.id==='orvasSoul'?380:poiCompanionType(a.id)?.enemy==='monsterSlime'?(typeof POI_SLIME_CONTACT_MS==='number'?POI_SLIME_CONTACT_MS:132):235;
  a.attackMotion={start:now,hit:now+delay,dx:dx/d,dz:dz/d,tx:t.s.x,tz:t.s.z,target:t,pending:true};
  return true;
 }
@@ -20678,28 +20700,31 @@ function poiCompanionResolve(a,now,mode){
  if(now-q.hit<=100&&poiCompanionTargetLegal(a,t.o,t.s,true)&&t.s.x===q.tx&&t.s.z===q.tz&&
     Math.hypot(p.x-(a.px??a.x),p.z-(a.pz??a.z))<=poiCompanionMeleeReach(a)&&poiCompanionAttackClear({x:a.px??a.x,z:a.pz??a.z},p,a.y)&&typeof poiPlayerDamageTarget==='function'){
   const batch={weapon:null,hit:false,defeated:false};
-  poiPlayerDamageTarget([t.o,t.s],t.s.x,t.s.z,poiCompanionType(a.id).attack,null,now,true,true,{companion:true,companionImpact:batch});
+  poiPlayerDamageTarget([t.o,t.s],t.s.x,t.s.z,(poiCompanionType(a.id)??poiHumanPartySpec(a.id)).attack,null,now,true,true,{companion:true,companionImpact:batch});
   if(typeof poiCompanionImpactFlush==='function')poiCompanionImpactFlush(batch);
  }
  return true;
 }
 // BEGIN HOSTILE ALLY TARGET CHOICE
 function poiEnemyAllyValid(o,s,a){
- return !!(o&&s&&a&&a===poiCompanionActor&&poiCompanionAllowed()&&o.y===a.y&&a.y===poiWalkLevel&&
+ return !!(o&&s&&a&&poiPartyActors().includes(a)&&poiCompanionAllowed()&&o.y===a.y&&a.y===poiWalkLevel&&
   poiCompanionSame(a,poiCompanionPlace())&&!s.townOwned&&!s.townHunt&&!s.northReturnFoe&&
   !(s.wildSpawn&&typeof poiWildPlayerOutside==='function'&&!poiWildPlayerOutside()));
 }
 function poiEnemyAllyChoice(o,s,src,now,notice,hero,admit=null){
- const a=poiCompanionActor;
- if(!poiEnemyAllyValid(o,s,a))return null;
+ let best=null;
+ for(const a of poiPartyActors()){
+ if(!poiEnemyAllyValid(o,s,a))continue;
  const p=poiCompanionPose(a,now),x=Math.round(p.x),z=Math.round(p.z);
  const near=Math.hypot(p.x-src.x,p.z-src.z),player=Math.hypot(hero.x-src.x,hero.z-src.z);
  if(near<.01||near>notice||admit&&!admit(p)||
     !poiCompanionEncounterAllows(o,poiWalkX,poiWalkZ)||!poiCompanionEncounterAllows(o,x,z)||
     typeof poiDungeonVisualVisible==='function'&&!poiDungeonVisualVisible(x,z,p.y)||
-    !poiCompanionAttackClear(src,p,o.y))return null;
- if(player<=near+.05&&(!admit||admit(hero))&&poiCompanionAttackClear(src,hero,o.y))return null;
- return {x,z,p,actor:a};
+    !poiCompanionAttackClear(src,p,o.y))continue;
+ if(player<=near+.05&&(!admit||admit(hero))&&poiCompanionAttackClear(src,hero,o.y))continue;
+ if(!best||near<best.near)best={x,z,p,actor:a,near};
+ }
+ return best;
 }
 function poiEnemyAllyContactPoint(hit,state,now){
  const a=hit.companionVictim;
@@ -20709,11 +20734,11 @@ function poiEnemyAllyContactPoint(hit,state,now){
   poiCompanionAttackClear({x:hit.sx,z:hit.sz},p,a.y)?p:null;
 }
 function poiEnemyApplyAlly(hit,state,now,point){
- if(!point||poiCompanionSeenContacts.has(hit)||hit.companionVictim!==poiCompanionActor)return false;
+ if(!point||poiCompanionSeenContacts.has(hit)||!poiPartyActors().includes(hit.companionVictim))return false;
  const amount=hit.northAttack?POI_NORTH_MINOTAUR_ATTACKS[hit.northAttack]?.damage:
   typeof poiMonsterStatsAt==='function'?poiMonsterStatsAt(hit.obj).attack:POI_MONSTER_STATS[hit.obj.type]?.attack;
  poiCompanionSeenContacts.add(hit);
- return poiCompanionHurt(amount,now);
+ return poiPartyWith(hit.companionVictim.id,()=>poiCompanionHurt(amount,now));
 }
 // END HOSTILE ALLY TARGET CHOICE
 
@@ -20724,11 +20749,11 @@ function poiCompanionHostileIntent(o,s,now){
  return poiEnemyAllyChoice(o,s,s,now,Math.max(6.5,armed?.reach||0),hero);
 }
 function poiCompanionBlocksHostileTile(x,z,y,now){
- const a=poiCompanionActor;
- if(!a||!poiCompanionSame(a,poiCompanionPlace())||y!==a.y)return false;
- if(x===a.x&&z===a.z)return true;
- const v=poiCompanionPose(a,now);
- return x===Math.round(v.x)&&z===Math.round(v.z);
+ return poiPartyActors().some(a=>{
+  if(!poiCompanionSame(a,poiCompanionPlace())||y!==a.y)return false;
+  const p=poiCompanionPose(a,now);
+  return x===a.x&&z===a.z||x===Math.round(p.x)&&z===Math.round(p.z);
+ });
 }
 function poiCompanionHostileChase(o,s,now,patrol){
  const goal=poiCompanionHostileIntent(o,s,now);
@@ -20788,7 +20813,7 @@ function poiCompanionDavidVictim(o,s,b,q,now){
  const a=poiCompanionActor;
  if(!a||!poiCompanionAllowed()||!poiCompanionSame(a,poiCompanionPlace())||
     poiCompanionDavidMatch(a,o,s,now)!==b||a.y!==q.y||
-    (q.targetAlly&&q.targetAlly!==a)||(s.david.attack&&s.david.attack!==q))return null;
+    (s.david.attack&&s.david.attack!==q))return null;
  const p=poiCompanionPose(a,now);
  return poiDavidIn(b,p)?p:null;
 }
@@ -20796,10 +20821,11 @@ function poiCompanionDavidApply(q,key,amount,now){
  if(!(amount>0))return false;
  let done=poiCompanionDavidHits.get(q);
  if(!done){done=new Set();poiCompanionDavidHits.set(q,done)}
- if(done.has(key))return false;
- done.add(key);return poiCompanionHurt(amount,now);
+ const tag=poiCompanionActor?.id+":"+key;
+ if(done.has(tag))return false;
+ done.add(tag);return poiCompanionHurt(amount,now);
 }
-function poiCompanionDavidImpact(o,s,b,q,i,now){
+function poiCompanionDavidImpactOne(o,s,b,q,i,now){
  const p=poiCompanionDavidVictim(o,s,b,q,now);
  if(!p)return false;
  const src={x:q.sx,z:q.sz},x=p.x-src.x,z=p.z-src.z,len=Math.hypot(x,z);
@@ -20811,7 +20837,7 @@ function poiCompanionDavidImpact(o,s,b,q,i,now){
  if(!poiDavidArea(q,p)||!poiDavidLine(src,p,b))return false;
  return poiCompanionDavidApply(q,i,POI_DAVID_PATTERNS[q.kind]?.damage[i],now);
 }
-function poiCompanionDavidBeam(o,s,b,q,lo,hi,now){
+function poiCompanionDavidBeamOne(o,s,b,q,lo,hi,now){
  const p=poiCompanionDavidVictim(o,s,b,q,now);
  if(!p)return false;
  const x=p.x-q.sx,z=p.z-q.sz,angle=Math.atan2(z*q.dx-x*q.dz,x*q.dx+z*q.dz);
@@ -20823,6 +20849,111 @@ function poiCompanionDavidBeam(o,s,b,q,lo,hi,now){
 }
 // END COMPANION DAVID
 // END COMPANION V2 AI
+// One reserved state per party ID, serialized ownership remains in the kit.
+// The existing solo physics/animations execute in an isolated member context.
+const poiPartyRuntime=new Map();
+let poiPartyContextId=null;
+function poiPartyActorById(id){return (poiPartyContextId===id?poiCompanionActor:poiPartyRuntime.get(id)?.[0])??null}
+function poiPartyPrimary(){return poiPartyActorById('orvasSoul')??poiPartyActors()[0]??null}
+function poiPartyActors(){
+ const actors=[];
+ for(const id of poiPartyRuntime.keys()){
+  const a=poiPartyActorById(id);if(a&&a.site&&!a.partyDown)actors.push(a);
+ }
+ return actors;
+}
+function poiPartyWith(id,fn){
+ if(id===poiPartyContextId)return fn();
+ let entry=poiPartyRuntime.get(id);
+ if(!entry){entry=[];poiPartyRuntime.set(id,entry)}
+ const old=poiPartyRuntimeCapture(),previous=poiPartyContextId;
+ poiPartyContextId=id;poiPartyRuntimeApply(entry);
+ try{return fn()}finally{
+  poiPartyRuntime.set(id,poiPartyRuntimeCapture());
+  poiPartyRuntimeApply(old);poiPartyContextId=previous;
+ }
+}
+function poiPartyEach(fn){
+ for(const id of poiPartyRuntime.keys())poiPartyWith(id,()=>fn(poiCompanionActor));
+}
+function poiCompanionTick(now){
+ if(typeof document!=='undefined'&&document.hidden)return;
+ const canAct=poiCompanionAllowed();
+ if(canAct)poiCompanionClaim(now);
+ const kit=canAct?poiHotbarRead():null;
+ const members=new Map(poiPartyMembers(kit).map(m=>[m.id,m]));
+ for(const id of members.keys())if(!poiPartyRuntime.has(id))poiPartyRuntime.set(id,[]);
+ poiPartyEach(()=>poiCompanionTickOne(now,members.get(poiPartyContextId),kit));
+}
+function poiPartyAdoptHuman(id,npc,now){
+ if(!npc)return;
+ const p=typeof poiTownNpcVisualPosition==='function'?poiTownNpcVisualPosition(npc,now):npc;
+ if(!p)return;
+ poiPartyWith(id,()=>{
+  const {x,z,y}=p,d=poiCompanionPlace();
+  if(y!==d.y||![x,z].every(Number.isFinite))return;
+  poiCompanionActor={...d,id,x:Math.round(x),z:Math.round(z),px:x,pz:z,
+   fx:x,fz:z,humanHeading:p.heading,stepAt:now-1,stepMs:1,next:now+120,nextHit:now+620,swingAt:-Infinity,hurtAt:-Infinity};
+ });
+}
+function poiCompanionSummonDraw(now,vp){poiPartyEach(()=>poiCompanionSummonDrawOne(now,vp))}
+function poiDrawCompanion(now,vp){poiPartyEach(()=>poiDrawCompanionOne(now,vp))}
+function poiDrawCompanionHealth(now,vp,layer){poiPartyEach(()=>poiDrawCompanionHealthOne(now,vp,layer))}
+function poiCompanionRecallDraw(now,vp){poiPartyEach(()=>poiCompanionRecallDrawOne(now,vp))}
+function poiCompanionRecallReset(){poiPartyEach(()=>poiCompanionRecallResetOne())}
+function poiCompanionPlayerDeathDetach(now){
+ poiPartyEach(a=>{if(a&&poiCompanionType(a.id))poiCompanionPlayerDeathDetachOne(now)});
+}
+function poiCompanionSeamCapture(dest,now,cold){
+ const ret=[];
+ poiPartyEach(a=>{if(a){const t=poiCompanionSeamCaptureOne(dest,now,cold);if(t)ret.push([a.id,t])}});
+ return ret;
+}
+function poiCompanionSeamCommit(tickets,now){
+ for(const [id,t] of tickets)poiPartyWith(id,()=>poiCompanionSeamCommitOne(t,now));
+}
+function poiCompanionEnemyContact(hit,state,now){
+ if(hit?.companionVictim)return poiPartyWith(hit.companionVictim.id,()=>poiCompanionEnemyContactOne(hit,state,now));
+ let did=false;poiPartyEach(()=>{did=poiCompanionEnemyContactOne(hit,state,now)||did});return did;
+}
+function poiCompanionDavidImpact(o,s,b,q,i,now){
+ let did=false;poiPartyEach(()=>{did=poiCompanionDavidImpactOne(o,s,b,q,i,now)||did});return did;
+}
+function poiCompanionDavidBeam(o,s,b,q,lo,hi,now){
+ let did=false;poiPartyEach(()=>{did=poiCompanionDavidBeamOne(o,s,b,q,lo,hi,now)||did});return did;
+}
+const poiPartyMonsterMeshes=new Map();
+function poiPartyMonsterMesh(m,a,pose,now){
+ const type=poiCompanionType(a.id)?.enemy;if(!type)return;
+ if(!poiPartyMonsterMeshes.has(type)){
+  const raw=mesh();deco(raw,type,0,0,0,0);poiPartyMonsterMeshes.set(type,raw);
+ }
+ const raw=poiPartyMonsterMeshes.get(type);
+ if(type==='monsterSlime'){poiAppendWildSlimeVisual(m,raw,pose,pose.facing);return}
+ const q=a.attackMotion,attack=q?Math.sin(Math.PI*Math.max(0,Math.min(1,(now-q.start)/480)))*.29:0;
+ const dx=q?.dx??0,dz=q?.dz??0,hop=a.freeMoving?Math.abs(Math.sin(now*.016))*.07:0;
+ poiAppendWildSlimeVisual(m,raw,{...pose,attack:null,x:pose.x+dx*attack,y:pose.y+hop,z:pose.z+dz*attack},pose.facing);
+}
+function poiPartyRuntimeCapture(){return [poiCompanionActor,poiCompanionTarget,poiCompanionSeamWalk,poiCompanionSummonTicket,poiCompanionSummonEvent,poiCompanionSummonGpu,poiCompanionMesh,poiCompanionMeshKey,poiCompanionWorldActor,poiCompanionDrawPose,poiCompanionWorldBar,poiCompanionWorldBarKit,poiCompanionWorldBarCell,poiCompanionRecallEvent,poiCompanionRecallGpu,poiCompanionRejoinTicket]}
+function poiPartyRuntimeApply(a){
+ poiCompanionActor=a[0]??null;
+ poiCompanionTarget=a[1]??null;
+ poiCompanionSeamWalk=a[2]??null;
+ poiCompanionSummonTicket=a[3]??null;
+ poiCompanionSummonEvent=a[4]??null;
+ poiCompanionSummonGpu=a[5]??null;
+ poiCompanionMesh=a[6]??null;
+ poiCompanionMeshKey=a[7]??null;
+ poiCompanionWorldActor=a[8]??null;
+ poiCompanionDrawPose=a[9]??null;
+ poiCompanionWorldBar=a[10]??null;
+ poiCompanionWorldBarKit=a[11]??null;
+ poiCompanionWorldBarCell=a[12]??null;
+ poiCompanionRecallEvent=a[13]??null;
+ poiCompanionRecallGpu=a[14]??null;
+ poiCompanionRejoinTicket=a[15]??null;
+}
+
 // END MONSTER COMPANION CORE
 
 const POI_HOTBAR_KEY='world-workshop-hotbar-v1';
@@ -21245,6 +21376,7 @@ function poiHotbarRead(){
  if(saved.sacredTempleSeen===true)kit.sacredTempleSeen=true;
  const companion=typeof poiCompanionDecode==='function'?poiCompanionDecode(saved.companionSoul):null;
  if(companion)kit.companionSoul=companion;
+ const humanParty=typeof poiHumanPartyDecode==='function'?poiHumanPartyDecode(saved.humanParty):[];if(humanParty.length)kit.humanParty=humanParty;
  const pv=typeof poiPortQuestDecode==='function'?poiPortQuestDecode(saved.portQuests):null;
  if(pv)kit.portQuests=pv;
  const worn=poiArmorDecode(saved.worn);if(worn)kit.worn=worn;
@@ -21343,6 +21475,7 @@ function poiHotbarSave(kit=poiHotbarState){
    ...(poiHasExplicitWeaponDurability(kit)?{weaponDurabilityVersion:2}:{}),...(toolshopSupply?{toolshopSupply}:{}),...(kit.southShipment?{southShipment:kit.southShipment}:{}),...(kit.armedDrops?.length?{armedDrops:kit.armedDrops}:{}),...(kit.fireWandFound?{fireWandFound:true}:{}),...(kit.northTrailCampSupplies===true?{northTrailCampSupplies:true}:{}),...(kit.northWatchPostSupplies===true?{northWatchPostSupplies:true}:{}),...(kit.otherworldEastSupplyFound===true?{otherworldEastSupplyFound:true}:{}),...(kit.chapelWestSupplyFound===true?{chapelWestSupplyFound:true}:{}),...(kit.northMarshHerbFound===true?{northMarshHerbFound:true}:{}),...(kit.northWatchPostGuardLoot===true?{northWatchPostGuardLoot:true}:{}),...(kit.northMinotaurAxeAwarded===true?{northMinotaurAxeAwarded:true}:{}),...(typeof poiOrvasRewardMask==='function'&&poiOrvasRewardMask(kit.orvasRewards)?{orvasRewards:kit.orvasRewards}:{}),...(Number.isInteger(kit.northFortReturn)&&kit.northFortReturn>=0&&kit.northFortReturn<=7?{northFortReturn:kit.northFortReturn}:{}),
    ...(kit.soulDrops?.length?{soulDrops:kit.soulDrops}:{}),
    ...(kit.sacredTempleSeen===true?{sacredTempleSeen:true}:{}),
+   ...(typeof poiHumanPartyDecode==='function'&&poiHumanPartyDecode(kit.humanParty).length?{humanParty:poiHumanPartyDecode(kit.humanParty)}:{}),
    ...(typeof poiPlayerSatietyDecode==='function'&&poiPlayerSatietyDecode(kit.satiety)?{satiety:poiPlayerSatietyDecode(kit.satiety)}:{}),
    ...(typeof poiCompanionDecode==='function'&&poiCompanionDecode(kit.companionSoul)?{companionSoul:poiCompanionDecode(kit.companionSoul)}:{}),
    ...(typeof poiPortQuestDecode==='function'&&poiPortQuestDecode(kit.portQuests)?{portQuests:poiPortQuestDecode(kit.portQuests)}:{}),
@@ -22182,13 +22315,15 @@ function poiCompanionThumbnail(type){
 function poiCompanionUiClose(restore=true){
  const node=$('poiCompanionCommands');
  if(!node||node.hidden)return;
- node.hidden=true;
+ node.hidden=true;poiPartySelectedHuman=null;
  poiCompanionCommandType=null;poiCompanionCommandSlot=null;
  const focus=poiCompanionCommandReturn;poiCompanionCommandReturn=null;
  if(restore&&focus?.isConnected)focus.focus({preventScroll:true});
 }
 function poiCompanionUiPosition(){
  const node=$('poiCompanionCommands'),anchor=poiCompanionCommandReturn?.getBoundingClientRect?.();
+ if(node)node.toggleAttribute('data-party-anchor',!!poiCompanionCommandReturn?.matches?.('.poiPartyCard'));
+ if(node&&anchor)node.style.setProperty('--soul-slot-after',Math.round(anchor.bottom+7)+'px');
  if(!node?.style)return;
  if(anchor&&anchor.width>0&&anchor.height>0){
   node.style.setProperty('--soul-slot-x',(anchor.left+anchor.width/2)+'px');
@@ -22210,14 +22345,15 @@ function poiCompanionUiOpen(kit,index,focus=null){
  const node=$('poiCompanionCommands'),cell=poiInventorySlots(kit)[index],spec=poiCompanionType(cell?.type);
  if(!node||!spec||cell.durability<=0||!poiCompanionAllowed()||document.querySelector('dialog[open],.modal.open'))
   return {ok:false,reason:'unavailable'};
- poiCompanionCommandType=cell.type;poiCompanionCommandSlot=index;poiCompanionCommandReturn=focus;
+ poiPartySelectedHuman=null;poiCompanionCommandType=cell.type;poiCompanionCommandSlot=index;poiCompanionCommandReturn=focus;
  const title=$('poiCompanionCommandsTitle'),status=$('poiCompanionCommandsStatus');
  if(title)title.textContent=spec.name.replace(/の魂$/,'');
  if(status)status.textContent='';
- const active=kit.companionSoul?.active===cell.type,mode=active?poiCompanionMode(kit):null;
+ const active=poiPartyActive(kit,cell.type),mode=active?poiCompanionMode(kit,cell.type):null;
  for(const button of node.querySelectorAll?.('[data-companion-command]')??[]){
   const command=button.dataset.companionCommand;
   button.hidden=command==='summon'?active:command!=='back'&&!active;
+  if(command==='dismiss')button.textContent='魂に戻す';
   if(command==='summon')button.textContent=spec.name.replace(/の魂$/,'')+'を呼ぶ';
   if(command==='fight'||command==='follow')button.setAttribute('aria-pressed',String(command===mode));
  }
@@ -22238,34 +22374,78 @@ function poiCompanionShortcutTap(kit,index){
 function poiCompanionUiCommand(mode){
  if(mode==='back'){poiCompanionUiClose();return}
  if(!['fight','follow','dismiss','summon'].includes(mode))return;
+ if(poiPartySelectedHuman){
+  const id=poiPartySelectedHuman;
+  const r=mode==='dismiss'?poiHumanPartyDismiss(id,performance.now()):poiHumanPartyCommand(id,mode);
+  if(r?.ok||r===true){poiCompanionUiClose();poiEconomyRefresh();}else if($('poiCompanionCommandsStatus'))$('poiCompanionCommandsStatus').textContent='今は指示できません。';
+  return;
+ }
  const kit=poiHotbarRead(),index=poiCompanionCommandSlot,type=poiCompanionCommandType;
  const cell=poiInventorySlots(kit)[index];
  if(!type||cell?.type!==type||!poiCompanionAllowed()){poiCompanionUiClose();return}
  const result=poiCompanionCommand(mode,performance.now(),type);
- if(result.ok){poiCompanionUiClose();poiHotbarRender()}
+ if(result.ok||result.reason==='party-full'){poiCompanionUiClose();poiHotbarRender()}
  else{
   const feedback=$('poiCompanionCommandsStatus');
   if(feedback)feedback.textContent=result.reason==='storage'?'保存できませんでした。もう一度お試しください。':'今は指示できません。';
  }
 }
+let poiPartySelectedHuman=null;
+function poiPartyHumanMenu(member,anchor){
+ const panel=$('poiCompanionCommands');
+ if(!panel||!member)return;
+ poiCompanionCommandType=null;poiCompanionCommandSlot=null;poiCompanionCommandReturn=anchor;
+ poiPartySelectedHuman=member.id;
+ $('poiCompanionCommandsTitle').textContent=member.name;
+ $('poiCompanionCommandsStatus').textContent='';
+ const hp=$('poiCompanionCommandsHP');hp.hidden=false;hp.textContent='HP '+member.hp+' / '+member.maxHp;
+ for(const b of panel.querySelectorAll('[data-companion-command]')){
+  const command=b.dataset.companionCommand;
+  b.hidden=command==='summon'||member.hp<=0&&['fight','follow'].includes(command);
+  if(command==='dismiss')b.textContent='別れる';
+  if(command==='fight'||command==='follow')b.setAttribute('aria-pressed',String(command===member.mode));
+ }
+ panel.hidden=false;poiCompanionUiPosition();
+}
 function poiCompanionHudSync(){
  if(typeof $!=='function')return;
- const root=$('poiCompanionHud');if(!root)return;
+ const first=$('poiCompanionHud');if(!first)return;
  const kit=poiWalkActive&&poiHotbarHasKit()?poiHotbarRead():null;
- const type=kit?.companionSoul?.active,cell=type&&poiInventorySlots(kit).find(c=>c?.type===type);
- const spec=type&&poiCompanionType(type),hp=cell?.durability;
- const visible=!!(spec&&Number.isFinite(hp)&&hp>0&&poiCompanionAllowed()&&!(typeof poiPlayerHP==='number'&&poiPlayerHP<=0));
- if(poiCompanionCommandType&&(!kit||!poiCompanionAllowed()||typeof poiPlayerHP==='number'&&poiPlayerHP<=0||
+ const members=kit&&poiCompanionAllowed()&&poiPlayerHP>0?poiPartyMembers(kit):[];
+ if(poiCompanionCommandType&&(!kit||!poiCompanionAllowed()||poiPlayerHP<=0||
    poiInventorySlots(kit)[poiCompanionCommandSlot]?.type!==poiCompanionCommandType))poiCompanionUiClose(false);
- if(poiCompanionCommandType===type&&visible)poiCompanionUiHealth(cell,spec,true);
- root.hidden=!visible;if(!visible)return;
- const label=spec.name.replace(/の魂$/,'');
- if(root.dataset.companion!==type){
-  root.dataset.companion=type;$('poiCompanionHudName').textContent=label;
-  $('poiCompanionHudHp').setAttribute('aria-label',label+'のHP');
+ if(poiPartySelectedHuman&&!members.some(m=>m.id===poiPartySelectedHuman))poiCompanionUiClose(false);
+ for(let i=0;i<POI_PARTY_LIMIT;i++){
+  let card=i===0?first:$('poiCompanionHud'+i);
+  if(!card&&members[i]){
+   card=first.cloneNode(true);card.id='poiCompanionHud'+i;delete card.dataset.partyWired;
+   card.querySelectorAll('[id]').forEach(el=>el.removeAttribute('id'));
+   first.parentNode.append(card);
+  }
+  if(!card)continue;
+  const m=members[i];card.hidden=!m;
+  if(!m)continue;
+  const label=card.querySelector('strong'),hp=card.querySelector('progress');
+  const value=card.querySelector('.poiHpValue');
+  if(card.dataset.companion!==m.id){card.dataset.companion=m.id;label.textContent=m.name;hp.setAttribute('aria-label',m.name+'のHP');}
+  hp.max=m.maxHp;hp.value=m.hp;value.textContent=m.hp+'/'+m.maxHp;
+  if(!card.dataset.partyWired){
+   card.dataset.partyWired='1';card.tabIndex=0;
+   card.addEventListener('click',()=>poiPartyOpenCard(card));
+   card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();poiPartyOpenCard(card)}});
+  }
+  if(m.kind==='monster'&&poiCompanionCommandType===m.id)poiCompanionUiHealth({durability:m.hp},poiCompanionType(m.id),true);
  }
- $('poiCompanionHudHp').max=spec.hp;$('poiCompanionHudHp').value=hp;
- $('poiCompanionHudHpValue').textContent=hp+'/'+spec.hp;
+}
+function poiPartyOpenCard(card){
+ if(!poiCompanionAllowed())return;
+ const kit=poiHotbarRead(),member=poiPartyMembers(kit).find(x=>x.id===card.dataset.companion);
+ if(!member)return;
+ if(member.kind==='human')poiPartyHumanMenu(member,card);
+ else{
+  const slot=poiInventorySlots(kit).findIndex(c=>c?.type===member.id);
+  if(slot>=0)poiCompanionUiOpen(kit,slot,card);
+ }
 }
 // END COMPANION COMMAND UI
 // BEGIN PLAYER SATIETY
@@ -23699,7 +23879,7 @@ function poiItemDetailCell(ref){
 function poiItemDetailActions(zone,cell,chestOpen,hasSplitSpace=true){
  if(zone==='npc')return ['back'];
  if(typeof poiCompanionType==='function'&&poiCompanionType(cell.type))return zone==='bag'||zone==='hotbar'?
-  ['use',...(typeof poiHotbarRead==='function'&&poiHotbarRead().companionSoul?.active===cell.type?[]:['drop']),'back']:['back'];
+  ['use',...(typeof poiHotbarRead==='function'&&poiPartyActive(poiHotbarRead(),cell.type)?[]:['drop']),'back']:['back'];
  if(cell.type==='gold')return [...(cell.count>1&&hasSplitSpace?['split']:[]),'back'];
  if(zone==='armor')return ['unequip','back'];
  const actions=[];
@@ -23855,7 +24035,7 @@ function poiItemDetailRender(){
   const action=button.dataset.itemDetailAction;
   if(action==='transfer')button.textContent=ref.zone==='chest'?'インベントリに入れる':'チェストに入れる';
   if(action==='use')button.textContent=typeof poiCompanionType==='function'&&poiCompanionType(cell.type)?
-   (poiHotbarRead().companionSoul?.active===cell.type?'仲間に指示':'仲間を呼ぶ'):cell.type==='fireWand'?(typeof poiArmedWandIndex==='function'&&poiArmedWandIndex()===poiInventoryIndex(ref)?'構えを解く':'構える'):'使う';
+   (poiPartyActive(poiHotbarRead(),cell.type)?'仲間に指示':'仲間を呼ぶ'):cell.type==='fireWand'?(typeof poiArmedWandIndex==='function'&&poiArmedWandIndex()===poiInventoryIndex(ref)?'構えを解く':'構える'):'使う';
   button.hidden=!actions.includes(action);
  }
  if(document.activeElement?.hidden&&dialog.contains(document.activeElement))
@@ -26212,7 +26392,7 @@ function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMo
  if(obj.type==='monsterNorthMinotaur'){if(typeof poiNorthMinotaurFrame==='function'&&poiNorthMinotaurFrame(obj,state,now))changed=true;continue}
  if(state.actorFree&&poiMonsterActorPoint(state.actorFree,now).t<1)continue;
  const patrol=typeof poiDungeonPatrolSite==='function'&&!state.wildSpawn?poiDungeonPatrolSite(obj):null;
- if(typeof poiCompanionNormal==='function'&&typeof poiCompanionActor!=='undefined'&&poiCompanionActor)
+ if(typeof poiCompanionNormal==='function'&&poiPartyActors().length)
   state.companionAware=poiCompanionNormal(obj,state);
  if(typeof poiCompanionHostileChase==='function'&&poiCompanionHostileChase(obj,state,now,patrol))continue;
  const allowed=poiMineEarlyMayMove(obj,poiWalkX,poiWalkZ)&&
@@ -26536,6 +26716,7 @@ function poiTownRememberAdventurers(){
 // END TOWN ADVENTURER MEMORY
 function poiTownResidentsReset(keepProgress=false){
  if(keepProgress)poiTownRememberAdventurers();else poiTownAdventurerMemory.clear();
+ if(!keepProgress&&typeof poiHumanPartyPendingReturns!=='undefined')poiHumanPartyPendingReturns.clear();
  poiTownDialogueClose();poiTownAmbientClose();
  if(poiTownNpcActors.length)poiTownNpcRelease();
  poiTownNpcActors=[];poiTownNpcBook=null;poiTownNpcNext=0;poiTownNpcNav=null;poiTownNpcVersion++;
@@ -27126,6 +27307,126 @@ function poiTownNpcPurseApply(a,kind,bed=null,absoluteMinute=null){
  return 'ok';
 }
 // END TOWN NPC CANONICAL PURSE
+// BEGIN HUMAN PARTY
+const POI_HUMAN_PARTY_IDS=Object.freeze({
+ 'human:resadventurer':'resadventurer','human:guestadventurer':'guestadventurer'
+});
+const poiHumanPartyPendingReturns=new Map();
+function poiHumanPartySpec(id){
+ if(!Object.hasOwn(POI_HUMAN_PARTY_IDS,id))return null;
+ const key=POI_HUMAN_PARTY_IDS[id],role=POI_TOWN_RESIDENT_ROLES.find(a=>a.id===key);
+ if(!role||role.role!=='adventurer')return null;
+ const loadout=poiTownNpcLoadout({role});
+ return {id,kind:'human',npcId:key,name:role.name,maxHp:POI_TOWN_RESIDENT_HP,
+  attack:poiTownNpcAttackPower({role,...loadout}),defense:poiTownNpcDefense({role,...loadout}),
+  weapon:loadout.weapon,gear:loadout.gear,type:role.type,enemy:null};
+}
+function poiHumanPartyDecode(raw){
+ if(!Array.isArray(raw))return [];
+ const seen=new Set(),out=[];
+ for(const v of raw.slice(0,2)){
+  if(!v||!Object.hasOwn(POI_HUMAN_PARTY_IDS,v.id)||seen.has(v.id)||
+     !Number.isInteger(v.hp)||v.hp<0||v.hp>POI_TOWN_RESIDENT_HP)continue;
+  seen.add(v.id);out.push({id:v.id,hp:v.hp,mode:v.mode==='follow'?'follow':'fight'});
+ }
+ return out;
+}
+function poiHumanPartyMembers(kit){
+ return poiHumanPartyDecode(kit?.humanParty).map(v=>{
+  const spec=poiHumanPartySpec(v.id);return spec?{...spec,...v}:null;
+ }).filter(Boolean);
+}
+function poiHumanPartyAway(npcId,kit){
+ if(!Object.values(POI_HUMAN_PARTY_IDS).includes(npcId))return false;
+ if(kit===undefined)kit=typeof poiHotbarHasKit==='function'&&poiHotbarHasKit()?poiHotbarRead():null;
+ return poiHumanPartyDecode(kit?.humanParty).some(a=>POI_HUMAN_PARTY_IDS[a.id]===npcId);
+}
+function poiHumanPartyCanRecruit(a){
+ return !!a?.role&&a.role.role==='adventurer'&&Object.hasOwn(POI_HUMAN_PARTY_IDS,'human:'+a.role.id);
+}
+function poiHumanPartyRecruit(a,now=0){
+ const reject=reason=>({ok:false,reason});
+ if(!poiHumanPartyCanRecruit(a))return reject('ineligible');
+ if(facilitySite?.id!=='base'||!poiTownNpcActors.includes(a)||a.recessed||a.death||a.target||a.bedId||a.hp<=0)
+  return reject('busy');
+ const kit=poiHotbarRead(),id='human:'+a.role.id;
+ if(poiHumanPartyAway(a.role.id,kit))return reject('duplicate');
+ if(typeof poiPartyHasRoom!=='function'||!poiPartyHasRoom(kit))return reject('full');
+ if(!poiEconomyWrite({...kit,humanParty:[...poiHumanPartyDecode(kit.humanParty),{id,hp:Math.min(POI_TOWN_RESIDENT_HP,Math.round(a.hp)),mode:'fight'}]}))
+  return reject('storage');
+ // The successful kit transaction owns this identity. Only then remove
+ // it from town collision, dialogue, roaming, encounters and bed lookup.
+ poiTownNpcReleaseHunt(a);
+ poiTownNpcActors=poiTownNpcActors.filter(n=>n!==a);poiTownNpcVersion++;
+ poiHumanPartyPendingReturns.delete(a.role.id);
+ if(typeof poiPartyAdoptHuman==='function')poiPartyAdoptHuman(id,a,now);
+ return {ok:true,id};
+}
+function poiHumanPartyHurt(id,damage,now=0){
+ const spec=poiHumanPartySpec(id);if(!spec||!Number.isFinite(damage)||damage<=0)return false;
+ const kit=poiHotbarRead(),list=poiHumanPartyDecode(kit.humanParty),a=list.find(v=>v.id===id);
+ if(!a?.hp)return false;
+ a.hp=Math.max(0,a.hp-Math.max(1,Math.round(damage)-Math.ceil(spec.defense||0)));
+ if(!poiEconomyWrite({...kit,humanParty:list}))return false;
+ if(a.hp===0&&typeof toast==='function')toast(spec.name+'は戦えなくなった。');
+ return true;
+}
+function poiHumanPartyCommand(id,mode){
+ const kit=poiHotbarRead(),list=poiHumanPartyDecode(kit.humanParty),a=list.find(v=>v.id===id);
+ if(!a||!a.hp||!['fight','follow','flee','escape','auto'].includes(mode))return false;
+ const next=mode==='fight'||mode==='auto'?'fight':'follow';
+ if(a.mode===next)return true;
+ a.mode=next;
+ return poiEconomyWrite({...kit,humanParty:list});
+}
+function poiHumanPartyDismiss(id,now=0){
+ const kit=poiHotbarRead(),list=poiHumanPartyDecode(kit.humanParty),a=list.find(v=>v.id===id);
+ if(!a)return {ok:false,reason:'missing'};
+ const next={...kit,humanParty:list.filter(v=>v.id!==id)};
+ if(!poiEconomyWrite(next))return {ok:false,reason:'storage'};
+ const key=POI_HUMAN_PARTY_IDS[id];
+ poiHumanPartyPendingReturns.set(key,Math.max(1,a.hp));
+ poiHumanPartyTownTick();
+ return {ok:true,id};
+}
+function poiHumanPartyTownTick(){
+ if(!poiHumanPartyPendingReturns.size||facilitySite?.id!=='base'||poiWalkLevel!==0)return;
+ for(const [id,hp] of poiHumanPartyPendingReturns){
+  if(poiHumanPartyAway(id)||poiTownNpcActors.some(a=>a.role.id===id)){poiHumanPartyPendingReturns.delete(id);continue}
+  const role=POI_TOWN_RESIDENT_ROLES.find(a=>a.id===id);
+  if(!role){poiHumanPartyPendingReturns.delete(id);continue}
+  const p=[role.home,role.public].find(q=>q&&q.y===0&&poiTownNpcStance(q)&&
+   Math.hypot(q.x-poiWalkX,q.z-poiWalkZ)>1.3&&
+   !poiTownNpcActors.some(a=>!a.recessed&&a.x===q.x&&a.z===q.z&&a.y===q.y));
+  if(!p)continue;
+  const a={role,...poiTownNpcLoadout({role}),...p,index:POI_TOWN_RESIDENT_ROLES.indexOf(role),hp,activity:'idle',
+   recessed:false,attacks:0,coins:0,potions:0,bedId:null,bedUntil:null,restUntil:null,path:null,nextPlan:0,attackAt:0,encounterAt:0};
+  const resident=typeof poiTownNpcPurseHydrate==='function'?poiTownNpcPurseHydrate(a):a;
+  // The port streaming code uses a tail marker; never append a Base
+  // returnee behind currently loaded port-specific actors.
+  const port=poiTownNpcActors.findIndex(b=>b.role?.portBounds);
+  poiTownNpcActors.splice(port<0?poiTownNpcActors.length:port,0,resident);poiTownNpcVersion++;
+  poiHumanPartyPendingReturns.delete(id);
+ }
+}
+function poiHumanPartyWorldPose(a,now){
+ const spec=poiHumanPartySpec(a.id),p=poiCompanionPosition(a),q=a.attackMotion;
+ const bearing=q&&now-q.start<260?[q.dx,q.dz]:[a.freeDx,a.freeDz];
+ const usable=Number.isFinite(bearing[0])&&Number.isFinite(bearing[1])&&Math.hypot(...bearing)>.00001;
+ if(usable)a.humanHeading=Math.atan2(-bearing[0],bearing[1]);
+ const heading=a.humanHeading??0;
+ const y=terrainY(a.x,a.z)+(a.y*1.4)+.025+(typeof poiCompanionBridgeLift==='function'?poiCompanionBridgeLift(a):0);
+ return {human:true,type:spec?.type,x:p.x+.5,y,z:p.z+.5,heading,facing:0,attack:!!(q&&now-q.start<260)};
+}
+function poiHumanPartyMesh(m,a,pose,now){
+ const spec=poiHumanPartySpec(a.id);if(!spec||!pose)return false;
+ const stride=a.freeMoving?Math.sin((a.freeMileage||0)*Math.PI*2)*.19:0;
+ const swing=poiWalkSwordPose(now-(a.attackMotion?.start??-Infinity));
+ const part=poiBuildPlayerMesh(spec.weapon,swing,spec.gear,stride,0,pose.x,pose.y,pose.z,pose.heading);
+ for(const key of ['p','n','c'])for(const v of part[key])m[key].push(v);
+ return true;
+}
+// END HUMAN PARTY
 function poiTownNpcInit(clock){
  if(poiTownNpcActors.length)return;
  const merchant=typeof poiSouthMarketRole==='function'?poiSouthMarketRole():null;
@@ -27135,6 +27436,7 @@ function poiTownNpcInit(clock){
  const roster=[...POI_TOWN_RESIDENT_ROLES,...(merchant?[merchant]:[]),...duty,...daily,...gateways];
  const reserved=new Set();
  poiTownNpcActors=roster.map((role,index)=>{
+  if(typeof poiHumanPartyAway==='function'&&poiHumanPartyAway(role.id))return null;
   const visitor=role.role==='visitor';
   const duty=typeof poiTownDutyPlan==='function'?poiTownDutyPlan(role,clock.minute):null;
   const daily=typeof poiTownDailyPlan==='function'?poiTownDailyPlan(role,clock):null;
@@ -27158,7 +27460,7 @@ function poiTownNpcInit(clock){
   const actor={role,weapon,gear,...p,index,...(returning?{supplyCarrying:true}:{}),hp:personal?.hp??POI_TOWN_RESIDENT_HP,activity:returning?'supply-return':recessed?'offsite':duty?.label||daily?.label||'idle',recessed,attacks:0,coins:personal?.coins??0,potions:personal?.potions??0,bedId:bed?.id??null,
    bedUntil:bed?morning:null,restUntil:null,path:null,nextPlan:0,attackAt:0,encounterAt:0};
   return typeof poiTownNpcPurseHydrate==='function'?poiTownNpcPurseHydrate(actor):actor;
- });
+ }).filter(Boolean);
  poiTownNpcVersion++;
 }
 function poiTownNpcBedOwner(b){
@@ -28389,6 +28691,15 @@ function poiNpcMenuChoose(id,now=performance.now()){
   d.text=id==='request'?'どんな用かな？':id==='sell'?'どれを売りたい？':'どれにする？';
  }else if(id==='local-help'){
   d.text=d.actor.role.id==='portfisher'?'網を直してるところさ。今は頼みごとはないよ。':'魚を干してるところだよ。今は頼みごとはないよ。';
+ }else if(id==='recruit'&&typeof poiHumanPartyRecruit==='function'){
+  const result=poiHumanPartyRecruit(d.actor,now);
+  if(result.ok){
+   const name=poiTownNpcDisplayName(d.actor.role);poiTownDialogueClose();
+   if(typeof poiEconomyRefresh==='function')poiEconomyRefresh();
+   if(typeof toast==='function')toast(name+'が仲間になった。');
+   return true;
+  }
+  d.text=({full:'仲間は3人までです。',storage:'保存できなかったため、仲間にはなっていません。',busy:'今は同行できない。'})[result.reason]||'ここを離れられない。';
  }else if(id==='recruit')d.text='今は忙しい';
  else if(id==='stay'){
   const result=poiTownRequestPlayerLodging(),room={'inn-west':'西','inn-east':'東','inn-south':'南'}[result?.bed?.id];
@@ -28818,6 +29129,7 @@ function poiTownResidentsFrame(now){
  if(typeof poiTownNpcProcTick==='function')poiTownNpcProcTick(clock,now);
  if(poiTownNpcBook&&clock.absoluteMinute>=poiTownNpcBook.until)poiTownNpcBook=null;
  poiTownNpcInit(clock);
+ if(typeof poiHumanPartyTownTick==='function')poiHumanPartyTownTick();
  if(typeof poiPortNpcSync==='function')poiPortNpcSync(clock,now);
  const budget={plans:2};
  const speaker=poiTownDialogueUpdate(now);
@@ -29059,7 +29371,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v346',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v347',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -29174,7 +29486,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v346';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v347';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -29389,7 +29701,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v346',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v347',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -37002,7 +37314,7 @@ function poiDrawDavidRaisedStone(now,vp,bank=null){
 // END DAVID RAISED STONE
 
 function poiDrawDavidCue(now,vp,ally=false){
- const s=ally?poiCompanionActor:poiDavidActive?.s,q=s?.david?.attack,o=poiDavidActive?.o,b=ally?q?.allyArena:poiDavidMatch(o);
+ const s=ally?poiPartyActorById("orvasSoul"):poiDavidActive?.s,q=s?.david?.attack,o=poiDavidActive?.o,b=ally?q?.allyArena:poiDavidMatch(o);
  const finishing=!!s?.david?.deathFinish,active=q&&b&&(ally?s.id==='orvasSoul'&&poiCompanionSame(s,poiCompanionPlace()):s.hp>0)&&
   (poiEnemyThreatEnabled()||finishing)&&poiWalkLevel===q.y&&(poiDavidIn(b,poiAimOrigin(now))||ally&&poiOrvasAllyBossLatch(s,now));
  let poiDavidCue=ally?poiOrvasAllyEffects.cue:readDavidHostileCue();
@@ -37198,7 +37510,7 @@ function render(){
  drawSignOverlays(p.vp,daylight);pineDrawEditCursor(p.vp);
  poiDrawNorthAxeCue(now,p.vp);
  const davidBeam=typeof poiDrawDavidCue==='function'?poiDrawDavidCue(now,p.vp):null;
- const alliedDavidBeam=(poiCompanionActor?.id==='orvasSoul'||poiOrvasAllyEffects.cue)?poiDrawDavidCue(now,p.vp,true):null;
+ const alliedDavidBeam=(poiPartyActorById('orvasSoul')||poiOrvasAllyEffects.cue)?poiDrawDavidCue(now,p.vp,true):null;
  if(typeof poiDrawOrvasGroundTraces==='function')poiDrawOrvasGroundTraces(now,p.vp);
  if(typeof poiDrawDavidFissure==='function')poiDrawDavidFissure(now,p.vp);
  if(typeof poiDrawOrvasWalkFissures==='function')poiDrawOrvasWalkFissures(now,p.vp);
