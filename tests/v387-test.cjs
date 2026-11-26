@@ -1,0 +1,13 @@
+const fs=require('node:fs'),a=require('node:assert/strict'),vm=require('node:vm');
+const h=fs.readFileSync(process.argv[2]||'candidate.html','utf8');
+for(const m of h.matchAll(/<script>([\s\S]*?)<\/script>/g))new vm.Script(m[1]);
+const slice=(first,last)=>h.slice(h.indexOf(first),h.indexOf(last,h.indexOf(first)));
+const names=slice('function frontierHouseFurnitureAt','function frontierRotateBuildingMesh');
+a(names.includes('frontierHouseWallRects')&&names.includes('function frontierHouseClip'),'house collision must use wall/furniture footprints');
+const stick=slice("case 'equipStick':{","case 'equipClub':{");
+a(stick.includes('bark')&&stick.includes('offshoot')&&stick.includes('broken'), 'wood stick should read as a forked branch');
+a(h.includes('equipStick:{range:1.55,reachStars:3,damage:16'),'weapon stats must be unchanged');
+console.log('PASS partial house footprints and forked wooden stick model');
+a(/\.frontierLifeLine\{[^}]*background:var\(--workshop-panel-surface\)/.test(h),'overhead speech should use the shared panel surface');
+const ally=slice('function poiCompanionResolve','// BEGIN HOSTILE ALLY TARGET CHOICE');
+a(ally.includes("poiCompanionWeaponCue(a,q.type,'swing')")&&ally.includes("poiCompanionWeaponCue(a,q.type,'release')"),'human allies should emit their own swings and bow release');
