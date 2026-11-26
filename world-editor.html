@@ -1755,7 +1755,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v447）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v448）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="2500" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -28198,7 +28198,7 @@ const FRONTIER_SOUTH_PURSUIT_NEIGHBOURS=[[0,-1],[-1,0],[1,0],[0,1]];
 const frontierSouthPursuitCache=new Map();
 const frontierSouthPursuitKey=(x,z)=>x*256+z;
 function frontierSouthPursuitChoice(s,remembered,humans,notice,line){
- const tracked=humans.find(h=>h.key===remembered);
+ const tracked=humans.find(h=>h.key===remembered)??humans.find(h=>h.key===s.southHitBy);
  if(tracked)return tracked; // No distance or LOS expiry inside the ruins.
  let target=null,best=notice;
  for(const h of humans){
@@ -28295,7 +28295,7 @@ function frontierSouthPursuitFrame(o,s,now,human){
  if(s.playerAttack?.pending)return;
  const target=frontierSouthPursuitChoice(s,s.southPursuit,human.people,poiSouthSentinelSpec(o).notice,
   h=>poiCompanionAttackClear(s,h,-1));
- s.southPursuit=target?.key??null;
+ s.southPursuit=target?.key??null;s.southHitBy=null;
  if(!target)return;
  if(s.actorFree&&poiMonsterActorSettle(o,s,now))return;
  if(target.kind==='npc'){
@@ -29858,7 +29858,7 @@ function poiTownNpcActorRun(a,now,g){
   a.x=x;a.z=z;a.actorLeg=null;a.fromX=x;a.fromZ=z;poiTownNpcVersion++;
   a.walkMileage=leg.traveled+Math.hypot(changeX,changeZ);a.walkHeading=leg.heading;a.walkFinished=now;
   if(a.goal&&a.path?.length&&!a.target&&!a.frontierCombat&&!a.frontierStrike)
-   poiTownNpcMove(a,a.goal,a.activity,now,{plans:0,continueFree:true});
+   poiTownNpcMove(a,a.goal,a.activity,now,{plans:0,continueFree:true},a.expeditionRoutePlanner);
   return;
  }
  if(next.stopped||next.distance<=1e-6||Math.abs(changeX*leg.dz-changeZ*leg.dx)>1e-5){
@@ -29881,13 +29881,15 @@ function poiTownNpcPlayerBlocksStep(from,to,now){
    to.y!==from.y&&poiTownNpcPlayerBodyBlocks(to.x,to.z,to.x,to.z,to.y,now));
 }
 function poiTownNpcPace(a){return POI_TOWN_RESIDENT_TICK/poiHumanMovementFactor(poiTownAttributes(a))}
-function poiTownNpcMove(a,want,label,now,budget){
+function poiTownNpcMove(a,want,label,now,budget,routeOnly=null){
  const exactSupply=a.role?.id==='toolkeeper'&&(label==='supply-pickup'||label==='supply-return');
  const k=want?poiTownNpcKey(want.x,want.z,want.y):null;
- if(a.goalKey!==k){
+ if(a.goalKey!==k||!!routeOnly!==!!a.expeditionRouteOnly){
+  a.expeditionRouteOnly=!!routeOnly;
   a.goalKey=k;a.goal=want;a.path=null;a.nextPlan=0;a.actorRetryCardinal=false;a.playerDetour=false;a.npcDetour=false;
   if(a.actorLeg)poiTownNpcActorSettle(a,now)
  }
+ a.expeditionRoutePlanner=routeOnly;
  if(!want)return false;
  if(a.actorLeg){
   if(exactSupply)poiTownNpcActorSettle(a,now);
@@ -29900,7 +29902,7 @@ function poiTownNpcMove(a,want,label,now,budget){
   const detour=bounds||a.playerDetour||a.npcDetour?(from,to)=>
    bounds&&!poiPortNpcContains(bounds,to)||a.npcDetour&&poiTownNpcActorOccupied(to.x,to.z,to.y,a)||a.playerDetour&&
     Math.abs(to.x-poiWalkX)<=2&&Math.abs(to.z-poiWalkZ)<=2&&poiTownNpcPlayerBlocksStep(from,to,now):undefined;
-  budget.plans--;a.path=poiTownFindPath(a,want,detour);
+  budget.plans--;a.path=routeOnly?routeOnly(a,want):poiTownFindPath(a,want,detour);
   if(!a.path?.length){a.nextPlan=now+1800;return false}
  }
  const graph=poiTownNpcGraph();
@@ -29914,7 +29916,9 @@ function poiTownNpcMove(a,want,label,now,budget){
   // visit each authored waypoint. Never pull past the exact goal.
   const canPull=!a.actorRetryCardinal&&!a.playerDetour&&a.role?.id!==POI_SOUTH_MERCHANT_ID;
   const legal=(x,z,fx,fz)=>poiTownNpcActorLegal(a,graph,want,x,z,fx,fz);
-  const pulled=poiActorPickSegment(a,canPull?a.path:[p],next=>poiTownNpcActorPinned(a,next,graph,want,underground),legal,true);
+  const turn=routeOnly?a.path.findIndex(q=>q.x!==a.x&&q.z!==a.z):-1;
+  const prefix=turn<0?a.path:a.path.slice(0,turn);
+  const pulled=poiActorPickSegment(a,canPull?prefix:[p],next=>poiTownNpcActorPinned(a,next,graph,want,underground),legal,true);
   const finalCell=pulled.used===1?p:null;
   if(pulled.used>1||pulled.used===1&&poiTownNpcActorLegal(a,graph,want,p.x,p.z,a.x,a.z,finalCell)){
    const to=pulled.target,dx=to.x-a.x,dz=to.z-a.z;
@@ -31931,7 +31935,13 @@ function frontierNpcStrike(a,now){
  const before=s.hp,reach=Math.hypot(s.x-a.x,s.z-a.z),shaft=poiSpearType(q.weapon)&&reach<q.range-(q.profile?.tipLength??0);
  const attack=poiTownNpcAttackPower(a)??POI_TOWN_RESIDENT_MELEE;
  poiPlayerDamageTarget([q.obj,s],s.x,s.z,shaft?Math.max(1,Math.round(attack*.75)):attack,q.weapon,now,!poiTownNpcCombatNear(a.x,a.z,a.y),true,{companion:true,resident:true,started:a.swingAt,actorId:a.role.id});
- if(s.hp<before){a.attacks++;a.lastHitAt=now}
+ if(s.hp<before){
+  a.attacks++;a.lastHitAt=now;
+  if(s.hp>0&&q.obj.y===-1&&frontierSouthRecordId(q.obj)&&frontierSouthPursuitNpcValid(a)){
+   const key=frontierSouthPursuitHumanKey('npc',a.role.id);
+   s.southHitBy=key;s.southPursuit??=key;
+  }
+ }
  if(s.hp<=0){a.frontierCombat=null;frontierNpcCollect(a,now)}
 }
 function frontierReturnTile(where,hero=null){
@@ -32013,14 +32023,14 @@ function frontierExpeditionLook(m,p,walk,traversed=null){
   (walk(x,z)?m.floor:m.walls).add(key);
  }
 }
-function frontierExpeditionLearnTree(m,p){
+function frontierExpeditionLearnTree(m,p,blocked=-1){
  const root=frontierExpeditionMapKey(p.x,p.z),prev=new Map([[root,null]]),dist=new Map([[root,0]]),queue=[root];
  if(root<0||!m.floor.has(root))return {root,prev,dist,queue:[]};
  for(let i=0;i<queue.length;i++){
   const k=queue[i],{x,z}=frontierExpeditionMapPoint(k);
   for(const [u,v] of FRONTIER_EXPEDITION_DIRECTIONS){
    const next=frontierExpeditionMapKey(x+u,z+v);
-   if(!m.floor.has(next)||prev.has(next))continue;
+   if(next===blocked||!m.floor.has(next)||prev.has(next))continue;
    prev.set(next,k);dist.set(next,dist.get(k)+1);queue.push(next);
   }
  }
@@ -32031,8 +32041,15 @@ function frontierExpeditionTrace(tree,k){
  const result=[];for(let n=k;n!==tree.root;n=tree.prev.get(n))result.push(frontierExpeditionMapPoint(n));
  return result.reverse();
 }
-function frontierExpeditionLearnPath(m,a,b){
- return frontierExpeditionTrace(frontierExpeditionLearnTree(m,a),frontierExpeditionMapKey(b.x,b.z));
+function frontierExpeditionLearnPath(m,a,b,blocked=-1){
+ return frontierExpeditionTrace(frontierExpeditionLearnTree(m,a,blocked),frontierExpeditionMapKey(b.x,b.z));
+}
+const frontierExpeditionCell=p=>frontierExpeditionMapKey(p.x,p.z);
+const frontierExpeditionWalk=(x,z)=>frontierSouthRuinsOwn(x,z)&&!frontierSouthChestAt(x,z);
+function frontierExpeditionScopedPath(m,actor,goal){
+ const peer=poiTownNpcActors.find(p=>p!==actor&&p.y===-1&&!p.death&&!p.recessed&&FRONTIER_EXPEDITION_NPCS.includes(p.role.id));
+ const avoid=peer?frontierExpeditionCell(peer):-1;
+ return frontierExpeditionLearnPath(m,actor,goal,avoid);
 }
 function frontierExpeditionSegment(path,a){
  // Keep the mover's target on the first visible straight piece of the
@@ -32048,8 +32065,8 @@ function frontierExpeditionSegment(path,a){
  }
  return end;
 }
-function frontierExpeditionChoose(m,p){
- const tree=frontierExpeditionLearnTree(m,p);
+function frontierExpeditionChoose(m,p,blocked=-1){
+ const tree=frontierExpeditionLearnTree(m,p,blocked);
  let best=null,score=Infinity;
  for(const k of tree.queue){
   if(k===tree.root)continue;
@@ -32086,7 +32103,7 @@ function frontierExpeditionStudyMemory(s){
  return frontierExpeditionStudyMap;
 }
 function frontierExpeditionStudySense(s,lead){
- const m=frontierExpeditionStudyMemory(s),at=frontierExpeditionMapKey(lead.x,lead.z);
+ const m=frontierExpeditionStudyMemory(s),at=frontierExpeditionCell(lead);
  if(at===frontierExpeditionStudyAt)return m;
  if(frontierExpeditionStudyAt!==null){
   const from=frontierExpeditionMapPoint(frontierExpeditionStudyAt),dx=lead.x-from.x,dz=lead.z-from.z;
@@ -32094,7 +32111,7 @@ function frontierExpeditionStudySense(s,lead){
    m.dx=Math.abs(dx)>Math.abs(dz)?Math.sign(dx):0;m.dz=m.dx?0:Math.sign(dz);
   }
  }
- frontierExpeditionStudyAt=at;frontierExpeditionLook(m,lead,frontierSouthRuinsOwn);return m;
+ frontierExpeditionStudyAt=at;frontierExpeditionLook(m,lead,frontierExpeditionWalk);return m;
 }
 function frontierExpeditionStudyAtGoal(p,goal,now,exact=false){
  if(p.y!==-1||p.actorLeg||poiTownNpcStepT(p,now)<1)return false;
@@ -32110,37 +32127,50 @@ function frontierExpeditionStudyTick(s,kit,team,commit,now){
   return;
  }
  const current=Number.isInteger(s.studyGoal)?frontierExpeditionMapPoint(s.studyGoal):null;
- let handoff=false;
- if(current&&!frontierExpeditionStudyAtGoal(lead,current,now,true)){
-  // At a tight turn the trailing scout can be the first one to reach the
-  // spot. Hand over the lead instead of forcing two bodies to switch cells.
-  const first=team.find(a=>a!==lead&&frontierExpeditionStudyAtGoal(a,current,now,true)&&
-   Math.hypot(lead.x-a.x,lead.z-a.z)<=4.2);
-  if(first&&frontierExpeditionSeen(lead,first,frontierSouthRuinsOwn)){lead=first;handoff=true}
- }
  const m=frontierExpeditionStudySense(s,lead);
+ let rear=team.find(a=>a!==lead&&a.y===-1);
+ // Combat or a restored save can separate the pair. Rejoin through known floor.
+ if(rear&&!m.visited.has(frontierExpeditionCell(rear)))frontierExpeditionLook(m,rear,frontierExpeditionWalk);
  const exit={...FRONTIER_SOUTH_STAIR,y:-1},boss=frontierSouthEnemyRecords().at(-1);
- if(s.phase==='out'&&boss&&m.floor.has(frontierExpeditionMapKey(boss.x,boss.z))&&frontierSouthBossDefeated(kit)){
+ if(s.phase==='out'&&boss&&m.floor.has(frontierExpeditionCell(boss))&&frontierSouthBossDefeated(kit)){
   commit({...s,phase:'back',step:0,result:kit.southClearBy==='other'?'precleared':'success',landed:false,studyActive:true,
-   study:frontierExpeditionMapEncode(m),studyGoal:null,studyLead:lead.role.id});return;
+   study:frontierExpeditionMapEncode(m),studyGoal:null,studyAnchor:null,studyLead:lead.role.id});return;
  }
  if(s.phase==='back'&&frontierExpeditionStudyAtGoal(lead,exit,now,true)&&team.every(a=>a===lead||a.y===0||frontierExpeditionStudyAtGoal(a,exit,now))){
-  commit({...s,step:0,landed:false,studyActive:false,study:frontierExpeditionMapEncode(m),studyGoal:null});return;
+  commit({...s,step:0,landed:false,studyActive:false,study:frontierExpeditionMapEncode(m),studyGoal:null,studyAnchor:null});return;
  }
- if(current&&!handoff&&s.studyLead===lead.role.id){
-  const d=Math.hypot(lead.x-current.x,lead.z-current.z);
-  if(d<=4.25&&frontierExpeditionSeen(lead,current,frontierSouthRuinsOwn)||
-     (frontierExpeditionLearnPath(m,lead,current)?.length??Infinity)<=8){
-   if(!frontierExpeditionStudyAtGoal(lead,current,now,true)||!team.every(a=>a===lead||frontierExpeditionStudyAtGoal(a,current,now)))return;
+ if(lead.actorLeg||poiTownNpcStepT(lead,now)<1)return;
+ const anchor=Number.isInteger(s.studyAnchor)?frontierExpeditionMapPoint(s.studyAnchor):null;
+ if(current&&anchor&&s.studyLead===lead.role.id){
+  const path=frontierExpeditionScopedPath(m,lead,current);
+  if(path?.length)return; // Finish the current learned segment before selecting another.
+  if(frontierExpeditionStudyAtGoal(lead,current,now,true)&&rear&&
+     !frontierExpeditionStudyAtGoal(rear,anchor,now,true)&&
+     !frontierExpeditionStudyAtGoal(rear,lead,now))return;
+ }
+ const findNext=a=>{
+  const learned=s.phase==='back'?frontierExpeditionLearnPath(m,a,exit):null;
+  return frontierExpeditionSegment(learned,a)||frontierExpeditionChoose(m,a);
+ };
+ let next=findNext(lead);
+ if(next&&rear&&!rear.actorLeg&&poiTownNpcStepT(rear,now)>=1){
+  const preferred=frontierExpeditionLearnPath(m,lead,next);
+  if(preferred?.some(p=>frontierExpeditionCell(p)===frontierExpeditionCell(rear))&&
+     !frontierExpeditionScopedPath(m,lead,next)){
+   // At a single-file turnaround, the rear scout is already in front
+   // in the new direction; swap roles, not positions.
+   const onward=frontierExpeditionLearnPath(m,rear,next,frontierExpeditionCell(lead))?.length?next:findNext(rear);
+   if(onward&&frontierExpeditionLearnPath(m,rear,onward,frontierExpeditionCell(lead))?.length){
+    [lead,rear]=[rear,lead];next=onward;
+   }else if(frontierExpeditionCell(next)===frontierExpeditionCell(rear)&&m.visited.has(frontierExpeditionCell(rear))){
+    const alternate=frontierExpeditionChoose(m,lead,frontierExpeditionCell(rear));
+    if(alternate)next=alternate;
+   }
   }
  }
- const learned=s.phase==='back'?frontierExpeditionLearnPath(m,lead,exit):null;
- const next=frontierExpeditionSegment(learned,lead)||frontierExpeditionChoose(m,lead);
- // An exhausted accessible component is not a reason to cheat with a
- // pre-authored boss route. Stay with the last sighted ground/entrance.
- if(!next)return;
+ if(!next||!frontierExpeditionScopedPath(m,lead,next)?.length)return;
  commit({...s,step:0,landed:false,studyActive:true,study:frontierExpeditionMapEncode(m),
-  studyGoal:frontierExpeditionMapKey(next.x,next.z),studyLead:lead.role.id,
+  studyGoal:frontierExpeditionCell(next),studyAnchor:frontierExpeditionCell(lead),studyLead:lead.role.id,
   studyFacing:next.x===lead.x?next.z>=lead.z?2:0:next.x>lead.x?1:3});
 }
 // END EXPEDITION LEARNED ROUTES
@@ -32163,9 +32193,10 @@ function frontierExpeditionDecode(s){
  const studyActive=!!study&&s.studyActive===true&&(s.phase==='out'||s.phase==='back');
  const studyLead=FRONTIER_EXPEDITION_NPCS.includes(s.studyLead)?s.studyLead:FRONTIER_EXPEDITION_NPCS[0];
  const studyFacing=[0,1,2,3].includes(s.studyFacing)?s.studyFacing:2;
+ const studyAnchor=Number.isInteger(s.studyAnchor)&&study?.visited.includes(s.studyAnchor)?s.studyAnchor:null;
  return {version:1,started:s.started,phase:s.phase,step:s.step,landed:s.landed===true,result,positions,
  ...(result==='precleared'&&s.phase==='back'&&(s.gateTalk===0||s.gateTalk===1)?{gateTalk:s.gateTalk}:{}),
- ...(result==='precleared'&&s.southGateReturn===true?{southGateReturn:true}:{}),...(study?{study,studyGoal,studyActive,studyLead,studyFacing}:{})};
+ ...(result==='precleared'&&s.southGateReturn===true?{southGateReturn:true}:{}),...(study?{study,studyGoal,studyAnchor,studyActive,studyLead,studyFacing}:{})};
 }
 function frontierExpeditionRuinsWarning(a){
  if(facilitySite?.id!=='frontier'||a?.y!==-1||a.frontierPartyId||!frontierSouthRuinsOwn(a.x,a.z))return null;
@@ -32195,15 +32226,8 @@ function frontierExpeditionRoute(s){
 function frontierExpeditionGoal(s,id){
  if(s.studyActive){
   if(!Number.isInteger(s.studyGoal))return null;
-  const p=frontierExpeditionMapPoint(s.studyGoal),m=frontierExpeditionStudyMemory(s);
-  const facing=s.studyFacing??2;
-  if(id===s.studyLead)return {...p,facing};
-  const [dx,dz]=[[0,-1],[1,0],[0,1],[-1,0]][facing];
-  for(const [x,z] of [[p.x-dz,p.z+dx],[p.x+dz,p.z-dx],[p.x-dx,p.z-dz],
-   [p.x-dx-dz,p.z-dz+dx],[p.x-dx+dz,p.z-dz-dx],[p.x+dx,p.z+dz]]){
-   if(m.floor.has(frontierExpeditionMapKey(x,z)))return {x,z,y:-1};
-  }
-  return null; // Wait without blocking the leader on the same tile.
+  if(id===s.studyLead)return {...frontierExpeditionMapPoint(s.studyGoal),facing:s.studyFacing??2};
+  return Number.isInteger(s.studyAnchor)?frontierExpeditionMapPoint(s.studyAnchor):null;
  }
  const p=frontierExpeditionRoute(s)[s.step];
  if(!p)return null;
@@ -32293,7 +32317,8 @@ function frontierExpeditionMove(a,s,now,budget){
   if(!a.actorLeg)poiTownNpcAct(a,s.phase==='out'?'expedition-search':'expedition-return');
   return true;
  }
- if(poiTownNpcMove(a,goal,s.phase==='out'?'expedition-march':'expedition-return',now,budget)&&poiTownNpcStepT(a,now)>=1)
+ const route=s.studyActive?(from,to)=>frontierExpeditionScopedPath(frontierExpeditionStudyMemory(s),from,to):null;
+ if(poiTownNpcMove(a,goal,s.phase==='out'?'expedition-march':'expedition-return',now,budget,route)&&poiTownNpcStepT(a,now)>=1)
   poiTownNpcAct(a,s.phase==='out'?'expedition-search':'expedition-return');
  return true;
 }
@@ -33014,7 +33039,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v447',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v448',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -33129,7 +33154,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v447';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v448';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -33344,7 +33369,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v447',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v448',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
