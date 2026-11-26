@@ -11,7 +11,11 @@ h=h.replace(mark,mark+`
    poiWildClear();poiTownNpcNext=Infinity;poiNextMobTick=Infinity;
    const o={type:'monsterSlime',x:117,z:30,y:0,rot:0},s=poiCombatActorMake(o);s.hp=150;
    poiMonsterStates.set(o,s);poiCombatLockReset();poiSkillBarSync();
-   window.__editorTest.qa426.target={o,s};
+   const fixture=window.__editorTest.qa426;fixture.target={o,s};
+   document.getElementById('poiSkillBar').addEventListener('click',()=>{
+    fixture.tapState={mp:fixture.mp(),preview:fixture.preview(),hp:s.hp};
+    if(fixture.tapState.preview===false)fixture.move();
+   },{once:true});
   },
   mp:()=>[poiSkillMana(null).mp,poiSkillMana('frontierregna').mp],
   preview:()=>poiIceFangCasts.find(c=>c.owner===null)?.done??null,
@@ -44,12 +48,11 @@ try{
  await p.locator('#poiBagToggle').tap();await p.locator('#poiSkillListOpen').tap();
  a.match(await p.locator('#poiSkillListRows').innerText(),/氷牙陣.*消費MP 12/);
  a.equal(await p.locator('#poiBagPlayerMpValue').textContent(),'44/44');
- await p.locator('#poiSkillListDialog button').tap();await p.locator('#poiBagToggle').tap();
+ await p.locator('#poiSkillListDialog button').tap();await p.locator('#poiBagClose').tap();
  await p.locator('#poiSkillBar button').tap();
- a.deepEqual(await via('mp'),[32,44]);a.equal(await via('preview'),false);
- await via('move');
- await p.waitForFunction(()=>window.__editorTest.qa426.result().hp===94,null,{timeout:7000,polling:75});
- const q=await via('result');console.log(q);a.equal(q.done,true);a.ok(Math.abs(q.x-118.5)<.12);
+ a.deepEqual(await p.evaluate(()=>window.__editorTest.qa426.tapState),{mp:[32,44],preview:false,hp:150});
+ const observed=await p.waitForFunction(()=>{const v=window.__editorTest.qa426.result();return v.hp===94&&v.done?v:false},null,{timeout:7000,polling:50});
+ const q=await observed.jsonValue();console.log(q);a.equal(q.done,true);a.ok(Math.abs(q.x-118.5)<.12);
  a.equal(await via('regna'),true);a.deepEqual(await via('mp'),[32,32]);
  await p.waitForFunction(()=>window.__editorTest.qa426.result().hp===38,null,{timeout:7000,polling:110});
  a.deepEqual(errors,[]);console.log('PASS player touch controls, shared rank MP, windup, tracking hit and Regna auto-cast');
