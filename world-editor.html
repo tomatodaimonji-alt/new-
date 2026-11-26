@@ -1723,7 +1723,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v377）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v378）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -21848,7 +21848,8 @@ const POI_NPC_TRADE_BASE_PRICES=Object.freeze({
 });
 const POI_NPC_TRADE_CONSUMABLES=['healingHerb','cannedFood'];
 const POI_VALDIA_GROCER_ID='vald-greengrocer';
-const poiNpcTradeItems=id=>id===POI_VALDIA_GROCER_ID?['freshProduce']:POI_NPC_TRADE_CONSUMABLES;
+const POI_FRONTIER_SHOP_ID='frontiershopkeeper';
+const poiNpcTradeItems=id=>id===POI_VALDIA_GROCER_ID?['freshProduce']:id===POI_FRONTIER_SHOP_ID?['healingHerb']:POI_NPC_TRADE_CONSUMABLES;
 const POI_NPC_TRADE_MAX_STOCK=9;
 const POI_NPC_TRADE_CANNED=new Set(['diningkeeper','stablekeeper','resadventurer','guestadventurer','westpeddler']);
 function poiNpcTradeDecode(raw){
@@ -21856,7 +21857,7 @@ function poiNpcTradeDecode(raw){
   !raw.actors||typeof raw.actors!=='object'||Array.isArray(raw.actors))return null;
  const actors={};
  for(const id of [...POI_TOWN_RESIDENT_ROLES.map(r=>r.id),
-  ...(typeof POI_SOUTH_MERCHANT_ID==='string'?[POI_SOUTH_MERCHANT_ID]:[]),POI_VALDIA_GROCER_ID]){
+  ...(typeof POI_SOUTH_MERCHANT_ID==='string'?[POI_SOUTH_MERCHANT_ID]:[]),POI_VALDIA_GROCER_ID,POI_FRONTIER_SHOP_ID]){
   const stock=raw.actors[id];if(!stock)continue;
   const goods=poiNpcTradeItems(id);
   if(!goods.every(type=>Number.isInteger(stock[type])&&stock[type]>=0&&stock[type]<=POI_NPC_TRADE_MAX_STOCK))continue;
@@ -21866,7 +21867,7 @@ function poiNpcTradeDecode(raw){
 }
 function poiNpcTradeEligible(actor){
  return !!actor&&poiTownNpcActive()&&poiTownNpcActors.includes(actor)&&(POI_TOWN_RESIDENT_ROLES.some(r=>r.id===actor.role?.id)||
-   (typeof POI_SOUTH_MERCHANT_ID==='string'&&actor.role?.id===POI_SOUTH_MERCHANT_ID)||poiValdiaAtCounter(actor)||facilitySite?.id==='frontier'&&frontierResident(actor.role?.id))&&
+   (typeof POI_SOUTH_MERCHANT_ID==='string'&&actor.role?.id===POI_SOUTH_MERCHANT_ID)||poiValdiaAtCounter(actor)||poiFrontierAtCounter(actor)||facilitySite?.id==='frontier'&&frontierResident(actor.role?.id))&&
   actor.y===poiWalkLevel&&Math.abs(actor.x-poiWalkX)+Math.abs(actor.z-poiWalkZ)<=2&&
   !actor.recessed&&!actor.death&&!actor.target&&actor.hitAt==null&&!/^(?:sleep|rest|fight|knocked-out)/.test(actor.activity||'');
 }
@@ -21877,7 +21878,7 @@ function poiNpcTradeState(kit,actor){
  }
  const day=poiTownClockSnapshot().day;
  const record=kit.npcTrade?.day===day?kit.npcTrade:{version:1,day,actors:{}};
- const stock=record.actors[id]||(id===POI_VALDIA_GROCER_ID?{freshProduce:7}:{healingHerb:2,cannedFood:POI_NPC_TRADE_CANNED.has(id)?1:0});
+ const stock=record.actors[id]||(id===POI_VALDIA_GROCER_ID?{freshProduce:7}:id===POI_FRONTIER_SHOP_ID?{healingHerb:8}:{healingHerb:2,cannedFood:POI_NPC_TRADE_CANNED.has(id)?1:0});
  return {id,record,stock};
 }
 function poiNpcTradeOffer(kit,slots,stock,mode,type){
@@ -22031,8 +22032,9 @@ function poiLookoutEnter(fromX,fromZ,x,z,roll=Math.random){
  if(kind==='gold')poiLookoutRestoreGold();
  return true;
 }
+function poiFieldCoinsAllowed(){return poiEconomyAllowed()||facilitySite?.id==='frontier'&&poiWildActive()}
 function poiEconomyDrop(obj,state){
- if(!poiEconomyAllowed()||obj.type!=='monsterSlime'||obj.y!==0||!state.wildSpawn||
+ if(!poiFieldCoinsAllowed()||obj.type!=='monsterSlime'||obj.y!==0||!state.wildSpawn||
     state.hp!==0||poiEconomyDropActors.has(state))return;
  const {x,z}=state;
  if(!poiWildExterior(x,z)||!poiWalkCanStep(x,z))return;
@@ -22044,7 +22046,7 @@ function poiEconomyDrop(obj,state){
  if(!state.townOwned&&amount!==(prior?.amount||0)&&typeof poiSound==='function')poiSound('enemy-loot','coin');
 }
 function poiEconomyCollect(x,z){
- if(!poiEconomyAllowed())return false;
+ if(!poiFieldCoinsAllowed())return false;
  const key=x+','+z,drop=poiEconomyDrops.get(key),cache=poiEconomyCaches.get(key);
  const amount=(drop?.amount||0)+(cache?.amount||0);
  if(!amount)return false;
@@ -22078,14 +22080,14 @@ function poiLootFloorTop(x,z,y,lookout=0){
  return top;
 }
 function poiEconomyDraw(vp,now){
- if(!poiEconomyAllowed())return;
+ if(!poiFieldCoinsAllowed())return;
  if(poiEconomyMeshDirty){
   poiEconomyMeshDirty=false;
   if(poiEconomyMesh){gl.deleteBuffer(poiEconomyMesh.buf);poiEconomyMesh=null}
   const m=mesh(),face=[1,.78,.27],rim=[.84,.52,.12],core=[1,.94,.52];
   const drawPile=({x,z,id})=>{
    const lookout=id==='lookout-tower'&&typeof poiLookoutLootTop==='function'?poiLookoutLootTop(x,z,0):0;
-   const y=terrainY(x,z)+poiLootFloorTop(x,z,0,lookout)+.038;
+   const y=(facilitySite?.id==='frontier'?frontierSurfaceHeight(x+.5,z+.5):terrainY(x,z)+poiLootFloorTop(x,z,0,lookout))+.038;
    for(const [dx,dz,lift] of [[-.095,.065,0],[.082,-.062,0],[.122,.087,.026]]){
     const cx=x+.5+dx,cz=z+.5+dz;
     roundStack(m,cx,y+lift,cz,[[0,.116,.116],[.043,.116,.116]],8,rim);
@@ -25194,6 +25196,7 @@ function poiMonsterAt(x,z,reserveSlide=false,except=null){
  return null;
 }
 const POI_WILD_MAX=3;
+const FRONTIER_WILD_MAX=5;
 const POI_FIELD_NOTICE=6.5,POI_FIELD_ARCHER_NOTICE=8;
 const POI_WILD_BIRTH_MARGIN=.20;
 function poiWildBirthPlayer(now){
@@ -25330,15 +25333,18 @@ function poiWildZone(rects,x,z,margin=0){
  return rects.some(([a,b,c,d])=>x>=a-margin&&x<=c+margin&&z>=b-margin&&z<=d+margin);
 }
 function poiWildExterior(x,z,buffer=0){
+ if(facilitySite?.id==='frontier')return validPos(x,z)&&Math.hypot(x+.5-FRONTIER_VILLAGE.x,z+.5-FRONTIER_VILLAGE.z)>FRONTIER_VILLAGE.r+buffer&&
+  !frontierTempleGround(x+.5,z+.5)&&!frontierHomeCell(x,z);
  return validPos(x,z)&&!poiKingdomNoWild(facilitySite,x,z,Math.max(1,buffer))&&!poiEastNatureBlocked(facilitySite,x,z)&&!POI_WILD_GATES.some(g=>(!g.expansion||facilitySite?.townOffset)&&poiWildZone([g.threshold],x,z))&&!poiWildZone(POI_SAFE_TOWN,x,z,buffer)&&
   !poiWildZone(POI_WILD_LANDMARKS,x,z)&&!(typeof poiWildProtectedArea==='function'&&poiWildProtectedArea(x,z))&&!(typeof poiWayfarerWellSheltered==='function'&&poiWayfarerWellSheltered(x,z))&&
   !(typeof poiSouthTownContains==='function'&&poiSouthTownContains(facilitySite,x,z,0))&&facilityFloorOwner(x,z,0)===null;
 }
 function poiWildActive(){
- return facilitySite?.id==='base'&&poiWalkActive&&poiWalkLevel===0&&!pineAIActive&&poiAudioAllowed();
+ return (facilitySite?.id==='base'||facilitySite?.id==='frontier')&&poiWalkActive&&poiWalkLevel===0&&!pineAIActive&&poiAudioAllowed();
 }
 function poiWildPlayerOutside(){return poiWildActive()&&poiWildExterior(poiWalkX,poiWalkZ)}
 function poiWildMobMayMove(state,x,z,fromX=state.x,fromZ=state.z){
+ if(facilitySite?.id==='frontier')return poiWildExterior(x,z)&&frontierGroundKind(x,z)!=='river'&&!poiWildNearResident(x,z);
  return poiWildExterior(x,z)&&(!state.regionalWild||Math.hypot(x-state.roamHome.x,z-state.roamHome.z)<=6)&&!(typeof poiWildNearResident==='function'&&poiWildNearResident(x,z))&&!facilityCreekIndex?.water.has(x+','+z)&&terrainPassable(fromX,fromZ,x,z)&&
   !world.some(o=>o.x===x&&o.z===z&&o.y===0&&(o.type==='poiFortWall'||o.type==='poiFortCorner'||o.type==='poiFortBoundary'));
 }
@@ -25378,6 +25384,7 @@ function poiWildGatePick(rng,gate=poiWildGateApproach(),player=poiWildBirthPlaye
 }
 function poiWildPick(rng){
  const player=poiWildBirthPlayer(typeof performance==="undefined"?0:performance.now());
+ if(facilitySite?.id==='frontier')return frontierWildPick(rng,player);
  const gate=poiWildGateApproach();
  // Never fall back to a point across the river if this meadow is blocked.
  if(gate)return poiWildGatePick(rng,gate,player);
@@ -25393,6 +25400,19 @@ function poiWildPick(rng){
  }
  return null;
 }
+function frontierWildPick(rng,player){
+ const blocked=poiWildSpawnTerrain(),bank=(x,z)=>Math.sign(x+.5-frontierRiverCenter(z+.5));
+ for(let i=0;i<44;i++){
+  const a=rng()*Math.PI*2,r=8+rng()*7,dx=Math.round(Math.cos(a)*r),dz=Math.round(Math.sin(a)*r);
+  const x=player.x+dx,z=player.z+dz;
+  if(Math.hypot(dx,dz)<8||!poiWildBeyondNotice(x,z,player,'monsterSlime')||!poiWildExterior(x,z,2)||
+     bank(x,z)!==bank(player.x,player.z)||frontierGroundKind(x,z)==='river'||frontierBridgeCell(x,z)||
+     blocked.has(x+','+z)||poiMonsterAt(x,z,true)||poiWildNearResident(x,z,2)||!poiWalkCanStep(x,z))continue;
+  if(![[1,0],[-1,0],[0,1],[0,-1]].some(([u,v])=>poiWildExterior(x+u,z+v)&&frontierGroundKind(x+u,z+v)!=='river'&&poiWalkCanStep(x+u,z+v,x,z)))continue;
+  return {x,z};
+ }
+ return null;
+}
 function poiWildSpawnFrame(now,rng=Math.random){
  if(!poiWildActive()){poiWildPause();return}
  for(const key of poiWildActors){
@@ -25401,8 +25421,9 @@ function poiWildSpawnFrame(now,rng=Math.random){
   poiWildActors.delete(key);poiMonsterStates.delete(key);poiMonsterMeshDirty=true;
  }
  if(!poiWildExterior(poiWalkX,poiWalkZ)){poiWildPause();return}
- if(typeof poiWildRegionalFrame==='function')poiWildRegionalFrame(now,rng);
- if(!poiWildRemaining)poiWildRemaining=5500+rng()*3500;
+ const frontier=facilitySite?.id==='frontier';
+ if(!frontier&&typeof poiWildRegionalFrame==='function')poiWildRegionalFrame(now,rng);
+ if(!poiWildRemaining)poiWildRemaining=frontier?1800+rng()*1300:5500+rng()*3500;
  const dt=poiWildLastFrame===null?0:Math.max(0,Math.min(now-poiWildLastFrame,1000));
  poiWildLastFrame=now;
  if((poiWildRemaining-=dt)>0)return;
@@ -25410,7 +25431,7 @@ function poiWildSpawnFrame(now,rng=Math.random){
   if((poiMonsterStates.get(key)?.hp||0)>0)continue;
   poiWildActors.delete(key);poiMonsterStates.delete(key);
  }
- if(poiWildActors.size>=POI_WILD_MAX){poiWildRemaining=8500+rng()*5500;return}
+ if(poiWildActors.size>=(frontier?FRONTIER_WILD_MAX:POI_WILD_MAX)){poiWildRemaining=frontier?3400+rng()*2700:8500+rng()*5500;return}
  const p=poiWildPick(rng);
  if(!p){poiWildRemaining=2200+rng()*2300;return}
  const obj={...p,y:0,type:'monsterSlime',rot:0};
@@ -25418,7 +25439,7 @@ function poiWildSpawnFrame(now,rng=Math.random){
  poiMonsterStates.set(obj,{...p,fromX:p.x,fromZ:p.z,moveStarted:-10000,facing:0,
   hp:POI_MONSTER_STATS.monsterSlime.hp,nextAttack:now+1500,wildSpawn:true});
  poiMonsterMeshDirty=true;
- poiWildRemaining=8500+rng()*5500;
+ poiWildRemaining=frontier?3400+rng()*2700:8500+rng()*5500;
 }
 function poiWildSnapshot(){
  return {count:[...poiWildActors].filter(key=>(poiMonsterStates.get(key)?.hp||0)>0).length,
@@ -27081,6 +27102,7 @@ function poiTownRoleChoice(role,gear){
 }
 function poiTownNpcLoadout(a){
  const role=a?.role||{};
+ if(role.id===POI_FRONTIER_SHOP_ID)return {weapon:null,gear:a.gear||FRONTIER_FITTED_GEAR,tools:[]};
  const frontier=Object.hasOwn(FRONTIER_RESIDENT_WEAPONS,role.id);
  if(frontier)return {weapon:a.weapon===undefined?FRONTIER_RESIDENT_WEAPONS[role.id]:a.weapon,gear:a.gear||FRONTIER_FITTED_GEAR,tools:[]};
  const authored=Object.hasOwn(POI_TOWN_ROLE_OUTFITS,role.id)?POI_TOWN_ROLE_OUTFITS[role.id]:
@@ -28911,6 +28933,7 @@ function poiTownNpcDisplayName(role){
 }
 const POI_TOWN_SPEECH=Object.freeze({
  frontierchief:'ようこそ、リネア村へ。村長のロアンじゃ。この杖で川辺を何年も歩いてきた。外へ行くなら、わしにも声をかけておくれ。',
+ frontiershopkeeper:'いらっしゃい。川沿いで採った薬草だよ。旅の支度ならカウンターへどうぞ。',
  frontiersera:'橋を渡れば、東の丘に出ます。川は浅く見えても流れがあるから、橋から渡ってね。',
  frontierren:'この川は南北の湖をつないでいるんだ。夕暮れの水面は、足を止めて眺めたくなるよ。',
  'vald-greengrocer':'いらっしゃい。朝採れの野菜、店先で見ていって。',
@@ -29027,7 +29050,14 @@ function poiValdiaAtCounter(actor,dx=0,dz=-1){
    poiWalkX===p.x&&poiWalkZ===p.z&&poiWalkLevel===p.y&&actor.x===m.x&&actor.z===m.z&&actor.y===m.y&&
    actor.activity==='work'&&!actor.recessed&&!actor.death&&!actor.actorLeg&&poiTownNpcStepT(actor,performance.now())>=1;
 }
-function poiNpcShopCounter(actor){return poiNpcToolshopCounter(actor)||poiValdiaAtCounter(actor)}
+function poiFrontierAtCounter(actor,dx=0,dz=-1){
+ const pos=facilitySite?.toolShop;
+ return facilitySite?.id==='frontier'&&actor?.role.id===POI_FRONTIER_SHOP_ID&&pos&&dx===0&&dz===-1&&poiWalkFacing===0&&
+  poiWalkX===pos.x&&poiWalkZ===pos.z+1&&poiWalkLevel===0&&actor.x===pos.x&&actor.z===pos.z-1&&actor.y===0&&
+  !actor.recessed&&!actor.death&&!actor.target&&actor.hitAt==null&&
+  world.some(o=>o.x===pos.x&&o.z===pos.z&&o.y===0&&o.type==='counterWood'&&(o.rot||0)%2===0);
+}
+function poiNpcShopCounter(actor){return poiNpcToolshopCounter(actor)||poiValdiaAtCounter(actor)||poiFrontierAtCounter(actor)}
 function poiNpcToolshopCounter(actor){
  return !!actor&&actor.role.id==='toolkeeper'&&actor.activity==='work'&&poiNpcAtWork(actor)&&
   poiTownNpcActive()&&poiTownNpcActors.includes(actor)&&!actor.recessed&&!actor.death&&!actor.target&&actor.hitAt==null&&
@@ -29050,7 +29080,7 @@ function poiNpcMenuRows(d){
  if(d.sleeping||d.page==='speech')return [];
  const row=id=>({id,label:POI_NPC_MENU_LABELS[id]});
  const quests=d.actor.role.id==='guildkeeper'&&typeof poiQuestsForClerk==='function'?poiQuestsForClerk():[];
- if(d.page==='toolshop')return [{id:d.actor.role.id===POI_VALDIA_GROCER_ID?'buy':'shop',label:'買う'},{id:'sell',label:'売る'},row('back')];
+ if(d.page==='toolshop')return [{id:[POI_VALDIA_GROCER_ID,POI_FRONTIER_SHOP_ID].includes(d.actor.role.id)?'buy':'shop',label:'買う'},{id:'sell',label:'売る'},row('back')];
  if(d.page==='root')return ['status','request',...(quests.length?['quest']:[]),'back'].map(row);
  if(d.page==='quest')return [...quests.map(q=>({id:'quest:'+q.id,
   label:q.label+(({accepted:'（受注済み）',surveyed:'（報告可能）',reported:'（報告済み）'})[poiNpcQuestProgress(q.id)]||''),quest:q})),row('back')];
@@ -29471,6 +29501,7 @@ function poiTownDialogueMovingTarget(a,now,dx,dz,held){
 // of a long counter. Samples are tied to the actual live cell/floor.
 function poiTownCounterTalkReachable(a,dx,dz,g){
  if(a?.role.id===POI_VALDIA_GROCER_ID)return poiValdiaAtCounter(a,dx,dz);
+ if(a?.role.id===POI_FRONTIER_SHOP_ID)return poiFrontierAtCounter(a,dx,dz);
  if(a?.role?.portBounds)return typeof poiPortNpcCounter==='function'&&poiPortNpcCounter(a,dx,dz,g);
  const x=poiWalkX+dx,z=poiWalkZ+dz,y=poiWalkLevel;
  if(!a||(Math.abs(dx)+Math.abs(dz)!==1)||a.y!==y||a.x!==x+dx||a.z!==z+dz)return false;
@@ -30164,7 +30195,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v377',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v378',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -30279,7 +30310,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v377';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v378';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -30494,7 +30525,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v377',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v378',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -34427,6 +34458,7 @@ function poiWalkEnterCell(dx,dz,now,continuous=false,onDoorCue){
  if(facilitySite?.id==='base'&&poiWalkLevel===0&&typeof poiLookoutEnter==='function')poiLookoutEnter(poiWalkFromX,poiWalkFromZ,poiWalkX,poiWalkZ);
  if(facilitySite?.id==='base'){if(facilitySite.creek)poiCreekAudioSync();poiEconomyCollect(poiWalkX,poiWalkZ);if(typeof poiGroundGoldPickup==='function')poiGroundGoldPickup(poiWalkX,poiWalkZ);poiInventoryPickup(poiWalkX,poiWalkZ);poiMineFindExplore(poiWalkX,poiWalkZ);poiMineFindPickup(poiWalkX,poiWalkZ);poiArmedPickup(poiWalkX,poiWalkZ);if(typeof poiPortQuestVisit==='function')poiPortQuestVisit();if(typeof poiNorthTrailPickup==='function')poiNorthTrailPickup(poiWalkX,poiWalkZ)}
  if(facilitySite?.id==='snowpass'){poiGroundGoldPickup(poiWalkX,poiWalkZ);poiInventoryPickup(poiWalkX,poiWalkZ)}
+ if(facilitySite?.id==='frontier')poiEconomyCollect(poiWalkX,poiWalkZ);
  if(typeof poiSoulFloorWalkover==='function')poiSoulFloorWalkover(poiWalkX,poiWalkZ,now);
  frontierEstateWalkover();
  if(!poiWalkDoorFoley(door,fromLevel,onDoorCue)&&!continuous)poiWalkFootstep(wet);
@@ -41966,8 +41998,9 @@ const FRONTIER_HOMES=[
 
  {id:'frontierHouse',name:'村長の家',x1:43,x2:49,z1:21,z2:26,dx:46,tone:0,roofType:4,floorHeight:2.32,room:'inn',frontierStyle:'cottage',
   furniture:[[44,22,'cot','bed'],[48,22,'settle','chairWood'],[47,22,'hearth','crate'],[44,24,'blanketChest','crate'],[48,24,'mealTable','crate']]},
- {id:'frontierStore',name:'共同の物置',x1:36,x2:40,z1:23,z2:26,dx:38,tone:3,roofType:1,floorHeight:1.88,room:'store',frontierStyle:'storehouse',
-  furniture:[[37,24,'supShelf','crate'],[39,24,'barrel','barrel'],[37,25,'stack','crate']]},
+ {id:'frontierStore',name:'道具屋',x1:36,x2:40,z1:22,z2:26,dx:38,tone:3,roofType:1,floorHeight:2.28,room:'store',frontierStyle:'herbshop',
+  furniture:[[37,23,'herbShelf','crate'],[39,23,'herbShelf','crate'],
+   [37,24,'shopDesk','counterWood'],[38,24,'shopDesk','counterWood'],[39,24,'shopDesk','counterWood']]},
  {id:'frontierWoodworker',name:'木工小屋',x1:39,x2:44,z1:34,z2:37,dx:42,frontNorth:true,tone:2,roofType:2,floorHeight:2.08,room:'carpenter',frontierStyle:'workshop',
   furniture:[[40,35,'workBench','crate'],[43,35,'toolRack','crate'],[43,36,'woodStool','chairWood']]}
 ];
@@ -42187,12 +42220,12 @@ function frontierSite(){
  for(const [x,z,type,rot] of [[43,24,'lantern',0],
     [47,33,'wellStone',0],[46,32,'benchWood',0],[44,27,'benchWood',1],
     [50,33,'marketStallWood',0],[51,27,'rockMossy',0],[52,35,'treeBirch',0],[51,38,'treePine',0],
-    [55,36,'treeBirch',0],[53,26,'treeBirch',2],[55,24,'treePine',3],[57,26,'treeCedar',1],
-    [81,28,'monsterSlime',0],[87,34,'monsterSlime',2]])if(!frontierVillageFence(x,z))put(x,z,type,rot);
+    [55,36,'treeBirch',0],[53,26,'treeBirch',2],[55,24,'treePine',3],[57,26,'treeCedar',1]])if(!frontierVillageFence(x,z))put(x,z,type,rot);
  const person=(id,name,type,x,z,facing,appearance)=>({id,name,type,appearance,role:'local',job:'村人',home:{x,z,y:0,facing},public:{x,z,y:0,facing}});
  const chief={...person('frontierchief','ロアン','humanVillager',45,23,1,'roan'),job:'村長',homeBuilding:'frontierHouse'};
- const residents=[person('frontiersera','セラ','humanVillager',48,28,1,'sera'),person('frontierren','レン','humanVillager',75,32,2,'kai'),chief];
- return frontierAppendTemple({id:'frontier',name:'川辺の原野',villageName:FRONTIER_VILLAGE_NAME,spawn:{x:51,z:30},respawnEntry:{x:51,z:30,y:0,facing:2},decks,buildings,residents,fenceCells,playerAppearance:'kai',
+ const clerk={...person(POI_FRONTIER_SHOP_ID,'ミナ','humanMerchant',38,23,2,'lina'),job:'道具屋',homeBuilding:'frontierStore',gear:FRONTIER_FITTED_GEAR};
+ const residents=[person('frontiersera','セラ','humanVillager',48,28,1,'sera'),person('frontierren','レン','humanVillager',75,32,2,'kai'),chief,clerk];
+ return frontierAppendTemple({id:'frontier',name:'川辺の原野',villageName:FRONTIER_VILLAGE_NAME,toolShop:{x:38,z:24},spawn:{x:51,z:30},respawnEntry:{x:51,z:30,y:0,facing:2},decks,buildings,residents,fenceCells,playerAppearance:'kai',
   map:{format:'forest-world-v1',version:1,width:FRONTIER_W,height:FRONTIER_H,size:FRONTIER_W,world,models:[],prefabs:[],checks:[]}});
 }
 function frontierGround(m){
@@ -46179,7 +46212,7 @@ function frontierSouthGeometryRecord(b){
 }
 function frontierHomeGeometry(d,cut){
  const m=mesh(),{x1:L,z1:B,x2,z2,h,door,furniture,frontierStyle:style}=d,R=x2+1,F=z2+1,W=R-L,D=F-B,X=(L+R)*.5,Z=(B+F)*.5;
- const cottage=style==='cottage',store=style==='storehouse',shop=style==='workshop';
+ const cottage=style==='cottage',store=style==='storehouse',herb=style==='herbshop',shop=style==='workshop'||herb;
  const pale=[.821,.725,.572],plaster=[.757,.686,.576],dark=[.326,.239,.169],
   timber=[.494,.346,.219],oak=[.597,.434,.273],edge=[.663,.555,.406],stone=[.466,.451,.412],
   slate=[.285,.322,.327],rust=[.478,.286,.214],sage=[.31,.426,.389],linen=[.81,.76,.62],
@@ -46231,7 +46264,7 @@ function frontierHomeGeometry(d,cut){
      if(x-a<.49||b-x<.49)continue;
      if(cottage||shop){C(x-.48,.65,z+face*.04,.113,h-.77,.113,timber);C(x+.48,.65,z+face*.04,.113,h-.77,.113,timber);}
      if(store&&(front||j%2===1))continue;
-     const y=store?1.63:1.10,span=shop?.82:.73;
+     const y=store?1.63:1.10,span=herb&&front?1.0:shop?.82:.73;
      C(x,y,z+face*.086,span,.827,.101,dark);C(x,y+.104,z+face*.146,span-.17,.605,.047,glass);
      C(x,y+.095,z+face*.178,.054,.642,.041,timber);C(x,y+.39,z+face*.178,span-.12,.046,.043,timber);
      C(x,y-.058,z+face*.134,span+.12,.091,.227,tint(stone,1.22));
@@ -46288,6 +46321,13 @@ function frontierHomeGeometry(d,cut){
    const A=L+.19,U=R-.23;
    roofing([A,2.26,F+.43],[A,2.75,F-.06],[U,2.75,F-.06],[U,2.26,F+.43],sage);
    for(let x=A+.2;x<U;x+=.77)C(x,2.184,F+.27,.082,.09,.39,dark);
+   if(herb){
+    // Painted botanical sign and linen valance, above the walking lane.
+    for(let x=A+.2,i=0;x<U-.05;x+=.32,i++)C(x,2.20,F+.431,.318,.115,.032,i%2?linen:sage);
+    C(gmid,2.46,F+.22,.81,.40,.13,dark);C(gmid,2.503,F+.29,.724,.312,.037,sage);
+    const line=(ax,ay,bx,by,c)=>naturalBranch(m,gmid+ax,ay,F+.319,gmid+bx,by,F+.319,.021,.011,c);
+    line(-.04,2.55,.055,2.747,linen);line(.015,2.664,-.16,2.72,linen);line(.023,2.678,.18,2.723,linen);
+   }
   }else{
    // A tall front gable and reddish, uneven shake tones identify the dwelling.
    const p=h+1.73,r=X+.32;
@@ -46363,6 +46403,26 @@ function frontierHomeGeometry(d,cut){
    C(x,.62,z,.855,.09,.772,oak);C(x,.709,z,.304,.016,.681,linen);
    utensil(x-.204,.719,z+.062,.126,[.788,.679,.502]);utensil(x+.198,.719,z-.101,.101,sage);
    C(x-.051,.715,z-.228,.16,.103,.137,[.688,.487,.286]);C(x+.136,.716,z+.172,.072,.025,.173,iron);
+  }else if(kind==='shopDesk'){
+   C(x,0,z,.98,.82,.62,timber);C(x,.815,z,1.002,.107,.752,oak);C(x,.17,z+.324,.87,.54,.046,edge);
+   if(px===38){
+    C(x-.17,.921,z,.281,.023,.267,linen);C(x-.17,.942,z-.03,.235,.006,.016,dark);
+    utensil(x+.208,.922,z+.045,.078,sage);
+   }else{utensil(x-.24,.925,z,.103,sage);utensil(x+.19,.925,z-.032,.118,[.54,.41,.27])}
+  }else if(kind==='herbShelf'){
+   for(const s of [-1,1])C(x+s*.410,0,z,.09,1.69,.55,timber);
+   for(const y of [.14,.57,1.01,1.45]){
+    C(x,y,z,.86,.080,.554,oak);
+    for(let i=0;i<3;i++)utensil(x-.25+i*.247,y+.080,z+.03,.079,i%2?sage:[.58,.44,.29]);
+   }
+   for(const i of [-1,1]){
+    const hx=x+i*.23;
+    for(let j=-1;j<=1;j++){
+     const u=hx+j*.087;
+     naturalBranch(m,u,1.535,z,u+j*.036,1.72,z+.03,.012,.006,[.34,.47,.21]);
+     tri(m,[u,1.59,z+.02],[u+j*.025+.042,1.67,z+.047],[u+j*.025,1.72,z+.033],sage);
+    }
+   }
   }else if(kind==='supShelf'||kind==='toolRack'){
    for(const s of [-1,1])C(x+s*.399,0,z,.103,kind==='supShelf'?1.32:1.43,.578,timber);
    for(const y of [.19,.62,1.087])C(x,y,z,.851,.083,.571,oak);
