@@ -1755,7 +1755,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v435）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v436）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="2500" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -13411,6 +13411,10 @@ function poiOrchestraScene(now){
  if(typeof poiValdiaMusicHere==='function'&&poiValdiaMusicHere())return 'valdia';
  const temple=typeof poiDavidScoreScene==='function'?poiDavidScoreScene(now):null;
  if(temple)return temple;
+ if(facilitySite?.id==='frontier'&&poiWalkActive&&poiWalkLevel===-1&&frontierSouthRuinsOwn(poiWalkX,poiWalkZ)){
+  const chamber=poiWalkX>=153&&poiWalkX<=167&&poiWalkZ>=116&&poiWalkZ<=126;
+  return chamber&&!frontierSouthBossDefeated()?'southRuinsBoss':'southRuins';
+ }
  if(poiSouthSettlementContains(facilitySite,poiWalkX,poiWalkZ,poiWalkLevel))return 'southSettlement';
  const zone=facilitySite?.id==='snowpass'?'outside':facilitySite?.id==='base'?poiAudioMusicZone():'indoor';
  if(poiAudioSnowActive())return 'snow';
@@ -13437,7 +13441,7 @@ function poiOrchestraScore(scene){
  if(poiOrchestraScoreCache.has(scene))return poiOrchestraScoreCache.get(scene);
  // The existing flute/cello chamber arrangement is calmer than market
  // music. Give it one dedicated clock through the whole southern walk.
- const scoreKey=scene==='southSettlement'?'indoor':scene;
+ const scoreKey=scene==='southSettlement'?'indoor':scene==='southRuinsBoss'?'battle':scene==='southRuins'?'mine':scene;
  const s=POI_ORCHESTRAL_SCORES[scoreKey]||POI_ORCHESTRAL_SCORES.indoor,sec=60/s.bpm;
  const events=Object.entries(s.tracks).flatMap(([instrument,notes])=>notes.filter(
   n=>POI_ORCHESTRA_INSTRUMENTS[instrument]&&n[0]>=0&&n[0]<s.beats&&n[2]>0&&n[3]>0
@@ -13759,7 +13763,7 @@ function poiRecordedZoneClip(ctx,key,encoded){
  return entry;
 }
 function poiRecordedZoneTry(scene,deck,now){
- const key=scene==='southSettlement'?'indoor':scene;
+ const key=scene==='southSettlement'?'indoor':scene==='southRuinsBoss'?'battle':scene==='southRuins'?'mine':scene;
  const encoded=POI_ZONE_RECORDINGS[key];
  if(typeof encoded!=='string')return false;
  if(deck.recordedLoop)return true;
@@ -27504,8 +27508,7 @@ const POI_SOUTH_SENTINELS=Object.freeze({
 });
 function poiSouthSentinelSpec(obj){return Object.hasOwn(POI_SOUTH_SENTINELS,obj?.type)?POI_SOUTH_SENTINELS[obj.type]:null}
 function poiSouthSentinelAdmit(obj,x,z){
- const b=obj?.southLeash;
- return !b||x>=b[0]&&x<=b[2]&&z>=b[1]&&z<=b[3];
+ return obj?.y!==-1||!poiSouthSentinelSpec(obj)||frontierSouthRuinsOwn(x,z);
 }
 function poiSouthSentinelAim(obj,s,x,z){
  const spec=poiSouthSentinelSpec(obj),dx=x-s.x,dz=z-s.z,d=Math.hypot(dx,dz);
@@ -28086,15 +28089,117 @@ function poiMonsterCrowdStep(obj,state,now,patrol,g){
 }
 // END MONSTER CROWD SPACING
 
+// BEGIN SOUTH DUNGEON PURSUIT
+const FRONTIER_SOUTH_PURSUIT_NEIGHBOURS=[[0,-1],[-1,0],[1,0],[0,1]];
+const frontierSouthPursuitCache=new Map();
+const frontierSouthPursuitKey=(x,z)=>x*256+z;
+function frontierSouthPursuitChoice(s,remembered,humans,notice,line){
+ const tracked=humans.find(h=>h.key===remembered);
+ if(tracked)return tracked; // No distance or LOS expiry inside the ruins.
+ let target=null,best=notice;
+ for(const h of humans){
+  const d=Math.hypot(s.x-h.x,s.z-h.z);
+  if(d>best||target&&d>=best||!line(h))continue;
+  target=h;best=d;
+ }
+ return target;
+}
+function frontierSouthPursuitField(goal,walk){
+ const distances=new Map(),q=[goal];
+ if(!walk(goal.x,goal.z))return distances;
+ distances.set(frontierSouthPursuitKey(goal.x,goal.z),0);
+ for(let i=0;i<q.length;i++){
+  const {x,z}=q[i],d=distances.get(frontierSouthPursuitKey(x,z))+1;
+  for(const [dx,dz] of FRONTIER_SOUTH_PURSUIT_NEIGHBOURS){
+   const a=x+dx,b=z+dz,k=frontierSouthPursuitKey(a,b);
+   if(distances.has(k)||!walk(a,b))continue;
+   distances.set(k,d);q.push({x:a,z:b});
+  }
+ }
+ return distances;
+}
+function frontierSouthPursuitDistances(goal){
+ const key=frontierSouthPursuitKey(goal.x,goal.z),old=frontierSouthPursuitCache.get(key);
+ if(old){frontierSouthPursuitCache.delete(key);frontierSouthPursuitCache.set(key,old);return old}
+ const field=frontierSouthPursuitField(goal,frontierSouthRuinsOwn);
+ if(frontierSouthPursuitCache.size>=10)frontierSouthPursuitCache.delete(frontierSouthPursuitCache.keys().next().value);
+ frontierSouthPursuitCache.set(key,field);return field;
+}
+function frontierSouthPursuitPath(s,field,free){
+ let next=null,best=field.get(frontierSouthPursuitKey(s.x,s.z))??Infinity;
+ for(const [dx,dz] of FRONTIER_SOUTH_PURSUIT_NEIGHBOURS){
+  const x=s.x+dx,z=s.z+dz,d=field.get(frontierSouthPursuitKey(x,z));
+  if(d===undefined||d>=best||!free(x,z))continue;
+  next={x,z,dx,dz};best=d;
+ }
+ return next;
+}
+function frontierSouthPursuitHumanKey(kind,id){return kind+'/'+id}
+function frontierSouthPursuitNpcValid(a){
+ return !!a.role&&!a.death&&!a.recessed&&a.hp>0&&a.y===-1&&frontierSouthRuinsOwn(a.x,a.z);
+}
+function frontierSouthPursuitSnapshot(now){
+ const people=[],occupied=new Set(),floors=frontierSouthRuinsOwn;
+ const point=(kind,key,x,z,actor=null)=>{
+  x=poiFreeCell(x);z=poiFreeCell(z);
+  if(floors(x,z)){people.push({kind,key,x,z,y:-1,actor});occupied.add(frontierSouthPursuitKey(x,z))}
+ };
+ if(poiWalkLevel===-1&&!poiPlayerDying()){
+  const p=poiAimOrigin(now);
+  point('player','player',p.x,p.z);
+ }
+ for(const a of poiTownNpcActors)if(frontierSouthPursuitNpcValid(a))point('npc',frontierSouthPursuitHumanKey('npc',a.role.id),a.x,a.z,a);
+ for(const a of poiPartyActors()){
+  if(a.partyDown||a.death||a.y!==-1||!poiCompanionSame(a,poiCompanionPlace()))continue;
+  const p=poiCompanionPose(a,now),x=poiFreeCell(p.x),z=poiFreeCell(p.z);
+  // A summoned monster blocks movement but does not raise the human alarm.
+  if(floors(x,z))occupied.add(frontierSouthPursuitKey(x,z));
+  if(POI_HUMAN_PARTY_IDS[a.id])point('party',frontierSouthPursuitHumanKey('party',a.id),x,z,a);
+ }
+ const enemies=new Set();
+ for(const [o,s] of poiMonsterStates)if(o.y===-1&&s.hp>0&&floors(s.x,s.z))enemies.add(frontierSouthPursuitKey(s.x,s.z));
+ return {people,occupied,enemies};
+}
+function frontierSouthPursuitFrame(o,s,now,human){
+ if(s.hp<=0||s.townOwned)return;
+ if(s.expeditionCounter){frontierExpeditionEnemyTurn(o,s,now);return}
+ if(s.playerAttack?.pending)return;
+ const target=frontierSouthPursuitChoice(s,s.southPursuit,human.people,poiSouthSentinelSpec(o).notice,
+  h=>poiCompanionAttackClear(s,h,-1));
+ s.southPursuit=target?.key??null;
+ if(!target)return;
+ if(s.actorFree&&poiMonsterActorSettle(o,s,now))return;
+ if(target.kind==='npc'){
+  if(frontierExpeditionEnemyTurn(o,s,now,target.actor))return;
+ }else if(poiSouthSentinelAim(o,s,target.x,target.z)){
+  if(now>=s.nextAttack&&poiWalkLevel===-1)poiEnemyBeginPlayer(o,s,now,target.kind==='party'?target:null);
+  return;
+ }
+ const from=frontierSouthPursuitKey(s.x,s.z);
+ const n=frontierSouthPursuitPath(s,frontierSouthPursuitDistances(target),(x,z)=>{
+  const key=frontierSouthPursuitKey(x,z);
+  return !human.occupied.has(key)&&!human.enemies.has(key);
+ });
+ if(!n)return;
+ human.enemies.delete(from);human.enemies.add(frontierSouthPursuitKey(n.x,n.z));
+ s.fromX=s.x;s.fromZ=s.z;s.x=n.x;s.z=n.z;s.moveStarted=now;
+ s.facing=n.dx?(n.dx>0?3:1):(n.dz<0?2:0);poiMonsterMeshDirty=true;
+}
+// END SOUTH DUNGEON PURSUIT
 function poiMobFrame(now){if(!poiWalkActive||now<poiNextMobTick)return;poiNextMobTick=now+380;
  if(typeof poiNorthReturnTick==='function')poiNorthReturnTick(now);
- let changed=false,crowdRead=false,crowd=null;for(const [obj,state] of poiMonsterStates){if(!frontierPlaneMatches(state.frontierRuins,frontierPlayCave)||(facilitySite&&obj.y!==poiWalkLevel)||state.hp<=0||state.townOwned||(state.wildSpawn&&!poiWildPlayerOutside())||state.playerAttack?.pending||
+ let changed=false,crowdRead=false,crowd=null,human=null;for(const [obj,state] of poiMonsterStates){
+ if(facilitySite?.id==='frontier'&&poiSouthSentinelSpec(obj)&&frontierSouthRecordId(obj)){
+  human??=frontierSouthPursuitSnapshot(now);
+  frontierSouthPursuitFrame(obj,state,now,human);continue;
+ }
+ if(!frontierPlaneMatches(state.frontierRuins,frontierPlayCave)||(facilitySite&&obj.y!==poiWalkLevel)||state.hp<=0||state.townOwned||(state.wildSpawn&&!poiWildPlayerOutside())||state.playerAttack?.pending||
  (state.northReturnReady!==undefined&&now<state.northReturnReady)||
  (obj.type==='monsterSlime'&&typeof poiSlimeRecovering==='function'&&poiSlimeRecovering(state,now)))continue;
  if(obj.type==='monsterStoneDavid'){if(typeof poiDavidMobFrame==='function'&&poiDavidMobFrame(obj,state,now))changed=true;continue}
  if(obj.type==='monsterNorthMinotaur'){if(typeof poiNorthMinotaurFrame==='function'&&poiNorthMinotaurFrame(obj,state,now))changed=true;continue}
  if(state.actorFree&&poiMonsterActorPoint(state.actorFree,now).t<1)continue;
- if(frontierExpeditionEnemyTurn(obj,state,now)||frontierWildResidentTurn(obj,state,now))continue;
+ if(frontierWildResidentTurn(obj,state,now))continue;
  const patrol=typeof poiDungeonPatrolSite==='function'&&!state.wildSpawn?poiDungeonPatrolSite(obj):null;
  if(typeof poiCompanionNormal==='function'&&poiPartyActors().length)
   state.companionAware=poiCompanionNormal(obj,state);
@@ -31744,17 +31849,14 @@ function frontierExpeditionMove(a,s,now,budget){
   poiTownNpcAct(a,s.phase==='out'?'expedition-search':'expedition-return');
  return true;
 }
-function frontierExpeditionEnemyTurn(o,s,now){
- if(o.y!==-1||s.hp<=0||typeof frontierSouthRecordId!=='function'||!frontierSouthRecordId(o)||s.playerAttack?.pending)return false;
- const kit=poiHotbarRead(),exp=kit.frontierExpedition;
- if(exp?.phase!=='out')return false;
- const team=poiTownNpcActors.filter(a=>FRONTIER_EXPEDITION_NPCS.includes(a.role.id)&&!a.death&&!a.recessed&&a.y===o.y);
+function frontierExpeditionEnemyTurn(o,s,now,focus=null){
+ if(o.y!==-1||s.hp<=0||!frontierSouthRecordId(o)||s.playerAttack?.pending)return false;
  const q=s.expeditionCounter;
  if(q){
   if(now<q.hit)return true;
   s.expeditionCounter=null;s.counterHitAt=null;
-  for(const a of team){
-   if(!poiSouthSentinelCovered(q.pattern,a,q.footprint))continue;
+  for(const a of poiTownNpcActors){
+   if(!frontierSouthPursuitNpcValid(a)||!poiSouthSentinelCovered(q.pattern,a,q.footprint))continue;
    const before=a.hp,hp=Math.max(0,before-Math.max(1,q.pattern.damage-poiTownNpcDefense(a)));
    if(hp?frontierLifeSetHp(a,hp):frontierNpcDeath(a,now)){
     a.hurtAt=now;poiRecordAttack(a,poiEnemyLearnKey(o),now);
@@ -31767,23 +31869,17 @@ function frontierExpeditionEnemyTurn(o,s,now){
   }
   return true;
  }
- const near=team.map(a=>({a,d:Math.hypot(a.x-s.x,a.z-s.z)})).sort((a,b)=>a.d-b.d);
- const hero=poiWalkLevel===o.y?poiAimOrigin(now):null;
- for(const {a,d} of near){
-  if(d>5.2)break;
-  const pattern=poiSouthSentinelAim(o,s,a.x,a.z);
-  if(!pattern)continue;
-  if(hero&&Math.hypot(hero.x-s.x,hero.z-s.z)<d+.15&&poiCompanionAttackClear(s,hero,o.y))return false;
-  if(now<(s.expeditionNext||0))return true;
-  s.expeditionNext=now+pattern.windup+pattern.cool;
-  s.facing=[2,1,0,3][poiTownNpcFaces(s.x,s.z,a.x,a.z)];
-  s.attackVisualSequence=(s.attackVisualSequence||0)+1;
-  s.counterAt=now;s.counterHitAt=now+pattern.windup;
-  s.expeditionCounter={hit:s.counterHitAt,pattern,footprint:poiSouthSentinelArea(pattern)};
-  poiMonsterMeshDirty=true;
-  return true;
- }
- return false;
+ if(!focus||!frontierSouthPursuitNpcValid(focus))return false;
+ const pattern=poiSouthSentinelAim(o,s,focus.x,focus.z);
+ if(!pattern)return false;
+ if(now<Math.max(s.nextAttack||0,s.expeditionNext||0))return true;
+ s.expeditionNext=s.nextAttack=now+pattern.windup+pattern.cool;
+ s.facing=[2,1,0,3][poiTownNpcFaces(s.x,s.z,focus.x,focus.z)];
+ s.attackVisualSequence=pattern.motion+1;
+ s.counterAt=now;s.counterHitAt=now+pattern.windup;
+ s.expeditionCounter={hit:s.counterHitAt,pattern,footprint:poiSouthSentinelArea(pattern)};
+ poiMonsterMeshDirty=true;
+ return true;
 }
 // END LINEA SOUTH EXPEDITION
 function frontierNpcLifeStep(a,clock,now,budget){
@@ -32103,7 +32199,6 @@ function poiTownResidentsFrame(now){
    poiTownNpcNext=now+POI_TOWN_RESIDENT_TICK;
    const budget={plans:2},clock=poiTownClockSnapshot();
    frontierExpeditionTick(clock,now);
-   if(poiWalkLevel!==-1&&poiHotbarRead().frontierExpedition?.phase==='out')for(const [o,s] of poiMonsterStates)frontierExpeditionEnemyTurn(o,s,now);
    for(const a of poiTownNpcActors)if(poiTownNpcRecover(a,now))frontierNpcLifeStep(a,clock,now,budget);
    poiTownDialogueUpdate(now);poiTownDialogueSyncPrompt(now);
   }
@@ -32438,7 +32533,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v435',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v436',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -32553,7 +32648,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v435';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v436';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -32768,7 +32863,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v435',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v436',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -35883,7 +35978,8 @@ function poiPlayerDeathSnapshot(){
 let poiDefeatEntry=null;
 function poiDefeatSupported(site){return site?.id==='base'||site?.id==='snowpass'||!!site?.respawnEntry}
 function poiDefeatArea(site,x,z,y){
- if(site?.id==='frontier')return poiDavidTempleEnclosedAt(site,x,z,y)?'davidTemple':
+ if(site?.id==='frontier')return y===-1&&frontierSouthRuinsOwn(x,z)?'southRuins':
+  poiDavidTempleEnclosedAt(site,x,z,y)?'davidTemple':
   y===0&&frontierPlayCave&&frontierBurrowRoofAt(x+.5,z+.5)?'forestRuins':'home';
  if(site?.id!=='base')return site?.id?'region:'+site.id:null;
  const realm=typeof poiDungeonTravelKey==='function'?poiDungeonTravelKey(site,x,z,y):null;
@@ -35905,6 +36001,7 @@ function poiDefeatCheckpoint(ctx){
  else if(area==='mine'){const s=site.mine.stairs;p={x:s?.x,z:s?.z-1,y:site.mine.bounds.y};face=0}
  else if(area==='davidTemple'){p=d.retreat;face=0}
  else if(area==='forestRuins'){p={x:34,z:29,y:0};face=3;}
+ else if(area==='southRuins'){p={x:160,z:72,y:0};face=2;}
  else if(area!=='home'){p=d?.dungeonStand;face=((p?.facing??2)+2)%4}
  else p=site.spawn??{x:poiSpawnX,z:poiSpawnZ};
  return p?{x:p.x,z:p.z,y:p.y??0,facing:face}:null;
@@ -35934,6 +36031,7 @@ function poiPlayerDeathSpawn(ctx=poiDefeatContext()){
  const {site,area}=ctx,pin=poiDefeatCheckpoint(ctx),arrived=poiDefeatEntry?.site===site&&poiDefeatEntry.area===area?poiDefeatEntry:null;
  const home=(x,z,y)=>y===0&&(typeof poiWildZone!=='function'||poiWildZone(POI_SAFE_TOWN,x,z));
  const same=(x,z,y)=>area==='forestRuins'?y===0&&x>=32&&x<=38:
+  area==='southRuins'?y===0&&frontierSouthOwn(x,z)&&z<74:
   area==='davidTemple'?
   y===0&&poiDefeatArea(site,x,z,y)==='home':
   area==='home'?home(x,z,y):poiDefeatArea(site,x,z,y)===area;
@@ -38192,8 +38290,10 @@ function poiAngledWallRecord(records,m,o,sides,start,trim=false){
 // BEGIN FACILITY SHARED GRADE
 let facilityGrade=null;
 function facilityGradeKey(lamps){
- if(facilitySite?.id==='frontier'&&poiWalkActive)return 'frontier-ground';
+ // Cellar meshes have no surface grade. Do not let a cold save or
+ // prewarm cache an empty VBO under the surface's shared key.
  if(!facilitySite||!poiWalkActive||facilityViewLevel()<0)return null;
+ if(facilitySite.id==='frontier')return 'frontier-ground';
  // Only general lanterns spill across floors. Cutaways can hide those;
  // their absence would change baked ground color, so retain that distinction.
  return lamps.filter(o=>o.type==='lantern'&&o.y!==0).map(o=>[o.x,o.z,o.y,o.rot||0].join(',')).join(';');
@@ -38246,6 +38346,7 @@ function makeScene(){
    return false;
   }
   if(facilitySite?.id==='frontier'&&o.y===-1&&frontierSouthOwn(o.x,o.z)&&(o.type==='stone'||o.type==='stonewallAll'))return false;
+  if(facilitySite?.id==='frontier'&&o.y===-1&&o.type==='lantern'&&frontierSouthAuthoredLamp(o.x,o.z))return false;
   if(facilitySite?.id==='frontier'&&o.y===0){
    if(o.x>=155&&o.x<=165&&o.z>=74&&o.z<=81&&(o.type==='stonewallDoor'||o.type==='stonewallAll'))return false; // Pyramid is drawn as one shared shell.
    if(frontierHomeCell(o.x,o.z)&&(/^plasterwall/.test(o.type)||frontierHouseFurnitureAt(o)))return false;
@@ -39318,7 +39419,7 @@ const FRONTIER_SOUTH_EXPEDITION_ROUTE=Object.freeze([
  [146,38],[148,51],[149,63],[155,67],[160,69],[160,74],[160,76],[160,78]
 ].map(([x,z])=>({x,z,y:0})).concat(FRONTIER_SOUTH_MAIN.map(([x,z])=>({x,z,y:-1}))));
 const FRONTIER_SOUTH_ENEMIES=Object.freeze([
- [157,82,'monsterBasaltHound',1],[150,82,'monsterBasaltHound',2],
+ [147,84,'monsterBasaltHound',1],[150,82,'monsterBasaltHound',2],
  [145,89,'monsterRuneWarden',0],[136,94,'monsterRuneWarden',1],
  [151,94,'monsterBasaltHound',3],[160,92,'monsterRuneWarden',0],
  [171,95,'monsterBasaltHound',2],[176,103,'monsterRuneWarden',0],
@@ -39388,6 +39489,10 @@ function frontierSouthRemember(o,state){
  const kit=poiHotbarRead(),next=frontierSouthMarkEncounter(kit,[o]);
  return next===kit||poiEconomyWrite(next);
 }
+const FRONTIER_SOUTH_LAMPS=Object.freeze([[158,79],[162,79],[151,80],[145,85],[137,92],[150,96],[157,92],[164,98],[174,92],[171,106],[179,103],[151,112],[158,113],[153,119],[167,119],[154,125],[166,125]]);
+function frontierSouthAuthoredLamp(x,z){
+ return FRONTIER_SOUTH_LAMPS.some(([a,b])=>a===x&&b===z);
+}
 function frontierSouthPopulate(put){
  const walls=new Set();
  for(const key of frontierSouthCells){
@@ -39400,7 +39505,7 @@ function frontierSouthPopulate(put){
   }
  }
  for(const key of walls){const [x,z]=key.split(',').map(Number);put(x,z,'stonewallAll',0,-1)}
- for(const [x,z] of [[158,79],[162,79],[151,80],[145,85],[137,92],[150,96],[157,92],[164,98],[174,92],[171,106],[179,103],[151,112],[158,113],[153,119],[167,119],[154,125],[166,125]])
+ for(const [x,z] of FRONTIER_SOUTH_LAMPS)
   if(frontierSouthRuinsOwn(x,z))put(x,z,'lantern',0,-1);
  for(const [x,z] of [[134,92],[137,96],[184,100],[149,113],[155,124],[165,124]])
   if(frontierSouthRuinsOwn(x,z))put(x,z,'rockMossy',0,-1);
@@ -39413,7 +39518,7 @@ function frontierSouthPopulate(put){
 function frontierSouthGrade(x,z){
  const join=frontierSmooth(64,72,z),edge=frontierHeight(x,64)*(1-join);
  const n=.25+.22*Math.sin(x*.17+z*.14)+.12*Math.sin(x*.28-z*.28);
- const house=frontierSmooth(6,12,Math.hypot(x-160.5,z-76.8));
+ const house=frontierSmooth(0,5,Math.hypot(Math.max(154-x,x-167,0),Math.max(73-z,z-84,0)));
  return edge+join*house*n;
 }
 function frontierSouthDrawMesh(x0,z0){
@@ -39428,7 +39533,8 @@ function frontierSouthDrawMesh(x0,z0){
   vs.push({p:[x,(z===64?frontierHeight(x,z):frontierSouthGrade(x,z))+.005,z],c});
  }
  for(let z=0;z<32;z++)for(let x=0;x<32;x++){
-  if(frontierSouthRampCell(x+x0,z+z0))continue;
+  const wx=x+x0,wz=z+z0;
+  if(frontierSouthRampCell(wx,wz)||frontierSouthVestibuleCell(wx,wz))continue;
   const a=z*33+x,b=a+1,d=a+33,e=d+1;
   for(const [i,j,k] of [[a,d,e],[a,e,b]]){
    const p=vs[i].p,q=vs[j].p,r=vs[k].p,ux=q[0]-p[0],uy=q[1]-p[1],uz=q[2]-p[2],vx=r[0]-p[0],vy=r[1]-p[1],vz=r[2]-p[2];
@@ -39455,6 +39561,16 @@ function frontierSouthDrawMesh(x0,z0){
   if((x+z)%3===0)cube(m,x-.38,y-.034,z+.51,.29,.18,.30,[.289,.28,.247]);
  }
  return m;
+}
+function frontierSouthVestibuleCell(x,z){return x>=155&&x<=165&&z>=74&&z<=82;}
+function frontierSouthVestibuleArt(m){
+ const floor=(x,z,y,x1,z1,c)=>quad(m,[x,y,z],[x,y,z1],[x1,y,z1],[x1,y,z],c);
+ for(let z=74;z<=82;z++)for(let x=155;x<=165;x++){
+  if(frontierSouthRampCell(x,z))continue;
+  const n=((x*13+z*17)%11-5)*.004;
+  floor(x,z,.006,x+1,z+1,[.329+n,.305+n,.264+n]);
+  floor(x+.014,z+.014,.012,x+.986,z+.986,[.41+n,.381+n,.33+n]);
+ }
 }
 function frontierSouthGateArt(m){
  const X=160.5,Z=74.25,base=frontierHeight(160,74),stone=[.405,.381,.322],top=[.49,.462,.38],old=[.35,.325,.276],dark=[.24,.217,.182];
@@ -39501,6 +39617,44 @@ function frontierSouthStairArt(m){
   const y=(frontierSouthRampHeight(160.5,z+.5)??-1.4)+2.24;
   cube(m,X,y,z+.5,4.22,.17,1.01,[.259,.234,.202]);
  }
+}
+function frontierSouthLanternMounts(){
+ const mounts=[],faces=[],used=new Set();
+ for(const cell of frontierSouthCells){
+  const [x,z]=cell.split(',').map(Number);
+  if(frontierSouthRampCell(x,z))continue;
+  for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
+   if(frontierSouthRuinsOwn(x+dx,z+dz)||frontierSouthRampCell(x+dx,z+dz))continue;
+   faces.push({x:x+.5+dx*.5,z:z+.5+dz*.5,dx:-dx,dz:-dz,y:FRONTIER_SOUTH_BEDROCK+1.43});
+  }
+ }
+ for(const [x,z] of FRONTIER_SOUTH_LAMPS){
+  if(z===79&&(x===158||x===162)){
+   const zz=79.50,wall=x===158?159.02:162.98;
+   mounts.push({x:wall,z:zz,dx:x===158?1:-1,dz:0,y:frontierSouthRampHeight(160.5,zz)+1.41,stair:true});
+   continue;
+  }
+  let best=null,r=Infinity;
+  for(const face of faces){
+   if(used.has(face))continue;
+   const d=(x+.5-face.x)**2+(z+.5-face.z)**2;
+   if(d<r){best=face;r=d;}
+  }
+  if(best){used.add(best);mounts.push(best);}
+ }
+ return mounts;
+}
+function frontierSouthMountedLanternArt(m,{x,y,z,dx,dz}){
+ const iron=[.20,.169,.126],edge=[.31,.256,.181];
+ const B=(project,h,w,v,d,c)=>cube(m,x+dx*project,y+h,z+dz*project,dx?d:w,v,dx?w:d,c);
+ B(.037,-.14,.29,.46,.08,iron);       // anchored wall plate
+ B(.16,.14,.084,.076,.31,edge);       // arm runs from plate directly over lamp
+ B(.29,.045,.057,.14,.056,iron);      // hook
+ B(.29,-.005,.24,.062,.24,edge);
+ B(.29,-.338,.23,.069,.23,edge);
+ B(.29,-.28,.13,.22,.13,[3.1,1.73,.53]);
+ for(const a of [-1,1])for(const b of [-1,1])
+  cube(m,x+dx*(.29+a*.090)-dz*b*.09,y-.29,z+dz*(.29+a*.09)+dx*b*.09,.025,.29,.025,iron);
 }
 function frontierSouthCeilingMesh(){
  const m=mesh(),low=FRONTIER_SOUTH_BEDROCK,inside=frontierSouthRuinsOwn;
@@ -39613,9 +39767,11 @@ function frontierSouthDrawCovered(vp,now){
  if(facilitySite?.id!=='frontier')return;
  if(!frontierSouthStairGpu){
   const stair=mesh(),gate=mesh(),door=mesh();
-  frontierSouthStairArt(stair);frontierSouthGateArt(gate);frontierSouthDoorArt(door);frontierSouthDoorGpu=upload(door);
+  frontierSouthStairArt(stair);frontierSouthGateArt(gate);frontierSouthVestibuleArt(gate);frontierSouthDoorArt(door);frontierSouthDoorGpu=upload(door);
+  const cellar=frontierSouthCeilingMesh();
+  for(const lamp of frontierSouthLanternMounts())frontierSouthMountedLanternArt(lamp.stair?stair:cellar,lamp);
   frontierSouthStairGpu=upload(stair);frontierSouthInteriorGateGpu=upload(gate);
-  frontierSouthCeilingGpu=upload(frontierSouthCeilingMesh());
+  frontierSouthCeilingGpu=upload(cellar);
  }
  const under=facilityViewLevel()<0;
  if((!under||poiWalkViewZ<83)&&!stockAtlasOutside(vp,[158,-1.6,75,164,2.6,82]))draw(frontierSouthStairGpu,vp);
