@@ -1,0 +1,14 @@
+const fs=require('node:fs'),vm=require('node:vm'),a=require('node:assert/strict');
+const h=fs.readFileSync(process.argv[2]||'candidate.html','utf8');
+for(const m of h.matchAll(/<script>([\s\S]*?)<\/script>/g))new vm.Script(m[1]);
+const get=(x,y)=>{const i=h.indexOf(x),j=h.indexOf(y,i+1);a(i>=0&&j>i);return h.slice(i,j)};
+const body=get("case 'equipStick':{","case 'equipClub':{");
+const limbs=[];
+vm.runInNewContext("switch('equipStick'){"+body+"}",{x:0,y:0,z:0,m:{},naturalCrown(){},naturalBranch(m,...p){limbs.push(p)}});
+a.deepEqual(limbs[0].slice(0,6),[.006,.045,.005,-.030,.33,.014]);
+a.deepEqual(limbs[8].slice(3,6),[.043,1.307,-.001]);
+a(Math.abs(limbs[2][6]-.110*.94)<1e-9);
+a(Math.abs(limbs[4][6]-.094*.94)<1e-9);
+a(body.includes('const offshoot=[[-.042,.698,.006],[-.189,.872,.016],[-.276,1.047,.064],[-.293,1.118,.062]]'));
+a(h.includes('equipStick:{range:1.55,reachStars:3,damage:16'));
+console.log('PASS stick radius is 6% slimmer, with original endpoints, fork and combat profile');
