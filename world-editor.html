@@ -1726,7 +1726,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v382）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v383）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -28075,7 +28075,7 @@ function poiHumanPartyAway(npcId,kit){
 function poiHumanPartyCanRecruit(a){
  return !!a?.role&&(a.role.role==='adventurer'||facilitySite?.id==='frontier'&&frontierResident(a.role.id))&&Object.hasOwn(POI_HUMAN_PARTY_IDS,'human:'+a.role.id);
 }
-function poiHumanPartyRecruit(a,now=0){
+function poiHumanPartyRecruit(a,now=0,preview=false){
  const reject=reason=>({ok:false,reason});
  if(!poiHumanPartyCanRecruit(a))return reject('ineligible');
  if(!['base','frontier'].includes(facilitySite?.id)||!poiTownNpcActors.includes(a)||a.recessed||a.death||a.target||a.bedId||a.hp<=0)
@@ -28084,6 +28084,7 @@ function poiHumanPartyRecruit(a,now=0){
  if(frontierIntroVillager(a.role.id)&&!frontierDressed(kit))return reject('clothes');
  if(poiHumanPartyAway(a.role.id,kit))return reject('duplicate');
  if(typeof poiPartyHasRoom!=='function'||!poiPartyHasRoom(kit))return reject('full');
+ if(preview)return {ok:true,id};
  if(!poiEconomyWrite({...kit,humanParty:[...poiHumanPartyDecode(kit.humanParty),{id,hp:Math.min(POI_TOWN_RESIDENT_HP,Math.round(a.hp)),mode:'fight'}]}))
   return reject('storage');
  // The successful kit transaction owns this identity. Only then remove
@@ -29084,6 +29085,31 @@ function frontierNpcTutorial(role){
  return {gift:{flag:'frontierClothesGift',types:Object.values(FRONTIER_FITTED_GEAR).filter(Boolean)},pages:[sera?'どうしてそんな格好で？ 裸のままだと困るでしょう。予備の服とズボン、革の靴をどうぞ。':
   'おい、どうして裸でうろついてるんだ？ とりあえず、予備の服とズボン、革の靴を持っていきな。']};
 }
+// A reply is a revocable invitation, not a party transaction.
+const POI_NPC_JOIN_REPLIES=Object.freeze({
+ frontiersera:'うん、行こう。まだ知らない景色を、一緒に見に行きたいな。',
+ frontierren:'いいぜ。村の外は任せとけ。俺の槍が役に立つはずだ。',
+ frontierchief:'よし、わしも行こう。昔の旅で覚えたことが役に立つかもしれん。',
+ frontiershopkeeper:'店の外へ出るのも久しぶりだね。うん、私も連れていって。',
+ resadventurer:'いいだろう。先頭は交代しながら行こう。',
+ guestadventurer:'ちょうど次の旅を考えていたんだ。よろしくな。'
+});
+function poiNpcRecruitResultText(reason){
+ return ({full:'仲間は3人までです。',storage:'保存できなかったため、仲間にはなっていません。',busy:'今は同行できない。',clothes:'まずインベントリで布の服と布のズボンを装備しよう。'})[reason]||'ここを離れられない。';
+}
+function poiNpcRecruitConfirm(d,now){
+ d.pendingRecruit=false;
+ const result=poiTownDialogueTarget(now)===d.actor?poiHumanPartyRecruit(d.actor,now):{ok:false,reason:'busy'};
+ if(!result.ok){
+  d.page='request';d.index=0;d.text=poiNpcRecruitResultText(result.reason);
+  poiNpcMenuRender(now);poiShopSync();return true;
+ }
+ const name=d.actor.role.name||poiTownNpcDisplayName(d.actor.role);
+ poiTownDialogueClose();poiEconomyRefresh();
+ poiSound('item-pickup');
+ if(!poiMessagePush(name+'が仲間になった。','recruit',now))toast(name+'が仲間になった。');
+ return true;
+}
 function poiNpcGiftConfirm(d,now){
  const offer=d.pendingGift;d.pendingGift=null;
  const kit=poiHotbarRead();let next=kit;const added=[];
@@ -29542,14 +29568,11 @@ function poiNpcMenuChoose(id,now=performance.now()){
  }else if(id==='local-help'){
   d.text=d.actor.role.id==='portfisher'?'網を直してるところさ。今は頼みごとはないよ。':'魚を干してるところだよ。今は頼みごとはないよ。';
  }else if(id==='recruit'&&typeof poiHumanPartyRecruit==='function'){
-  const result=poiHumanPartyRecruit(d.actor,now);
+  const result=poiHumanPartyRecruit(d.actor,now,true);
   if(result.ok){
-   const name=poiTownNpcDisplayName(d.actor.role);poiTownDialogueClose();
-   if(typeof poiEconomyRefresh==='function')poiEconomyRefresh();
-   if(typeof toast==='function')toast(name+'が仲間になった。');
-   return true;
-  }
-  d.text=({full:'仲間は3人までです。',storage:'保存できなかったため、仲間にはなっていません。',busy:'今は同行できない。',clothes:'まずインベントリで布の服と布のズボンを装備しよう。'})[result.reason]||'ここを離れられない。';
+   d.page='speech';d.index=0;d.pendingRecruit=true;d.speechIndex=0;
+   d.text=POI_NPC_JOIN_REPLIES[d.actor.role.id]||'うん、一緒に行こう。よろしく。';d.speechPages=[d.text];
+  }else d.text=poiNpcRecruitResultText(result.reason);
  }else if(id==='recruit')d.text='今は忙しい';
  else if(id==='stay'){
   const result=poiTownRequestPlayerLodging(),room={'inn-west':'西','inn-east':'東','inn-south':'南'}[result?.bed?.id];
@@ -29779,6 +29802,7 @@ function poiTownDialogueAction(now){
  if(poiTownDialogueSpeechOnly()){
   if(expected)return false;
   if(poiTownDialogue.pendingGift)return poiNpcGiftConfirm(poiTownDialogue,now);
+  if(poiTownDialogue.pendingRecruit)return poiNpcRecruitConfirm(poiTownDialogue,now);
   if(poiTownDialogueHasNext()){
    const d=poiTownDialogue;
    d.topic=d.text=d.speechPages[++d.speechIndex];
@@ -30609,7 +30633,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v382',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v383',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -30724,7 +30748,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v382';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v383';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -30939,7 +30963,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v382',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v383',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -34744,17 +34768,17 @@ function poiShopSync(){
  const stay=typeof poiTownPlayerService==='function'?poiTownPlayerService():null;
  const talk=(visible||poiWalkActive&&facilitySite?.id==='frontier')&&typeof poiTownDialogueTarget==='function'&&poiTownDialogueTarget(performance.now());
  const soul=typeof poiSoulFloorReachable==='function'?poiSoulFloorReachable(performance.now()):null;
- const prompt=typeof poiTownDialogueSpeechOnly==='function'&&poiTownDialogueSpeechOnly()?(poiTownDialogue?.pendingGift?'npc-gift':poiTownDialogueHasNext()?'npc-next':'npc-dismiss'):poiShopIsOpen()?'npc-confirm':poiChestIsOpen()?'chest-close':poiKitchenChestReachable()?'chest':typeof poiMineVaultChestReachable==='function'&&poiMineVaultChestReachable()?'vault':typeof poiOtherworldChestReachable==='function'&&poiOtherworldChestReachable()?'otherworld-chest':typeof poiChapelChestReachable==='function'&&poiChapelChestReachable()?'chapel-chest':typeof poiQuestSurveyReachable==='function'&&poiQuestSurveyReachable()?'survey':stay==='rest'?'rest':talk?'talk':soul?'soul-pickup':typeof poiWayfarerWellReachable==='function'&&poiWayfarerWellReachable()?'well':(typeof poiNorthTrailForkSignReachable==='function'&&poiNorthTrailForkSignReachable()||typeof poiChapelWaymarkReachable==='function'&&poiChapelWaymarkReachable())?'trail-sign':'action';
+ const prompt=typeof poiTownDialogueSpeechOnly==='function'&&poiTownDialogueSpeechOnly()?(poiTownDialogue?.pendingGift?'npc-gift':poiTownDialogue?.pendingRecruit?'npc-recruit':poiTownDialogueHasNext()?'npc-next':'npc-dismiss'):poiShopIsOpen()?'npc-confirm':poiChestIsOpen()?'chest-close':poiKitchenChestReachable()?'chest':typeof poiMineVaultChestReachable==='function'&&poiMineVaultChestReachable()?'vault':typeof poiOtherworldChestReachable==='function'&&poiOtherworldChestReachable()?'otherworld-chest':typeof poiChapelChestReachable==='function'&&poiChapelChestReachable()?'chapel-chest':typeof poiQuestSurveyReachable==='function'&&poiQuestSurveyReachable()?'survey':stay==='rest'?'rest':talk?'talk':soul?'soul-pickup':typeof poiWayfarerWellReachable==='function'&&poiWayfarerWellReachable()?'well':(typeof poiNorthTrailForkSignReachable==='function'&&poiNorthTrailForkSignReachable()||typeof poiChapelWaymarkReachable==='function'&&poiChapelWaymarkReachable())?'trail-sign':'action';
  const landscape=$('viewWrap')?.hasAttribute?.('data-analog-play')===true;
  if(action)action._talkActor=prompt==='talk'?talk:null;
  if(action&&(action._shopPrompt!==prompt||!!action._shopLandscape!==landscape)){
   action._shopPrompt=prompt;action._shopLandscape=landscape;action._shopWeapon=undefined;
   if(action.dataset)delete action.dataset.actionArt;
   const [label,aria]=prompt==='chest'?['開ける','チェストを開ける']:prompt==='chest-close'?['閉じる','チェストを閉じる']:
-   prompt==='vault'?['開ける','宝物庫の宝箱を開ける']:prompt==='otherworld-chest'?['開ける','回廊の宝箱を開ける']:prompt==='chapel-chest'?['開ける','礼拝堂の宝箱を開ける']:prompt==='npc-confirm'?['選択','会話の選択肢を決定する']:prompt==='npc-gift'?['決定','贈り物を受け取る']:prompt==='npc-next'?['次へ','次のセリフへ']:prompt==='npc-dismiss'?['閉じる','会話を閉じる']:
+   prompt==='vault'?['開ける','宝物庫の宝箱を開ける']:prompt==='otherworld-chest'?['開ける','回廊の宝箱を開ける']:prompt==='chapel-chest'?['開ける','礼拝堂の宝箱を開ける']:prompt==='npc-confirm'?['選択','会話の選択肢を決定する']:prompt==='npc-recruit'?['決定','仲間に迎える']:prompt==='npc-gift'?['決定','贈り物を受け取る']:prompt==='npc-next'?['次へ','次のセリフへ']:prompt==='npc-dismiss'?['閉じる','会話を閉じる']:
    prompt==='survey'?['調べる','廃坑を調べる']:prompt==='trail-sign'?['読む','道しるべを読む']:prompt==='well'?['調べる','井戸を調べる']:prompt==='rest'?['休む','客室で休む']:prompt==='talk'?['話す','住人と話す']:prompt==='soul-pickup'?['拾う','仲間の魂を拾う']:['攻撃','攻撃または決定'];
   if(landscape&&prompt==='action')poiLandscapeActionWeaponSync(typeof poiArmedWandIndex==='function'&&poiArmedWandIndex()!==null?'fireWand':poiEquippedWeapon(),action);
-  else if(landscape&&(prompt==='talk'||prompt==='npc-next'||prompt==='npc-dismiss'||prompt==='npc-gift'))action.textContent=label;
+  else if(landscape&&(prompt==='talk'||prompt==='npc-next'||prompt==='npc-dismiss'||prompt==='npc-gift'||prompt==='npc-recruit'))action.textContent=label;
   else if(landscape&&prompt==='soul-pickup')action.textContent='拾う';
   else action.innerHTML=label+'<br>決定';
   action.setAttribute('aria-label',aria);
