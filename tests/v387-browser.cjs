@@ -57,7 +57,7 @@ try{
  const saved=await run('save',36,22,36.11,21.7);a(saved.ok);close(saved.point.subX,36.11);
  a(!(await run('save',36,22,35.9,21.7)).ok);
  const stick=await run('stick');a(stick.drawn&&stick.pixels>70&&stick.profile===3,JSON.stringify(stick));
- a.deepEqual(await run('audio'),[['attack','equipStick'],['attack','equipWoodSpear'],['attack','equipWalkingCane'],['bow-draw',null],['attack','equipWoodBow']]);
+ a.deepEqual(await run('audio'),[['attack','equipStick'],['attack','equipWoodSpear'],['attack','equipWalkingCane'],['bow-draw'],['attack','equipWoodBow']]);
  const theme=await p.evaluate(()=>{
   const bubble=document.createElement('div');bubble.className='frontierLifeLine';document.querySelector('#frontierLifeSpeech').append(bubble);
   const d=getComputedStyle(bubble),s=getComputedStyle(document.querySelector('#poiTownSpeech'));
