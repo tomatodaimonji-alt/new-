@@ -1,0 +1,13 @@
+const a=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
+const s=fs.readFileSync(process.argv[2]??'world-editor.html','utf8');
+for(const m of s.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))if(m[1].trim())new vm.Script(m[1]);
+const begin=s.indexOf('const POI_ADVENTURE_RANKS=');
+const api=vm.runInNewContext(s.slice(begin,s.indexOf('function poiHumanPartyCanRecruit(',begin))+'\n({hp:poiRankBaseHp,stats:poiRankSpeedBonus,rank:poiAdventureRankDecode,migrate:poiRankRestoreHp})');
+a.deepEqual(['F','E','D','C','B','A','S'].map(api.hp),[100,160,250,380,550,750,1000]);
+a.deepEqual(['F','E','D','C','B','A','S'].map(api.stats),[0,0,0,0,1,2,3]);
+a.equal(api.rank('SS'),'S');a.equal(api.rank('SSS'),'S');a.equal(api.hp(null),100);
+a.equal(api.migrate(130,180,550),500);a.equal(api.migrate(0,180,550),0);a.equal(api.migrate(600,1000,1000),600);
+a.match(s,/armorMithrilTorso:'ミスリルの戦衣'/);
+a.match(s,/if\(mithril\)frontierMithrilCoat\(m,0,0,0,scale\);/);
+a.match(s,/const bladeY=h=>y\+\.52\+\(h-\.52\)\*\(mithril\?1\.095:1\)/);
+a.match(s,/else pose\.meleeReach=poiWorldMeleePlan\(a.weapon,profile,age\)/);
