@@ -1,0 +1,12 @@
+const fs=require('node:fs'),vm=require('node:vm'),a=require('node:assert/strict'),h=fs.readFileSync(process.argv[2],'utf8');
+const match=h.match(/\/\/ BEGIN FRONTIER MAP FLOOR SEPARATION\n([\s\S]*?)\/\/ END FRONTIER MAP FLOOR SEPARATION/);
+a(match,'the surface and underground surveys must be separate');
+const c={FRONTIER_BURROW:{east:32,mid:29.5,roof:25},frontierBurrowRoofAt:x=>x<25,frontierBurrowCell:(x,z)=>x>=10&&x<32&&z===29,frontierRuinsCell:()=>false};
+vm.runInNewContext(match[1]+'\nthis.out={poiFrontierCaveMap,poiFrontierCaveMapAccess,poiFrontierCaveMapTone,poiFrontierSurfaceMarker};',c);
+const f=c.out,site={id:'frontier'};
+a(f.poiFrontierCaveMap(site,20,29,0));a(!f.poiFrontierCaveMap(site,31,29,0));a(!f.poiFrontierCaveMap({},20,29,0));
+a(f.poiFrontierCaveMapAccess(32,29));a(!f.poiFrontierCaveMapAccess(32,30));
+a.equal(f.poiFrontierSurfaceMarker(32,29),8);a.equal(f.poiFrontierSurfaceMarker(20,29),null);
+a.equal(f.poiFrontierCaveMapTone(20,29),3);
+a(h.includes("?'west-ruins':realmKey||'surface'"));
+console.log('PASS exterior shows one entrance marker with independent surveyed underground map');
