@@ -45,3 +45,10 @@ console.log('bedside dialogue within a room, not through a wall or between floor
  a.deepEqual(calls,[.28,['house',true],0,['other',false]]);
 }
 console.log('only the current interior door is drawn transparently with its exit frame');
+{
+ const a1={x:101,z:34,y:0,activity:'sleep-home',role:{bed:{x:101,z:35}}};
+ const ctx={poiTownNpcActors:[a1],poiWalkLevel:0,poiWalkX:101,poiWalkZ:33,frontierPartyTalkActors:()=>[],
+   poiTownNpcSleeping:a=>a.activity==='sleep-home',poiTownNpcVisualPosition:a=>({...a,t:1})};
+ const clip=vm.runInNewContext(fn('poiPlayerNpcBodyClip')+'\npoiPlayerNpcBodyClip(50)',ctx);
+ a.equal(clip,null,'the lying resident must not occupy the standing tile');
+}
