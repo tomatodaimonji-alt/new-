@@ -13,7 +13,8 @@ h=h.replace(mark,mark+`
    if(!poiHumanPartyRecruit(guard,n).ok)throw Error('bridge ally fixture');
    const friend='human:'+guard.role.id;
    poiPartyAdoptHuman(friend,{...guard,x:125,z:30,actorLeg:null,moveAt:null},n);
-   const ally=poiPartyActorById(friend);ally.next=0;ally.nextHit=0;
+   const ally=poiPartyActorById(friend);ally.next=0;ally.nextHit=0;ally.frontierPickupAt=n+30000;
+   for(const resident of poiTownNpcActors)resident.frontierPickupAt=n+30000;
    const obj={x:127,z:30,y:0,type:'monsterSlime',rot:0},body=poiCombatActorMake(obj);
    Object.assign(body,{hp:12,frontierRuins:false,wildSpawn:true,nextAttack:n+15000,nextMove:n+15000,moveStarted:-10000});
    poiMonsterStates.set(obj,body);poiMonsterMeshDirty=true;
@@ -23,7 +24,12 @@ h=h.replace(mark,mark+`
    return {ranks,npcRows,poseY:pose.y,deck,raw:terrainY(127,30),loot:poiGroundLootSupport({x:127,z:30,y:0,frontierCave:false}),bag:!$('poiBagPanel').hidden,
     rankRow:[...$('poiBagPlayerStats').children].find(n=>n.textContent.includes('冒険者ランク'))?.textContent};
   },
-  result:()=>({hp:window.qaSlime.body.hp,coin:poiEconomyDrops.get('127,30')?.amount??0,bag:!$('poiBagPanel').hidden}),
+  result:()=>{
+   const q=window.qaSlime.body,coin=poiEconomyDrops.get(q.x+','+q.z);
+   return {hp:q.hp,coin:coin?.amount??0,bag:!$('poiBagPanel').hidden,
+    dropped:poiEconomyDropActors.has(q),onDeck:facilitySite.decks.has(q.x+','+q.z),
+    exterior:poiWildExterior(q.x,q.z),reachable:poiWalkCanStep(q.x,q.z)};
+  },
  },
 `);
 const server=createServer((_,r)=>{r.setHeader('Content-Type','text/html;charset=utf-8');r.end(h)});
@@ -40,6 +46,6 @@ try{
  a.deepEqual(s.npcRows.slice(0,4),['名前','職業','冒険者ランク','HP']);a.ok(s.bag&&s.deck>s.raw+.25&&Math.abs(s.poseY-s.deck)<.03);a.equal(s.loot,s.deck);
  await p.waitForFunction(()=>window.__editorTest.qa417.result().hp<=0,null,{timeout:14000,polling:300});
  const r=await p.evaluate(()=>window.__editorTest.qa417.result());console.log(r);
- a.deepEqual(r,{hp:0,coin:3,bag:true});a.deepEqual(errors,[]);
+ a.equal(r.hp,0);a.equal(r.coin,3);a.ok(r.bag&&r.dropped&&r.onDeck);a.deepEqual(errors,[]);
  console.log('PASS live allied kill during inventory and bridge-supported slime and coin loot; adventurer rank order');
 }finally{await b?.close();server.close()}})().catch(e=>{console.error(e);process.exitCode=1});
