@@ -1,0 +1,16 @@
+const a=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
+const s=fs.readFileSync(process.argv[2]??'world-editor.html','utf8');
+for(const m of s.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))if(m[1].trim())new vm.Script(m[1]);
+a.match(s,/armorSilverHood:'銀羽の髪飾り'/);
+a.match(s,/frontierlyzel:'equipWoodBow'/);
+a.equal(s.split("worldParty:'east-bridge-contract'").length,3);
+const start=s.indexOf('function frontierNpcPartyTarget('),end=s.indexOf('\nfunction frontierNpcLifeStep(',start);
+a.ok(start>=0&&end>=0);
+const hostile={y:0,type:'monsterSlime'},state={hp:35,x:3,z:2};
+const role={worldParty:'east-bridge-contract'},regna={role,y:0,x:1,z:2},lyzel={role,y:0,x:2,z:2,frontierCombat:hostile};
+const ctxt={poiTownNpcActors:[regna,lyzel],poiMonsterStates:new Map([[hostile,state]]),poiCompanionAttackClear:()=>true};
+const choose=vm.runInNewContext(s.slice(start,end)+'\nfrontierNpcPartyTarget',ctxt);
+a.equal(choose(regna).o,hostile);
+state.hp=0;a.equal(choose(regna),null);state.hp=35;
+lyzel.y=1;a.equal(choose(regna),null);
+lyzel.y=0;ctxt.poiCompanionAttackClear=()=>false;a.equal(choose(regna),null);
