@@ -1733,7 +1733,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v407）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v408）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -22407,10 +22407,10 @@ function poiNpcTradeState(kit,actor){
 }
 function poiNpcTradeOffer(kit,slots,stock,mode,type){
  const base=POI_NPC_TRADE_BASE_PRICES[type],buy=mode==='buy';
- const price=buy?base*3/2:base/2,gold=Number.isInteger(stock.gold)?poiWalletGold(kit):kit.gold||0;
+ const gift=mode==='gift',price=gift?0:buy?base*3/2:base/2,gold=Number.isInteger(stock.gold)?poiWalletGold(kit):kit.gold||0;
  const count=buy?stock[type]:slots.reduce((n,c)=>n+(c?.type===type?c.count:0),0);
  const reason=buy?(!count?'stock':gold<price?'funds':Number.isInteger(stock.gold)&&stock.gold+price>POI_ECONOMY_GOLD_MAX?'stock':!poiInventoryCanReceive(kit,type)?'full':null):
-  (!count?'empty':Number.isInteger(stock.gold)&&stock.gold<price?'npc-funds':stock[type]>=POI_NPC_TRADE_MAX_STOCK?'stock':(kit.gold||0)+price>POI_ECONOMY_GOLD_MAX?'goldmax':null);
+  (!count?'empty':!gift&&Number.isInteger(stock.gold)&&stock.gold<price?'npc-funds':stock[type]>=POI_NPC_TRADE_MAX_STOCK?'stock':!gift&&(kit.gold||0)+price>POI_ECONOMY_GOLD_MAX?'goldmax':null);
  return {code:type,type,name:poiInventoryItemName(type),base,price,quantity:count,canTrade:reason===null,reason};
 }
 function frontierMerchantGoods(kit,actor,mode,slots){
@@ -22431,10 +22431,10 @@ function frontierMerchantPrice(type,buy){
 function frontierMerchantLooseOffer(kit,actor,mode,type){
  const id=actor.role.id,stock=frontierVendorStock(kit,id),items=frontierLifeRecord(kit,id).items,buy=mode==='buy';
  const quantity=(buy?items:poiInventorySlots(kit)).reduce((n,c)=>n+(c?.type===type?c.count:0),0);
- const price=frontierMerchantPrice(type,buy);
+ const gift=mode==='gift',price=gift?0:frontierMerchantPrice(type,buy);
  const reason=!quantity?(buy?'stock':'empty'):buy?(poiWalletGold(kit)<price?'funds':stock.gold+price>POI_ECONOMY_GOLD_MAX?'stock':
   !poiInventoryAccept(kit,type,1,items.find(c=>c.type===type)).accepted?'full':null):
-  stock.gold<price?'npc-funds':items.length>=9?'stock':(kit.gold||0)+price>POI_ECONOMY_GOLD_MAX?'goldmax':null;
+  !gift&&stock.gold<price?'npc-funds':items.length>=9?'stock':!gift&&(kit.gold||0)+price>POI_ECONOMY_GOLD_MAX?'goldmax':null;
  return {code:type,type,name:poiInventoryItemName(type),price,quantity,canTrade:!reason,reason};
 }
 function frontierMerchantLooseTrade(kit,actor,mode,type,from,result){
@@ -22450,7 +22450,7 @@ function frontierMerchantLooseTrade(kit,actor,mode,type,from,result){
   slots[from]=c.count>1?{...c,count:c.count-1}:null;items.push({...c,count:1});
  }
  const gold=(kit.gold||0)+(buy?-offer.price:offer.price);
- const next=frontierLifeEdit(frontierLifeStock({...kit,gold},id,{...stock,gold:stock.gold+(buy?offer.price:-offer.price)}),id,{items});
+ const next=frontierLifeEdit(frontierLifeStock(mode==='gift'?kit:{...kit,gold},id,{...stock,gold:stock.gold+(buy?offer.price:-offer.price)}),id,{items});
  if(!poiEconomyWrite(poiInventoryEdited(next,slots)))return result('storage');
  poiEconomyRefresh();return result(null,gold);
 }
@@ -22470,10 +22470,12 @@ function poiNpcTradeSellRows(actor){
 }
 function poiNpcTradeTransaction(actor,mode,code,sourceIndex=null){
  const result=(reason,gold=poiEconomyGold())=>({ok:reason===null,reason,gold});
- if((mode!=='buy'&&mode!=='sell')||!poiNpcTradeEligible(actor)||
+ const gift=mode==='gift';
+ if((mode!=='buy'&&mode!=='sell'&&!gift)||!poiNpcTradeEligible(actor)||
+    (gift&&(typeof poiNpcTradeSessionMatches!=='function'||!Number.isInteger(sourceIndex)))||
     (typeof poiNpcTradeSessionMatches==='function'&&!poiNpcTradeSessionMatches(actor,mode,code,sourceIndex)))return result('unavailable');
  const kit=poiHotbarRead(),slots=poiInventorySlots(kit).slice(),{id,record,stock,frontier}=poiNpcTradeState(kit,actor);
- if(!frontierMerchantGoods(kit,actor,mode,slots).includes(code))return result('item');
+ if(!frontierMerchantGoods(kit,actor,gift?'sell':mode,slots).includes(code))return result('item');
  if((id===POI_FRONTIER_SHOP_ID||actor.frontierPartyId)&&frontierMerchantLooseType(code))return frontierMerchantLooseTrade(kit,actor,mode,code,sourceIndex,result);
  const offer=poiNpcTradeOffer(kit,slots,stock,mode,code);
  if(!offer.canTrade)return result(offer.reason);
@@ -22496,7 +22498,7 @@ function poiNpcTradeTransaction(actor,mode,code,sourceIndex=null){
  const nextStock={...stock,[code]:stock[code]+(buy?-1:1)};
  const traded=frontier?{frontierTrades:{...kit.frontierTrades,[id]:{...nextStock,gold:stock.gold+(buy?offer.price:-offer.price)}}}:
   {npcTrade:{...record,actors:{...record.actors,[id]:nextStock}}};
- if(!poiEconomyWrite(poiInventoryEdited({...kit,gold,...traded},nextSlots)))return result('storage');
+ if(!poiEconomyWrite(poiInventoryEdited({...kit,...(gift?{}:{gold}),...traded},nextSlots)))return result('storage');
  poiEconomyRefresh();return result(null,gold);
 }
 
@@ -22807,12 +22809,12 @@ function poiArmorSnapshot(){
 }
 function poiArmorReconcile(kit,slots){
  const seen=new Set(Object.values(facilitySite?.id==='frontier'?(kit.worn||POI_FRESH_ARMOR):poiArmorWorn(kit)));
- const keep=(c,hot=false)=>{
+ const keep=c=>{
   if(!poiArmorCategory(c?.type))return c;
-  if(hot||seen.has(c.type))return null;
+  if(seen.has(c.type))return null;
   seen.add(c.type);return c;
  };
- if(slots)slots=slots.map((c,i)=>keep(c,i<POI_HOTBAR_SIZE));
+ if(slots)slots=slots.map(keep);
  for(const key of POI_CHEST_STORE_KEYS)if(kit[key])kit[key].slots=kit[key].slots.map(c=>keep(c));
  if(kit.drops){kit.drops=kit.drops.filter(c=>keep(c));if(!kit.drops.length)delete kit.drops}
  return slots;
@@ -22820,13 +22822,16 @@ function poiArmorReconcile(kit,slots){
 function poiMoveArmorSlot(from,to){
  const result=poiStorageActionResult;
  if(!poiInventoryAllowed())return result('unavailable');
- const equipping=from?.zone==='bag'&&to?.zone==='armor',removing=from?.zone==='armor'&&to?.zone==='bag';
+ const loose=r=>r?.zone==='bag'||r?.zone==='hotbar';
+ const equipping=loose(from)&&to?.zone==='armor',removing=from?.zone==='armor'&&loose(to);
  if(!equipping&&!removing)return result('type');
- const part=(equipping?to:from).part,idx=(equipping?from:to).index;
- if(!Object.prototype.hasOwnProperty.call(POI_STARTER_ARMOR,part)||!poiStorageIndexExists(idx,POI_BAG_SAVED)||removing&&idx>=POI_BAG_UNLOCKED)return result('locked');
- const kit=poiHotbarRead(),slots=poiInventorySlots(kit).slice(),i=POI_HOTBAR_SIZE+idx;
+ const part=(equipping?to:from).part,ref=equipping?from:to,idx=ref.index,hot=ref.zone==='hotbar';
+ if(!Object.prototype.hasOwnProperty.call(POI_STARTER_ARMOR,part)||
+   !poiStorageIndexExists(idx,hot?POI_HOTBAR_SIZE:POI_BAG_SAVED)||!hot&&removing&&idx>=POI_BAG_UNLOCKED)return result('locked');
+ const kit=poiHotbarRead(),slots=poiInventorySlots(kit).slice(),i=hot?idx:POI_HOTBAR_SIZE+idx;
+ if(hot&&i===poiGoldHotbarSlot(kit))return result('occupied');
  const active=poiArmorWorn(kit),worn={...(facilitySite?.id==='frontier'?(kit.worn||active):active)},cell=slots[i];
- if(equipping&&facilitySite?.id==='frontier'&&cell&&cell.type!==FRONTIER_FITTED_GEAR[part])return result('unavailable');
+ if(cell&&facilitySite?.id==='frontier'&&cell.type!==FRONTIER_FITTED_GEAR[part])return result(equipping?'unavailable':'occupied');
  if(equipping&&!cell||removing&&!active[part])return result('empty');
  if(cell&&poiArmorCategory(cell.type)!==part)return result(equipping?'type':'occupied');
  const returned=poiArmorCell(worn[part],kit.wornDurability?.[part]);
@@ -23027,8 +23032,6 @@ function poiMoveChestInventorySlot(fromArea,fromIndex,toArea,toIndex){
  const liveEnd=POI_HOTBAR_SIZE+POI_BAG_UNLOCKED;
  if(b===slots&&toIndex>=liveEnd||
     a===slots&&fromIndex>=liveEnd&&!poiInventoryCanWithdrawTo(a[fromIndex],b[toIndex]))return result('locked');
- if(b===slots&&toIndex<POI_HOTBAR_SIZE&&poiArmorCategory(a[fromIndex]?.type)||
-    a===slots&&fromIndex<POI_HOTBAR_SIZE&&poiArmorCategory(b[toIndex]?.type))return result('type');
  if(b===chest&&frontierEstateCoinAt(poiChestActiveKey,toIndex,kit))return result('occupied');
  const taken=a===chest&&b===slots?a[fromIndex].type:null,key=poiChestActiveKey,active=kit[key];
  const estate=FRONTIER_ESTATE_KEYS.includes(key);
@@ -23194,6 +23197,8 @@ function poiEquipHotbarItem(index){
  if(!poiStorageIndexExists(index,POI_HOTBAR_SIZE))return result('locked');
  const kit=poiHotbarRead(),cell=poiInventorySlots(kit)[index];
  if(!cell)return result('empty');
+ const part=poiArmorCategory(cell.type);
+ if(part)return poiMoveArmorSlot({zone:'hotbar',index},{zone:'armor',part});
  const weapon=poiHotbarWeaponForType(cell.type);
  if(!weapon)return result('type');
  if(kit.weapon===weapon){if(typeof poiWandDisarm==='function')poiWandDisarm();return result()}
@@ -23704,7 +23709,6 @@ function poiInventoryMove(from,to){
  if(j===poiGoldHotbarSlot(kit))return result('occupied');
  const liveEnd=POI_HOTBAR_SIZE+POI_BAG_UNLOCKED;
  if(j>=liveEnd||i>=liveEnd&&!poiInventoryCanWithdrawTo(slots[i],slots[j]))return result('locked');
- if(j<POI_HOTBAR_SIZE&&poiArmorCategory(slots[i]?.type)||i<POI_HOTBAR_SIZE&&poiArmorCategory(slots[j]?.type))return result('type');
  poiInventorySwap(slots,i,slots,j);
  const next=poiInventoryEdited(kit,slots);
  if(!poiEconomyWrite(next))return result('storage');
@@ -25492,6 +25496,12 @@ function poiHotbarUse(slot){
  const kit=poiHotbarRead();if(slot===poiGoldHotbarSlot(kit))return;
  const item=poiInventorySlot(kit,slot);
  if(item==='gold')return;
+ if(poiArmorCategory(item)){
+  const result=poiEquipHotbarItem(slot);
+  if(result.reason==='unavailable')toast('この防具は装備できません');
+  else if(result.reason==='storage')toast('装備を保存できませんでした');
+  return;
+ }
  if(typeof poiCompanionType==='function'&&poiCompanionType(item)){
   const use=typeof poiCompanionShortcutTap==='function'?poiCompanionShortcutTap(kit,slot):poiCompanionUse(kit,slot);if(use.reason==='storage')toast('仲間の状態を保存できませんでした');return;
  }
@@ -29741,11 +29751,15 @@ function poiTownDialogueMoveIntent(){
 }
 function poiNpcMenuActive(){return !!poiTownDialogue&&!poiTownDialogue.sleeping&&!poiTownDialogueSpeechOnly()}
 function poiTownNpcSleeping(a){return /^(?:sleep-|rest-inn$)/.test(a.activity||'')}
+function poiNpcTradeGiftAvailable(d){
+ return !!d&&!d.sleeping&&!d.toolshopCounter&&d.page==='confirm'&&d.pending?.page==='sell'&&
+  Number.isInteger(d.pending.offer?.sourceIndex);
+}
 function poiNpcTradeSessionMatches(actor,mode,code=null,sourceIndex=null){
- const d=poiTownDialogue;
- return !!d&&!d.sleeping&&d.actor===actor&&d.page==='confirm'&&d.pending?.page===mode&&
+ const d=poiTownDialogue,gift=mode==='gift';
+ return !!d&&!d.sleeping&&d.actor===actor&&d.page==='confirm'&&(gift?poiNpcTradeGiftAvailable(d):d.pending?.page===mode)&&
   (code===null||d.pending.offer.code===code)&&
-  (mode!=='sell'||code===null||d.pending.offer.sourceIndex===sourceIndex)&&
+  (mode!=='sell'&&!gift||code===null||d.pending.offer.sourceIndex===sourceIndex)&&
   (actor.role.id!=='toolkeeper'||d.toolshopCounter&&poiNpcToolshopCounter(actor))&&
   poiTownDialogueTarget(performance.now())===actor;
 }
@@ -29812,7 +29826,8 @@ function poiNpcMenuRows(d){
  }
  if(d.page==='confirm'){
   const mode=d.pending?.page;
-  return [{id:'confirm',label:mode==='sell'?'売る':mode==='buy'?'買う':POI_NPC_MENU_LABELS.confirm},row('back')];
+  return [{id:'confirm',label:mode==='sell'?'売る':mode==='buy'?'買う':POI_NPC_MENU_LABELS.confirm},
+   ...(typeof poiNpcTradeGiftAvailable==='function'&&poiNpcTradeGiftAvailable(d)?[{id:'gift',label:'タダで渡す'}]:[]),row('back')];
  }
  const shelf=d.page==='shop'&&typeof poiToolshopStock==='function'?poiToolshopStock():null;
  const offers=d.page==='shop'?[{code:'shop-herb',name:'薬草',price:6,quantity:shelf,canTrade:shelf!==0,reason:shelf===0?'stock':null}]:
@@ -30015,7 +30030,9 @@ function poiNpcTradeDetail(d,mode){
  description.textContent=poiItemDetailDescription(cell);text.append(name,price,description);
  if(offer.canTrade===false){const error=document.createElement('p');error.textContent=poiNpcTradeMessage(offer.reason);text.append(error)}
  const actions=document.createElement('div');actions.className='poiNpcTradeActions';
- actions.append(poiNpcTradeButton('confirm',mode==='sell'?'売る':'買う'),poiNpcTradeButton('back','戻る'));
+ actions.append(poiNpcTradeButton('confirm',mode==='sell'?'売る':'買う'));
+ if(typeof poiNpcTradeGiftAvailable==='function'&&poiNpcTradeGiftAvailable(d))actions.append(poiNpcTradeButton('gift','タダで渡す'));
+ actions.append(poiNpcTradeButton('back','戻る'));
  detail.append(art,text,actions);return detail;
 }
 function poiNpcTradePanelSync(d=null,mode=null){
@@ -30186,6 +30203,13 @@ function poiNpcMenuChoose(id,now=performance.now()){
    d.pending={page:d.page,offer:row.offer};d.page='confirm';d.index=0;
    d.text=row.offer.name+'を'+row.offer.price+'Gで'+(d.pending.page==='sell'?'売る？':'買う？');
   }
+ }else if(id==='gift'&&d.pending&&poiNpcTradeGiftAvailable(d)){
+  const {page,offer}=d.pending;
+  const result=poiNpcTradeTransaction(d.actor,'gift',offer.code,offer.sourceIndex);
+  if(result?.ok&&typeof poiTownNpcGesture==='function')
+   poiTownNpcGesture(d.actor,'trade-buy',typeof poiTownMotionClock==='number'?poiTownMotionClock:now);
+  d.page=page;d.index=0;d.pending=null;
+  d.text=result?.ok?offer.name+'を1個、タダで渡した。':result?.reason==='stock'?'相手の持ち物に空きがありません。':poiNpcTradeMessage(result?.reason);
  }else if(id==='confirm'&&d.pending){
   const {page,offer}=d.pending;
   const result=page==='shop'?poiNpcMenuService(d.actor)==='shop'&&typeof poiEconomyBuyPotion==='function'?poiEconomyBuyPotion():null:
@@ -31344,7 +31368,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v407',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v408',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -31459,7 +31483,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v407';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v408';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -31674,7 +31698,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v407',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v408',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -35084,10 +35108,8 @@ function poiLocalTopologyFor(site,concealed){
  if(site?.id==='frontier'&&levels.has(0)){
   const row=levels.get(0);
   for(const [x,z] of site.fenceCells){const i=poiLocalBit(x,z);row.cats[i]=7;row.walls[i]|=1;}
-  for(const k of FRONTIER_RUINS.cells){const [x,z]=k.split(',').map(Number);row.cats[poiLocalBit(x,z)]=3;}
-  for(let z=27;z<32;z++)for(let x=10;x<32;x++){
-   const i=poiLocalBit(x,z);row.cats[i]=x<25?3:2;
-  }
+  // The surface carries only an entrance marker, not the passage layout.
+  const a=FRONTIER_BURROW;row.cats[poiLocalBit(a.east,Math.floor(a.mid))]=8;
  }
  poiMiniBuilds++;
  return poiLocalTopology={world,site,concealed,levels};
@@ -35108,8 +35130,24 @@ function poiFieldSurveyScope(rank){
  return rank<POI_LOCAL_W*POI_LOCAL_H?'base:0:outerfield':'base:0:outerfield-2';
 }
 function poiFieldSurveyIndex(rank){return rank%(POI_LOCAL_W*POI_LOCAL_H)}
+// BEGIN FRONTIER MAP FLOOR SEPARATION
+function poiFrontierCaveMap(site,x,z,y){
+ return site?.id==='frontier'&&y===0&&frontierBurrowRoofAt(x+.5,z+.5);
+}
+function poiFrontierSurfaceMarker(x,z){
+ return x===FRONTIER_BURROW.east&&z===Math.floor(FRONTIER_BURROW.mid)?8:null;
+}
+function poiFrontierCaveMapAccess(x,z){
+ return poiFrontierSurfaceMarker(x,z)!==null||frontierBurrowCell(x+.5,z+.5);
+}
+function poiFrontierCaveMapTone(x,z){
+ return poiFrontierSurfaceMarker(x,z)??(frontierRuinsCell(x,z)||x<FRONTIER_BURROW.roof?3:2);
+}
+// END FRONTIER MAP FLOOR SEPARATION
 function poiLocalCapture(x,z,y,site,realmKey,realm,concealed,quests){
- const crop=poiLocalCrop(x,z),hasSite=site&&/^[a-z0-9_-]{1,36}$/.test(site.id),scope=hasSite?site.id+':'+y+':'+(realmKey||'surface'):null;
+ const frontierCave=poiFrontierCaveMap(site,x,z,y);
+ const crop=poiLocalCrop(x,z),hasSite=site&&/^[a-z0-9_-]{1,36}$/.test(site.id),
+  scope=hasSite?site.id+':'+y+':'+(frontierCave?'west-ruins':realmKey||'surface'):null;
  const map=poiLocalTopologyFor(site,concealed),row=map.levels.get(y);
  const bits=scope?poiLocalSurvey(scope):null; // Temporary editor preview is never recorded.
  const door=poiWalkDoorOpen;
@@ -35125,8 +35163,10 @@ function poiLocalCapture(x,z,y,site,realmKey,realm,concealed,quests){
    poiLocalKnown(page,j%POI_LOCAL_W,Math.floor(j/POI_LOCAL_W));
  };
  const access=(x,z)=>x>=0&&z>=0&&(field?poiOverlandSquareOwner(x,z)==='base':x<MAP_W&&z<MAP_H)&&
-  (!realm||x>=realm.x1&&x<=realm.x2&&z>=realm.z1&&z<=realm.z2);
- const temple=concealed&&site?.davidTemple,closed=(tx,tz)=>!access(tx,tz)||(temple&&poiSacredMiniEntrance(temple,tx,tz))||poiLocalBlocked(row,site,y,tx,tz)||field&&poiKingdomData(site)?.solid.has(tx+','+tz);
+  (!realm||x>=realm.x1&&x<=realm.x2&&z>=realm.z1&&z<=realm.z2)&&(!frontierCave||poiFrontierCaveMapAccess(x,z));
+ const temple=concealed&&site?.davidTemple,closed=(tx,tz)=>!access(tx,tz)||(temple&&poiSacredMiniEntrance(temple,tx,tz))||
+  (frontierCave?frontierRuinsGateAt(tx,tz)&&!frontierRuinsGateOpen():poiLocalBlocked(row,site,y,tx,tz))||
+  field&&poiKingdomData(site)?.solid.has(tx+','+tz);
  const indoor=poiWalkIndoor(),fog=typeof poiSacredFogStrength==='function'?poiSacredFogStrength(site,x,z,y):0,
   radius=poiLocalSightRadius(indoor,fog);
  const sample=poiLocalSample;
@@ -35147,7 +35187,7 @@ function poiLocalCapture(x,z,y,site,realmKey,realm,concealed,quests){
  const tile=(tx,tz)=>{
   if(!access(tx,tz)||(temple&&poiSacredMiniEntrance(temple,tx,tz)))return 0;
   const eastern=field?poiEastNatureData(site)?.tiles.get(tx+','+tz):null;
-  const tone=eastern==='river'?3:eastern==='wall'?4:eastern==='bridge'||eastern==='earth'||eastern==='road'?2:eastern==='tree'?1:null;
+  const tone=frontierCave?poiFrontierCaveMapTone(tx,tz):eastern==='river'?3:eastern==='wall'?4:eastern==='bridge'||eastern==='earth'||eastern==='road'?2:eastern==='tree'?1:null;
   return ((tx===x&&tz===z)||surface(tx,tz,false))?1+(tone??row?.cats[poiLocalBit(tx,tz)]??0):0;
  };
  const cells=new Uint8Array(POI_LOCAL_SIDE**2);
@@ -35155,7 +35195,7 @@ function poiLocalCapture(x,z,y,site,realmKey,realm,concealed,quests){
   const tx=crop.x1+i%POI_LOCAL_SIDE,tz=crop.z1+Math.floor(i/POI_LOCAL_SIDE);
   cells[i]=tile(tx,tz);
  }
- return {cells,crop,marks,x,z,y,scope,realm:realmKey,concealed,facing:poiWalkFacing,tile};
+ return {cells,crop,marks,x,z,y,scope,realm:realmKey,concealed,frontierCave,facing:poiWalkFacing,tile};
 }
 // BEGIN WIDE HUD MAP
 function poiLocalHudMetrics(cssWidth,cssHeight,height){
@@ -35275,6 +35315,7 @@ function poiLocalAtlasCamera(b,r,zoom=1,cx,cz){
  return {zoom:n,scale,cx:center(cx,b.x1,b.x2,width),cz:center(cz,b.z1,b.z2,height),width,height};
 }
 function poiLocalAtlasBounds(f){
+ if(f.frontierCave)return {x1:0,z1:8,x2:FRONTIER_BURROW.east+1,z2:56,global:false};
  const id=facilitySite?.id,global=f.y===0&&!f.realm&&(poiSquareFieldSite(facilitySite)||id==='snowpass');
  if(global){const side=poiOverlandSquareStatus().side;return {x1:0,z1:0,x2:side,z2:side,global}}
  const b=f.realm&&facilitySite?.[f.realm]?.bounds;
