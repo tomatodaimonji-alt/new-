@@ -1755,7 +1755,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v431）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v432）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="2500" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -21006,6 +21006,7 @@ function poiCompanionTickOne(now,member,kit){
   return;
  }
  const where=poiCompanionPlace(),blocked=poiCompanionMenusBlock(member.kind==='human');
+ if(poiCompanionActor?.id===id&&frontierSouthGuideCompanion(poiCompanionActor,where,now,blocked))return;
  if(typeof poiCompanionSeamFrame==='function'&&poiCompanionActor?.id===id&&poiCompanionSeamFrame(now,blocked))return;
  if(!poiCompanionActor||poiCompanionActor.id!==id||!poiCompanionSame(poiCompanionActor,where)){
   poiCompanionActor=poiCompanionSpawn(id,now);poiCompanionTarget=null;
@@ -23345,6 +23346,7 @@ function frontierVendorDecode(raw){
 }
 function frontierVendorStock(kit,npcId){return kit.frontierTrades?.[npcId]??{gold:12,healingHerb:npcId===POI_FRONTIER_SHOP_ID?8:2,cannedFood:1}}
 function frontierEstateDecode(bag){
+ if(bag&&Number.isInteger(bag.x)&&Number.isInteger(bag.z))bag=frontierSouthRestoreFloor(bag);
  if(!bag||bag.version!==1||!frontierEstateKey(bag.npcId)||(bag.y!==0&&!(bag.y===-1&&frontierSouthRuinsOwn(bag.x,bag.z)))||
    !Number.isInteger(bag.x)||bag.x<0||bag.x>=FRONTIER_W||!Number.isInteger(bag.z)||bag.z<0&&!frontierNorthOwn(bag.x,bag.z)||bag.z>=FRONTIER_H&&!frontierSouthOwn(bag.x,bag.z)||
    !Array.isArray(bag.slots)||bag.slots.length!==POI_CHEST_SIZE||
@@ -28334,6 +28336,7 @@ function poiTownNpcStance(p,g=poiTownNpcGraph()){
  if(facilitySite?.id==='frontier'&&z>=64){
   if(!frontierSouthOwn(x,z))return false;
   if(y===-1)return frontierSouthRuinsOwn(x,z);
+  if(y===0&&frontierSouthSurfaceBlocked(x,z))return false;
  }
  if(facilitySite?.id==='frontier'&&y===0&&frontierVillageFence(x,z))return false;
  if(y===0&&x>=MAP_W&&x<POI_SQUARE_FIELD_SIDE&&z>=44&&z<=126){
@@ -28356,8 +28359,10 @@ function poiTownNpcStance(p,g=poiTownNpcGraph()){
  g.walk.set(k,yes);return yes;
 }
 function poiTownNpcNextTile(from,x,z,g){
- const same={x,z,y:from.y};
+ const pitch=facilitySite?.id==='frontier'?frontierSouthSlopeLevel(x,z,from.x,from.z,from.y):null;
+ const same={x,z,y:pitch??from.y};
  if(!poiTownNpcStance(same,g))return null;
+ if(pitch!==null)return same;
  if(from.y===0){
   const deck=g.bridge.get(x+','+z)||g.bridge.get(from.x+','+from.z);
   if(deck&&((deck.rot%2===1)?from.z!==z:from.x!==x))return null;
@@ -31651,7 +31656,7 @@ function frontierExpeditionDecode(s){
  for(const id of FRONTIER_EXPEDITION_NPCS){
   const p=s.positions?.[id];
   if(p&&Number.isInteger(p.x)&&p.x>=128&&p.x<192&&Number.isInteger(p.z)&&p.z>=0&&p.z<128&&[0,-1].includes(p.y)&&
-     (p.y===0||p.z>=64)&&Number.isInteger(p.facing)&&p.facing>=0&&p.facing<4)positions[id]={x:p.x,z:p.z,y:p.y,facing:p.facing};
+     (p.y===0||p.z>=64)&&Number.isInteger(p.facing)&&p.facing>=0&&p.facing<4)positions[id]=frontierSouthRestoreFloor({x:p.x,z:p.z,y:p.y,facing:p.facing});
  }
  return {version:1,started:s.started,phase:s.phase,step:s.step,landed:s.landed===true,result,positions};
 }
@@ -32165,7 +32170,7 @@ function poiTownResidentsSnapshot(){
 // BEGIN TOWN WALK VISUAL
 function poiTownNpcStepT(a,now){
  if(a.actorLeg)return Math.min(.999999,a.actorLeg.elapsed/a.actorLeg.duration);
- if(a.fromY!==a.y||!Number.isFinite(a.moveAt)||
+ if(a.fromY!==a.y&&!(facilitySite?.id==='frontier'&&frontierSouthSlopeLevel(a.x,a.z,a.fromX,a.fromZ,a.fromY)===a.y)||!Number.isFinite(a.moveAt)||
    Math.abs(a.x-a.fromX)+Math.abs(a.z-a.fromZ)!==1)return 1;
  return Math.max(0,Math.min(1,(now-a.moveAt)/poiTownNpcPace(a)));
 }
@@ -32342,11 +32347,12 @@ function poiTownResidentsDraw(now,vp){
    const sample=poiTownNpcVisualPosition(p,now,!!rate),{x,z,t}=sample;
    a.visual={...sample,moving:rate>0,cadence:rate||cadence};
    const h=(x,z)=>p.y===0?(facilityCreekIndex?.bridgeHeight?.get(x+','+z)??terrainY(x,z)):terrainY(x,z);
-   const footFit=facilitySite?.id==='frontier'&&p.y===0&&part.townParts?.soles&&!bed;
+   const grade=facilitySite?.id==='frontier'?frontierSouthRampHeight(x+.5,z+.5):null;
+   const footFit=facilitySite?.id==='frontier'&&p.y===0&&grade===null&&part.townParts?.soles&&!bed;
    const ground=footFit?frontierWalkSurface(x+.5,z+.5):
     (t===1?h(p.x,p.z):h(a.fromX,a.fromZ)*(1-t)+h(p.x,p.z)*t)+(p.y===0&&a.role.role==='kingdom-citizen'?poiKingdomPalaceHeight(x,z):0);
    const firstVertex=m.p.length;
-   const y=ground+p.y*1.4+(bed?.57:.025),r=[2,3,0,1][p.facing]||0;
+   const y=(grade??ground+p.y*1.4)+(bed?.57:.025),r=[2,3,0,1][p.facing]||0;
    const heading=motion.kind==='walk'&&Number.isFinite(sample.heading)?sample.heading:null,c=Math.cos(heading??0),ss=Math.sin(heading??0);
    const rotate=heading===null?(xx,zz)=>rot2(xx,zz,r):(xx,zz)=>[xx*c-zz*ss,xx*ss+zz*c];
    const parts=part.townParts;
@@ -32446,7 +32452,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v431',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v432',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -32561,7 +32567,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v431';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v432';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -32776,7 +32782,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v431',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v432',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -36057,6 +36063,10 @@ function facilityRefreshCreek(){
  facilityCreekIndex={water,parts,shallows,terrace,bridgeHeight,hasWater:water.size>0};
 }
 function poiCreekPlayerHeight(now){
+ if(facilitySite?.id==='frontier'){
+  const rise=frontierSouthRampHeight(poiWalkViewX+.5,poiWalkViewZ+.5);
+  if(rise!==null)return rise-poiWalkLevel*1.4;
+ }
  if(poiWalkLevel===0&&facilitySite?.id==='frontier')
   return frontierWalkSurface(poiWalkViewX+.5,poiWalkViewZ+.5);
  if(poiWalkLevel===0&&facilitySite?.id==='base'&&!facilitySurfaceEdited&&
@@ -36098,8 +36108,12 @@ function poiWalkCanStep(x,z,fromX,fromZ,exceptMonster,skipNpcTile=false,freeTree
   if(poiWalkLevel!==0||(layer??(exceptMonster?!!exceptMonster.frontierRuins:frontierCollisionCave??frontierPlayCave))||frontierNorthWet(x+.5,z+.5,true))return false;
   return !poiWalkActive||(!poiMonsterAt(x,z,true,exceptMonster,false)&&(skipNpcTile||!poiTownNpcActorOccupied(x,z,0)));
  }
- if(facilitySite?.id==='frontier'&&poiWalkLevel===-1)
-  return frontierSouthRuinsOwn(x,z)&&(!poiWalkActive||(!poiMonsterAt(x,z,true,exceptMonster,false)&&(skipNpcTile||!poiTownNpcActorOccupied(x,z,-1))));
+ if(facilitySite?.id==='frontier'){
+  const dy=exceptMonster?null:frontierSouthSlopeLevel(x,z,fromX,fromZ,poiWalkLevel);
+  if(dy!==null)return skipNpcTile||!poiTownNpcActorOccupied(x,z,dy);
+  if(poiWalkLevel===-1)return frontierSouthRuinsOwn(x,z)&&(!poiWalkActive||(!poiMonsterAt(x,z,true,exceptMonster,false)&&(skipNpcTile||!poiTownNpcActorOccupied(x,z,-1))));
+  if(poiWalkLevel===0&&frontierSouthSurfaceBlocked(x,z))return false;
+ }
  if(poiWalkLevel===0&&poiEastNatureBlocked(facilitySite,x,z))return false;
  const frontier=facilitySite?.id==='frontier'&&poiWalkLevel===0;
  const cave=frontier?(layer??(exceptMonster?!!exceptMonster.frontierRuins:frontierCollisionCave??frontierPlayCave)):false;
@@ -37101,6 +37115,13 @@ function poiWalkEnterCell(dx,dz,now,continuous=false,onDoorCue){
  if(facilitySite?.id==='frontier'&&fromLevel===0)
   frontierSetPlayLayer(frontierLayerAfter(frontierPlayCave,poiWalkX,poiWalkZ,poiWalkFromX,poiWalkFromZ));
 
+  const slope=facilitySite?.id==='frontier'?frontierSouthSlopeLevel(poiWalkX,poiWalkZ,poiWalkFromX,poiWalkFromZ,fromLevel):null;
+  if(slope!==null){
+   poiWalkLevel=level=slope;$('level').value=String(level);
+   $('app').classList.toggle('facilityCellar',slope<0);
+   poiMonsterMeshDirty=true;poiDamageLabels=[];
+   if(slope<0)poiDefeatRememberEntry(poiWalkX,poiWalkZ,slope,poiWalkFacing);
+  }
   const stairCell=facilitySite?.id==='frontier'&&poiWalkZ<0?[]:world.filter(o=>o.x===poiWalkX&&o.z===poiWalkZ&&o.y===poiWalkLevel);
   const direction=stairCell.some(o=>o.type==='guildStairUp')?1:stairCell.some(o=>o.type==='guildStairDown')?-1:0;
   const next=poiWalkLevel+direction;
@@ -38237,7 +38258,7 @@ function makeScene(){
    return false;
   }
   if(facilitySite?.id==='frontier'&&o.y===0){
-   if(o.z===74&&Math.abs(o.x-160)<=1&&o.type==='stonewallDoor')return false; // Large custom stone arch in its place.
+   if(o.x>=155&&o.x<=165&&o.z>=74&&o.z<=81&&(o.type==='stonewallDoor'||o.type==='stonewallAll'))return false; // Pyramid is drawn as one shared shell.
    if(frontierHomeCell(o.x,o.z)&&(/^plasterwall/.test(o.type)||frontierHouseFurnitureAt(o)))return false;
   }
   if(facilitySite&&!facilityObjectVisible(o,cut))return false;
@@ -38563,6 +38584,7 @@ function frontierSupportCache(site){
  return cache;
 }
 function frontierSurfaceHeight(x,z,cache=frontierSupportCache(facilitySite),cave=frontierCollisionCave??frontierPlayCave){
+ if(facilitySite?.id==='frontier'&&!cave){const h=frontierSouthRampHeight(x,z);if(h!==null)return h;}
  const ix=Math.floor(x),iz=Math.floor(z),dx=x-ix,dz=z-iz,key=iz*512+ix;
  if(cave&&frontierRuinsCell(ix,iz))return frontierBurrowFloor(10)+.018;
  if(cave&&frontierBurrowCell(ix,iz))return frontierBurrowFloor(x)+.019;
@@ -39270,13 +39292,41 @@ function frontierDrawNorth(vp,now){
 // END FRONTIER NORTH MEADOW
 // BEGIN FRONTIER SOUTH RUINS
 const FRONTIER_SOUTH_LABEL='灰刻の地下遺跡',FRONTIER_SOUTH_SURFACE='枯れ野の石門';
-const FRONTIER_SOUTH_STAIR=Object.freeze({x:160,z:77});
+const FRONTIER_SOUTH_STAIRS=Object.freeze({x1:159,x2:162,z1:76,z2:81,seam:79});
+const FRONTIER_SOUTH_STAIR=Object.freeze({x:160,z:79});
+function frontierSouthRampCell(x,z){
+ const b=FRONTIER_SOUTH_STAIRS;
+ return x>=b.x1&&x<=b.x2&&z>=b.z1&&z<b.z2;
+}
+function frontierSouthRampHeight(x,z){
+ const b=FRONTIER_SOUTH_STAIRS;
+ if(x<b.x1||x>b.x2+1||z<b.z1-.02||z>b.z2+.02)return null;
+ return -1.4*Math.min(1,Math.max(0,(z-b.z1)/(b.z2-b.z1)))||0;
+}
+function frontierSouthSlopeLevel(x,z,fx,fz,y){
+ const b=FRONTIER_SOUTH_STAIRS;
+ if(x!==fx||!frontierSouthRampCell(x,z)||!frontierSouthRampCell(fx,fz))return null;
+ if(y===0&&z===b.seam&&fz===b.seam-1)return -1;
+ if(y===-1&&z===b.seam-1&&fz===b.seam)return 0;
+ return null;
+}
+function frontierSouthSurfaceBlocked(x,z){
+ if(frontierSouthRampCell(x,z))return z>=FRONTIER_SOUTH_STAIRS.seam;
+ return x>=156&&x<=164&&z>=76&&z<=80;
+}
+function frontierSouthRestoreFloor(p){
+ if(p?.y!==-1||!frontierSouthOwn(p.x,p.z)||frontierSouthRuinsOwn(p.x,p.z))return p;
+ for(let d=1;d<=7;d++)for(let u=-d;u<=d;u++)for(const v of new Set([d-Math.abs(u),Math.abs(u)-d])){
+  if(frontierSouthRuinsOwn(p.x+u,p.z+v))return {...p,x:p.x+u,z:p.z+v};
+ }
+ return {...p,x:160,z:81};
+}
 const FRONTIER_SOUTH_H=128;
 const FRONTIER_SOUTH_MAIN=[
- [160,77],[160,82],[147,82],[147,94],[160,94],[174,94],[174,107],[160,107],[160,114],[160,119]
+ [160,79],[160,82],[147,82],[147,94],[160,94],[174,94],[174,107],[160,107],[160,114],[160,119]
 ];
 const FRONTIER_SOUTH_EXPEDITION_ROUTE=Object.freeze([
- [146,38],[148,51],[149,63],[155,67],[160,69],[160,74],[160,76],[160,77]
+ [146,38],[148,51],[149,63],[155,67],[160,69],[160,74],[160,76],[160,78]
 ].map(([x,z])=>({x,z,y:0})).concat(FRONTIER_SOUTH_MAIN.map(([x,z])=>({x,z,y:-1}))));
 const FRONTIER_SOUTH_ENEMIES=Object.freeze([
  [157,82,'monsterBasaltHound',1],[150,82,'monsterBasaltHound',2],
@@ -39289,15 +39339,17 @@ const FRONTIER_SOUTH_ENEMIES=Object.freeze([
 ].map(([x,z,type,rot])=>Object.freeze({x,z,y:-1,type,rot,...(type==='monsterObsidianRegent'?{southLeash:[152,116,168,126]}:{})})));
 function frontierSouthOwn(x,z){return x>=128&&x<192&&z>=64&&z<128}
 const frontierSouthCells=(()=>{
- const s=new Set(),box=(a,b,c,d)=>{for(let z=Math.max(77,b);z<=Math.min(126,d);z++)for(let x=a;x<=c;x++)s.add(x+','+z)};
+ const s=new Set(),box=(a,b,c,d)=>{for(let z=Math.max(79,b);z<=Math.min(126,d);z++)for(let x=a;x<=c;x++)s.add(x+','+z)};
  const dig=path=>{for(let i=1;i<path.length;i++){
   const [x,z]=path[i-1],[u,v]=path[i];
-  box(Math.min(x,u)-2,Math.min(z,v)-2,Math.max(x,u)+2,Math.max(z,v)+2);
+  box(Math.min(x,u)-1,Math.min(z,v)-1,Math.max(x,u)+1,Math.max(z,v)+1);
  }};
  dig(FRONTIER_SOUTH_MAIN);
  dig([[147,94],[136,94]]);dig([[174,100],[183,100]]);dig([[160,107],[150,107],[150,113]]);
- for(const b of [[142,78,151,87],[132,90,141,98],[155,90,165,98],[170,101,179,111],
-  [180,96,187,104],[146,109,153,116],[152,116,168,126]])box(...b);
+ for(const [x,z] of [[160,82],[147,82],[147,89],[147,94],[136,94],[160,94],[174,94],[174,101],[174,107],[170,110],[183,100],[150,113],[160,107],[160,114],[155,121],[165,123]])
+  box(x-2,z-2,x+2,z+2);
+ box(157,119,163,125);box(155,121,165,123);
+ box(159,79,162,80);
  return s;
 })();
 function frontierSouthRuinsOwn(x,z){return frontierSouthCells.has(x+','+z)}
@@ -39326,6 +39378,7 @@ function frontierSouthPopulate(put){
  const walls=new Set();
  for(const key of frontierSouthCells){
   const [x,z]=key.split(',').map(Number);
+  if(frontierSouthRampCell(x,z))continue;
   const kind=(x+z)%9===0?'roadBasaltFull':(x+z)%5===0?'brickfloor':'stone';
   put(x,z,kind,0,-1);
   for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
@@ -39338,11 +39391,10 @@ function frontierSouthPopulate(put){
   if(frontierSouthRuinsOwn(x,z))put(x,z,'lantern',0,-1);
  for(const [x,z] of [[134,92],[137,96],[184,100],[149,113],[155,124],[165,124]])
   if(frontierSouthRuinsOwn(x,z))put(x,z,'rockMossy',0,-1);
- for(let z=74;z<=79;z++)for(let x=155;x<=165;x++){
-  if((x===155||x===165)||z===79&&x!==160)put(x,z,'stonewallAll',0,0);
+ for(let z=74;z<=81;z++)for(let x=155;x<=165;x++){
+  if(z===81||x===155||x===165)put(x,z,'stonewallAll',0,0);
   else if(z===74)put(x,z,Math.abs(x-160)<=1?'stonewallDoor':'stonewallAll',2,0);
  }
- put(160,77,'guildStairDown',2,0);put(160,77,'guildStairUp',2,-1);
  for(const o of FRONTIER_SOUTH_ENEMIES)put(o.x,o.z,o.type,o.rot,o.y,o.southLeash?{southLeash:o.southLeash}:null);
 }
 function frontierSouthGrade(x,z){
@@ -39363,7 +39415,7 @@ function frontierSouthDrawMesh(x0,z0){
   vs.push({p:[x,(z===64?frontierHeight(x,z):frontierSouthGrade(x,z))+.005,z],c});
  }
  for(let z=0;z<32;z++)for(let x=0;x<32;x++){
-  if(x+x0===160&&z+z0===77)continue;
+  if(frontierSouthRampCell(x+x0,z+z0))continue;
   const a=z*33+x,b=a+1,d=a+33,e=d+1;
   for(const [i,j,k] of [[a,d,e],[a,e,b]]){
    const p=vs[i].p,q=vs[j].p,r=vs[k].p,ux=q[0]-p[0],uy=q[1]-p[1],uz=q[2]-p[2],vx=r[0]-p[0],vy=r[1]-p[1],vz=r[2]-p[2];
@@ -39389,25 +39441,108 @@ function frontierSouthDrawMesh(x0,z0){
   cube(m,x+.50,y-.039,z-.44,.31,.13,.27,c);
   if((x+z)%3===0)cube(m,x-.38,y-.034,z+.51,.29,.18,.30,[.289,.28,.247]);
  }
- if(local(160,74)){frontierSouthGateArt(m);poiCellarShaftLining(m,160.5,frontierHeight(160,77),77.5);}
  return m;
 }
 function frontierSouthGateArt(m){
- const Z=74.32,X=160.5,g=frontierHeight(160,74),stone=[.372,.369,.32],edge=[.446,.427,.358],dark=[.229,.224,.194],wood=[.238,.161,.103];
- const B=(x,y,z,w,h,d,c)=>cube(m,x,g+y,z,w,h,d,c);
- for(const s of [-1,1]){
-  const x=X+s*1.58;
-  B(x,0,Z,.94,.34,1.13,dark);
-  for(let i=0;i<6;i++)B(x+s*(i%2)*.044,.34+i*.329,Z,.84-(i%2)*.05,.317,.96, i%2?edge:stone);
-  B(x,2.31,Z,.98,.213,1.08,dark);
-  for(let i=0;i<4;i++)B(X+s*(1.44-i*.34),2.80-Math.abs(1.44-i*.34)*.174,Z,.44,.39,.91,i%2?stone:edge);
-  const leaf=X+s*1.01;
-  B(leaf,.02,Z+.53,.37,1.91,.21,wood);
-  for(const h of [.23,1.37]) B(leaf,h,Z+.39,.42,.10,.11,dark);
+ const X=160.5,Z=74.25,base=frontierHeight(160,74),stone=[.405,.381,.322],top=[.49,.462,.38],old=[.35,.325,.276],dark=[.24,.217,.182];
+ const B=(x,y,z,w,h,d,c)=>cube(m,x,base+y,z,w,h,d,c);
+ // Hollow truncated pyramid. Tapered bands build in stone from all four
+ // views; the entrance aperture remains open through the lower courses.
+ const faces=(h,a,b,split)=>{
+  const w=6.35-h*.83,v=5.05-h*.77,s=Z+4.0,step=h+.30,ww=6.35-step*.83,vv=5.05-step*.77;
+  const Q=(p,q,r,t,col)=>quad(m,p,q,r,t,col);
+  for(const d of [-1,1]){
+   Q([X+d*w,base+h,s-v],[X+d*w,base+h,s+v],[X+d*ww,base+step,s+vv],[X+d*ww,base+step,s-vv],d<0?b:a);
+  }
+  Q([X+w,base+h,s+v],[X-w,base+h,s+v],[X-ww,base+step,s+vv],[X+ww,base+step,s+vv],b);
+  for(const d of [-1,1]){
+   const cut=split?1.60:0;
+   Q([X+d*cut,base+h,s-v],[X+d*w,base+h,s-v],[X+d*ww,base+step,s-vv],[X+d*cut,base+step,s-vv],a);
+  }
+ };
+ for(let i=0;i<14;i++)faces(i*.30,i%2?stone:top,i%2?old:stone,i<8);
+ B(X,4.16,Z+4,5.85,.17,3.68,top);
+ // Recessed stone portal, dark hinged leaves held along its sides.
+ const F=Z-1.12;
+ for(const d of [-1,1]){
+  const x=X+d*1.77;
+  for(let i=0;i<7;i++)B(x,.30*i,F,.64,.296,.90,i%2?top:stone);
+  B(X+d*1.28,.03,F+.39,.28,1.92,.23,[.235,.156,.095]);
  }
- B(X,2.82,Z,3.75,.31,1.01,stone);B(X,3.15,Z,4.14,.13,1.18,dark);
- B(X,3.02,Z+1.43,3.46,.23,2.96,stone);
- B(X,2.95,Z-.63,.48,.27,.12,edge);
+ B(X,2.12,F,3.84,.36,.91,old);B(X,2.50,F,4.20,.15,1.05,dark);
+}
+function frontierSouthStairArt(m){
+ const b=FRONTIER_SOUTH_STAIRS,X=(b.x1+b.x2+1)/2;
+ for(let i=0;i<20;i++){
+  const z=b.z1+(i+.5)*.25,y=frontierSouthRampHeight(X,z),p=i%3*.012;
+  cube(m,X,y-.16,z,4,.16,.251,[.425-p,.404-p,.349-p]);
+ }
+ for(const x of [158.92,163.08])for(let z=76;z<81;z++){
+  const y=frontierSouthRampHeight(160.5,z+.5);
+  cube(m,x,y-.25,z+.5,.20,2.80,1.003,[.264,.248,.211]);
+  for(const h of [.18,.72,1.25])cube(m,x,y+h,z+.5,.23,.074,1.006,[.329,.307,.266]);
+ }
+ // Entrance vestibule and the landing share the same permanent roof.
+ for(let z=76;z<82;z++){
+  const y=(frontierSouthRampHeight(160.5,z+.5)??-1.4)+2.24;
+  cube(m,X,y,z+.5,4.22,.17,1.01,[.259,.234,.202]);
+ }
+}
+function frontierSouthCeilingMesh(){
+ const m=mesh(),inside=frontierSouthRuinsOwn;
+ for(let z=81;z<=126;z++)for(let x=131;x<=187;x++)if(inside(x,z)){
+  const y=terrainY(x,z)-1.4+2.21;
+  cube(m,x+.5,y,z+.5,1.02,.13,1.02,[(x+z)%4*.014+.245,.226,.192]);
+  for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]])if(!inside(x+dx,z+dz)&&!frontierSouthRampCell(x+dx,z+dz)){
+   cube(m,x+.5+dx*.57,y-.80,z+.5+dz*.57,dx?.25:1.02,.84,dz?.25:1.02,[.257,.252,.203]);
+  }
+ }
+ return m;
+}
+let frontierSouthStairGpu=null,frontierSouthCeilingGpu=null,frontierSouthInteriorGateGpu=null;
+function frontierSouthGuideCompanion(a,where,now,blocked){
+ if(where.site?.id!=='frontier'||a.site!==where.site||a.travel!==where.travel||a.y===where.y||
+    Math.abs(a.x-160)>12||a.z<65||a.z>94||Math.abs(poiWalkZ-79)>13)return false;
+ if(blocked){a.freeAt=now;return true;}
+ const targetY=where.y,old=a.y,p=poiCompanionPosition(a),x=Math.max(159,Math.min(162,Math.round(p.x)));
+ const z=old===0?(p.z<75.5?76:79):(p.z>82?81:78);
+ if(a.attackMotion?.pending)a.attackMotion.pending=false;
+ a.freeFollows=false;poiCompanionTarget=null;
+ const playerY=poiWalkLevel;
+ try{poiWalkLevel=old;poiCompanionAdvance(a,{x,z,y:old},now,0,true);}
+ finally{poiWalkLevel=playerY;}
+ if(frontierSouthSlopeLevel(a.x,a.z,a.fx,a.fz,old)===targetY){a.y=targetY;a.freeGoal=null;a.freeRoute=null;}
+ return true;
+}
+function frontierSouthDrawCovered(vp){
+ if(facilitySite?.id!=='frontier')return;
+ if(!frontierSouthStairGpu){
+  const stair=mesh(),gate=mesh();
+  frontierSouthStairArt(stair);frontierSouthGateArt(gate);
+  frontierSouthStairGpu=upload(stair);frontierSouthInteriorGateGpu=upload(gate);
+  frontierSouthCeilingGpu=upload(frontierSouthCeilingMesh());
+ }
+ const under=facilityViewLevel()<0;
+ if((!under||poiWalkViewZ<83)&&!stockAtlasOutside(vp,[158,-1.6,75,164,2.6,82]))draw(frontierSouthStairGpu,vp);
+ if(under)draw(frontierSouthCeilingGpu,vp);
+ if((!under||poiWalkViewZ<81)&&!stockAtlasOutside(vp,[154,0,73,168,4.4,84]))draw(frontierSouthInteriorGateGpu,vp);
+}
+function frontierSouthCoveredCamera(target,eye){
+ if(facilitySite?.id!=='frontier'||!poiWalkActive)return eye;
+ const below=poiWalkLevel<0;
+ if(!below&&(target[0]<155.6||target[0]>165.4||target[2]<74.05||target[2]>81.1))return eye;
+ const clear=(x,z)=>below?frontierSouthRuinsOwn(Math.floor(x),Math.floor(z))||
+  frontierSouthRampHeight(x,z)!==null:x>=155.4&&x<=165.6&&z>=73.5&&z<=81.1;
+ const cap=(x,z)=>(frontierSouthRampHeight(x,z)??(below?terrainY(Math.floor(x),Math.floor(z))-1.4:0))+2.03;
+ const u=[eye[0],Math.min(eye[1],cap(target[0],target[2])),eye[2]],n=30;
+ let last=target;
+ for(let i=1;i<=n;i++){
+  const p=target.map((c,j)=>c+(u[j]-c)*i/n);
+  if(!clear(p[0],p[2]))break;
+  p[1]=Math.min(p[1],cap(p[0],p[2]));last=p;
+ }
+ if(last===target)return [target[0],target[1]+.07,target[2]-.16];
+ return last;
 }
 let frontierSouthMeshes=null;
 function frontierDrawSouth(vp){
@@ -40607,7 +40742,7 @@ function parameters(){
   }
   const target=[x,ground+(lowRoom?1.05:1.1),z];
   if(lowRoom&&!cottage)desired[1]=Math.max(ground+.22,Math.min(ground+1.30,desired[1]));
-  const eye=frontierBurrowCamera(target,typeof facilitySharedWallCameraEye==='function'?facilitySharedWallCameraEye(target,desired,cottage):desired);
+  const eye=frontierSouthCoveredCamera(target,frontierBurrowCamera(target,typeof facilitySharedWallCameraEye==='function'?facilitySharedWallCameraEye(target,desired,cottage):desired));
   if(cottage)poiCottageFrame={cottage,target,eye};
   const arm=eye===desired?radius:Math.hypot(...eye.map((v,i)=>v-target[i]));
   const near=eye!==desired&&arm<1.81?.08:.45;
@@ -42527,7 +42662,7 @@ function render(){
  if(facilitySite?.id!=='frontier'||facilityViewLevel()>=0){
   frontierDrawNorth(p.vp,now);frontierDrawSouth(p.vp);frontierDrawWater(p.vp,now);frontierDrawBurrow(p.vp);
  }
- poiDrawSceneOcclusion(sceneMesh,p.vp);
+ poiDrawSceneOcclusion(sceneMesh,p.vp);frontierSouthDrawCovered(p.vp);
  if(facilitySite?.id!=='frontier'||facilityViewLevel()>=0){frontierDrawVillage(p.vp);frontierDrawHouse(p.vp);}
  if(typeof facilityDrawLocalScene==='function')facilityDrawLocalScene(p.vp);
  if(typeof facilityDrawForestScene==='function')facilityDrawForestScene(p.vp);
@@ -51812,7 +51947,9 @@ function workshopResumeApplyView(v){
 function workshopResumeRestorePosition(p){
  const cave=facilitySite?.id==='frontier'&&p?.y===0&&(p.cave??frontierBurrowCell(p.x+.5,p.z+.5));
  if(cave&&frontierRuinsGateAt(p.x,p.z)&&!frontierRuinsGateOpen())p={...p,z:p.z-1};
- if(facilitySite?.id==='frontier'&&p?.y===-1&&!frontierSouthRuinsOwn(p.x,p.z))return false;
+ if(facilitySite?.id==='frontier'&&p?.y===-1){
+  p=frontierSouthRestoreFloor(p);if(!frontierSouthRuinsOwn(p.x,p.z))return false;
+ }
  if(facilitySite?.id==='frontier'&&p?.y===0&&p.x===41+FRONTIER_WEST_OFFSET&&p.z===37&&!frontierResumeFine(p))p={...p,z:36};
  if(typeof poiSouthPortRecoverPosition==='function')p=poiSouthPortRecoverPosition(p);
  if(typeof poiSouthForestRecoverPosition==='function')p=poiSouthForestRecoverPosition(p);
@@ -54497,7 +54634,7 @@ function poiAnalogFrame(now){
  if(!poiFreePose||poiFreePose.level!==poiWalkLevel||poiFreeCell(poiFreePose.x)!==poiWalkX||poiFreeCell(poiFreePose.z)!==poiWalkZ){
   poiFreePose={x:poiWalkX,z:poiWalkZ,level:poiWalkLevel,distance:0,walking:false,angle:0};
  }
- const old=poiFreePose,level=poiWalkLevel,travel=poiOtherworldTravelSerial;
+ const old=poiFreePose,travel=poiOtherworldTravelSerial;let level=poiWalkLevel;
  const pace=elapsed*direction.power*poiHumanMovementFactor(poiPlayerAttributes())/(typeof poiChapelStepMs==='function'?poiChapelStepMs(poiWalkX,poiWalkZ):POI_WALK_MS);
  if(typeof poiMineUnlockCancel==='function')poiMineUnlockCancel(true);
  // Canonical Action aiming remains cardinal. Hysteresis avoids facing jitter
@@ -54530,9 +54667,11 @@ function poiAnalogFrame(now){
   if(!(typeof poiOverlandAnalogSeam==='function'&&poiOverlandAnalogSeam(x,z,fromX,fromZ))&&!poiWalkCanStep(x,z,fromX,fromZ,undefined,true,true))return false;
   entered=true;
   if(streaming)poiOverlandAnalogOffer={x:px,z:pz,angle,contact:c};
+  const slope=facilitySite?.id==='frontier'?frontierSouthSlopeLevel(x,z,fromX,fromZ,poiWalkLevel):null;
   let transition;
   try{transition=poiWalkEnterCell(x-fromX,z-fromZ,now,true,onDoorCue)}
   finally{if(streaming)poiOverlandAnalogOffer=null}
+  if(slope!==null&&poiWalkLevel===slope){level=slope;old.level=slope;}
   checks.clear();failures.clear();
   return transition!=='portal'&&poiWalkLevel===level&&poiOtherworldTravelSerial===travel&&poiAnalogContact===c;
  },clipBody,streaming);
