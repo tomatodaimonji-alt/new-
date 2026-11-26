@@ -11,6 +11,14 @@ h=h.replace(mark,mark+`
    return {slots:slots.filter(Boolean),ren:poiTownNpcStatus(ren),worn:frontierLifeRecord(kit,ren.role.id).worn,player:poiArmorWorn(kit),
     speech:[...document.querySelectorAll('.frontierLifeLine,#poiTownSpeech')].map(el=>getComputedStyle(el).overflowWrap)};
   },
+  meetRen:()=>{
+   poiTownDialogueClose();poiWildClear();poiTownNpcNext=Infinity;
+   const a=poiTownNpcActors.find(a=>a.role.id==='frontierren');
+   Object.assign(a,{x:110,z:29,facing:2,activity:'visit',target:null,frontierCombat:null,actorLeg:null,moveAt:null,hitAt:null});
+   if(!workshopResumeRestorePosition({x:110,z:30,y:0,facing:0,cave:false}))throw Error('trading spot');
+   poiShopSync();
+   return poiTownDialogueTarget(performance.now())?.role.id;
+  },
   equip:()=>{
    const kit=poiHotbarRead(),i=poiInventorySlots(kit).findIndex(q=>q?.type==='armorLeatherLegs');
    if(i<0)throw Error('bought item missing');
@@ -57,7 +65,7 @@ try{
  a.ok((await get()).slots.some(x=>x.type==='armorLeatherLegs'));
  a.deepEqual((await p.evaluate(()=>window.__editorTest.qa419.shop())).find(([k])=>k==='armorLeatherLegs'),['armorLeatherLegs',0]);
  await p.evaluate(()=>window.__editorTest.qa419.equip());
- await at(122,31,2);await action();await tap('request');await tap('sell');await tap('trade-sell:-13');await tap('confirm');
+ a.equal(await p.evaluate(()=>window.__editorTest.qa419.meetRen()),'frontierren');await action();await tap('request');await tap('sell');await tap('trade-sell:-13');await tap('confirm');
  const sold=await get();console.log('sold equipped trousers',sold.worn,sold.ren.gear);
  a.equal(sold.player.legs,null);a.equal(sold.ren.gear.legs,'armorLeatherLegs');a.equal(sold.worn.legs.durability,19);a.equal(sold.ren.equipmentCells[3].durability,19);
  a.ok(sold.ren.carried.some(x=>x.type==='starterTrousers'));
