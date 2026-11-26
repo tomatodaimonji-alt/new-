@@ -14,6 +14,7 @@ h=h.replace(mark,mark+`
    at(33,29,false);
    const crossing=[step(-1,0),step(-1,0)];
    for(let x=30;x>=21;x--)crossing.push(step(-1,0));
+   at(21,29,true); // settle the camera after the just-asserted walk sequence
    const cave=[poiWalkX,poiWalkZ,frontierPlayCave,frontierWalkSurface(21.5,29.5),poiOrbitDungeonLookUp(),poiLocalFrame.scope];
    at(18,38,true);const wall=step(-1,0);
    at(5,48,true);const gate=step(0,1);
@@ -38,6 +39,7 @@ try{
  a.deepEqual(e.surface,[[18,37,false],[19,37,false],[20,37,false]]);
  a(e.ground>=0&&e.surfaceMap==='frontier:0:surface'&&!e.monsterAbove);
  a.deepEqual(e.crossing.slice(0,3),[[32,29,false],[31,29,true],[30,29,true]]);
+ a.deepEqual(e.crossing.at(-1),[21,29,true]);
  a.deepEqual(e.cave.slice(0,3),[21,29,true]);a(e.cave[3]<-3&&e.cave[4]&&e.cave[5]==='frontier:0:west-ruins');
  a.deepEqual(e.wall,[18,38,true]);a.deepEqual(e.gate,[5,48,true]);a.deepEqual(e.exit,[32,29,false]);
  a.equal(e.saved.cave,false);a.equal(e.gl,0);
