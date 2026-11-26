@@ -1,0 +1,12 @@
+const a=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
+const s=fs.readFileSync(process.argv[2]??'world-editor.html','utf8');
+for(const m of s.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))if(m[1].trim())new vm.Script(m[1]);
+a.match(s,/frontierregna:'equipMithrilSword'/);
+a.match(s,/job:'魔法剣士',adventureRank:'B',minimumRank:'B'/);
+a.match(s,/armorGaldShoes:'ガルドの革靴'/);
+const i=s.indexOf('const POI_ADVENTURE_RANKS=');
+const gate=vm.runInNewContext(s.slice(i,s.indexOf('function poiHumanPartyCanRecruit(',i))+'\npoiAdventureRankAllows');
+for(const rank of [undefined,'未登録','F','C','Z'])a.equal(gate(rank,'B'),false,rank);
+for(const rank of ['B','A','S'])a.equal(gate(rank,'B'),true,rank);
+a.equal(gate(undefined,undefined),true);
+a.match(s,/rank:'[\s\S]{0,10}お前のようなザコ/);
