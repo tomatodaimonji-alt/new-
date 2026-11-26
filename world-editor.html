@@ -22327,8 +22327,9 @@ function poiOrvasRewardRestore(kit,raw,minute=poiDungeonPopulationMinute()){
 }
 // END ORVAS REWARD CORE
 function poiDungeonRememberDefeat(o,state,debris=null){
- if(!poiWalkActive||pineAIActive||poiWalkLevel!==o.y||state?.hp!==0)return false;
+ if(!poiWalkActive||pineAIActive||state?.hp!==0)return false;
  if(facilitySite?.id==='frontier'&&frontierSouthRecordId(o))return frontierSouthRemember(o,state);
+ if(poiWalkLevel!==o.y)return false;
  if(frontierRuinsBoss(o))return frontierRuinsRecordDefeat(o,state);
  if(frontierRuinsDefeatKey(o))return frontierRuinsRememberMob(o,state);
  if(o.northReturnSlot!==undefined&&typeof poiNorthReturnRecordDefeat==='function')return poiNorthReturnRecordDefeat(o,state);
@@ -34162,6 +34163,7 @@ function poiPlayerWeaponCancel(keepEnemy=false){
  poiPlayerWeaponPending=poiPlayerWeaponVisual=null;poiWalkActionStarted=-10000;
 }
 function poiPlayerRayClear(x,z,y,fromX,fromZ){
+ if(facilitySite?.id==='frontier'&&y===-1)return frontierSouthRuinsOwn(x,z);
  if(facilitySite?.id==='frontier'&&y===0){
   const cave=frontierCollisionCave??frontierPlayCave;
   if(!frontierBurrowWalkEdge(x,z,fromX,fromZ,cave)||cave&&frontierRuinsGateAt(x,z)&&!frontierRuinsGateOpen())return false;
@@ -34491,12 +34493,13 @@ function poiPlayerDamageTarget(monster,x,z,amount,weapon,now,silent=false,atCont
   source.companionImpact.hit=true;
   if(state.hp===0)source.companionImpact.defeated=true;
  }
- if(state.hp<before&&typeof poiOrchestraCombat==='function')poiOrchestraCombat();
+ const showContact=!source?.resident||obj.y===poiWalkLevel&&!silent;
+ if(showContact&&state.hp<before&&typeof poiOrchestraCombat==='function')poiOrchestraCombat();
  if(state.hp<before&&!source?.companion&&typeof poiHitstopRequest==='function')poiHitstopRequest(now,weapon);
  if(state.hp<before&&!source?.companion&&typeof poiCompanionPlayerContact==='function')poiCompanionPlayerContact(obj,state,now);
  const contact=obj.type==='monsterMineGuard'||state.actorFree;
  const hx=contact?x:state.x,hz=contact?z:state.z;
- poiDamageNumber(hx+.5,hz+.5,terrainY(hx,hz)+(guarded?2.22:1.8)+(facilitySite?poiWalkLevel*1.4:0),amount,
+ if(showContact)poiDamageNumber(hx+.5,hz+.5,terrainY(hx,hz)+(guarded?2.22:1.8)+(facilitySite?obj.y*1.4:0),amount,
   ...(guarded?[false,false,true]:[]));
  if(!state.hp&&(!stone||before>0)){
   const debris=poiMonsterBreak(obj,state,now);

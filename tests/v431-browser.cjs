@@ -21,10 +21,30 @@ h=h.replace(mark,mark+`
   floor:()=>({hall:poiWalkCanStep(160,78),void:!poiWalkCanStep(160,75),ledger:poiLocalBit(160,78),
     path:poiTownNpcStance({x:160,z:78,y:-1})}),
   startExpedition:()=>{
-   poiTownClockSetTest(FRONTIER_EXPEDITION_DEPART);
+   poiTownClockRead();poiTownClockGameMs=FRONTIER_EXPEDITION_DEPART*POI_TOWN_MINUTE_MS;poiTownClockLast=null;
    const now=performance.now();
    frontierExpeditionTick(poiTownClockSnapshot(),now);
    return poiHotbarRead().frontierExpedition;
+  },
+  fatal:()=>{
+   poiTownNpcNext=Infinity;
+   const a=poiTownNpcActors.find(a=>a.role.id==='frontierregna');
+   const [o,s]=[...poiMonsterStates].find(([o])=>o.type==='monsterBasaltHound'&&o.x===157);
+   Object.assign(a,{x:156,z:82,y:-1,hp:510,actorLeg:null,frontierCave:false});
+   const t=performance.now();
+   if(!frontierExpeditionEnemyTurn(o,s,t)||!s.expeditionCounter)throw Error('missing real hound attack');
+   frontierExpeditionEnemyTurn(o,s,s.expeditionCounter.hit+1);
+   const wounded=a.hp;
+   a.hp=1;s.expeditionNext=0;
+   if(!frontierExpeditionEnemyTurn(o,s,t+4000)||!s.expeditionCounter)throw Error('missing second hound attack');
+   frontierExpeditionEnemyTurn(o,s,s.expeditionCounter.hit+1);
+   const key=frontierEstateKey(a.role.id),raw=JSON.parse(localStorage.getItem(POI_HOTBAR_KEY));
+   const d=frontierEstateDecode(raw[key]);
+   const saved=workshopResumeRestorePosition({x:156,z:82,y:0,facing:0,cave:false});
+   const above=frontierEstateReachable(key);
+   const below=workshopResumeRestorePosition({x:156,z:82,y:-1,facing:0,cave:false})&&frontierEstateReachable(key);
+   return {wounded,fallen:raw.frontierFallen.includes(a.role.id),pos:d&&[d.x,d.z,d.y],
+    gear:d?.slots.some(c=>c?.type==='equipMithrilSword'),above:!!above,below:!!below,saved};
   },
  },
 `);
@@ -49,6 +69,9 @@ try{
  a.equal((await via('state')).y,0);
  const exp=await via('startExpedition');
  a.equal(exp?.phase,'out');a.ok(exp?.positions?.frontierregna);a.ok(exp?.positions?.frontierlyzel);
+ const dead=await via('fatal');
+ a.ok(dead.wounded>1&&dead.wounded<510);a.equal(dead.fallen,true);a.deepEqual(dead.pos,[156,82,-1]);
+ a.ok(dead.gear&&dead.saved&&dead.below);a.equal(dead.above,false);
  a.deepEqual(errors,[]);
  console.log('PASS mobile scene, stone gate, stair down/up, blocked underground void, surface visibility and real expedition departure');
 }finally{await b?.close();server.close()}})().catch(e=>{console.error(e);process.exitCode=1});
