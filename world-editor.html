@@ -1733,7 +1733,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v401）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v402）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -20368,6 +20368,104 @@ function poiCompanionSeamVisible(a){
 }
 // END COMPANION SEAM WALK
 
+// BEGIN HUMAN COMPANION SIDESTEP
+const POI_HUMAN_SIDESTEP_MS=188,POI_HUMAN_SIDESTEP_RECOVER=145;
+function poiHumanSidestepEase(t){return 1-Math.pow(1-Math.max(0,Math.min(1,t)),2)}
+function poiHumanSidestepTarget(p,hit,covered,clear){
+ if(!covered(p))return null;
+ const sx=hit.dx??(p.x-hit.sx),sz=hit.dz??(p.z-hit.sz),d=Math.hypot(sx,sz);
+ if(d<.01)return null;
+ const dx=sx/d,dz=sz/d;
+ // Prefer the smallest perpendicular dodge. A slightly backward sidestep
+ // is the fallback for a broad arc; never move toward the attacker.
+ for(const [distance,back] of [[.87,0],[1.18,0],[1.04,.53],[1.29,.6]]){
+  for(const side of [-1,1]){
+   const x=p.x-side*dz*distance+dx*back,z=p.z+side*dx*distance+dz*back;
+   const q={x,z,y:p.y};
+   if(!covered(q)&&clear(x,z))return q;
+  }
+ }
+ return null;
+}
+function poiHumanSidestepCovers(hit,s,p,now){
+ if(hit.y!==p.y)return false;
+ if(hit.northAttack)return poiNorthMinotaurCovered(hit,now,p);
+ if(hit.guardTrial)return poiMineGuardTrialCovered(hit,now,p);
+ if(poiEnemyCueRanged(hit))return poiEnemyRangedCovers(hit,s,p);
+ const x=poiFreeCell(p.x),z=poiFreeCell(p.z);
+ const hitTile=hit.tiles?hit.tiles.some(c=>c.x===x&&c.z===z):hit.x===x&&hit.z===z;
+ return hitTile&&(!hit.angular||poiEnemyAngleHitClear(hit,x,z,s))&&
+  poiCompanionAttackClear({x:hit.sx,z:hit.sz},p,p.y);
+}
+function poiHumanSidestepClear(a,p,tx,tz,now,actors){
+ const edge=(x,z,fx,fz)=>poiCompanionCell(x,z,a.y,fx,fz)&&!poiMonsterAt(x,z,true);
+ const clip=frontierMovementClip(null,p.x,p.z,a.y);
+ const next=poiFreeAdvance(p.x,p.z,tx-p.x,tz-p.z,POI_COMPANION_FREE_RADIUS,edge,edge,clip);
+ if(Math.hypot(next.x-tx,next.z-tz)>1e-4||poiTownNpcPlayerBodyBlocks(p.x,p.z,tx,tz,a.y,now))return false;
+ const others=frontierNpcBodies(a.y,a,now);
+ for(const b of actors)if(b!==a&&b.y===a.y)others.push(poiCompanionPosition(b));
+ // Include enemy bodies even when both the start and destination are in
+ // the same walkable tile. Only allow an overlap already in progress to separate.
+ for(const [o,s] of poiMonsterStates)
+  if(o.y===a.y&&s.hp>0&&Math.abs(s.x-p.x)<2.5&&Math.abs(s.z-p.z)<2.5)others.push(s);
+ return !frontierNpcSweepBlocked(p.x,p.z,tx,tz,others);
+}
+function poiHumanSidestepApply(a,now,actors){
+ const d=a.humanSidestep;if(!d)return;
+ const u=poiHumanSidestepEase((now-d.at)/POI_HUMAN_SIDESTEP_MS);
+ const p=poiCompanionPosition(a),x=d.x+(d.tx-d.x)*u,z=d.z+(d.tz-d.z)*u;
+ if(!poiHumanSidestepClear(a,p,x,z,now,actors)){
+  a.humanSidestep=null;a.freeMoving=false;a.humanSidestepHold=now+75;return;
+ }
+ const mileage=Math.hypot(x-p.x,z-p.z);
+ a.fx=a.x;a.fz=a.z;a.x=poiFreeCell(x);a.z=poiFreeCell(z);a.px=x;a.pz=z;a.freeAt=a.stepAt=now;
+ a.freeMoving=mileage>.00001;a.freeMileage=(a.freeMileage||0)+mileage;a.freeDx=x-p.x;a.freeDz=z-p.z;
+ a.humanHeading=d.heading;
+ if(u>=1){
+  a.humanSidestep=null;a.freeMoving=false;
+  a.humanSidestepHold=Math.max(now+POI_HUMAN_SIDESTEP_RECOVER,d.hit.hit+65);
+  if(poiEnemyAttackSourceValid(d.state,d.hit)&&!poiHumanSidestepCovers(d.hit,d.state,{x,z,y:a.y},now))poiDodgeFeedback(x,z,a.y);
+ }
+}
+function poiHumanSidestepFrame(now,roll=Math.random){
+ if(!poiCompanionAllowed()||!poiEnemyThreatEnabled()||
+   typeof document!=='undefined'&&document.querySelector('dialog[open],.modal.open,:is(#poiBagPanel,#poiLandscapeMenu,#poiNpcMenu,#poiScreenNoteLayer):not([hidden])'))return;
+ const actors=poiPartyActors(),where=poiCompanionPlace();
+ for(const a of actors){
+  if(!poiCompanionSame(a,where)||!poiHumanPartySpec(a.id))continue;
+  if(a.humanSidestep){poiHumanSidestepApply(a,now,actors);continue}
+  if(now<(a.humanSidestepHold??-Infinity)||!poiEnemyPending.size)continue;
+  const p=poiCompanionPosition(a),grade=poiPartyAttributes(a).intelligence;
+  const delay=Math.max(105,220-grade*10);
+  const hits=[];
+  for(const s of poiEnemyPending){
+   const h=s.playerAttack;
+   if(!h?.pending||h.y!==a.y||h.companionVictim&&h.companionVictim!==a||
+    !h.companionVictim&&!poiCompanionNormal(h.obj,s)||now<h.start+delay||
+    h.hit-now<POI_HUMAN_SIDESTEP_MS+30||a.humanSidestepTried?.has(h)||
+    Math.hypot(h.sx-p.x,h.sz-p.z)>12||!poiEnemyAttackSourceValid(s,h))continue;
+   hits.push({h,s});
+  }
+  hits.sort((a,b)=>a.h.hit-b.h.hit);
+  for(const {h,s} of hits){
+   const key=poiEnemyLearnKey(h),chance=poiLearnedChance(a,key,grade,now,h.start??null);
+   if(chance<=0||!poiHumanSidestepCovers(h,s,p,now))continue;
+   (a.humanSidestepTried??=new WeakSet()).add(h);
+   if(roll()>=chance)continue;
+   const covered=q=>hits.some(v=>v.h.hit<=h.hit+250&&poiHumanSidestepCovers(v.h,v.s,q,now));
+   const goal=poiHumanSidestepTarget(p,h,covered,(x,z)=>poiHumanSidestepClear(a,p,x,z,now,actors));
+   if(!goal)continue;
+   a.dodgedAt=now;a.humanSidestep={at:now,x:p.x,z:p.z,tx:goal.x,tz:goal.z,hit:h,state:s,
+    heading:Math.atan2(p.x-h.sx,h.sz-p.z)};
+   a.humanSidestepHold=0;a.freeGoal=null;a.localDetour=null;a.freeRoute=null;
+   // An unreleased strike is interrupted; an arrow already fired is not.
+   if(!a.attackMotion?.arrow)a.attackMotion=null;
+   break;
+  }
+ }
+}
+// END HUMAN COMPANION SIDESTEP
+
 function poiCompanionTickOne(now,member,kit){
  if(typeof poiCompanionSummonPrune==='function')poiCompanionSummonPrune(now);
  if(poiPartyContextId==='orvasSoul'&&typeof poiOrvasAllyRouteFrame==='function')poiOrvasAllyRouteFrame(now);
@@ -20403,6 +20501,11 @@ function poiCompanionTickOne(now,member,kit){
  if(blocked){
   if(a.id==='orvasSoul'&&typeof poiOrvasAllyStop==='function')poiOrvasAllyStop(a,now,true);
   if(a.attackMotion?.pending)a.attackMotion.pending=false;poiCompanionAdvance(a,null,now,0);return;
+ }
+ if(a.humanSidestep||now<(a.humanSidestepHold??-Infinity)){
+  if(a.attackMotion?.arrow)poiCompanionResolve(a,now,mode);
+  if(!a.humanSidestep)a.freeAt=now;
+  return;
  }
  if(a.id==='orvasSoul'&&typeof poiOrvasAllyResolve==='function'&&poiOrvasAllyResolve(a,now,mode)){
   poiCompanionAdvance(a,null,now,0);return;
@@ -20695,7 +20798,7 @@ function poiCompanionHurt(damage,now,attack=null){
  const a=poiCompanionActor,kit=poiHotbarRead();
  if(!a||!Number.isFinite(damage)||damage<=0)return false;
  const key=typeof attack==='string'?attack:poiEnemyLearnKey(attack),cast=attack?.start??null;
- if(key&&poiLearnedDodge(a,key,poiPartyAttributes(a).intelligence,now,Math.random,cast)){
+ if(!poiHumanPartySpec(a.id)&&key&&poiLearnedDodge(a,key,poiPartyAttributes(a).intelligence,now,Math.random,cast)){
   const p=poiCompanionPosition(a);poiDodgeFeedback(p.x,p.z,a.y,a.id==='orvasSoul'?6:1.56);return false;
  }
  if(typeof poiHumanPartySpec==='function'&&poiHumanPartySpec(a.id)){
@@ -28395,7 +28498,7 @@ function poiHumanPartyWorldPose(a,now){
  const spec=poiHumanPartySpec(a.id),p=poiCompanionPosition(a),q=a.attackMotion;
  const bearing=q&&(q.pending||now-q.start<400)?[q.dx,q.dz]:[a.freeDx,a.freeDz];
  const usable=Number.isFinite(bearing[0])&&Number.isFinite(bearing[1])&&Math.hypot(...bearing)>.00001;
- if(usable)a.humanHeading=Math.atan2(-bearing[0],bearing[1]);
+ if(usable&&!a.humanSidestep&&now>=(a.humanSidestepHold??-Infinity))a.humanHeading=Math.atan2(-bearing[0],bearing[1]);
  const heading=a.humanHeading??0;
  const y=facilitySite?.id==='frontier'&&a.y===0?frontierWalkSurface(p.x+.5,p.z+.5)+.03:terrainY(a.x,a.z)+(a.y*1.4)+.025+(typeof poiCompanionBridgeLift==='function'?poiCompanionBridgeLift(a):0);
  return {human:true,type:spec?.type,x:p.x+.5,y,z:p.z+.5,heading,facing:0,attack:!!(q&&(q.pending||now-q.start<400))};
@@ -30951,7 +31054,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v401',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v402',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -31066,7 +31169,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v401';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v402';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -31281,7 +31384,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v401',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v402',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -32538,7 +32641,7 @@ function poiDrawOrvasPlayerBeam(now,vp){
 // END ORVAS PLAYER BEAM
 // BEGIN ACTOR ATTRIBUTES
 const POI_ACTOR_STAT_ROLES=Object.freeze({
- frontierren:[6,5],frontiersera:[6,7],frontierchief:[3,8],frontiershopkeeper:[5,7],
+ frontierren:[6,2],frontiersera:[6,3],frontierchief:[3,5],frontiershopkeeper:[5,4],
  adventurer:[6,6],visitor:[5,5],watch:[5,6],keeper:[5,6],scout:[7,7]
 });
 const POI_ACTOR_STAT_MONSTERS=Object.freeze({
@@ -32595,10 +32698,13 @@ function poiTuneWeapon(p,standard=5){
  const hit=Math.round(p.hit*factor),pose=Math.max(hit+1,Math.round(p.pose*factor));
  return {...p,hit,pose,ready:Math.max(pose,Math.round(p.ready*factor))};
 }
-function poiLearnedDodge(actor,key,grade,now,roll=Math.random,cast=null){
+function poiLearnedChance(actor,key,grade,now,cast=null){
  const lesson=key&&actor.learnedAttacks?.get(key);
- if(!lesson||now-lesson.last>45000||cast!=null&&cast===lesson.cast||now-(actor.dodgedAt??-Infinity)<720)return false;
- const chance=Math.min(.52,(poiStatGrade(grade)-1)*.033+Math.min(3,lesson.hits-1)*.04);
+ if(!lesson||now-lesson.last>45000||cast!=null&&cast===lesson.cast||now-(actor.dodgedAt??-Infinity)<720)return 0;
+ return Math.min(.52,(poiStatGrade(grade)-1)*.033+Math.min(3,lesson.hits-1)*.04);
+}
+function poiLearnedDodge(actor,key,grade,now,roll=Math.random,cast=null){
+ const chance=poiLearnedChance(actor,key,grade,now,cast);
  if(chance<=0||roll()>=chance)return false;
  actor.dodgedAt=now;return true;
 }
@@ -34281,6 +34387,7 @@ function poiWalkFrame(now){
  panX=poiWalkViewX+.5-MAP_W/2;panZ=poiWalkViewZ+.5-MAP_H/2;
  if(lockTurn||(free?free.changed:now-poiWalkStarted<=poiWalkStepMs+32)||poiWalkAttackPosePending){poiWalkAvatar(now);if(free)free.changed=false}
  if(typeof poiHitstopPending==='function'&&poiHitstopPending())return;
+ poiHumanSidestepFrame(now);
  if(typeof poiDavidCombatFrame==='function'&&poiDavidCombatFrame(now))return;
  if(poiEnemyResolvePlayer(now))return;
  poiWildSpawnFrame(now);poiMobFrame(now);poiMineUnlockFrame(now);
