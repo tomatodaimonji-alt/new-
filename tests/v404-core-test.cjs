@@ -1,0 +1,11 @@
+const a=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),h=fs.readFileSync(process.argv[2],'utf8');
+const s=h.match(/\/\/ BEGIN RUIN INTERACTION VISIBILITY\n([\s\S]*?)\/\/ END RUIN INTERACTION VISIBILITY/);
+a(s,'explicit facing interaction and underground HUD filtering missing');
+const env={facilitySite:{id:'frontier'},poiWalkLevel:0,poiWalkViewX:30,poiWalkViewZ:29,frontierBurrowRoofAt:(x,z)=>x<=25&&z>=27&&z<=32};
+vm.runInNewContext(s[1]+'\nthis.x={frontierRuinsHealthVisible,frontierRuinsFacesChest};',env);
+const api=env.x;
+a(!api.frontierRuinsHealthVisible({frontierRuins:true}));a(api.frontierRuinsHealthVisible({wildSpawn:true}));
+env.poiWalkViewX=21;a(api.frontierRuinsHealthVisible({frontierRuins:true}));
+a(api.frontierRuinsFacesChest(5,52,2,{x:5,z:53}));a(!api.frontierRuinsFacesChest(5,52,0,{x:5,z:53}));a(!api.frontierRuinsFacesChest(5,51,2,{x:5,z:53}));
+for(const m of h.matchAll(/<script>([\s\S]*?)<\/script>/g))new vm.Script(m[1]);
+console.log('PASS ruins prompt requires facing treasure; below-ground enemy health HUD cannot leak to exterior');
