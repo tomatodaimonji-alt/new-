@@ -7,7 +7,7 @@ h=h.replace(mark,mark+`
   readySave:()=>workshopResumeReady&&poiWalkActive&&facilitySite?.id==='frontier',
   set:()=>{
    if(!workshopResumeRestorePosition({x:21,z:29,y:0,facing:3}))throw Error('vault location');
-   const old=poiSkyCanLookUp();
+   const old=poiOrbitDungeonLookUp();
    const Q=FRONTIER_RUINS.ARENA_MOBS.slice(0,2);
    for(const p of Q){
     const found=[...poiMonsterStates].find(([o])=>o.x===p.x&&o.z===p.z&&o.type===p.type);
@@ -20,7 +20,7 @@ h=h.replace(mark,mark+`
   inspect:()=>{
    const q=FRONTIER_RUINS.ARENA_MOBS;
    const actors=[...poiMonsterStates.keys()],present=p=>actors.some(o=>o.x===p.x&&o.z===p.z&&o.type===p.type);
-   return {x:poiWalkX,z:poiWalkZ,hp:poiPlayerHP,dead:q.slice(0,2).map(present),alive:q.slice(2).map(present),up:poiSkyCanLookUp()};
+   return {x:poiWalkX,z:poiWalkZ,hp:poiPlayerHP,dead:q.slice(0,2).map(present),alive:q.slice(2).map(present),up:poiOrbitDungeonLookUp()};
   },
   persisted:()=>{const p=JSON.parse(localStorage.getItem(WORKSHOP_RESUME_KEY));return {hp:p.frontierHp,x:p.position?.x,z:p.position?.z,writes:window.__saveWrites}}
  } ,
