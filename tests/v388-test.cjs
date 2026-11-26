@@ -1,0 +1,15 @@
+const a=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),h=fs.readFileSync(process.argv[2]||'candidate.html','utf8');
+for(const m of h.matchAll(/<script>([\s\S]*?)<\/script>/g))new vm.Script(m[1]);
+a(!h.includes('id="poiEstateGold"'),'the separate legacy gold claim control must be removed');
+const f=h.slice(h.indexOf('function frontierEstateCoinIndex('),h.indexOf('function frontierEstateTakeGold('));
+a(f.includes('POI_CHEST_SIZE'),'estate coins need a visible slot even if existing item slots are full');
+const context={POI_CHEST_SIZE:18};vm.runInNewContext(f,context);
+const occupied=Array(18).fill({type:'healingHerb',count:1});a.equal(context.frontierEstateCoinIndex({gold:1,slots:occupied}),18);
+occupied[9]=null;a.equal(context.frontierEstateCoinIndex({gold:999999,slots:occupied}),9);
+a.equal(context.frontierEstateCoinIndex({gold:0,slots:occupied}),-1);
+a.match(h,/const sizes=\[\.098,\.106,\.110,\.097,\.078\]/,'the branch must retain more thickness at the tip');
+a(h.includes('equipStick:{range:1.55,reachStars:3,damage:16'));
+console.log('PASS single estate coin slot without losing full legacy bags, thicker branch at unchanged reach');
+a(!h.includes('poiSleepingNpcDraw')&&h.includes("sleeping?'zzz...':''"));
+a(!h.includes('data-landscape-action="view"'));
+a(h.includes("poiThirdPerson=true;cameraTopDown=false;\n  poiCameraYaw=v.orbitYaw"));
