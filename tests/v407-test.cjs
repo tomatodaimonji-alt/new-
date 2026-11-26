@@ -1,0 +1,13 @@
+const a=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const h=fs.readFileSync(process.argv[2],'utf8');
+a(h.includes('const POI_HUMAN_WALK_RATE=.80;'));
+const cut=(l,r)=>{const i=h.indexOf(l),j=h.indexOf(r,i+1);a(i>=0&&j>i);return h.slice(i,j)};
+const ctx={facilitySite:{id:'frontier'},POI_HUMAN_PARTY_IDS:{'human:chief':'frontierchief'},poiMovementFactor:()=>1,poiPartyAttributes:()=>({speed:5}),POI_MONSTER_FREE_TICK:380,poiTownAttributes:()=>({speed:5}),POI_CHAPEL_ELITE_STATS:0};
+vm.runInNewContext(cut('const POI_HUMAN_WALK_RATE=', 'let poiWalkStepMs=')+h.match(/^const POI_TOWN_RESIDENT_TICK=.*;$/m)[0]+cut('function frontierPlayerTrafficClip(', 'const frontierCardinalTraffic=')+cut('function poiCompanionSpeed(', 'function frontierFollowSpeed(')+cut('function poiTownNpcPace(', 'function poiTownNpcMove(')+';this.x={poiCompanionSpeed,frontierPlayerTrafficClip,poiTownNpcPace,POI_WALK_MS};',ctx);
+const x=ctx.x;a.equal(175/x.POI_WALK_MS,.8);a.equal(380/x.poiTownNpcPace({}),.8);
+a.equal(x.poiCompanionSpeed({id:'human:chief'}),.8/380);a.equal(x.poiCompanionSpeed({id:'slimeSoul'}),1/380);a.equal(x.poiCompanionSpeed({id:'orvasSoul'}),1/235);
+const state={},c=()=>0,press=(ms,f=1)=>x.frontierPlayerTrafficClip(state,c,ms,f)(0,0,1,false);
+a.equal(press(20),0);a.equal(press(160),0);a.equal(press(319),0);a.equal(press(320),1);a.equal(press(321,2),0);
+a(cut('function poiShopSync(', ' const stay=typeof poiTownPlayerService').includes('poiWalletSync(poiEconomyGold())'));
+for(const m of h.matchAll(/<script>([\s\S]*?)<\/script>/g))new vm.Script(m[1]);
+console.log('PASS 300ms yielding, 80% human movement, unchanged monster speed, current wallet source');
