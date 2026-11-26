@@ -49,12 +49,12 @@ Object.assign(c,{
     frontierSouthBossDefeated:()=>dead,
     frontierSouthRestoreFloor:p=>p,
     FRONTIER_SOUTH_STAIR:{x:160,z:79},
-    poiHotbarRead:()=>kit,poiEconomyWrite:next=>(kit=next,s=next.frontierExpedition,saves++,true),
+    poiHotbarRead:()=>c.poiHotbarState??kit,poiEconomyWrite:next=>(c.poiHotbarState=kit=next,s=next.frontierExpedition,saves++,true),
     frontierFallenDecode:v=>v||[],poiHumanPartyDecode:()=>[],POI_HUMAN_PARTY_IDS:{},
     poiTownNpcActors:team,poiTownNpcHere:(a,b)=>a&&b&&a.x===b.x&&a.z===b.z&&a.y===b.y,
     poiTownNpcStepT:()=>1,poiTownNpcStance:p=>p.y===0||fixtureWalk(p.x,p.z)
 });
-const trigger=()=>tick({absoluteMinute:1921},0);
+let now=0;const trigger=()=>{tick({absoluteMinute:1921},now+=380);kit=c.poiHotbarState??kit;s=kit.frontierExpedition};
 Object.assign(team[0],getGoal(s,id1));Object.assign(team[1],getGoal(s,id2),{y:0});
 trigger();assert.ok(!s.studyActive,'leader waits for second NPC at the stairs');
 Object.assign(team[1],getGoal(s,id2));trigger();assert.ok(s.studyActive&&s.studyGoal!==bossKey);
@@ -85,7 +85,7 @@ while(s.studyActive){
  if(s.study?.floor.includes(bossKey)){
   dead=true;  // Stubs boss combat only after it becomes visible, never from a preknown checkpoint.
   if(s.phase==='out'){
-   const old=s;s=read(JSON.parse(JSON.stringify(kit.frontierExpedition)));kit={frontierExpedition:s};
+   const old=s;s=read(JSON.parse(JSON.stringify(kit.frontierExpedition)));kit=c.poiHotbarState={frontierExpedition:s};
    assert.equal(s.studyGoal,old.studyGoal);assert.deepEqual(s.study.floor,old.study.floor);
   }
  }
@@ -94,6 +94,6 @@ while(s.studyActive){
 }
 assert.equal(s.phase,'back');assert.equal(s.result,'success');
 assert.ok(team.some(a=>a.x===160&&a.z===79),'lead physically discovers and returns to stairs');
-assert.ok(furthest>=116&&mileage>135&&saves<ticks,'walked multiple rooms/branches without writing every tick');
+assert.ok(furthest>=116&&mileage>135&&saves<ticks/6,'walked multiple rooms/branches without writing every tick');
 assert.equal(getGoal(s,id1).y,0,'only exit to surface after physically backtracking');
 console.log(`PASS actual dungeon two-person test: followed first scout down, explored to boss, saved/resumed learning, backtracked to exit (${ticks} ticks, ${saves} saves)`);

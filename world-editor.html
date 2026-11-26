@@ -31912,7 +31912,17 @@ function frontierExpeditionChoose(m,p){
  }
  return best===null?null:frontierExpeditionSegment(frontierExpeditionTrace(tree,best),p);
 }
-let frontierExpeditionStudyState=null,frontierExpeditionStudyMap=null,frontierExpeditionStudyAt=null;
+let frontierExpeditionStudyState=null,frontierExpeditionStudyMap=null,frontierExpeditionStudyAt=null,frontierExpeditionStudySavedAt=-Infinity;
+function frontierExpeditionStudyCommit(prior,kit,state,positions,now){
+ const next={...kit,frontierExpedition:{...state,positions}};
+ if(prior?.studyActive&&state.studyActive&&prior.phase===state.phase&&now-frontierExpeditionStudySavedAt<4500){
+  // Expose the latest observations to all ordinary save paths without
+  // writing the entire inventory for every short surveyed footstep.
+  poiHotbarState=next;return true;
+ }
+ if(!poiEconomyWrite(next))return false;
+ frontierExpeditionStudySavedAt=now;return true;
+}
 function frontierExpeditionStudyMemory(s){
  if(s!==frontierExpeditionStudyState){
   frontierExpeditionStudyMap=frontierExpeditionMapDecode(s.study);
@@ -31964,8 +31974,10 @@ function frontierExpeditionStudyTick(s,kit,team,commit,now){
  }
  if(current&&!handoff&&s.studyLead===lead.role.id){
   const d=Math.hypot(lead.x-current.x,lead.z-current.z);
-  if(d<=4.1&&frontierExpeditionSeen(lead,current,frontierSouthRuinsOwn)&&
-     (!frontierExpeditionStudyAtGoal(lead,current,now,true)||!team.every(a=>a===lead||frontierExpeditionStudyAtGoal(a,current,now))))return;
+  if(d<=4.25&&frontierExpeditionSeen(lead,current,frontierSouthRuinsOwn)||
+     (frontierExpeditionLearnPath(m,lead,current)?.length??Infinity)<=8){
+   if(!frontierExpeditionStudyAtGoal(lead,current,now,true)||!team.every(a=>a===lead||frontierExpeditionStudyAtGoal(a,current,now)))return;
+  }
  }
  const learned=s.phase==='back'?frontierExpeditionLearnPath(m,lead,exit):null;
  const next=frontierExpeditionSegment(learned,lead)||frontierExpeditionChoose(m,lead);
@@ -32049,7 +32061,7 @@ function frontierExpeditionTick(clock,now){
  const team=FRONTIER_EXPEDITION_NPCS.map(id=>poiTownNpcActors.find(a=>a.role.id===id&&!a.death&&!a.recessed)).filter(Boolean);
  const recruited=poiHumanPartyDecode(kit.humanParty).some(p=>FRONTIER_EXPEDITION_NPCS.includes(POI_HUMAN_PARTY_IDS[p.id]));
  const positions=Object.fromEntries(team.map(a=>[a.role.id,{x:a.x,z:a.z,y:a.y,facing:a.facing}]));
- const commit=state=>poiEconomyWrite({...kit,frontierExpedition:{...state,positions}});
+ const commit=state=>frontierExpeditionStudyCommit(s,kit,state,positions,now);
  if(!s){
   if(team.length===2&&!recruited)commit({version:1,started:clock.absoluteMinute,phase:'out',step:0,landed:false,result:null});
   return;
