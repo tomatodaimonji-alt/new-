@@ -1733,7 +1733,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v409）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v410）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -2225,6 +2225,10 @@ const palette=[
 {id:'monsterMineGuard',name:'ゴーレム',icon:'◆',cat:'character'},
 {id:'monsterNorthMinotaur',name:'ミノタウロス',icon:'♉',cat:'character'},
 {id:'equipWoodBow',name:'木の弓',icon:'⌇',cat:'equipment'},
+{id:'equipIronSpear',name:'鉄の槍',icon:'↑',cat:'equipment'},
+{id:'armorLeatherTorso',name:'革の鎧',icon:'◆',cat:'equipment'},
+{id:'armorKnitCap',name:'ニット帽',icon:'◆',cat:'equipment'},
+{id:'armorMilitaryCap',name:'ミリタリーキャップ',icon:'◆',cat:'equipment'},
 {id:'equipWoodSpear',name:'木の槍',icon:'↑',cat:'equipment'},
 {id:'equipStoneMace',name:'石のメイス',icon:'◆',cat:'equipment'},
 {id:'equipNorthMinotaurAxe',name:'ミノタウロスの長柄斧',icon:'🪓',cat:'equipment'},
@@ -2592,8 +2596,13 @@ const POI_SHARED_CLOTH_ART=Object.freeze({
  trousers:Object.freeze({main:Object.freeze([.31,.36,.39]),trim:Object.freeze([.43,.46,.44])}),
  leather:Object.freeze([.31,.218,.146])
 });
+function poiSpearType(type){return type==='equipWoodSpear'||type==='equipIronSpear'}
 const FRONTIER_FITTED_GEAR=Object.freeze({head:null,torso:'starterTunic',legs:'starterTrousers',feet:'armorLeatherShoes'});
-const FRONTIER_RESIDENT_WEAPONS=Object.freeze({frontierren:'equipWoodSpear',frontiersera:'equipWoodBow',frontierchief:'equipWalkingCane',frontiershopkeeper:'equipBallpointPen'});
+const FRONTIER_GUARD_STATS=Object.freeze({
+ frontiersugimoto:Object.freeze({hp:150,attack:5,intelligence:1,head:'armorKnitCap'}),
+ frontiermiyamoto:Object.freeze({hp:170,attack:3,intelligence:0,head:'armorMilitaryCap'})
+});
+const FRONTIER_RESIDENT_WEAPONS=Object.freeze({frontierren:'equipWoodSpear',frontiersera:'equipWoodBow',frontierchief:'equipWalkingCane',frontiershopkeeper:'equipBallpointPen',frontiersugimoto:'equipIronSpear',frontiermiyamoto:'equipIronSpear'});
 function frontierLeatherShoe(m,x,y,z,leather){
  const sole=leather.map(v=>v*.66);
  humanRingProfile(m,x,y,z,[[0,0,0,0,.031],[.010,.069,.113,0,.031],[.028,.069,.113,0,.031]],sole,8);
@@ -2602,11 +2611,27 @@ function frontierLeatherShoe(m,x,y,z,leather){
  const seam=leather.map(v=>Math.min(1,v*1.38));
  cube(m,x,.091+y,z+.061,.085,.007,.011,seam);
 }
+function frontierGuardHat(m,type){
+ if(type==='armorKnitCap'){
+  const knit=[.37,.159,.129],fold=[.28,.116,.10];
+  humanRingProfile(m,0,0,-.010,[[1.369,.117,.105],[1.406,.126,.110],[1.455,.113,.108],[1.505,.082,.078],[1.532,.038,.037],[1.54,0,0]],knit,12);
+  humanRingProfile(m,0,0,-.010,[[1.368,.120,.108],[1.376,.130,.114],[1.416,.129,.115],[1.422,.121,.109]],fold,16);
+  for(let i=0;i<16;i++){
+   const a=i*Math.PI/8;
+   naturalBranch(m,Math.cos(a)*.130,1.383,Math.sin(a)*.112-.010,Math.cos(a)*.128,1.415,Math.sin(a)*.112-.010,.005,.004,knit);
+  }
+ }else if(type==='armorMilitaryCap'){
+  humanRingProfile(m,0,0,-.010,[[1.374,.116,.109],[1.385,.130,.114],[1.460,.122,.112],[1.485,.112,.101],[1.489,0,0]],[.325,.35,.215],12);
+  humanRingProfile(m,0,0,.065,[[1.378,0,0],[1.381,.115,.135,0,.030],[1.398,.114,.134,0,.024],[1.407,0,0]],[.213,.245,.151],10);
+ }
+}
 function frontierHumanShape(m,look,gear=null){
  const {skin,hair,trim,cut}=look;
  const {tunic,trousers,leather}=POI_SHARED_CLOTH_ART;
  const slender=look.kind==='female',scale=slender?.93:1;
- const top=poiHumanGearType(gear?.torso)==='starterTunic',pants=poiHumanGearType(gear?.legs)==='starterTrousers',
+ const armor=poiHumanGearType(gear?.torso)==='armorLeatherTorso',head=poiHumanGearType(gear?.head);
+ const leatherBody=[.325,.218,.145],leatherTrim=[.47,.341,.216];
+ const top=armor||poiHumanGearType(gear?.torso)==='starterTunic',pants=poiHumanGearType(gear?.legs)==='starterTrousers',
   shoes=poiHumanGearType(gear?.feet)==='armorLeatherShoes';
  const profile=(x,z,rows,c,n=10)=>humanRingProfile(m,x,0,z,rows,c,n);
  const linen=slender?[.73,.65,.48]:[.55,.48,.35],edge=linen.map(v=>v*.78);
@@ -2625,12 +2650,16 @@ function frontierHumanShape(m,look,gear=null){
  }
  profile(0,0,[[.487,0,0],[.505,.198*scale,.127],[.611,.184*scale,.115],
   [.732,.154*scale,.098],[.84,.184*scale,.117],[.939,.213*scale,.123],[1.005,.156*scale,.102],
-  [1.039,.081,.083],[1.044,0,0]],top?tunic.main:skin);
+  [1.039,.081,.083],[1.044,0,0]],top?(armor?leatherBody:tunic.main):skin);
  if(pants||!top){
   profile(0,0,[[.51,.207*scale,.134],[.565,.201*scale,.132],[.589,.191*scale,.123]],pants?trousers.main:linen);
   profile(0,0,[[.575,.198*scale,.130],[.606,.190*scale,.126]],pants?trousers.trim:edge);
  }
- if(top)profile(0,.012,[[.926,0,0],[.969,.15*scale,.125],[1.016,.12*scale,.101],[1.051,.079,.081],[1.065,0,0]],tunic.trim,8);
+ if(armor){
+  for(const y of [.615,.687,.758,.829])profile(0,.008,[[y,.186*scale,.131],[y+.037,.191*scale,.133],[y+.047,.186*scale,.131]],leatherTrim,10);
+  for(const x of [-.106,.106])for(const y of [.70,.79,.88])cube(m,x,y,.137,.016,.015,.014,[.62,.49,.30]);
+ }
+ if(top)profile(0,.012,[[.926,0,0],[.969,.15*scale,.125],[1.016,.12*scale,.101],[1.051,.079,.081],[1.065,0,0]],(armor?leatherTrim:tunic.trim),8);
  else if(slender){
   profile(0,0,[[.798,.179,.121],[.824,.189,.134],[.898,.198,.139],[.927,.200,.133]],linen);
   profile(0,0,[[.793,.181,.124],[.810,.184,.126]],edge);
@@ -2646,7 +2675,7 @@ function frontierHumanShape(m,look,gear=null){
   profile(x,0,sleeveAxis([[.463,0,0],[.484,.041,.047],
    [.538,.044,.049],[.613,.051,.056],[.730,.053,.06],[.751,0,0]]),skin,8);
   profile(x,0,sleeveAxis([[.64,.054,.060],[.67,.058,.063],[.821,.070,.074],
-   [.909,.079,.080],[.975,.067,.076],[1.017,0,0]]),top?tunic.main:skin,8);
+   [.909,.079,.080],[.975,.067,.076],[1.017,0,0]]),top?(armor?leatherBody:tunic.main):skin,8);
   if(m.townParts)m.townParts[side<0?'left':'right']=[i,m.p.length];
  }
  const headStart=m.p.length;
@@ -2680,6 +2709,7 @@ function frontierHumanShape(m,look,gear=null){
   profile(0,.071,[[1.211,0,0],[1.225,.052,.039],[1.250,.079,.041],[1.281,.068,.036],[1.289,.017,.021],[1.293,0,0]],hair,8);
   for(const side of [-1,1])profile(side*.041,.088,[[1.276,0,0],[1.282,.029,.019],[1.289,.033,.017],[1.299,0,0]],hair,8);
  }
+ frontierGuardHat(m,head);
  const headDrop=slender?.084:.071;
  for(let i=headStart+1;i<m.p.length;i+=3)m.p[i]-=headDrop;
  if(top){
@@ -2687,7 +2717,7 @@ function frontierHumanShape(m,look,gear=null){
   profile(0,0,[[.556,.207*scale,.138],[.597,.198*scale,.135],[.613,.194*scale,.129]],tunic.belt,10);
   cube(m,0,.569,.146,.057,.041,.018,tunic.trim);
  }
- for(const [slot,integrated] of [['head',false],['torso',top],['legs',pants],['feet',shoes]]){
+ for(const [slot,integrated] of [['head',head==='armorKnitCap'||head==='armorMilitaryCap'],['torso',top],['legs',pants],['feet',shoes]]){
   const type=poiHumanGearType(gear?.[slot]);
   if(!type||integrated)continue;
   const first=m.p.length;
@@ -4256,13 +4286,14 @@ function poiFantasyEquipmentGeometry(m,id,x,y,z){
   for(let i=0;i<curve.length-1;i++)rod(curve[i],curve[i+1],.050,i%2?timber:grain);
   if(!m.enemyBowRig)rod(curve[0],curve.at(-1),.012,[.86,.79,.60]);
   for(let i=0;i<3;i++)b(.35,.51+i*.044,0,.112,.022,.094,lash);
- }else if(id==='equipWoodSpear'){
+ }else if(poiSpearType(id)){
+  const iron=id==='equipIronSpear';
   rod([0,.03,0],[0,1.40,0],.038,timber);
   rod([.02,.14,.011],[.02,1.32,.012],.016,grain);
-  for(let i=0;i<3;i++)b(0,1.30+i*.052,0,.101,.024,.094,lash);
+  for(let i=0;i<3;i++)b(0,1.30+i*.052,0,.101,.024,.094,iron?[.46,.51,.55]:lash);
   const tip=[x,y+1.67,z],L=[x-.085,y+1.42,z],R=[x+.085,y+1.42,z];
   for(const side of [-1,1]){
-   const mid=[x,y+1.51,z+side*.057],tone=side===1?[.62,.69,.71]:[.39,.46,.49];
+   const mid=[x,y+1.51,z+side*.057],tone=side===1?(iron?[.82,.86,.90]:[.62,.69,.71]):[.39,.46,.49];
    tri(m,L,mid,tip,tone);tri(m,mid,R,tip,tone);
   }
  }else if(id==='equipStoneMace'){
@@ -5288,6 +5319,13 @@ case 'armorMerchantCoat':case 'armorGuildUniform':case 'armorCookApron':case 'ar
 case 'equipFryingPan':case 'equipLadle':case 'equipBallpointPen':
  poiRoleItemGeometry(m,id,x,y,z);break;
 case 'armorOrvasWaistcloth':poiOrvasWaistclothGeometry(m,x,y-.14,z);break;
+case 'armorKnitCap':case 'armorMilitaryCap':{
+ const h=mesh();frontierGuardHat(h,id);
+ for(let i=0;i<h.p.length;i+=3){m.p.push(x+h.p[i]*3,y+(h.p[i+1]-1.365)*3,z+h.p[i+2]*3);m.n.push(h.n[i],h.n[i+1],h.n[i+2]);m.c.push(h.c[i],h.c[i+1],h.c[i+2])}
+ break;}
+case 'armorLeatherTorso':{
+ humanRingProfile(m,x,y,z,[[.034,.30,.16],[.40,.265,.15],[.72,.38,.18],[.83,.22,.145],[.86,0,0]],[.325,.218,.145],10);
+ for(let i=0;i<4;i++)cube(m,x,y+.18+i*.13,z+.15,.51,.05,.076,[.47,.341,.216]);break;}
 case 'armorLeatherShoes':{
  for(const side of [-1,1])frontierLeatherShoe(m,x+side*.104,y,z,POI_SHARED_CLOTH_ART.leather);
  break;}
@@ -5321,7 +5359,7 @@ case 'equipOrvasGreatsword':poiOrvasGreatswordGeometry(m,x,y,z);break;
 case 'equipOrvasTwinGreatswords':poiOrvasTwinGeometry(m,x,y,z);break;
 case 'equipNorthMinotaurAxe':
  poiNorthMinotaurAxeGeometry(m,x,y,z);break;
-case 'equipWoodBow':case 'equipWoodSpear':case 'equipStoneMace':case 'equipBoneSword':case 'fireWand':case 'equipWalkingCane':case 'equipPlainStaff':case 'equipLongStaff':
+case 'equipWoodBow':case 'equipIronSpear':case 'equipWoodSpear':case 'equipStoneMace':case 'equipBoneSword':case 'fireWand':case 'equipWalkingCane':case 'equipPlainStaff':case 'equipLongStaff':
  poiFantasyEquipmentGeometry(m,id,x,y,z);break;
 case 'armorIronTorso':
  poiStarterGearGeometry(m,id,x,y-.48,z);break;
@@ -18864,6 +18902,7 @@ const POI_WEAPON_SE={
  equipBallpointPen:{swing:[1100,2020,125],impact:[1330,2250,150],weight:.40,cut:.62},
  kitchenKnife:    {playerBlade:true,material:'kitchenKnife',recordedSteel:true},
  equipStick:      {swing:[790,1220,108],impact:[445,730,150],weight:.82,cut:.92},
+ equipIronSpear:  {swing:[980,1720,100],impact:[610,1200,155],weight:.85,cut:.90},
  equipWoodSpear:  {swing:[1040,1640,87],impact:[590,1110,145],weight:.72,cut:.88},
  equipWalkingCane:{swing:[620,1040,99],impact:[360,640,134],weight:.94,cut:.75},
  equipClub:       {swing:[610,980,104],impact:[350,620,133],weight:1.20,cut:.78},
@@ -21482,11 +21521,11 @@ function poiCompanionResolve(a,now,mode){
  const origin=q.arrow||{x:a.px??a.x,z:a.pz??a.z},dx=p.x-origin.x,dz=p.z-origin.z;
  const locked=q.type?Math.abs(dx*q.dz-dz*q.dx)<.53&&dx*q.dx+dz*q.dz>0&&(!q.arrow||Math.abs(dx*q.dx+dz*q.dz-q.arrow.d)<.72):t.s.x===q.tx&&t.s.z===q.tz;
  if(now-q.hit<=120&&poiCompanionTargetLegal(a,t.o,t.s,true)&&locked&&
-    Math.hypot(dx,dz)<=poiCompanionMeleeReach(a)+(q.type==='equipWoodSpear'?1e-7:.10)&&poiCompanionAttackClear(origin,p,a.y)&&typeof poiPlayerDamageTarget==='function'){
+    Math.hypot(dx,dz)<=poiCompanionMeleeReach(a)+(poiSpearType(q.type)?1e-7:.10)&&poiCompanionAttackClear(origin,p,a.y)&&typeof poiPlayerDamageTarget==='function'){
   const batch={weapon:q.type||null,hit:false,defeated:false};
   const attack=(poiCompanionType(a.id)??poiHumanPartySpec(a.id)).attack;
-  const shaft=q.type==='equipWoodSpear'&&dx*q.dx+dz*q.dz<q.profile.range-q.profile.tipLength;
-  if(q.type==='equipWoodSpear'&&model)q.spearPoint={x:p.x+.5,z:p.z+.5,y:model.y+(POI_COMBAT_TORSO_HEIGHT[t.o.type]??.67)};
+  const shaft=poiSpearType(q.type)&&dx*q.dx+dz*q.dz<q.profile.range-q.profile.tipLength;
+  if(poiSpearType(q.type)&&model)q.spearPoint={x:p.x+.5,z:p.z+.5,y:model.y+(POI_COMBAT_TORSO_HEIGHT[t.o.type]??.67)};
   poiPlayerDamageTarget([t.o,t.s],t.s.x,t.s.z,shaft?Math.max(1,Math.round(attack*q.profile.shaftScale)):attack,q.type,now,true,true,{companion:true,companionImpact:batch,started:q.start});
   if(typeof poiCompanionImpactFlush==='function')poiCompanionImpactFlush(batch);
  }
@@ -22718,23 +22757,23 @@ const POI_KNIFE='kitchenKnife',POI_CANNED='cannedFood',POI_FIRE_WAND='fireWand',
 const poiFoodItem=type=>type===POI_CANNED||type===POI_FRESH_PRODUCE;
 const POI_FIRE_WAND_MAX_CHARGES=5;
 const POI_GAME_WEAPON_NAMES=Object.freeze({equipStick:'木の棒',equipWoodSword:'木の剣',kitchenKnife:'包丁',equipWoodBow:'木の弓',
- equipWoodSpear:'木の槍',equipStoneMace:'石のメイス',equipBoneSword:'骨の剣',equipIronSword:'鉄の剣',
+ equipIronSpear:'鉄の槍',equipWoodSpear:'木の槍',equipStoneMace:'石のメイス',equipBoneSword:'骨の剣',equipIronSword:'鉄の剣',
  equipWalkingCane:'歩行杖', equipPlainStaff:'ただの杖',equipLongStaff:'長い杖',equipNorthMinotaurAxe:'ミノタウロスの長柄斧',equipOrvasHead:'オルヴァスの頭',equipOrvasGreatsword:'審判の巨剣',equipOrvasTwinGreatswords:'審判の双巨剣',
  equipFryingPan:'フライパン',equipLadle:'おたま',equipBallpointPen:'ペン'});
 const POI_STARTER_ARMOR=Object.freeze({head:'starterCap',torso:'starterTunic',legs:'starterTrousers',feet:'starterBoots'});
 const POI_FRESH_ARMOR=Object.freeze({head:null,torso:null,legs:null,feet:null});
-const POI_STARTER_ARMOR_NAMES=Object.freeze({armorValdiaCrown:'ヴァルディアの王冠',armorValdiaRobe:'群青の王衣',starterCap:'キャップ',starterTunic:'布の服',starterTrousers:'布のズボン',starterBoots:'スニーカー',armorLeatherShoes:'革の靴',
+const POI_STARTER_ARMOR_NAMES=Object.freeze({armorLeatherTorso:'革の鎧',armorKnitCap:'ニット帽',armorMilitaryCap:'ミリタリーキャップ',armorValdiaCrown:'ヴァルディアの王冠',armorValdiaRobe:'群青の王衣',starterCap:'キャップ',starterTunic:'布の服',starterTrousers:'布のズボン',starterBoots:'スニーカー',armorLeatherShoes:'革の靴',
  armorOrvasWaistcloth:'オルヴァスの腰布',armorIronTorso:'鉄の鎧',armorMerchantCoat:'商人の服',armorGuildUniform:'ギルド制服',armorCookApron:'料理人の服',armorCookHat:'料理人の帽子',
  armorPeddlerMantle:'行商人の旅装',armorWatchHelm:'見張りの鉄兜',armorWatchJacket:'夜番の上着',armorScoutMantle:'斥候の外套',armorInnVest:'宿屋の前掛け',armorWorkerVest:'職人の作業着',armorFisherOilskin:'漁師の油布上着'});
-const POI_ROLE_ARMOR_PART=Object.freeze({armorLeatherShoes:'feet',armorValdiaCrown:'head',armorValdiaRobe:'torso',armorOrvasWaistcloth:'legs',armorIronTorso:'torso',armorMerchantCoat:'torso',armorGuildUniform:'torso',armorCookApron:'torso',armorCookHat:'head',
+const POI_ROLE_ARMOR_PART=Object.freeze({armorLeatherTorso:'torso',armorKnitCap:'head',armorMilitaryCap:'head',armorLeatherShoes:'feet',armorValdiaCrown:'head',armorValdiaRobe:'torso',armorOrvasWaistcloth:'legs',armorIronTorso:'torso',armorMerchantCoat:'torso',armorGuildUniform:'torso',armorCookApron:'torso',armorCookHat:'head',
  armorPeddlerMantle:'torso',armorWatchHelm:'head',armorWatchJacket:'torso',armorScoutMantle:'torso',armorInnVest:'torso',armorWorkerVest:'torso',armorFisherOilskin:'torso'});
 function poiArmorCategory(type){
  return Object.hasOwn(POI_ROLE_ARMOR_PART,type)?POI_ROLE_ARMOR_PART[type]:Object.keys(POI_STARTER_ARMOR).find(p=>POI_STARTER_ARMOR[p]===type)||null;
 }
-const POI_ARMOR_DEFENSE=Object.freeze({armorValdiaCrown:2,armorValdiaRobe:3,starterCap:.25,starterTunic:.75,starterTrousers:.75,starterBoots:.25,armorLeatherShoes:1,armorOrvasWaistcloth:.75,
+const POI_ARMOR_DEFENSE=Object.freeze({armorLeatherTorso:2,armorKnitCap:1,armorMilitaryCap:1,armorValdiaCrown:2,armorValdiaRobe:3,starterCap:.25,starterTunic:.75,starterTrousers:.75,starterBoots:.25,armorLeatherShoes:1,armorOrvasWaistcloth:.75,
  armorMerchantCoat:1.25,armorGuildUniform:2,armorCookApron:1.5,armorCookHat:.5,armorIronTorso:4,
  armorPeddlerMantle:2,armorWatchHelm:2,armorWatchJacket:2,armorScoutMantle:2,armorInnVest:1,armorWorkerVest:2,armorFisherOilskin:2});
-const POI_ROLE_GEAR_PRICE=Object.freeze({armorValdiaCrown:80,armorValdiaRobe:70,starterCap:5,starterTunic:8,starterTrousers:8,starterBoots:10,armorLeatherShoes:12,
+const POI_ROLE_GEAR_PRICE=Object.freeze({armorLeatherTorso:25,armorKnitCap:8,armorMilitaryCap:11,equipIronSpear:38,armorValdiaCrown:80,armorValdiaRobe:70,starterCap:5,starterTunic:8,starterTrousers:8,starterBoots:10,armorLeatherShoes:12,
  armorMerchantCoat:20,armorGuildUniform:28,armorCookApron:18,armorCookHat:10,armorIronTorso:55,
  equipFryingPan:13,equipLadle:8,equipBallpointPen:4,
  armorPeddlerMantle:26,armorWatchHelm:38,armorWatchJacket:26,armorScoutMantle:29,armorInnVest:14,armorWorkerVest:22,armorFisherOilskin:24});
@@ -22770,7 +22809,7 @@ function poiArmorDecode(raw){
  if(!raw||typeof raw!=='object'||Array.isArray(raw))return null;
  return Object.fromEntries(pieces.map(([part,type])=>[part,raw[part]===null?null:poiArmorCategory(raw[part])===part?raw[part]:type]));
 }
-const POI_EQUIPMENT_DURABILITY=Object.freeze({armorValdiaCrown:105,armorValdiaRobe:125,equipStick:44,equipWoodSword:160,kitchenKnife:POI_KNIFE_DURABILITY,
+const POI_EQUIPMENT_DURABILITY=Object.freeze({armorLeatherTorso:108,armorKnitCap:48,armorMilitaryCap:57,equipIronSpear:155,armorValdiaCrown:105,armorValdiaRobe:125,equipStick:44,equipWoodSword:160,kitchenKnife:POI_KNIFE_DURABILITY,
  starterCap:36,starterTunic:62,starterTrousers:54,starterBoots:46,armorLeatherShoes:52,armorOrvasWaistcloth:96,armorIronTorso:150,
  equipWoodBow:100,equipWoodSpear:120,equipStoneMace:140,equipBoneSword:125,equipIronSword:180,
  equipWalkingCane:65, equipPlainStaff:80,equipLongStaff:65,equipNorthMinotaurAxe:180,equipOrvasHead:100,equipOrvasGreatsword:220,equipOrvasTwinGreatswords:210,
@@ -22797,12 +22836,14 @@ function poiWornDurabilityDecode(raw,worn){
  return Object.keys(state).length?state:null;
 }
 function poiArmorCell(type,durability){return type?{type,count:1,...(durability?{durability}:{})}:null}
+const FRONTIER_EXTRA_ARMOR={head:['armorKnitCap','armorMilitaryCap'],torso:['armorLeatherTorso']};
+function frontierArmorFits(type,part){return type===FRONTIER_FITTED_GEAR[part]||!!FRONTIER_EXTRA_ARMOR[part]?.includes(type)}
 function frontierStowArmor(kit){
- if(facilitySite?.id!=='frontier'||!kit?.worn||!Object.entries(kit.worn).some(([part,type])=>type&&type!==FRONTIER_FITTED_GEAR[part]))return kit;
+ if(facilitySite?.id!=='frontier'||!kit?.worn||!Object.entries(kit.worn).some(([part,type])=>type&&!frontierArmorFits(type,part)))return kit;
  const slots=poiInventorySlots(kit).slice(),worn={...kit.worn},cond={...kit.wornDurability};
  let moved=false;
  for(const part of Object.keys(worn)){
-  if(!worn[part]||worn[part]===FRONTIER_FITTED_GEAR[part])continue;
+  if(!worn[part]||frontierArmorFits(worn[part],part))continue;
   const offset=slots.slice(POI_HOTBAR_SIZE,POI_HOTBAR_SIZE+POI_BAG_UNLOCKED).findIndex(c=>!c);
   if(offset<0)break; // A full bag keeps overflow saved, but never equipped.
   slots[POI_HOTBAR_SIZE+offset]=poiArmorCell(worn[part],cond[part]);
@@ -22816,7 +22857,7 @@ function frontierStowArmor(kit){
 function poiArmorWorn(kit){
  if(facilitySite?.id!=='frontier')return kit.worn||POI_STARTER_ARMOR;
  if(!kit.worn)return POI_FRESH_ARMOR;
- return Object.fromEntries(Object.entries(FRONTIER_FITTED_GEAR).map(([part,type])=>[part,kit.worn[part]===type?type:null]));
+ return Object.fromEntries(Object.entries(FRONTIER_FITTED_GEAR).map(([part])=>[part,frontierArmorFits(kit.worn[part],part)?kit.worn[part]:null]));
 }
 function poiArmorSnapshot(){
  const kit=poiHotbarHasKit()?poiHotbarRead():null;
@@ -22847,7 +22888,7 @@ function poiMoveArmorSlot(from,to){
  const kit=poiHotbarRead(),slots=poiInventorySlots(kit).slice(),i=hot?idx:POI_HOTBAR_SIZE+idx;
  if(hot&&i===poiGoldHotbarSlot(kit))return result('occupied');
  const active=poiArmorWorn(kit),worn={...(facilitySite?.id==='frontier'?(kit.worn||active):active)},cell=slots[i];
- if(cell&&facilitySite?.id==='frontier'&&cell.type!==FRONTIER_FITTED_GEAR[part])return result(equipping?'unavailable':'occupied');
+ if(cell&&facilitySite?.id==='frontier'&&!frontierArmorFits(cell.type,part))return result(equipping?'unavailable':'occupied');
  if(equipping&&!cell||removing&&!active[part])return result('empty');
  if(cell&&poiArmorCategory(cell.type)!==part)return result(equipping?'type':'occupied');
  const returned=poiArmorCell(worn[part],kit.wornDurability?.[part]);
@@ -24971,6 +25012,10 @@ function poiItemDetailDescription(cell,inlineWeapon=true){
   freshProduce:'市場で仕入れた野菜。満腹度が最大18回復し、HPは回復しない。',
   fireWand:'構えると攻撃ボタンで炎を飛ばす。発射ごとに残り回数が1減る。',
   equipWoodBow:'構えてから、向いている方向へ矢を放つ。敵に当たると耐久が減る。',
+  equipIronSpear:'幅広の鉄穂を鋲で止めた槍。穂先での一撃が最も強い。',
+  armorLeatherTorso:'濃い革を何枚も重ねた、門番用の鎧。',
+  armorKnitCap:'ざっくり編んだ暗い赤のニット帽。',
+  armorMilitaryCap:'短いつばのついた、くすんだ緑の帽子。',
   equipWoodSpear:'木製の長槍。通常の近接武器より遠くから突ける。',
   equipStoneMace:'石の頭を付けた打撃武器。近距離用。',
   equipBoneSword:'骨を削り出した近距離用の剣。',
@@ -27736,7 +27781,7 @@ function poiTownRoleChoice(role,gear){
 function poiTownNpcLoadout(a){
  const role=a?.role||{};
  const frontier=Object.hasOwn(FRONTIER_RESIDENT_WEAPONS,role.id);
- if(frontier)return {weapon:a.weapon===undefined?FRONTIER_RESIDENT_WEAPONS[role.id]:a.weapon,gear:a.gear||FRONTIER_FITTED_GEAR,tools:[]};
+ if(frontier)return {weapon:a.weapon===undefined?FRONTIER_RESIDENT_WEAPONS[role.id]:a.weapon,gear:a.gear||role.gear||FRONTIER_FITTED_GEAR,tools:[]};
  const authored=Object.hasOwn(POI_TOWN_ROLE_OUTFITS,role.id)?POI_TOWN_ROLE_OUTFITS[role.id]:
   role.role==='kingdom-citizen'&&role.type==='humanKnight'?
    role.job==='王様'?{gear:POI_VALDIA_REGALIA}:{gear:{...POI_TOWN_NPC_KNIGHT_GEAR,head:'armorWatchHelm'},weapon:'equipWoodSpear'}:null;
@@ -27746,8 +27791,13 @@ function poiTownNpcLoadout(a){
   role.type==='humanMerchant'?POI_TOWN_NPC_MERCHANT_GEAR:POI_TOWN_NPC_BASE_GEAR);
  return {weapon,gear:role.appearance&&FRONTIER_HUMANS[role.appearance]?POI_FRESH_ARMOR:a?.gear||poiTownRoleChoice(role,usual),tools:cook?POI_TOWN_NPC_COOK_TOOLS:[]};
 }
+function poiTownNpcMaxHp(id){
+ return FRONTIER_GUARD_STATS[id]?.hp??POI_TOWN_RESIDENT_HP;
+}
 function poiTownNpcAttackPower(a){
  const {weapon}=poiTownNpcLoadout(a);
+ const base=FRONTIER_GUARD_STATS[a.role?.id]?.attack;
+ if(base!==undefined)return base+poiEquipmentItemAttack(weapon);
  if(typeof poiPlayerAttackDamage!=='function')return POI_TOWN_RESIDENT_MELEE;
  return Math.max(1,Math.round(POI_TOWN_RESIDENT_MELEE*poiPlayerAttackDamage(weapon)/poiPlayerAttackDamage('equipWoodSword')));
 }
@@ -27799,7 +27849,7 @@ function poiTownNpcStance(p,g=poiTownNpcGraph()){
  const door=types.some(poiWalkPassableDoor);
  const yes=(y===0||types.some(t=>isFloor(t)||steps(t)))&&
   (!types.some(t=>/^(water|river|lake|sea)$/.test(t))||!!deck)&&!types.some(t=>{
-   if(isFloor(t)||steps(t)||poiWalkPassableDoor(t)||POI_TOWN_WALK_DECOR.has(t))return false;
+   if(isFloor(t)||steps(t)||poiWalkPassableDoor(t)||POI_TOWN_WALK_DECOR.has(t)||facilitySite?.id==='frontier'&&frontierSoftPlant(t))return false;
    if(t==='poiFortBoundary'&&y===0&&z===g.north)return false;
    if(y===0&&(deck?.type===t||g.shallows.get(xy)===t))return false;
    if(door&&(isWallId(t)||/(?:wall|Wall|Frame|Trim|Lintel|Facade)/.test(t)))return false;
@@ -28602,7 +28652,8 @@ function poiTownNpcPurseApply(a,kind,bed=null,absoluteMinute=null){
 // BEGIN HUMAN PARTY
 const POI_HUMAN_PARTY_IDS=Object.freeze({
  'human:resadventurer':'resadventurer','human:guestadventurer':'guestadventurer',
- 'human:frontiersera':'frontiersera','human:frontierren':'frontierren','human:frontierchief':'frontierchief','human:frontiershopkeeper':'frontiershopkeeper'
+ 'human:frontiersera':'frontiersera','human:frontierren':'frontierren','human:frontierchief':'frontierchief','human:frontiershopkeeper':'frontiershopkeeper',
+ 'human:frontiersugimoto':'frontiersugimoto','human:frontiermiyamoto':'frontiermiyamoto'
 });
 const poiHumanPartyPendingReturns=new Map();
 function poiHumanPartySpec(id){
@@ -28611,7 +28662,7 @@ function poiHumanPartySpec(id){
  const role=(frontier?facilitySite?.id==='frontier'?facilitySite.residents:[]:POI_TOWN_RESIDENT_ROLES).find(a=>a.id===key);
  if(!role||!frontier&&role.role!=='adventurer')return null;
  const loadout=poiTownNpcLoadout({role});
- return {id,kind:'human',npcId:key,name:role.name,job:role.job||'冒険者',appearance:role.appearance,maxHp:POI_TOWN_RESIDENT_HP,
+ return {id,kind:'human',npcId:key,name:role.name,job:role.job||'冒険者',appearance:role.appearance,maxHp:poiTownNpcMaxHp(key),
   attack:poiTownNpcAttackPower({role,...loadout}),defense:poiTownNpcDefense({role,...loadout}),
   weapon:loadout.weapon,gear:loadout.gear,type:role.type,enemy:null,...poiTownAttributes({role},loadout)};
 }
@@ -28620,7 +28671,7 @@ function poiHumanPartyDecode(raw){
  const seen=new Set(),out=[];
  for(const v of raw.slice(0,4)){
   if(!v||!Object.hasOwn(POI_HUMAN_PARTY_IDS,v.id)||seen.has(v.id)||
-     !Number.isInteger(v.hp)||v.hp<0||v.hp>POI_TOWN_RESIDENT_HP)continue;
+     !Number.isInteger(v.hp)||v.hp<0||v.hp>poiTownNpcMaxHp(POI_HUMAN_PARTY_IDS[v.id]))continue;
   seen.add(v.id);out.push({id:v.id,hp:v.hp,mode:v.mode==='follow'?'follow':'fight'});
  }
  return out;
@@ -28641,14 +28692,14 @@ function poiHumanPartyCanRecruit(a){
 function poiHumanPartyRecruit(a,now=0,preview=false){
  const reject=reason=>({ok:false,reason});
  if(!poiHumanPartyCanRecruit(a))return reject('ineligible');
- if(!['base','frontier'].includes(facilitySite?.id)||!poiTownNpcActors.includes(a)||a.recessed||a.death||a.target||a.bedId||a.hp<=0)
+ if(!['base','frontier'].includes(facilitySite?.id)||!poiTownNpcActors.includes(a)||a.recessed||a.death||a.target||a.hp<=0)
   return reject('busy');
  const kit=poiHotbarRead(),id='human:'+a.role.id;
  if(frontierIntroVillager(a.role.id)&&!frontierDressed(kit))return reject('clothes');
  if(poiHumanPartyAway(a.role.id,kit))return reject('duplicate');
  if(typeof poiPartyHasRoom!=='function'||!poiPartyHasRoom(kit))return reject('full');
  if(preview)return {ok:true,id};
- if(!poiEconomyWrite({...kit,humanParty:[...poiHumanPartyDecode(kit.humanParty),{id,hp:Math.min(POI_TOWN_RESIDENT_HP,Math.round(a.hp)),mode:'fight'}]}))
+ if(!poiEconomyWrite({...kit,humanParty:[...poiHumanPartyDecode(kit.humanParty),{id,hp:Math.min(poiTownNpcMaxHp(a.role.id),Math.round(a.hp)),mode:'fight'}]}))
   return reject('storage');
  // The successful kit transaction owns this identity. Only then remove
  // it from town collision, dialogue, roaming, encounters and bed lookup.
@@ -28730,7 +28781,7 @@ function poiHumanPartyMesh(m,a,pose,now){
  const stride=a.freeMoving?Math.sin((a.freeMileage||0)*Math.PI*2)*.19:0;
  const q=a.attackMotion,age=now-(q?.start??-Infinity),frontier=!!spec.appearance;
  const swing=frontier?(spec.weapon?poiPlayerProfilePose(spec.weapon,age):poiBareFistPose(age)):poiWalkSwordPose(age);
- if(swing&&frontier&&spec.weapon==='equipWoodSpear'){
+ if(swing&&frontier&&poiSpearType(spec.weapon)){
   const o={x:pose.x-.5,z:pose.z-.5,y:a.y},dir={x:q.dx,z:q.dz};
   const reach=poiAimWallLimit(o,dir,poiCompanionMeleeReach(a),poiAimWall(o));
   swing.spearVisual={originX:pose.x,originZ:pose.z,dx:q.dx,dz:q.dz,reach,point:q.spearPoint??null};
@@ -28767,7 +28818,8 @@ function poiTownNpcInit(clock){
   // reconstructed after a cold evening launch; no clerk or spare room is used.
   const bed=assigned&&(clock.minute<POI_TOWN_WAKE||clock.minute>=POI_TOWN_CLOSE)&&
    poiTownNpcExistsBed(assigned)&&poiTownNpcStance(assigned.stand)?assigned:null;
-  const start=duty?.start??daily?.goal??(visitor?(recessed?role.home:poiTownNpcVisitorGoal(role,clock.minute)):
+  const watch=facilitySite.id==='frontier'?frontierGuardDuty(role,clock):null;
+  const start=(watch?(watch==='watch'?role.public:role.home):null)??duty?.start??daily?.goal??(visitor?(recessed?role.home:poiTownNpcVisitorGoal(role,clock.minute)):
    bed?.stand||(night&&!assigned?role.sleepStand||role.home:role.role==='keeper'?role.work:role.public||role.home));
   const shipment=role.id==='toolkeeper'&&typeof poiToolshopSupplyResume==='function'?poiToolshopSupplyResume(clock):null;
   const returning=shipment&&poiTownNpcStance(shipment);
@@ -28778,7 +28830,7 @@ function poiTownNpcInit(clock){
   const morning=clock.absoluteMinute-clock.minute+POI_TOWN_WAKE+(clock.minute>=POI_TOWN_WAKE?1440:0);
   const {weapon,gear}=poiTownNpcLoadout({role});
   const personal=role.role==='adventurer'?poiTownAdventurerMemory.get(role.id):null;
-  const actor={role,weapon,gear,...p,index,...(returning?{supplyCarrying:true}:{}),hp:personal?.hp??(facilitySite?.id==='frontier'?frontierLifeRecord(poiHotbarRead(),role.id).hp:POI_TOWN_RESIDENT_HP),activity:returning?'supply-return':recessed?'offsite':duty?.label||daily?.label||'idle',recessed,attacks:0,coins:personal?.coins??0,potions:personal?.potions??0,bedId:bed?.id??null,
+  const actor={role,weapon,gear,...p,index,...(returning?{supplyCarrying:true}:{}),hp:personal?.hp??(facilitySite?.id==='frontier'?frontierLifeRecord(poiHotbarRead(),role.id).hp:POI_TOWN_RESIDENT_HP),activity:returning?'supply-return':recessed?'offsite':!resume&&watch==='sleep'?'sleep-home':duty?.label||daily?.label||'idle',recessed,attacks:0,coins:personal?.coins??0,potions:personal?.potions??0,bedId:bed?.id??null,
    bedUntil:bed?morning:null,restUntil:null,path:null,nextPlan:0,attackAt:0,encounterAt:0};
   if(resume&&Math.hypot(p.x-resume.x,p.z-resume.z)<1.5)frontierAttachReturn(actor,resume,performance.now());
   return typeof poiTownNpcPurseHydrate==='function'?poiTownNpcPurseHydrate(actor):actor;
@@ -29625,6 +29677,8 @@ function poiTownNpcDisplayName(role){
  return name&&job?name+'（'+job+'）':name;
 }
 const POI_TOWN_SPEECH=Object.freeze({
+ frontiersugimoto:'おい、西の森の奥に遺跡がある。地面に開いた穴だ。丸腰で入ってくたばっても俺は知らねえぞ。行くなら仲間を連れてけ、バカ野郎。', 
+ frontiermiyamoto:'西の奥に遺跡があるぞ。穴から入るんだ。俺、頭ん中の星がゼロらしい。東と西もよく間違えるから、道は自分で見てくれ。', 
  frontierchief:'ようこそ、リネア村へ。村長のロアンじゃ。この杖で川辺を何年も歩いてきた。外へ行くなら、わしにも声をかけておくれ。',
  frontiershopkeeper:'いらっしゃい。川沿いで採った薬草だよ。旅の支度ならカウンターへどうぞ。',
  frontiersera:'橋を渡れば、東の丘に出ます。川は浅く見えても流れがあるから、橋から渡ってね。',
@@ -29699,6 +29753,8 @@ function frontierNpcTutorial(role){
 }
 // A reply is a revocable invitation, not a party transaction.
 const POI_NPC_JOIN_REPLIES=Object.freeze({
+ frontiersugimoto:'ちっ、仕方ねえな。手伝ってやる。背中くらい自分で守れよ。', 
+ frontiermiyamoto:'一緒に行く！ 道はわかんないから、前を歩いてくれ。',
  frontiersera:'うん、行こう。まだ知らない景色を、一緒に見に行きたいな。',
  frontierren:'いいぜ。村の外は任せとけ。俺の槍が役に立つはずだ。',
  frontierchief:'よし、わしも行こう。昔の旅で覚えたことが役に立つかもしれん。',
@@ -29712,7 +29768,8 @@ function poiNpcRecruitResultText(reason){
 function poiNpcRecruitStillHere(d,now){
  const a=d?.actor;
  if(!a||!poiTownNpcActive()||a.y!==poiWalkLevel||!poiTownNpcActors.includes(a)||a.recessed||a.death||
-    a.target||a.frontierCombat||a.hp<=0||poiTownNpcSleeping(a))return false;
+    a.target||a.frontierCombat||a.hp<=0)return false;
+ if(poiTownNpcSleeping(a))return d.bedside&&!d.sleeping&&poiTownDialogueTarget(now)===a;
  const p=poiAimOrigin(now),q=poiTownNpcVisualPosition(a,now);
  return Math.hypot(p.x-q.x,p.z-q.z)<=2.1&&poiCompanionAttackClear(p,q,a.y);
 }
@@ -29859,7 +29916,7 @@ function poiTownNpcStatus(actor){
  const equipment=[weapon,gear.head,gear.torso,gear.legs,gear.feet];
  return {name:role.name||'住人',job:role.job||(Object.hasOwn(POI_TOWN_JOB_LABELS,role.id)?POI_TOWN_JOB_LABELS[role.id]:null)||
    ({adventurer:'冒険者',visitor:'旅人',watch:'門番',keeper:'店主',scout:'斥候'})[role.role]||'住人',
-  hp:actor.hp,maxHP:POI_TOWN_RESIDENT_HP,
+  hp:actor.hp,maxHP:poiTownNpcMaxHp(role.id),
   attack:poiTownNpcAttackPower(actor)??POI_TOWN_RESIDENT_MELEE,defense:poiTownNpcDefense(actor),...poiTownAttributes(actor,{weapon,gear}),weapon,gear,tools,equipment,
   coins:frontierLifeId(role.id)?frontierVendorStock(poiHotbarRead(),role.id).gold:actor.coins||0,
   herbs:frontierLifeId(role.id)?frontierVendorStock(poiHotbarRead(),role.id).healingHerb:actor.potions||0,
@@ -30377,7 +30434,7 @@ function poiTownDialogueTarget(now,selection=null,expected=null){
  }
  if(!live&&adjacent&&poiTownNpcNextTile({x:poiWalkX,z:poiWalkZ,y},x,z,poiTownNpcGraph())?.y===y)return adjacent;
  const sleep=poiTownNpcActors.find(a=>{
-  if(!present(a)||!poiTownNpcSleeping(a))return false;
+  if(!present(a)||a.target||a.frontierCombat||!poiTownNpcSleeping(a))return false;
   const bed=(typeof POI_TOWN_INN_BEDS==='undefined'?null:POI_TOWN_INN_BEDS.find(b=>b.id===a.bedId))||a.role.bed;
   const p=bed||a;
   if(p.x!==x||p.z!==z||p.y!==y)return false;
@@ -30431,7 +30488,7 @@ function poiTownDialogueUpdate(now){
  if(!poiTownDialogue)return null;
  const d=poiTownDialogue;
  if((d.until&&now>=d.until)||(typeof poiPlayerDying==='function'&&poiPlayerDying())||(d.pendingRecruit?!poiNpcRecruitStillHere(d,now):poiTownDialogueTarget(now)!==d.actor)||
-  poiTownNpcSleeping(d.actor)!==d.sleeping||(d.toolshopCounter&&!poiNpcShopCounter(d.actor))){
+  poiTownNpcSleeping(d.actor)!==d.bedside||(d.toolshopCounter&&!poiNpcShopCounter(d.actor))){
   poiTownDialogueClose();if(typeof poiShopSync==='function')poiShopSync();return null;
  }
  return d.sleeping?null:d.actor;
@@ -30450,6 +30507,14 @@ function poiTownDialogueAction(now){
  const expected=arguments[1]??null;
  if(poiTownDialogueSpeechOnly()){
   if(expected)return false;
+  if(poiTownDialogue.sleeping){
+   const d=poiTownDialogue;
+   if(poiTownDialogueTarget(now)!==d.actor){poiTownDialogueClose();poiShopSync();return false}
+   d.sleeping=false;d.until=null;d.page='root';
+   if(typeof poiSound==='function')poiSound('npc-greet');
+   poiTownDialogueBeginTopic(d);
+   poiNpcMenuRender(now);poiShopSync();return true;
+  }
   if(poiTownDialogue.pendingGift)return poiNpcGiftConfirm(poiTownDialogue,now);
   if(poiTownDialogue.pendingRecruit)return poiNpcRecruitConfirm(poiTownDialogue,now);
   if(poiTownDialogueHasNext()){
@@ -30474,10 +30539,10 @@ function poiTownDialogueAction(now){
  const greeting=POI_TOWN_SPEECH[id]||(role==='adventurer'?'外へ行くのか？　草むらにスライムがいることがある。気をつけて。':
   role==='visitor'?'いい町ですね。門をくぐると、ほっとします。':'こんにちは。今日は過ごしやすいですね。');
  poiTownAmbientClose();
- if(!sleeping&&typeof poiBagSetOpen==='function')poiBagSetOpen(false);
+ if(typeof poiBagSetOpen==='function')poiBagSetOpen(false);
  const toolshopCounter=!sleeping&&poiNpcShopCounter(actor);
- poiTownDialogue={actor,text:sleeping?'zzz...':'',topic:'',greeting,topicIndex:0,sleeping,movingGreeting:!!selection.movingGreeting,until:sleeping?now+2200:null,
-  toolshopCounter,page:toolshopCounter?'toolshop':'root',index:0,rows:[]};
+ poiTownDialogue={actor,text:sleeping?'ZZZ…':'',topic:'',greeting,topicIndex:0,sleeping,bedside:sleeping,movingGreeting:!!selection.movingGreeting,until:null,
+  toolshopCounter,page:sleeping?'speech':toolshopCounter?'toolshop':'root',index:0,rows:[]};
  if(!sleeping){
   if(typeof poiSound==='function')poiSound('npc-greet');
   if(typeof poiStopRepeat==='function')poiStopRepeat();
@@ -30491,13 +30556,16 @@ function poiTownDialogueAction(now){
   }
   poiTownNpcFace(actor,facing);
   if(actor.actorLeg&&typeof poiTownNpcVersion==='number')poiTownNpcVersion++;
-  const d=poiTownDialogue,intro=actor.frontierPartyId?{pages:['何か用？']}:frontierChiefGift(actor.role)??frontierNpcTutorial(actor.role);
+  poiTownDialogueBeginTopic(poiTownDialogue);
+ }
+ poiNpcMenuRender(now);poiShopSync();return true;
+}
+function poiTownDialogueBeginTopic(d){
+ const actor=d.actor,intro=actor.frontierPartyId?{pages:['何か用？']}:frontierChiefGift(actor.role)??frontierNpcTutorial(actor.role);
   if(intro?.gift||intro?.pages.length>1){
    d.page='speech';d.speechPages=intro.pages;d.speechIndex=0;d.pendingGift=intro.gift??null;
   }
-  d.topic=d.text=intro?.pages[0]??poiNpcOpeningTopic(d);
- }
- poiNpcMenuRender(now);poiShopSync();return true;
+ d.topic=d.text=intro?.pages[0]??poiNpcOpeningTopic(d);
 }
 // BEGIN SPEECH PLACEMENT
 function poiTownSpeechPlace(pt,size,panel,stageHeight){
@@ -30541,6 +30609,11 @@ const POI_TOWN_AMBIENT_LINES=Object.freeze({
 });
 let poiTownAmbient=null;
 // BEGIN FRONTIER DAILY LIFE
+function frontierGuardDuty(role,clock){
+ if(!Object.hasOwn(FRONTIER_GUARD_STATS,role.id))return null;
+ const minute=clock.minute;
+ return minute>=1200||minute<360?'watch':minute>=480&&minute<1020?'sleep':'off-duty';
+}
 function frontierLifeId(id){return id===POI_FRONTIER_SHOP_ID||frontierResident(id)}
 function frontierReturnPoint(p){
  return p&&Number.isFinite(p.x)&&Number.isFinite(p.z)&&p.x>=0&&p.x<FRONTIER_W&&p.z>=0&&p.z<FRONTIER_H?
@@ -30549,13 +30622,13 @@ function frontierReturnPoint(p){
 function frontierLifeDecode(raw){
  const out={};
  for(const id of Object.keys(FRONTIER_RESIDENT_WEAPONS)){
-  const r=raw?.[id];if(!r||!Number.isInteger(r.hp)||r.hp<1||r.hp>100)continue;
+  const r=raw?.[id];if(!r||!Number.isInteger(r.hp)||r.hp<1||r.hp>poiTownNpcMaxHp(id))continue;
   const items=Array.isArray(r.items)?r.items.slice(0,9).map(poiInventorySanitizeCell).filter(c=>c&&!poiCompanionType(c.type)):[];
   out[id]={hp:r.hp,items,...(frontierReturnPoint(r.returnFrom)?{returnFrom:frontierReturnPoint(r.returnFrom)}:{})};
  }
  return out;
 }
-function frontierLifeRecord(kit,id){return kit.frontierLife?.[id]??{hp:100,items:[]}}
+function frontierLifeRecord(kit,id){return kit.frontierLife?.[id]??{hp:poiTownNpcMaxHp(id),items:[]}}
 function frontierLifeEdit(kit,id,delta){
  return {...kit,frontierLife:{...kit.frontierLife,[id]:{...frontierLifeRecord(kit,id),...delta}}};
 }
@@ -30671,7 +30744,7 @@ function frontierNpcHeal(a,now){
  if(!stock.healingHerb){
   frontierNeedLine(id,a,a.hp,!!(a.frontierCombat||a.frontierStrike),now);a.frontierHealAt=now+3000;return false;
  }
- const hp=Math.min(100,a.hp+POI_HOTBAR_HEAL);
+ const hp=Math.min(poiTownNpcMaxHp(id),a.hp+POI_HOTBAR_HEAL);
  const next=frontierLifeSetStockAndHp(kit,id,{...stock,healingHerb:stock.healingHerb-1},hp);
  if(!poiEconomyWrite(next))return false;
  a.hp=hp;a.frontierHealAt=now+4200;frontierLifeLine(id,a,'heal',now);poiTownNpcGesture(a,'eat-inn',now);return true;
@@ -30685,7 +30758,7 @@ function frontierHumanCompanionHeal(a,now){
  if(!member?.hp||member.hp>55)return;
  const stock=frontierVendorStock(kit,id);
  if(!stock.healingHerb){frontierNeedLine(id,a,member.hp,frontierPartyFight(a,member),now);a.frontierHealAt=now+3000;return}
- member.hp=Math.min(100,member.hp+POI_HOTBAR_HEAL);
+ member.hp=Math.min(poiTownNpcMaxHp(id),member.hp+POI_HOTBAR_HEAL);
  if(!poiEconomyWrite({...frontierLifeStock(kit,id,{...stock,healingHerb:stock.healingHerb-1}),humanParty:party}))return;
  a.frontierHealAt=now+4800;frontierLifeLine(id,a,'heal',now);
  if(poiTownNpcCombatNear(a.x,a.z,a.y))poiSound('heal');poiEconomyRefresh();
@@ -30760,7 +30833,7 @@ function frontierNpcStrike(a,now){
  if(q.weapon)poiCompanionWeaponCue(a,q.weapon,q.weapon==='equipWoodBow'?'release':'swing');
  const s=poiMonsterStates.get(q.obj);
  if(!s||s.hp<=0||q.obj.y!==a.y||Math.hypot(s.x-a.x,s.z-a.z)>q.range||!poiCompanionAttackClear(a,s,a.y))return;
- const before=s.hp,reach=Math.hypot(s.x-a.x,s.z-a.z),shaft=q.weapon==='equipWoodSpear'&&reach<q.range-(q.profile?.tipLength??0);
+ const before=s.hp,reach=Math.hypot(s.x-a.x,s.z-a.z),shaft=poiSpearType(q.weapon)&&reach<q.range-(q.profile?.tipLength??0);
  const attack=poiTownNpcAttackPower(a)??POI_TOWN_RESIDENT_MELEE;
  poiPlayerDamageTarget([q.obj,s],s.x,s.z,shaft?Math.max(1,Math.round(attack*.75)):attack,q.weapon,now,!poiTownNpcCombatNear(a.x,a.z,a.y),true,{companion:true,resident:true,started:a.swingAt});
  if(s.hp<before){a.attacks++;a.lastHitAt=now}
@@ -30782,7 +30855,7 @@ function frontierAttachReturn(a,where,now){
 function frontierNpcReturning(a,clock,now,budget){
  if(!a.frontierReturning)return false;
  if(a.actorLeg)return true;
- const night=clock.hour>=21||clock.hour<6,goal=night&&a.role.bed?a.role.home:a.role.public;
+ const watch=frontierGuardDuty(a.role,clock),night=clock.hour>=21||clock.hour<6,goal=(watch?watch!=='watch':night)&&a.role.bed?a.role.home:a.role.public;
  if(!poiTownNpcMove(a,goal,'returning-party',now,budget)||poiTownNpcStepT(a,now)<1)return true;
  const kit=poiHotbarRead();
  if(!poiEconomyWrite(frontierLifeEdit(kit,a.role.id,{returnFrom:null})))return true;
@@ -30832,10 +30905,11 @@ function frontierNpcLifeStep(a,clock,now,budget){
  if(frontierNpcReturning(a,clock,now,budget))return;
  frontierNpcHeal(a,now);
  const stock=frontierVendorStock(poiHotbarRead(),id),bed=a.role.bed,night=clock.hour>=21||clock.hour<6;
- if(bed&&(night||a.hp<72||a.activity==='sleep-home'&&a.hp<100)){
+ const watch=frontierGuardDuty(a.role,clock),maxHp=poiTownNpcMaxHp(id);
+ if(bed&&((watch?watch==='sleep':night)||a.hp<72||a.activity==='sleep-home'&&a.hp<maxHp&&a.hp<Math.max(100,maxHp*.7))){
   if(poiTownNpcMove(a,a.role.home,'going-home',now,budget)&&poiTownNpcStepT(a,now)>=1){
    poiTownNpcAct(a,'sleep-home');
-   if(a.hp<100&&now>=(a.frontierRestAt||0)&&frontierLifeSetHp(a,Math.min(100,a.hp+12)))a.frontierRestAt=now+1600;
+   if(a.hp<maxHp&&now>=(a.frontierRestAt||0)&&frontierLifeSetHp(a,Math.min(maxHp,a.hp+12)))a.frontierRestAt=now+1600;
   }else poiTownNpcAct(a,'going-home');
   return;
  }
@@ -30850,6 +30924,13 @@ function frontierNpcLifeStep(a,clock,now,budget){
   const p=a.frontierClaim;
   if(!poiEconomyDrops.has(p.x+','+p.z)||Math.hypot(p.x-a.x,p.z-a.z)<=1.2)a.frontierClaim=null;
   else{poiTownNpcMove(a,p,'collecting',now,budget);return}
+ }
+ if(watch){
+  const active=watch==='watch',label=active?'watch':'off-duty';
+  if(poiTownNpcMove(a,active?a.role.public:a.role.home,label,now,budget)){
+   poiTownNpcAct(a,label);if(active)poiTownNpcFace(a,a.role.public.facing);
+  }
+  return;
  }
  if(poiTownNpcMove(a,a.role.public,shop?'work':'going-visit',now,budget))poiTownNpcAct(a,shop?'work':'visit');
 }
@@ -31249,11 +31330,11 @@ function poiTownNpcModel(type,actor=null){
  return poiTownNpcModelCache.get(key);
 }
 function poiFrontierResidentSpear(a,now,x,y,z,heading,stride){
- const age=now-(a.swingAt??-Infinity),pose=poiPlayerProfilePose('equipWoodSpear',age);
+ const age=now-(a.swingAt??-Infinity),pose=poiPlayerProfilePose(a.weapon,age);
  const dir={x:-Math.sin(heading),z:Math.cos(heading)},o={x:x-.5,z:z-.5,y:a.y};
  if(pose)pose.spearVisual={originX:x,originZ:z,dx:dir.x,dz:dir.z,
-  reach:poiAimWallLimit(o,dir,poiPlayerWeaponRange('equipWoodSpear'),poiAimWall(o))};
- return poiBuildPlayerMesh('equipWoodSpear',pose,a.gear,stride,0,x,y,z,heading,true,a.role.appearance);
+  reach:poiAimWallLimit(o,dir,poiPlayerWeaponRange(a.weapon),poiAimWall(o))};
+ return poiBuildPlayerMesh(a.weapon,pose,a.gear,stride,0,x,y,z,heading,true,a.role.appearance);
 }
 function poiTownResidentsDraw(now,vp){
  if(!poiTownNpcActive()||!poiTownNpcActors.length)return;
@@ -31298,7 +31379,7 @@ function poiTownResidentsDraw(now,vp){
    const stride=poiTownNpcVisualStride(a,t);
    const frontierArms=!!FRONTIER_HUMANS[a.role.appearance]&&!bed;
    const hurt=near&&inTime(a.hurtAt,155)?(1-(now-a.hurtAt)/155)*.33:0;
-   if(facilitySite?.id==='frontier'&&a.role.id==='frontierren'&&a.weapon==='equipWoodSpear'&&!bed){
+   if(facilitySite?.id==='frontier'&&poiSpearType(a.weapon)&&!bed){
     const part=poiFrontierResidentSpear(a,now,x+.5,y,z+.5,heading??r*Math.PI/2,stride);
     for(let i=0;i<part.p.length;i+=3){
      m.p.push(part.p[i],part.p[i+1],part.p[i+2]);m.n.push(part.n[i],part.n[i+1],part.n[i+2]);
@@ -31385,7 +31466,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v409',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v410',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -31500,7 +31581,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v409';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v410';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -31715,7 +31796,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v409',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v410',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -32560,7 +32641,7 @@ function poiAimNewShot(shot,now){
  if(track)poiAimAttack.track=track;
  let aimed={...shot,aim:o,dx:d.x,dz:d.z,...(track?{track}:null)};
  if(track)aimed=poiAimTrack(aimed,now,o);
- if(shot.type==='equipWoodSpear')poiAimAttack.spearVisual=poiWorldSpearAim(aimed,now);
+ if(poiSpearType(shot.type))poiAimAttack.spearVisual=poiWorldSpearAim(aimed,now);
  return aimed;
 }
 // BEGIN OVERSIZED MELEE BODY
@@ -32571,7 +32652,7 @@ function poiLargeMeleeBody(target,shot,now){
  if(type!=='monsterStoneDavid'||w==='equipWoodBow'||w==='fireWand')return null;
  if(typeof poiDavidRig!=='function'||typeof poiMonsterPose!=='function')return null;
  const p=poiMonsterPose(target.id,target.state,now),r=poiDavidRig(p.david);
- const height=w==='equipWoodSpear'?.868:(typeof POI_WORLD_MELEE_CONTACT_HEIGHT!=='undefined'?POI_WORLD_MELEE_CONTACT_HEIGHT[w]:0)??.76;
+ const height=poiSpearType(w)?.868:(typeof POI_WORLD_MELEE_CONTACT_HEIGHT!=='undefined'?POI_WORLD_MELEE_CONTACT_HEIGHT[w]:0)??.76;
  const y=terrainY(Math.floor(shot.aim.x+.5),Math.floor(shot.aim.z+.5))+shot.aim.y*1.4+(height||.76)-p.y;
  // Mesh ankle and knee prism centerline/radii in poiDavidGeometry.
  // Evaluate the visible low body at the contact height, never its held
@@ -32639,9 +32720,9 @@ function poiAimTrace(shot,range,now){
  if(shot.track&&!poiAimPinContains(shot,winner))winner=null;
  return winner?{x:Math.floor(winner.x+.5),z:Math.floor(winner.z+.5),distance:Math.hypot(winner.x-o.x,winner.z-o.z),
   forward:bodyPoint?best:(winner.x-o.x)*d.x+(winner.z-o.z)*d.z,monster:[winner.id,winner.state],
-  ...(shot.type==='equipWoodSpear'?{spearPoint:bodyPoint??{x:winner.x+.5,z:winner.z+.5,y:winner.y+
+  ...(poiSpearType(shot.type)?{spearPoint:bodyPoint??{x:winner.x+.5,z:winner.z+.5,y:winner.y+
    (POI_COMBAT_TORSO_HEIGHT[winner.id.type]??.67)},spearLimit:limit}:{})}:
-  {monster:null,distance:limit,...(shot.type==='equipWoodSpear'?{spearLimit:limit}:{})};
+  {monster:null,distance:limit,...(poiSpearType(shot.type)?{spearLimit:limit}:{})};
 }
 function poiAimFlightBegin(shot,now){
  if(shot.track&&typeof poiAimTrack==='function'&&!shot.track.sealed){
@@ -32985,16 +33066,16 @@ const POI_ACTOR_STAT_GEAR=Object.freeze({
  armorLeatherShoes:[1,0],armorValdiaCrown:[0,1]
 });
 function poiStatGrade(n){return Math.max(1,Math.min(10,Math.round(n)||1))}
-function poiStatStars(n){const stars=poiStatGrade(n);return '★'.repeat(stars)+'☆'.repeat(10-stars)}
+function poiStatStars(n){const stars=n===0?0:poiStatGrade(n);return '★'.repeat(stars)+'☆'.repeat(10-stars)}
 function poiStatDisplay(el,n){
  if(!el)return;
- const text=poiStatStars(n),label='10段階中'+poiStatGrade(n);
+ const text=poiStatStars(n),label='10段階中'+(n===0?0:poiStatGrade(n));
  if(el.textContent!==text)el.textContent=text;
  if(el.getAttribute('aria-label')!==label)el.setAttribute('aria-label',label);
 }
 function poiStatBase(role,type){
  const [speed,intelligence]=(type?POI_ACTOR_STAT_MONSTERS[type]:POI_ACTOR_STAT_ROLES[role?.id]??POI_ACTOR_STAT_ROLES[role?.role])??[5,5];
- return {speed:type?speed:POI_HUMAN_SPEED_GRADE,intelligence};
+ return {speed:type?speed:POI_HUMAN_SPEED_GRADE,intelligence:FRONTIER_GUARD_STATS[role?.id]?.intelligence??intelligence};
 }
 function poiStatsGear(type){
  const [speed,intelligence]=POI_ACTOR_STAT_GEAR[type]??[0,0];
@@ -33005,7 +33086,7 @@ function poiStatsWithGear(base,weapon,gear){
  for(const type of [weapon,...Object.values(gear??{})]){
   const q=poiStatsGear(type);speed+=q.speed;intelligence+=q.intelligence;
  }
- return {speed:poiStatGrade(speed),intelligence:poiStatGrade(intelligence)};
+ return {speed:poiStatGrade(speed),intelligence:Math.max(0,Math.min(10,Math.round(intelligence)||0))};
 }
 const POI_HUMAN_SPEED_GRADE=1;
 function poiMovementFactor(speed,base=5){return 1+.065*(poiStatGrade(speed)-base)}
@@ -33032,7 +33113,7 @@ function poiTuneWeapon(p,standard=5){
 }
 function poiLearnedChance(actor,key,grade,now,cast=null){
  const lesson=key&&actor.learnedAttacks?.get(key);
- if(!lesson||(Number.isFinite(lesson.until)?now>=lesson.until:now-lesson.last>45000)||cast!=null&&cast===lesson.cast||now-(actor.dodgedAt??-Infinity)<720)return 0;
+ if(grade===0||!lesson||(Number.isFinite(lesson.until)?now>=lesson.until:now-lesson.last>45000)||cast!=null&&cast===lesson.cast||now-(actor.dodgedAt??-Infinity)<720)return 0;
  return Math.min(.52,(poiStatGrade(grade)-1)*.033+Math.min(3,Math.max(0,lesson.hits-1))*.04+(lesson.hits===0?Math.min(3,Math.max(0,lesson.sightings-1))*.019:0));
 }
 function poiLearnedDodge(actor,key,grade,now,roll=Math.random,cast=null){
@@ -33063,6 +33144,7 @@ const POI_PLAYER_WEAPON_BASE=Object.freeze({
  kitchenKnife:{range:1,get damage(){return POI_PLAYER_ATTACK+POI_KNIFE_BONUS},hit:80,ready:225,pose:190,
   commitAim:true,contactSound:true,speed:4,reach:1},
  equipWoodBow:{range:6,reachStars:6,damage:22,hit:325,ready:1030,pose:525,cellMs:65,minFlight:70,speed:1,reach:3},
+ equipIronSpear:{range:2.7,reachStars:5,damage:30,tipLength:.60,shaftScale:.75,hit:255,ready:590,pose:435,speed:2,reach:2},
  equipWoodSpear:{range:2.4,reachStars:4,damage:24,tipLength:.57,shaftScale:.75,hit:240,ready:540,pose:410,speed:2,reach:2},
  equipStoneMace:{range:1,damage:32,hit:380,ready:760,pose:620,commitAim:true,speed:1,reach:1},
  equipWoodSword:{...POI_SWORD_PROFILE,hit:205,ready:650,pose:530,speedStars:3,get damage(){return POI_PLAYER_ATTACK+POI_HOTBAR_SWORD_BONUS}},
@@ -33229,7 +33311,7 @@ function poiPlayerDamageTarget(monster,x,z,amount,weapon,now,silent=false,atCont
 }
 function poiPlayerWeaponResolve(shot,now,line=shot.aim?
  poiAimTrace(shot,shot.profile.range,now):poiPlayerWeaponTrace(shot)){
- if(shot.type==='equipWoodSpear'&&typeof poiWorldSpearContact==='function')poiWorldSpearContact(shot,line,now);
+ if(poiSpearType(shot.type)&&typeof poiWorldSpearContact==='function')poiWorldSpearContact(shot,line,now);
  else if(typeof poiWorldMeleeContact==='function')poiWorldMeleeContact(shot,now);
  if(shot.type==null&&shot.aim&&poiAimAttack?.started===shot.started){
   const o=shot.aim,d={x:shot.dx,z:shot.dz};
@@ -33438,7 +33520,7 @@ function poiWorldSpearLine(pose,g,base={x:0,y:0,z:0}){
  const along=opposite.map(n=>n/gap),rear=tip.map((n,i)=>n-along[i]*POI_WORLD_SPEAR_LENGTH);
  return {tip,rear,along};
 }
-function poiBuildWorldSpear(m,pose,g,rotate,x,y,z){
+function poiBuildWorldSpear(m,pose,g,rotate,x,y,z,weapon){
  const line=poiWorldSpearLine(pose,g,{x,y,z}),{along}=line;
  const wing=Math.hypot(along[1],along[2]);
  const side=wing>.01?[0,along[2]/wing,-along[1]/wing]:[0,1,0];
@@ -33446,13 +33528,13 @@ function poiBuildWorldSpear(m,pose,g,rotate,x,y,z){
  const P=(d,wide=0,flat=0)=>line.tip.map((v,i)=>v+along[i]*d+side[i]*wide+normal[i]*flat);
  const W=p=>{const v=rotate(p[0],p[2]);return [x+v[0],y+p[1],z+v[1]]};
  const rod=(a,b,w,v,color)=>naturalBranch(m,...W(a),...W(b),w,v,color);
- const timber=[.52,.348,.177],hemp=[.74,.58,.34],flint=[.67,.76,.79],dark=[.27,.37,.41];
+ const iron=weapon==='equipIronSpear',timber=iron?[.31,.224,.153]:[.52,.348,.177],hemp=iron?[.52,.57,.61]:[.74,.58,.34],flint=iron?[.80,.84,.88]:[.67,.76,.79],dark=[.27,.37,.41];
  rod(line.rear,P(-.43),.038,.031,timber);
  rod(line.rear,P(-POI_WORLD_SPEAR_LENGTH+.14),.044,.042,dark);
  // The binding and leaf blade cannot be mistaken for a floating effect;
  // both are connected to the same pole line as the actual leading apex.
  for(let i=0;i<4;i++)rod(P(-.57+i*.042),P(-.552+i*.042),.047,.046,hemp);
- const tip=W(line.tip),left=W(P(-.40,.096)),right=W(P(-.40,-.096)),neck=W(P(-.52));
+ const tip=W(line.tip),left=W(P(-.40,iron?.116:.096)),right=W(P(-.40,iron?-.116:-.096)),neck=W(P(-.52));
  for(const s of [-1,1]){
   const ridge=W(P(-.29,0,s*.039));
   tri(m,neck,ridge,left,dark);tri(m,neck,right,ridge,dark);
@@ -33465,7 +33547,7 @@ function poiWorldSpearAim(shot,now){
  return {originX:o.x+.5,originZ:o.z+.5,dx:shot.dx,dz:shot.dz,reach:shot.profile.range,point:null,clock:null};
 }
 function poiWorldSpearContact(shot,line,now){
- if(shot.type!=='equipWoodSpear'||!shot.aim||typeof poiAimAttack==='undefined'||
+ if(!poiSpearType(shot.type)||!shot.aim||typeof poiAimAttack==='undefined'||
     poiAimAttack?.started!==shot.started||!poiAimAttack.spearVisual)return;
  poiAimAttack.spearVisual.originX=shot.aim.x+.5;
  poiAimAttack.spearVisual.originZ=shot.aim.z+.5;
@@ -33584,7 +33666,7 @@ function poiPlayerArmCrate(m,origin,end,ww,dd,register,color){
 function poiDrawPlayerBlockArms(m,arms,gear,rotate,x,y,z){
  const P=p=>{const [a,b]=rotate(p[0],p[2]);return [x+a,y+p[1],z+b]};
  const look=m.frontierLook,skin=look?.skin||[.77,.59,.43],shadow=look?skin.map(v=>v*.91):[.71,.52,.39],knuckle=look?skin.map(v=>v*1.045):[.82,.63,.47];
- const torso=poiHumanGearType(gear?.torso),sleeve=torso==='starterTunic'?POI_SHARED_CLOTH_ART.tunic.main:poiRoleClothingTone(torso);
+ const torso=poiHumanGearType(gear?.torso),sleeve=torso==='starterTunic'?POI_SHARED_CLOTH_ART.tunic.main:torso==='armorLeatherTorso'?[.325,.218,.145]:poiRoleClothingTone(torso);
  const {upperWidth,lowerWidth,wristWidth,handWidth}=POI_PLAYER_BLOCK_ARM;
  const block=(a,b,w,d,c)=>poiPlayerArmCrate(m,a,b,w,d,P,c);
  for(const {shoulder:s,elbow:e,wrist:w,straight} of [arms.right,arms.left]){
@@ -33804,7 +33886,7 @@ function poiPlayerProfilePose(type,ms){
   const at=ms<=p.hit?108*ms/p.hit:108+152*(ms-p.hit)/(p.pose-p.hit);
   return poiWalkSwordPose(at);
  }
- if(type==='equipWoodSpear')return poiWorldSpearPose(p,ms);
+ if(poiSpearType(type))return poiWorldSpearPose(p,ms);
  if(type==='fireWand')return poiWalkPunchPose(ms<=p.hit?108*ms/p.hit:108+152*(ms-p.hit)/(p.pose-p.hit));
  if(type==='equipStoneMace'){
   // Deep preparation, then accelerate through the impact key.
@@ -34065,8 +34147,8 @@ function poiBuildPlayerMesh(weapon,pose,gear,stride=0,r=0,x=0,y=0,z=0,heading=nu
   // Weapons and hands use the same animated wrist socket.
   const arms=quietArms||poiPlayerWeaponHands(pose,stride),[gx,gy,gz]=arms.right.wrist;
   poiDrawPlayerBlockArms(m,arms,gear,rotate,x,y,z);
-  if(worldSpear&&weapon==='equipWoodSpear'){
-   poiBuildWorldSpear(m,pose,{x:gx,y:gy,z:gz},rotate,x,y,z);
+  if(worldSpear&&poiSpearType(weapon)){
+   poiBuildWorldSpear(m,pose,{x:gx,y:gy,z:gz},rotate,x,y,z,weapon);
    return m;
   }
   if(weapon==='equipOrvasTwinGreatswords'||weapon==='equipOrvasGreatsword'){
@@ -34140,7 +34222,7 @@ function poiWalkAvatar(now=performance.now()){
   typeof poiArmedWandIndex==='function'&&poiArmedWandIndex()!==null?'fireWand':
   kit?kit.weapon:typeof poiEquippedWeapon==='function'?poiEquippedWeapon():null;
  const weapon=(EQUIPMENT_IDS.includes(held)||!!poiRoleToolGripStyle(held))?held:null;
- const spearClock=weapon==='equipWoodSpear'&&typeof poiAimAttack!=='undefined'&&
+ const spearClock=poiSpearType(weapon)&&typeof poiAimAttack!=='undefined'&&
   poiAimAttack?.started===poiWalkActionStarted?poiAimAttack.spearVisual:null;
  const atContact=spearClock&&Number.isFinite(spearClock.clock)&&now>=spearClock.clock&&now-spearClock.clock<36;
  if(atContact||meleeContact)poiWalkAttackPosePending=true;
@@ -34843,6 +34925,7 @@ function poiWalkCanStep(x,z,fromX,fromZ,exceptMonster,skipNpcTile=false,freeTree
   if(dungeonRoute&&o.type===dungeonRoute.portal.type)return !poiOtherworldTraversal(dungeonRoute,fromX,fromZ,poiWalkLevel);
   if(isFloor(o.type)||poiWalkPassableDoor(o.type)||nonBlocking.has(o.type)||o.type==='guildStairUp'||o.type==='guildStairDown')return false;
   if(o===deck||creek?.shallows.get(key)===o.type||frontier&&facilitySite.decks.has(key)&&BRIDGE_IDS.has(o.type))return false;
+  if(frontier&&frontierSoftPlant(o.type))return false;
   if(o.type==='poiCanalQuay'||frontier&&freeTrees&&(frontierTreeTrunkType(o.type)||frontierHouseFineTile(o)))return false;
   const realmGate=facilitySite?.id==='base'?facilitySite.otherworld?.gate:null;
   if(realmGate&&o.x===realmGate.x&&o.z===realmGate.z&&o.y===realmGate.y&&o.type===realmGate.type&&poiOtherworldGateOpen())return false;
@@ -36650,6 +36733,7 @@ function pineDrawBaseTree(m,o){
  for(let i=from+1;i<m.p.length;i+=3)m.p[i]=Math.max(y,m.p[i]);
  return true;
 }
+function frontierSoftPlant(type){return type==='bushFern'||type==='bush'||type==='bushFlower'||type==='tallGrass'||type==='flowerField'}
 function frontierTreeTrunkType(type){return type==='treeBirch'||type==='treePine'||type==='treeCedar'}
 function frontierTreeTrunkRadius(o){
  return (o.type==='treeBirch'?.104:o.type==='treePine'?.143:.167)*(.9+surfaceNoise(o.x*23+74,o.z*29+38)*.20);
@@ -41520,7 +41604,7 @@ function renderCharacterList(){
 }
 
 let equipmentExpanded=false;
-const EQUIPMENT_IDS=['equipStick','equipClub','equipWoodSword','equipStoneSword','equipIronSword','kitchenKnife','equipWoodBow','equipWoodSpear','equipStoneMace','equipBoneSword','armorIronTorso','fireWand','equipWalkingCane','equipPlainStaff','equipLongStaff','equipNorthMinotaurAxe','equipOrvasHead','equipOrvasGreatsword','equipOrvasTwinGreatswords'];
+const EQUIPMENT_IDS=['equipIronSpear','armorLeatherTorso','armorKnitCap','armorMilitaryCap','equipStick','equipClub','equipWoodSword','equipStoneSword','equipIronSword','kitchenKnife','equipWoodBow','equipWoodSpear','equipStoneMace','equipBoneSword','armorIronTorso','fireWand','equipWalkingCane','equipPlainStaff','equipLongStaff','equipNorthMinotaurAxe','equipOrvasHead','equipOrvasGreatsword','equipOrvasTwinGreatswords'];
 function renderEquipmentList(){
  const root=$('equipmentList');root.replaceChildren();
  root.appendChild(expandableRow('武器','',equipmentExpanded,()=>{
@@ -44059,6 +44143,8 @@ const FRONTIER_LEGACY_W=192,FRONTIER_W=FRONTIER_WEST_OFFSET+FRONTIER_LEGACY_W,FR
 const FRONTIER_VILLAGE_NAME='リネア村';
 const FRONTIER_VILLAGE={x:44.5+FRONTIER_WEST_OFFSET,z:30.5,r:12,opening:1.72};
 const FRONTIER_LEGACY_HOMES=[
+ {id:'frontierWatchHouse',name:'西門番の家',x1:35,x2:38,z1:33,z2:36,dx:36,frontNorth:true,tone:1,roofType:2,floorHeight:2.14,room:'house',frontierStyle:'weathered',
+  furniture:[[37,34,'cot','bed','n'],[36,34,'cot','bed','n']]},
 
  {id:'frontierHouse',name:'村長の家',x1:43,x2:49,z1:21,z2:26,dx:46,tone:0,roofType:4,floorHeight:2.32,room:'inn',frontierStyle:'cottage',
   furniture:[[44,22,'cot','bed','n'],[48,22,'settle','chairWood','n'],[47,22,'hearth','crate','n'],[44,24,'blanketChest','crate','w'],[48,24,'mealTable','crate','e']]},
@@ -44074,7 +44160,7 @@ function frontierRotateFurniture(b,furniture){
  return b.frontNorth?furniture.map(([x,z,...rest])=>[b.x1+b.x2-x,b.z1+b.z2-z,...rest]):furniture;
 }
 function frontierFrontageAtOldX(x,z){
- return (x>=37&&x<=39||x>=45&&x<=47)&&z>=27&&z<=29||
+ return x===36&&z>=30&&z<=32||(x>=37&&x<=39||x>=45&&x<=47)&&z>=27&&z<=29||
   x>=41&&x<=42&&z>=31&&z<=33;
 }
 function frontierHomeCell(x,z){
@@ -44327,8 +44413,11 @@ function frontierSite(){
  const chief={...person('frontierchief','ロアン','humanVillager',45,23,1,'roan'),job:'村長',homeBuilding:'frontierHouse',bed:frontierNpcHome(44+FRONTIER_WEST_OFFSET,22)};
  const clerk={...person(POI_FRONTIER_SHOP_ID,'ミナ','humanMerchant',38,23,2,'lina'),job:'道具屋',homeBuilding:'frontierStore',gear:FRONTIER_FITTED_GEAR,
   home:frontierNpcHome(38+FRONTIER_WEST_OFFSET,22),bed:frontierNpcHome(38+FRONTIER_WEST_OFFSET,21)};
+ const guard=(id,name,z,bedX,appearance)=>({...person(id,name,'humanVillager',34,z,3,appearance),job:'門番',homeBuilding:'frontierWatchHouse',
+  home:frontierNpcHome(bedX+FRONTIER_WEST_OFFSET,34),bed:frontierNpcHome(bedX+FRONTIER_WEST_OFFSET,35),
+  gear:{...FRONTIER_FITTED_GEAR,head:FRONTIER_GUARD_STATS[id].head,torso:'armorLeatherTorso'}});
  const residents=[{...person('frontiersera','セラ','humanVillager',48,28,1,'sera'),home:frontierNpcHome(41+FRONTIER_WEST_OFFSET,36),bed:frontierNpcHome(40+FRONTIER_WEST_OFFSET,36),homeBuilding:'frontierCoupleHome'},
-  {...person('frontierren','レン','humanVillager',75,32,2,'kai'),home:frontierNpcHome(42+FRONTIER_WEST_OFFSET,36),bed:frontierNpcHome(43+FRONTIER_WEST_OFFSET,36),homeBuilding:'frontierCoupleHome'},chief,clerk];
+  {...person('frontierren','レン','humanVillager',75,32,2,'kai'),home:frontierNpcHome(42+FRONTIER_WEST_OFFSET,36),bed:frontierNpcHome(43+FRONTIER_WEST_OFFSET,36),homeBuilding:'frontierCoupleHome'},chief,clerk,guard('frontiersugimoto','スギモト',28,36,'kai'),guard('frontiermiyamoto','ミヤモト',32,37,'roan')];
  return frontierAppendTemple({id:'frontier',name:'川辺の原野',villageName:FRONTIER_VILLAGE_NAME,toolShop:{x:38+FRONTIER_WEST_OFFSET,z:24},spawn:{x:51+FRONTIER_WEST_OFFSET,z:30},respawnEntry:{x:51+FRONTIER_WEST_OFFSET,z:30,y:0,facing:2},decks,buildings,residents,fenceCells,playerAppearance:'kai',
   map:{format:'forest-world-v1',version:1,width:FRONTIER_W,height:FRONTIER_H,size:FRONTIER_W,world,models:[],prefabs:[],checks:[]}});
 }
@@ -48401,7 +48490,7 @@ function frontierSouthGeometryRecord(b){
 }
 function frontierHomeGeometry(d,cut){
  const m=mesh(),{x1:L,z1:B,x2,z2,h,door,furniture,frontierStyle:style}=d,R=x2+1,F=z2+1,W=R-L,D=F-B,X=(L+R)*.5,Z=(B+F)*.5;
- const cottage=style==='cottage',store=style==='storehouse',herb=style==='herbshop',shop=style==='workshop'||herb;
+ const weathered=style==='weathered',cottage=style==='cottage'||weathered,store=style==='storehouse',herb=style==='herbshop',shop=style==='workshop'||herb;
  const pale=[.821,.725,.572],plaster=[.757,.686,.576],dark=[.326,.239,.169],
   timber=[.494,.346,.219],oak=[.597,.434,.273],edge=[.663,.555,.406],stone=[.466,.451,.412],
   slate=[.285,.322,.327],rust=[.478,.286,.214],sage=[.31,.426,.389],linen=[.81,.76,.62],
@@ -48409,7 +48498,7 @@ function frontierHomeGeometry(d,cut){
  const tint=(c,s)=>c.map(v=>v*s);
  const C=(x,y,z,w,h,d,c)=>{if(w>.002&&h>.002&&d>.002)cube(m,x,y,z,w,h,d,c)};
  const Bx=(x,y,z,X,Y,Z,c)=>C((x+X)*.5,y,(z+Z)*.5,X-x,Y-y,Z-z,c);
- const board=[.665,.501,.323],major=store?tint(timber,.90):shop?tint(timber,1.045):board;
+ const board=weathered?[.395,.319,.244]:[.665,.501,.323],major=store?tint(timber,.90):shop?tint(timber,1.045):board;
  const farX=!!((Number(cut)-1)&1),farZ=!!((Number(cut)-1)&2);
  const n=cut?(farZ?0:2.35):h,s=cut?(farZ?2.35:0):h,w=cut?(farX?2.35:0):h,e=cut?(farX?0:2.35):h;
  const g=door.x,parts=[[L,g+.035],[g+.965,R]],gmid=g+.5;
@@ -48457,7 +48546,7 @@ function frontierHomeGeometry(d,cut){
      C(x,y,z+face*.086,span,.827,.101,dark);C(x,y+.104,z+face*.146,span-.17,.605,.047,glass);
      C(x,y+.095,z+face*.178,.054,.642,.041,timber);C(x,y+.39,z+face*.178,span-.12,.046,.043,timber);
      C(x,y-.058,z+face*.134,span+.12,.091,.227,tint(stone,1.22));
-     if(cottage&&front){
+     if(cottage&&!weathered&&front){
       for(const side of [-1,1])C(x+side*.426,y+.046,z+face*.143,.22,.712,.068,sage);
       C(x,y-.222,z+face*.202,.68,.162,.265,timber);
       for(let i=-2;i<=2;i++){
@@ -48546,6 +48635,16 @@ function frontierHomeGeometry(d,cut){
   for(const [i,[A,V,U,S]] of walls.entries()){
    const H=wallHeights[i];
    if(H>0)Bx(A,H-.036,V,U,H+.027,S,edge);
+  }
+ }
+ if(weathered){
+  for(let i=0;i<13;i++){
+   const u=L+.49+(i*1.317)%(W-.95),v=B+.49+(i*.773)%(D-.95);
+   C(u,.026,v,.11+(i%4)*.13,.008,.11+(i%3)*.08,i%2?[.29,.237,.169]:[.40,.336,.241]);
+  }
+  if(!cut)for(let i=0;i<6;i++){
+   const u=L+.30+i*.54;
+   if(u<g-.07||u>g+1.08)C(u,.29+(i%3)*.16,F+.075,.23,.16+(i%3)*.08,.048,[.288,.293,.215]);
   }
  }
  const plank=(u,v,x,z,color,y=.019)=>quad(m,[u,y,v],[u,y,z],[x,y,z],[x,y,v],color);
@@ -49837,7 +49936,7 @@ function poiSnowEdgeWalkable(source,x,z,region){
  const field=region==='base'&&poiSquareFieldAt(x,z);
  if(!group)return field;
  return !group.some(o=>/^(water|lake|river|sea)$/.test(o.type)||
-    !isFloor(o.type)&&o.type!=='tallGrass'&&o.type!=='flowerField'&&o.type!=='bushFern')&&
+    !isFloor(o.type)&&!frontierSoftPlant(o.type))&&
   (field||group.some(o=>isFloor(o.type)));
 }
 function poiSnowPassDecode(d,p){
