@@ -1730,7 +1730,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v416）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v417）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="2500" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -1800,6 +1800,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
    <div id="poiBagPlayerStats" role="group" aria-label="プレイヤーのステータス">
     <span><b>名前</b><span>プレイヤー</span></span>
     <span><b>職業</b><span>冒険者</span></span>
+    <span><b>冒険者ランク</b><span>未登録</span></span>
     <span><b>HP</b><span id="poiBagPlayerHpValue">100/100</span></span>
     <span><b>攻撃</b><span id="poiBagPlayerAttackValue"></span></span>
     <span><b>防御</b><span id="poiBagPlayerDefenseValue"></span></span>
@@ -19495,6 +19496,13 @@ function poiCompanionReconcile(kit){
  if(Object.hasOwn(kit,'companionSoul')){const next={...kit};delete next.companionSoul;return next}
  return kit;
 }
+function poiCompanionMenusBlock(human){
+ if(typeof document==='undefined')return false;
+ const inventory=human&&$('poiBagPanel')?.hidden===false;
+ return !!document.querySelector(inventory?
+  'dialog[open]:not(#poiItemDetail),.modal.open,:is(#poiLandscapeMenu,#poiNpcMenu,#poiScreenNoteLayer):not([hidden])':
+  'dialog[open],.modal.open,:is(#poiBagPanel,#poiLandscapeMenu,#poiNpcMenu,#poiScreenNoteLayer):not([hidden])');
+}
 function poiCompanionAllowed(){
  return !!(poiWalkActive&&poiHotbarHasKit()&&!pineAIActive&&
    !(typeof poiPlayerDying==='function'&&poiPlayerDying())&&
@@ -19657,7 +19665,7 @@ function poiSoulFloorCollect(item,walkover=false){
 // BEGIN SOUL FLOOR ART
 function poiSoulFloorGround(item){
  const lookout=typeof poiLookoutLootTop==='function'?poiLookoutLootTop(item.x,item.z,item.y):0;
- return terrainY(item.x,item.z)+item.y*1.4+poiLootFloorTop(item.x,item.z,item.y,lookout)+.02;
+ return poiGroundLootSupport(item,lookout)+.02;
 }
 function poiSoulFloorModel(type){
  if(poiSoulFloorModels.has(type))return poiSoulFloorModels.get(type);
@@ -20589,8 +20597,7 @@ function poiHumanSidestepApply(a,now,actors){
  }
 }
 function poiHumanSidestepFrame(now,roll=Math.random){
- if(!poiCompanionAllowed()||!poiEnemyThreatEnabled()||
-   typeof document!=='undefined'&&document.querySelector('dialog[open],.modal.open,:is(#poiBagPanel,#poiLandscapeMenu,#poiNpcMenu,#poiScreenNoteLayer):not([hidden])'))return;
+ if(!poiCompanionAllowed()||!poiEnemyThreatEnabled()||poiCompanionMenusBlock(true))return;
  const actors=poiPartyActors(),where=poiCompanionPlace();
  for(const a of actors){
   if(!frontierPlaneMatches(a.frontierCave,frontierPlayCave)||!poiCompanionSame(a,where)||!poiHumanPartySpec(a.id))continue;
@@ -20734,9 +20741,8 @@ function poiCompanionTickOne(now,member,kit){
   if(typeof poiCompanionSeamFrame==='function')poiCompanionSeamFrame(now);
   return;
  }
- const where=poiCompanionPlace();
- if(typeof poiCompanionSeamFrame==='function'&&poiCompanionActor?.id===id&&poiCompanionSeamFrame(now,
-    typeof document!=='undefined'&&document.querySelector('dialog[open],.modal.open,:is(#poiBagPanel,#poiLandscapeMenu,#poiNpcMenu,#poiScreenNoteLayer):not([hidden])')))return;
+ const where=poiCompanionPlace(),blocked=poiCompanionMenusBlock(member.kind==='human');
+ if(typeof poiCompanionSeamFrame==='function'&&poiCompanionActor?.id===id&&poiCompanionSeamFrame(now,blocked))return;
  if(!poiCompanionActor||poiCompanionActor.id!==id||!poiCompanionSame(poiCompanionActor,where)){
   poiCompanionActor=poiCompanionSpawn(id,now);poiCompanionTarget=null;
   if(typeof poiCompanionRecallRejoin==='function')poiCompanionRecallRejoin(poiCompanionActor,now);
@@ -20746,8 +20752,6 @@ function poiCompanionTickOne(now,member,kit){
   return;
  }
  const a=poiCompanionActor,mode=member.mode;
- const blocked=typeof document!=='undefined'&&
-    document.querySelector('dialog[open],.modal.open,:is(#poiBagPanel,#poiLandscapeMenu,#poiNpcMenu,#poiScreenNoteLayer):not([hidden])');
  if(blocked){
   if(a.frontierQuiet)frontierQuietClose(a);
   if(a.id==='orvasSoul'&&typeof poiOrvasAllyStop==='function')poiOrvasAllyStop(a,now,true);
@@ -22713,6 +22717,11 @@ function poiEconomySnapshot(){
 }
 // Match the floor under the center of the existing mesh, not collision
 // height. Grade draws the last authored floor per tile; B1 draws each.
+function poiGroundLootSupport(d,lookout=0){
+ if(facilitySite?.id==='frontier'&&d.y===0)
+  return frontierSurfaceHeight(d.x+.5,d.z+.5,undefined,frontierGroundRecordLayer(d));
+ return d.y*1.4+terrainY(d.x,d.z)+poiLootFloorTop(d.x,d.z,d.y,lookout);
+}
 function poiLootFloorTop(x,z,y,lookout=0){
  let top=lookout;
  for(let i=world.length-1;i>=0;i--){
@@ -22733,7 +22742,7 @@ function poiEconomyDraw(vp,now){
   const m=mesh(),face=[1,.78,.27],rim=[.84,.52,.12],core=[1,.94,.52];
   const drawPile=({x,z,id})=>{
    const lookout=id==='lookout-tower'&&typeof poiLookoutLootTop==='function'?poiLookoutLootTop(x,z,0):0;
-   const y=(facilitySite?.id==='frontier'?frontierSurfaceHeight(x+.5,z+.5):terrainY(x,z)+poiLootFloorTop(x,z,0,lookout))+.038;
+   const y=poiGroundLootSupport({x,z,y:0,frontierCave:false},lookout)+.038;
    for(const [dx,dz,lift] of [[-.095,.065,0],[.082,-.062,0],[.122,.087,.026]]){
     const cx=x+.5+dx,cz=z+.5+dz;
     roundStack(m,cx,y+lift,cz,[[0,.116,.116],[.043,.116,.116]],8,rim);
@@ -24315,7 +24324,7 @@ function poiInventoryDraw(vp,now){
    for(const d of [...(list||[]),...(finds||[]),...(armed||[]),...nearby,...(groundGold||[])]){
     if(d.y!==poiWalkLevel||!validPos(d.x,d.z)||(typeof poiSnowGroundMatch==='function'&&!poiSnowGroundMatch(d))||!poiDungeonVisualVisible(d.x,d.z,d.y))continue;
     const lookout=typeof poiLookoutLootTop==='function'?poiLookoutLootTop(d.x,d.z,d.y):0;
-    const x=d.x+.5,z=d.z+.5,y=d.y*1.4+terrainY(d.x,d.z)+poiLootFloorTop(d.x,d.z,d.y,lookout)+(d.type===POI_INVENTORY_HERB?.012:.05);
+    const x=d.x+.5,z=d.z+.5,y=poiGroundLootSupport(d,lookout)+(d.type===POI_INVENTORY_HERB?.012:.05);
     if(d.amount){
      for(const [dx,dz] of [[-.08,0],[.08,-.06],[.11,.09]]){
       roundStack(m,x+dx,y,z+dz,[[0,.105,.105],[.036,.105,.105]],8,[.84,.52,.12]);
@@ -26045,7 +26054,7 @@ function poiWildActive(){
 }
 function poiWildPlayerOutside(){return !frontierPlayCave&&poiWildActive()&&poiWildExterior(poiWalkX,poiWalkZ)}
 function poiWildMobMayMove(state,x,z,fromX=state.x,fromZ=state.z){
- if(facilitySite?.id==='frontier')return poiWildExterior(x,z)&&frontierGroundKind(x,z)!=='river'&&!poiWildNearResident(x,z);
+ if(facilitySite?.id==='frontier')return poiWildExterior(x,z)&&(frontierGroundKind(x,z)!=='river'||facilitySite.decks.has(x+','+z))&&!poiWildNearResident(x,z);
  return poiWildExterior(x,z)&&(!state.regionalWild||Math.hypot(x-state.roamHome.x,z-state.roamHome.z)<=6)&&!(typeof poiWildNearResident==='function'&&poiWildNearResident(x,z))&&!facilityCreekIndex?.water.has(x+','+z)&&terrainPassable(fromX,fromZ,x,z)&&
   !world.some(o=>o.x===x&&o.z===z&&o.y===0&&(o.type==='poiFortWall'||o.type==='poiFortCorner'||o.type==='poiFortBoundary'));
 }
@@ -28688,7 +28697,7 @@ function poiHumanPartySpec(id){
  const role=(frontier?facilitySite?.id==='frontier'?facilitySite.residents:[]:POI_TOWN_RESIDENT_ROLES).find(a=>a.id===key);
  if(!role||!frontier&&role.role!=='adventurer')return null;
  const loadout=poiTownNpcLoadout({role});
- return {id,kind:'human',npcId:key,name:role.name,job:role.job||'冒険者',appearance:role.appearance,maxHp:poiTownNpcMaxHp(key),
+ return {id,kind:'human',npcId:key,name:role.name,job:role.job||'冒険者',rank:role.adventureRank||'未登録',appearance:role.appearance,maxHp:poiTownNpcMaxHp(key),
   attack:poiTownNpcAttackPower({role,...loadout}),defense:poiTownNpcDefense({role,...loadout}),
   weapon:loadout.weapon,gear:loadout.gear,type:role.type,enemy:null,...poiTownAttributes({role},loadout)};
 }
@@ -29936,7 +29945,7 @@ function poiTownNpcStatus(actor){
  const equipment=[weapon,gear.head,gear.torso,gear.legs,gear.feet];
  return {name:role.name||'住人',job:role.job||(Object.hasOwn(POI_TOWN_JOB_LABELS,role.id)?POI_TOWN_JOB_LABELS[role.id]:null)||
    ({adventurer:'冒険者',visitor:'旅人',watch:'門番',keeper:'店主',scout:'斥候'})[role.role]||'住人',
-  hp:actor.hp,maxHP:poiTownNpcMaxHp(role.id),
+  rank:role.adventureRank||'未登録',hp:actor.hp,maxHP:poiTownNpcMaxHp(role.id),
   attack:poiTownNpcAttackPower(actor)??POI_TOWN_RESIDENT_MELEE,defense:poiTownNpcDefense(actor),...poiTownAttributes(actor,{weapon,gear}),weapon,gear,tools,equipment,
   coins:frontierLifeId(role.id)?frontierVendorStock(poiHotbarRead(),role.id).gold:actor.coins||0,
   herbs:frontierLifeId(role.id)?frontierVendorStock(poiHotbarRead(),role.id).healingHerb:actor.potions||0,
@@ -29946,7 +29955,7 @@ function poiTownNpcStatus(actor){
 function poiNpcStatusView(actor,info=poiTownNpcStatus(actor)){
  const view=document.createElement('dl');view.id='poiNpcStatus';
  view.setAttribute('aria-label',info.name+'の状態');
- const fields=[['name','名前',info.name],['job','職業',info.job],['hp','HP',info.hp+'/'+info.maxHP],
+ const fields=[['name','名前',info.name],['job','職業',info.job],['rank','冒険者ランク',info.rank],['hp','HP',info.hp+'/'+info.maxHP],
   ['attack','攻撃',info.attack],['defense','防御',info.defense],['speed','速度',info.speed],['intelligence','知能',info.intelligence]];
  for(const [key,label,value] of fields){
   const term=document.createElement('dt'),text=document.createElement('dd');
@@ -31520,7 +31529,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v416',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v417',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -31635,7 +31644,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v416';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v417';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -31850,7 +31859,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v416',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v417',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -34344,6 +34353,7 @@ function poiMonsterPose(obj,s,now,locomotionOnly=false){
  const free=s.actorFree,p=free?poiMonsterActorPoint(free,now):null;
  let x=p?p.x:(s.fromX??s.x)+(s.x-(s.fromX??s.x))*e;
  let z=p?p.z:(s.fromZ??s.z)+(s.z-(s.fromZ??s.z))*e;
+ const floor=facilitySite?.id==='frontier'&&obj.y===0?frontierWalkSurface(x+.5,z+.5,!!s.frontierRuins):terrainY(s.x,s.z)+(facilitySite?obj.y*1.4:0);
  const phase=p?p.t:t;
  const moving=phase<1&&(free||((s.fromX??s.x)!==s.x||(s.fromZ??s.z)!==s.z));
  const resting=obj.type==='monsterSlime'&&typeof poiSlimeRecovering==='function'&&poiSlimeRecovering(s,now);
@@ -34355,7 +34365,7 @@ function poiMonsterPose(obj,s,now,locomotionOnly=false){
   const hop=Math.sin(Math.PI*(now-s.counterAt)/340);
   x+=(s.counterTargetX-s.x)*.33*hop;z+=(s.counterTargetZ-s.z)*.33*hop;bounce+=.27*hop;
  }
- return {x:x+.5,y:terrainY(s.x,s.z)+bounce+(facilitySite?obj.y*1.4:0),z:z+.5,...(attack?{attack}:free?{heading:free.heading}:
+ return {x:x+.5,y:floor+bounce,z:z+.5,...(attack?{attack}:free?{heading:free.heading}:
   s.guardTrialHeading?{heading:Math.atan2(-s.guardTrialHeading[0],s.guardTrialHeading[1])}:null)};
 }
 function poiMonsterFragmentTemplate(type){
@@ -34496,7 +34506,9 @@ function poiMonsterBreak(obj,state,now,random=Math.random,actorEffect=null){
   for(let j=0;j<chunk.part.p.length;j+=3){
    bottom=Math.min(bottom,(chunk.part.p[j]-chunk.cx)*ts+(chunk.part.p[j+1]-chunk.cy)*tc);
   }
-  const ground=terrainY(Math.floor(pose.x+dx),Math.floor(pose.z+dz))+(facilitySite?obj.y*1.4:0);
+  const ground=facilitySite?.id==='frontier'&&obj.y===0?
+   frontierSurfaceHeight(pose.x+dx,pose.z+dz,undefined,!!(actorEffect?.frontierCave??state.frontierRuins??frontierPlayCave)):
+   terrainY(Math.floor(pose.x+dx),Math.floor(pose.z+dz))+(facilitySite?obj.y*1.4:0);
   return {...chunk,fromX,fromZ,dx,dz,ground,centerY:ground+.016-bottom*restScale,
    restScale,yaw,tilt,lift:.35+random()*.38,bounce:.04+random()*.09};
  });
@@ -44468,7 +44480,7 @@ function frontierSite(){
  const chief={...person('frontierchief','ロアン','humanVillager',45,23,1,'roan'),job:'村長',homeBuilding:'frontierHouse',bed:frontierNpcHome(44+FRONTIER_WEST_OFFSET,22)};
  const clerk={...person(POI_FRONTIER_SHOP_ID,'ミナ','humanMerchant',38,23,2,'lina'),job:'道具屋',homeBuilding:'frontierStore',gear:FRONTIER_FITTED_GEAR,
   home:frontierNpcHome(38+FRONTIER_WEST_OFFSET,22),bed:frontierNpcHome(38+FRONTIER_WEST_OFFSET,21)};
- const guard=(id,name,z,bedX,appearance)=>({...person(id,name,'humanVillager',31,z,3,appearance),job:'門番',homeBuilding:'frontierWatchHouse',
+ const guard=(id,name,z,bedX,appearance)=>({...person(id,name,'humanVillager',31,z,3,appearance),job:'門番',adventureRank:'F',homeBuilding:'frontierWatchHouse',
   home:frontierNpcHome(bedX+FRONTIER_WEST_OFFSET,34),bed:frontierNpcHome(bedX+FRONTIER_WEST_OFFSET,35),
   gear:{...FRONTIER_FITTED_GEAR,head:FRONTIER_GUARD_STATS[id].head,torso:'armorLeatherTorso'}});
  const residents=[{...person('frontiersera','セラ','humanVillager',48,28,1,'sera'),home:frontierNpcHome(41+FRONTIER_WEST_OFFSET,36),bed:frontierNpcHome(40+FRONTIER_WEST_OFFSET,36),homeBuilding:'frontierCoupleHome'},
