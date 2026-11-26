@@ -1,0 +1,10 @@
+const a=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const s=fs.readFileSync(process.argv[2]||'candidate.html','utf8');
+for(const m of s.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g))new vm.Script(m[1]);
+a.match(s,/frontierlyzel:\[6,3\],frontierregna:\[6,3\]/);
+a.match(s,/frontierSouthWarmCellar\(\)/);
+a.match(s,/if\(!prior\|\|area.silent\|\|window.pineStartup/);
+a.match(s,/frontierSouthDoorGpu=upload\(door\)/);
+a.match(s,/function frontierSouthDoorWanted\(/);
+a.match(s,/frontierSouthCeilingHeight\(x,z\)-\.19/);
+console.log('PASS authored intelligence, closed gate renderer, prebuilt geometry, no area banner and script syntax');
