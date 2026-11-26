@@ -1,0 +1,18 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const h=fs.readFileSync(process.argv[2],'utf8');
+const b=h.match(/\/\/ BEGIN FRONTIER WEST INTEGRATION\n([\s\S]*?)\/\/ END FRONTIER WEST INTEGRATION/);
+const f=h.match(/\/\/ BEGIN FRONTIER RUINS TORCHES\n([\s\S]*?)\/\/ END FRONTIER RUINS TORCHES/);
+assert(f,'shared animated torches not implemented');
+const out={},ctx={out,facilitySite:{id:'frontier'},frontierRuinsCell:(x,z)=>x===9&&z>=27&&z<32,frontierSmooth:(lo,hi,v)=>{const t=Math.max(0,Math.min(1,(v-lo)/(hi-lo)));return t*t*(3-2*t)}};
+vm.runInNewContext(b[1]+'\n'+f[1]+'\nObject.assign(out,{frontierBurrowFloor,frontierBurrowRoofY,frontierBurrowTerrainY,frontierTorchPulse,frontierRuinsVisibleTorches,FRONTIER_RUINS_TORCHES});',ctx);
+assert(out.frontierBurrowFloor(32)>.1&&out.frontierBurrowFloor(25)<-3);
+assert(out.frontierBurrowRoofY(25,.5)<.12,'mouth roof not nearly flush with ground');
+assert(out.frontierBurrowRoofY(25,.5)-out.frontierBurrowFloor(25)>2.9,'entrance must have headroom');
+for(let x=10;x<=25;x+=.05) assert(out.frontierBurrowTerrainY(x,29.5,.22)>out.frontierBurrowRoofY(x,.5)+.08,'terrain clips the inside at '+x);
+assert.equal(out.frontierBurrowTerrainY(34,29.5,.39),.39);
+assert(out.FRONTIER_RUINS_TORCHES.length>=10);
+assert(out.frontierTorchPulse(0,0)!==out.frontierTorchPulse(.21,0));
+assert(out.frontierRuinsVisibleTorches(19,29,-3).length<=4);
+assert.equal(out.frontierRuinsVisibleTorches(90,30,0).length,0);
+for(const m of h.matchAll(/<script>([\s\S]*?)<\/script>/g))new vm.Script(m[1]);
+console.log('PASS buried mouth, clear roof, bounded animated torches and inline syntax');
