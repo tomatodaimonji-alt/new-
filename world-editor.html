@@ -1723,7 +1723,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v374）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v375）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -24856,7 +24856,14 @@ function poiNorthReturnExit(realm){
 function poiResetCombat(){poiWildClear();poiPlayerHP=POI_PLAYER_MAX_HP;poiMonsterStates=new Map();const population=typeof poiDungeonPopulationDecode==='function'&&(facilitySite?.id==='base'||facilitySite?.id==='frontier')?poiDungeonPopulationDecode(poiHotbarRead().dungeonPopulation):null;for(const o of world){if(poiIsMonster(o.type)&&!(typeof poiWildFieldFixedPolicy==='function'&&poiWildFieldFixedPolicy(o))&&!(typeof poiNorthWatchGuardDefeated==='function'&&poiNorthWatchGuardDefeated(o))&&!(population&&poiDungeonActorAbsent(o,population)))poiMonsterStates.set(o,poiCombatActorMake(o))}poiDamageLabels=[];poiNextMobTick=0;poiAttackReady=0;poiMonsterMeshDirty=true;poiCombatHud();dirty=true}
 const POI_MESSAGE_LIFETIME=5000,POI_MESSAGE_MAX=2;
 const poiMessageLines=[];
-let poiMessageSpeech=null;
+let poiMessageSpeech=null,poiMessageTyping=null;
+function poiMessageSpeechFrame(now){
+ const s=poiMessageTyping;if(!s)return;
+ const step=Math.min(16,1050/Math.max(1,s.chars.length-1));
+ const count=Math.min(s.chars.length,1+Math.floor(Math.max(0,now-s.start)/step));
+ if(count>s.count){s.count=count;s.line.textContent=s.chars.slice(0,count).join('')}
+ if(count>=s.chars.length)poiMessageTyping=null;
+}
 function poiMessageRestore(){
  const heading=$('poiMessageHeading'),panel=$('poiMessagePanel');
  if(heading)heading.textContent='アナウンス';
@@ -24867,7 +24874,8 @@ function poiMessageUpdate(now){
  if(!poiMessageLines.length&&!poiMessageSpeech)return;
  const show=poiWalkActive&&!pineAIActive;
  while(poiMessageLines.length&&(!show||now>=poiMessageLines[0].until))poiMessageLines.shift().line.remove();
- if(!show&&poiMessageSpeech){poiMessageSpeech.remove();poiMessageSpeech=null;poiMessageRestore()}
+ if(!show&&poiMessageSpeech){poiMessageSpeech.remove();poiMessageSpeech=null;poiMessageTyping=null;poiMessageRestore()}
+ else if(show)poiMessageSpeechFrame(now);
  if(!poiMessageLines.length&&!poiMessageSpeech){const panel=$('poiMessagePanel');if(panel)panel.hidden=true}
 }
 function poiMessageSpeak(name,text,now){
@@ -24877,13 +24885,16 @@ function poiMessageSpeak(name,text,now){
  poiMessageUpdate(now);
  if(poiMessageSpeech)poiMessageSpeech.remove();
  for(const {line,kind} of poiMessageLines)line.hidden=kind!=='gift';
- const line=document.createElement('div');line.className='poiMessageLine';line.dataset.kind='dialogue';line.textContent=text;line.hidden=!text;
+ const line=document.createElement('div');line.className='poiMessageLine';line.dataset.kind='dialogue';line.hidden=!text;
+ if(text)line.setAttribute('aria-label',text);
  poiMessageSpeech=line;
+ poiMessageTyping=text?{line,chars:Array.from(text),start:now,count:0}:null;
+ poiMessageSpeechFrame(now);
  heading.textContent=name;panel.hidden=false;log.append(line);return true;
 }
 function poiMessageEndSpeech(now=performance.now()){
  if(!poiMessageSpeech)return;
- poiMessageSpeech.remove();poiMessageSpeech=null;
+ poiMessageSpeech.remove();poiMessageSpeech=null;poiMessageTyping=null;
  poiMessageUpdate(now);poiMessageRestore();
 }
 function poiMessagePush(text,kind,now=performance.now()){
@@ -30003,7 +30014,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v374',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v375',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -30118,7 +30129,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v374';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v375';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -30333,7 +30344,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v374',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v375',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -35689,8 +35700,30 @@ function frontierFitSoles(m,ranges,rootY,scale){
  }
 }
 // END FRONTIER WALK SUPPORT
+function frontierRefineGroundTile(t,tint){
+ const pos=t.p.slice(0,18),col=t.c.slice(0,18);
+ const p=[],c=[],n=[];
+ for(let start=0;start<18;start+=9){
+  const q=[0,1,2].map(i=>pos.slice(start+3*i,start+3*i+3)),center=[(q[0][0]+q[1][0]+q[2][0])/3,0,(q[0][2]+q[1][2]+q[2][2])/3];
+  const paint=tint(center[0],center[2]);
+  for(let i=0;i<3;i++){
+   const j=(i+1)%3;
+   p.push(...q[i],...q[j],...center);c.push(...col.slice(start+i*3,start+i*3+3),...col.slice(start+j*3,start+j*3+3),...paint);
+   n.push(0,1,0,0,1,0,0,1,0);
+  }
+ }
+ t.p=p.concat(t.p.slice(18));t.c=c.concat(t.c.slice(18));t.n=n.concat(t.n.slice(18));
+}
 function frontierClassicTiles(target,water=false){
  const area=FRONTIER_W*FRONTIER_H,temple=facilitySite?.davidTemple;
+ const trees=new Set();
+ for(const o of world)if(o.y===0&&/^tree/.test(o.type))trees.add(o.x*512+o.z);
+ const cache=new Map(),tint=(x,z)=>{
+  if(!Number.isInteger(x)||!Number.isInteger(z))return frontierEarthTint(x,z,trees);
+  const key=x*512+z;
+  if(!cache.has(key))cache.set(key,frontierEarthTint(x,z,trees));
+  return cache.get(key);
+ };
  const shade=temple?pineFloorLightingSources(facilitySite.map.world.slice(temple.authored.index)):null;
  for(let z=0;z<FRONTIER_H;z++)for(let x=0;x<FRONTIER_W;x++){
   let type=frontierTileKind(x,z);
@@ -35703,8 +35736,23 @@ function frontierClassicTiles(target,water=false){
   }else if(type==='grass'||type==='earth'){
    const dirt=frontierDirtCoverage(x+.5,z+.5);
    const detail=dirt<.12&&(h>.56&&seed>.94||seed>.992);
-   // Shared corner colors feather the track into grass without slab edges.
-   addFloorTile(t,x,z,detail?'grassMeadow':'grass',detail?area:area*3,0,frontierEarthTint,true);
+   // The original surface planes and shared corners stay aligned. Small
+   // facets inside each plane sharpen the worn path without visible tile seams.
+   addFloorTile(t,x,z,detail?'grassMeadow':'grass',detail?area:area*3,0,tint,true);
+   if(frontierGroundCuts(x,z)||trees.has(x*512+z))frontierRefineGroundTile(t,tint);
+   const seed=surfaceNoise(x*23+7,z*19+4);
+   if(seed>.38){
+    const u=x+.24+.52*seed,v=z+.24+.52*surfaceNoise(z*29+2,x*17);
+    const lip=frontierTrackVerge(u,v);
+    if(lip>.20&&frontierDirtCoverage(u,v)<.72&&frontierRiver(u,v)>1.1&&
+     !frontierBridgeCell(x,z)&&!frontierTempleGround(u,v)&&frontierGroundContact(u,v,trees)<.1){
+     const c=tint(u,v),green=[c[0]*.80,c[1]*1.14,c[2]*.87];
+     for(let i=0;i<2;i++){
+      const dx=(i-.50)*.064,dz=(i-.50)*.042,ht=.06+seed*.105;
+      tri(t,[u+dx-.032,.006,v+dz],[u+dx+.026,.006,v+dz+.024],[u+dx+.042*(i?1:-1),ht,v+dz+.018],green);
+     }
+    }
+   }
   }else addFloorTile(t,x,z,type,area*3,0,null,true);
   if(shade&&temple.interiorFloors.has(x+','+z))pineBakeFloorLighting(t,x,z,0,shade.blockers,shade.lamps);
   const c0=frontierHeight(x,z),c1=frontierHeight(x+1,z),c2=frontierHeight(x,z+1),c3=frontierHeight(x+1,z+1);
@@ -41880,8 +41928,8 @@ function frontierSampleHeight(x,z){
  return a+(frontierHeight(ix+1,iz)-a)*(dx-dz)+(c-a)*dz;
 }
 function frontierDirtCoverage(x,z){
- const wear=.18*Math.sin(x*1.08+z*.65)+.10*Math.cos(z*2.20-x*.52);
- const fade=(span,d)=>1-frontierSmooth(span-.30,span+.73,d+wear);
+ const wear=.16*Math.sin(x*1.08+z*.65)+.11*Math.cos(z*2.20-x*.52)+.08*Math.sin(x*3.38+z*4.39);
+ const fade=(span,d)=>1-frontierSmooth(span-.37,span+.43,d+wear);
  const a=frontierVillageTrack(x),b=30.5-19.5*frontierSmooth(125,156,x);
  const center=a+(b-a)*frontierSmooth(114,125,x);
  const path=Math.max(fade(1.59,Math.max(Math.abs(z-center),21.6-x,x-160.4)),
@@ -41891,14 +41939,40 @@ function frontierDirtCoverage(x,z){
  const doorstep=Math.max(at(38.5,26.8,30.5),at(46.5,26.8,30.5),at(41.5,30.5,34.1));
  return Math.max(path,plaza,doorstep);
 }
-function frontierEarthTint(x,z){
- const wood=frontierTreeHabitat(x,z),broad=.047*Math.sin(x*.27+z*.19)+.027*Math.cos(z*.54-x*.37),
-  grit=.024*Math.sin(x*7.73+z*13.21)*Math.cos(z*9.81-x*.93),n=broad+grit;
+function frontierTrackVerge(x,z){
+ const d=frontierDirtCoverage(x,z);
+ return frontierSmooth(.04,.3,d)*(1-frontierSmooth(.70,.97,d));
+}
+function frontierGroundContact(x,z,trees){
+ const v=FRONTIER_VILLAGE,dx=x-v.x,dz=z-v.z,dist=Math.hypot(dx,dz);
+ const edge=Math.asin(v.opening/v.r);
+ const angle=Math.atan2(Math.abs(dz),Math.abs(dx));
+ const fenceDist=angle>=edge?Math.abs(dist-v.r):Math.hypot(Math.abs(dx)-Math.cos(edge)*v.r,Math.abs(dz)-v.opening);
+ let shadow=.33*(1-frontierSmooth(.17,.79,fenceDist));
+ if(!trees?.size)return shadow;
+ const a=Math.floor(x),b=Math.floor(z);
+ for(let j=b-1;j<=b+1;j++)for(let i=a-1;i<=a+1;i++){
+  if(!trees.has(i*512+j))continue;
+  const q=Math.hypot(x-i-.55,(z-j-.48)*1.14);
+  shadow=Math.max(shadow,.40*(1-frontierSmooth(.09,.99,q)));
+ }
+ return shadow;
+}
+function frontierGroundCuts(x,z){
+ const xx=x+.5,zz=z+.5;
+ return x>=20&&x<=165&&frontierDirtCoverage(xx,zz)>.035||
+  Math.hypot(xx-44.5,zz-30.5)<18;
+}
+function frontierEarthTint(x,z,trees){
+ const wood=frontierTreeHabitat(x,z),broad=.032*Math.sin(x*.27+z*.19)+.018*Math.cos(z*.54-x*.37),
+  grit=.034*Math.sin(x*7.73+z*13.21)*Math.cos(z*9.81-x*.93),n=broad+grit;
  const damp=(1-frontierSmooth(.35,4.30,frontierRiver(x,z)))*.048;
- const worn=(.024*Math.cos(z*2.44-x*.58)+.023*Math.sin(x*.92+z*1.44));
- const grass=[.311+n-wood*.06-damp,.423+n*.91-wood*.072-damp,.196+n*.65-wood*.038-damp*.65];
- const soil=[.421+n*.91+worn-damp,.289+n*.73+worn*.73-damp,.173+n*.59+worn*.40-damp*.56],q=frontierDirtCoverage(x,z);
- return grass.map((v,i)=>v+(soil[i]-v)*q);
+ const q=frontierDirtCoverage(x,z),worn=(.022*Math.cos(z*2.44-x*.58)+.019*Math.sin(x*.92+z*1.44))*(.30+.70*q),
+  rim=frontierTrackVerge(x,z)*(.5+.5*Math.sin(x*2.91+z*3.70))* .036;
+ const grass=[.295+n-wood*.057-damp+rim,.406+n*.91-wood*.070-damp+rim*.72,.195+n*.65-wood*.036-damp*.65];
+ const soil=[.438+n*.94+worn-damp,.309+n*.78+worn*.73-damp,.192+n*.58+worn*.47-damp*.56];
+ const shade=frontierGroundContact(x,z,trees);
+ return grass.map((v,i)=>(v+(soil[i]-v)*q)*(1-shade));
 }
 function frontierGroundKind(x,z){
  if(frontierHomeCell(x,z))return 'woodfloorLight';
