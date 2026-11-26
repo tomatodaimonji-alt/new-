@@ -13,3 +13,7 @@ const next=take({}, {id:'ren'},old,cell);a.equal(next.worn.torso,cell);a.equal(n
 const shelf=take({}, {id:'shop'},old,cell);a.equal(shelf.worn,undefined);a.equal(shelf.items[0],cell);
 a.match(s,/overflow-wrap:anywhere/);
 console.log('catalog stocked, gear upgrades preserve moved item durability, shopkeeper does not auto-equip');
+const f=s.match(/function frontierDressed\(kit\)\{[\s\S]*?\n\}/)?.[0]||'';
+const dressed=vm.runInNewContext(f+'\nfrontierDressed',{poiArmorWorn:k=>k});
+a.equal(dressed({torso:'armorLeatherTorso',legs:'armorLeatherLegs'}),true);
+a.equal(dressed({torso:'armorLeatherTorso',legs:null}),false);
