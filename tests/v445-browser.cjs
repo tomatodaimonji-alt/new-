@@ -24,9 +24,9 @@ h=h.replace(mark,mark+`
     }));
    },
    road:()=>{
-    if(!workshopResumeRestorePosition({x:125,z:30,y:0,facing:1,cave:false}))throw Error('road restore');
-    poiTownClockGameMs=POI_TOWN_MINUTE_MS*12*60;poiThirdPerson=true;poiCameraYaw=Math.PI*.5;poiCameraPitch=.65;poiWalkCamera();
-    return {walk:[123,124,125,126,127].every(x=>poiWalkCanStep(x,30)),colors:[30.5,32,33.5].map(z=>frontierEarthTint(126.5,z,new Set()))};
+    if(!workshopResumeRestorePosition({x:118,z:30,y:0,facing:1,cave:false}))throw Error('road restore');
+    poiTownClockGameMs=POI_TOWN_MINUTE_MS*12*60;poiThirdPerson=true;poiCameraYaw=-Math.PI*.5;poiCameraPitch=.78;poiWalkCamera();
+    return {walk:[116,117,118,119,120].every(x=>poiWalkCanStep(x,30)),colors:[30.5,32,33.5].map(z=>frontierEarthTint(118.5,z,new Set()))};
    },
    fist:()=>{
     const boss=facilitySite.davidTemple.boss;
@@ -38,11 +38,28 @@ h=h.replace(mark,mark+`
     if(!started)throw Error('boss did not awaken');
     for(const age of [POI_DAVID_AWAKENING.first,POI_DAVID_AWAKENING.second,POI_DAVID_WAKE_MS])poiDavidAwakeningTick(o,s,boss,s.david.wakeAt+age);
     const before=s.hp,record={armed:poiEquippedWeapon(),damage:poiPlayerAttackDamage(null),before,player:poiPlayerHP,awake:s.david?.wakeDone};
-    const time=now+POI_DAVID_WAKE_MS+2;poiAimAttack=null;
-    poiPlayerStartProfile(null,time);
-    const shot=poiPlayerWeaponPending;
-    const frame=time+POI_FIST_PROFILE.hit+1;poiPlayerWeaponFrame(frame);
-    return {...record,after:s.hp,hit:POI_FIST_PROFILE.hit,interval:POI_FIST_PROFILE.ready,dx:shot?.dx,dz:shot?.dz,sx:shot?.aim?.x,sz:shot?.aim?.z,tx:s.x,tz:s.z};
+    const time=now+POI_DAVID_WAKE_MS+2,frame=time+POI_FIST_PROFILE.hit+1,original=poiFreePose;
+    let found=null,checked=0;
+    // The player's short straight hit only works if it intersects a leg,
+    // not the air under the center marker. Try walkable points around it.
+    for(let ring=10;ring>=4&&!found;ring--)for(let i=0;i<32&&!found;i++){
+     const angle=i*Math.PI/16,x=boss.x+Math.sin(angle)*ring*.16,z=boss.z+Math.cos(angle)*ring*.16;
+     const ix=Math.floor(x+.5),iz=Math.floor(z+.5);
+     if(!poiWalkCanStep(ix,iz))continue;
+     poiFreePose={x,z,level:boss.y,angle};
+     poiCombatLockReset();poiAimAttack=null;
+     const shot=poiAimNewShot({type:null,profile:POI_FIST_PROFILE,started:time,y:boss.y},time);
+     const trace=poiAimTrace(shot,shot.profile.range,frame);checked++;
+     if(trace.monster?.[0]===o)found={x,z,forward:trace.forward,angle};
+    }
+    if(found){
+     poiFreePose={x:found.x,z:found.z,level:boss.y,angle:found.angle};
+     poiCombatLockReset();poiAimAttack=null;
+     poiPlayerStartProfile(null,time);
+     poiPlayerWeaponFrame(frame);
+    }
+    poiFreePose=original;
+    return {...record,after:s.hp,hit:POI_FIST_PROFILE.hit,interval:POI_FIST_PROFILE.ready,checked,found};
    }
   },
 `);
@@ -68,6 +85,6 @@ try{
   },[x,z,y]);console.log('FRAME_SAMPLE',x,z,y,s);
  }
  const fist=await p.evaluate(()=>window.__editorTest.qa445.fist());
- console.log('FIST_CONTACT',fist);
+ console.log('FIST_CONTACT',fist);a.equal(fist.armed,null);a.ok(fist.awake);
  a.deepEqual(errors,[]);
 }finally{await b?.close();server.close()}})().catch(e=>{console.error(e);process.exitCode=1});
