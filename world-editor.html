@@ -1733,7 +1733,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v397）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v398）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -21673,6 +21673,7 @@ function poiOrvasRewardRestore(kit,raw,minute=poiDungeonPopulationMinute()){
 // END ORVAS REWARD CORE
 function poiDungeonRememberDefeat(o,state,debris=null){
  if(!poiWalkActive||pineAIActive||poiWalkLevel!==o.y||state?.hp!==0)return false;
+ if(frontierRuinsBoss(o))return frontierRuinsRecordDefeat(o,state);
  if(o.northReturnSlot!==undefined&&typeof poiNorthReturnRecordDefeat==='function')return poiNorthReturnRecordDefeat(o,state);
  const id=poiDungeonSpawnId(o);
  if(!id)return false;
@@ -21854,8 +21855,20 @@ function poiHotbarRead(){
  if(!valid)return poiHotbarState=facilitySite?.id==='frontier'?
   {weapon:null,sword:false,potions:0,worn:{...POI_FRESH_ARMOR}}:
   {weapon:null,potions:POI_HOTBAR_POTION_START,...(raw===null?{worn:{...POI_FRESH_ARMOR}}:{})};
+ if(facilitySite?.id==='frontier'&&saved.frontierWest!==1){
+  for(const field of ['drops','groundGold','armedDrops','soulDrops'])
+   if(Array.isArray(saved[field]))saved[field]=saved[field].map(p=>p?.region==='snowpass'?p:frontierShiftPoint(p));
+  for(const id of Object.keys(saved.frontierLife||{}))if(saved.frontierLife[id]?.returnFrom)
+   saved.frontierLife[id].returnFrom=frontierShiftPoint(saved.frontierLife[id].returnFrom);
+  for(const id of FRONTIER_ESTATE_KEYS)if(saved[id])saved[id]=frontierShiftPoint(saved[id]);
+ }
  poiMigrateWeaponDurability(saved);
  const kit={weapon:saved.weapon,potions:saved.potions};
+ if(facilitySite?.id==='frontier'){
+  if(saved.frontierRuinsCleared===true)kit.frontierRuinsCleared=true;
+  if(saved.frontierRuinsLootPlaced===true)kit.frontierRuinsLootPlaced=true;
+  const chest=poiChestDecode(saved.frontierRuinsChest);if(chest&&kit.frontierRuinsCleared)kit.frontierRuinsChest=chest;
+ }
  const satiety=typeof poiPlayerSatietyDecode==='function'?poiPlayerSatietyDecode(saved.satiety):null;if(satiety)kit.satiety=satiety;
  const orvas=typeof poiOrvasRewardMask==='function'?poiOrvasRewardMask(saved.orvasRewards):0;if(orvas)kit.orvasRewards=orvas;
  if(saved.sacredTempleSeen===true)kit.sacredTempleSeen=true;
@@ -21976,9 +21989,12 @@ function poiHotbarSave(kit=poiHotbarState){
    ...(kit.soulDrops?.length?{soulDrops:kit.soulDrops}:{}),
    ...(kit.sacredTempleSeen===true?{sacredTempleSeen:true}:{}),
    ...(kit.frontierLife?{frontierLife:kit.frontierLife}:{}),
+   ...(kit.frontierRuinsCleared===true?{frontierRuinsCleared:true}:{}),
+   ...(kit.frontierRuinsLootPlaced===true?{frontierRuinsLootPlaced:true}:{}),
+   ...(kit.frontierRuinsChest?{frontierRuinsChest:kit.frontierRuinsChest}:{}),
    ...(kit.frontierChiefStickGift===true?{frontierChiefStickGift:true}:{}),
    ...(kit.frontierClothesGift===true?{frontierClothesGift:true}:{}),
-   ...(facilitySite?.id==='frontier'?{frontierMerchantUnified:true}:{}),
+   ...(facilitySite?.id==='frontier'?{frontierMerchantUnified:true,frontierWest:1}:{}),
    ...(kit.frontierTrades?{frontierTrades:kit.frontierTrades}:{}),
    ...Object.fromEntries(FRONTIER_ESTATE_KEYS.filter(key=>kit[key]).map(key=>[key,kit[key]])),
    ...(frontierFallenDecode(kit.frontierFallen).length?{frontierFallen:frontierFallenDecode(kit.frontierFallen)}:{}),
@@ -22376,7 +22392,7 @@ function poiHotbarHerbIcon(){
 }
 
 const POI_INVENTORY_LIMIT=36,POI_INVENTORY_HERB='healingHerb',POI_INVENTORY_SWORD='equipWoodSword';
-const POI_CHEST_STORE_KEYS=['kitchenChest','mineTreasureChest','otherworldChest','chapelChest'];
+const POI_CHEST_STORE_KEYS=['kitchenChest','mineTreasureChest','otherworldChest','chapelChest','frontierRuinsChest'];
 const POI_CHEST_SIZE=18,POI_KNIFE_DURABILITY=40,POI_KNIFE_BONUS=12;
 const POI_KNIFE='kitchenKnife',POI_CANNED='cannedFood',POI_FIRE_WAND='fireWand',POI_FRESH_PRODUCE='freshProduce';
 const poiFoodItem=type=>type===POI_CANNED||type===POI_FRESH_PRODUCE;
@@ -22656,6 +22672,7 @@ function poiChestDecode(raw){
 }
 let poiKitchenChestRoll=null,poiChestActiveKey='kitchenChest';
 function poiActiveChestReachable(key=poiChestActiveKey){
+ if(key===FRONTIER_RUINS_CHEST_KEY)return frontierRuinsChestReachable();
  return FRONTIER_ESTATE_KEYS.includes(key)?frontierEstateReachable(key):key==='mineTreasureChest'?poiMineVaultChestOpened()&&poiMineVaultChestReachable():
   key==='otherworldChest'?poiOtherworldChestOpened()&&poiOtherworldChestReachable():
   key==='chapelChest'?poiChapelChestOpened()&&poiChapelChestReachable():
@@ -23248,7 +23265,7 @@ function poiRepeatableMonsterWeapon(type){return POI_REPEATABLE_MONSTER_WEAPONS.
 function poiDavidDepthGroundPoint(p){
  // Only the base/snow shared kit can create ordinary ground stacks. The
  // extension is a narrow base surface lobe, never an editor or snow region.
- return !!p&&(typeof poiSquareFieldGroundPoint==='function'&&poiSquareFieldGroundPoint(p)||
+ return !!p&&(facilitySite?.id==='frontier'&&!p.region&&p.y===0&&validPos(p.x,p.z)||typeof poiSquareFieldGroundPoint==='function'&&poiSquareFieldGroundPoint(p)||
   p.region!=='snowpass'&&p.y===0&&p.x>=0&&p.z>=128&&p.z<182&&(p.x<48||typeof poiSnowSleeveOwn==='function'&&poiSnowSleeveOwn(p.x,p.z)));
 }
 function poiInventoryReadDrops(raw){
@@ -23653,7 +23670,7 @@ function poiEnemyCombatEdge(x,z,fx,fz,y=poiWalkLevel,actor=null){
 }
 function poiEnemyAdjacent(obj,state,x,z){
  const dx=x-state.x,dz=z-state.z,m=Math.abs(dx)+Math.abs(dz);
- if(m===1)return true;
+ if(m===1)return !state.frontierRuins||poiPlayerRayClear(x,z,obj.y,state.x,state.z);
  return Math.abs(dx)===1&&Math.abs(dz)===1&&poiEnemyDiagonalType(obj)&&
   !poiEnemyAttackTrace(state.x,state.z,x,z,(u,v,fx,fz)=>poiEnemyCombatEdge(u,v,fx,fz,poiWalkLevel,state)).blocked;
 }
@@ -24123,7 +24140,7 @@ function poiChapelEliteMatch(o){
  const e=facilitySite?.id==='base'?facilitySite.chapel?.elite:null;
  return !!e&&o.x===e.x&&o.z===e.z&&o.y===e.y&&o.type===e.type;
 }
-function poiMonsterStatsAt(o){return typeof poiMineGuardTrial==='function'&&poiMineGuardTrial(o)?POI_MINE_TRIAL_STATS:poiChapelEliteMatch(o)?POI_CHAPEL_ELITE_STATS:POI_MONSTER_STATS[o.type]}
+function poiMonsterStatsAt(o){return frontierRuinsBoss(o)?FRONTIER_RUINS_BOSS_STATS:typeof poiMineGuardTrial==='function'&&poiMineGuardTrial(o)?POI_MINE_TRIAL_STATS:poiChapelEliteMatch(o)?POI_CHAPEL_ELITE_STATS:POI_MONSTER_STATS[o.type]}
 function poiChapelGateOpen(){return poiHotbarHasKit()&&poiHotbarRead().chapelCleared===true}
 function poiChapelChestOpened(){return poiHotbarHasKit()&&!!poiHotbarRead().chapelChest}
 function poiChapelRecordDefeat(o,state){
@@ -24253,7 +24270,7 @@ function poiChestSetOpen(open,key='kitchenChest',sound=true){
  if(open){
   if(!poiActiveChestReachable(key)||!poiInventoryAllowed())return;
   poiChestActiveKey=key;
-  const heading=$('poiChestHeading');if(heading)heading.textContent=FRONTIER_ESTATE_KEYS.includes(key)?(facilitySite?.residents?.find(r=>r.id===poiHotbarRead()[key]?.npcId)?.name||'仲間')+'の遺品袋':key==='chapelChest'?'礼拝堂の宝箱':key==='otherworldChest'?'回廊の宝箱':key==='mineTreasureChest'?'宝物庫の宝箱':'チェスト';
+  const heading=$('poiChestHeading');if(heading)heading.textContent=key===FRONTIER_RUINS_CHEST_KEY?'森の遺跡の宝箱':FRONTIER_ESTATE_KEYS.includes(key)?(facilitySite?.residents?.find(r=>r.id===poiHotbarRead()[key]?.npcId)?.name||'仲間')+'の遺品袋':key==='chapelChest'?'礼拝堂の宝箱':key==='otherworldChest'?'回廊の宝箱':key==='mineTreasureChest'?'宝物庫の宝箱':'チェスト';
   poiBagSetOpen(true);
   if(bag.hidden)return;
  }
@@ -25191,7 +25208,7 @@ function poiHotbarUse(slot){
  else if(result.reason==='sated')toast('お腹はいっぱいです。');
  else if(result.reason==='storage')toast(poiInventoryItemName(item)+'を保存できませんでした');
 }
-function poiCombatActorMake(o){const stats=typeof poiMonsterStatsAt==='function'?poiMonsterStatsAt(o):POI_MONSTER_STATS[o.type];return {x:o.x,z:o.z,fromX:o.x,fromZ:o.z,moveStarted:-10000,facing:0,hp:stats.hp,nextAttack:0}}
+function poiCombatActorMake(o){const stats=typeof poiMonsterStatsAt==='function'?poiMonsterStatsAt(o):POI_MONSTER_STATS[o.type];return {x:o.x,z:o.z,fromX:o.x,fromZ:o.z,moveStarted:-10000,facing:0,hp:stats.hp,nextAttack:0,...(facilitySite?.id==='frontier'&&frontierRuinsCell(o.x,o.z)?{frontierRuins:true,frontierRuinsBoss:frontierRuinsBoss(o)}:{})}}
 // BEGIN NORTH FORT RETURN ENCOUNTER
 const POI_NORTH_RETURN_FOES=Object.freeze([57,59,61].map((x,northReturnSlot)=>
  Object.freeze({x,z:16,y:-1,type:'monsterGoblin',rot:0,northReturnSlot})));
@@ -25260,7 +25277,7 @@ function poiNorthReturnExit(realm){
 // END NORTH FORT RETURN ENCOUNTER
 
 const poiHeroLessons={};
-function poiResetCombat(){poiHeroLessons.learnedAttacks?.clear();poiHeroLessons.dodgedAt=-Infinity;poiWildClear();poiPlayerHP=POI_PLAYER_MAX_HP;poiMonsterStates=new Map();const population=typeof poiDungeonPopulationDecode==='function'&&(facilitySite?.id==='base'||facilitySite?.id==='frontier')?poiDungeonPopulationDecode(poiHotbarRead().dungeonPopulation):null;for(const o of world){if(poiIsMonster(o.type)&&!(typeof poiWildFieldFixedPolicy==='function'&&poiWildFieldFixedPolicy(o))&&!(typeof poiNorthWatchGuardDefeated==='function'&&poiNorthWatchGuardDefeated(o))&&!(population&&poiDungeonActorAbsent(o,population)))poiMonsterStates.set(o,poiCombatActorMake(o))}poiDamageLabels=[];poiNextMobTick=0;poiAttackReady=0;poiMonsterMeshDirty=true;poiCombatHud();dirty=true}
+function poiResetCombat(){poiHeroLessons.learnedAttacks?.clear();poiHeroLessons.dodgedAt=-Infinity;poiWildClear();poiPlayerHP=POI_PLAYER_MAX_HP;poiMonsterStates=new Map();const population=typeof poiDungeonPopulationDecode==='function'&&(facilitySite?.id==='base'||facilitySite?.id==='frontier')?poiDungeonPopulationDecode(poiHotbarRead().dungeonPopulation):null;for(const o of world){if(poiIsMonster(o.type)&&!(frontierRuinsBoss(o)&&frontierRuinsGateOpen())&&!(typeof poiWildFieldFixedPolicy==='function'&&poiWildFieldFixedPolicy(o))&&!(typeof poiNorthWatchGuardDefeated==='function'&&poiNorthWatchGuardDefeated(o))&&!(population&&poiDungeonActorAbsent(o,population)))poiMonsterStates.set(o,poiCombatActorMake(o))}poiDamageLabels=[];poiNextMobTick=0;poiAttackReady=0;poiMonsterMeshDirty=true;poiCombatHud();dirty=true}
 const POI_MESSAGE_LIFETIME=5000,POI_MESSAGE_MAX=2;
 const poiMessageLines=[];
 let poiMessageSpeech=null,poiMessageTyping=null;
@@ -25610,7 +25627,7 @@ function poiWildZone(rects,x,z,margin=0){
 }
 function poiWildExterior(x,z,buffer=0){
  if(facilitySite?.id==='frontier')return validPos(x,z)&&Math.hypot(x+.5-FRONTIER_VILLAGE.x,z+.5-FRONTIER_VILLAGE.z)>frontierVillageRadius(x+.5-FRONTIER_VILLAGE.x,z+.5-FRONTIER_VILLAGE.z)+buffer&&
-  !frontierTempleGround(x+.5,z+.5)&&!frontierHomeCell(x,z);
+  !frontierTempleGround(x+.5,z+.5)&&!frontierHomeCell(x,z)&&!frontierBurrowCell(x,z);
  return validPos(x,z)&&!poiKingdomNoWild(facilitySite,x,z,Math.max(1,buffer))&&!poiEastNatureBlocked(facilitySite,x,z)&&!POI_WILD_GATES.some(g=>(!g.expansion||facilitySite?.townOffset)&&poiWildZone([g.threshold],x,z))&&!poiWildZone(POI_SAFE_TOWN,x,z,buffer)&&
   !poiWildZone(POI_WILD_LANDMARKS,x,z)&&!(typeof poiWildProtectedArea==='function'&&poiWildProtectedArea(x,z))&&!(typeof poiWayfarerWellSheltered==='function'&&poiWayfarerWellSheltered(x,z))&&
   !(typeof poiSouthTownContains==='function'&&poiSouthTownContains(facilitySite,x,z,0))&&facilityFloorOwner(x,z,0)===null;
@@ -25722,6 +25739,7 @@ function poiWildSnapshot(){
   nextIn:Math.max(0,Math.round(poiWildRemaining))};
 }
 function poiMonsterCanMove(x,z,except,fromX,fromZ){
+ if(except?.frontierRuins&&(!frontierRuinsCell(x,z)||except.frontierRuinsBoss&&(x<1||x>9||z<38||z>46)))return false;
  if(except?.companionAware&&typeof poiCompanionBlocksHostileTile==='function'&&
     poiCompanionBlocksHostileTile(x,z,poiWalkLevel,performance.now()))return false;
  const northFoe=except?.northReturnFoe;
@@ -30376,7 +30394,7 @@ function frontierNpcLifeStep(a,clock,now,budget){
   return;
  }
  if(!shop&&!stock.healingHerb&&stock.gold>=9){
-  const desk={x:38,z:25,y:0,facing:0},market=poiTownNpcActors.find(n=>n.role.id===POI_FRONTIER_SHOP_ID&&!n.death);
+  const desk={x:38+FRONTIER_WEST_OFFSET,z:25,y:0,facing:0},market=poiTownNpcActors.find(n=>n.role.id===POI_FRONTIER_SHOP_ID&&!n.death);
   if(market&&poiNpcTradeState(poiHotbarRead(),market).stock.healingHerb){
    if(poiTownNpcMove(a,desk,'going-toolshop',now,budget)&&poiTownNpcStepT(a,now)>=1)frontierNpcBuyHerb(a,now);
    return;
@@ -30925,7 +30943,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v397',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v398',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -31040,7 +31058,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v397';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v398';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -31255,7 +31273,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v397',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v398',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -31826,7 +31844,7 @@ function poiGameRoofHiddenAt(x,z){
  return false;
 }
 function poiWalkIndoor(){
- if(facilitySite)return facilityHiddenRoof()!==null;
+ if(facilitySite)return facilitySite.id==='frontier'&&poiWalkLevel===0&&frontierBurrowRoofAt(poiWalkViewX+.5,poiWalkViewZ+.5)||facilityHiddenRoof()!==null;
  // A covered, walkable door is already the threshold on custom play maps.
  const roofs=world.filter(o=>o.y>0&&(AUTO_ROOFS.has(o.type)||RESIDENTIAL_ROOFS.has(o.type)||o.type==='pineSuperRoof'));
  if(!roofs.length)return false;
@@ -32637,6 +32655,7 @@ function poiPlayerWeaponCancel(keepEnemy=false){
  poiPlayerWeaponPending=poiPlayerWeaponVisual=null;poiWalkActionStarted=-10000;
 }
 function poiPlayerRayClear(x,z,y,fromX,fromZ){
+ if(facilitySite?.id==='frontier'&&y===0&&(!frontierBurrowWalkEdge(x,z,fromX,fromZ)||frontierRuinsGateAt(x,z)&&!frontierRuinsGateOpen()))return false;
  const walls=world.filter(o=>o.y===y&&o.x===x&&o.z===z);
  if(!validPos(x,z))return false;
  const town=facilitySite?.id==='base'?facilitySite.townOffset:null;
@@ -32709,6 +32728,7 @@ function poiPlayerDamageTarget(monster,x,z,amount,weapon,now,silent=false,atCont
   state.x=Math.floor(p.x+.5);state.z=Math.floor(p.z+.5);
  }
  if(obj.type==='monsterMineGuard'&&typeof poiMineGuardTrialIncoming==='function')amount=poiMineGuardTrialIncoming(obj,state,amount,now,source);
+ if(frontierRuinsBoss(obj)&&amount>0)amount=Math.max(1,Math.round(amount*(state.playerAttack?.pending?.65:1))-3);
  const incoming=amount;
  const key=amount>0?(source?.moveKey??'weapon:'+(weapon??(source?.companion?'creature':'fists'))):null,cast=source?.started??(!source?.companion?poiWalkActionStarted:null);
  if(key&&poiLearnedDodge(state,key,poiStatBase(null,obj.type).intelligence,now,Math.random,cast)){
@@ -34050,7 +34070,8 @@ function poiMonsterRender(now,vp,sacredPeek=false){
    const pitch=(attack?.pitch||0)*bodyScale,twist=(attack?.twist||0)*bodyScale;
    const cp=Math.cos(pitch),sp=Math.sin(pitch),ct=Math.cos(twist),st=Math.sin(twist);
    for(let i=0;i<part.p.length;i+=3){
-    let px=part.p[i]-cx,py=part.p[i+1]-y,pz=part.p[i+2]-cz;
+    const scale=frontierRuinsBoss(obj)?1.28:1;
+    let px=(part.p[i]-cx)*scale,py=(part.p[i+1]-y)*scale,pz=(part.p[i+2]-cz)*scale;
     let nx=part.n[i],ny=part.n[i+1],nz=part.n[i+2];
     if(articulate){
      // Pose the chest, arms and held prop together, leaving the feet
@@ -34068,7 +34089,7 @@ function poiMonsterRender(now,vp,sacredPeek=false){
      m.p.push(cx+px*attack.width,y+py*attack.squash,cz+pz*attack.width);
      m.n.push(nnx/n,ny/n,nnz/n);
     }else{
-     m.p.push(cx+px,part.p[i+1],cz+pz);
+     m.p.push(cx+px,y+py,cz+pz);
      m.n.push(nx,part.n[i+1],nz);
     }
     // Only David's sculpted eye charge may exceed ordinary red paint.
@@ -34130,7 +34151,8 @@ function poiPlayerDeathSnapshot(){
 let poiDefeatEntry=null;
 function poiDefeatSupported(site){return site?.id==='base'||site?.id==='snowpass'||!!site?.respawnEntry}
 function poiDefeatArea(site,x,z,y){
- if(site?.id==='frontier')return poiDavidTempleEnclosedAt(site,x,z,y)?'davidTemple':'home';
+ if(site?.id==='frontier')return poiDavidTempleEnclosedAt(site,x,z,y)?'davidTemple':
+  y===0&&frontierBurrowRoofAt(x+.5,z+.5)?'forestRuins':'home';
  if(site?.id!=='base')return site?.id?'region:'+site.id:null;
  const realm=typeof poiDungeonTravelKey==='function'?poiDungeonTravelKey(site,x,z,y):null;
  if(realm)return realm;
@@ -34150,6 +34172,7 @@ function poiDefeatCheckpoint(ctx){
  if(area?.startsWith('region:')){p=site.respawnEntry??site.spawn;face=p?.facing??2}
  else if(area==='mine'){const s=site.mine.stairs;p={x:s?.x,z:s?.z-1,y:site.mine.bounds.y};face=0}
  else if(area==='davidTemple'){p=d.retreat;face=0}
+ else if(area==='forestRuins'){p={x:34,z:29,y:0};face=3;}
  else if(area!=='home'){p=d?.dungeonStand;face=((p?.facing??2)+2)%4}
  else p=site.spawn??{x:poiSpawnX,z:poiSpawnZ};
  return p?{x:p.x,z:p.z,y:p.y??0,facing:face}:null;
@@ -34178,7 +34201,8 @@ function poiDefeatFind(pin,accept,max){
 function poiPlayerDeathSpawn(ctx=poiDefeatContext()){
  const {site,area}=ctx,pin=poiDefeatCheckpoint(ctx),arrived=poiDefeatEntry?.site===site&&poiDefeatEntry.area===area?poiDefeatEntry:null;
  const home=(x,z,y)=>y===0&&(typeof poiWildZone!=='function'||poiWildZone(POI_SAFE_TOWN,x,z));
- const same=(x,z,y)=>area==='davidTemple'?
+ const same=(x,z,y)=>area==='forestRuins'?y===0&&x>=32&&x<=38:
+  area==='davidTemple'?
   y===0&&poiDefeatArea(site,x,z,y)==='home':
   area==='home'?home(x,z,y):poiDefeatArea(site,x,z,y)===area;
  // Never trust saved coordinates as an entrance. A genuine live ingress
@@ -34327,7 +34351,7 @@ function poiSacredDepthVoid(site,x,z){
 function poiWalkCanStep(x,z,fromX,fromZ,exceptMonster,skipNpcTile=false,freeTrees=false){
  if(!validPos(x,z)||poiWalkLevel===0&&poiEastNatureBlocked(facilitySite,x,z))return false;
  const frontier=facilitySite?.id==='frontier'&&poiWalkLevel===0;
- if(frontier&&(frontierVillageFence(x,z)||frontierGroundKind(x,z)==='river'&&!facilitySite.decks.has(x+','+z)))return false;
+ if(frontier&&(!frontierBurrowWalkEdge(x,z,fromX,fromZ)||frontierRuinsGateAt(x,z)&&!frontierRuinsGateOpen()||frontierVillageFence(x,z)||frontierGroundKind(x,z)==='river'&&!facilitySite.decks.has(x+','+z)))return false;
  const north=facilitySite?.id==='base'?(facilitySite.townOffset||0):null;
  // This offset rampart's physical wall sits on the outer edge of the tile.
  // Keep the lane on the interior side accessible without crossing the wall.
@@ -34429,6 +34453,10 @@ function poiRegionAt(site,x,z,legacy=false,floor=null){
  }else if(site?.id==='frontier'&&poiDavidTempleEnclosedAt(site,x,z,floor)){
   return {name:site.davidTemple.name,difficulty:10,stars:'★'.repeat(10)};
  }else{
+  if(site?.id==='frontier'&&(floor===0||floor==null)&&x<FRONTIER_WEST_OFFSET){
+   const buried=frontierBurrowRoofAt(x+.5,z+.5);
+   return {name:buried?'森の地下遺跡':'西の深い森',difficulty:buried?3:1,stars:buried?'★★★☆☆☆☆☆☆☆':'★☆☆☆☆☆☆☆☆☆'};
+  }
   if(site?.id==='frontier'&&site.villageName&&(floor===0||floor==null)&&
    Math.hypot(x+.5-FRONTIER_VILLAGE.x,z+.5-FRONTIER_VILLAGE.z)<=frontierVillageRadius(x+.5-FRONTIER_VILLAGE.x,z+.5-FRONTIER_VILLAGE.z))
     return {name:site.villageName,difficulty:0,stars:'☆'.repeat(10)};
@@ -34538,9 +34566,11 @@ function poiLocalProject(crop,v){
 }
 function poiLocalBits(){return new Uint8Array(POI_LOCAL_BYTES)}
 function poiLocalBit(x,z){
- if(facilitySite?.id==='frontier'&&Number.isInteger(x)&&Number.isInteger(z)&&x>=128&&x<FRONTIER_W&&z>=0&&z<64)
-  return (64+z)*POI_LOCAL_W+x-128; // Keep the first two sectors' saved fog bit layout.
-
+ if(facilitySite?.id==='frontier'&&Number.isInteger(x)&&Number.isInteger(z)&&x>=0&&x<FRONTIER_W&&z>=0&&z<64){
+  if(x<FRONTIER_WEST_OFFSET)return (64+z)*POI_LOCAL_W+64+x;
+  const old=x-FRONTIER_WEST_OFFSET;
+  return old>=128?(64+z)*POI_LOCAL_W+old-128:z*POI_LOCAL_W+old;
+ }
  return Number.isInteger(x)&&Number.isInteger(z)&&x>=0&&x<POI_LOCAL_W&&z>=0&&z<POI_LOCAL_H?z*POI_LOCAL_W+x:-1;
 }
 function poiLocalKnown(bits,x,z){
@@ -34649,6 +34679,10 @@ function poiLocalTopologyFor(site,concealed){
  if(site?.id==='frontier'&&levels.has(0)){
   const row=levels.get(0);
   for(const [x,z] of site.fenceCells){const i=poiLocalBit(x,z);row.cats[i]=7;row.walls[i]|=1;}
+  for(const k of FRONTIER_RUINS.cells){const [x,z]=k.split(',').map(Number);row.cats[poiLocalBit(x,z)]=3;}
+  for(let z=27;z<32;z++)for(let x=10;x<32;x++){
+   const i=poiLocalBit(x,z);row.cats[i]=x<25?3:2;
+  }
  }
  poiMiniBuilds++;
  return poiLocalTopology={world,site,concealed,levels};
@@ -35180,7 +35214,7 @@ function poiShopSync(){
  const stay=typeof poiTownPlayerService==='function'?poiTownPlayerService():null;
  const talk=(visible||poiWalkActive&&facilitySite?.id==='frontier')&&typeof poiTownDialogueTarget==='function'&&poiTownDialogueTarget(performance.now());
  const soul=typeof poiSoulFloorReachable==='function'?poiSoulFloorReachable(performance.now()):null;
- const prompt=typeof poiTownDialogueSpeechOnly==='function'&&poiTownDialogueSpeechOnly()?(poiTownDialogue?.pendingGift?'npc-gift':poiTownDialogue?.pendingRecruit?'npc-recruit':poiTownDialogueHasNext()?'npc-next':'npc-dismiss'):poiShopIsOpen()?'npc-confirm':poiChestIsOpen()?'chest-close':poiKitchenChestReachable()?'chest':typeof poiMineVaultChestReachable==='function'&&poiMineVaultChestReachable()?'vault':typeof poiOtherworldChestReachable==='function'&&poiOtherworldChestReachable()?'otherworld-chest':typeof poiChapelChestReachable==='function'&&poiChapelChestReachable()?'chapel-chest':typeof poiQuestSurveyReachable==='function'&&poiQuestSurveyReachable()?'survey':stay==='rest'?'rest':talk?'talk':soul?'soul-pickup':typeof poiWayfarerWellReachable==='function'&&poiWayfarerWellReachable()?'well':(typeof poiNorthTrailForkSignReachable==='function'&&poiNorthTrailForkSignReachable()||typeof poiChapelWaymarkReachable==='function'&&poiChapelWaymarkReachable())?'trail-sign':'action';
+ const prompt=typeof poiTownDialogueSpeechOnly==='function'&&poiTownDialogueSpeechOnly()?(poiTownDialogue?.pendingGift?'npc-gift':poiTownDialogue?.pendingRecruit?'npc-recruit':poiTownDialogueHasNext()?'npc-next':'npc-dismiss'):poiShopIsOpen()?'npc-confirm':poiChestIsOpen()?'chest-close':frontierRuinsChestReachable()?'chest':poiKitchenChestReachable()?'chest':typeof poiMineVaultChestReachable==='function'&&poiMineVaultChestReachable()?'vault':typeof poiOtherworldChestReachable==='function'&&poiOtherworldChestReachable()?'otherworld-chest':typeof poiChapelChestReachable==='function'&&poiChapelChestReachable()?'chapel-chest':typeof poiQuestSurveyReachable==='function'&&poiQuestSurveyReachable()?'survey':stay==='rest'?'rest':talk?'talk':soul?'soul-pickup':typeof poiWayfarerWellReachable==='function'&&poiWayfarerWellReachable()?'well':(typeof poiNorthTrailForkSignReachable==='function'&&poiNorthTrailForkSignReachable()||typeof poiChapelWaymarkReachable==='function'&&poiChapelWaymarkReachable())?'trail-sign':'action';
  const landscape=$('viewWrap')?.hasAttribute?.('data-analog-play')===true;
  if(action)action._talkActor=prompt==='talk'?talk:null;
  if(action&&(action._shopPrompt!==prompt||!!action._shopLandscape!==landscape)){
@@ -35308,7 +35342,7 @@ function poiWalkEnterCell(dx,dz,now,continuous=false,onDoorCue){
  if(facilitySite?.id==='base'&&poiWalkLevel===0&&typeof poiLookoutEnter==='function')poiLookoutEnter(poiWalkFromX,poiWalkFromZ,poiWalkX,poiWalkZ);
  if(facilitySite?.id==='base'){if(facilitySite.creek)poiCreekAudioSync();poiEconomyCollect(poiWalkX,poiWalkZ);if(typeof poiGroundGoldPickup==='function')poiGroundGoldPickup(poiWalkX,poiWalkZ);poiInventoryPickup(poiWalkX,poiWalkZ);poiMineFindExplore(poiWalkX,poiWalkZ);poiMineFindPickup(poiWalkX,poiWalkZ);poiArmedPickup(poiWalkX,poiWalkZ);if(typeof poiPortQuestVisit==='function')poiPortQuestVisit();if(typeof poiNorthTrailPickup==='function')poiNorthTrailPickup(poiWalkX,poiWalkZ)}
  if(facilitySite?.id==='snowpass'){poiGroundGoldPickup(poiWalkX,poiWalkZ);poiInventoryPickup(poiWalkX,poiWalkZ)}
- if(facilitySite?.id==='frontier'){poiEconomyCollect(poiWalkX,poiWalkZ);poiGroundGoldPickup(poiWalkX,poiWalkZ);poiInventoryPickup(poiWalkX,poiWalkZ)}
+ if(facilitySite?.id==='frontier'){frontierRuinsStockLoot();poiEconomyCollect(poiWalkX,poiWalkZ);poiGroundGoldPickup(poiWalkX,poiWalkZ);poiInventoryPickup(poiWalkX,poiWalkZ)}
  if(typeof poiSoulFloorWalkover==='function')poiSoulFloorWalkover(poiWalkX,poiWalkZ,now);
  frontierEstateWalkover();
  if(!poiWalkDoorFoley(door,fromLevel,onDoorCue)&&!continuous)poiWalkFootstep(wet);
@@ -35368,6 +35402,10 @@ function poiWalkAction(){
  if(typeof poiTownDialogueSpeechOnly==='function'&&poiTownDialogueSpeechOnly()){poiTownDialogueAction(performance.now());return}
  if(poiShopIsOpen()){if(typeof poiTownDialogueAction==='function')poiTownDialogueAction(performance.now());return}
  if(poiChestIsOpen()){poiBagSetOpen(false);return}
+ if(frontierRuinsChestReachable()){
+  if(poiInventoryAllowed()&&frontierRuinsRewardInit())poiChestSetOpen(true,FRONTIER_RUINS_CHEST_KEY);
+  return;
+ }
  if(typeof poiChapelChestReachable==='function'&&poiChapelChestReachable()){
   if(!poiInventoryAllowed()||document.querySelector('dialog[open],.modal.open'))return;
   if(poiChapelChestOpened())poiChestSetOpen(true,'chapelChest');
@@ -36731,6 +36769,8 @@ function frontierSupportCache(site){
 }
 function frontierSurfaceHeight(x,z,cache=frontierSupportCache(facilitySite)){
  const ix=Math.floor(x),iz=Math.floor(z),dx=x-ix,dz=z-iz,key=iz*512+ix;
+ if(frontierRuinsCell(ix,iz))return frontierBurrowFloor(10)+.018;
+ if(frontierBurrowCell(ix,iz))return frontierBurrowFloor(x)+.019;
  let tile=cache?.get(key);
  if(!tile){
   const type=frontierTileKind(ix,iz),slab=type==='stone'||type==='woodfloorLight'||ROAD_IDS.has(type);
@@ -36795,6 +36835,7 @@ function frontierClassicTiles(target,water=false){
  };
  const shade=temple?pineFloorLightingSources(facilitySite.map.world.slice(temple.authored.index)):null;
  for(let z=0;z<FRONTIER_H;z++)for(let x=0;x<FRONTIER_W;x++){
+  if(x<FRONTIER_WEST_OFFSET)continue;
   let type=frontierTileKind(x,z);
   const wet=type==='river';
   if(wet!==water)continue;
@@ -36838,13 +36879,398 @@ function frontierClassicTiles(target,water=false){
  }
 }
 // BEGIN FRONTIER RIVER ART
+// BEGIN FRONTIER WEST INTEGRATION
+const FRONTIER_WEST_OFFSET=64;
+const FRONTIER_BURROW=Object.freeze({west:10,east:32,north:27,south:32,roof:25,mid:29.5});
+function frontierBurrowFloor(x){
+ return .35-3.95*(1-frontierSmooth(24,32,x))-1.45*(1-frontierSmooth(16,24,x));
+}
+function frontierBurrowCell(x,z){
+ const a=FRONTIER_BURROW;return frontierRuinsCell(Math.floor(x),Math.floor(z))||x>=a.west&&x<a.east&&z>=a.north&&z<a.south;
+}
+function frontierBurrowRoofAt(x,z){
+ const a=FRONTIER_BURROW;return frontierRuinsCell(Math.floor(x),Math.floor(z))||x>=a.west&&x<=a.roof&&z>=a.north&&z<=a.south;
+}
+function frontierBurrowWalkEdge(x,z,fx,fz){
+ if(!Number.isInteger(fx)||!Number.isInteger(fz))return true;
+ const there=frontierBurrowCell(x,z),from=frontierBurrowCell(fx,fz);
+ return there===from||z===fz&&Math.max(x,fx)===FRONTIER_BURROW.east&&z>=27&&z<32;
+}
+function frontierShiftPoint(p,by=FRONTIER_WEST_OFFSET){
+ if(!p||!Number.isFinite(p.x))return p;
+ return {...p,x:p.x+by,...(Number.isFinite(p.subX)?{subX:p.subX+by}:{})};
+}
+function frontierBurrowCamera(target,eye){
+ if(facilitySite?.id!=='frontier')return eye;
+ const [x,,z]=target,a=FRONTIER_BURROW;
+ if(frontierRuinsCell(Math.floor(x),Math.floor(z))){
+  const floor=frontierBurrowFloor(10),dir=[eye[0]-x,eye[2]-z],length=Math.hypot(...dir);
+  const max=Math.min(length,3.55),step=.11;
+  let last=0;
+  if(length>.01)for(let d=step;d<=max+step;d+=step){
+   const v=Math.min(d,max),px=x+dir[0]*v/length,pz=z+dir[1]*v/length;
+   if([[0,0],[-.16,0],[.16,0],[0,-.16],[0,.16]].some(([u,w])=>{
+    const i=Math.floor(px+u),j=Math.floor(pz+w);
+    return !frontierBurrowCell(i,j)||frontierRuinsGateAt(i,j)&&!frontierRuinsGateOpen();
+   }))break;
+   last=v;if(v===max)break;
+  }
+  const t=length>.01?last/length:0,big=x<10&&z>=38&&z<47;
+  return [x+dir[0]*t,Math.max(floor+.55,Math.min(floor+(big?3.78:2.86),target[1]+(eye[1]-target[1])*Math.max(t,.17))),z+dir[1]*t];
+ }
+ if(x<a.west||x>=a.east||z<a.north||z>a.south)return eye;
+ // Close the orbit smoothly as the walk descends. In the vaulted part,
+ // constrain the camera to the same physical space as the avatar.
+ const vault=1-frontierSmooth(24.35,28.8,x),arm=1-frontierSmooth(25.3,32,x);
+ const limit=(v,lo,hi)=>Math.max(lo,Math.min(hi,v)),mix=(v,w,t)=>v+(w-v)*t;
+ const ex=limit(eye[0],a.west+.30,a.east+1);
+ const ez=limit(eye[2],a.north+.33,a.south-.33);
+ const floor=frontierBurrowFloor(ex),shoulder=Math.abs(ez-a.mid)/2.63;
+ const cap=floor+2.55+1.98*Math.sqrt(Math.max(0,1-shoulder*shoulder));
+ const y=Math.max(floor+.47,mix(eye[1],Math.min(eye[1],cap-.28),vault));
+ const radius=.24+.76*(1-arm);
+ return [mix(eye[0],mix(x,ex,radius),arm),mix(eye[1],y,arm),mix(eye[2],mix(z,ez,radius),arm)];
+}
+// END FRONTIER WEST INTEGRATION
+
+// Western frontier parcel only. Coordinates are final physical x/z; nothing
+// here reads or mutates an existing parcel, cached save, object ID, or runtime.
+const FRONTIER_WEST_FOREST_ENTRANCE=Object.freeze({x:31.5,z:29.5});
+function frontierWestForestSmooth(a,b,x){
+ const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);
+}
+function frontierWestForestTrack(x){
+ // Flat tangents at the actual east parcel seam and the mine mouth.
+ const p=[[31.5,29.5],[35,29.5],[41,31.45],[47,33.5],[53,32.7],[60,30.5],[64,30.5]];
+ for(let i=1;i<p.length;i++)if(x<=p[i][0]){
+  const [a,b]=p[i-1],[c,d]=p[i];return b+(d-b)*frontierWestForestSmooth(a,c,x);
+ }
+ return 30.5;
+}
+function frontierWestForestTrail(x,z){
+ const mouth=frontierWestForestSmooth(28.7,31.3,x);
+ const d=Math.abs(z-frontierWestForestTrack(x));
+ return mouth*(1-frontierWestForestSmooth(.83,2.12,d));
+}
+function frontierWestForestHeight(x,z,seamHeight=0){
+ const hill=(cx,cz,rx,rz,h)=>h*(1-frontierWestForestSmooth(0,1,Math.hypot((x-cx)/rx,(z-cz)/rz)));
+ const grade=.39+hill(17,16,25,23,1.82)+hill(39,49,29,22,1.45)+hill(54,11,17,19,.95)
+  +.19*Math.sin(x*.28+z*.193)+.12*Math.cos(x*.52-z*.31);
+ const path=frontierWestForestTrail(x,z);
+ const yard=1-frontierWestForestSmooth(3,9,Math.hypot(x-31.5,z-29.5));
+ const road=.36+.14*Math.sin((x-31.5)*.11);
+ const flat=grade+(road-grade)*Math.max(yard,path*.88);
+ const eased=flat*frontierWestForestSmooth(0,4,Math.min(x,z,64-z));
+ const join=frontierWestForestSmooth(55,64,x);
+ return eased*(1-join)+seamHeight*join;
+}
+function frontierWestForestPopulate(put){
+ const hash=(x,z,n)=>((Math.imul(x+137+n*47,73856093)^Math.imul(z+101+n*61,19349663))>>>0)%1009/1009;
+ const blocked=(x,z)=>x<=1||x>=62||z<=1||z>=62||(x>=24&&x<=35&&z>=24&&z<=35)||
+  (x>=29&&Math.abs(z+.5-frontierWestForestTrack(x+.5))<2.65);
+ const tree=new Set(),occupy=(x,z)=>tree.add(x+','+z);
+ const groves=[[13,10,12],[19,41,14],[42,16,13],[47,51,13],[58,23,11],[8,55,10],[27,53,10]];
+ for(let cz=0;cz<32;cz++)for(let cx=0;cx<32;cx++){
+  const x=cx*2+Math.floor(hash(cx,cz,0)*2),z=cz*2+Math.floor(hash(cx,cz,1)*2);
+  if(blocked(x,z)||tree.has((x-1)+','+z)||tree.has(x+','+(z-1))||tree.has((x+1)+','+z))continue;
+  const cover=Math.max(...groves.map(([u,v,r])=>1-frontierWestForestSmooth(0,1,Math.hypot(x-u,z-v)/r)));
+  if(hash(cx,cz,2)>.25+cover*.57)continue;
+  const f=hash(x,z,3),birch=x>39?.39:.28;
+  put(x,z,f<birch?'treeBirch':f<.69?'treePine':'treeCedar',Math.floor(hash(x,z,4)*4));
+  occupy(x,z);
+ }
+ for(let z=2;z<=61;z++)for(let x=2;x<=61;x++){
+  if(blocked(x,z)||tree.has(x+','+z))continue;
+  const f=hash(x,z,5);
+  if(f<.031)put(x,z,hash(x,z,6)<.54?'bushFern':'flowerField',Math.floor(hash(x,z,7)*4));
+ }
+}
+
+// The west forest stair and the abandoned dressed-stone gallery beyond it.
+// The first seven metres are open to the sky; the portal supports the soil
+// above the gallery, with no geometry intersecting the five-tile passage.
+function frontierBurrowGeometry(){
+ const m=mesh(),center=29.5,west=10,east=25,mouth=32,half=2.63,spring=2.77,rise=1.99;
+ const grade=x=>frontierBurrowFloor(x),tint=(rgb,k)=>rgb.map(v=>Math.min(1,Math.max(0,v*k)));
+ const gravel=[.34,.26,.18],wetSoil=[.23,.17,.115],clay=[.38,.275,.18],cutRoot=[.24,.16,.096];
+ const shale=[.43,.415,.37],grout=[.265,.251,.219],damp=[.265,.299,.233];
+ const vary=(color,x,z,amount=.18)=>tint(color,1+amount*(surfaceNoise(x,z)-.5));
+ const inward=(a,b,c,d,col,flip=false)=>flip?quad(m,d,c,b,a,col):quad(m,a,b,c,d,col);
+ const floor=(a,b,z1,z2,col)=>quad(m,[b,grade(b)+.012,z1],[a,grade(a)+.012,z1],
+   [a,grade(a)+.012,z2],[b,grade(b)+.012,z2],col);
+ // Keep floor heights continuous across segments. Seams are mineral color,
+ // not raised trim: collision and lighting can follow the same ramp.
+ for(let x=west;x<mouth;x+=.5){
+  const a=x,b=Math.min(mouth,a+.5);
+  floor(a,b,center-half,center+half,x<east?grout:gravel);
+  for(let j=0;j<5;j++){
+   const l=center-2.5+j+.028,r=l+.944;
+   const begin=a+.022,end=b-.022;
+   const mineral=x<east?(surfaceNoise(x+7,j)>.87?damp:shale):surfaceNoise(x+9,j)>.81?clay:gravel;
+   quad(m,[end,grade(end)+.019,l],[begin,grade(begin)+.019,l],
+    [begin,grade(begin)+.019,r],[end,grade(end)+.019,r],vary(mineral,x,j,.33));
+  }
+ }
+ // The open trench: layered widening earthen banks, dirt faces above
+ // the retaining stones, interrupted by visible roots and chips.
+ const banks=[25,25.75,26.5,27.25,28,28.75,29.5,30.25,31,32];
+ for(const side of [-1,1])for(let i=0;i<banks.length-1;i++){
+  const x0=banks[i],x1=banks[i+1],g0=grade(x0),g1=grade(x1);
+  const edge=(x,j)=>center+side*(half+Math.max(0,x-east)*.047+j*(.24+.13*surfaceNoise(x,side+8)));
+  const profile=(x,g,j)=>[x,g+Math.max(0,-g)*[0,.36,.76,1][j],edge(x,j)];
+  for(let j=0;j<3;j++){
+   const hue=[wetSoil,clay,gravel][j];
+   inward(profile(x0,g0,j),profile(x1,g1,j),profile(x1,g1,j+1),profile(x0,g0,j+1),
+    vary(hue,i+side,j,.31),side>0);
+  }
+  // Exposed roots stay outside the walkable band and occur sparingly.
+  if(i===1||i===5){
+   const a=profile(x0,g0,2),b=profile(x1,g1,1);
+   naturalBranch(m,a[0],a[1],a[2],b[0],b[1],b[2],.074,.028,cutRoot);
+   const tip=profile(x1,g1,2);
+   naturalBranch(m,(a[0]+b[0])*.5,(a[1]+b[1])*.5,(a[2]+b[2])*.5,
+    tip[0]+.2,tip[1]-.17,tip[2],.039,.012,cutRoot);
+  }
+  if(i%2===0){
+   const xc=(x0+x1)*.5,zc=edge(xc,0)+side*.23;
+   cube(m,xc,grade(xc),zc,.37,.17+.11*surfaceNoise(i,4),.24,vary(gravel,i,side,.31));
+  }
+ }
+ // Continuous masonry sidewalls must stay outside the passable width.
+ for(const side of [-1,1])for(let x=west;x<east;x+=.75){
+  const a=x,b=Math.min(x+.75,east),z=center+side*half;
+  inward([a,grade(a),z],[b,grade(b),z],[b,grade(b)+spring,z],[a,grade(a)+spring,z],grout,side>0);
+  for(let j=0;j<4;j++){
+   const u=a+.026+(j%2)*.028,v=b-.031,y=j*spring/4+.026;
+   const top=y+spring/4-.051,k=z-side*.018;
+   inward([u,grade(u)+y,k],[v,grade(v)+y,k],[v,grade(v)+top,k],[u,grade(u)+top,k],
+    vary(j===0&&surfaceNoise(x,side)>.62?damp:shale,x+j*.35,side+3,.37),side>0);
+  }
+ }
+ const polar=(x,t,thick=0)=>[x,grade(x)+spring+(rise+thick)*Math.sin(t),center+(half+thick)*Math.cos(t)];
+ for(let x=west;x<east;x+=.75){
+  const a=x,b=Math.min(x+.75,east);
+  for(let j=0;j<14;j++){
+   const t=Math.PI*j/14,u=Math.PI*(j+1)/14;
+   quad(m,polar(b,t),polar(a,t),polar(a,u),polar(b,u),grout);
+   const aa=a+.027,bb=b-.027;
+   function tile(xx,angle){const v=polar(xx,angle,-.017);return v}
+   quad(m,tile(bb,t+.009),tile(aa,t+.009),tile(aa,u-.009),tile(bb,u-.009),vary(shale,x*.91,j+9,.32));
+  }
+ }
+ // Portal and ribs built of independently toned wedge blocks; carved feet,
+ // keystone band and thickness are visible from both directions.
+ for(const x of [11.45,16.1,20.7,24.83]){
+  const portal=x>24,a=x-.17,b=x+.17,width=portal?.41:.19;
+  for(const side of [-1,1]){
+   const z=center+side*(half+.09);
+   for(let j=0;j<5;j++)cube(m,x,grade(x)+j*.55,z,portal?.52:.34,.524,portal?.36:.29,
+    vary(j===0?damp:shale,x+j,side,.28));
+   cube(m,x,grade(x)+spring-.06,z,portal?.60:.42,.09,.41,grout);
+  }
+  for(let j=0;j<13;j++){
+   const t=Math.PI*j/13+.016,u=Math.PI*(j+1)/13-.016;
+   const col=vary(j===6?[.52,.493,.42]:shale,x,j+13,.3);
+   quad(m,polar(b,t,-.10),polar(b,u,-.10),polar(b,u,width),polar(b,t,width),col);
+   quad(m,polar(a,u,-.10),polar(a,t,-.10),polar(a,t,width),polar(a,u,width),tint(col,.95));
+   quad(m,polar(a,t,-.10),polar(a,u,-.10),polar(b,u,-.10),polar(b,t,-.10),tint(col,.82));
+  }
+ }
+ // Ground-coloured edge collar around the structural portal, but never
+ // in the rectangular walkway or over the uncovered approach in front.
+ for(const side of [-1,1]){
+  const edge=center+side*(half+.07),outside=center+side*(half+1.38),g=grade(east);
+  const a=[east+.03,g,edge],b=[east+.03,-.015,outside],c=[east+.03,-.015,edge+side*.38];
+  inward(a,b,c,a,vary(wetSoil,east,side,.18),side<0);
+  for(let j=0;j<3;j++){
+   const t=j/3,u=(j+1)/3,z0=edge+(outside-edge)*t,z1=edge+(outside-edge)*u;
+   cube(m,east-.035,-.12-.044*j,(z0+z1)/2,.18,.14,Math.abs(z1-z0),vary(clay,j,side,.20));
+  }
+ }
+ // Stone/iron wall fixtures, each with restrained amber tones. No
+ // baked bright stripe across the floor or dependency on the light system.
+ for(const [x,side] of [[22.65,1],[18.55,-1],[14.4,1],[11.7,-1]]){
+  const z=center+side*(half-.045),g=grade(x),iron=[.249,.192,.126];
+  cube(m,x,g+1.78,z,.33,.35,.12,iron);
+  cube(m,x,g+1.82,z-side*.19,.29,.13,.34,[.367,.23,.118]);
+  cube(m,x,g+1.975,z-side*.225,.125,.205,.13,[.83,.373,.105]);
+  cube(m,x+.012,g+2.075,z-side*.235,.081,.147,.093,[.98,.655,.265]);
+ }
+ return m;
+}
+
+// Rectangles encode inclusive cell coordinates. Physical coordinates occupy
+// [x,x+1] by [z,z+1], the same convention as the adjoining burrow.
+const FRONTIER_RUINS=(()=>{
+ const cells=new Set(),rect=(x0,z0,x1,z1)=>{
+  for(let z=z0;z<=z1;z++)for(let x=x0;x<=x1;x++)cells.add(x+','+z);
+ };
+ rect(5,27,9,31);       // Shared five-tile-wide tunnel opening east at x=10
+ rect(5,25,7,27);       // Junction's northern throat
+ rect(4,21,8,25);       // Irregular northern gallery crossroad
+ rect(3,16,5,23);       // Western ruined study, blind north end
+ rect(7,9,9,22);        // Long northern ascent ruined / blocked at the end
+ rect(8,18,14,20);      // Eastern side gallery, dead end around x=14
+ rect(5,31,7,35);       // Main ascent heads around the collapsed wall
+ rect(7,33,20,35);      // Long transverse gallery with fighting space
+ rect(18,34,20,44);     // Turn south past the arches
+ rect(9,42,18,44);      // Approach the boss hall from the east
+ rect(1,38,9,46);       // 9×9 boss chamber
+ rect(5,46,5,50);       // A real single-cell gated reward corridor
+ rect(3,50,7,54);       // Small cache behind the lock
+ const P=(x,z)=>Object.freeze({x,z,y:0});
+ return Object.freeze({
+  cells,
+  BOSS:P(5,42),MOBS:Object.freeze([P(4,19),P(8,15),P(12,19),P(6,34),P(10,34),P(14,34),P(19,37),P(19,41),P(14,43),P(8,43),P(3,41)]),
+  LOOT:Object.freeze([P(4,17),P(8,10),P(13,19)]),
+  CHEST:P(5,53),GATE:P(5,49),ENTRY:P(9,29)
+ });
+})();
+
+function frontierRuinsGeometry(){
+ const m=mesh(),g=frontierBurrowFloor(10),cells=FRONTIER_RUINS.cells;
+ const mortar=[.251,.245,.216],slate=[.409,.408,.365],soot=[.305,.311,.277],green=[.263,.298,.231];
+ const sand=[.373,.346,.282],engraved=[.514,.463,.344];
+ const tone=(c,x,z,k=.28)=>c.map(v=>v*(1+(surfaceNoise(x,z)-.5)*k));
+ const top=(x0,z0,x1,z1,y,col)=>quad(m,[x1,y,z0],[x0,y,z0],[x0,y,z1],[x1,y,z1],col);
+ const at=(x,z)=>cells.has(x+','+z);
+ const roof=(x,z)=>x<=9&&x>=1&&z>=38&&z<=46?4.45:3.55;
+ function wall(x,z,d){
+  const h=roof(x,z);
+  // The winding's front face points inward, facing the walkable cell.
+  const rails=[
+   [[x,z],[x+1,z],[0,1]],[[x+1,z],[x+1,z+1],[-1,0]],
+   [[x+1,z+1],[x,z+1],[0,-1]],[[x,z+1],[x,z],[1,0]]
+  ];
+  const [a,b,n]=rails[d];
+  const face=(u,v,y0,y1,c,depth=0)=>{
+   const at=(t,y)=>[a[0]+(b[0]-a[0])*t+n[0]*depth,g+y,a[1]+(b[1]-a[1])*t+n[1]*depth];
+   quad(m,at(u,y0),at(v,y0),at(v,y1),at(u,y1),c);
+  };
+  face(0,1,0,h,mortar);
+  for(let j=0;j<5;j++){
+   const base=h*j/5+.018,end=h*(j+1)/5-.023;
+   const split=.39+.24*surfaceNoise(x+j*.41,z+d);
+   face(.019,split-.015,base,end,tone(j===0?green:slate,x+j+d*.2,z),.008);
+   face(split+.013,.981,base,end,tone(j===0?green:slate,z+j+d*.2,x),.008);
+  }
+ }
+ for(const k of cells){
+  const [x,z]=k.split(',').map(Number),big=x<=9&&z>=38&&z<=46;
+  top(x,z,x+1,z+1,g+.012,mortar);
+  let p=tone(surfaceNoise(x,z)>.84?green:slate,x,z);
+  if(big&&(x===1||x===9||z===38||z===46||Math.max(Math.abs(x-5),Math.abs(z-42))===2))p=tone(engraved,x,z,.18);
+  if(x===5&&z>=47)p=tone(sand,x,z,.17);
+  top(x+.026,z+.026,x+.974,z+.974,g+.018,p);
+  const y=g+roof(x,z),r=[x,y,z],s=[x+1,y,z],t=[x+1,y,z+1],u=[x,y,z+1];
+  quad(m,r,s,t,u,tone(soot,x,z,.14));
+  for(const [i,[dx,dz]] of [[0,[0,-1]],[1,[1,0]],[2,[0,1]],[3,[-1,0]]]){
+   if(at(x+dx,z+dz)||i===1&&x===9&&z>=27&&z<=31)continue;
+   wall(x,z,i);
+  }
+  // Close the ceiling-height transition without lowering the chamber.
+  if(big){
+   const high=y,low=g+3.55;
+   const steps=[
+    [0,-1,[x,low,z],[x+1,low,z],[x+1,high,z],[x,high,z]],
+    [0,1,[x+1,low,z+1],[x,low,z+1],[x,high,z+1],[x+1,high,z+1]]
+   ];
+   for(const [dx,dz,r,s,t,u] of steps)if(at(x+dx,z+dz)&&(z+dz<38||z+dz>46))quad(m,r,s,t,u,mortar);
+  }
+ }
+ // Short masonry header closes the height difference to the barrel
+ // vault without filling the five-tile shared east mouth below its soffit.
+ const soffit=g+3.55,inner=Math.asin((3.55-2.77)/1.99);
+ for(let j=0;j<10;j++){
+  const angle=j=>inner+(Math.PI-2*inner)*j/10;
+  const ring=j=>[10,g+2.77+1.99*Math.sin(angle(j)),29.5+2.63*Math.cos(angle(j))];
+  const a=ring(j),b=ring(j+1);
+  quad(m,[10,soffit,a[2]],[10,soffit,b[2]],b,a,tone(slate,j,39,.21));
+ }
+ for(const [z0,z1] of [[26.87,27],[32,32.13]])
+  quad(m,[10,g,z0],[10,g,z1],[10,g+2.77,z1],[10,g+2.77,z0],mortar);
+ // Monolithic granite gate jambs remain against the outer corridor edges,
+ // with a clear central span underneath for the game's actual locked gate.
+ const gate=FRONTIER_RUINS.GATE;
+ for(const side of [-1,1]){
+  const x=gate.x+.5+side*.435;
+  cube(m,x,g,gate.z+.5,.13,3.0,.32,tone(engraved,x,gate.z));
+ }
+ cube(m,gate.x+.5,g+2.85,gate.z+.5,1,.24,.34,soot);
+ // Wall-mounted relics are shallow, not obstacles or independent lights.
+ for(const [x,z,side] of [[4,17,-1],[8,11,1],[12,19,-1],[6,34,1],[2,42,-1],[8,42,1],[5,53,-1]]){
+  let fx, fz;
+  if(!at(x+side,z)){fx=x+.5+side*.47;fz=z+.5;}
+  else if(!at(x,z+side)){fx=x+.5;fz=z+.5+side*.47;}
+  else continue;
+  cube(m,fx,g+1.59,fz,.12,.31,.16,soot);
+  cube(m,fx,g+1.72,fz,.16,.12,.19,[.41,.279,.145]);
+  cube(m,fx,g+1.86,fz,.07,.21,.074,[.86,.502,.226]);
+ }
+ return m;
+}
+
+const FRONTIER_RUINS_BOSS_STATS=Object.freeze({hp:320,attack:23});
+const FRONTIER_RUINS_LOOT=Object.freeze([{type:'healingHerb',count:2},{type:'cannedFood',count:1},{type:'equipIronSword',count:1}]);
+const FRONTIER_RUINS_CHEST_KEY='frontierRuinsChest';
+function frontierRuinsCell(x,z){return FRONTIER_RUINS.cells.has(x+','+z)}
+function frontierRuinsBoss(o){
+ const p=FRONTIER_RUINS.BOSS;
+ return facilitySite?.id==='frontier'&&o?.type==='monsterGoblin'&&o.x===p.x&&o.z===p.z&&o.y===p.y;
+}
+function frontierRuinsGateOpen(){return facilitySite?.id==='frontier'&&poiHotbarRead().frontierRuinsCleared===true}
+function frontierRuinsGateAt(x,z){return x===FRONTIER_RUINS.GATE.x&&z===FRONTIER_RUINS.GATE.z}
+function frontierRuinsChestAt(x,z){return x===FRONTIER_RUINS.CHEST.x&&z===FRONTIER_RUINS.CHEST.z}
+function frontierRuinsChestReachable(){
+ return poiWalkActive&&poiWalkLevel===0&&frontierRuinsGateOpen()&&
+  Math.abs(poiWalkX-FRONTIER_RUINS.CHEST.x)+Math.abs(poiWalkZ-FRONTIER_RUINS.CHEST.z)===1&&
+  poiPlayerRayClear(FRONTIER_RUINS.CHEST.x,FRONTIER_RUINS.CHEST.z,0,poiWalkX,poiWalkZ);
+}
+function frontierRuinsRecordDefeat(o,state){
+ if(!frontierRuinsBoss(o)||state.hp!==0||frontierRuinsGateOpen())return false;
+ if(!poiEconomyWrite({...poiHotbarRead(),frontierRuinsCleared:true}))return false;
+ poiSound('mine-lock-click');poiMessagePush('遺跡の番人を倒した。奥の扉が開いた。','item');return true;
+}
+function frontierRuinsRewardInit(){
+ if(!frontierRuinsChestReachable())return false;
+ const kit=poiHotbarRead();if(kit[FRONTIER_RUINS_CHEST_KEY])return true;
+ const slots=Array(POI_CHEST_SIZE).fill(null);
+ slots[0]={type:'healingHerb',count:3};slots[1]={type:'cannedFood',count:2};
+ const weapon='equipBoneSword';
+ if(!poiInventoryOrdinarySlots(kit).some(c=>c?.type===weapon)&&!poiAnyChestHas(kit,weapon)&&!kit.drops?.some(c=>c.type===weapon))
+  slots[2]={type:weapon,count:1,durability:poiEquipmentDurabilityMax(weapon)};
+ return poiEconomyWrite({...kit,[FRONTIER_RUINS_CHEST_KEY]:{version:1,slots}});
+}
+function frontierRuinsStockLoot(){
+ if(facilitySite?.id!=='frontier'||poiWalkLevel!==0||!frontierRuinsCell(poiWalkX,poiWalkZ))return false;
+ const kit=poiHotbarRead();if(kit.frontierRuinsLootPlaced===true)return true;
+ const list=kit.drops||[],taken=new Set(list.map(d=>d.x+','+d.z+','+d.y));
+ const items=FRONTIER_RUINS.LOOT.flatMap((p,i)=>{
+  const {type,count}=FRONTIER_RUINS_LOOT[i];
+  if(taken.has(p.x+','+p.z+','+p.y))return [];
+  if(poiHotbarWeaponForType(type)&&(list.some(d=>d.type===type)||poiInventoryOrdinarySlots(kit).some(c=>c?.type===type)||poiAnyChestHas(kit,type)))
+   return [{...p,type:'healingHerb',count:2}];
+  const durability=poiEquipmentDurabilityMax(type);
+  return [{...p,type,count,...(durability?{durability}:{})}];
+ });
+ if(list.length+items.length>POI_INVENTORY_LIMIT)return false;
+ return poiEconomyWrite({...kit,drops:list.concat(items),frontierRuinsLootPlaced:true});
+}
+function frontierRuinsGateMesh(m){
+ const {x,z}=FRONTIER_RUINS.GATE,g=frontierBurrowFloor(10),c=[.219,.20,.144],iron=[.30,.281,.208];
+ for(let i=0;i<5;i++)cube(m,x+.16+i*.17,g,z+.51,.075,2.88,.12,i%2?c:iron);
+ for(const y of [.44,1.42,2.42])cube(m,x+.5,g+y,z+.51,.84,.105,.16,iron);
+ for(const side of [-1,1])cube(m,x+.5+side*.28,g+1.28,z+.41,.13,.24,.10,[.43,.326,.18]);
+}
+
 // BEGIN FRONTIER WATERSHED
 const FRONTIER_WATER_FORM=Object.freeze({
  center:64,bend:3,bendStart:30,bendRate:.14,half:2.76,narrow:.22,eddy:.13,
  head:10,tail:54,join:1.64,
  north:[63.15,11.1,9.55,7.25,1.35],south:[63.25,52.85,11.15,7.05,2.24]
 });
-const frontierRiverCenter=z=>FRONTIER_WATER_FORM.center+FRONTIER_WATER_FORM.bend*Math.sin((z-FRONTIER_WATER_FORM.bendStart)*FRONTIER_WATER_FORM.bendRate);
+const frontierOldRiverCenter=z=>FRONTIER_WATER_FORM.center+FRONTIER_WATER_FORM.bend*Math.sin((z-FRONTIER_WATER_FORM.bendStart)*FRONTIER_WATER_FORM.bendRate);
+const frontierRiverCenter=z=>FRONTIER_WEST_OFFSET+frontierOldRiverCenter(z);
 const frontierRiverWidth=z=>FRONTIER_WATER_FORM.half+FRONTIER_WATER_FORM.narrow*Math.sin(z*.47)+FRONTIER_WATER_FORM.eddy*Math.sin(z*1.57);
 function frontierLakeEdge(x,z,[cx,cz,rx,rz,phase]){
  const u=(x-cx)/rx,v=(z-cz)/rz;
@@ -36853,16 +37279,18 @@ function frontierLakeEdge(x,z,[cx,cz,rx,rz,phase]){
 }
 function frontierWaterFields(x,z){
  const f=FRONTIER_WATER_FORM;
- const channel=Math.max(Math.abs(x-frontierRiverCenter(z))-frontierRiverWidth(z),f.head-z,z-f.tail);
+ const channel=Math.max(Math.abs(x-frontierOldRiverCenter(z))-frontierRiverWidth(z),f.head-z,z-f.tail);
  const lake=Math.min(frontierLakeEdge(x,z,f.north),frontierLakeEdge(x,z,f.south));
  return {channel,lake};
 }
-function frontierRiver(x,z){
+function frontierRiver(x,z){return x<FRONTIER_WEST_OFFSET?99:frontierOldRiver(x-FRONTIER_WEST_OFFSET,z)}
+function frontierOldRiver(x,z){
  const {channel,lake}=frontierWaterFields(x,z),k=FRONTIER_WATER_FORM.join;
  const overlap=Math.max(0,1-Math.abs(channel-lake)/k);
  return Math.min(channel,lake)-overlap*overlap*k*.25;
 }
 function frontierLakeMix(x,z){
+ x-=FRONTIER_WEST_OFFSET;
  const {lake}=frontierWaterFields(x,z),t=Math.max(0,Math.min(1,(2.45-lake)/2.72));
  return t*t*(3-2*t);
 }
@@ -36906,7 +37334,7 @@ function frontierWaterSurface(m){
   }
  };
  const cell=(x,z,s)=>{const a=point(x,z),b=point(x,z+s),c=point(x+s,z+s),d=point(x+s,z);clip(a,b,c);clip(a,c,d)};
- for(let z=2;z<63;z++)for(let x=49;x<78;x++){
+ for(let z=2;z<63;z++)for(let x=49+FRONTIER_WEST_OFFSET;x<78+FRONTIER_WEST_OFFSET;x++){
   const near=Math.abs(frontierRiver(x+.5,z+.5));
   if(near<1.12){cell(x,z,.5);cell(x+.5,z,.5);cell(x,z+.5,.5);cell(x+.5,z+.5,.5);}
   else if(frontierRiver(x+.5,z+.5)<0)cell(x,z,1);
@@ -36983,8 +37411,8 @@ function frontierShoreDetails(m){
   while(r<15&&frontierRiver(center+r*side,z)<.16+n*.58)r+=.115;
   if(r<15)mark(center+side*r,z,n,side);
  }
- for(const [x0,z0,rx,rz] of [FRONTIER_WATER_FORM.north,FRONTIER_WATER_FORM.south]){
-  const side=z0<30?-1:1;
+ for(const [basis,z0,rx,rz] of [FRONTIER_WATER_FORM.north,FRONTIER_WATER_FORM.south]){
+  const x0=basis+FRONTIER_WEST_OFFSET,side=z0<30?-1:1;
   for(let i=1;i<15;i++){
    const a=Math.PI*i/16,n=surfaceNoise(x0+i*6.9,z0*11.1);
    if(n<.51)continue;
@@ -36996,6 +37424,20 @@ function frontierShoreDetails(m){
  }
 }
 // END FRONTIER RIVER ART
+let frontierBurrowGpu=null,frontierRuinsGateGpu=null;
+function frontierDrawBurrow(vp){
+ if(facilitySite?.id!=='frontier'||!poiWalkActive||poiWalkViewX>86)return;
+ if(!frontierBurrowGpu){
+  const passage=frontierBurrowGeometry(),rooms=frontierRuinsGeometry();
+  for(const k of ['p','n','c'])passage[k].push(...rooms[k]);
+  frontierBurrowGpu=upload(passage);
+ }
+ draw(frontierBurrowGpu,vp);
+ if(!frontierRuinsGateOpen()){
+  if(!frontierRuinsGateGpu){const m=mesh();frontierRuinsGateMesh(m);frontierRuinsGateGpu=upload(m)}
+  draw(frontierRuinsGateGpu,vp);
+ }
+}
 let frontierWaterMesh=null;
 function frontierDrawWater(vp,now){
  if(facilitySite?.id!=='frontier')return;
@@ -37170,7 +37612,7 @@ void main(){
  }
  vec3 paint=pow(max(vCol,vec3(0.0)),vec3(.92));
  if(uFrontierWater.x>.5){
-  OCCP vec2 p=vLootXZ;
+  OCCP vec2 p=vLootXZ-vec2(${FRONTIER_WEST_OFFSET.toFixed(1)},0.0);
   ${frontierWaterShaderShape()}
   float t=uFrontierWater.y,lateral=p.x-center;
   float pool=1.0-smoothstep(-.27,2.45,lake);
@@ -37922,7 +38364,7 @@ function parameters(){
   }
   const target=[x,ground+(lowRoom?1.05:1.1),z];
   if(lowRoom&&!cottage)desired[1]=Math.max(ground+.22,Math.min(ground+1.30,desired[1]));
-  const eye=typeof facilitySharedWallCameraEye==='function'?facilitySharedWallCameraEye(target,desired,cottage):desired;
+  const eye=frontierBurrowCamera(target,typeof facilitySharedWallCameraEye==='function'?facilitySharedWallCameraEye(target,desired,cottage):desired);
   if(cottage)poiCottageFrame={cottage,target,eye};
   const arm=eye===desired?radius:Math.hypot(...eye.map((v,i)=>v-target[i]));
   const near=eye!==desired&&arm<1.81?.08:.45;
@@ -39819,7 +40261,11 @@ function render(){
   sceneMesh=variant.mesh;signOverlays=variant.signs;
  }
  if(cursorDirty){if(cursorMesh)gl.deleteBuffer(cursorMesh.buf);cursorMesh=makeCursor();cursorDirty=false}
- const daylight=poiTownSceneLight();gl.uniform3f(loc.daylight,...daylight);
+ const ambient=poiTownSceneLight(),ux=poiWalkViewX+.5,uz=poiWalkViewZ+.5;
+ const underground=facilitySite?.id==='frontier'&&poiWalkActive&&poiWalkLevel===0?
+  frontierRuinsCell(Math.floor(ux),Math.floor(uz))?1:uz>=27&&uz<=32?1-frontierSmooth(22,31.6,ux):0:0;
+ const daylight=underground?ambient.map((v,i)=>v+( [.69,.61,.51][i]-v)*underground):ambient;
+ gl.uniform3f(loc.daylight,...daylight);
  if(typeof poiSacredApplyFog==='function')poiSacredApplyFog(now,daylight);
  poiFieldHazePrepare(now);
  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
@@ -39830,7 +40276,7 @@ function render(){
   poiForestFrontDrop();
   if(typeof poiSacredClearScene==='function')poiSacredClearScene();
   poiOverlandPresent(p.vp);
- }else{stockGradeDraw(sceneMesh?.ground,p.vp);frontierDrawWater(p.vp,now);poiDrawSceneOcclusion(sceneMesh,p.vp);frontierDrawVillage(p.vp);frontierDrawHouse(p.vp);
+ }else{stockGradeDraw(sceneMesh?.ground,p.vp);frontierDrawWater(p.vp,now);frontierDrawBurrow(p.vp);poiDrawSceneOcclusion(sceneMesh,p.vp);frontierDrawVillage(p.vp);frontierDrawHouse(p.vp);
  if(typeof facilityDrawLocalScene==='function')facilityDrawLocalScene(p.vp);
  if(typeof facilityDrawForestScene==='function')facilityDrawForestScene(p.vp);
  facilityDrawRoofs(p.vp);poiDrawGameRoofs(p.vp);}}finally{poiFieldHazeStop()}
@@ -42946,10 +43392,10 @@ function pineOutsideMeadowCell(x,z){
  return z<0||z>47||x<1||x>66||(z>20&&x>62)||(z<4&&x>46);
 }
 // BEGIN FRONTIER LANDSCAPE
-const FRONTIER_W=192,FRONTIER_H=64,FRONTIER_SECTOR=64,FRONTIER_PARCEL=8;
+const FRONTIER_LEGACY_W=192,FRONTIER_W=FRONTIER_WEST_OFFSET+FRONTIER_LEGACY_W,FRONTIER_H=64,FRONTIER_SECTOR=64,FRONTIER_PARCEL=8;
 const FRONTIER_VILLAGE_NAME='リネア村';
-const FRONTIER_VILLAGE={x:44.5,z:30.5,r:12,opening:1.72};
-const FRONTIER_HOMES=[
+const FRONTIER_VILLAGE={x:44.5+FRONTIER_WEST_OFFSET,z:30.5,r:12,opening:1.72};
+const FRONTIER_LEGACY_HOMES=[
 
  {id:'frontierHouse',name:'村長の家',x1:43,x2:49,z1:21,z2:26,dx:46,tone:0,roofType:4,floorHeight:2.32,room:'inn',frontierStyle:'cottage',
   furniture:[[44,22,'cot','bed','n'],[48,22,'settle','chairWood','n'],[47,22,'hearth','crate','n'],[44,24,'blanketChest','crate','w'],[48,24,'mealTable','crate','e']]},
@@ -42959,10 +43405,12 @@ const FRONTIER_HOMES=[
  {id:'frontierCoupleHome',name:'セラとレンの家',x1:39,x2:44,z1:34,z2:37,dx:42,frontNorth:true,tone:2,roofType:2,floorHeight:2.08,room:'house',frontierStyle:'cottage',
   furniture:[[40,35,'cot','bed','n'],[43,35,'cot','bed','n'],[40,36,'blanketChest','crate','w']]}
 ];
+const FRONTIER_HOMES=FRONTIER_LEGACY_HOMES.map(b=>({...b,x1:b.x1+FRONTIER_WEST_OFFSET,x2:b.x2+FRONTIER_WEST_OFFSET,dx:b.dx+FRONTIER_WEST_OFFSET,
+ furniture:b.furniture.map(([x,...rest])=>[x+FRONTIER_WEST_OFFSET,...rest])}));
 function frontierRotateFurniture(b,furniture){
  return b.frontNorth?furniture.map(([x,z,...rest])=>[b.x1+b.x2-x,b.z1+b.z2-z,...rest]):furniture;
 }
-function frontierFrontage(x,z){
+function frontierFrontageAtOldX(x,z){
  return (x>=37&&x<=39||x>=45&&x<=47)&&z>=27&&z<=29||
   x>=41&&x<=42&&z>=31&&z<=33;
 }
@@ -42990,21 +43438,22 @@ function frontierVillageTrack(x){
  const w=frontierSmooth(8,17,Math.abs(x-44.5));return 30.5+(frontierTrack(x)-30.5)*w;
 }
 const FRONTIER_TEMPLE={x:160,z:43,radius:18,entry:13,exit:27};
-function frontierTemplePath(x,z){
+function frontierOldTemplePath(x,z){
  if(x<114||x>164)return false;
  if(x>=157)return x<162.5&&z>=9.5&&z<=30.8;
  const bend=30.5-19.5*frontierSmooth(125,156,x);
  return Math.abs(z-bend)<1.56;
 }
-function frontierTempleGround(x,z){
+function frontierOldTempleGround(x,z){
  return Math.hypot(x-160.5,z-43.5)<19.3||
   x>=157&&x<=164&&z>=9&&z<=30;
 }
+function frontierTempleGround(x,z){return frontierOldTempleGround(x-FRONTIER_WEST_OFFSET,z)}
 function frontierAppendTemple(site){
  // Re-anchor the original playable temple, not a copied facade. Coordinates
  // in floor keys, path sets, and chamber limits move together.
  const tmp={map:{world:[]},buildings:[]};
- const temple=extendTownWorldDavidTemple(tmp),dx=136,dz=-115;
+ const temple=extendTownWorldDavidTemple(tmp),dx=136+FRONTIER_WEST_OFFSET,dz=-115;
  const axis={x:dx,x1:dx,x2:dx,minX:dx,maxX:dx,z:dz,z1:dz,z2:dz,minZ:dz,maxZ:dz,enterZ:dz,exitZ:dz};
  const move=v=>{
   if(v instanceof Set)return new Set([...v].map(k=>{const [x,z]=k.split(',').map(Number);return (x+dx)+','+(z+dz)}));
@@ -43020,7 +43469,7 @@ function frontierAppendTemple(site){
  site.map.world.push(...pieces);site.buildings.push(...move(tmp.buildings));
  return site;
 }
-const FRONTIER_BRIDGE=Object.freeze({west:59,east:69,north:29,south:32});
+const FRONTIER_BRIDGE=Object.freeze({west:59+FRONTIER_WEST_OFFSET,east:69+FRONTIER_WEST_OFFSET,north:29,south:32});
 function frontierTrack(x){return 30.5+1.35*Math.sin((x-64)*.14)*Math.min(1,Math.max(0,(Math.abs(x-64)-7)/9))}
 function frontierSmooth(lo,hi,value){
  const t=Math.min(1,Math.max(0,(value-lo)/(hi-lo)));return t*t*(3-2*t);
@@ -43029,13 +43478,24 @@ function frontierRise(x,z,cx,cz,r,w,h){
  const d=Math.hypot((x-cx)/r,(z-cz)/w);return h*(1-frontierSmooth(0,1,d));
 }
 function frontierTreeHabitat(x,z){
+ if(x<FRONTIER_WEST_OFFSET)return .65+.24*(1-frontierWestForestTrail(x,z));
+ return frontierOldTreeHabitat(x-FRONTIER_WEST_OFFSET,z);
+}
+function frontierOldTreeHabitat(x,z){
  return Math.max(frontierRise(x,z,25,16,26,18,1),frontierRise(x,z,94,47,29,17,1),
   frontierRise(x,z,93,12,24,17,.93),frontierRise(x,z,35,49,24,16,.85),
   frontierRise(x,z,54,37,13,12,.75),frontierRise(x,z,75,19,12,11,.80));
 }
 function frontierHeight(x,z){
+ if(x>=FRONTIER_WEST_OFFSET)return frontierOldHeight(x-FRONTIER_WEST_OFFSET,z);
+ const forest=frontierWestForestHeight(x,z,frontierOldHeight(0,z));
+ if(x>=FRONTIER_BURROW.west&&x<=FRONTIER_BURROW.east&&z>=FRONTIER_BURROW.north&&z<=FRONTIER_BURROW.south)
+  return frontierBurrowFloor(x);
+ return forest;
+}
+function frontierOldHeight(x,z){
  if(x>=122){
-  if(frontierTempleGround(x,z)||frontierTemplePath(x,z))return 0;
+  if(frontierOldTempleGround(x,z)||frontierOldTemplePath(x,z))return 0;
   const route=30.5-19.5*frontierSmooth(125,156,x);
   const clearing=frontierSmooth(18.8,24,Math.hypot(x-160.5,z-43.5));
   const path=x<158?frontierSmooth(2,7,Math.abs(z-route)):frontierSmooth(3,7,Math.abs(x-160.5));
@@ -43043,13 +43503,13 @@ function frontierHeight(x,z){
   const h=frontierSmooth(0,7,Math.min(x-122,192-x,z,64-z));
   return plateau*h*clearing*path;
  }
- const bank=frontierRiver(x,z),edge=Math.min(x,z,FRONTIER_W-x,FRONTIER_H-z);
+ const bank=frontierOldRiver(x,z),edge=Math.min(x,z,FRONTIER_LEGACY_W-x,FRONTIER_H-z);
  if(edge<=1)return 0;
  if(bank<0)return -.075-.95*frontierSmooth(0,3.8,-bank);
  const road=frontierSmooth(2.2,8,Math.abs(z-frontierVillageTrack(x)));
  const bridge=frontierSmooth(1.5,6,Math.abs(z-30.5))*frontierSmooth(0,.9,bank);
  let home=1;
- for(const b of FRONTIER_HOMES){
+ for(const b of FRONTIER_LEGACY_HOMES){
   const gx=Math.max(0,b.x1-x,x-b.x2-1),gz=Math.max(0,b.z1-z,z-b.z2-1);
   home*=frontierSmooth(1.1,4.8,Math.hypot(gx,gz));
  }
@@ -43066,12 +43526,20 @@ function frontierBridgeCell(x,z){
  return x>=west&&x<east&&z>=north&&z<south;
 }
 function frontierSampleHeight(x,z){
+ if(frontierRuinsCell(Math.floor(x),Math.floor(z)))return frontierBurrowFloor(10);
  const ix=Math.floor(x),iz=Math.floor(z),dx=x-ix,dz=z-iz;
  const a=frontierHeight(ix,iz),c=frontierHeight(ix+1,iz+1);
  if(dx<dz)return a+(frontierHeight(ix,iz+1)-a)*(dz-dx)+(c-a)*dx;
  return a+(frontierHeight(ix+1,iz)-a)*(dx-dz)+(c-a)*dz;
 }
 function frontierDirtCoverage(x,z){
+ if(frontierBurrowCell(x,z))return 1;
+ if(x<FRONTIER_WEST_OFFSET)return frontierWestForestTrail(x,z);
+ const old=x-FRONTIER_WEST_OFFSET;
+ const link=(1-frontierSmooth(.85,2,Math.abs(z-(30.5+(frontierVillageTrack(old)-30.5)*frontierSmooth(7,20,old)))))*(1-frontierSmooth(20,25,old));
+ return Math.max(link,frontierOldDirtCoverage(old,z));
+}
+function frontierOldDirtCoverage(x,z){
  const wear=.16*Math.sin(x*1.08+z*.65)+.11*Math.cos(z*2.20-x*.52)+.08*Math.sin(x*3.38+z*4.39);
  const fade=(span,d)=>1-frontierSmooth(span-.37,span+.43,d+wear);
  const a=frontierVillageTrack(x),b=30.5-19.5*frontierSmooth(125,156,x);
@@ -43104,8 +43572,7 @@ function frontierGroundContact(x,z,trees){
 }
 function frontierGroundCuts(x,z){
  const xx=x+.5,zz=z+.5;
- return x>=20&&x<=165&&frontierDirtCoverage(xx,zz)>.035||
-  Math.hypot(xx-44.5,zz-30.5)<18;
+ return frontierDirtCoverage(xx,zz)>.035||Math.hypot(xx-FRONTIER_VILLAGE.x,zz-30.5)<18;
 }
 function frontierEarthTint(x,z,trees){
  const wood=frontierTreeHabitat(x,z),broad=.032*Math.sin(x*.27+z*.19)+.018*Math.cos(z*.54-x*.37),
@@ -43121,7 +43588,7 @@ function frontierEarthTint(x,z,trees){
 function frontierGroundKind(x,z){
  if(frontierHomeCell(x,z))return 'woodfloorLight';
  if(frontierRiver(x+.5,z+.5)<0)return 'river';
- if(frontierFrontage(x,z)||frontierDirtCoverage(x+.5,z+.5)>.48)return 'earth';
+ if(frontierFrontageAtOldX(x-FRONTIER_WEST_OFFSET,z)||frontierDirtCoverage(x+.5,z+.5)>.48)return 'earth';
  return 'grass';
 }
 function frontierSite(){
@@ -43134,12 +43601,20 @@ function frontierSite(){
  const put=(x,z,type,rot=0,y=0)=>{
   const key=[x,z,y,type].join(',');if(!occupied.has(key)){occupied.add(key);world.push({x,z,y,type,rot})}
  };
+ const boss=FRONTIER_RUINS.BOSS,chest=FRONTIER_RUINS.CHEST;
+ put(boss.x,boss.z,'monsterGoblin',2);
+ FRONTIER_RUINS.MOBS.forEach((p,i)=>put(p.x,p.z,i%2===0?'monsterSlime':'monsterGoblin',(i+1)%4));
+ put(chest.x,chest.z,'chest',2);
  const decks=new Set(),{west,east,north,south}=FRONTIER_BRIDGE;
  for(let z=north;z<south;z++)for(let x=west;x<east;x++){
   put(x,z,x===west||x===east-1?'bridgeWoodEnd':'bridgeWood',x===east-1?3:1);
   decks.add(x+','+z);
  }
- for(let z=0;z<FRONTIER_H;z++)for(let x=0;x<FRONTIER_W;x++){
+ frontierWestForestPopulate((x,z,type,rot)=>{
+  if(!frontierBurrowCell(x,z))put(x,z,type,rot);
+ });
+ for(let z=0;z<FRONTIER_H;z++)for(let x=FRONTIER_WEST_OFFSET;x<FRONTIER_W;x++){
+  const u=x-FRONTIER_WEST_OFFSET;
   const kind=frontierGroundKind(x,z),h=((Math.imul(x+71,73856093)^Math.imul(z+53,19349663))>>>0)%997;
   const fence=frontierVillageFence(x,z);if(fence)fenceCells.push([x,z]);
   if(kind==='woodfloorLight'){
@@ -43148,21 +43623,21 @@ function frontierSite(){
    const rot=z===b.z2?0:x===b.x1?1:z===b.z1?2:x===b.x2?3:null;
    b.footprint.push({x,z});
    if(rot!==null)put(x,z,corner?'plasterwallAll':'plasterwall'+(b.door.x===x&&b.door.z===z?'Door':z===b.z2||z===b.z1?'Window':''),rot);
-  }else if(x>=125&&kind==='grass'&&!frontierTempleGround(x+.5,z+.5)&&x<190&&z>4&&z<61){
-   const trail=30.5-19.5*frontierSmooth(125,156,x);
-   const approaches=(x<=159&&Math.abs(z-trail)<3.5)||(x>=155&&x<=164&&z<29);
+  }else if(u>=125&&kind==='grass'&&!frontierTempleGround(x+.5,z+.5)&&u<190&&z>4&&z<61){
+   const trail=30.5-19.5*frontierSmooth(125,156,u);
+   const approaches=(u<=159&&Math.abs(z-trail)<3.5)||(u>=155&&u<=164&&z<29);
    if(!approaches&&h<22&&(x+z)%2===0)put(x,z,h%3===0?'treeBirch':h%3===1?'treeCedar':'treePine',h%4);
    else if(!approaches&&h>45&&h<60)put(x,z,h%2?'rockMossy':'tallGrass',h%4);
-  }else if(kind==='grass'&&!fence&&x>2&&x<125&&z>2&&z<61&&
-    Math.abs(Math.hypot(x+.5-44.5,z+.5-30.5)-frontierVillageRadius(x+.5-44.5,z+.5-30.5))>1.20&&Math.hypot(x-46,z-25)>7&&
-    (x<21||x>109||Math.abs(z+.5-frontierVillageTrack(x+.5))>3.6)&&
-    !(x>=75&&x<=91&&z>=25&&z<=37)&&!decks.has(x+','+z)){
+  }else if(kind==='grass'&&!fence&&u>2&&u<125&&z>2&&z<61&&
+    Math.abs(Math.hypot(x+.5-FRONTIER_VILLAGE.x,z+.5-30.5)-frontierVillageRadius(x+.5-FRONTIER_VILLAGE.x,z+.5-30.5))>1.20&&Math.hypot(u-46,z-25)>7&&
+    (u>109||Math.abs(z+.5-frontierVillageTrack(u+.5))>(u<21?2.8:3.6))&&
+    !(u>=75&&u<=91&&z>=25&&z<=37)&&!decks.has(x+','+z)){
    const bank=frontierRiver(x+.5,z+.5),grove=frontierTreeHabitat(x,z);
    // A jittered two-tile lattice reserves walking gaps without a grid silhouette.
-   const ox=Math.floor(x/2),oz=Math.floor(z/2),
+   const ox=Math.floor(u/2),oz=Math.floor(z/2),
     seed=(Math.imul(ox+23,37111)^Math.imul(oz+47,69761)^Math.imul(ox+3,oz+777))>>>0;
    const sample=x%2===(seed&1)&&z%2===(seed>>1&1);
-   if(sample&&bank>1.18&&h<46+grove*340&&Math.hypot(x-51,z-30)>4.5)
+   if(sample&&bank>1.18&&h<46+grove*340&&Math.hypot(u-51,z-30)>4.5)
     put(x,z,bank<4.8?'treeBirch':['treeBirch','treePine','treeCedar'][h%3],h%4);
    else if(bank<1.9&&h<114)put(x,z,h<22?'rockMossy':h<51?'bushFern':'tallGrass',h%4);
    else if(h<30)put(x,z,h<7?'rockMossy':h<20?'flowerField':'tallGrass',h%4);
@@ -43173,14 +43648,14 @@ function frontierSite(){
  for(const [x,z,type,rot] of [[43,24,'lantern',0],
     [47,33,'wellStone',0],[46,32,'benchWood',2],[44,27,'benchWood',0],
     [50,33,'marketStallWood',0],[51,27,'rockMossy',0],[52,35,'treeBirch',0],[51,38,'treePine',0],
-    [55,36,'treeBirch',0],[53,26,'treeBirch',2],[55,24,'treePine',3],[57,26,'treeCedar',1]])if(!frontierVillageFence(x,z))put(x,z,type,rot);
- const person=(id,name,type,x,z,facing,appearance)=>({id,name,type,appearance,role:'local',job:'村人',home:{x,z,y:0,facing},public:{x,z,y:0,facing}});
- const chief={...person('frontierchief','ロアン','humanVillager',45,23,1,'roan'),job:'村長',homeBuilding:'frontierHouse',bed:frontierNpcHome(44,22)};
+    [55,36,'treeBirch',0],[53,26,'treeBirch',2],[55,24,'treePine',3],[57,26,'treeCedar',1]])if(!frontierVillageFence(x+FRONTIER_WEST_OFFSET,z))put(x+FRONTIER_WEST_OFFSET,z,type,rot);
+ const person=(id,name,type,x,z,facing,appearance)=>({id,name,type,appearance,role:'local',job:'村人',home:{x:x+FRONTIER_WEST_OFFSET,z,y:0,facing},public:{x:x+FRONTIER_WEST_OFFSET,z,y:0,facing}});
+ const chief={...person('frontierchief','ロアン','humanVillager',45,23,1,'roan'),job:'村長',homeBuilding:'frontierHouse',bed:frontierNpcHome(44+FRONTIER_WEST_OFFSET,22)};
  const clerk={...person(POI_FRONTIER_SHOP_ID,'ミナ','humanMerchant',38,23,2,'lina'),job:'道具屋',homeBuilding:'frontierStore',gear:FRONTIER_FITTED_GEAR,
-  home:frontierNpcHome(38,22),bed:frontierNpcHome(38,21)};
- const residents=[{...person('frontiersera','セラ','humanVillager',48,28,1,'sera'),home:frontierNpcHome(41,36),bed:frontierNpcHome(40,36),homeBuilding:'frontierCoupleHome'},
-  {...person('frontierren','レン','humanVillager',75,32,2,'kai'),home:frontierNpcHome(42,36),bed:frontierNpcHome(43,36),homeBuilding:'frontierCoupleHome'},chief,clerk];
- return frontierAppendTemple({id:'frontier',name:'川辺の原野',villageName:FRONTIER_VILLAGE_NAME,toolShop:{x:38,z:24},spawn:{x:51,z:30},respawnEntry:{x:51,z:30,y:0,facing:2},decks,buildings,residents,fenceCells,playerAppearance:'kai',
+  home:frontierNpcHome(38+FRONTIER_WEST_OFFSET,22),bed:frontierNpcHome(38+FRONTIER_WEST_OFFSET,21)};
+ const residents=[{...person('frontiersera','セラ','humanVillager',48,28,1,'sera'),home:frontierNpcHome(41+FRONTIER_WEST_OFFSET,36),bed:frontierNpcHome(40+FRONTIER_WEST_OFFSET,36),homeBuilding:'frontierCoupleHome'},
+  {...person('frontierren','レン','humanVillager',75,32,2,'kai'),home:frontierNpcHome(42+FRONTIER_WEST_OFFSET,36),bed:frontierNpcHome(43+FRONTIER_WEST_OFFSET,36),homeBuilding:'frontierCoupleHome'},chief,clerk];
+ return frontierAppendTemple({id:'frontier',name:'川辺の原野',villageName:FRONTIER_VILLAGE_NAME,toolShop:{x:38+FRONTIER_WEST_OFFSET,z:24},spawn:{x:51+FRONTIER_WEST_OFFSET,z:30},respawnEntry:{x:51+FRONTIER_WEST_OFFSET,z:30,y:0,facing:2},decks,buildings,residents,fenceCells,playerAppearance:'kai',
   map:{format:'forest-world-v1',version:1,width:FRONTIER_W,height:FRONTIER_H,size:FRONTIER_W,world,models:[],prefabs:[],checks:[]}});
 }
 function frontierGround(m){
@@ -43188,7 +43663,7 @@ function frontierGround(m){
  const cache=new Map();
  const vertex=(x,z)=>{
   const key=x*512+z;if(cache.has(key))return cache.get(key);
-  const h=frontierHeight(x,z),d=frontierRiver(x,z);
+  const h=frontierHeight(x,z),d=frontierRiver(x,z),u=x-FRONTIER_WEST_OFFSET;
   const broad=.034*Math.sin(x*.20+z*.135)+.019*Math.sin(z*.42-x*.29),
    grain=.012*(Math.sin(x*19.38+z*12.19)+Math.sin(z*15.31-x*7.78)),
    edge=frontierSmooth(1,8,Math.min(x,z,FRONTIER_W-x,FRONTIER_H-z));
@@ -43200,12 +43675,12 @@ function frontierGround(m){
    const wetSand=mix([.25+n,.24+n,.16+n],[.53+n,.46+n,.31+n],frontierSmooth(-.6,1.05,d));
    color=mix(wetSand,color,frontierSmooth(.0,3.0,d));
   }
-  if(x>=21&&x<=109&&d>.3){
-   const t=(1-frontierSmooth(.84,2.05,Math.abs(z-frontierVillageTrack(x))))*
-    frontierSmooth(21,25,x)*(1-frontierSmooth(105,109,x));
+  if(x<FRONTIER_WEST_OFFSET)color=mix(color,[.39+n,.29+n,.175+n],frontierWestForestTrail(x,z));
+  if(u>=0&&u<=109&&d>.3){
+   const t=frontierDirtCoverage(x,z)*(1-frontierSmooth(105,109,u));
    color=mix(color,[.49+n,.42+n,.28+n],t);
   }
-  const sq=(x-47.5)**2+(z-30.4)**2;
+  const sq=(u-47.5)**2+(z-30.4)**2;
   if(sq<22)color=mix(color,[.54+n,.50+n,.41+n],.84*(1-frontierSmooth(9,22,sq)));
   if(FRONTIER_HOMES.some(b=>x>=b.x1&&x<=b.x2+1&&z>=b.z1&&z<=b.z2+1))color=mix(color,[.45+grain,.31+grain,.18+grain],.96);
   const nx=frontierHeight(x-.35,z)-frontierHeight(x+.35,z),nz=frontierHeight(x,z-.35)-frontierHeight(x,z+.35),
@@ -43219,7 +43694,7 @@ function frontierGround(m){
  // Submit one complete ground buffer; parcel boundaries are never visible or aged out.
  for(let pz=0;pz<FRONTIER_H;pz+=FRONTIER_PARCEL)
   for(let px=0;px<FRONTIER_W;px+=FRONTIER_PARCEL){
-   for(let z=pz;z<pz+FRONTIER_PARCEL;z++)for(let x=px;x<px+FRONTIER_PARCEL;x++)cell(x,z,1);
+   for(let z=pz;z<pz+FRONTIER_PARCEL;z++)for(let x=px;x<px+FRONTIER_PARCEL;x++)if(x<10||x>=32||z<27||z>=32||frontierRuinsCell(x,z))cell(x,z,1);
   }
 }
 // END FRONTIER LANDSCAPE
@@ -48904,7 +49379,8 @@ function workshopResumeDecode(raw){
   (field||d.id==='frontier'&&p.x<FRONTIER_W&&p.z<FRONTIER_H||p.x<MAX_MAP&&(p.z<MAX_MAP||deep&&p.y>=0&&(p.x<POI_SACRED_DEPTH_W||typeof poiSnowSleeveOwn==='function'&&poiSnowSleeveOwn(p.x,p.z))&&p.z<POI_SACRED_DEPTH_H))&&
   Number.isInteger(p.y)&&p.y>=-1&&p.y<=MAX_LEVEL&&Number.isInteger(p.facing)&&p.facing>=0&&p.facing<4
   ?{x:p.x,z:p.z,y:p.y,facing:p.facing,...(d.id==='frontier'&&p.y===0&&frontierResumeFine(p)?{subX:p.subX,subZ:p.subZ}:{})}:null;
- return {version:1,route:d.route,id:d.route==='facility'?d.id:null,play:d.play===true,position,
+ const shifted=d.id==='frontier'&&d.frontierWest!==1?frontierShiftPoint(position):position;
+ return {version:1,route:d.route,id:d.route==='facility'?d.id:null,play:d.play===true,position:shifted,
   ...(typeof poiSnowPassDecode==='function'?poiSnowPassDecode(d,position):{}),
   ...(d.route==='facility'&&d.id==='base'&&d.templeDepth===1?{templeDepth:1}:{}),
   ...(d.route==='facility'&&d.id==='base'&&([2,3,4,5].includes(d.townLayout))?{townLayout:d.townLayout}:{}),
@@ -48957,6 +49433,7 @@ function workshopResumeWrite(override,seed=false){
   ...(facilitySite?.id==='snowpass'&&poiWalkActive?{region:'snowpass',regionHp:poiPlayerDeath?POI_PLAYER_MAX_HP:poiPlayerHP}:{}),
   ...(facilitySite?.id==='base'?(facilitySite.townOffset>=22?{townLayout:5,townMapHeight:facilitySite.map.height}:{townLayout:facilitySite.townOffset?4:3}):{}),
   ...(facilitySite?.id==='base'&&facilitySite.davidTemple?.depth===1?{templeDepth:1}:{}),
+  ...(facilitySite?.id==='frontier'?{frontierWest:1}:{}),
   tag:route==='editor'||route==='map-play'?workshopResumeTag:null,
   position:poiWalkActive?(typeof poiPlayerDeath!=='undefined'&&poiPlayerDeath&&!poiPlayerDeath.relocated?
    poiPlayerDeathSpawn(poiPlayerDeath.checkpoint):{x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,facing:poiWalkFacing,...frontierResumeCoordinates()}):null,
@@ -48998,7 +49475,8 @@ function workshopResumeApplyView(v){
  poiSyncCameraModeUI();dirty=true;cursorDirty=true;
 }
 function workshopResumeRestorePosition(p){
- if(facilitySite?.id==='frontier'&&p?.y===0&&p.x===41&&p.z===37&&!frontierResumeFine(p))p={...p,z:36};
+ if(facilitySite?.id==='frontier'&&p?.y===0&&frontierRuinsGateAt(p.x,p.z)&&!frontierRuinsGateOpen())p={...p,z:p.z-1};
+ if(facilitySite?.id==='frontier'&&p?.y===0&&p.x===41+FRONTIER_WEST_OFFSET&&p.z===37&&!frontierResumeFine(p))p={...p,z:36};
  if(typeof poiSouthPortRecoverPosition==='function')p=poiSouthPortRecoverPosition(p);
  if(typeof poiSouthForestRecoverPosition==='function')p=poiSouthForestRecoverPosition(p);
  if(typeof poiDavidTempleRecoverPosition==='function')p=poiDavidTempleRecoverPosition(p);
