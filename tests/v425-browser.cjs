@@ -36,6 +36,8 @@ h=h.replace(mark,mark+`
    poiTownDialogueClose();poiShopSync();
    if(!workshopResumeRestorePosition({x:115,z:30,y:0,facing:1,cave:false}))throw Error('bow position');
    const now=performance.now(),type='equipBlackwingBow',p=poiPlayerWeaponProfile(type);
+   const kit=poiHotbarRead(),slots=poiInventorySlots(kit).slice();slots[0]={type,count:1};
+   if(!poiEconomyWrite(poiInventoryEdited({...kit,weapon:type},slots)))throw Error('equip bow');
    if(!poiPlayerStartProfile(type,now))throw Error('bow start');
    const armed=poiPlayerWeaponPending?.type===type;
    poiPlayerWeaponFrame(now+p.hit+5);
