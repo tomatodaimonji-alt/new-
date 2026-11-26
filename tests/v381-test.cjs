@@ -1,0 +1,11 @@
+const a=require('node:assert/strict'),h=require('node:fs').readFileSync(process.argv[2],'utf8');
+a(h.includes("equipWoodSpear:{range:2.4"),'shortened spear');
+a(h.includes("equipStick:{range:1.55"),'stick reach');
+a(h.includes('profile?.reachStars'));
+a(h.includes('function frontierNpcReturning('));
+a(h.includes('function poiFrontierResidentSpear('));
+const start=h.indexOf('// BEGIN WORLD PLAYER SPEAR'),end=h.indexOf('function poiBuildWorldSpear(',start);
+const f=new Function(h.slice(start,end)+'return {line:poiWorldSpearLine,pose:poiWorldSpearPose,length:POI_WORLD_SPEAR_LENGTH}')();
+const p=f.pose({range:2.4,hit:240,pose:410},240),g={x:.16,y:.53,z:.10};
+const q=f.line(p,g);a.equal(q.tip[2],2.4);a(f.length<3);a(Math.abs(Math.hypot(...q.tip.map((v,i)=>v-q.rear[i]))-f.length)<1e-9);
+console.log('PASS shorter reach and rigid shared spear, explicit 10-star ratings and walk-back code');
