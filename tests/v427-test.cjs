@@ -22,3 +22,4 @@ a.equal(hp,70);
 const speech=h.slice(h.indexOf('function poiTownDialogueDraw('),h.indexOf('// END TOWN DIALOGUE',h.indexOf('function poiTownDialogueDraw(')));
 a.doesNotMatch(speech,/poiTownNpcDisplayName/);
 a.match(speech,/a\.role\.name/);
+a.match(h,/equipStick:\{range:1\.55,reachStars:3,damage:5,hit:165,ready:520/);
