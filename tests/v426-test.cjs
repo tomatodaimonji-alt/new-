@@ -1,0 +1,14 @@
+const a=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
+const s=fs.readFileSync(process.argv[2]??'world-editor.html','utf8');
+for(const m of s.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))if(m[1].trim())new vm.Script(m[1]);
+a.match(s,/name:'氷牙陣'/);
+a.match(s,/id="poiSkillListOpen"/);
+a.match(s,/id="poiSkillBar"/);
+a.match(s,/poiSkillSpendMana\(owner,skill.cost\)/);
+a.match(s,/poiIceFangImpact\(q,now\)/);
+a.match(s,/function poiSkillMana\(/);
+a.match(s,/function poiNpcIdleMesh/);
+const begin=s.indexOf('const POI_SKILLBOOK='),end=s.indexOf('\nlet poiIceFangCasts=',begin);
+const decode=vm.runInNewContext(s.slice(begin,end)+'\npoiLearnedSkills');
+a.deepEqual(Array.from(decode(['ice-fang','unknown','ice-fang'])),['ice-fang']);
+a.deepEqual(Array.from(decode(undefined)),[]);
