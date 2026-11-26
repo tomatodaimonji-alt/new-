@@ -30025,10 +30025,12 @@ function poiNpcMenuRows(d){
 function poiTownNpcStatus(actor){
  const role=actor.role,{weapon,gear,tools}=poiTownNpcLoadout(actor);
  const equipment=[weapon,gear.head,gear.torso,gear.legs,gear.feet];
+ const worn=frontierResident(role.id)?frontierNpcEquipment(poiHotbarRead(),role):null;
+ const equipmentCells=FRONTIER_GEAR_PARTS.map((part,i)=>worn?.[part]&&worn[part].type===equipment[i]?worn[part]:poiArmorCell(equipment[i]));
  return {name:role.name||'住人',job:role.job||(Object.hasOwn(POI_TOWN_JOB_LABELS,role.id)?POI_TOWN_JOB_LABELS[role.id]:null)||
    ({adventurer:'冒険者',visitor:'旅人',watch:'門番',keeper:'店主',scout:'斥候'})[role.role]||'住人',
   rank:role.adventureRank||'未登録',hp:actor.hp,maxHP:poiTownNpcMaxHp(role.id),
-  attack:poiTownNpcAttackPower(actor)??POI_TOWN_RESIDENT_MELEE,defense:poiTownNpcDefense(actor),...poiTownAttributes(actor,{weapon,gear}),weapon,gear,tools,equipment,
+  attack:poiTownNpcAttackPower(actor)??POI_TOWN_RESIDENT_MELEE,defense:poiTownNpcDefense(actor),...poiTownAttributes(actor,{weapon,gear}),weapon,gear,tools,equipment,equipmentCells,
   coins:frontierLifeId(role.id)?frontierVendorStock(poiHotbarRead(),role.id).gold:actor.coins||0,
   herbs:frontierLifeId(role.id)?frontierVendorStock(poiHotbarRead(),role.id).healingHerb:actor.potions||0,
   provisions:frontierLifeId(role.id)?frontierVendorStock(poiHotbarRead(),role.id).cannedFood:0,
@@ -30101,12 +30103,12 @@ function poiNpcInventoryView(actor,info=poiTownNpcStatus(actor),portrait=poiNpcP
  }
  const gear=document.createElement('div');gear.id='poiNpcInventoryGear';gear.setAttribute('role','group');gear.setAttribute('aria-label','装備');
  for(const [index,part] of ['weapon','head','torso','legs','feet'].entries()){
-  const item=info.equipment[index],tile=poiNpcInventoryTile(item?{type:item,count:1}:null);tile.dataset.npcGearSlot=part;
+  const cell=info.equipmentCells[index],item=cell?.type,tile=poiNpcInventoryTile(cell);tile.dataset.npcGearSlot=part;
   if(item){
    tile.dataset.npcEquipment=item;const label=poiInventoryItemName(item)||item;
    tile.title=label;tile.setAttribute('aria-label',label);
    const icon=document.createElement('span');icon.className='hotbar-icon';tile.append(icon);
-   poiInventoryPresentItem(tile,{type:item,count:1});
+   poiInventoryPresentItem(tile,cell);
   }
   else tile.setAttribute('aria-hidden','true');
   gear.append(tile);
@@ -30127,8 +30129,8 @@ function poiNpcInventorySync(actor=null){
   if(panel.firstChild)panel.replaceChildren();return;
  }
  const info=poiTownNpcStatus(actor),keys={actor,
-  bag:JSON.stringify(poiNpcInventoryItems(info)),gear:info.equipment.join(':'),
-  status:JSON.stringify([info.name,info.job,info.hp,info.maxHP,info.attack,info.defense]),
+  bag:JSON.stringify(poiNpcInventoryItems(info)),gear:JSON.stringify(info.equipmentCells),
+  status:JSON.stringify([info.name,info.job,info.rank,info.hp,info.maxHP,info.attack,info.defense,info.speed,info.intelligence]),
   visual:poiTownNpcGearVisualKey(actor)||actor.role.type};
  if(prior?.actor!==actor||!panel.firstChild){
   if(poiItemDetailSelection?.ref.zone==='npc')poiItemDetailClose(false);
@@ -30229,6 +30231,8 @@ function poiNpcTradeDetail(d,mode){
  const text=document.createElement('div'),name=document.createElement('strong'),price=document.createElement('p'),description=document.createElement('p');
  name.textContent=offer.name;price.textContent='1個 '+offer.price+'G';
  description.textContent=poiItemDetailDescription(cell);text.append(name,price,description);
+ const maximum=poiEquipmentDurabilityMax(cell.type);
+ if(maximum&&offer.cell){const condition=document.createElement('p');condition.textContent='耐久値 '+(offer.cell.durability??maximum)+' / '+maximum;text.append(condition)}
  if(offer.canTrade===false){const error=document.createElement('p');error.textContent=poiNpcTradeMessage(offer.reason);text.append(error)}
  const actions=document.createElement('div');actions.className='poiNpcTradeActions';
  actions.append(poiNpcTradeButton('confirm',mode==='sell'?'売る':'買う'));

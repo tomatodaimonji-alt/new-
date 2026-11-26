@@ -5,7 +5,7 @@ h=h.replace(mark,mark+`
  qa419:{
   ready:()=>facilitySite?.id==='frontier'&&poiWalkActive&&poiTownNpcActors.some(a=>a.role.id==='frontierren'),
   at:(x,z,facing)=>{poiTownDialogueClose();if(!workshopResumeRestorePosition({x,z,y:0,facing,cave:false}))throw Error('scene '+x+','+z);poiShopSync()},
-  seed:()=>{if(!poiEconomyWrite({...poiHotbarRead(),gold:300}))throw Error('seed');poiEconomyRefresh()},
+  seed:()=>{if(!poiEconomyWrite({...poiHotbarRead(),gold:300,frontierClothesGift:true}))throw Error('seed');poiEconomyRefresh()},
   shop:()=>poiNpcTradeCatalog(poiTownNpcActors.find(a=>a.role.id===POI_FRONTIER_SHOP_ID),'buy').map(r=>[r.type,r.quantity]),
   stuff:()=>{const kit=poiHotbarRead(),slots=poiInventorySlots(kit),ren=poiTownNpcActors.find(a=>a.role.id==='frontierren');
    return {slots:slots.filter(Boolean),ren:poiTownNpcStatus(ren),worn:frontierLifeRecord(kit,ren.role.id).worn,player:poiArmorWorn(kit),
@@ -59,7 +59,7 @@ try{
  await p.evaluate(()=>window.__editorTest.qa419.equip());
  await at(122,31,2);await action();await tap('request');await tap('sell');await tap('trade-sell:-13');await tap('confirm');
  const sold=await get();console.log('sold equipped trousers',sold.worn,sold.ren.gear);
- a.equal(sold.player.legs,null);a.equal(sold.ren.gear.legs,'armorLeatherLegs');a.equal(sold.worn.legs.durability,19);
+ a.equal(sold.player.legs,null);a.equal(sold.ren.gear.legs,'armorLeatherLegs');a.equal(sold.worn.legs.durability,19);a.equal(sold.ren.equipmentCells[3].durability,19);
  a.ok(sold.ren.carried.some(x=>x.type==='starterTrousers'));
  await tap('back');await tap('buy');await tap('trade:wear:weapon');await tap('confirm');
  const bought=await get();a.equal(bought.ren.weapon,null);a.equal(bought.ren.attack,0);a.ok(bought.slots.some(x=>x.type==='equipWoodSpear'));
