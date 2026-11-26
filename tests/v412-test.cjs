@@ -33,3 +33,15 @@ a.ok(Number.isFinite(bedside({x:100,z:34,y:0,dir:{x:1,z:0}},bed,false)));
 a.equal(bedside({x:100,z:36.7,y:0,dir:{x:0,z:-1}},bed,false),Infinity);
 a.equal(bedside({x:100,z:34,y:1,dir:{x:0,z:1}},bed,false),Infinity);
 console.log('bedside dialogue within a room, not through a wall or between floors');
+{
+ const inside={id:'house',door:{x:1,z:1},enterable:true,shape:'valdia-home'},outside={...inside,id:'other'};
+ const calls=[];
+ const gl={BLEND:1,CONSTANT_ALPHA:2,ONE_MINUS_CONSTANT_ALPHA:3,SRC_ALPHA:4,ONE_MINUS_SRC_ALPHA:5,
+  enable(){},disable(){},depthMask(){},blendFunc(){},blendColor(r,g,b,a){calls.push(a)}};
+ const ctx={gl,poiWalkActive:true,poiWalkLevel:0,poiWalkX:8,poiWalkZ:8,poiWalkViewX:8,poiWalkViewZ:8,
+  poiThirdPerson:true,poiCameraYaw:Math.PI,poiValdiaHomeAt:()=>inside,poiValdiaDoorStates:new Map(),poiValdiaDoorGpu:new Map(),poiOverlandBoxVisible:()=>true,
+  poiValdiaDoorMotion:()=>0,poiValdiaDoorGeometry:(b,amount,exit)=>[b.id,exit],upload:x=>x,draw:x=>calls.push(x),performance};
+ vm.runInNewContext(fn('poiValdiaDoorsDraw')+"\npoiValdiaDoorsDraw(k,null,[1,1])",{...ctx,k:{id:'frontier',buildings:[inside,outside]}});
+ a.deepEqual(calls,[.28,['house',true],0,['other',false]]);
+}
+console.log('only the current interior door is drawn transparently with its exit frame');

@@ -9,6 +9,7 @@ h=h.replace(mark,mark+`
   target:()=>poiTownDialogueTarget(performance.now())?.role?.id??null,
   sync:()=>poiShopSync(),
   dialogue:()=>poiTownDialogueSnapshot(),
+  exitDraw:()=>[...poiValdiaDoorGpu.keys()].some(k=>k.startsWith('frontierWatchHouse:')&&k.endsWith(':exit')),
   party:()=>poiHumanPartyMembers(poiHotbarRead()).map(x=>x.id),
  },
 `);
@@ -27,9 +28,10 @@ try{
  const tap=()=>p.locator('#poiWalkAction').tap();
  await at(115,28,0);a.deepEqual(await p.evaluate(()=>window.__editorTest.qa412.walk(0,-1)),[115,27]);
  await at(101,37,0);a.equal(await p.evaluate(()=>window.__editorTest.qa412.target()),null);
- await at(100,33,2);a.deepEqual(await p.evaluate(()=>window.__editorTest.qa412.walk(0,1)),[100,34]);
+ await at(101,32,2);a.deepEqual(await p.evaluate(()=>window.__editorTest.qa412.walk(0,1)),[101,33]);a.deepEqual(await p.evaluate(()=>window.__editorTest.qa412.walk(0,1)),[101,34]);
  await at(100,34,1); // face along the room, not toward either bed
  await p.waitForFunction(()=>window.__editorTest.qa412.target()==='frontiersugimoto',null,{timeout:5000});
+ await p.waitForFunction(()=>window.__editorTest.qa412.exitDraw(),null,{timeout:5000});
  await sync();await tap();a.equal((await get()).text,'ZZZ…');
  a.equal(await p.locator('#poiWalkAction').textContent(),'次へ');
  await tap();a.match((await get()).text,/遺跡/);

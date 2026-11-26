@@ -38236,7 +38236,7 @@ function frontierDrawHouse(vp){
  if(facilitySite?.id!=='frontier')return;
  const g=[poiWalkViewX+.5,poiWalkViewZ+.5];
  poiValdiaHomesDraw(facilitySite,vp,g);
- if(facilityHiddenRoof()===null)poiValdiaDoorsDraw(facilitySite,vp,g);
+ poiValdiaDoorsDraw(facilitySite,vp,g);
 }
 function stockGradeDraw(m,vp){
  if(!m?.parcels||poiFieldHazeFrame?.id!=='base'||!poiThirdPerson||!vp||vp.length!==16||!vp.every(Number.isFinite))return draw(m,vp);
@@ -48957,8 +48957,8 @@ function poiValdiaDoorMotion(state,opens,now){
  state.value=Math.max(0,Math.min(1,state.value+(opens?1:-1)*elapsed/(opens?250:315)));
  return state.value;
 }
-function poiValdiaDoorGeometry(b,amount){
- if(b.frontierStyle&&b.frontNorth)return frontierRotateBuildingMesh(poiValdiaDoorGeometry(frontierSouthGeometryRecord(b),amount),b);
+function poiValdiaDoorGeometry(b,amount,exit=false){
+ if(b.frontierStyle&&b.frontNorth)return frontierRotateBuildingMesh(poiValdiaDoorGeometry(frontierSouthGeometryRecord(b),amount,exit),b);
  const m=mesh(),w=.906,h=2.13,hinge=b.door.x+.051,z=b.door.z+.925;
  const plank=[[.44,.296,.185],[.48,.322,.196],[.51,.35,.224],[.455,.302,.183],[.493,.325,.191]];
  const beam=[.306,.203,.135],iron=[.224,.239,.229],brass=[.60,.466,.248];
@@ -48978,6 +48978,12 @@ function poiValdiaDoorGeometry(b,amount){
   const x=m.p[i],v=m.p[i+2],nx=m.n[i],nz=m.n[i+2];
   m.p[i]=hinge+x*C+v*S;m.p[i+2]=z-x*S+v*C;
   m.n[i]=nx*C+nz*S;m.n[i+2]=-nx*S+nz*C;
+ }
+ if(exit){
+  const frame=[.52,.381,.245];
+  for(const u of [hinge-.026,hinge+w+.027])cc(u,.028,z,.055,2.12,.106,frame);
+  cc(hinge+w*.5,2.154,z,w+.11,.060,.11,frame);
+  cc(hinge+w*.5,.020,z,w+.097,.029,.135,frame);
  }
  return m;
 }
@@ -49003,11 +49009,18 @@ function poiValdiaDoorsDraw(k,vp,g){
   // Retain an open leaf but don't leave a closed door floating by itself.
   const room=poiValdiaHomeAt(k,poiWalkViewX+.5,poiWalkViewZ+.5);
   const bearing=poiThirdPerson?poiCameraYaw:yaw+Math.PI;
-  if(index===0&&room===b&&Math.cos(bearing)<0)continue;
-  const key=b.id+':'+index;
+  const exit=k.id==='frontier'&&poiWalkActive&&poiWalkLevel===0&&room===b;
+  if(!exit&&index===0&&room===b&&Math.cos(bearing)<0)continue;
+  const key=b.id+':'+index+(exit?':exit':'');
   let gpu=poiValdiaDoorGpu.get(key);
-  if(!gpu){gpu=upload(poiValdiaDoorGeometry(b,index/12));poiValdiaDoorGpu.set(key,gpu)}
-  draw(gpu,vp);
+  if(!gpu){gpu=upload(poiValdiaDoorGeometry(b,index/12,exit));poiValdiaDoorGpu.set(key,gpu)}
+  if(!exit){draw(gpu,vp);continue}
+  gl.enable(gl.BLEND);gl.blendColor(0,0,0,.28);
+  gl.blendFunc(gl.CONSTANT_ALPHA,gl.ONE_MINUS_CONSTANT_ALPHA);gl.depthMask(false);
+  try{draw(gpu,vp)}finally{
+   gl.depthMask(true);gl.blendColor(0,0,0,0);
+   gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.disable(gl.BLEND);
+  }
  }
 }
 function frontierHomeInteriorAt(site,x,z){
