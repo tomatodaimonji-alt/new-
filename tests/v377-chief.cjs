@@ -1,0 +1,11 @@
+const fs=require('node:fs'),a=require('node:assert/strict'),h=fs.readFileSync(process.argv[2],'utf8');
+a(h.includes("const FRONTIER_VILLAGE_NAME='リネア村';"),'named village area is required');
+a(h.includes("frontierchief:'equipWalkingCane'"),'chief has real cane');
+a(h.includes("'human:frontierchief':'frontierchief'"));
+const s=h.indexOf('function frontierIntroVillager('),e=h.indexOf('function frontierFallenDecode(',s);
+const code=h.slice(s,e);
+const make=new Function("const FRONTIER_RESIDENT_WEAPONS={frontierchief:'equipWalkingCane',frontiersera:'equipWoodBow',frontierren:'equipWoodSpear'};"+code+"return {frontierIntroVillager,frontierResident};");
+const {frontierIntroVillager:intro,frontierResident:resident}=make();
+a(!intro('frontierchief')&&resident('frontierchief'));
+a(h.includes("equipWalkingCane:'歩行杖'"));
+console.log('PASS named village, separately recruitable chief, no duplicate tutorial, real cane item');
