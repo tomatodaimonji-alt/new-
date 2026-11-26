@@ -1733,7 +1733,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v404）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v405）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -2090,6 +2090,7 @@ const localStorage=frontierBoot?{
  removeItem:k=>window.localStorage.removeItem('frontier-v1:'+k)
 }:window.localStorage;
 const WORKSHOP_RESUME_KEY='world-workshop-resume-v1';
+const WORKSHOP_AUTOSAVE_MS=1000;
 let workshopResumeReady=false,workshopResumeLeaving=false,workshopResumeRaw='',workshopResumeTag='empty',workshopAdventureResumeQuiet=false;
 let facilitySite=null,facilityRoofMeshes=[],facilityExportFallback=null;
 let facilityInitialMap='',facilityLeaving=false,facilityEditView=null,facilityHasCellar=false;
@@ -21856,6 +21857,7 @@ function poiOrvasRewardRestore(kit,raw,minute=poiDungeonPopulationMinute()){
 function poiDungeonRememberDefeat(o,state,debris=null){
  if(!poiWalkActive||pineAIActive||poiWalkLevel!==o.y||state?.hp!==0)return false;
  if(frontierRuinsBoss(o))return frontierRuinsRecordDefeat(o,state);
+ if(frontierRuinsDefeatKey(o))return frontierRuinsRememberMob(o,state);
  if(o.northReturnSlot!==undefined&&typeof poiNorthReturnRecordDefeat==='function')return poiNorthReturnRecordDefeat(o,state);
  const id=poiDungeonSpawnId(o);
  if(!id)return false;
@@ -22048,6 +22050,7 @@ function poiHotbarRead(){
  const kit={weapon:saved.weapon,potions:saved.potions};
  if(facilitySite?.id==='frontier'){
   if(saved.frontierRuinsCleared===true)kit.frontierRuinsCleared=true;
+  const defeated=frontierRuinsDefeatsDecode(saved.frontierRuinsDefeats);if(defeated.length)kit.frontierRuinsDefeats=defeated;
   if(saved.frontierRuinsLootPlaced===true)kit.frontierRuinsLootPlaced=true;
   const chest=poiChestDecode(saved.frontierRuinsChest);if(chest&&kit.frontierRuinsCleared)kit.frontierRuinsChest=chest;
  }
@@ -22172,6 +22175,7 @@ function poiHotbarSave(kit=poiHotbarState){
    ...(kit.sacredTempleSeen===true?{sacredTempleSeen:true}:{}),
    ...(kit.frontierLife?{frontierLife:kit.frontierLife}:{}),
    ...(kit.frontierRuinsCleared===true?{frontierRuinsCleared:true}:{}),
+   ...(kit.frontierRuinsDefeats?.length?{frontierRuinsDefeats:frontierRuinsDefeatsDecode(kit.frontierRuinsDefeats)}:{}),
    ...(kit.frontierRuinsLootPlaced===true?{frontierRuinsLootPlaced:true}:{}),
    ...(kit.frontierRuinsChest?{frontierRuinsChest:kit.frontierRuinsChest}:{}),
    ...(kit.frontierChiefStickGift===true?{frontierChiefStickGift:true}:{}),
@@ -25459,7 +25463,10 @@ function poiNorthReturnExit(realm){
 // END NORTH FORT RETURN ENCOUNTER
 
 const poiHeroLessons={};
-function poiResetCombat(){poiHeroLessons.learnedAttacks?.clear();poiHeroLessons.dodgedAt=-Infinity;poiWildClear();poiPlayerHP=POI_PLAYER_MAX_HP;poiMonsterStates=new Map();const population=typeof poiDungeonPopulationDecode==='function'&&(facilitySite?.id==='base'||facilitySite?.id==='frontier')?poiDungeonPopulationDecode(poiHotbarRead().dungeonPopulation):null;for(const o of world){if(poiIsMonster(o.type)&&!(frontierRuinsBoss(o)&&frontierRuinsGateOpen())&&!(typeof poiWildFieldFixedPolicy==='function'&&poiWildFieldFixedPolicy(o))&&!(typeof poiNorthWatchGuardDefeated==='function'&&poiNorthWatchGuardDefeated(o))&&!(population&&poiDungeonActorAbsent(o,population)))poiMonsterStates.set(o,poiCombatActorMake(o))}poiDamageLabels=[];poiNextMobTick=0;poiAttackReady=0;poiMonsterMeshDirty=true;poiCombatHud();dirty=true}
+function poiResetCombat(){poiHeroLessons.learnedAttacks?.clear();poiHeroLessons.dodgedAt=-Infinity;poiWildClear();poiPlayerHP=POI_PLAYER_MAX_HP;poiMonsterStates=new Map();const kit=(facilitySite?.id==='base'||facilitySite?.id==='frontier')?poiHotbarRead():null;
+ const population=kit?poiDungeonPopulationDecode(kit.dungeonPopulation):null;
+ const frontierDead=facilitySite?.id==='frontier'?new Set(kit?.frontierRuinsDefeats):null;
+ for(const o of world){if(poiIsMonster(o.type)&&!(frontierRuinsBoss(o)&&kit?.frontierRuinsCleared)&&!frontierDead?.has(frontierRuinsDefeatKey(o))&&!(typeof poiWildFieldFixedPolicy==='function'&&poiWildFieldFixedPolicy(o))&&!(typeof poiNorthWatchGuardDefeated==='function'&&poiNorthWatchGuardDefeated(o))&&!(population&&poiDungeonActorAbsent(o,population)))poiMonsterStates.set(o,poiCombatActorMake(o))}poiDamageLabels=[];poiNextMobTick=0;poiAttackReady=0;poiMonsterMeshDirty=true;poiCombatHud();dirty=true}
 const POI_MESSAGE_LIFETIME=5000,POI_MESSAGE_MAX=2;
 const poiMessageLines=[];
 let poiMessageSpeech=null,poiMessageTyping=null;
@@ -31200,7 +31207,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v404',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v405',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -31315,7 +31322,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v404';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v405';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -31530,7 +31537,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v404',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v405',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -35607,7 +35614,7 @@ function poiWalkEnterCell(dx,dz,now,continuous=false,onDoorCue){
  if(typeof poiSoulFloorWalkover==='function')poiSoulFloorWalkover(poiWalkX,poiWalkZ,now);
  frontierEstateWalkover();
  if(!poiWalkDoorFoley(door,fromLevel,onDoorCue)&&!continuous)poiWalkFootstep(wet);
- poiWalkRoof();if(!continuous)poiWalkAvatar(poiWalkStarted);poiWalkStatus();if(pineGameActive){workshopAdventureResumeQuiet=false;pineGameSave()}workshopResumeWrite();
+ poiWalkRoof();if(!continuous)poiWalkAvatar(poiWalkStarted);poiWalkStatus();if(pineGameActive){workshopAdventureResumeQuiet=false;pineGameSave()}if(facilitySite?.id!=='frontier')workshopResumeWrite();
  return dx?'x':'z';
 }
 function poiNorthTrailForkSignReachable(){
@@ -37489,6 +37496,29 @@ function frontierRuinsBoss(o){
  const p=FRONTIER_RUINS.BOSS;
  return facilitySite?.id==='frontier'&&o?.type==='monsterGoblin'&&o.x===p.x&&o.z===p.z&&o.y===p.y;
 }
+// BEGIN FRONTIER RUINS DEFEAT LEDGER
+function frontierRuinsDefeatKey(o){
+ if(facilitySite?.id!=='frontier'||o?.y!==0)return null;
+ const idx=FRONTIER_RUINS.MOBS.findIndex(p=>p.x===o.x&&p.z===o.z&&!frontierRuinsArenaAt(p.x,p.z));
+ if(idx>=0&&o.type===(idx%2===0?'monsterSlime':'monsterGoblin'))return o.type+':'+o.x+':'+o.z;
+ if(FRONTIER_RUINS.ARENA_MOBS.some(p=>p.x===o.x&&p.z===o.z&&p.type===o.type))return o.type+':'+o.x+':'+o.z;
+ return null;
+}
+function frontierRuinsDefeatsDecode(raw){
+ if(!Array.isArray(raw))return [];
+ const allowed=new Set([
+  ...FRONTIER_RUINS.MOBS.flatMap((p,i)=>frontierRuinsArenaAt(p.x,p.z)?[]:[(i%2===0?'monsterSlime':'monsterGoblin')+':'+p.x+':'+p.z]),
+  ...FRONTIER_RUINS.ARENA_MOBS.map(p=>p.type+':'+p.x+':'+p.z)
+ ]);
+ return [...new Set(raw.slice(0,64).filter(v=>allowed.has(v)))].sort();
+}
+function frontierRuinsRememberMob(o,state){
+ const key=frontierRuinsDefeatKey(o);if(!key||state?.hp!==0)return false;
+ const kit=poiHotbarRead(),dead=kit.frontierRuinsDefeats||[];
+ if(dead.includes(key))return false;
+ return poiEconomyWrite({...kit,frontierRuinsDefeats:[...dead,key]});
+}
+// END FRONTIER RUINS DEFEAT LEDGER
 function frontierRuinsGateOpen(){return facilitySite?.id==='frontier'&&poiHotbarRead().frontierRuinsCleared===true}
 function frontierRuinsGateAt(x,z){return x===FRONTIER_RUINS.GATE.x&&z===FRONTIER_RUINS.GATE.z}
 function frontierRuinsChestAt(x,z){return x===FRONTIER_RUINS.CHEST.x&&z===FRONTIER_RUINS.CHEST.z}
@@ -38627,8 +38657,13 @@ function poiOrbitHigherDome(){
  return poiWalkActive&&poiThirdPerson&&!cameraTopDown&&!pineAIActive&&poiWalkLevel===0&&
   typeof poiDavidTempleEnclosedAt==='function'&&poiDavidTempleEnclosedAt(facilitySite,poiWalkViewX,poiWalkViewZ,poiWalkLevel);
 }
+const POI_ORBIT_DUNGEON_MIN=-.50;
+function poiOrbitDungeonLookUp(){
+ return poiWalkActive&&poiThirdPerson&&!cameraTopDown&&!pineAIActive&&poiWalkLevel===0&&
+  facilitySite?.id==='frontier'&&frontierBurrowRoofAt(poiWalkViewX+.5,poiWalkViewZ+.5);
+}
 function poiOrbitPitchClamp(pitch){
- const low=poiSkyCanLookUp()||poiOrbitHigherDome()?POI_ORBIT_LOOKUP_LIMIT:.12;
+ const low=poiSkyCanLookUp()||poiOrbitHigherDome()?POI_ORBIT_LOOKUP_LIMIT:poiOrbitDungeonLookUp()?POI_ORBIT_DUNGEON_MIN:.12;
  return Math.max(low,Math.min(1.15,pitch));
 }
 function poiOrbitHigherLens(eye,target,pitch,allowed){
@@ -38751,7 +38786,10 @@ function parameters(){
   const near=eye!==desired&&arm<1.81?.08:.45;
   const fov=lowRoom&&!cottage||eye!==desired?facilityWatchtowerCloseFov(arm):Math.PI/3;
   const lensTarget=poiDavidRevealLook(eye,target,performance.now());
-  const viewTarget=poiOrbitHigherLens(eye,lensTarget,poiCameraPitch,higher);
+  // Keep the existing physical eye/arm under the roof. In Frontier's
+  // covered underground rooms only the lens can tilt a little higher.
+  const dungeonLook=poiOrbitDungeonLookUp();
+  const viewTarget=poiOrbitHigherLens(eye,lensTarget,dungeonLook?Math.max(POI_ORBIT_DUNGEON_MIN,poiCameraPitch):poiCameraPitch,higher||dungeonLook);
   let sky=null;
   if(skyOutdoor||sacredView){
    // Anchor the time-of-day palette to physical elevations, not camera
@@ -49774,6 +49812,7 @@ function workshopResumeDecode(raw){
   ...(d.route==='facility'&&d.id==='base'&&d.townLayout===5&&Number.isInteger(d.townMapHeight)&&
    d.townMapHeight>=96&&(d.townMapHeight<=MAX_MAP||deep)?{townMapHeight:d.townMapHeight}:{}),
   tag:typeof d.tag==='string'&&/^(empty|[a-f0-9]{8})$/.test(d.tag)?d.tag:null,
+  ...(d.id==='frontier'&&d.play===true&&Number.isInteger(d.frontierHp)&&d.frontierHp>=1&&d.frontierHp<=100?{frontierHp:d.frontierHp}:{}),
   view:view(d.view),editorView:view(d.editorView)};
 }
 function workshopResumePermitted(params){
@@ -49820,7 +49859,7 @@ function workshopResumeWrite(override,seed=false){
   ...(facilitySite?.id==='snowpass'&&poiWalkActive?{region:'snowpass',regionHp:poiPlayerDeath?POI_PLAYER_MAX_HP:poiPlayerHP}:{}),
   ...(facilitySite?.id==='base'?(facilitySite.townOffset>=22?{townLayout:5,townMapHeight:facilitySite.map.height}:{townLayout:facilitySite.townOffset?4:3}):{}),
   ...(facilitySite?.id==='base'&&facilitySite.davidTemple?.depth===1?{templeDepth:1}:{}),
-  ...(facilitySite?.id==='frontier'?{frontierWest:1}:{}),
+  ...(facilitySite?.id==='frontier'?{frontierWest:1,...(poiWalkActive?{frontierHp:poiPlayerDeath&&!poiPlayerDeath.relocated?POI_PLAYER_MAX_HP:Math.max(1,Math.min(POI_PLAYER_MAX_HP,Math.round(poiPlayerHP)))}:{})}:{}),
   tag:route==='editor'||route==='map-play'?workshopResumeTag:null,
   position:poiWalkActive?(typeof poiPlayerDeath!=='undefined'&&poiPlayerDeath&&!poiPlayerDeath.relocated?
    poiPlayerDeathSpawn(poiPlayerDeath.checkpoint):{x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,facing:poiWalkFacing,...frontierResumeCoordinates()}):null,
@@ -49835,8 +49874,9 @@ function workshopResumeStart(){
  workshopResumeReady=true;
  workshopResumeWrite(undefined,startupEditor||facilityParams.get('guild-return')==='1');
  // Native activity termination and updates need not dispatch beforeunload.
- // Position/mode writes are immediate; camera-only gestures are sampled.
- setInterval(()=>{if(typeof poiGameFrozen!=='function'||!poiGameFrozen())workshopResumeWrite()},500);
+ // Frontier walk/camera/HP are sampled from the compact resume record.
+ // No write if the JSON bytes are unchanged; inventory and rewards keep their own event saves.
+ setInterval(()=>{if(!poiGameFrozen()&&!document.hidden)workshopResumeWrite()},WORKSHOP_AUTOSAVE_MS);
  window.addEventListener('pagehide',()=>workshopResumeWrite());
  document.addEventListener('visibilitychange',()=>{if(document.hidden)workshopResumeWrite()});
  window.addEventListener('pageshow',e=>{
@@ -49945,7 +49985,8 @@ function workshopResumeRestore(s){
    const snow=s.region==='snowpass'&&typeof poiSnowPassApply==='function'&&poiSnowPassApply({region:'snowpass',x:12,z:0,facing:2},performance.now(),true);
    facilitySetPlay(true);
    const next=snow?s.position:facilitySite.id==='base'?workshopResumeTownPosition(s,offset):s.position;
-   workshopResumeRestorePosition(typeof poiDavidTempleMigrateResume==='function'?poiDavidTempleMigrateResume(s,next):next);
+   const restored=workshopResumeRestorePosition(typeof poiDavidTempleMigrateResume==='function'?poiDavidTempleMigrateResume(s,next):next);
+   if(restored&&facilitySite?.id==='frontier'&&Number.isInteger(s.frontierHp)){poiPlayerHP=s.frontierHp;poiCombatHud()}
    if(snow&&Number.isInteger(s.regionHp)){poiPlayerHP=s.regionHp;poiCombatHud()}
    if(poiWalkActive)workshopResumeApplyView(s.view);
   }
