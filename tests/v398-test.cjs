@@ -1,0 +1,16 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const h=fs.readFileSync(process.argv[2]||'candidate.html','utf8');
+const b=h.match(/\/\/ BEGIN FRONTIER WEST INTEGRATION\n([\s\S]*?)\/\/ END FRONTIER WEST INTEGRATION/);
+assert(b,'frontier requires a west parcel and connected descent');
+const out={},ctx={out,facilitySite:{id:'frontier'},frontierRuinsCell:(x,z)=>x===9&&z>=27&&z<32,frontierSmooth:(lo,hi,v)=>{const t=Math.max(0,Math.min(1,(v-lo)/(hi-lo)));return t*t*(3-2*t)}};
+vm.runInNewContext(b[1]+'\nObject.assign(out,{FRONTIER_WEST_OFFSET,frontierBurrowFloor,frontierBurrowCell,frontierBurrowWalkEdge,frontierShiftPoint,frontierBurrowCamera});',ctx);
+assert.equal(out.FRONTIER_WEST_OFFSET,64);
+assert.equal(out.frontierShiftPoint({x:51,z:30,subX:51.2}).x,115);
+assert.equal(out.frontierShiftPoint({x:51,z:30,subX:51.2}).subX,115.2);
+assert(out.frontierBurrowFloor(32)>.1&&out.frontierBurrowFloor(16)<-4.5);
+for(let x=11;x<=31;x++)assert(out.frontierBurrowCell(x,29)&&out.frontierBurrowWalkEdge(x,29,x+1,29));
+assert(!out.frontierBurrowWalkEdge(20,26,20,27)&&out.frontierBurrowWalkEdge(9,29,10,29));
+const camera=out.frontierBurrowCamera([18, -4,29.5],[18,4,40]);
+assert(camera[2]<32&&camera[1]<0);
+for(const m of h.matchAll(/<script>([\s\S]*?)<\/script>/g))new vm.Script(m[1]);
+console.log('PASS west relocation, downhill gallery, side walls, vault camera and full inline syntax');
