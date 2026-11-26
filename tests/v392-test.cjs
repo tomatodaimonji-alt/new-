@@ -1,0 +1,10 @@
+const fs=require('node:fs'),vm=require('node:vm'),a=require('node:assert/strict');
+const h=fs.readFileSync(process.argv[2]||'candidate.html','utf8');
+for(const m of h.matchAll(/<script>([\s\S]*?)<\/script>/g))new vm.Script(m[1]);
+const i=h.indexOf('function poiRoleItemGeometry('),j=h.indexOf(" if(id==='armorCookHat')",i);
+const parts=[];const ctx={poiRoleToolGripStyle:()=>({grip:.17}),cube(m,x,y,z,w,dy,d){parts.push({y,dy})}};
+vm.runInNewContext(h.slice(i,j)+"}\npoiRoleItemGeometry({},'equipBallpointPen',0,0,0);",ctx);
+a.equal(parts.length,6);
+a(Math.abs(Math.max(...parts.map(p=>p.y+p.dy))-(.17+(.699-.17)*.88))<1e-9);
+a(h.includes('equipBallpointPen:{range:1,reachStars:1,speedStars:7,damage:12,hit:90,ready:250,pose:230,'));
+console.log('PASS pen geometry, speed grade, cooldown and unchanged range/damage');
