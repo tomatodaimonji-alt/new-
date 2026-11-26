@@ -1733,7 +1733,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v403）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v404）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -18846,11 +18846,26 @@ const POI_WEAPON_SE={
  equipWoodSword:  {swing:[940,1630,126],material:'woodSword',weight:1,cut:1},
  equipStoneSword: {playerBlade:true,swing:[815,1270,112],impact:[660,1260,162],weight:1.10,cut:.86},
  equipBoneSword:  {playerBlade:true,swing:[855,1520,124],impact:[710,1510,185],weight:.86,cut:.90},
- equipIronSword:  {playerBlade:true,recordedSteel:true,swing:[1100,1940,142],impact:[1060,1820,215],weight:.94,cut:1.08},
+ equipIronSword:  {playerBlade:true,recordedSteel:true,ironSword:true,swing:[1100,1940,142],impact:[1060,1820,215],weight:.94,cut:1.08},
  equipNorthMinotaurAxe:{playerBlade:true,recordedSteel:true,swing:[850,1520,120],impact:[840,1520,175],weight:1.13,cut:1}
 };
 const POI_WEAPON_CONTACT_DELAY=.108;
 function poiWeaponSound(kind,sound,now,contactDelay=POI_WEAPON_CONTACT_DELAY,player=true){
+ if(player&&sound.ironSword){
+  if(kind==='attack'){
+   // Slow, heavy air followed by a small rounded edge texture.
+   poiAudioNoiseBurst(now+.050,.164,740,.84,.132,.028);
+   poiAudioNoiseBurst(now+.097,.079,1430,.78,.068,.012);
+   poiAudioThud(now+.067,121,60,.104,.093,.012);
+  }else{
+   // One damped impact at physical contact; no pitched metal ring.
+   const t=now+contactDelay;
+   poiAudioThud(t,166,74,.107,.134,.008);
+   poiAudioNoiseBurst(t+.004,.064,720,.9,.133,.007);
+   poiAudioNoiseBurst(t+.019,.046,1210,.72,.053,.009);
+  }
+  return;
+ }
  if(player&&kind==='hit'&&sound.playerBlade){
   const contact=now+contactDelay;
   if(typeof poiTryRecordedFoley==='function'&&poiTryRecordedFoley('playerSteelCut',contact,.57))return;
@@ -25602,7 +25617,7 @@ function poiRenderEnemyHealth(now,vp){
  const frame=++poiEnemyBarFrame;
  if(poiWalkActive&&!pineAIActive)for(const [obj,state] of poiMonsterStates){
   if(obj.type==='monsterStoneDavid'&&(!state.david?.awake||state.david.returning))continue;
-  if(state.hp<=0||!poiSacredInteriorHostileVisible(obj)||(facilitySite&&obj.y!==poiWalkLevel)||
+  if(state.hp<=0||!frontierRuinsHealthVisible(state)||!poiSacredInteriorHostileVisible(obj)||(facilitySite&&obj.y!==poiWalkLevel)||
     (typeof poiDungeonVisualVisible==='function'&&!poiDungeonVisualVisible(obj.x,obj.z,obj.y))||
     Math.max(Math.abs(state.x-poiWalkX),Math.abs(state.z-poiWalkZ))>10)continue;
   const pose=poiMonsterPose(obj,state,now);
@@ -30393,7 +30408,11 @@ function frontierLifeLine(id,actor,kind,now){
  if(old?.kind===kind&&now<old.until+2500)return;
  const chief=id==='frontierchief',ren=id==='frontierren';
  const text=({pain:chief?'いてて……':ren?'いてっ！':'いたっ！',heal:chief?'薬草を使うぞ。':ren?'薬草を使うよ。':'薬草を使うね。',
-  empty:'もう薬草がない……',critical:chief?'これは……まずいのう。':ren?'このままじゃもたない……':'もう倒れそう……'})[kind];
+  empty:'薬草が切れちゃった。',supply:chief?'傷が深い。回復アイテムが必要じゃ。':ren?'回復アイテムが必要だ。':'薬草があれば、まだ戦えるんだけど。',
+  rest:chief?'そろそろ帰って休みたいのう。':ren?'いったん帰って休みたいな。':'ここは引いて、帰って休みたい。',
+  'herb-ask':chief?'誰か、薬草が余っておらんか？':ren?'誰か、薬草余ってないか？':'誰か薬草を余らせてない？',
+  'herb-sale':chief?'わしに余りがある。6Gでひとつ譲ろう。':ren?'持ってるよ。6Gでひとつどう？':'私、持ってるわよ。ひとつ6Gね。',
+  'herb-gift':chief?'余りがある。代金はいらんから使いなさい。':ren?'ひとつ持ってけ。お金はいいよ。':'私、持ってるわよ。代金はいいから使って。'})[kind];
  frontierLifeSpeech.set(id,{actor,text,kind,until:now+(kind==='pain'?1450:2200)});
 }
 function frontierLifeSpeechDraw(now,vp){
@@ -30413,11 +30432,80 @@ function frontierLifeSpeechDraw(now,vp){
  }
  for(const [id,el] of frontierLifeSpeechNodes)if(!frontierLifeSpeech.has(id)){el.remove();frontierLifeSpeechNodes.delete(id)}
 }
+// BEGIN FRONTIER PARTY HERB EXCHANGE
+const frontierNeedSpeech=new Map();
+let frontierHerbExchange=null,frontierHerbScanAt=0;
+function frontierPartyFight(a,member){
+ return member?.mode!=='follow'&&!!(a.attackMotion?.pending||a.allyTarget||a.fightLatch||a.frontierCombat||a.frontierStrike);
+}
+function frontierNeedLine(id,a,hp,combat,now){
+ const old=frontierNeedSpeech.get(id);
+ const context=combat?'supply':hp<=22?'rest':'empty';
+ if(old&&(now<old.at+18000||old.context===context&&now<old.at+30000))return false;
+ frontierNeedSpeech.set(id,{at:now,context});
+ frontierLifeLine(id,a,context,now);
+ return true;
+}
+function frontierHerbTrack(kit,a){
+ const id=a&&POI_HUMAN_PARTY_IDS[a.id];
+ if(!id||!frontierResident(id)||a.site!==facilitySite||a.y!==poiWalkLevel||a.partyDown||a.death||a.recessed)return null;
+ const member=poiHumanPartyDecode(kit.humanParty).find(v=>v.id===a.id);
+ return member?.hp?{id,a,member,stock:frontierVendorStock(kit,id)}:null;
+}
+function frontierHerbNeighbors(buy,sell,now){
+ if(!buy||!sell||buy.id===sell.id||buy.a.y!==sell.a.y||buy.stock.healingHerb!==0||buy.member.hp>55||
+    sell.stock.healingHerb<2||sell.member.hp<60||sell.a.attackMotion?.pending)return false;
+ const p=poiCompanionPosition(buy.a),q=poiCompanionPosition(sell.a);
+ if(!p||!q||Math.hypot(p.x-q.x,p.z-q.z)>2.5||Math.hypot(p.x-poiWalkX,p.z-poiWalkZ)>8||
+    Math.hypot(q.x-poiWalkX,q.z-poiWalkZ)>8)return false;
+ return poiCompanionAttackClear(p,q,buy.a.y);
+}
+function frontierHerbSettle(kit,buy,sell,now){
+ if(!frontierHerbNeighbors(buy,sell,now))return false;
+ const price=buy.member.hp<=22||buy.stock.gold<6||sell.stock.gold+6>POI_ECONOMY_GOLD_MAX?0:6;
+ const giver=frontierLifeStock(kit,sell.id,{...sell.stock,healingHerb:sell.stock.healingHerb-1,gold:sell.stock.gold+price});
+ const next=frontierLifeStock(giver,buy.id,{...buy.stock,healingHerb:1,gold:buy.stock.gold-price});
+ if(!poiEconomyWrite(next))return false;
+ buy.a.frontierHealAt=Math.max(buy.a.frontierHealAt||0,now+1650);
+ frontierLifeLine(sell.id,sell.a,price?'herb-sale':'herb-gift',now);
+ return true;
+}
+function frontierPartyHerbFrame(now,actors){
+ if(facilitySite?.id!=='frontier'||!poiWalkActive){frontierHerbExchange=null;return}
+ const blocked=typeof document!=='undefined'&&document.querySelector?.('dialog[open],.modal.open,:is(#poiBagPanel,#poiNpcMenu,#poiLandscapeMenu):not([hidden])');
+ if(blocked){frontierHerbExchange=null;return}
+ if(frontierHerbExchange){
+  const q=frontierHerbExchange;
+  if(now<q.replyAt)return;
+  frontierHerbExchange=null;frontierHerbScanAt=now+12000;
+  if(q.site!==facilitySite||now-q.replyAt>1800)return;
+  if(!actors.includes(q.buy)||!actors.includes(q.sell))return;
+  const kit=poiHotbarRead();
+  frontierHerbSettle(kit,frontierHerbTrack(kit,q.buy),frontierHerbTrack(kit,q.sell),now);
+  return;
+ }
+ if(now<frontierHerbScanAt||actors.length<2)return;
+ frontierHerbScanAt=now+600;
+ const kit=poiHotbarRead(),people=actors.map(a=>frontierHerbTrack(kit,a)).filter(Boolean);
+ const buyers=people.filter(p=>p.member.hp<=55&&!p.stock.healingHerb)
+  .sort((a,b)=>a.member.hp-b.member.hp);
+ for(const buy of buyers){
+  const old=frontierNeedSpeech.get(buy.id);
+  if(old&&now<old.at+18000)continue;
+  const donor=people.find(sell=>frontierHerbNeighbors(buy,sell,now));
+  if(!donor)continue;
+  frontierNeedSpeech.set(buy.id,{at:now,context:'ask'});
+  frontierHerbExchange={site:facilitySite,buy:buy.a,sell:donor.a,replyAt:now+1050};
+  frontierLifeLine(buy.id,buy.a,'herb-ask',now);
+  return;
+ }
+}
+// END FRONTIER PARTY HERB EXCHANGE
 function frontierNpcHeal(a,now){
  const id=a.role.id,kit=poiHotbarRead(),stock=frontierVendorStock(kit,id);
  if(a.hp>55||now<(a.frontierHealAt||0))return false;
  if(!stock.healingHerb){
-  frontierLifeLine(id,a,a.hp<=22?'critical':'empty',now);a.frontierHealAt=now+3000;return false;
+  frontierNeedLine(id,a,a.hp,!!(a.frontierCombat||a.frontierStrike),now);a.frontierHealAt=now+3000;return false;
  }
  const hp=Math.min(100,a.hp+POI_HOTBAR_HEAL);
  const next=frontierLifeSetStockAndHp(kit,id,{...stock,healingHerb:stock.healingHerb-1},hp);
@@ -30430,7 +30518,7 @@ function frontierHumanCompanionHeal(a,now){
  const kit=poiHotbarRead(),party=poiHumanPartyDecode(kit.humanParty),member=party.find(v=>v.id===a.id);
  if(!member?.hp||member.hp>55)return;
  const stock=frontierVendorStock(kit,id);
- if(!stock.healingHerb){frontierLifeLine(id,a,member.hp<=22?'critical':'empty',now);a.frontierHealAt=now+3000;return}
+ if(!stock.healingHerb){frontierNeedLine(id,a,member.hp,frontierPartyFight(a,member),now);a.frontierHealAt=now+3000;return}
  member.hp=Math.min(100,member.hp+POI_HOTBAR_HEAL);
  if(!poiEconomyWrite({...frontierLifeStock(kit,id,{...stock,healingHerb:stock.healingHerb-1}),humanParty:party}))return;
  a.frontierHealAt=now+4800;frontierLifeLine(id,a,'heal',now);
@@ -30793,7 +30881,8 @@ function poiTownResidentsFrame(now){
    if(poiTownDialogue?.actor===a&&!poiTownDialogue.sleeping)a.actorLeg.last=now;
    else poiTownNpcActorRun(a,now,poiTownNpcGraph());
   }
-  for(const a of poiPartyActors())if(POI_HUMAN_PARTY_IDS[a.id])frontierHumanCompanionHeal(a,now);
+  const partyActors=poiPartyActors();frontierPartyHerbFrame(now,partyActors);
+  for(const a of partyActors)if(POI_HUMAN_PARTY_IDS[a.id])frontierHumanCompanionHeal(a,now);
   for(const a of poiTownNpcActors)if(!a.death&&a.frontierStrike)frontierNpcStrike(a,now);
   if(now>=poiTownNpcNext){
    poiTownNpcNext=now+POI_TOWN_RESIDENT_TICK;
@@ -31111,7 +31200,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v403',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v404',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -31226,7 +31315,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v403';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v404';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -31441,7 +31530,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v403',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v404',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -32792,7 +32881,7 @@ const POI_PLAYER_WEAPON_BASE=Object.freeze({
  equipStoneMace:{range:1,damage:32,hit:380,ready:760,pose:620,commitAim:true,speed:1,reach:1},
  equipWoodSword:{...POI_SWORD_PROFILE,hit:205,ready:650,pose:530,speedStars:3,get damage(){return POI_PLAYER_ATTACK+POI_HOTBAR_SWORD_BONUS}},
  equipBoneSword:{...POI_SWORD_PROFILE,range:1.55,damage:24,speedStars:6},
- equipIronSword:{...POI_SWORD_PROFILE,range:2,damage:30,speedStars:5},
+ equipIronSword:{...POI_SWORD_PROFILE,range:2,damage:30,speedStars:2},
  equipOrvasHead:{range:14,damage:48,hit:420,ready:1520,pose:760,speed:1,reach:5,eyeBeam:true},
  equipOrvasGreatsword:{get range(){return POI_DAVID_SWEEP_FORWARD},get damage(){return POI_ORVAS_JUDGMENT_POWER},hit:560,ready:1150,pose:1150,speed:1,reach:5,sweep:true,orvasCut:'sweep'},
  equipOrvasTwinGreatswords:{range:3.55,get damage(){return POI_ORVAS_JUDGMENT_POWER},hit:720,ready:1730,pose:1730,speed:1,reach:4,orvasCut:'double'},
@@ -35386,13 +35475,13 @@ function poiShopSync(){
  const stay=typeof poiTownPlayerService==='function'?poiTownPlayerService():null;
  const talk=(visible||poiWalkActive&&facilitySite?.id==='frontier')&&typeof poiTownDialogueTarget==='function'&&poiTownDialogueTarget(performance.now());
  const soul=typeof poiSoulFloorReachable==='function'?poiSoulFloorReachable(performance.now()):null;
- const prompt=typeof poiTownDialogueSpeechOnly==='function'&&poiTownDialogueSpeechOnly()?(poiTownDialogue?.pendingGift?'npc-gift':poiTownDialogue?.pendingRecruit?'npc-recruit':poiTownDialogueHasNext()?'npc-next':'npc-dismiss'):poiShopIsOpen()?'npc-confirm':poiChestIsOpen()?'chest-close':frontierRuinsChestReachable()?'chest':poiKitchenChestReachable()?'chest':typeof poiMineVaultChestReachable==='function'&&poiMineVaultChestReachable()?'vault':typeof poiOtherworldChestReachable==='function'&&poiOtherworldChestReachable()?'otherworld-chest':typeof poiChapelChestReachable==='function'&&poiChapelChestReachable()?'chapel-chest':typeof poiQuestSurveyReachable==='function'&&poiQuestSurveyReachable()?'survey':stay==='rest'?'rest':talk?'talk':soul?'soul-pickup':typeof poiWayfarerWellReachable==='function'&&poiWayfarerWellReachable()?'well':(typeof poiNorthTrailForkSignReachable==='function'&&poiNorthTrailForkSignReachable()||typeof poiChapelWaymarkReachable==='function'&&poiChapelWaymarkReachable())?'trail-sign':'action';
+ const prompt=typeof poiTownDialogueSpeechOnly==='function'&&poiTownDialogueSpeechOnly()?(poiTownDialogue?.pendingGift?'npc-gift':poiTownDialogue?.pendingRecruit?'npc-recruit':poiTownDialogueHasNext()?'npc-next':'npc-dismiss'):poiShopIsOpen()?'npc-confirm':poiChestIsOpen()?'chest-close':frontierRuinsChestReachable()?'ruins-chest':poiKitchenChestReachable()?'chest':typeof poiMineVaultChestReachable==='function'&&poiMineVaultChestReachable()?'vault':typeof poiOtherworldChestReachable==='function'&&poiOtherworldChestReachable()?'otherworld-chest':typeof poiChapelChestReachable==='function'&&poiChapelChestReachable()?'chapel-chest':typeof poiQuestSurveyReachable==='function'&&poiQuestSurveyReachable()?'survey':stay==='rest'?'rest':talk?'talk':soul?'soul-pickup':typeof poiWayfarerWellReachable==='function'&&poiWayfarerWellReachable()?'well':(typeof poiNorthTrailForkSignReachable==='function'&&poiNorthTrailForkSignReachable()||typeof poiChapelWaymarkReachable==='function'&&poiChapelWaymarkReachable())?'trail-sign':'action';
  const landscape=$('viewWrap')?.hasAttribute?.('data-analog-play')===true;
  if(action)action._talkActor=prompt==='talk'?talk:null;
  if(action&&(action._shopPrompt!==prompt||!!action._shopLandscape!==landscape)){
   action._shopPrompt=prompt;action._shopLandscape=landscape;action._shopWeapon=undefined;
   if(action.dataset)delete action.dataset.actionArt;
-  const [label,aria]=prompt==='chest'?['開ける','チェストを開ける']:prompt==='chest-close'?['閉じる','チェストを閉じる']:
+  const [label,aria]=prompt==='ruins-chest'?['開ける','遺跡の宝箱を開ける']:prompt==='chest'?['開ける','チェストを開ける']:prompt==='chest-close'?['閉じる','チェストを閉じる']:
    prompt==='vault'?['開ける','宝物庫の宝箱を開ける']:prompt==='otherworld-chest'?['開ける','回廊の宝箱を開ける']:prompt==='chapel-chest'?['開ける','礼拝堂の宝箱を開ける']:prompt==='npc-confirm'?['選択','会話の選択肢を決定する']:prompt==='npc-recruit'?['決定','仲間に迎える']:prompt==='npc-gift'?['決定','贈り物を受け取る']:prompt==='npc-next'?['次へ','次のセリフへ']:prompt==='npc-dismiss'?['閉じる','会話を閉じる']:
    prompt==='survey'?['調べる','廃坑を調べる']:prompt==='trail-sign'?['読む','道しるべを読む']:prompt==='well'?['調べる','井戸を調べる']:prompt==='rest'?['休む','客室で休む']:prompt==='talk'?['話す','住人と話す']:prompt==='soul-pickup'?['拾う','仲間の魂を拾う']:['攻撃','攻撃または決定'];
   if(landscape&&prompt==='action')poiLandscapeActionWeaponSync(typeof poiArmedWandIndex==='function'&&poiArmedWandIndex()!==null?'fireWand':poiEquippedWeapon(),action);
@@ -35567,7 +35656,7 @@ function poiWayfarerWellRead(){
  toast('冷たい水の音がする。旅人が腰を下ろせるベンチがある。');
  return true;
 }
-function poiWalkAction(){
+function poiWalkAction(input=null){
  if(typeof poiLocalModalOpen==='function'&&poiLocalModalOpen())return;
  if(typeof poiSnowPassPending!=='undefined'&&poiSnowPassPending)return;
  if(!poiWalkActive||(typeof poiPlayerDying==='function'&&poiPlayerDying()))return;
@@ -35575,7 +35664,8 @@ function poiWalkAction(){
  if(poiShopIsOpen()){if(typeof poiTownDialogueAction==='function')poiTownDialogueAction(performance.now());return}
  if(poiChestIsOpen()){poiBagSetOpen(false);return}
  if(frontierRuinsChestReachable()){
-  if(poiInventoryAllowed()&&frontierRuinsRewardInit())poiChestSetOpen(true,FRONTIER_RUINS_CHEST_KEY);
+  if(input?.allowRuinsChest!==false&&!input?.repeat&&poiInventoryAllowed()&&frontierRuinsRewardInit())
+   poiChestSetOpen(true,FRONTIER_RUINS_CHEST_KEY);
   return;
  }
  if(typeof poiChapelChestReachable==='function'&&poiChapelChestReachable()){
@@ -37402,9 +37492,19 @@ function frontierRuinsBoss(o){
 function frontierRuinsGateOpen(){return facilitySite?.id==='frontier'&&poiHotbarRead().frontierRuinsCleared===true}
 function frontierRuinsGateAt(x,z){return x===FRONTIER_RUINS.GATE.x&&z===FRONTIER_RUINS.GATE.z}
 function frontierRuinsChestAt(x,z){return x===FRONTIER_RUINS.CHEST.x&&z===FRONTIER_RUINS.CHEST.z}
+// BEGIN RUIN INTERACTION VISIBILITY
+function frontierRuinsHealthVisible(state){
+ return facilitySite?.id!=='frontier'||!state.frontierRuins||poiWalkLevel===0&&
+  frontierBurrowRoofAt(poiWalkViewX+.5,poiWalkViewZ+.5);
+}
+function frontierRuinsFacesChest(x,z,facing,goal){
+ const [dx,dz]=[[0,-1],[1,0],[0,1],[-1,0]][facing]??[0,0];
+ return (dx!==0||dz!==0)&&x+dx===goal.x&&z+dz===goal.z;
+}
+// END RUIN INTERACTION VISIBILITY
 function frontierRuinsChestReachable(){
  return poiWalkActive&&poiWalkLevel===0&&frontierRuinsGateOpen()&&
-  Math.abs(poiWalkX-FRONTIER_RUINS.CHEST.x)+Math.abs(poiWalkZ-FRONTIER_RUINS.CHEST.z)===1&&
+  frontierRuinsFacesChest(poiWalkX,poiWalkZ,poiWalkFacing,FRONTIER_RUINS.CHEST)&&
   poiPlayerRayClear(FRONTIER_RUINS.CHEST.x,FRONTIER_RUINS.CHEST.z,0,poiWalkX,poiWalkZ);
 }
 function frontierRuinsRecordDefeat(o,state){
@@ -52562,7 +52662,7 @@ function poiAnalogActionAllowed(){
 poiAnalogAction.addEventListener('pointerdown',e=>{
  if(e.pointerType!=='touch'||e.button!==0||poiAnalogActionTouch||!poiAnalogActionLandscape())return;
  const can=poiAnalogActionAllowed(),talk=can&&poiAnalogAction._shopPrompt==='talk',valid=can&&(talk||typeof poiHealingCastActive!=='function'||!poiHealingCastActive());
- poiAnalogActionTouch={id:e.pointerId,x:e.clientX,y:e.clientY,valid,talk,actor:talk?poiAnalogAction._talkActor:null};
+ poiAnalogActionTouch={id:e.pointerId,x:e.clientX,y:e.clientY,valid,talk,allowRuinsChest:valid&&frontierRuinsChestReachable(),actor:talk?poiAnalogAction._talkActor:null};
 });
 poiAnalogAction.addEventListener('pointermove',e=>{
  const touch=poiAnalogActionTouch;
@@ -52583,13 +52683,13 @@ poiAnalogAction.addEventListener('pointerup',e=>{
   e.clientX<rect.left||e.clientX>rect.right||e.clientY<rect.top||e.clientY>rect.bottom)return;
  e.preventDefault();
  if(touch.talk){
-  if(!poiTownDialogue&&poiNpcGreetingBlockedByLock(now)){poiWalkAction();return}
+  if(!poiTownDialogue&&poiNpcGreetingBlockedByLock(now)){poiWalkAction({allowRuinsChest:touch.allowRuinsChest});return}
   if(!touch.actor||!poiTownDialogueAction(now,touch.actor)){
    toast('少し近づいてから話してみよう。');poiShopSync();
   }
   return;
  }
- poiWalkAction();
+ poiWalkAction({allowRuinsChest:touch.allowRuinsChest});
 });
 for(const event of ['pointercancel','lostpointercapture'])poiAnalogAction.addEventListener(event,e=>{
  if(poiAnalogActionTouch?.id===e.pointerId)poiAnalogActionTouch=null;
@@ -52673,7 +52773,7 @@ document.addEventListener('keydown',e=>{
   // Preserve native activation of focused editor controls. Gameplay focus
   // uses the same center action as ordinary play and its on-screen button.
   if(facilitySite&&e.target?.closest?.('button,a[href],summary'))return;
-  e.preventDefault();poiWalkAction();return;
+  e.preventDefault();poiWalkAction(e);return;
  }
  const d={arrowup:[0,-1],w:[0,-1],arrowdown:[0,1],s:[0,1],arrowleft:[-1,0],a:[-1,0],arrowright:[1,0],d:[1,0]}[k];
  if(d){e.preventDefault();if(e.repeat&&poiOtherworldKeyReleaseRequired)return;
