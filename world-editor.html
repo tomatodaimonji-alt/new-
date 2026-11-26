@@ -1755,7 +1755,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v448）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v449）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="2500" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -32904,10 +32904,32 @@ function poiNpcIdleMesh(m,first,last,x,y,z,heading,now,index=0){
   const nx=m.n[i],nz=m.n[i+2];m.n[i]=nx*ca-nz*sa;m.n[i+2]=nx*sa+nz*ca;
  }
 }
+// BEGIN FRONTIER RESIDENT DRAW CULL
+const FRONTIER_RESIDENT_SMALL_HELD=new Set([null,'equipWoodSpear','equipIronSpear','equipWoodBow','equipBlackwingBow',
+ 'equipMithrilSword','equipIronAxe','equipWoodSword','equipWalkingCane','equipBallpointPen']);
+function poiFrontierResidentDrawVisible(a,vp){
+ if(facilitySite?.id!=='frontier'||poiWalkLevel!==0||a.y!==0||!poiThirdPerson||
+    !FRONTIER_RESIDENT_SMALL_HELD.has(a.weapon??null)||a.bedId||a.frontierSkillCast||
+    /^(?:sleep|rest)-/.test(a.activity||''))return true;
+ // Cover all positions in an unfinished interpolated step and pad by
+ // more than the resident's model and held-weapon silhouette.
+ const {x,z}=a,px=a.fromX??x,pz=a.fromZ??z,lx=a.actorLeg?.x??x,lz=a.actorLeg?.z??z;
+ const y=terrainY(x,z),py=terrainY(px,pz),ly=terrainY(lx,lz);
+ return !stockAtlasOutside(vp,[Math.min(x,px,lx)-3.6,Math.min(y,py,ly)-1.5,Math.min(z,pz,lz)-3.6,
+  Math.max(x,px,lx)+4.6,Math.max(y,py,ly)+4.5,Math.max(z,pz,lz)+4.6]);
+}
+// END FRONTIER RESIDENT DRAW CULL
 function poiTownResidentsDraw(now,vp){
  if(!poiTownNpcActive()||!poiTownNpcActors.length)return;
  const inTime=(at,max)=>Number.isFinite(at)&&now>=at&&now-at<max;
- const actors=typeof poiOverlandActorVisible==='function'?poiTownNpcActors.filter(a=>poiOverlandActorVisible(vp,a.x,a.z,a.y)):poiTownNpcActors;
+ const actors=typeof poiOverlandActorVisible==='function'?poiTownNpcActors.filter(a=>{
+  if(!poiOverlandActorVisible(vp,a.x,a.z,a.y))return false;
+  if(poiFrontierResidentDrawVisible(a,vp))return true;
+  // Dialogue labels use the pose even when this frame has no body upload.
+  const rate=poiTownNpcVisualCadence(a,now);
+  a.visual={...poiTownNpcVisualPosition(a,now,!!rate),moving:rate>0,cadence:rate};
+  return false;
+ }):poiTownNpcActors;
  const nearActors=actors.filter(a=>!a.recessed&&!a.death&&poiTownNpcMotionNear(a));
  const poseFast=nearActors.some(a=>poiRegnaChantVisual(a,now,'resident')||inTime(a.swingAt,poiPlayerActionProfile(a.weapon)?.pose??260)||inTime(a.hurtAt,155)||inTime(a.gestureAt,1120));
  const walking=new Map();
@@ -33039,7 +33061,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v448',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v449',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -33154,7 +33176,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v448';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v449';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -33369,7 +33391,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v448',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v449',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -36042,8 +36064,10 @@ function poiBuildPlayerMesh(weapon,pose,gear,stride=0,r=0,x=0,y=0,z=0,heading=nu
  return m;
 }
 function poiWalkAvatar(now=performance.now()){
- if(poiWalkMesh){gl.deleteBuffer(poiWalkMesh.buf);poiWalkMesh=null}
- if(!poiWalkActive)return;
+ if(!poiWalkActive){
+  if(poiWalkMesh){gl.deleteBuffer(poiWalkMesh.buf);poiWalkMesh=null}
+  return;
+ }
  const ms=now-poiWalkActionStarted;
  const profile=poiPlayerActionProfile(poiWalkActionWeapon);
  const poseMs=profile?.pose||260;
@@ -36114,7 +36138,9 @@ function poiWalkAvatar(now=performance.now()){
   poiAimTrack({track:aim.track},now);
  }
  if(typeof poiCombatLockRenderedHeading!=='undefined')poiCombatLockRenderedHeading=poiCombatLockHeading;
- const put=m=>{const g=upload(m);g.orvasEyeSockets=m.orvasEyeSockets;return g};
+ // The vertices still follow every movement/attack pose. Stream them
+ // into one VBO instead of creating and deleting a resource every frame.
+ const put=m=>{const g=upload(m,poiWalkMesh?.buf,gl.DYNAMIC_DRAW);g.orvasEyeSockets=m.orvasEyeSockets;return g};
  if(aim){
   poiWalkMesh=put(poiBuildPlayerMesh(weapon,pose,gear,stride,[2,3,0,1][poiWalkFacing],x,y,z,aim.heading,true));
  }else if(typeof poiCombatLockHeading!=='undefined'&&Number.isFinite(poiCombatLockHeading)&&poiAimLocked?.id.y===poiWalkLevel){
@@ -36777,7 +36803,7 @@ function poiWalkCanStep(x,z,fromX,fromZ,exceptMonster,skipNpcTile=false,freeTree
  if(poiWalkLevel===0&&poiEastNatureBlocked(facilitySite,x,z))return false;
  const frontier=facilitySite?.id==='frontier'&&poiWalkLevel===0;
  const cave=frontier?(layer??(exceptMonster?!!exceptMonster.frontierRuins:frontierCollisionCave??frontierPlayCave)):false;
- if(frontier&&(!frontierBurrowWalkEdge(x,z,fromX,fromZ,cave)||cave&&frontierRuinsGateAt(x,z)&&!frontierRuinsGateOpen()||!cave&&(frontierVillageFence(x,z)||frontierGroundKind(x,z)==='river'&&!facilitySite.decks.has(x+','+z))))return false;
+ if(frontier&&(!frontierBurrowWalkEdge(x,z,fromX,fromZ,cave)||cave&&frontierRuinsGateAt(x,z)&&!frontierRuinsGateOpen()||!cave&&(frontierVillageFence(x,z)&&!(freeTrees&&frontierEastGateFineCell(x,z))||frontierGroundKind(x,z)==='river'&&!facilitySite.decks.has(x+','+z))))return false;
  const north=facilitySite?.id==='base'?(facilitySite.townOffset||0):null;
  // This offset rampart's physical wall sits on the outer edge of the tile.
  // Keep the lane on the interior side accessible without crossing the wall.
@@ -38662,6 +38688,34 @@ function frontierTreeTrunkRadius(o){
  return (o.type==='treeBirch'?.104:o.type==='treePine'?.143:.167)*(.9+surfaceNoise(o.x*23+74,o.z*29+38)*.20);
 }
 const frontierTreeCollisionCache=new WeakMap();
+// On the tight north approach to the east bridge, render-sized fence
+// posts replace the thick whole-cell wall for swept player movement.
+const frontierEastGateFineCell=(x,z)=>x>=FRONTIER_BRIDGE.west-5&&x<=FRONTIER_BRIDGE.west-2&&z>=FRONTIER_BRIDGE.north-5&&z<FRONTIER_BRIDGE.north;
+let frontierEastGatePosts=null;
+function frontierEastGateCollisionPosts(){
+ if(frontierEastGatePosts)return frontierEastGatePosts;
+ const posts=[],arc=frontierVillageArcs()[1],west=FRONTIER_BRIDGE.west,north=FRONTIER_BRIDGE.north;
+ const add=(x,z,r)=>{
+  if(x>=west-7&&x<=west-1&&z>=north-7&&z<=north+1)posts.push({x:x-.5,z:z-.5,r:r+.20});
+ };
+ for(let i=1;i<arc.length;i++){
+  const [x,z]=arc[i],[ax,az]=arc[i-1],j=277+i*2;
+  add(x,z,i===arc.length-1?.235:.16+.034*(.5+.5*Math.sin(j*2.169)));
+  const u=(x+ax)*.5,v=(z+az)*.5,offset=.033*Math.sin(j*7.13)/FRONTIER_VILLAGE.r;
+  add(u+(u-FRONTIER_VILLAGE.x)*offset,v+(v-FRONTIER_VILLAGE.z)*offset,.17+.029*Math.cos(j*1.81));
+ }
+ const v=FRONTIER_VILLAGE;
+ add(v.x+Math.sqrt(v.r*v.r-v.opening*v.opening)-.035,v.z-v.opening,.275);
+ return frontierEastGatePosts=posts;
+}
+function frontierEastGateSafePoint(x,z){
+ if(frontierEastGateCollisionPosts().some(p=>(p.x-x)**2+(p.z-z)**2<p.r**2-1e-7))return false;
+ const reach=.48;
+ for(let a=Math.ceil(x-reach);a<=Math.floor(x+reach);a++)for(let b=Math.ceil(z-reach);b<=Math.floor(z+reach);b++)
+  if(poiWalkObjectsAt(a,b,0).some(o=>frontierTreeTrunkType(o.type)&&
+     (a-x)**2+(b-z)**2<(frontierTreeTrunkRadius(o)*1.43+.20)**2-1e-7))return false;
+ return true;
+}
 function frontierMovementClip(npcs,x,z,y=poiWalkLevel){
  if(facilitySite?.id!=='frontier'||y!==0||(frontierCollisionCave??frontierPlayCave))return npcs;
  let cells=frontierTreeCollisionCache.get(world);
@@ -38673,6 +38727,10 @@ function frontierMovementClip(npcs,x,z,y=poiWalkLevel){
  for(let j=Math.floor(z)-2;j<=Math.ceil(z)+2;j++)for(let i=Math.floor(x)-2;i<=Math.ceil(x)+2;i++){
   const o=cells.get(i+','+j);if(o)trunks.push({x:i,z:j,r:frontierTreeTrunkRadius(o)*1.43+.20});
  }
+ const west=FRONTIER_BRIDGE.west,north=FRONTIER_BRIDGE.north;
+ if(x>=west-8&&x<=west+1&&z>=north-8&&z<=north+2)
+  for(const post of frontierEastGateCollisionPosts())
+   if(Math.abs(post.x-x)<2.6&&Math.abs(post.z-z)<2.6)trunks.push(post);
  const house=frontierHouseClip(x,z);
  if(!trunks.length&&!house)return npcs;
  return (p,q,next,swap)=>{
@@ -53209,9 +53267,13 @@ function frontierResumeFine(p){
  return Number.isFinite(p.subX)&&Number.isFinite(p.subZ)&&poiFreeCell(p.subX)===p.x&&poiFreeCell(p.subZ)===p.z;
 }
 function frontierResumeCoordinates(){
- if(facilitySite?.id!=='frontier'||poiWalkLevel!==0||!poiFreePose||!frontierHouseForTile(poiWalkX,poiWalkZ))return {};
+ if(facilitySite?.id!=='frontier'||poiWalkLevel!==0||!poiFreePose)return {};
  const {x,z}=poiFreePose,p={x:poiWalkX,z:poiWalkZ,subX:x,subZ:z};
- return frontierResumeFine(p)&&frontierHouseSafePoint(x,z)?{subX:x,subZ:z}:{};
+ return frontierResumeFine(p)&&frontierFineResumeSafe(p)?{subX:x,subZ:z}:{};
+}
+function frontierFineResumeSafe(p){
+ if(frontierEastGateFineCell(p.x,p.z))return frontierEastGateSafePoint(p.subX,p.subZ);
+ return !!frontierHouseForTile(p.x,p.z)&&frontierHouseSafePoint(p.subX,p.subZ);
 }
 function workshopResumeWrite(override,seed=false){
  if(facilitySite?.id==='guildsaved')return;
@@ -53290,7 +53352,7 @@ function workshopResumeRestorePosition(p){
     (typeof poiChapelResumeBlocked==='function'&&poiChapelResumeBlocked(p)))return false;
  const prior=poiWalkLevel;
  poiWalkLevel=p.y;
- const fine=facilitySite?.id==='frontier'&&p.y===0&&frontierResumeFine(p)&&!!frontierHouseForTile(p.x,p.z)&&frontierHouseSafePoint(p.subX,p.subZ);
+ const fine=facilitySite?.id==='frontier'&&p.y===0&&frontierResumeFine(p)&&frontierFineResumeSafe(p);
  const valid=poiWalkCanStep(p.x,p.z,undefined,undefined,undefined,false,fine,cave)&&
   (fine||facilitySite?.id!=='frontier'||p.y!==0||frontierHouseSafePoint(p.x,p.z));
  poiWalkLevel=prior;
