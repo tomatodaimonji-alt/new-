@@ -1,0 +1,12 @@
+const a=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const h=fs.readFileSync(process.argv[2],'utf8');
+const pick=(x,y)=>h.slice(h.indexOf(x),h.indexOf(y,h.indexOf(x)+x.length));
+const c=vm.createContext({poiBowType:()=>true,poiCompanionWeaponCue:()=>{},poiHumanBowHeading:()=>0,poiCompanionAttackClear:()=>true,poiSpearType:()=>false,poiTownNpcAttackPower:()=>3,poiTownNpcCombatNear:()=>true,poiPlayerDamageTarget:([o,s],x,z,d)=>{s.hp-=d},frontierSouthRecordId:()=>true,frontierSouthPursuitNpcValid:()=>true});
+vm.runInContext(pick('function frontierSouthPursuitChoice(','function frontierSouthPursuitField(')+pick('function frontierSouthPursuitHumanKey(','function frontierSouthPursuitNpcValid(')+pick('function frontierNpcStrike(','function frontierReturnTile(')+';globalThis.q={frontierNpcStrike,frontierSouthPursuitChoice};',c);
+const o={y:-1},s={x:160,z:100,hp:50};c.poiMonsterStates=new Map([[o,s]]);
+const actor={role:{id:'frontierlyzel'},x:152,z:100,y:-1,attacks:0,frontierStrike:{obj:o,range:8,hit:10,weapon:'equipBlackwingBow'}};
+const mark={kind:'npc',key:'npc/frontierlyzel',x:actor.x,z:actor.z};
+a.equal(c.q.frontierSouthPursuitChoice(s,null,[mark],6.8,()=>true),null,'not detected before a long range hit');
+c.q.frontierNpcStrike(actor,10);a.equal(s.hp,47);
+a.equal(c.q.frontierSouthPursuitChoice(s,s.southPursuit,[mark],6.8,()=>false),mark,'an actual hit wakes and tracks the attacker even beyond the usual sight radius');
+console.log('PASS long-range hit starts tracking without increasing pre-hit notice radius');
