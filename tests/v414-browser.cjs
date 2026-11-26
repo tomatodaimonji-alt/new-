@@ -12,6 +12,7 @@ h=h.replace(mark,mark+`
    const k=frontierLifeStock(poiHotbarRead(),a.role.id,{gold:12,healingHerb:0,cannedFood:0});
    if(!poiEconomyWrite(k))throw Error('shop fixture');
    Object.assign(a,{x:pos.x,z:pos.z+1,facing:0,activity:'going-toolshop',moveAt:null,actorLeg:null});
+   if(!workshopResumeRestorePosition({x:106,z:27,y:0,facing:3,cave:false}))throw Error('shop witness fixture');
    poiTownClockGameMs=18*60*POI_TOWN_MINUTE_MS;
    const n=performance.now(),cost=frontierMerchantPrice('healingHerb',true);
    frontierNpcLifeStep(a,poiTownClockSnapshot(),n,{plans:2});
@@ -55,10 +56,10 @@ try{
  a.equal(await p.locator(slot(4)+' .hotbar-count').textContent(),'');
  await p.locator('#poiBagClose').tap();
  const sold=await p.evaluate(()=>window.__editorTest.qa414.shop());console.log('shop',sold);
- a.equal(sold.stock.healingHerb,1);a.equal(sold.stock.gold,12-sold.cost);a.equal(sold.length,2400);a.ok(sold.both);
+ a.equal(sold.stock.healingHerb,1);a.equal(sold.stock.gold,12-sold.cost);a.equal(sold.length,2400);a.ok(sold.both);a.equal(sold.speech?.venue,'frontier-shop');
  await p.waitForFunction(()=>window.__editorTest.qa414.activity('frontiermiyamoto')==='off-duty',null,{timeout:11000});
  await p.evaluate(()=>window.__editorTest.qa414.clock(21));
- await p.waitForFunction(()=>window.__editorTest.qa414.guard().every(g=>g.activity==='watch'&&g.x===95),null,{timeout:42000,polling:600});
+ await p.waitForFunction(()=>window.__editorTest.qa414.guard().every((g,i)=>g.activity==='watch'&&g.x===95&&g.z===(i?32:28)),null,{timeout:60000,polling:600});
  const posts=await p.evaluate(()=>window.__editorTest.qa414.guard());
  a.deepEqual(posts.map(p=>[p.x,p.z,p.clear]),[[95,28,true],[95,32,true]]);a.deepEqual(errors,[]);
  console.log('PASS physical gold drag there and back + reload, finite trade and departure, outside west gate watch');
