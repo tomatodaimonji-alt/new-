@@ -10,6 +10,18 @@ h=h.replace(mark,mark+`
     region:poiRegionAt(facilitySite,poiWalkX,poiWalkZ,false,0).name}),
   frame:()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))),
   walk:(dz)=>{poiWalkNextReady=0;return poiWalkStep(0,dz)},
+  inn:()=>{
+   poiTownDialogueClose();poiWildClear();
+   if(!poiEconomyWrite({...poiHotbarRead(),gold:30,skillManaUsed:{player:8,frontierregna:12},
+    humanParty:[{id:'human:frontierregna',hp:290,mode:'follow'}]}))throw Error('party fixture');
+   poiPlayerHP=40;poiEconomyRefresh();
+   if(!workshopResumeRestorePosition({x:115,z:40,y:0,facing:2,cave:false}))throw Error('inn position');
+   const host=poiTownNpcActors.find(a=>a.role.id==='frontierinnkeeper');
+   Object.assign(host,{x:115,z:42,y:0,facing:0,activity:'work',actorLeg:null,moveAt:null});
+   return poiTownDialogueAction(performance.now());
+  },
+  party:()=>{const k=poiHotbarRead();return {gold:k.gold,player:poiPlayerHP,regna:k.humanParty[0]?.hp,
+   playerMP:poiSkillMana(null).mp,regnaMP:poiSkillMana('frontierregna').mp}},
   inspect:()=>{const m=frontierNorthMeshes,previous=window.__editorTest.qa430.mesh;
    window.__editorTest.qa430.mesh=m;
    return {same:previous===m,count:m.parcels.map(p=>p.gpu.count),water:m.water.count,
@@ -43,6 +55,14 @@ try{
  const q=await via('inspect');a.deepEqual(q.count,[6144,6144,6144,6144]);a.equal(q.same,true);
  a.ok(q.water>200&&q.water<7000);a.ok(q.pass&&q.blocked&&q.shallows&&q.worldEdge);
  a.equal(q.resume.z,-3);a.equal(q.waterMap,4);a.deepEqual(errors,[]);
+ a.equal(await via('inn'),true);
+ await p.locator('#poiNpcMenu [data-npc-action="stay"]').tap({timeout:8000});
+ await p.locator('#poiNpcMenu [data-npc-action="inn-pay"]').tap({timeout:8000});
+ a.deepEqual(await via('party'),{gold:20,player:100,regna:550,playerMP:20,regnaMP:44});
+ await p.locator('#poiNpcMenu [data-npc-action="stay"]').tap({timeout:8000});
+ await p.locator('#poiNpcMenu [data-npc-action="inn-pay"]').tap({timeout:8000});
+ a.equal((await via('party')).gold,20);a.deepEqual(errors,[]);
+ console.log('PASS mobile inn conversation, one payment, party HP/MP and no duplicate charge');
  console.log('PASS mobile viewport north/south traversal, water map, resume, no parcel re-upload');
  const median=xs=>[...xs].sort((a,b)=>a-b)[Math.floor(xs.length/2)];
  console.log('Boundary/other step two-frame median ms (software Chromium):',median(times[1]),median(times[0]));
