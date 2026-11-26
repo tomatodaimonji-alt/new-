@@ -1730,7 +1730,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v417）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v418）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="2500" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -20786,7 +20786,7 @@ function poiCompanionTickOne(now,member,kit){
  const held=!!david&&Math.hypot(origin.x-david.s.x,origin.z-david.s.z)<=1.62&&now<(a.slimeRecoverUntil||0);
  if(held){poiCompanionAdvance(a,null,now,0);return}
  if(now>=a.next){
-  a.next=now+100;
+  a.next=now+100;a.freeLoot=false;
   // Genuine encounters may have been spawned on saved overlap cells.
   if(typeof poiMonsterAt==='function'&&poiMonsterAt(a.x,a.z,true)){
    const n=poiCompanionDirection(a,player).map(([dx,dz])=>({x:a.x+dx,z:a.z+dz}))
@@ -20804,14 +20804,17 @@ function poiCompanionTickOne(now,member,kit){
      !to&&typeof poiCompanionNavScope==='function'&&poiCompanionNavScope(a,player,true)&&
      !poiCompanionNearGroundClear(a,origin,player,now);
     const follow=poiCompanionFollowWanted(a,distance)||blockedNear||!!a.localDetour;
-    a.freeGoal=to===a?null:to||(follow?player:null);
-    a.freeFollows=!to;
+    const loot=!to&&!david&&member.kind==='human'&&mode!=='follow'&&distance<4.5?
+     frontierNpcCoinGoal(a,origin):null;
+    a.freeLoot=!!loot;
+    a.freeGoal=to===a?null:to||loot||(follow?player:null);
+    a.freeFollows=!to&&!loot;
    }
   }
  }
  const goal=a.freeFollows&&a.freeGoal?frontierFollowTarget(a,player,now):a.freeGoal;
- if(typeof frontierQuietParty==='function'&&frontierQuietParty(a,member,player,origin,now,goal))return;
- poiCompanionAdvance(a,goal,now,a.freeFollows?(frontierFollowStyle(a)?.stop??POI_COMPANION_FOLLOW_STOP):Math.min(1.16,poiCompanionMeleeReach(a)*.91));
+ if(!a.freeLoot&&typeof frontierQuietParty==='function'&&frontierQuietParty(a,member,player,origin,now,goal))return;
+ poiCompanionAdvance(a,goal,now,a.freeLoot?.70:a.freeFollows?(frontierFollowStyle(a)?.stop??POI_COMPANION_FOLLOW_STOP):Math.min(1.16,poiCompanionMeleeReach(a)*.91));
  if(a.id==='orvasSoul'&&typeof poiOrvasAllyFoot==='function')poiOrvasAllyFoot(a,now);
 }
 // BEGIN ORVAS ALLY BOSS RUNTIME
@@ -22687,12 +22690,12 @@ function poiEconomyDrop(obj,state){
  if(!poiFieldCoinsAllowed()||obj.type!=='monsterSlime'||obj.y!==0||!state.wildSpawn||
     state.hp!==0||poiEconomyDropActors.has(state))return;
  const {x,z}=state;
- if(!poiWildExterior(x,z)||!poiWalkCanStep(x,z))return;
+ if(!poiWildExterior(x,z)||!poiWalkCanStep(x,z,null,null,null,true))return;
  poiEconomyDropActors.add(state);
  const key=x+','+z,prior=poiEconomyDrops.get(key);
  if(!prior&&poiEconomyDrops.size>=24)poiEconomyDrops.delete(poiEconomyDrops.keys().next().value);
  const amount=Math.min(POI_ECONOMY_GOLD_MAX,(prior?.amount||0)+POI_ECONOMY_COIN);
- poiEconomyDrops.set(key,{x,z,amount});poiEconomyMeshDirty=true;
+ poiEconomyDrops.set(key,{x,z,amount,y:0,frontierCave:false});poiEconomyMeshDirty=true;
  if(!state.townOwned&&amount!==(prior?.amount||0)&&typeof poiSound==='function')poiSound('enemy-loot','coin');
 }
 function poiEconomyCollect(x,z){
@@ -30831,6 +30834,30 @@ function frontierNpcBuyHerb(a,now){
  poiTownAmbientSpeak('frontier-shop',a,market,now,2400);
  poiTownNpcAct(a,'buy-toolshop');return true;
 }
+function frontierNpcCoinRoom(a,o){
+ const cave=!!a.frontierCave;
+ return !!o&&(o.y??0)===a.y&&
+  !(cave===frontierPlayCave&&a.y===poiWalkLevel&&poiWalkX===o.x&&poiWalkZ===o.z)&&
+  poiSnowGroundMatch(o,cave);
+}
+function frontierNpcCoinGoal(a,p){
+ if(facilitySite?.id!=='frontier'||!p||a.death||a.recessed||a.partyDown)return null;
+ const id=a.role?.id??POI_HUMAN_PARTY_IDS[a.id],kit=poiHotbarRead();
+ if(!frontierResident(id)||frontierVendorStock(kit,id).gold>=POI_ECONOMY_GOLD_MAX)return null;
+ let best=null,distance=3.15;
+ const consider=o=>{
+  if(!Number.isSafeInteger(o.amount)||o.amount<=0||!frontierNpcCoinRoom(a,o))return;
+  const d=Math.hypot(o.x-p.x,o.z-p.z);
+  if(d>=distance||!poiCompanionAttackClear(p,o,a.y))return;
+  best=o;distance=d;
+ };
+ if(!a.frontierCave&&a.y===0)for(const o of poiEconomyDrops.values())consider(o);
+ for(const o of kit.groundGold||[])consider(o);
+ return best;
+}
+function frontierNpcCoinFoley(a,p){
+ if(!!a.frontierCave===frontierPlayCave&&poiTownNpcCombatNear(p.x,p.z,a.y))poiSound('item-pickup','coin');
+}
 function frontierNpcCollect(a,now){
  if(facilitySite?.id!=='frontier'||!a||a.recessed||a.death||a.partyDown||
     a.frontierStrike||a.attackMotion?.pending||typeof poiTownDialogue!=='undefined'&&poiTownDialogue?.actor===a||
@@ -30842,9 +30869,7 @@ function frontierNpcCollect(a,now){
  if(party&&!poiHumanPartyDecode(kit.humanParty).some(v=>v.id===a.id&&v.hp>0))return false;
  const p=party?poiCompanionPosition(a):(typeof poiTownNpcVisualPosition==='function'?poiTownNpcVisualPosition(a,now):a);
  if(!p||!Number.isFinite(p.x)||!Number.isFinite(p.z))return false;
- const atHero=o=>a.y===poiWalkLevel&&poiWalkX===o.x&&poiWalkZ===o.z;
- const near=o=>o&&Math.hypot(o.x-p.x,o.z-p.z)<=1.20&&!atHero(o)&&
-  (typeof poiSnowGroundMatch!=='function'||poiSnowGroundMatch(o,a.frontierCave??false))&&poiCompanionAttackClear(p,o,a.y);
+ const near=o=>frontierNpcCoinRoom(a,o)&&Math.hypot(o.x-p.x,o.z-p.z)<=1.20&&poiCompanionAttackClear(p,o,a.y);
  // Existing wild coin records omit y because production emits them only
  // at surface. In particular, an NPC underground must not claim them.
  if(stock.gold<POI_ECONOMY_GOLD_MAX){
@@ -30853,13 +30878,14 @@ function frontierNpcCollect(a,now){
    const take=Math.min(coin.amount,POI_ECONOMY_GOLD_MAX-stock.gold);
    if(!poiEconomyWrite(frontierLifeStock(kit,id,{...stock,gold:stock.gold+take})))return false;
    if(take===coin.amount)poiEconomyDrops.delete(key);else poiEconomyDrops.set(key,{...coin,amount:coin.amount-take});
-   poiEconomyMeshDirty=true;return true;
+   poiEconomyMeshDirty=true;frontierNpcCoinFoley(a,p);return true;
   }
   const piles=kit.groundGold||[],gold=piles.find(o=>o.y===a.y&&Number.isSafeInteger(o.amount)&&o.amount>0&&near(o));
   if(gold){
    const take=Math.min(gold.amount,POI_ECONOMY_GOLD_MAX-stock.gold);
    const groundGold=take===gold.amount?piles.filter(o=>o!==gold):piles.map(o=>o===gold?{...o,amount:o.amount-take}:o);
-   return poiEconomyWrite(frontierLifeStock({...kit,groundGold},id,{...stock,gold:stock.gold+take}));
+   if(!poiEconomyWrite(frontierLifeStock({...kit,groundGold},id,{...stock,gold:stock.gold+take})))return false;
+   frontierNpcCoinFoley(a,p);return true;
   }
  }
  const piles=kit.drops||[];
@@ -30894,7 +30920,7 @@ function frontierNpcStrike(a,now){
  const attack=poiTownNpcAttackPower(a)??POI_TOWN_RESIDENT_MELEE;
  poiPlayerDamageTarget([q.obj,s],s.x,s.z,shaft?Math.max(1,Math.round(attack*.75)):attack,q.weapon,now,!poiTownNpcCombatNear(a.x,a.z,a.y),true,{companion:true,resident:true,started:a.swingAt});
  if(s.hp<before){a.attacks++;a.lastHitAt=now}
- if(s.hp<=0){a.frontierClaim={x:s.x,z:s.z,y:a.y};a.frontierCombat=null;frontierNpcCollect(a,now)}
+ if(s.hp<=0){a.frontierCombat=null;frontierNpcCollect(a,now)}
 }
 function frontierReturnTile(where,hero=null){
  const x=poiFreeCell(where.x),z=poiFreeCell(where.z);
@@ -30984,10 +31010,9 @@ function frontierNpcLifeStep(a,clock,now,budget){
   }
  }
  a.frontierShopStarted=null;
- if(a.frontierClaim){
-  const p=a.frontierClaim;
-  if(!poiEconomyDrops.has(p.x+','+p.z)||Math.hypot(p.x-a.x,p.z-a.z)<=1.2)a.frontierClaim=null;
-  else{poiTownNpcMove(a,p,'collecting',now,budget);return}
+ const coin=watch==='watch'?null:frontierNpcCoinGoal(a,poiTownNpcVisualPosition(a,now));
+ if(coin&&Math.hypot(coin.x-a.x,coin.z-a.z)>1.1){
+  poiTownNpcMove(a,frontierNpcHome(coin.x,coin.z),'collecting',now,budget);return;
  }
  if(watch){
   const active=watch==='watch',label=active?'watch':'off-duty';
@@ -31529,7 +31554,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v417',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v418',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -31644,7 +31669,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v417';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v418';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -31859,7 +31884,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v417',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v418',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -36777,7 +36802,7 @@ function pineDrawBaseTree(m,o){
  return true;
 }
 function frontierWalkableProp(type,x,z,y){
- return frontierSoftPlant(type)||(type==='rockMossy'&&y===0&&x===51+FRONTIER_WEST_OFFSET&&z===27);
+ return frontierSoftPlant(type)||(type==='rockMossy'&&y===0);
 }
 function frontierSoftPlant(type){return type==='bushFern'||type==='bush'||type==='bushFlower'||type==='tallGrass'||type==='flowerField'}
 function frontierTreeTrunkType(type){return type==='treeBirch'||type==='treePine'||type==='treeCedar'}
