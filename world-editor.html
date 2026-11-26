@@ -1733,7 +1733,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v405）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v406）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -2585,6 +2585,12 @@ const FRONTIER_HUMANS=Object.freeze({
  roan:{kind:'male',cut:'elder',skin:[.66,.50,.38],hair:[.59,.57,.52],shirt:[.68,.58,.44],body:[.36,.28,.195],trim:[.49,.44,.28],legs:[.25,.26,.22],boot:[.28,.207,.142]},
  lina:{kind:'female',cut:'braid',skin:[.57,.39,.30],hair:[.125,.115,.115],shirt:[.63,.57,.56],body:[.345,.33,.50],trim:[.49,.61,.59],legs:[.325,.315,.388],boot:[.24,.21,.27]}
 });
+// Equipment owns its palette; body types only change where the cloth fits.
+const POI_SHARED_CLOTH_ART=Object.freeze({
+ tunic:Object.freeze({main:Object.freeze([.48,.53,.43]),trim:Object.freeze([.65,.65,.49]),belt:Object.freeze([.37,.28,.19])}),
+ trousers:Object.freeze({main:Object.freeze([.31,.36,.39]),trim:Object.freeze([.43,.46,.44])}),
+ leather:Object.freeze([.31,.218,.146])
+});
 const FRONTIER_FITTED_GEAR=Object.freeze({head:null,torso:'starterTunic',legs:'starterTrousers',feet:'armorLeatherShoes'});
 const FRONTIER_RESIDENT_WEAPONS=Object.freeze({frontierren:'equipWoodSpear',frontiersera:'equipWoodBow',frontierchief:'equipWalkingCane',frontiershopkeeper:'equipBallpointPen'});
 function frontierLeatherShoe(m,x,y,z,leather){
@@ -2596,7 +2602,8 @@ function frontierLeatherShoe(m,x,y,z,leather){
  cube(m,x,.091+y,z+.061,.085,.007,.011,seam);
 }
 function frontierHumanShape(m,look,gear=null){
- const {skin,hair,shirt,body,trim,legs,boot,cut}=look;
+ const {skin,hair,trim,cut}=look;
+ const {tunic,trousers,leather}=POI_SHARED_CLOTH_ART;
  const slender=look.kind==='female',scale=slender?.93:1;
  const top=poiHumanGearType(gear?.torso)==='starterTunic',pants=poiHumanGearType(gear?.legs)==='starterTrousers',
   shoes=poiHumanGearType(gear?.feet)==='armorLeatherShoes';
@@ -2604,24 +2611,25 @@ function frontierHumanShape(m,look,gear=null){
  const linen=slender?[.73,.65,.48]:[.55,.48,.35],edge=linen.map(v=>v*.78);
  for(const side of [-1,1]){
   const x=side*(slender?.105:.113),first=m.p.length;
-  if(shoes)frontierLeatherShoe(m,x,0,0,boot);
+  if(shoes)frontierLeatherShoe(m,x,0,0,leather);
   else profile(x,0,[[0,0,0,0,.031],[.016,.053,.09,0,.035],[.055,.050,.087,0,.034],
    [.100,.041,.049],[.143,.041,.045],[.153,0,0]],skin,8);
   const bootEnd=m.p.length;
   profile(x,0,[[.105,0,0],[.117,pants?.055:.042,pants?.061:.047],[.235,pants?.060:.047,pants?.068:.056],
    [.343,pants?.067:.054,pants?.075:.063],[.453,pants?.076:.064,pants?.081:.074],
-   [.557,pants?.089:.081,pants?.094:.088],[.59,0,0]],pants?legs:skin,8);
+   [.557,pants?.089:.081,pants?.094:.088],[.59,0,0]],pants?trousers.main:skin,8);
+  if(pants)profile(x,0,[[.117,.057,.064],[.147,.058,.065]],trousers.trim,8);
   if(!pants)profile(x*.84,0,[[.45,.053,.062],[.486,.079,.090],[.545,.096,.106],[.582,.086,.090]],linen,8);
   if(m.townParts)(m.townParts.soles??=[]).push([first,bootEnd,m.p.length]);
  }
  profile(0,0,[[.487,0,0],[.505,.198*scale,.127],[.611,.184*scale,.115],
   [.732,.154*scale,.098],[.84,.184*scale,.117],[.939,.213*scale,.123],[1.005,.156*scale,.102],
-  [1.039,.081,.083],[1.044,0,0]],top?body:skin);
+  [1.039,.081,.083],[1.044,0,0]],top?tunic.main:skin);
  if(pants||!top){
-  profile(0,0,[[.51,.207*scale,.134],[.565,.201*scale,.132],[.589,.191*scale,.123]],pants?legs:linen);
-  profile(0,0,[[.575,.198*scale,.130],[.606,.190*scale,.126]],pants?trim:edge);
+  profile(0,0,[[.51,.207*scale,.134],[.565,.201*scale,.132],[.589,.191*scale,.123]],pants?trousers.main:linen);
+  profile(0,0,[[.575,.198*scale,.130],[.606,.190*scale,.126]],pants?trousers.trim:edge);
  }
- if(top)profile(0,.012,[[.926,0,0],[.969,.15*scale,.125],[1.016,.12*scale,.101],[1.051,.079,.081],[1.065,0,0]],shirt,8);
+ if(top)profile(0,.012,[[.926,0,0],[.969,.15*scale,.125],[1.016,.12*scale,.101],[1.051,.079,.081],[1.065,0,0]],tunic.trim,8);
  else if(slender){
   profile(0,0,[[.798,.179,.121],[.824,.189,.134],[.898,.198,.139],[.927,.200,.133]],linen);
   profile(0,0,[[.793,.181,.124],[.810,.184,.126]],edge);
@@ -2637,7 +2645,7 @@ function frontierHumanShape(m,look,gear=null){
   profile(x,0,sleeveAxis([[.463,0,0],[.484,.041,.047],
    [.538,.044,.049],[.613,.051,.056],[.730,.053,.06],[.751,0,0]]),skin,8);
   profile(x,0,sleeveAxis([[.64,.054,.060],[.67,.058,.063],[.821,.070,.074],
-   [.909,.079,.080],[.975,.067,.076],[1.017,0,0]]),top?shirt:skin,8);
+   [.909,.079,.080],[.975,.067,.076],[1.017,0,0]]),top?tunic.main:skin,8);
   if(m.townParts)m.townParts[side<0?'left':'right']=[i,m.p.length];
  }
  const headStart=m.p.length;
@@ -2673,15 +2681,26 @@ function frontierHumanShape(m,look,gear=null){
  }
  const headDrop=slender?.084:.071;
  for(let i=headStart+1;i<m.p.length;i+=3)m.p[i]-=headDrop;
- // Small decorative details are part of the ordinary clothing, not equipment.
- if(top&&cut==='short')cube(m,-.112,.773,.125,.054,.11,.020,trim);
- if(top&&cut==='swept')profile(0,.026,[[.936,0,0],[.956,.14,.12],[1.006,.14,.111],[1.03,.086,.088],[1.043,0,0]],trim,10);
- if(top&&cut==='bob')cube(m,0,.569,.137,.066,.053,.023,[.65,.53,.31]);
- if(top&&cut==='braid')cube(m,.08,.884,.137,.061,.062,.023,trim);
+ if(top){
+  // The belt and its single clasp are on the same item for every wearer.
+  profile(0,0,[[.556,.207*scale,.138],[.597,.198*scale,.135],[.613,.194*scale,.129]],tunic.belt,10);
+  cube(m,0,.569,.146,.057,.041,.018,tunic.trim);
+ }
+ for(const [slot,integrated] of [['head',false],['torso',top],['legs',pants],['feet',shoes]]){
+  const type=poiHumanGearType(gear?.[slot]);
+  if(!type||integrated)continue;
+  const first=m.p.length;
+  if(!poiRoleClothingGeometry(m,type,0,0,0))poiStarterGearGeometry(m,type,0,0,0);
+  // Fit the same armor to the head height and body width of this wearer.
+  for(let i=first;i<m.p.length;i+=3){
+   if(slot==='head')m.p[i+1]-=headDrop;
+   else if(slender)m.p[i]*=scale;
+  }
+ }
 }
 function characterHuman(m,x,y,z,villager,armPose=null,gear=null,modest=false){
  const torsoType=poiHumanGearType(gear?.torso),legsType=poiHumanGearType(gear?.legs);
- const tunic=torsoType==='starterTunic'?[.48,.53,.43]:poiRoleClothingTone(torsoType);
+ const tunic=torsoType==='starterTunic'?POI_SHARED_CLOTH_ART.tunic.main:poiRoleClothingTone(torsoType);
  const skin=[.77,.59,.43],shadow=[.65,.47,.36],hair=[.24,.17,.12],cloth=[.32,.47,.39],linen=[.75,.71,.57],boot=[.25,.20,.17];
  const shorts=[.30,.31,.29],profile=(xx,zz,r,c,n)=>humanRingProfile(m,x+xx,y,z+zz,r,c,n);
  for(const side of [-1,1]){
@@ -2911,7 +2930,9 @@ function poiStarterGearGeometry(m,type,x,y,z){
   }
   return;
  }
- if(type==='starterCap'){
+ if(type==='armorLeatherShoes'){
+  for(const side of [-1,1])frontierLeatherShoe(m,x+side*.104,y,z,POI_SHARED_CLOTH_ART.leather);
+ }else if(type==='starterCap'){
   const cloth=[.24,.40,.43],crown=[.31,.49,.50],seam=[.53,.66,.64],edge=[.18,.32,.34];
   B(0,1.353,-.025,.409,.107,.386,cloth);
   B(0,1.456,-.027,.350,.045,.330,crown);
@@ -2925,12 +2946,12 @@ function poiStarterGearGeometry(m,type,x,y,z){
    quad(m,point(i,1.343),point(i,1.365),point(j,1.365),point(j,1.343),seam);
   }
  }else if(type==='starterTunic'){
-  const linen=[.48,.53,.43],trim=[.65,.65,.49],belt=[.37,.28,.19];
+  const {main:linen,trim,belt}=POI_SHARED_CLOTH_ART.tunic;
   B(0,.475,0,.418,.466,.285,linen);
   B(0,.47,.145,.42,.077,.035,belt);
   B(0,.86,.15,.123,.06,.019,trim);
  }else if(type==='starterTrousers'){
-  const cloth=[.31,.36,.39],trim=[.43,.46,.44];
+  const {main:cloth,trim}=POI_SHARED_CLOTH_ART.trousers;
   for(const side of [-1,1]){
    B(side*.115,.108,0,.174,.455,.215,cloth);
    B(side*.115,.117,.107,.162,.048,.012,trim);
@@ -5267,7 +5288,7 @@ case 'equipFryingPan':case 'equipLadle':case 'equipBallpointPen':
  poiRoleItemGeometry(m,id,x,y,z);break;
 case 'armorOrvasWaistcloth':poiOrvasWaistclothGeometry(m,x,y-.14,z);break;
 case 'armorLeatherShoes':{
- for(const side of [-1,1])frontierLeatherShoe(m,x+side*.104,y,z,[.31,.218,.146]);
+ for(const side of [-1,1])frontierLeatherShoe(m,x+side*.104,y,z,POI_SHARED_CLOTH_ART.leather);
  break;}
 case 'starterCap':case 'starterTunic':case 'starterTrousers':case 'starterBoots':{
  const bottom={starterCap:1.343,starterTunic:.47,starterTrousers:.108,starterBoots:0}[id];
@@ -20538,6 +20559,95 @@ function poiHumanSidestepFrame(now,roll=Math.random){
 }
 // END HUMAN COMPANION SIDESTEP
 
+// BEGIN FRONTIER PARTY QUIET IDLE
+let frontierQuietTalkAt=-Infinity,frontierQuietReply=null;
+const frontierQuietPhrases={
+ frontierchief:['ひと息つくのも旅のうちじゃ。','おぬし、足は大丈夫か？','昔はこのあたりもよく歩いたものじゃ。','まだ歩けるぞ、心配はいらん。'],
+ frontierren:['静かだな。少し気が楽になる。','少し休んでいくか？','先の道も、こんなに静かだといいな。','ああ、今のうちに息を整えよう。'],
+ frontiersera:['少しだけ風の音を聞いていたいな。','ねえ、ちょっと休んでいかない？','こういう時間も、旅の楽しみだね。','うん、急がなくても大丈夫だよ。']
+};
+function frontierQuietEligible(a,member,now,goal){
+ return facilitySite?.id==='frontier'&&!!frontierQuietPhrases[POI_HUMAN_PARTY_IDS[a.id]]&&a.y===poiWalkLevel&&
+  !goal&&!a.recessed&&!a.death&&!a.partyDown&&!a.humanSidestep&&!a.localDetour&&!a.allyTarget&&!a.fightLatch&&
+  !a.attackMotion?.pending&&now-(a.attackMotion?.start??-Infinity)>1000&&now-(a.hurtAt??-Infinity)>3000&&
+  member?.hp>55&&!poiFreePose?.walking&&now-poiWalkStarted>800&&
+  !(typeof poiHealingCastActive==='function'&&poiHealingCastActive());
+}
+function frontierQuietLine(a,text,now){
+ const id=POI_HUMAN_PARTY_IDS[a.id],old=frontierLifeSpeech.get(id);
+ if(old&&now<old.until)return false;
+ frontierLifeSpeech.set(id,{actor:a,text,kind:'party-idle',until:now+2100});
+ return true;
+}
+function frontierQuietClose(a){
+ a.frontierQuiet=null;
+ if(frontierQuietReply?.to===a||frontierQuietReply?.from===a)frontierQuietReply=null;
+ const id=POI_HUMAN_PARTY_IDS[a.id],old=frontierLifeSpeech.get(id);
+ if(old?.kind==='party-idle'&&old.actor===a)frontierLifeSpeech.delete(id);
+}
+function frontierQuietFacing(a,p,q){
+ const dx=q.x-p.x,dz=q.z-p.z;
+ if(Math.hypot(dx,dz)<.09)return;
+ a.humanHeading=Math.atan2(-dx,dz);a.freeDx=0;a.freeDz=0;
+}
+function frontierQuietStep(a,p,q,now,actors){
+ const leg=q.leg,t=Math.max(0,Math.min(1,(now-leg.start)/690)),u=t*t*(3-2*t);
+ const gx=leg.x+(leg.tx-leg.x)*u,gz=leg.z+(leg.tz-leg.z)*u,rest=Math.hypot(gx-p.x,gz-p.z);
+ const dt=Math.min(1,.085/Math.max(.085,rest)),x=p.x+(gx-p.x)*dt,z=p.z+(gz-p.z)*dt;
+ if(!poiHumanSidestepClear(a,p,x,z,now,actors)){q.leg=null;return false}
+ const d=Math.hypot(x-p.x,z-p.z);
+ a.freeAt=now;a.freeMoving=d>1e-5;
+ if(d>1e-5){
+  a.freeDx=x-p.x;a.freeDz=z-p.z;a.freeMileage=(a.freeMileage||0)+d;
+  a.fx=a.x;a.fz=a.z;a.px=x;a.pz=z;a.x=poiFreeCell(x);a.z=poiFreeCell(z);a.stepAt=now;a.stepMs=140;
+ }
+ if(t>=1&&dt===1)q.leg=null;
+ return true;
+}
+function frontierQuietParty(a,member,player,p,now,goal){
+ const id=POI_HUMAN_PARTY_IDS[a.id];
+ if(!frontierQuietPhrases[id]||facilitySite?.id!=='frontier')return false;
+ const dist=Math.hypot(p.x-player.x,p.z-player.z);
+ if(!frontierQuietEligible(a,member,now,goal)||dist<.85||dist>3.8||a.frontierQuiet&&
+    Math.hypot(player.x-a.frontierQuiet.x,player.z-a.frontierQuiet.z)>.16){frontierQuietClose(a);return false}
+ let q=a.frontierQuiet;
+ if(!q){
+  a.frontierQuiet={x:player.x,z:player.z,at:now+7600+(id==='frontierchief'?0:id==='frontierren'?1800:3400),turn:0};return false;
+ }
+ if(frontierQuietReply&&now>=frontierQuietReply.at+1100)frontierQuietReply=null;
+ const reply=frontierQuietReply;
+ if(reply?.to===a&&now>=reply.at){
+  frontierQuietReply=null;
+  const other=reply.from,q0=poiCompanionPosition(other);
+  if(now<reply.at+1100&&poiPartyActors().includes(other)&&other.frontierQuiet&&other.site===a.site&&other.y===a.y&&
+     Math.hypot(q0.x-p.x,q0.z-p.z)<=2.7&&poiCompanionAttackClear(p,q0,a.y)){
+   frontierQuietFacing(a,p,q0);frontierQuietLine(a,frontierQuietPhrases[id][3],now);
+  }
+ }
+ if(q.leg)return frontierQuietStep(a,p,q,now,poiPartyActors());
+ if(now<q.at)return false;
+ const n=q.turn++;q.at=now+17800+(n%3)*2400;
+ const actors=poiPartyActors();
+ if(n%3===1){
+  const heading=a.humanHeading??0,side=id==='frontiersera'?1:-1;
+  const tx=p.x+Math.cos(heading)*side*.46,tz=p.z+Math.sin(heading)*side*.46;
+  if(Math.hypot(tx-player.x,tz-player.z)<3.5&&poiHumanSidestepClear(a,p,tx,tz,now,actors)){
+   q.leg={x:p.x,z:p.z,tx,tz,start:now};a.freeAt=now;return true;
+  }
+ }
+ const peer=actors.find(b=>b!==a&&b.site===a.site&&b.y===a.y&&b.frontierQuiet&&!b.frontierQuiet.leg&&!b.allyTarget&&!b.attackMotion?.pending&&(()=>{
+  const other=poiCompanionPosition(b);
+  return Math.hypot(other.x-p.x,other.z-p.z)<=2.7&&poiCompanionAttackClear(p,other,a.y);
+ })());
+ frontierQuietFacing(a,p,peer?poiCompanionPosition(peer):player);
+ if(now>=frontierQuietTalkAt&&!frontierQuietReply&&frontierQuietLine(a,frontierQuietPhrases[id][peer?1:n%2===0?0:2],now)){
+  frontierQuietTalkAt=now+22000;
+  if(peer)frontierQuietReply={from:a,to:peer,at:now+2350};
+ }
+ return false;
+}
+// END FRONTIER PARTY QUIET IDLE
+
 function poiCompanionTickOne(now,member,kit){
  if(typeof poiCompanionSummonPrune==='function')poiCompanionSummonPrune(now);
  if(poiPartyContextId==='orvasSoul'&&typeof poiOrvasAllyRouteFrame==='function')poiOrvasAllyRouteFrame(now);
@@ -20571,10 +20681,12 @@ function poiCompanionTickOne(now,member,kit){
  const blocked=typeof document!=='undefined'&&
     document.querySelector('dialog[open],.modal.open,:is(#poiBagPanel,#poiLandscapeMenu,#poiNpcMenu,#poiScreenNoteLayer):not([hidden])');
  if(blocked){
+  if(a.frontierQuiet)frontierQuietClose(a);
   if(a.id==='orvasSoul'&&typeof poiOrvasAllyStop==='function')poiOrvasAllyStop(a,now,true);
   if(a.attackMotion?.pending)a.attackMotion.pending=false;poiCompanionAdvance(a,null,now,0);return;
  }
  if(a.humanSidestep||now<(a.humanSidestepHold??-Infinity)){
+  if(a.frontierQuiet)frontierQuietClose(a);
   if(a.attackMotion?.arrow)poiCompanionResolve(a,now,mode);
   if(!a.humanSidestep)a.freeAt=now;
   return;
@@ -20582,10 +20694,11 @@ function poiCompanionTickOne(now,member,kit){
  if(a.id==='orvasSoul'&&typeof poiOrvasAllyResolve==='function'&&poiOrvasAllyResolve(a,now,mode)){
   poiCompanionAdvance(a,null,now,0);return;
  }
- if(poiCompanionResolve(a,now,mode)){poiCompanionAdvance(a,null,now,0);return}
+ if(poiCompanionResolve(a,now,mode)){if(a.frontierQuiet)frontierQuietClose(a);poiCompanionAdvance(a,null,now,0);return}
  const player=poiCompanionPlayerPoint(now),origin=poiCompanionPosition(a);
  const homeExit=frontierPartyHomeExit(a,origin,player);
  if(homeExit){
+  if(a.frontierQuiet)frontierQuietClose(a);
   a.freeFollows=true;a.freeGoal=null;a.followBias=null;
   poiCompanionAdvance(a,homeExit,now,0,homeExit.cross);return;
  }
@@ -20620,6 +20733,7 @@ function poiCompanionTickOne(now,member,kit){
   }
  }
  const goal=a.freeFollows&&a.freeGoal?frontierFollowTarget(a,player,now):a.freeGoal;
+ if(typeof frontierQuietParty==='function'&&frontierQuietParty(a,member,player,origin,now,goal))return;
  poiCompanionAdvance(a,goal,now,a.freeFollows?(frontierFollowStyle(a)?.stop??POI_COMPANION_FOLLOW_STOP):Math.min(1.16,poiCompanionMeleeReach(a)*.91));
  if(a.id==='orvasSoul'&&typeof poiOrvasAllyFoot==='function')poiOrvasAllyFoot(a,now);
 }
@@ -30411,7 +30525,7 @@ function frontierLifeSetHp(a,hp){
 const frontierLifeSpeech=new Map(),frontierLifeSpeechNodes=new Map();
 function frontierLifeLine(id,actor,kind,now){
  const old=frontierLifeSpeech.get(id);
- if(old&&now<old.until+400&&kind==='pain')return;
+ if(old&&old.kind!=='party-idle'&&now<old.until+400&&kind==='pain')return;
  if(old?.kind===kind&&now<old.until+2500)return;
  const chief=id==='frontierchief',ren=id==='frontierren';
  const text=({pain:chief?'いてて……':ren?'いてっ！':'いたっ！',heal:chief?'薬草を使うぞ。':ren?'薬草を使うよ。':'薬草を使うね。',
@@ -30521,7 +30635,9 @@ function frontierNpcHeal(a,now){
 }
 function frontierLifeSetStockAndHp(kit,id,stock,hp){return frontierLifeEdit(frontierLifeStock(kit,id,stock),id,{hp})}
 function frontierHumanCompanionHeal(a,now){
- const id=POI_HUMAN_PARTY_IDS[a.id];if(facilitySite?.id!=='frontier'||!frontierResident(id)||now<(a.frontierHealAt||0))return;
+ const id=POI_HUMAN_PARTY_IDS[a.id];if(facilitySite?.id!=='frontier'||!frontierResident(id))return;
+ if(typeof frontierNpcCollect==='function')frontierNpcCollect(a,now);
+ if(now<(a.frontierHealAt||0))return;
  const kit=poiHotbarRead(),party=poiHumanPartyDecode(kit.humanParty),member=party.find(v=>v.id===a.id);
  if(!member?.hp||member.hp>55)return;
  const stock=frontierVendorStock(kit,id);
@@ -30543,32 +30659,56 @@ function frontierNpcBuyHerb(a,now){
  a.frontierTradeAt=now+1700;poiTownNpcAct(a,'buy-toolshop');return true;
 }
 function frontierNpcCollect(a,now){
- const id=a.role.id,kit=poiHotbarRead(),stock=frontierVendorStock(kit,id),life=frontierLifeRecord(kit,id);
- const near=o=>o&&Math.hypot(o.x-a.x,o.z-a.z)<=1.20&&
-  !(poiWalkX===o.x&&poiWalkZ===o.z)&&poiCompanionAttackClear(a,o,a.y);
- const coin=[...poiEconomyDrops.entries()].find(([,o])=>near(o));
- const ground=(kit.groundGold||[]).find(o=>o.y===a.y&&near(o));
- if(coin||ground){
-  const amount=(coin?.[1]??ground).amount;
-  if(stock.gold+amount<=POI_ECONOMY_GOLD_MAX){
-   const next=frontierLifeStock(!coin?{...kit,groundGold:kit.groundGold.filter(o=>o!==ground)}:kit,id,{...stock,gold:stock.gold+amount});
-   if(!poiEconomyWrite(next))return false;
-   if(coin){poiEconomyDrops.delete(coin[0]);poiEconomyMeshDirty=true}
-   return true;
+ if(facilitySite?.id!=='frontier'||!a||a.recessed||a.death||a.partyDown||
+    a.frontierStrike||a.attackMotion?.pending||typeof poiTownDialogue!=='undefined'&&poiTownDialogue?.actor===a||
+    now<(a.frontierTradeAt||0)||now<(a.frontierPickupAt||0))return false;
+ const party=!a.role,id=party?POI_HUMAN_PARTY_IDS[a.id]:a.role.id;
+ if(!frontierResident(id)||party&&a.site!==facilitySite)return false;
+ a.frontierPickupAt=now+460;
+ const kit=poiHotbarRead(),stock=frontierVendorStock(kit,id),life=frontierLifeRecord(kit,id);
+ if(party&&!poiHumanPartyDecode(kit.humanParty).some(v=>v.id===a.id&&v.hp>0))return false;
+ const p=party?poiCompanionPosition(a):(typeof poiTownNpcVisualPosition==='function'?poiTownNpcVisualPosition(a,now):a);
+ if(!p||!Number.isFinite(p.x)||!Number.isFinite(p.z))return false;
+ const atHero=o=>a.y===poiWalkLevel&&poiWalkX===o.x&&poiWalkZ===o.z;
+ const near=o=>o&&Math.hypot(o.x-p.x,o.z-p.z)<=1.20&&!atHero(o)&&
+  (typeof poiSnowGroundMatch!=='function'||poiSnowGroundMatch(o))&&poiCompanionAttackClear(p,o,a.y);
+ // Existing wild coin records omit y because production emits them only
+ // at surface. In particular, an NPC underground must not claim them.
+ if(stock.gold<POI_ECONOMY_GOLD_MAX){
+  if(a.y===0)for(const [key,coin] of poiEconomyDrops){
+   if((coin.y??0)!==a.y||!near(coin)||!Number.isSafeInteger(coin.amount)||coin.amount<=0)continue;
+   const take=Math.min(coin.amount,POI_ECONOMY_GOLD_MAX-stock.gold);
+   if(!poiEconomyWrite(frontierLifeStock(kit,id,{...stock,gold:stock.gold+take})))return false;
+   if(take===coin.amount)poiEconomyDrops.delete(key);else poiEconomyDrops.set(key,{...coin,amount:coin.amount-take});
+   poiEconomyMeshDirty=true;return true;
+  }
+  const piles=kit.groundGold||[],gold=piles.find(o=>o.y===a.y&&Number.isSafeInteger(o.amount)&&o.amount>0&&near(o));
+  if(gold){
+   const take=Math.min(gold.amount,POI_ECONOMY_GOLD_MAX-stock.gold);
+   const groundGold=take===gold.amount?piles.filter(o=>o!==gold):piles.map(o=>o===gold?{...o,amount:o.amount-take}:o);
+   return poiEconomyWrite(frontierLifeStock({...kit,groundGold},id,{...stock,gold:stock.gold+take}));
   }
  }
- const drop=(kit.drops||[]).find(o=>o.y===a.y&&near(o)&&poiInventorySanitizeCell({...o,count:o.count||1}));
- if(!drop)return false;
- const cell=poiInventorySanitizeCell({...drop,count:drop.count||1});
- let next={...kit,drops:kit.drops.filter(o=>o!==drop)};
- if(cell.type==='healingHerb'||cell.type==='cannedFood'){
-  if(stock[cell.type]+cell.count>POI_NPC_TRADE_MAX_STOCK)return false;
-  next=frontierLifeStock(next,id,{...stock,[cell.type]:stock[cell.type]+cell.count});
- }else{
-  if(life.items.length>=9)return false;
-  next=frontierLifeEdit(next,id,{items:[...life.items,cell]});
+ const piles=kit.drops||[];
+ for(const drop of piles){
+  // Armed loot, caches, unique boss kit, souls and estates stay with
+  // their existing player-facing pickup/interaction paths.
+  if(drop.y!==a.y||typeof poiCompanionType==='function'&&poiCompanionType(drop.type)||
+     /^(?:equipOrvas|armorOrvas|equipNorthMinotaurAxe$|fireWand$)/.test(drop.type))continue;
+  if(drop.type==='healingHerb'&&kit.towerFind?.kind==='herb'&&typeof poiLookoutCell==='function'){
+   const q=poiLookoutCell(kit.towerFind);if(q?.x===drop.x&&q?.z===drop.z&&q?.y===drop.y)continue;
+  }
+  if(!near(drop))continue;
+  const cell=poiInventorySanitizeCell({...drop,count:drop.count||1});if(!cell)continue;
+  const stack=cell.type==='healingHerb'||cell.type==='cannedFood';
+  const take=stack?Math.min(cell.count,POI_NPC_TRADE_MAX_STOCK-stock[cell.type]):life.items.length<9?cell.count:0;
+  if(take<=0)continue;
+  const drops=take===cell.count?piles.filter(o=>o!==drop):piles.map(o=>o===drop?{...o,count:cell.count-take}:o);
+  const next={...kit,drops};
+  return poiEconomyWrite(stack?frontierLifeStock(next,id,{...stock,[cell.type]:stock[cell.type]+take}):
+   frontierLifeEdit(next,id,{items:[...life.items,{...cell,count:take}]}));
  }
- return poiEconomyWrite(next);
+ return false;
 }
 const frontierNpcHome=(x,z)=>({x,z,y:0,facing:2});
 function frontierNpcStrike(a,now){
@@ -30609,6 +30749,7 @@ function frontierNpcLifeStep(a,clock,now,budget){
  if(a.death||a.recessed)return;
  frontierNpcStrike(a,now);
  if(a.frontierStrike)return;
+ frontierNpcCollect(a,now);
  const id=a.role.id,shop=id===POI_FRONTIER_SHOP_ID;
  let target=null,dist=6.51;
  for(const [o,s] of poiMonsterStates){
@@ -30622,7 +30763,7 @@ function frontierNpcLifeStep(a,clock,now,budget){
   if(poiTownDialogue?.actor===a){poiTownDialogueClose();poiShopSync()}
   frontierNpcHeal(a,now);
   if(a.role.bed&&a.hp<=25&&!frontierVendorStock(poiHotbarRead(),id).healingHerb){
-   frontierLifeLine(id,a,'critical',now);
+   frontierNeedLine(id,a,a.hp,true,now);
    poiTownNpcMove(a,a.role.home,'going-home',now,budget);return;
   }
   const profile=poiPlayerActionProfile(a.weapon),range=profile?.range??1.45;
@@ -30647,7 +30788,6 @@ function frontierNpcLifeStep(a,clock,now,budget){
  if(now<(a.frontierTradeAt||0))return;
  if(frontierNpcReturning(a,clock,now,budget))return;
  frontierNpcHeal(a,now);
- frontierNpcCollect(a,now);
  const stock=frontierVendorStock(poiHotbarRead(),id),bed=a.role.bed,night=clock.hour>=21||clock.hour<6;
  if(bed&&(night||a.hp<72||a.activity==='sleep-home'&&a.hp<100)){
   if(poiTownNpcMove(a,a.role.home,'going-home',now,budget)&&poiTownNpcStepT(a,now)>=1){
@@ -31050,11 +31190,6 @@ function poiTownNpcModel(type,actor=null){
    m.townParts={};m.roleRig=true;
    const appearance=FRONTIER_HUMANS[actor.role.appearance];
    if(appearance)frontierHumanShape(m,appearance,actor.gear);else characterHuman(m,0,0,0,false,null,actor.gear,true);
-   if(poiTownNpcMerchantBadge(actor)){
-    cube(m,.133,.779,.168,.104,.088,.037,[.34,.23,.13]);
-    cube(m,.133,.779,.190,.068,.053,.016,[.79,.62,.32]);
-    cube(m,.133,.779,.200,.023,.027,.010,[.25,.33,.28]);
-   }
    const weapon=poiHumanGearType(actor.weapon),style=poiTownNpcHeldStyle(weapon);
    if(style){
     const start=m.p.length,prop=mesh();deco(prop,weapon,0,0,0,0);
@@ -31207,7 +31342,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v405',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v406',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -31322,7 +31457,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v405';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v406';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -31537,7 +31672,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v405',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v406',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -33402,7 +33537,7 @@ function poiPlayerArmCrate(m,origin,end,ww,dd,register,color){
 function poiDrawPlayerBlockArms(m,arms,gear,rotate,x,y,z){
  const P=p=>{const [a,b]=rotate(p[0],p[2]);return [x+a,y+p[1],z+b]};
  const look=m.frontierLook,skin=look?.skin||[.77,.59,.43],shadow=look?skin.map(v=>v*.91):[.71,.52,.39],knuckle=look?skin.map(v=>v*1.045):[.82,.63,.47];
- const torso=poiHumanGearType(gear?.torso),sleeve=look?(torso==='starterTunic'?look.shirt:null):(torso==='starterTunic'?[.48,.53,.43]:poiRoleClothingTone(torso));
+ const torso=poiHumanGearType(gear?.torso),sleeve=torso==='starterTunic'?POI_SHARED_CLOTH_ART.tunic.main:poiRoleClothingTone(torso);
  const {upperWidth,lowerWidth,wristWidth,handWidth}=POI_PLAYER_BLOCK_ARM;
  const block=(a,b,w,d,c)=>poiPlayerArmCrate(m,a,b,w,d,P,c);
  for(const {shoulder:s,elbow:e,wrist:w,straight} of [arms.right,arms.left]){
@@ -37259,7 +37394,13 @@ function frontierWestForestPopulate(put){
  for(let z=2;z<=61;z++)for(let x=2;x<=61;x++){
   if(blocked(x,z)||tree.has(x+','+z))continue;
   const f=hash(x,z,5);
-  if(f<.031)put(x,z,hash(x,z,6)<.54?'bushFern':'flowerField',Math.floor(hash(x,z,7)*4));
+  if(f<.031){put(x,z,hash(x,z,6)<.54?'bushFern':'flowerField',Math.floor(hash(x,z,7)*4));continue;}
+  if(x<34)continue; // Do not add visual clutter over the ruins/mouth.
+  const verge=Math.abs(z+.5-frontierWestForestTrack(x+.5));
+  const drift=frontierWestForestSmooth(.08,.90,.54+.30*Math.sin(x*.56+z*.29)+.23*Math.cos(x*.35-z*.48));
+  const near=1-frontierWestForestSmooth(5.5,12,verge);
+  if(hash(x,z,8)<(.004+.045*drift+.080*near*drift))
+   put(x,z,near>.44&&hash(x,z,9)>.58?'flowerField':'tallGrass',Math.floor(hash(x,z,10)*4));
  }
 }
 
@@ -43899,8 +44040,11 @@ function frontierRise(x,z,cx,cz,r,w,h){
  const d=Math.hypot((x-cx)/r,(z-cz)/w);return h*(1-frontierSmooth(0,1,d));
 }
 function frontierTreeHabitat(x,z){
- if(x<FRONTIER_WEST_OFFSET)return .65+.24*(1-frontierWestForestTrail(x,z));
- return frontierOldTreeHabitat(x-FRONTIER_WEST_OFFSET,z);
+ const u=x-FRONTIER_WEST_OFFSET;
+ const old=frontierOldTreeHabitat(u,z);
+ if(u>=0)return old;
+ const forest=.65+.24*(1-frontierWestForestTrail(x,z)),blend=frontierSmooth(-13,0,u);
+ return forest+(old-forest)*blend;
 }
 function frontierOldTreeHabitat(x,z){
  return Math.max(frontierRise(x,z,25,16,26,18,1),frontierRise(x,z,94,47,29,17,1),
@@ -43958,8 +44102,12 @@ function frontierSampleHeight(x,z){
 }
 function frontierDirtCoverage(x,z){
  if(frontierBurrowCell(x,z))return 1;
- if(x<FRONTIER_WEST_OFFSET)return frontierWestForestTrail(x,z);
  const old=x-FRONTIER_WEST_OFFSET;
+ if(old<0){
+  const trail=frontierWestForestTrail(x,z),join=frontierSmooth(-8,0,old);
+  const villageLink=1-frontierSmooth(.85,2,Math.abs(z-30.5));
+  return trail+(villageLink-trail)*join;
+ }
  const link=(1-frontierSmooth(.85,2,Math.abs(z-(30.5+(frontierVillageTrack(old)-30.5)*frontierSmooth(7,20,old)))))*(1-frontierSmooth(20,25,old));
  return Math.max(link,frontierOldDirtCoverage(old,z));
 }
@@ -44085,6 +44233,8 @@ function frontierSite(){
 }
 function frontierGround(m){
  const mix=(a,b,t)=>a.map((v,i)=>v+(b[i]-v)*Math.min(1,Math.max(0,t)));
+ const trees=new Set();
+ for(const o of world)if(o.y===0&&o.x>=FRONTIER_WEST_OFFSET-16&&o.x<=FRONTIER_WEST_OFFSET+2&&/^tree/.test(o.type))trees.add(o.x*512+o.z);
  const cache=new Map();
  const vertex=(x,z)=>{
   const key=x*512+z;if(cache.has(key))return cache.get(key);
@@ -44108,6 +44258,9 @@ function frontierGround(m){
   const sq=(u-47.5)**2+(z-30.4)**2;
   if(sq<22)color=mix(color,[.54+n,.50+n,.41+n],.84*(1-frontierSmooth(9,22,sq)));
   if(FRONTIER_HOMES.some(b=>x>=b.x1&&x<=b.x2+1&&z>=b.z1&&z<=b.z2+1))color=mix(color,[.45+grain,.31+grain,.18+grain],.96);
+  // The classic tile overlay starts at the parcel edge. Match its exact
+  // shared vertex colours before that edge, fading in over the forest verge.
+  if(u>=-14&&u<=0)color=mix(color,frontierEarthTint(x,z,trees),frontierSmooth(-14,-1,u));
   const nx=frontierHeight(x-.35,z)-frontierHeight(x+.35,z),nz=frontierHeight(x,z-.35)-frontierHeight(x,z+.35),
    norm=Math.hypot(nx,.70,nz);
   const v={p:[x,h-.012,z],n:[nx/norm,.70/norm,nz/norm],color};cache.set(key,v);return v;
