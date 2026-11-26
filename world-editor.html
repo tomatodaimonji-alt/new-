@@ -1733,7 +1733,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v406）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v407）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -8468,7 +8468,8 @@ let poiWalkActive=false,poiWalkX=0,poiWalkZ=0,poiWalkLevel=0,poiWalkMesh=null,po
 let poiWalkFacing=2,poiWalkStarted=-10000,poiWalkFromX=0,poiWalkFromZ=0;
 let poiWalkViewX=0,poiWalkViewZ=0,poiWalkNextReady=0,poiWalkActionStarted=-10000;
 let poiFreePose=null;
-const POI_WALK_MS=175;
+const POI_HUMAN_WALK_RATE=.80;
+const POI_WALK_MS=175/POI_HUMAN_WALK_RATE;
 let poiWalkStepMs=POI_WALK_MS;
 
 // v40: original offline soundscape and layered game sound design.
@@ -19755,7 +19756,8 @@ function frontierFollowTarget(a,player,now){
 function poiCompanionSpeed(a){
  // Match the real hostile locomotion rates independently of player input,
  // gear or sprint. Orvas's authored one-tile approach is 235ms.
- return a.id==='orvasSoul'?1/235:poiMovementFactor(poiPartyAttributes(a).speed,3)/(typeof POI_MONSTER_FREE_TICK==='number'?POI_MONSTER_FREE_TICK:380);
+ const human=Object.hasOwn(POI_HUMAN_PARTY_IDS,a.id);
+ return a.id==='orvasSoul'?1/235:poiMovementFactor(poiPartyAttributes(a).speed,3)*(human?POI_HUMAN_WALK_RATE:1)/(typeof POI_MONSTER_FREE_TICK==='number'?POI_MONSTER_FREE_TICK:380);
 }
 function frontierFollowSpeed(a){
  const base=poiCompanionSpeed(a),style=a.freeFollows?frontierFollowStyle(a):null;
@@ -24432,7 +24434,7 @@ function poiChapelWater(x,z,kind){
  const y=poiWalkLevel,chapel=facilitySite?.id==='base'?facilitySite.chapel:null;
  return y===-1&&!!chapel?.[kind]?.some(p=>p.x===x&&p.z===z&&(p.y??y)===y)&&world.some(o=>o.x===x&&o.z===z&&o.y===y&&o.type==='water');
 }
-const POI_CHAPEL_WET_MS=265,POI_CHAPEL_ELITE_STATS=Object.freeze({hp:100,attack:15});
+const POI_CHAPEL_WET_MS=265/POI_HUMAN_WALK_RATE,POI_CHAPEL_ELITE_STATS=Object.freeze({hp:100,attack:15});
 function poiChapelStepMs(x,z,wet=poiChapelWater(x,z,'shallows')){
  return wet?POI_CHAPEL_WET_MS:POI_WALK_MS;
 }
@@ -27734,7 +27736,7 @@ const POI_TOWN_INN=Object.freeze({hostId:'innkeeper',desk:{x:41,z:32,y:0,facing:
 ])});
 const POI_TOWN_INN_BEDS=POI_TOWN_INN.beds;
 
-const POI_TOWN_RESIDENT_TICK=380;
+const POI_TOWN_RESIDENT_TICK=380/POI_HUMAN_WALK_RATE;
 const POI_TOWN_OPEN=7*60+30,POI_TOWN_CLOSE=18*60,POI_TOWN_WAKE=6*60;
 const POI_TOWN_WALK_DECOR=new Set(['flowerField','bushFlower','tallGrass','bushFern','rubble','chairWood',
  'chairClassic','stoolRound','benchWood','lantern','guildFacadeSign','poiFortGate','poiCanalQuay']);
@@ -28827,7 +28829,7 @@ function frontierPlayerTrafficClip(state,clip,now,facing){
   const limit=clip(p,q,next,swap);
   if(Math.abs(limit-next)<1e-7)return next;
   state.npcPushAt??=now;state.npcPushLast=now;
-  return now-state.npcPushAt>=700?next:limit;
+  return now-state.npcPushAt>=300?next:limit;
  };
 }
 const frontierCardinalTraffic={};
@@ -31342,7 +31344,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v406',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v407',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -31457,7 +31459,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v406';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v407';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -31672,7 +31674,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v406',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v407',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -35612,8 +35614,8 @@ function poiLandscapeActionWeaponSync(weapon,action=$('poiWalkAction')){
 function poiShopSync(){
  const action=$('poiWalkAction');
  const visible=poiWalkActive&&facilitySite?.id==='base';
- const gold=visible?poiEconomyGold():0;
- poiWalletSync(gold);
+ // The wallet belongs to the active kit, not the old base-only shop HUD.
+ poiWalletSync(poiEconomyGold());
  const stay=typeof poiTownPlayerService==='function'?poiTownPlayerService():null;
  const talk=(visible||poiWalkActive&&facilitySite?.id==='frontier')&&typeof poiTownDialogueTarget==='function'&&poiTownDialogueTarget(performance.now());
  const soul=typeof poiSoulFloorReachable==='function'?poiSoulFloorReachable(performance.now()):null;
