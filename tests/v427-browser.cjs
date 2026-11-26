@@ -3,8 +3,11 @@ const mark="if(facilityParams.get('test')==='1')window.__editorTest={";
 let h=fs.readFileSync('world-editor.html','utf8');a.equal(h.split(mark).length,2);
 h=h.replace(mark,mark+`
  qa427:{
-  ready:()=>facilitySite?.id==='frontier'&&poiWalkActive&&poiTownNpcActors.some(n=>n.role.id==='frontierregna'),
-  inspect:()=>poiNpcInventorySync(poiTownNpcActors.find(n=>n.role.id==='frontierregna')),
+  ready:()=>facilitySite?.id==='frontier'&&poiWalkActive&&facilitySite.residents.some(n=>n.id==='frontierregna'),
+  inspect:()=>{
+   const role=facilitySite.residents.find(n=>n.id==='frontierregna');
+   poiNpcInventorySync(poiTownNpcActors.find(n=>n.role===role)??{role,hp:550});
+  },
   close:()=>poiNpcInventorySync(),
   party:()=>{
    if(!poiEconomyWrite({...poiHotbarRead(),humanParty:[{id:'human:frontierregna',hp:550,mode:'follow'}]}))throw Error('party setup');
