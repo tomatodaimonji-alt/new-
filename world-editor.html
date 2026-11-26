@@ -1755,7 +1755,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v428）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v429）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="2500" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -19944,6 +19944,40 @@ function poiCompanionPlayerContact(o,s,now){
 }
 // BEGIN COMPANION FRACTIONAL FOLLOW
 const POI_COMPANION_FREE_RADIUS=.20,POI_COMPANION_FOLLOW_BEGIN=4,POI_COMPANION_FOLLOW_STOP=2;
+function frontierPartyHumanPeers(a){
+ if(!frontierResident(POI_HUMAN_PARTY_IDS[a.id])||facilitySite?.id!=='frontier')return [];
+ return poiPartyActors().filter(p=>p!==a&&p.y===a.y&&p.site===a.site&&!p.recessed&&!p.death&&!p.partyDown&&
+  frontierResident(POI_HUMAN_PARTY_IDS[p.id])&&frontierPlaneMatches(p.frontierCave,a.frontierCave));
+}
+function frontierPartyFollowLane(a){
+ const peers=frontierPartyHumanPeers(a);
+ return peers.length?([a,...peers].filter(p=>p.id<a.id).length-peers.length/2):null;
+}
+function frontierPartyBattleSpacing(a,target,p,now,cooling=false){
+ if(!target||a.localDetour||a.doorRoute)return null;
+ const peers=frontierPartyHumanPeers(a),dx=p.x-target.x,dz=p.z-target.z,d=Math.hypot(dx,dz);
+ if(!peers.length||d<.18)return null;
+ const reach=poiCompanionMeleeReach(a);
+ if(d>reach+1.6||cooling&&(d>reach-.06||reach>3))return null;
+ const radius=cooling?Math.min(reach-.085,Math.max(.60,d)):Math.min(reach-.09,1.65);
+ if(radius<.33)return null;
+ const near=peers.map(poiCompanionPosition);
+ const gap=q=>Math.min(...near.map(o=>Math.hypot(q.x-o.x,q.z-o.z)));
+ const startGap=gap(p);
+ if(cooling&&startGap>.72)return null;
+ // Give each nearby ally some room while staying on the same side of
+ // the enemy and within weapon reach. An obstructed lane is optional.
+ const a0=Math.atan2(dx,dz),pref=frontierPartyFollowLane(a)<0?-1:1;
+ let best=null,score=cooling?startGap+.19:.49;
+ for(const swing of [pref*.41,-pref*.41,pref*.72,-pref*.72]){
+  const q={x:target.x+Math.sin(a0+swing)*radius,z:target.z+Math.cos(a0+swing)*radius,y:a.y,partySpacing:true};
+  const separation=Math.min(.93,gap(q));
+  const grade=separation-Math.hypot(q.x-p.x,q.z-p.z)*.10;
+  if(grade<=score||!poiCompanionAttackClear(q,target,a.y)||!poiCompanionNavSweep(a,p,q.x,q.z))continue;
+  best=q;score=grade;
+ }
+ return best;
+}
 function frontierFollowStyle(a){
  if(facilitySite?.id!=='frontier')return null;
  if(a.followStyle)return a.followStyle;
@@ -19956,8 +19990,11 @@ function frontierFollowTarget(a,player,now){
  const style=frontierFollowStyle(a);
  if(!style||Math.hypot(player.x-a.x,player.z-a.z)>9)return player;
  const forward=poiAimOrigin(now).dir;if(!forward)return player;
- const side=style.side*(style.offset+.10*Math.sin(now*.00072+style.phase));
- const vx=player.x-forward.x*style.tail-forward.z*side,vz=player.z-forward.z*style.tail+forward.x*side;
+ const lane=a.localDetour?null:frontierPartyFollowLane(a);
+ const side=lane===null?style.side*(style.offset+.10*Math.sin(now*.00072+style.phase)):
+  lane*.88+.07*Math.sin(now*.00072+style.phase);
+ const tail=style.tail+(lane===0?.33:0);
+ const vx=player.x-forward.x*tail-forward.z*side,vz=player.z-forward.z*tail+forward.x*side;
  const last=a.followBias,dt=Math.max(0,Math.min(60,last?now-last.at:60)),t=1-Math.exp(-dt/340);
  const q={x:last?player.x+(last.dx+(vx-player.x-last.dx)*t):vx,z:last?player.z+(last.dz+(vz-player.z-last.dz)*t):vz,y:player.y};
  if(!poiWalkCanStep(poiFreeCell(q.x),poiFreeCell(q.z),undefined,undefined,undefined,true)||
@@ -20076,7 +20113,7 @@ function poiCompanionAdvance(a,to,now,stop,doorCross=false){
    }
   }
  }
- if(!doorCross&&next.distance<step*.19&&!waypoint&&!scope?.followOnly&&typeof poiCompanionPlan==='function'){
+ if(!doorCross&&!to.partySpacing&&next.distance<step*.19&&!waypoint&&!scope?.followOnly&&typeof poiCompanionPlan==='function'){
   const route=a.freeRoute??(a.freeRoute=poiCompanionPlan(a,{x:Math.round(to.x),z:Math.round(to.z)},now));
   if(route){
    const rx=route.x-p.x,rz=route.z-p.z,d=Math.hypot(rx,rz);
@@ -20333,7 +20370,7 @@ function poiCompanionEngage(a,now){
   if(poiCompanionAttackClear(origin,t.s,a.y)){poiCompanionCommit(a,t,now);return a}
   return t.s;
  }
- return t.s;
+ return t.o.type==='monsterStoneDavid'?t.s:frontierPartyBattleSpacing(a,t.s,origin,now)||t.s;
 }
 // BEGIN COMPANION SUMMON EFFECT
 const POI_COMPANION_SUMMON_MS=560;
@@ -20952,9 +20989,16 @@ function poiCompanionTickOne(now,member,kit){
    }
   }
  }
- const goal=a.freeFollows&&a.freeGoal?frontierFollowTarget(a,player,now):a.freeGoal;
+ let goal=a.freeFollows&&a.freeGoal?frontierFollowTarget(a,player,now):a.freeGoal;
+ if(!goal&&latch&&!david&&!a.frontierSkillCast&&now+150<(a.slimeRecoverUntil||0)){
+  const cached=a.partySpacing;
+  if(!cached||cached.target!==latch.s||now>=cached.until||Math.hypot(latch.s.x-cached.x,latch.s.z-cached.z)>.24)
+   a.partySpacing={target:latch.s,x:latch.s.x,z:latch.s.z,until:now+155,
+    goal:frontierPartyBattleSpacing(a,latch.s,origin,now,true)};
+  goal=a.partySpacing.goal;
+ }else a.partySpacing=null;
  if(!a.freeLoot&&typeof frontierQuietParty==='function'&&frontierQuietParty(a,member,player,origin,now,goal))return;
- poiCompanionAdvance(a,goal,now,a.freeLoot?.70:a.freeFollows?(frontierFollowStyle(a)?.stop??POI_COMPANION_FOLLOW_STOP):Math.min(1.16,poiCompanionMeleeReach(a)*.91));
+ poiCompanionAdvance(a,goal,now,goal?.partySpacing?.12:a.freeLoot?.70:a.freeFollows?(frontierFollowStyle(a)?.stop??POI_COMPANION_FOLLOW_STOP):Math.min(1.16,poiCompanionMeleeReach(a)*.91));
  if(a.id==='orvasSoul'&&typeof poiOrvasAllyFoot==='function')poiOrvasAllyFoot(a,now);
 }
 // BEGIN ORVAS ALLY BOSS RUNTIME
@@ -29134,7 +29178,8 @@ function poiHumanPartyMesh(m,a,pose,now){
   const reach=poiAimWallLimit(o,dir,poiCompanionMeleeReach(a),poiAimWall(o));
   swing.spearVisual={originX:pose.x,originZ:pose.z,dx:q.dx,dz:q.dz,reach,point:q.spearPoint??null};
  }
- if(swing&&frontier&&spec.weapon==='equipMithrilSword')swing.meleeReach=poiWorldMeleePlan(spec.weapon,q.profile,age);
+ if(swing&&frontier&&(spec.weapon==='equipMithrilSword'||POI_HELD_AXE_EDGE[spec.weapon]))
+  swing.meleeReach=poiWorldMeleePlan(spec.weapon,q.profile??poiPlayerWeaponProfile(spec.weapon),age);
  const part=poiBuildPlayerMesh(spec.weapon,swing,spec.gear,stride,0,pose.x,pose.y,pose.z,pose.heading,frontier,spec.appearance??null);
  if(q?.arrow&&now<q.arrow.end){
   const v=q.arrow,u=Math.min(1,Math.max(0,(now-v.at)/(v.end-v.at))),d=.47+(v.d-.47)*u;
@@ -31917,7 +31962,7 @@ function poiTownResidentsDraw(now,vp){
    const hurt=near&&inTime(a.hurtAt,155)?(1-(now-a.hurtAt)/155)*.33:0;
    const idle=near&&!sleeping&&!rate&&motion.kind==='idle'&&poiTownDialogue?.actor!==a&&
     a.activity!=='fight'&&a.activity!=='hunt'&&!a.frontierStrike&&!a.frontierCombat&&!a.frontierSkillCast&&!a.target;
-   if(facilitySite?.id==='frontier'&&(poiSpearType(a.weapon)||a.weapon==='equipMithrilSword'||a.weapon==='equipBlackwingBow')&&!bed){
+   if(facilitySite?.id==='frontier'&&(poiSpearType(a.weapon)||a.weapon==='equipMithrilSword'||a.weapon==='equipBlackwingBow'||POI_HELD_AXE_EDGE[a.weapon])&&!bed){
     const part=poiFrontierResidentRigidWeapon(a,now,x+.5,y,z+.5,heading??r*Math.PI/2,stride);
     if(idle)poiNpcIdleMesh(part,0,part.p.length,x+.5,y,z+.5,heading??r*Math.PI/2,now,a.index);
     for(let i=0;i<part.p.length;i+=3){
@@ -32006,7 +32051,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v428',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v429',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -32121,7 +32166,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v428';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v429';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -32336,7 +32381,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v428',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v429',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -34518,13 +34563,21 @@ function poiNorthPlayerAxeMotion(profile,ms){
  const f=ease((r-.46)/.54);
  return {phase:'recover',yaw:-h,strike:1.40*(1-f),arm:-1.17*(1-f),twist:.65*(1-f),mix:1-f};
 }
+// The sharpened outer edge is +X on both axe models. Keep the contact
+// key on that rim, not on the highest vertex above the actual edge.
+const POI_HELD_AXE_EDGE=Object.freeze({
+ equipIronAxe:[.656,1.12,0],
+ equipNorthMinotaurAxe:[.536*1.18,2.620-.181*1.18,0]
+});
 function poiWorldMeleePlan(type,profile,ms){
  const height=POI_WORLD_MELEE_CONTACT_HEIGHT[type];
  if(!height||!profile?.hit||ms<=0||ms>=profile.pose)return null;
  const {hit,range,pose}=profile,tail=pose-hit,sweep=!!profile.sweep;
  if(profile.frontArc){
   const k=poiNorthPlayerAxeMotion(profile,ms);
-  return {arc:'north-player-axe',allowBack:Math.abs(k.yaw)>1.34,mix:k.mix,
+  // The cut advances from positive to negative yaw. Turn the sharp
+  // side into that tangent so the back of the head never leads.
+  return {arc:'north-player-axe',edgeRoll:-1,allowBack:Math.abs(k.yaw)>1.34,mix:k.mix,
    side:range*Math.sin(k.yaw),forward:range*Math.cos(k.yaw),height};
  }
  if(type==='equipLongStaff'){
@@ -34563,7 +34616,7 @@ function poiRigidHeldRotation(plan,g,lead,grip,scale,wrist){
  // If this strike met a wall close to the grip, lift the fixed length
  // instead of making the edge go through the wall or shrinking the prop.
  const rise=plan.wall&&flat<length?Math.sqrt(Math.max(0,length*length-flat*flat)):dy;
- const y=unit([dx,rise,dz]),roll=plan.arc==='north-player-axe'?-1:1;
+ const y=unit([dx,rise,dz]),roll=plan.edgeRoll??1;
  const x=flat>1e-7?[roll*dz/flat,0,-roll*dx/flat]:[roll,0,0],z=cross(x,y);
  const basis=(i,j)=>x[i]*u[j]+y[i]*along[j]+z[i]*w[j];
  const target=Array.from({length:3},(_,i)=>Array.from({length:3},(_,j)=>basis(i,j)));
@@ -34946,7 +34999,7 @@ function poiBuildPlayerMesh(weapon,pose,gear,stride=0,r=0,x=0,y=0,z=0,heading=nu
    if(rise>1e-6){
     const side=(lead[0]-gripX)*scaleX,depth=lead[2]*scaleZ;
     scaleY=Math.sqrt(Math.max(.01,length*length-side*side-depth*depth))/rise;
-    if(key)orient=poiRigidHeldRotation(key,{x:gx,y:gy,z:gz},lead,[gripX,gripY,0],[scaleX,scaleY,scaleZ],wrist);
+    if(key)orient=poiRigidHeldRotation(key,{x:gx,y:gy,z:gz},POI_HELD_AXE_EDGE[weapon]??lead,[gripX,gripY,0],[scaleX,scaleY,scaleZ],wrist);
    }
   }
   for(let i=0;i<prop.p.length;i+=3){
