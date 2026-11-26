@@ -43,6 +43,7 @@ try{
  let saved=await via('saved');a.deepEqual(saved,[null,null,{owner:'frontierregna',id:'ice-fang'}]);
  await pick();await p.getByRole('button',{name:'やめる',exact:true}).tap();
  await p.getByRole('button',{name:'閉じる',exact:true}).tap();await via('close');
+ await p.waitForFunction(()=>document.querySelector('[data-skill-slot="2"]')?.textContent.includes('氷牙陣'));
  a.match(await p.locator('[data-skill-slot="2"]').innerText(),/3.*氷牙陣/);
  await start();a.deepEqual(await via('saved'),saved);
  await via('inspect');await open();await pick();await slot(1).tap();
