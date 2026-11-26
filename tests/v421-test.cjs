@@ -1,0 +1,20 @@
+const a=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
+const s=fs.readFileSync(process.argv[2]??'world-editor.html','utf8');
+for(const match of s.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))if(match[1].trim())new vm.Script(match[1]);
+const fn=name=>{const p=s.indexOf('function '+name+'(');a.ok(p>=0,name);return s.slice(p,s.indexOf('\n}',p)+2)};
+const pre=s.match(/^const POI_HOTBAR_POTION_START=.*$|^const POI_INVENTORY_LIMIT=.*$|^const POI_KNIFE=.*$|^const poiFoodItem=.*$|^const poiHealingItem=.*$/gm).join('\n');
+let invoked;
+const context={poiInventorySlots:k=>k.slots,poiStorageActionResult:reason=>({reason}),poiUseCannedFood:()=>invoked='food',
+ poiUseFood:()=>invoked='food',poiHealingCastStart:(k,i,c)=>invoked=c.type,POI_GAME_WEAPON_NAMES:{},POI_STARTER_ARMOR_NAMES:{}};
+const api=vm.runInNewContext(pre+'\n'+s.match(/^function poiInventoryItemName.*$/m)[0]+'\n'+fn('poiUseStorageConsumable')+'\n({name:poiInventoryItemName,food:poiFoodItem,use:poiUseStorageConsumable})',context);
+a.equal(api.name('cannedFood'),'ポーション','the saved old key loads as a potion');
+a.equal(api.food('cannedFood'),false);
+a.equal(api.food('freshProduce'),true);
+api.use({slots:[{type:'cannedFood',count:2}]},0);a.equal(invoked,'cannedFood');
+api.use({slots:[{type:'healingHerb',count:2}]},0);a.equal(invoked,'healingHerb');
+a.match(s,/healingHerb:'体力を最大20回復/);
+a.match(s,/cannedFood:'体力を最大40回復/);
+a.match(fn('poiNpcTradePanelSync'),/poiNpcTradeSpeech/,'trade has visible local dialogue');
+a.match(s,/frontiersugimoto:'equipIronSpear',frontiermiyamoto:'equipIronAxe'/);
+a.match(s,/equipIronAxe:\{range:1\.55,reachStars:3,damage:27/);
+a.match(s,/case 'equipIronAxe':\{/);
