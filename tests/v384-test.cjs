@@ -1,0 +1,10 @@
+const a=require('node:assert/strict'),h=require('node:fs').readFileSync(process.argv[2],'utf8');
+a(h.includes('function frontierNpcSweepBlocked('),'residents and party need swept body collision');
+const start=h.indexOf('function frontierNpcSweepBlocked('),end=h.indexOf('function frontierNpcBodies(',start);
+const f=new Function(h.slice(start,end)+'return frontierNpcSweepBlocked;')();
+a(f(0,0,1,0,[{x:.5,z:0}]));
+a(!f(0,0,1,0,[{x:.5,z:.6}]));
+a(!f(.1,0,-.2,0,[{x:.25,z:0}]),'parties loaded while touching may separate, not tunnel');
+a(f(.1,0,.9,0,[{x:.25,z:0}]),'existing overlap does not permit crossing to the far side');
+a(h.includes('function frontierFollowTarget('));
+console.log('PASS swept NPC bodies and stable varied follow anchors');
