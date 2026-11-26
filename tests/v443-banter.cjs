@@ -1,0 +1,14 @@
+const fs=require('node:fs'),vm=require('node:vm'),a=require('node:assert/strict'); const h=fs.readFileSync(process.argv[2]||'candidate.html','utf8');
+for(const m of h.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g))new vm.Script(m[1]);
+const part=(b,e)=>{const i=h.indexOf(b),j=h.indexOf(e,i+1);a.ok(i>=0&&j>i,b);return h.slice(i,j)};
+const u=vm.runInNewContext(part('const FRONTIER_DUO_BANTER=','let frontierQuietTalkAt=')+';frontierDuoBanter');
+const r='frontierregna',l='frontierlyzel';
+a.equal(u('frontiersera',l,0),null);a.equal(u(r,r,0),null);
+a.match(u(r,l,0)[0],/遅ぇ/);a.match(u(r,l,0)[1],/勝手/);
+a.match(u(l,r,0)[0],/射線/);a.match(u(l,r,0)[1],/先に当て/);
+a.notDeepEqual(u(r,l,1),u(r,l,0));
+for(const [i,j] of [[r,l],[l,r]])for(let q=0;q<6;q++) a.ok(u(i,j,q).every(s=>s.length<=30));
+a.match(h,/const duo=frontierDuoBanter\(id,peer\?POI_HUMAN_PARTY_IDS\[peer.id\]:null,n\)/);
+a.match(h,/frontierQuietLine\(a,reply\.line\?\?frontierQuietPhrases\[id\]\[3\],now\)/);
+a.match(h,/duo=frontierDuoBanter\(a.role.id,b.role.id,serial\),lines=duo\|\|/);
+console.log('PASS author-specific overhead banter both orders, rotates and fits panel; general residents unchanged');
