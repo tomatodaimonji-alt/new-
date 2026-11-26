@@ -813,6 +813,8 @@ header #batteryIndicator.unknown .batteryFill,#poiLandscapeBattery #batteryIndic
 #poiMessageLog{display:flex;flex-direction:column;gap:2px;min-height:0;overflow:hidden}
 .poiMessageLine{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:1;flex:none;overflow:hidden;overflow-wrap:anywhere}
 .poiMessageLine:last-child{-webkit-line-clamp:2}
+#poiMessageLog .poiMessageLine[data-kind="gift"]{color:#f3db9e;-webkit-line-clamp:2;order:1}
+#poiMessageLog:has(.poiMessageLine[data-kind="dialogue"]:not([hidden])) .poiMessageLine[data-kind="gift"]::before{content:"アナウンス："}
 #poiMessageLog .poiMessageLine[hidden]{display:none}
 @media(min-width:801px){
  #app:not(.gameWorldMode) #poiMessageStack{width:calc(100vw - 512px - 2 * var(--poi-message-edge))}
@@ -1721,7 +1723,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v373）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v374）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="3000" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -24874,7 +24876,7 @@ function poiMessageSpeak(name,text,now){
  if(!panel||!log||!heading)return false;
  poiMessageUpdate(now);
  if(poiMessageSpeech)poiMessageSpeech.remove();
- for(const {line} of poiMessageLines)line.hidden=true;
+ for(const {line,kind} of poiMessageLines)line.hidden=kind!=='gift';
  const line=document.createElement('div');line.className='poiMessageLine';line.dataset.kind='dialogue';line.textContent=text;line.hidden=!text;
  poiMessageSpeech=line;
  heading.textContent=name;panel.hidden=false;log.append(line);return true;
@@ -24890,7 +24892,7 @@ function poiMessagePush(text,kind,now=performance.now()){
  poiMessageUpdate(now);
  const last=poiMessageLines[poiMessageLines.length-1];
  if(kind==='dialogue'&&last?.kind===kind&&last.text===text&&now-last.start<700)return true;
- const line=document.createElement('div');line.className='poiMessageLine';line.dataset.kind=kind;line.textContent=text;line.hidden=!!poiMessageSpeech;
+ const line=document.createElement('div');line.className='poiMessageLine';line.dataset.kind=kind;line.textContent=text;line.hidden=!!poiMessageSpeech&&kind!=='gift';
  while(poiMessageLines.length>=POI_MESSAGE_MAX)poiMessageLines.shift().line.remove();
  poiMessageLines.push({line,text,kind,start:now,until:now+POI_MESSAGE_LIFETIME});
  panel.hidden=false;log.append(line);return true;
@@ -28804,7 +28806,7 @@ const POI_NPC_EXTRA_SPEECH=Object.freeze({
  portfisher:['水面が静かでも、足元の流れは別ものさ。桟橋の先では足元に気をつけて。','岸の明かりが見えたら、そろそろ帰る時間だな。'],
  southmerchant:['店の裏は荷ほどき場だ。通りからは表の入口が近いよ。','日が落ちたら向かいの宿に戻る。旅の支度は明るいうちがいいよ。']
 });
-const POI_NPC_MENU_LABELS={talk:'話す',status:'状態',request:'依頼','local-help':'用事を聞く',quest:'クエスト','quest-accept':'受ける','quest-report':'報告する',shop:'買い物する',stay:'泊まる',sell:'アイテムを売る',
+const POI_NPC_MENU_LABELS={status:'状態',request:'依頼','local-help':'用事を聞く',quest:'クエスト','quest-accept':'受ける','quest-report':'報告する',shop:'買い物する',stay:'泊まる',sell:'アイテムを売る',
  buy:'アイテムを買う',recruit:'仲間になってほしい',back:'戻る',confirm:'はい'};
 // Topics belong to this loaded NPC, not to a single menu visit or a save.
 const poiNpcTalkCursor=new WeakMap();
@@ -28823,16 +28825,16 @@ function frontierNpcTutorial(role){
   ['お、その服似合ってるじゃないか。','俺も村の外をちゃんと見てみたくてさ。一緒に冒険しないか？ その気なら「依頼」から仲間に誘ってくれ。']};
  if(kit.frontierClothesGift)return {pages:[sera?'さっきの服、まだ着てないんですね。インベントリを開いて、布の服と布のズボンを装備してくださいね。':
   'まだ着てないのか？ インベントリを開いて、布の服と布のズボンを装備してみなよ。']};
- let next=kit;
+ let next=kit;const gift=[];
  for(const type of Object.values(FRONTIER_FITTED_GEAR).filter(Boolean)){
   if(Object.values(poiArmorWorn(next)).includes(type)||poiInventorySlots(next).some(c=>c?.type===type)||
    poiAnyChestHas(next,type)||next.drops?.some(c=>c.type===type))continue;
   const result=poiInventoryAccept(next,type,1);
   if(!result.accepted)return {pages:['どうして裸でいるんだ？ 着替えを渡したいから、まず持ち物に空きを作ってくれ。']};
-  next=poiInventoryEdited(next,result.slots);
+  next=poiInventoryEdited(next,result.slots);gift.push(type);
  }
  if(!poiEconomyWrite({...next,frontierClothesGift:true}))return {pages:['着替えを渡せなかったみたいだ。もう一度、声をかけてくれる？']};
- return {pages:[sera?'どうしてそんな格好で？ 裸のままだと困るでしょう。予備の服とズボン、革の靴をどうぞ。':
+ return {gift,pages:[sera?'どうしてそんな格好で？ 裸のままだと困るでしょう。予備の服とズボン、革の靴をどうぞ。':
   'おい、どうして裸でうろついてるんだ？ とりあえず、予備の服とズボン、革の靴を持っていきな。']};
 }
 function poiTownDialogueHasNext(){
@@ -28892,7 +28894,7 @@ function poiNpcMenuRows(d){
  const row=id=>({id,label:POI_NPC_MENU_LABELS[id]});
  const quests=d.actor.role.id==='guildkeeper'&&typeof poiQuestsForClerk==='function'?poiQuestsForClerk():[];
  if(d.page==='toolshop')return [{id:d.actor.role.id===POI_VALDIA_GROCER_ID?'buy':'shop',label:'買う'},{id:'sell',label:'売る'},row('back')];
- if(d.page==='root')return ['talk','status','request',...(quests.length?['quest']:[]),'back'].map(row);
+ if(d.page==='root')return ['status','request',...(quests.length?['quest']:[]),'back'].map(row);
  if(d.page==='quest')return [...quests.map(q=>({id:'quest:'+q.id,
   label:q.label+(({accepted:'（受注済み）',surveyed:'（報告可能）',reported:'（報告済み）'})[poiNpcQuestProgress(q.id)]||''),quest:q})),row('back')];
  if(d.page==='quest-detail'){
@@ -29221,24 +29223,7 @@ function poiNpcMenuChoose(id,now=performance.now()){
   if(typeof poiPortQuestChoose!=='function'||!poiPortQuestChoose(d,id,now))return false;
   d.index=0;poiNpcMenuRender(now);poiShopSync();return true;
  }
- if(id==='talk'){
-  const intro=frontierNpcTutorial(d.actor.role);
-  if(intro){
-   d.page='speech';d.speechPages=intro.pages;d.speechIndex=0;
-   d.text=intro.pages[0];d.until=null;d.index=0;d.pending=null;d.questId=null;
-   poiNpcMenuRender(now);poiShopSync();return true;
-  }
-  const report=d.actor.role.id==='northscout'&&typeof poiTownScoutReport==='function'&&poiTownScoutReport(poiTownClockSnapshot());
-  const usualTopics=POI_NPC_EXTRA_SPEECH[d.actor.role.id]||['夕方になると門の外は暗くなる。帰り道は覚えておくといいよ。','町へ戻ると、ようやく一息つけるね。'];
-  const fish=typeof poiPortFishTalk==='function'&&poiPortFishTalk(d.actor);
-  const topics=report?[report,...usualTopics]:fish?[fish,...usualTopics]:[d.greeting,...usualTopics].filter(Boolean);
-  const port=typeof poiPortMarekTopic==='function'?poiPortMarekTopic(d.actor):null;
-  const length=topics.length+(port?1:0),index=(poiNpcTalkCursor.get(d.actor)||0)%length;
-  poiNpcTalkCursor.set(d.actor,(index+1)%length);
-  d.topic=d.text=index===topics.length?port:topics[index];
-  d.page='speech';d.index=0;d.pending=null;d.questId=null;
-  d.until=now+Math.max(4200,Math.min(7500,1600+d.text.length*95));
- }else if(id==='quest'){
+ if(id==='quest'){
   d.page='quest';d.index=0;d.text='どのクエストを見ますか？';
  }else if(row.quest){
   d.questId=row.quest.id;d.page='quest-detail';d.index=0;
@@ -29454,13 +29439,25 @@ function poiTownDialogueUpdate(now){
  }
  return d.sleeping?null:d.actor;
 }
+function poiNpcOpeningTopic(d){
+  const report=d.actor.role.id==='northscout'&&typeof poiTownScoutReport==='function'&&poiTownScoutReport(poiTownClockSnapshot());
+  const usualTopics=POI_NPC_EXTRA_SPEECH[d.actor.role.id]||['夕方になると門の外は暗くなる。帰り道は覚えておくといいよ。','町へ戻ると、ようやく一息つけるね。'];
+  const fish=typeof poiPortFishTalk==='function'&&poiPortFishTalk(d.actor);
+  const topics=report?[report,...usualTopics]:fish?[fish,...usualTopics]:[d.greeting,...usualTopics].filter(Boolean);
+  const port=typeof poiPortMarekTopic==='function'?poiPortMarekTopic(d.actor):null;
+  const length=topics.length+(port?1:0),index=(poiNpcTalkCursor.get(d.actor)||0)%length;
+  poiNpcTalkCursor.set(d.actor,(index+1)%length);
+  return index===topics.length?port:topics[index];
+}
 function poiTownDialogueAction(now){
  const expected=arguments[1]??null;
  if(poiTownDialogueSpeechOnly()){
   if(expected)return false;
   if(poiTownDialogueHasNext()){
    const d=poiTownDialogue;
-   d.text=d.speechPages[++d.speechIndex];poiNpcMenuRender(now);poiShopSync();return true;
+   d.topic=d.text=d.speechPages[++d.speechIndex];
+   if(!poiTownDialogueHasNext())d.page='root';
+   poiNpcMenuRender(now);poiShopSync();return true;
   }
   poiTownDialogueClose();if(typeof poiShopSync==='function')poiShopSync();return true;
  }
@@ -29495,6 +29492,15 @@ function poiTownDialogueAction(now){
   }
   poiTownNpcFace(actor,facing);
   if(actor.actorLeg&&typeof poiTownNpcVersion==='number')poiTownNpcVersion++;
+  const d=poiTownDialogue,intro=frontierNpcTutorial(actor.role);
+  if(intro?.pages.length>1){d.page='speech';d.speechPages=intro.pages;d.speechIndex=0}
+  d.topic=d.text=intro?.pages[0]??poiNpcOpeningTopic(d);
+  if(intro?.gift?.length){
+   if(typeof poiEconomyRefresh==='function')poiEconomyRefresh();
+   if(typeof poiSound==='function')poiSound('item-pickup',intro.gift[0]);
+   const notice=intro.gift.map(poiInventoryItemName).join('、')+'を手に入れた。';
+   if(!poiMessagePush(notice,'gift',now))toast(notice);
+  }
  }
  poiNpcMenuRender(now);poiShopSync();return true;
 }
@@ -29997,7 +30003,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v373',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v374',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -30112,7 +30118,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v373';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v374';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -30327,7 +30333,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v373',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v374',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
