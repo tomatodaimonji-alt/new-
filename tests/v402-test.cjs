@@ -1,0 +1,17 @@
+const a=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),h=fs.readFileSync(process.argv[2],'utf8');
+const x=h.match(/\/\/ BEGIN HUMAN COMPANION SIDESTEP\n([\s\S]*?)\/\/ END HUMAN COMPANION SIDESTEP/);
+a(x,'no physical NPC sidestep');
+const env={};vm.runInNewContext(x[1]+'\nthis.pick=poiHumanSidestepTarget;this.t=poiHumanSidestepEase;',env);
+const hit={sx:0,sz:3,dx:0,dz:1},p={x:0,z:4,y:0};
+const covers=q=>Math.abs(q.x)<.62;
+const open=(x,z)=>true,blocked=()=>false;
+const q=env.pick(p,hit,covers,open);
+a(q&&Math.abs(q.x)>.78&&q.z===4);
+const right=env.pick(p,hit,covers,(x,z)=>x>0);
+a(right.x>0&&right.z===4);
+a.equal(env.pick(p,hit,covers,blocked),null);
+a.equal(env.pick({x:2,z:4,y:0},hit,covers,open),null);
+a(h.includes('frontierren:[6,2],frontiersera:[6,3],frontierchief:[3,5],frontiershopkeeper:[5,4]'));
+a.equal(env.t(0),0);a(env.t(.5)>.5);a.equal(env.t(1),1);
+for(const m of h.matchAll(/<script>([\s\S]*?)<\/script>/g))new vm.Script(m[1]);
+console.log('PASS lateral direction, opposite side when blocked, no phantom escape, continuous interpolation and syntax');
