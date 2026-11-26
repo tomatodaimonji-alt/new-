@@ -1,0 +1,10 @@
+const a=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
+const s=fs.readFileSync(process.argv[2]??'world-editor.html','utf8');
+for(const m of s.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))if(m[1].trim())new vm.Script(m[1]);
+a.match(s,/frontierlyzel:'equipBlackwingBow'/);
+a.match(s,/equipBlackwingBow:\{range:8,reachStars:8,damage:32,hit:255,ready:875/);
+a.match(s,/head:'armorBlackFeather',torso:'armorOwlMantle',legs:'armorIndigoTrousers',feet:'armorGaldShoes'/);
+a.match(s,/if\(poiBowType\(a.type\)\)\{poiPlayerWeaponFlightBegin\(contact,now\)/);
+a.match(s,/if\(poiBowType\(q.type\)&&!q.arrow\)/);
+a.doesNotMatch(s,/\.poiBowType\(/);
+a.match(s,/poiBowType\(rig\.weapon\)/);
