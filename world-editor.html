@@ -1756,7 +1756,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v512）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v513）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="2500" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -24171,6 +24171,8 @@ function poiHotbarRead(){
  }
  poiMigrateWeaponDurability(saved);
  const kit={weapon:saved.weapon,potions:saved.potions};
+ if(poiFrontierRepeatableLootWeapon(kit.weapon)&&Number.isInteger(saved.weaponSlot)&&saved.weaponSlot>=0&&saved.weaponSlot<POI_HOTBAR_SIZE)
+  kit.weaponSlot=saved.weaponSlot;
  const rank=poiAdventureRankDecode(saved.adventureRank);
  if(rank)kit.adventureRank=rank;else if(facilitySite?.id==='frontier'&&['active','done'].includes(saved.frontierSurvey))kit.adventureRank='F';
  if(facilitySite?.id==='frontier'&&saved.guildMembers)kit.guildMembers=frontierGuildRanksDecode(saved.guildMembers);
@@ -24310,18 +24312,18 @@ function poiHotbarRead(){
  for(const key of POI_CHEST_STORE_KEYS){
   if(!kit[key])continue;
   kit[key].slots=kit[key].slots.map(c=>{
-   if(!poiHotbarWeaponForType(c?.type))return c;
+   if(!poiHotbarWeaponForType(c?.type)||poiFrontierRepeatableLootWeapon(c?.type))return c;
    if(heldChestWeapons.has(c.type))return null;
    heldChestWeapons.add(c.type);return c;
   });
  }
  const chestSword=poiAnyChestHas(kit,POI_INVENTORY_SWORD);
- if(chestSword&&(saved.sword!==false||kit.woodSwordBroken))
+ if(chestSword&&!poiFrontierRepeatableLootWeapon(POI_INVENTORY_SWORD)&&(saved.sword!==false||kit.woodSwordBroken))
   for(const key of POI_CHEST_STORE_KEYS)if(kit[key])kit[key].slots=kit[key].slots.map(c=>c?.type===POI_INVENTORY_SWORD?null:c);
  const drops=poiInventoryReadDrops(typeof poiSnowGroundDecode==='function'?poiSnowGroundDecode(saved.drops,saved.snowDrops):saved.drops);
  if(saved.sword===false&&(facilitySite?.id==='frontier'||kit.woodSwordBroken||chestSword||drops.some(d=>d.type===POI_INVENTORY_SWORD))){kit.sword=false;if(kit.weapon===POI_INVENTORY_SWORD)kit.weapon=null}
- const ownedDrops=drops.filter(d=>!(d.type===POI_INVENTORY_SWORD&&(kit.sword!==false||chestSword||kit.woodSwordBroken))&&
-  !(d.type!==POI_INVENTORY_SWORD&&poiHotbarWeaponForType(d.type)&&!poiRepeatableMonsterWeapon(d.type)&&poiAnyChestHas(kit,d.type)));
+ const ownedDrops=drops.filter(d=>poiFrontierRepeatableLootWeapon(d.type)||(!(d.type===POI_INVENTORY_SWORD&&(kit.sword!==false||chestSword||kit.woodSwordBroken))&&
+  !(d.type!==POI_INVENTORY_SWORD&&poiHotbarWeaponForType(d.type)&&!poiRepeatableMonsterWeapon(d.type)&&poiAnyChestHas(kit,d.type))));
  if(ownedDrops.length)kit.drops=ownedDrops;
  const groundGold=typeof poiGroundGoldDecode==='function'?poiGroundGoldDecode(typeof poiSnowGroundDecode==='function'?poiSnowGroundDecode(saved.groundGold,saved.snowGroundGold):saved.groundGold):[];
  if(groundGold.length)kit.groundGold=groundGold;
@@ -24351,6 +24353,7 @@ function poiHotbarSave(kit=poiHotbarState){
   const dungeonPopulation=kit.dungeonPopulation?poiDungeonPopulationDecode(kit.dungeonPopulation):null;
   const {weapon,potions,gold,claimedCaches,sword,drops,slots,towerFind,kitchenChest,worn,wornDurability,woodSwordBroken,npcTrade,goldBagOrder,quests,mineSurvey,mineGateCleared,mineTreasureChest,mineFindClaims,mineFindRolls,otherworldCleared,otherworldChest,chapelCleared,chapelChest,toolshopSupply}=kit;
   localStorage.setItem(POI_HOTBAR_KEY,JSON.stringify({version:1,weapon,potions:Math.min(potions,POI_HOTBAR_POTION_MAX),
+   ...(poiFrontierRepeatableLootWeapon(weapon)&&Number.isInteger(kit.weaponSlot)?{weaponSlot:kit.weaponSlot}:{}),
    ...(poiHasExplicitWeaponDurability(kit)?{weaponDurabilityVersion:2}:{}),...(toolshopSupply?{toolshopSupply}:{}),...(kit.southShipment?{southShipment:kit.southShipment}:{}),...(kit.armedDrops?.length?{armedDrops:kit.armedDrops}:{}),...(kit.fireWandFound?{fireWandFound:true}:{}),...(kit.northTrailCampSupplies===true?{northTrailCampSupplies:true}:{}),...(kit.northWatchPostSupplies===true?{northWatchPostSupplies:true}:{}),...(kit.otherworldEastSupplyFound===true?{otherworldEastSupplyFound:true}:{}),...(kit.chapelWestSupplyFound===true?{chapelWestSupplyFound:true}:{}),...(kit.northMarshHerbFound===true?{northMarshHerbFound:true}:{}),...(kit.northWatchPostGuardLoot===true?{northWatchPostGuardLoot:true}:{}),...(kit.northMinotaurAxeAwarded===true?{northMinotaurAxeAwarded:true}:{}),...(typeof poiOrvasRewardMask==='function'&&poiOrvasRewardMask(kit.orvasRewards)?{orvasRewards:kit.orvasRewards}:{}),...(Number.isInteger(kit.northFortReturn)&&kit.northFortReturn>=0&&kit.northFortReturn<=7?{northFortReturn:kit.northFortReturn}:{}),
    ...(kit.soulDrops?.length?{soulDrops:kit.soulDrops}:{}),
    ...(kit.sacredTempleSeen===true?{sacredTempleSeen:true}:{}),
@@ -24877,6 +24880,8 @@ const POI_GAME_WEAPON_NAMES=Object.freeze({equipStick:'木の棒',equipWoodSword
  equipFryingPan:'フライパン',equipLadle:'おたま',equipBallpointPen:'ペン',equipFirewoodAxe:'薪割り斧',equipWoodKnife:'木のナイフ'});
 const POI_F_WEAPON_DROPS=Object.freeze(['equipWoodSword','equipWoodSpear','equipWoodBow','equipFirewoodAxe','equipWoodKnife']);
 const POI_EQUIPMENT_RANKS=Object.freeze(Object.fromEntries([...POI_F_WEAPON_DROPS,'equipWalkingCane','equipBallpointPen'].map(type=>[type,'F'])));
+// Farmable Frontier rewards can have independent copies and condition.
+function poiFrontierRepeatableLootWeapon(type){return facilitySite?.id==='frontier'&&POI_F_WEAPON_DROPS.includes(type)}
 function poiEquipmentRank(type){return Object.hasOwn(POI_EQUIPMENT_RANKS,type)?POI_EQUIPMENT_RANKS[type]:null}
 
 const POI_STARTER_ARMOR=Object.freeze({head:'starterCap',torso:'starterTunic',legs:'starterTrousers',feet:'starterBoots'});
@@ -25156,7 +25161,7 @@ function poiChestDecode(raw){
  if(!raw||raw.version!==1||!Array.isArray(raw.slots)||raw.slots.length!==POI_CHEST_SIZE)return null;
  const unique=new Set(),slots=raw.slots.map(cell=>{
   const c=poiInventorySanitizeCell(cell);if(!c||typeof poiCompanionType==='function'&&poiCompanionType(c.type))return null;
-  if(poiHotbarWeaponForType(c.type)){if(unique.has(c.type))return null;unique.add(c.type)}
+  if(poiHotbarWeaponForType(c.type)&&!poiFrontierRepeatableLootWeapon(c.type)){if(unique.has(c.type))return null;unique.add(c.type)}
   return c;
  });
  return {version:1,slots};
@@ -25226,11 +25231,12 @@ function poiMoveChestInventorySlot(fromArea,fromIndex,toArea,toIndex){
  const taken=a===chest&&b===slots?a[fromIndex].type:null,key=poiChestActiveKey,active=kit[key];
  const estate=FRONTIER_ESTATE_KEYS.includes(key);
  if(estate&&(a!==chest||b!==slots||!poiInventoryCanWithdrawTo(a[fromIndex],b[toIndex])))return result('type');
- if(estate&&poiHotbarWeaponForType(taken)&&(slots.some(c=>c?.type===taken)||poiAnyChestHas(kit,taken)||
+ if(estate&&poiHotbarWeaponForType(taken)&&!poiFrontierRepeatableLootWeapon(taken)&&(slots.some(c=>c?.type===taken)||poiAnyChestHas(kit,taken)||
    kit.drops?.some(c=>c.type===taken)||taken===POI_INVENTORY_SWORD&&kit.sword!==false))return result('occupied');
  poiInventorySwap(a,fromIndex,b,toIndex);
  const box={...active,slots:chest};
- const next=poiInventoryEdited(estate?frontierEstateReplace(kit,key,box):{...kit,[key]:box},slots);
+ const selection=a===slots||b===slots?poiInventoryWeaponSwap(kit,a===slots?fromIndex:-1,b===slots?toIndex:-1):kit;
+ const next=poiInventoryEdited(estate?frontierEstateReplace(selection,key,box):{...selection,[key]:box},slots);
  if(!poiEconomyWrite(next))return result('storage');
  poiEconomyRefresh();if(kit.weapon!==next.weapon)poiWalkAvatar();
  if(taken&&typeof poiSound==='function')poiSound('chest-pickup',taken);
@@ -25253,7 +25259,7 @@ function poiChestTakeAll(){
   const src=chest[i];if(!src)continue;
   const cell=poiInventorySanitizeCell(src);
   const part=poiArmorCategory(src.type),weapon=poiHotbarWeaponForType(src.type);
-  if(!cell||((part&&!estate)||weapon)&&(slots.some(c=>c?.type===src.type)||poiAnyChestHas(withoutActive,src.type)||
+  if(!cell||((part&&!estate)||weapon&&!poiFrontierRepeatableLootWeapon(src.type))&&(slots.some(c=>c?.type===src.type)||poiAnyChestHas(withoutActive,src.type)||
     (part&&poiArmorWorn(kit)[part]===src.type)||(!poiRepeatableMonsterWeapon(src.type)&&kit.drops?.some(c=>c.type===src.type))||
     (src.type===POI_INVENTORY_SWORD&&(kit.sword!==false||kit.woodSwordBroken)))){
    remaining+=src.count;continue;
@@ -25377,7 +25383,7 @@ function poiEquipBagItem(index){
  const slot=poiInventoryEmptyHotbar(kit,slots);
  if(slot<0)return result('full');
  slots[slot]=cell;slots[i]=null;
- if(!poiEconomyWrite(poiInventoryEdited({...kit,weapon},slots)))return result('storage');
+ if(!poiEconomyWrite(poiInventoryEdited({...kit,weapon,weaponSlot:slot},slots)))return result('storage');
  if(typeof poiWandDisarm==='function')poiWandDisarm();
  poiEconomyRefresh();poiWalkAvatar();return result();
 }
@@ -25391,8 +25397,8 @@ function poiEquipHotbarItem(index){
  if(part)return poiMoveArmorSlot({zone:'hotbar',index},{zone:'armor',part});
  const weapon=poiHotbarWeaponForType(cell.type);
  if(!weapon)return result('type');
- if(kit.weapon===weapon){if(typeof poiWandDisarm==='function')poiWandDisarm();return result()}
- if(!poiEconomyWrite({...kit,weapon}))return result('storage');
+ if(kit.weapon===weapon&&(!poiFrontierRepeatableLootWeapon(weapon)||poiEquippedWeaponSlot(kit)===index)){if(typeof poiWandDisarm==='function')poiWandDisarm();return result()}
+ if(!poiEconomyWrite({...kit,weapon,weaponSlot:index}))return result('storage');
  if(typeof poiWandDisarm==='function')poiWandDisarm();
  poiEconomyRefresh();poiWalkAvatar();return result();
 }
@@ -25734,12 +25740,14 @@ function poiEquipmentSpendWeapon(type,released=false){
  const kit=poiHotbarRead();
  const releasedBow=released&&poiBowType(type);
  if(kit.weapon!==type&&!releasedBow)return false;
- const slots=poiInventorySlots(kit).slice(),i=slots.findIndex(c=>c?.type===type);
+ const slots=poiInventorySlots(kit).slice(),equipped=kit.weapon===type?poiEquippedWeaponSlot(kit,slots):-1;
+ const i=equipped>=0?equipped:slots.findIndex(c=>c?.type===type);
  if(i<0||i>=POI_HOTBAR_SIZE&&!releasedBow)return false;
  const cell=slots[i],durability=(cell.durability??poiEquipmentDurabilityMax(type))-1,broken=durability<=0;
  slots[i]=broken?null:{...cell,durability};
  const next=broken&&type===POI_INVENTORY_SWORD?{...kit,woodSwordBroken:true}:kit;
- if(!poiEconomyWrite(poiInventoryEdited(next,slots))){
+ const disarm=broken&&i===equipped&&poiFrontierRepeatableLootWeapon(type);
+ if(!poiEconomyWrite(poiInventoryEdited(disarm?{...next,weapon:null,weaponSlot:null}:next,slots))){
   toast(poiInventoryItemName(type)+'の耐久を保存できませんでした');return false;
  }
  if(broken){if(i<POI_HOTBAR_SIZE&&kit.weapon===type)poiHotbarEmptySlot=i;poiEquipmentBreakFeedback(type)}
@@ -25784,7 +25792,7 @@ function poiInventoryReadDrops(raw){
   if(!d||![d.x,d.z,d.y].every(Number.isInteger)||d.x<0||d.z<0&&!frontierNorthGroundRecord(d)||((d.x>=MAX_MAP||d.z>=MAX_MAP)&&(typeof poiDavidDepthGroundPoint!=='function'||!poiDavidDepthGroundPoint(d)))||d.y< -1||d.y>9)continue;
   const key=(d.region==='snowpass'?'s:':d.frontierCave===true?'b:':'')+d.x+','+d.z+','+d.y;
   const max=poiInventoryStack(d.type),count=Number.isInteger(d.count)?Math.max(1,Math.min(max,d.count)):1;
-  const c=poiInventorySanitizeCell({...d,count}),isWeapon=poiHotbarWeaponForType(d.type)&&!poiRepeatableMonsterWeapon(d.type);
+  const c=poiInventorySanitizeCell({...d,count}),isWeapon=poiHotbarWeaponForType(d.type)&&!poiRepeatableMonsterWeapon(d.type)&&!poiFrontierRepeatableLootWeapon(d.type);
   if(!c||seen.has(key)||isWeapon&&unique.has(d.type))continue;
   if(isWeapon)unique.add(d.type);seen.add(key);
   out.push({type:d.type,x:d.x,z:d.z,y:d.y,...(d.region==='snowpass'?{region:d.region}:{}),...(typeof d.frontierCave==='boolean'?{frontierCave:d.frontierCave}:{}),...(d.frontierDenStock===true&&d.y===0&&(d.x<64||frontierWoodOwn(d.x,d.z)||frontierGrandOwn(d.x,d.z)||frontierMeadowIn(d.x,d.z)||frontierStarOwn(d.x,d.z))?{frontierDenStock:true}:{}),...(count>1?{count}:null),...(c.durability?{durability:c.durability}:null),...(c.charges?{charges:c.charges}:null)});
@@ -25831,14 +25839,15 @@ function poiInventoryReadSlots(raw,kit){
    return null;
   }
   if(c.type===POI_INVENTORY_SWORD)swords++;
-  if(c.type!==POI_INVENTORY_SWORD&&poiHotbarWeaponForType(c.type)){
+  if(c.type!==POI_INVENTORY_SWORD&&poiHotbarWeaponForType(c.type)&&!poiFrontierRepeatableLootWeapon(c.type)){
    if(weapons.has(c.type)||!poiRepeatableMonsterWeapon(c.type)&&kit.drops?.some(d=>d.type===c.type)||poiAnyChestHas(kit,c.type))return null;
    weapons.add(c.type);
   }
   if(c.type===POI_INVENTORY_HERB)herbs+=c.count;
   out.push(c);
  }
- if(swords!==(kit.sword===false?0:1)||Math.min(herbs,POI_HOTBAR_POTION_MAX)!==kit.potions)return null;
+ if((kit.sword===false?swords!==0:poiFrontierRepeatableLootWeapon(POI_INVENTORY_SWORD)?swords<1:swords!==1)||
+    Math.min(herbs,POI_HOTBAR_POTION_MAX)!==kit.potions)return null;
  if(!legacy)return out;
  // Preserve each old row/column; the newly added ninth slot in each row
  // begins empty. Read-only opening does not rewrite the old save.
@@ -25847,12 +25856,26 @@ function poiInventoryReadSlots(raw,kit){
   rows.push(...out.slice(i,i+POI_INVENTORY_LEGACY_COLUMNS),null);
  return rows;
 }
+function poiEquippedWeaponSlot(kit,slots=poiInventoryOrdinarySlots(kit)){
+ if(!kit.weapon)return -1;
+ const i=kit.weaponSlot;
+ if(poiFrontierRepeatableLootWeapon(kit.weapon)&&Number.isInteger(i)&&i>=0&&i<POI_HOTBAR_SIZE&&slots[i]?.type===kit.weapon)return i;
+ return slots.slice(0,POI_HOTBAR_SIZE).findIndex(c=>c?.type===kit.weapon);
+}
+function poiInventoryWeaponSwap(kit,from,to){
+ const active=poiEquippedWeaponSlot(kit);
+ if(!poiFrontierRepeatableLootWeapon(kit.weapon)||active!==from&&active!==to)return kit;
+ const slot=active===from?to:from;
+ return slot>=0&&slot<POI_HOTBAR_SIZE?{...kit,weaponSlot:slot}:{...kit,weapon:null,weaponSlot:null};
+}
 function poiInventoryEdited(kit,slots){
  const goldStacks=slots.flatMap((c,slot)=>c?.type==='gold'?[{slot,amount:c.count}]:[]);
  if(goldStacks.length)slots=slots.map(c=>c?.type==='gold'?null:c);
  const sword=slots.findIndex(c=>c?.type===POI_INVENTORY_SWORD);
  const potions=slots.reduce((n,c)=>n+(c?.type===POI_INVENTORY_HERB?c.count:0),0);
- const next={...kit,weapon:kit.weapon&&slots.slice(0,POI_HOTBAR_SIZE).some(c=>c?.type===kit.weapon)?kit.weapon:null,potions};
+ const weaponIndex=poiEquippedWeaponSlot(kit,slots);
+ const next={...kit,weapon:weaponIndex>=0?kit.weapon:null,potions};
+ if(weaponIndex>=0&&poiFrontierRepeatableLootWeapon(kit.weapon))next.weaponSlot=weaponIndex;else delete next.weaponSlot;
  if(goldStacks.length)next.goldStacks=goldStacks;else delete next.goldStacks;
  if(sword<0)next.sword=false;else{delete next.sword;delete next.woodSwordBroken}
  if((sword===0||sword<0)&&(!potions||slots[1]?.count===potions)&&slots.every((c,i)=>!c||i===0&&c.type===POI_INVENTORY_SWORD&&c.durability===undefined||i===1&&c.type===POI_INVENTORY_HERB))delete next.slots;
@@ -25867,7 +25890,7 @@ function poiInventorySelected(index){
  if(companion!==null)return index===companion;
  const wand=poiArmedWandIndex();
  if(wand!==null)return index===wand;
- if(kit.weapon)return cell?.type===kit.weapon;
+ if(kit.weapon)return index===poiEquippedWeaponSlot(kit,slots);
  const reserved=poiGoldHotbarSlot(kit),empty=poiInventoryEmptyHotbar(kit,slots);
  return index!==reserved&&!cell&&index===(slots[poiHotbarEmptySlot]||poiHotbarEmptySlot===reserved?empty:poiHotbarEmptySlot);
 }
@@ -25875,8 +25898,9 @@ function poiInventoryAccept(kit,type,count,source=null){
  const slots=poiInventorySlots(kit).slice();
  const capacity=poiInventoryStack(type);
  if(typeof poiCompanionType==='function'&&poiCompanionType(type)&&slots.some(c=>c?.type===type))return {slots,accepted:0};
- if(!capacity||type===POI_INVENTORY_SWORD&&(kit.sword!==false||poiAnyChestHas(kit,type))||
-    type!==POI_INVENTORY_SWORD&&poiHotbarWeaponForType(type)&&(slots.some(c=>c?.type===type)||poiAnyChestHas(kit,type)))return {slots,accepted:0};
+ if(!capacity||!poiFrontierRepeatableLootWeapon(type)&&(
+    type===POI_INVENTORY_SWORD&&(kit.sword!==false||poiAnyChestHas(kit,type))||
+    type!==POI_INVENTORY_SWORD&&poiHotbarWeaponForType(type)&&(slots.some(c=>c?.type===type)||poiAnyChestHas(kit,type))))return {slots,accepted:0};
  const part=poiArmorCategory(type);
  if(part&&(poiArmorWorn(kit)[part]===type||slots.some(c=>c?.type===type)||poiAnyChestHas(kit,type)))return {slots,accepted:0};
  let left=capacity===1?Math.min(count,1):count;
@@ -25912,7 +25936,7 @@ function poiInventoryMove(from,to){
  const liveEnd=POI_HOTBAR_SIZE+POI_BAG_UNLOCKED;
  if(j>=liveEnd||i>=liveEnd&&!poiInventoryCanWithdrawTo(slots[i],slots[j]))return result('locked');
  poiInventorySwap(slots,i,slots,j);
- const next=poiInventoryEdited(kit,slots);
+ const next=poiInventoryEdited(poiInventoryWeaponSwap(kit,i,j),slots);
  if(!poiEconomyWrite(next))return result('storage');
  if(kit.weapon!==next.weapon){if(i<POI_HOTBAR_SIZE)poiHotbarEmptySlot=i;poiWalkAvatar()}
  poiEconomyRefresh();return result(null);
@@ -27763,7 +27787,8 @@ function poiHotbarUse(slot){
  }
  if(!poiHealingItem(item)&&!poiFoodItem(item)&&item!==POI_FIRE_WAND){
   const weapon=poiHotbarWeaponForType(item);
-  if(kit.weapon!==weapon&&!poiEconomyWrite({...kit,weapon})){toast('装備を保存できませんでした');return}
+  if((kit.weapon!==weapon||poiFrontierRepeatableLootWeapon(weapon)&&poiEquippedWeaponSlot(kit)!==slot)&&
+     !poiEconomyWrite({...kit,weapon,weaponSlot:weapon?slot:null})){toast('装備を保存できませんでした');return}
   if(!weapon)poiHotbarEmptySlot=slot;
   if(typeof poiWandDisarm==='function')poiWandDisarm();
   poiHotbarRender();if(kit.weapon!==weapon)poiWalkAvatar();return;
@@ -33752,12 +33777,13 @@ function frontierGuildReward(kit){
  slots[report]=null;
  const held=slots.findIndex(c=>c?.type===type);
  if(held>=0){slots[held]={type,count:1,durability};return poiInventoryEdited(kit,slots)}
- // These starter weapons are unique in the save format. Reissue any existing
- // copy at full condition rather than retaining a second copy in storage.
+ // Reissue a carried sword at full condition; preserve separately earned Frontier loot.
  const next={...kit};delete next.woodSwordBroken;
- for(const key of POI_CHEST_STORE_KEYS)if(next[key]?.slots.some(c=>c?.type===type))
-  next[key]={...next[key],slots:next[key].slots.map(c=>c?.type===type?null:c)};
- if(next.drops?.some(c=>c.type===type))next.drops=next.drops.filter(c=>c.type!==type);
+ if(!poiFrontierRepeatableLootWeapon(type)){
+  for(const key of POI_CHEST_STORE_KEYS)if(next[key]?.slots.some(c=>c?.type===type))
+   next[key]={...next[key],slots:next[key].slots.map(c=>c?.type===type?null:c)};
+  if(next.drops?.some(c=>c.type===type))next.drops=next.drops.filter(c=>c.type!==type);
+ }
  slots[report]={type,count:1,durability};return poiInventoryEdited(next,slots);
 }
 function frontierGuildDiscard(kit){
@@ -36009,7 +36035,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v512',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v513',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -36124,7 +36150,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v512';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v513';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -36339,7 +36365,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v512',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v513',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -52956,6 +52982,11 @@ function frontierMeadowLoot(chest,kit){
  if(weapon)rewards.set(weapon,{type:weapon,count:1,durability:poiEquipmentDurabilityMax(weapon)});
  return [...rewards.values()];
 }
+function frontierMeadowBossLoot(chest){
+ const rng=frontierMeadowRandom(chest.lootSeed);
+ const type=FRONTIER_MEADOW_WEAPONS[Math.floor(rng()*FRONTIER_MEADOW_WEAPONS.length)];
+ return [{type,count:1,durability:poiEquipmentDurabilityMax(type)},{type:POI_RECOVERY_POTION,count:1}];
+}
 function frontierMeadowChestInit(key){
  const c=frontierMeadowChestHere(key);if(!c)return false;
  const kit=poiHotbarRead(),existing=kit[key],side=key==='frontierMeadowChest';
@@ -52964,12 +52995,7 @@ function frontierMeadowChestInit(key){
  if(existing&&!report)return true;
  const slots=existing?existing.slots.slice():Array(POI_CHEST_SIZE).fill(null);
  if(!existing){
-  const rewards=frontierMeadowLoot(c,kit);
-  if(!side){
-   const weapon=rewards.find(o=>poiEquipmentRank(o.type)==='F');
-   rewards.splice(0,rewards.length,{type:POI_RECOVERY_POTION,count:1},{type:POI_INVENTORY_HERB,count:2});
-   if(weapon)rewards.push(weapon);
-  }
+  const rewards=side?frontierMeadowLoot(c,kit):frontierMeadowBossLoot(c);
   for(let i=0;i<rewards.length;i++)slots[i]=rewards[i];
  }
  const free=slots.indexOf(null);
