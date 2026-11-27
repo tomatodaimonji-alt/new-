@@ -1755,7 +1755,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v477）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v478）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="2500" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -13547,7 +13547,9 @@ function poiDavidScoreTick(scene,deck,now){
 // END DAVID COURTYARD SCORE
 function poiFrontierSurfaceMusicZone(){
  // Buildings and riverbank tiles inside the same travel area do not change BGM.
- return frontierSectorKeyAt(poiWalkX,poiWalkZ)?.join(',')==='128,0'?'outside':'indoor';
+ const key=frontierSectorKeyAt(poiWalkX,poiWalkZ)?.join(',');
+ if(key==='0,0'&&frontierPlayCave)return 'mine';
+ return ['0,0','128,0','192,0'].includes(key)?'outside':'indoor';
 }
 function poiOrchestraScene(now){
  if(typeof poiValdiaMusicHere==='function'&&poiValdiaMusicHere())return 'valdia';
@@ -22729,7 +22731,7 @@ function poiDungeonRememberDefeat(o,state,debris=null,source=null){
  const soulPoint=isOrvas&&debris&&typeof poiSoulFloorPlan==='function'?
   poiSoulFloorPlan(kit,Math.floor(debris.x),Math.floor(debris.z),o.y,state.facing??2):null;
  const reward=id==='northFort.minotaur'?poiNorthMinotaurRewardGrant(kit):isOrvas&&typeof poiOrvasRewardGrant==='function'?poiOrvasRewardGrant(kit,true,soulPoint):kit;
- if(!poiEconomyWrite({...reward,dungeonPopulation:{version:1,dead:{...old?.dead,[id]:minute},questEntries:old?.questEntries||{}}}))return false;
+ if(!poiEconomyWrite({...isOrvas?frontierGuildOrvasKilled(reward,o):reward,dungeonPopulation:{version:1,dead:{...old?.dead,[id]:minute},questEntries:old?.questEntries||{}}}))return false;
  if(isOrvas&&reward.soulDrops!==kit.soulDrops&&typeof poiSoulFloorAttach==='function'){
   const soul=reward.soulDrops?.find(s=>s.type==='orvasSoul');
   if(soul)poiSoulFloorAttach(soul,debris,debris?.start??performance.now());
@@ -22927,6 +22929,7 @@ function poiHotbarRead(){
  if(companion)kit.companionSoul=companion;
  const expedition=frontierExpeditionDecode(saved.frontierExpedition);if(expedition)kit.frontierExpedition=expedition;
  if(facilitySite?.id==='frontier'){const local=frontierLifeDecode(saved.frontierLife,saved.frontierFallen,saved.adventureVitals!==1,saved.roanHp70!==true);if(Object.keys(local).length)kit.frontierLife=local}
+ if(saved.frontierGuildBoard)kit.frontierGuildBoard=frontierGuildBoardDecode(saved.frontierGuildBoard);
  if(saved.frontierSurvey==='active'||saved.frontierSurvey==='done')kit.frontierSurvey=saved.frontierSurvey;
  if(saved.frontierChiefStickGift===true)kit.frontierChiefStickGift=true;
  if(saved.frontierClothesGift===true)kit.frontierClothesGift=true;
@@ -23058,6 +23061,7 @@ function poiHotbarSave(kit=poiHotbarState){
    ...(kit.frontierMeadowChest?{frontierMeadowChest:kit.frontierMeadowChest}:{}),
    ...(kit.frontierMeadowChest2?{frontierMeadowChest2:kit.frontierMeadowChest2}:{}),
    ...(kit.frontierSurvey?{frontierSurvey:kit.frontierSurvey}:{}),
+   ...(kit.frontierGuildBoard?{frontierGuildBoard:kit.frontierGuildBoard}:{}),
    ...(kit.frontierChiefStickGift===true?{frontierChiefStickGift:true}:{}),
    ...(kit.frontierClothesGift===true?{frontierClothesGift:true}:{}),
    ...(facilitySite?.id==='frontier'?{frontierMerchantUnified:true,frontierWest:1}:{}),
@@ -26011,7 +26015,7 @@ function poiInventoryPresentItem(host,cell,durability=false){
 }
 function poiItemDetailAvailableActions(ref,cell){
  if(ref.zone==='guild-detail'){
-  const step=frontierGuildStatus();
+  const quest=frontierGuildDetailValid(ref),step=quest?frontierGuildStatus(quest):null;
   return [...(step==='open'?['guild-accept']:step==='ready'?['guild-report','guild-abandon']:step==='active'?['guild-abandon']:[]),'back'];
  }
  const space=cell.type==='gold'&&ref.zone!=='npc'&&ref.zone!=='chest'?poiGoldSplitTarget(poiHotbarRead(),ref)>=0:ref.zone!=='hotbar'||poiInventoryEmptyHotbar(poiHotbarRead())>=0;
@@ -26021,7 +26025,7 @@ function poiItemDetailRender(){
  const ref=poiItemDetailSelection?.ref,cell=poiItemDetailCell(ref);
  if(!cell||cell.type!==poiItemDetailSelection.type){poiItemDetailClose();return false}
  const dialog=$('poiItemDetail'),actions=poiItemDetailAvailableActions(ref,cell);
- $('poiItemDetailName').textContent=ref.zone==='guild-detail'?FRONTIER_GUILD_QUEST:cell.type==='gold'?'金貨':poiInventoryCellName(cell);
+ $('poiItemDetailName').textContent=ref.zone==='guild-detail'?frontierGuildDetailValid(ref).title:cell.type==='gold'?'金貨':poiInventoryCellName(cell);
  poiInventoryPresentItem($('poiItemDetailIcon'),cell,true);
  if(cell.type==='gold'){
   const art=$('poiBagWallet')?.querySelector('svg'),icon=$('poiItemDetailIcon').querySelector('.hotbar-icon');
@@ -26033,7 +26037,7 @@ function poiItemDetailRender(){
   ' 現在の満腹度：'+poiPlayerSatiety(poiHotbarRead())+'／100。':'';
  const offer=ref.zone==='mina-shop'?poiMinaCurrentOffer(ref):null;
  const shopInfo=offer?'価格：'+offer.price+'G　／　在庫：'+offer.quantity+'個\n':'';
- $('poiItemDetailDescription').textContent=(ref.zone==='guild-detail'?frontierGuildDescription():shopInfo+description+satiety)||((typeof poiHotbarWeaponForType==='function'&&poiHotbarWeaponForType(cell.type))?'攻撃に使う武器。':'');
+ $('poiItemDetailDescription').textContent=(ref.zone==='guild-detail'?frontierGuildDescription(frontierGuildDetailValid(ref)):shopInfo+description+satiety)||((typeof poiHotbarWeaponForType==='function'&&poiHotbarWeaponForType(cell.type))?'攻撃に使う武器。':'');
  poiItemDetailRenderEquipment(cell);
  poiItemDetailRenderWeaponStats(cell.type);
  if(typeof poiItemDetailRenderSoulStats==='function')poiItemDetailRenderSoulStats(cell);
@@ -26044,6 +26048,9 @@ function poiItemDetailRender(){
    (poiPartyActive(poiHotbarRead(),cell.type)?'仲間に指示':'仲間を呼ぶ'):cell.type==='fireWand'?(typeof poiArmedWandIndex==='function'&&poiArmedWandIndex()===poiInventoryIndex(ref)?'構えを解く':'構える'):'使う';
   button.hidden=!actions.includes(action);
   if(action==='buy')button.disabled=offer?.canTrade===false;
+  if(action==='guild-report'&&ref.zone==='guild-detail'){
+   const q=frontierGuildDetailValid(ref);button.textContent=q.id==='meadow'?'調査書を納品する':q.item?'薬草を納品する':'討伐を報告する';
+  }
  }
  if(document.activeElement?.hidden&&dialog.contains(document.activeElement))
   dialog.querySelector('[data-item-detail-action="back"]').focus({preventScroll:true});
@@ -31281,7 +31288,7 @@ function poiNpcMenuRows(d){
  if(d.page==='speech')return d.pendingRecruit?[row('join-confirm'),row('back')]:[];
  const quests=d.actor.role.id==='guildkeeper'&&typeof poiQuestsForClerk==='function'?poiQuestsForClerk():[];
  if(d.page==='guild-counter')return [{id:'guild-list',label:'依頼一覧'},row('status'),row('back')];
- if(d.page==='guild-list')return [{id:'guild-meadow',label:FRONTIER_GUILD_QUEST},row('back')];
+ if(d.page==='guild-list')return [...frontierGuildChoices().map(q=>({id:'guild-'+q.id,label:q.title})),row('back')];
  if(d.page==='toolshop')return [{id:[POI_VALDIA_GROCER_ID,POI_FRONTIER_SHOP_ID].includes(d.actor.role.id)?'buy':'shop',label:'買う'},{id:'sell',label:'売る'},row('back')];
  if(d.page==='root')return [...(frontierInnAvailable(d.actor)?['stay']:[]),'status','request',...(d.actor.frontierPartyId?['tactics']:[]),...(quests.length?['quest']:[]),'back'].map(row);
  if(d.page==='tactics'&&d.actor.frontierPartyId){
@@ -31542,40 +31549,190 @@ function poiNpcTradeDetail(d,mode){
  detail.append(art,text,actions);return detail;
 }
 const FRONTIER_GUILD_QUEST='川辺の野原（調査）';
-function frontierGuildHasReport(kit){return poiInventorySlots(kit).some(c=>c?.type===FRONTIER_SURVEY_REPORT)}
-function frontierGuildStatus(kit=poiHotbarRead()){
- return kit.frontierSurvey==='done'?'done':kit.frontierSurvey==='active'?frontierGuildHasReport(kit)?'ready':'active':'open';
+const FRONTIER_GUILD_MEADOW={id:'meadow',title:FRONTIER_GUILD_QUEST,sector:'128,0',icon:'📜',
+ detail:'川辺の野原の宝箱に残された調査書を回収してロアンに納品する。',reward:'木の剣',
+ accept:'川辺の野原の宝箱に調査書が入っとる。見つけたら、ここへ持ってきてくれ。'};
+const FRONTIER_GUILD_RUINS={id:'ruins',title:'ゴブリンの巣窟（討伐）',sector:'0,0',icon:'⚔',
+ detail:'地図から西の深い森へ行き、地下遺跡の奥にいるゴブリンの番人を倒す。',reward:'25G',gold:25,
+ accept:'ワールドマップに西の森を記しておいた。森の地下遺跡でゴブリンの番人を倒し、ここへ戻ってきてくれ。'};
+const FRONTIER_GUILD_ORVAS={id:'orvas',title:'川辺の野原（討伐）',sector:'192,0',icon:'⚔',reward:'150G',gold:150,
+ detail:'神聖な森の奥にあるオルヴァスの大神殿へ。石像の番人オルヴァスを討伐してロアンに報告する。目から放つビームや地響きに注意。',
+ accept:'オルヴァスがいるのは神聖な森の奥の大神殿じゃ。地図に記しておいた。準備を整えてから向かってくれ。'};
+const FRONTIER_GUILD_ROTATION={
+ slime:{title:'川辺の野原（スライム討伐）',sector:'128,0',icon:'⚔',enemy:'monsterSlime',min:3,max:5},
+ goblin:{title:'川辺の野原（ゴブリン討伐）',sector:'128,0',icon:'⚔',enemy:'monsterGoblin',min:1,max:2},
+ herb:{title:'川辺の野原（薬草納品）',sector:'128,0',icon:'🌿',item:'healingHerb',min:2,max:4}
+};
+function frontierGuildBoardDecode(raw){
+ const ruins=raw?.ruins==='active'||raw?.ruins==='done'?raw.ruins:null;
+ const orvas=['active','ready','done'].includes(raw?.orvas)?raw.orvas:null;
+ const known=Array.isArray(raw?.known)?['0,0','192,0'].filter(key=>raw.known.includes(key)):[];
+ const offers=[],seen=new Set();
+ if(ruins==='done'&&Array.isArray(raw?.offers))for(const r of raw.offers.slice(0,2)){
+  const q=r&&Object.hasOwn(FRONTIER_GUILD_ROTATION,r.id)?FRONTIER_GUILD_ROTATION[r.id]:null;
+  if(!q||seen.has(r.id)||!Number.isInteger(r.amount)||r.amount<q.min||r.amount>q.max)continue;
+  seen.add(r.id);offers.push({id:r.id,amount:r.amount,active:r.active===true,
+   progress:r.active&&Number.isInteger(r.progress)?Math.max(0,Math.min(r.amount,r.progress)):0});
+ }
+ const nextDay=Number.isSafeInteger(raw?.nextDay)&&raw.nextDay>0?raw.nextDay:0;
+ const cycle=Number.isSafeInteger(raw?.cycle)&&raw.cycle>=0?raw.cycle:0;
+ return {ruins,orvas,known,offers,nextDay,cycle};
 }
-function frontierGuildStars(){return frontierSectorDifficulty('128,0').stars}
-function frontierGuildDescription(){
- const s=frontierGuildStatus();
- return '川辺の野原へ行き、宝箱に残された調査書を回収してロアンに納品する。\n難易度：'+frontierGuildStars()+'\n報酬：木の剣\n'+
-  {open:'未受注',active:'受注済み：調査書を探す',ready:'調査書を納品できます',done:'完了済み'}[s]+
-  (s==='active'||s==='ready'?'\n破棄すると調査書はなくなります。依頼は再受注できます。':'');
+function frontierGuildBoard(kit){return kit.frontierGuildBoard??frontierGuildBoardDecode(null)}
+function frontierGuildNewBoard(board){
+ const cycle=board.cycle+1,day=board.nextDay||poiTownClockSnapshot().day;
+ const rng=frontierMeadowRandom((frontierMeadowRead().seed^Math.imul(cycle,0x9e3779b9)^day)>>>0);
+ const kinds=Object.keys(FRONTIER_GUILD_ROTATION),offers=[];
+ for(let i=0;i<2;i++){
+  const id=kinds.splice(Math.floor(rng()*kinds.length),1)[0],q=FRONTIER_GUILD_ROTATION[id];
+  offers.push({id,amount:q.min+Math.floor(rng()*(q.max-q.min+1)),active:false,progress:0});
+ }
+ return {...board,cycle,offers,nextDay:0};
+}
+function frontierGuildCurrentBoard(kit){
+ const b=frontierGuildBoard(kit);
+ return b.ruins==='done'&&!b.offers.length&&poiTownClockSnapshot().day>=b.nextDay?frontierGuildNewBoard(b):b;
+}
+function frontierGuildChoices(kit=poiHotbarRead()){
+ if(kit.frontierSurvey!=='done')return [FRONTIER_GUILD_MEADOW];
+ const board=frontierGuildCurrentBoard(kit);
+ const special=board.orvas==='done'?[]:[FRONTIER_GUILD_ORVAS];
+ if(board.ruins!=='done')return [FRONTIER_GUILD_RUINS,...special];
+ return [...special,...board.offers.map(r=>{
+  const q=FRONTIER_GUILD_ROTATION[r.id],amount=r.amount,gold=q.enemy?amount*(r.id==='goblin'?9:4):amount*4;
+  const subject=r.id==='slime'?'スライム':'ゴブリン';
+  const detail=q.enemy?'川辺の野原で'+subject+'を'+amount+'体倒してロアンに報告する。':
+   '薬草を'+amount+'個集めてロアンに納品する。手持ちの薬草も使えます。';
+  return {...q,...r,detail,reward:gold+'G',gold,accept:detail};
+ })];
+}
+function frontierGuildHasReport(kit){return poiInventorySlots(kit).some(c=>c?.type===FRONTIER_SURVEY_REPORT)}
+function frontierGuildCountItem(kit,type){return poiInventorySlots(kit).reduce((n,c)=>c?.type===type?n+c.count:n,0)}
+function frontierGuildStatus(q,kit=poiHotbarRead()){
+ if(q.id==='meadow')return kit.frontierSurvey!=='active'?'open':frontierGuildHasReport(kit)?'ready':'active';
+ if(q.id==='ruins'){
+  const b=frontierGuildBoard(kit);
+  return b.ruins!=='active'?'open':b.known.includes(q.sector)&&kit.frontierRuinsCleared?'ready':'active';
+ }
+ if(q.id==='orvas')return frontierGuildBoard(kit).orvas||'open';
+ if(!q.active)return 'open';
+ return (q.item?frontierGuildCountItem(kit,q.item):q.progress)>=q.amount?'ready':'active';
+}
+function frontierGuildDescription(q){
+ const s=frontierGuildStatus(q),progress=q.enemy&&q.active?'（'+q.progress+'／'+q.amount+'体）':'';
+ return q.detail+'\n難易度：'+frontierSectorDifficulty(q.sector).stars+'\n報酬：'+q.reward+'\n'+
+  {open:'未受注',active:'受注済み',ready:'報告・納品できます'}[s]+progress+
+  (s==='active'||s==='ready'?(q.id==='meadow'?'\n破棄すると調査書はなくなります。依頼は再受注できます。':'\n破棄するとこの依頼の進捗はリセットされます。'):'');
 }
 function frontierGuildCatalog(){
  const list=document.createElement('div');list.id='poiGuildCatalog';list.setAttribute('aria-label','依頼一覧');
- const b=poiNpcTradeButton('guild-meadow',''),icon=document.createElement('span');
- icon.className='hotbar-icon';icon.textContent='📜';icon.setAttribute('aria-hidden','true');
- const name=document.createElement('strong');name.className='poiShopRowName';name.textContent=FRONTIER_GUILD_QUEST;
- const state=document.createElement('span');state.className='poiShopRowPrice';
- state.textContent=frontierGuildStars();state.setAttribute('aria-label','難易度 1／10');
- const desc=document.createElement('span');desc.className='poiShopRowDesc';desc.textContent=({open:'',active:'【受注済み】',ready:'【納品可】',done:'【完了】'})[frontierGuildStatus()]+'宝箱の調査書を回収して納品。報酬：木の剣';
- b.append(icon,name,state,desc);list.append(b);return list;
+ for(const q of frontierGuildChoices()){
+  const b=poiNpcTradeButton('guild-'+q.id,''),icon=document.createElement('span');
+  icon.className='hotbar-icon';icon.textContent=q.icon;icon.setAttribute('aria-hidden','true');
+  const name=document.createElement('strong');name.className='poiShopRowName';name.textContent=q.title;
+  const star=document.createElement('span');star.className='poiShopRowPrice';
+  const {stars,difficulty}=frontierSectorDifficulty(q.sector);
+  star.textContent=stars;star.setAttribute('aria-label','難易度 '+difficulty+'／10');
+  const desc=document.createElement('span');desc.className='poiShopRowDesc';
+  desc.textContent=({open:'',active:'【受注済み】',ready:'【報告可】'})[frontierGuildStatus(q)]+q.detail+' 報酬：'+q.reward;
+  b.append(icon,name,star,desc);list.append(b);
+ }
+ if(!list.childElementCount){
+  const msg=document.createElement('p');msg.className='poiShopEmpty';msg.textContent='受付中の依頼はありません。次の掲示は明日です。';list.append(msg);
+ }
+ return list;
 }
 function frontierGuildDetailValid(ref){
  const d=poiTownDialogue;
- return !!(d&&d===ref.dialogue&&d.guildCounter&&d.page==='guild-list'&&
-  $('poiGuildCatalog')?.contains(ref.button)&&frontierGuildAtCounter(d.actor));
+ return d&&d===ref.dialogue&&d.guildCounter&&d.page==='guild-list'&&
+  $('poiGuildCatalog')?.contains(ref.button)&&frontierGuildAtCounter(d.actor)?
+  frontierGuildChoices().find(q=>q.id===ref.id)??null:null;
 }
-function frontierGuildOpenDetail(d){
+function frontierGuildOpenDetail(d,id){
  if(poiItemDetailIsOpen())return false;
- const button=$('poiGuildCatalog')?.querySelector('button'),ref={zone:'guild-detail',dialogue:d,button};
+ const button=[...($('poiGuildCatalog')?.querySelectorAll('button')??[])].find(b=>b.dataset.npcAction==='guild-'+id),
+  ref={zone:'guild-detail',dialogue:d,button,id};
  if(!frontierGuildDetailValid(ref))return false;
  poiItemDetailSelection={button,ref,type:FRONTIER_SURVEY_REPORT};
  $('poiItemDetailFeedback').textContent='';
  if(!poiItemDetailRender())return false;
  poiStopRepeat();$('poiItemDetail').showModal();return true;
+}
+function frontierGuildRewardGold(kit,q){
+ const gold=(kit.gold??0)+q.gold;if(gold>POI_ECONOMY_GOLD_MAX)return null;
+ if(!q.item)return {...kit,gold};
+ let left=q.amount;
+ const slots=poiInventorySlots(kit).map(c=>{
+  if(c?.type!==q.item||!left)return c;
+  const n=Math.min(left,c.count);left-=n;return c.count>n?{...c,count:c.count-n}:null;
+ });
+ return left?null:poiInventoryEdited({...kit,gold},slots);
+}
+function frontierGuildCommit(ref,action,now=performance.now()){
+ const q=frontierGuildDetailValid(ref);if(!q)return false;
+ const kit=poiHotbarRead(),state=frontierGuildStatus(q,kit);
+ const accept=action==='guild-accept'&&state==='open',deliver=action==='guild-report'&&state==='ready';
+ const abandon=action==='guild-abandon'&&(state==='active'||state==='ready');
+ if(!accept&&!deliver&&!abandon)return false;
+ let next;
+ if(q.id==='meadow'){
+  const trial=deliver?frontierGuildReward(kit):abandon?frontierGuildDiscard(kit):kit;
+  next=abandon||!trial?trial:{...trial,frontierSurvey:deliver?'done':'active'};
+ }else{
+  const b=frontierGuildCurrentBoard(kit),paid=deliver?frontierGuildRewardGold(kit,q):kit;
+  if(paid){
+   let updated;
+   if(q.id==='ruins'){
+    updated={...b,ruins:accept?'active':deliver?'done':null};
+    if(deliver)updated=frontierGuildNewBoard(updated);
+   }else if(q.id==='orvas')updated={...b,orvas:accept?'active':deliver?'done':null};
+   else{
+    const offers=b.offers.flatMap(r=>r.id!==q.id?[r]:deliver?[]:[{...r,active:accept,progress:0}]);
+    updated={...b,offers,nextDay:offers.length?0:poiTownClockSnapshot().day+1};
+   }
+   next={...paid,frontierGuildBoard:updated};
+  }
+ }
+ if(!next||!poiEconomyWrite(next)){
+  $('poiItemDetailFeedback').textContent=!next?'報酬を受け取れる状態にしてから、もう一度お試しください。':'保存できませんでした。もう一度お試しください。';return false;
+ }
+ poiItemDetailClose(false);
+ const d=poiTownDialogue;
+ if(accept){d.page='speech';d.guildExitAfterSpeech=true;d.guildReadUntil=null;d.index=0}
+ d.text=abandon?'依頼は取り下げたぞ。また引き受けたくなったら声をかけてくれ。':
+  deliver?'よく戻ったな。報酬は'+q.reward+'じゃ。':'受注したな。'+q.accept;
+ poiEconomyRefresh();
+ if(deliver)poiSound('item-pickup',q.id==='meadow'?POI_INVENTORY_SWORD:'coin');
+ poiNpcMenuRender(now);poiShopSync();
+ if(deliver){const notice='依頼完了。'+q.reward+'を手に入れた。';if(!poiMessagePush(notice,'gift',now))toast(notice)}
+ return true;
+}
+function frontierGuildTravelAllowed(key,kit=poiHotbarRead()){
+ if(key==='64,0'||key==='128,0')return true;
+ const board=frontierGuildBoard(kit);
+ return board.known.includes(key)||(key===FRONTIER_GUILD_RUINS.sector&&board.ruins==='active')||
+  (key===FRONTIER_GUILD_ORVAS.sector&&board.orvas==='active');
+}
+function frontierGuildArrival(key){
+ if(key!==FRONTIER_GUILD_RUINS.sector&&key!==FRONTIER_GUILD_ORVAS.sector)return;
+ const kit=poiHotbarRead(),board=frontierGuildBoard(kit);
+ const q=key===FRONTIER_GUILD_RUINS.sector?'ruins':'orvas';
+ if(board[q]==='active'&&!board.known.includes(key))
+  poiEconomyWrite({...kit,frontierGuildBoard:{...board,known:[...board.known,key]}});
+}
+function frontierGuildOrvasKilled(kit,o){
+ const board=frontierGuildBoard(kit);
+ return facilitySite?.id==='frontier'&&board.orvas==='active'&&board.known.includes(FRONTIER_GUILD_ORVAS.sector)&&
+  frontierSectorKeyAt(o.x,o.z)?.join(',')===FRONTIER_GUILD_ORVAS.sector?
+  {...kit,frontierGuildBoard:{...board,orvas:'ready'}}:kit;
+}
+function frontierGuildFieldDefeat(o){
+ const kit=poiHotbarRead(),board=frontierGuildBoard(kit);
+ if(board.ruins!=='done')return;
+ const i=board.offers.findIndex(r=>r.active&&r.progress<r.amount&&FRONTIER_GUILD_ROTATION[r.id].enemy===o.type);
+ if(i<0)return;
+ const offers=board.offers.slice(),r=offers[i];offers[i]={...r,progress:r.progress+1};
+ poiEconomyWrite({...kit,frontierGuildBoard:{...board,offers}});
 }
 function frontierGuildReward(kit){
  const type=POI_INVENTORY_SWORD,durability=poiEquipmentDurabilityMax(type),slots=poiInventorySlots(kit).slice();
@@ -31596,28 +31753,6 @@ function frontierGuildDiscard(kit){
  for(const key of FRONTIER_MEADOW_CHEST_KEYS)if(kit[key]?.slots.some(c=>c?.type===FRONTIER_SURVEY_REPORT))
   next[key]={...kit[key],slots:kit[key].slots.map(c=>c?.type===FRONTIER_SURVEY_REPORT?null:c)};
  return poiInventoryEdited(next,poiInventorySlots(kit).map(c=>c?.type===FRONTIER_SURVEY_REPORT?null:c));
-}
-function frontierGuildCommit(ref,action,now=performance.now()){
- if(!frontierGuildDetailValid(ref))return false;
- const kit=poiHotbarRead(),state=frontierGuildStatus(kit);
- const accept=action==='guild-accept'&&state==='open',deliver=action==='guild-report'&&state==='ready';
- const abandon=action==='guild-abandon'&&(state==='active'||state==='ready');
- if(!accept&&!deliver&&!abandon)return false;
- const next=deliver?frontierGuildReward(kit):abandon?frontierGuildDiscard(kit):kit;
- if(!next||!poiEconomyWrite(abandon?next:{...next,frontierSurvey:deliver?'done':'active'})){
-  $('poiItemDetailFeedback').textContent='保存できませんでした。もう一度お試しください。';return false;
- }
- poiItemDetailClose(false);
- const d=poiTownDialogue;
- if(accept){d.page='speech';d.guildExitAfterSpeech=true;d.guildReadUntil=null;d.index=0}
- d.text=abandon?'依頼は取り下げたぞ。また引き受けたくなったら声をかけてくれ。':
-  deliver?'調査書を受け取った。これが報酬の木の剣じゃ。よく戻ったな。':
-  '受注したな。川辺の野原の宝箱に調査書が入っとる。見つけたら、ここへ持ってきてくれ。';
- poiEconomyRefresh();
- if(deliver)poiSound('item-pickup',POI_INVENTORY_SWORD);
- poiNpcMenuRender(now);poiShopSync();
- if(deliver&&!poiMessagePush('依頼完了。木の剣を手に入れた。','gift',now))toast('依頼完了。木の剣を手に入れた。');
- return true;
 }
 function poiMinaShopCatalog(d){
  return !!(d?.toolshopCounter&&d.actor.role.id===POI_FRONTIER_SHOP_ID&&d.page==='buy');
@@ -31807,7 +31942,7 @@ function poiNpcMenuChoose(id,now=performance.now()){
  if(id==='guild-list'&&d.guildCounter){
   d.page='guild-list';d.index=0;d.text='どの依頼を見るかね？';poiNpcMenuRender(now);poiShopSync();return true;
  }
- if(id==='guild-meadow'&&d.guildCounter)return frontierGuildOpenDetail(d);
+ if(id.startsWith('guild-')&&d.guildCounter&&d.page==='guild-list')return frontierGuildOpenDetail(d,id.slice(6));
  if(id==='tactics'&&d.actor.frontierPartyId){
   d.page='tactics';d.index=0;d.text='どう動けばいい？';poiNpcMenuRender(now);poiShopSync();return true;
  }
@@ -33830,7 +33965,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v477',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v478',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -33945,7 +34080,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v477';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v478';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -34160,7 +34295,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v477',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v478',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -48315,7 +48450,8 @@ function frontierMeadowNewVisit(now){
 function frontierMeadowRecordDefeat(o){
  if(!Number.isInteger(o?.meadowId)||!facilitySite?.meadow)return false;
  const data=frontierMeadowRead();if(data.dead.includes(o.meadowId))return true;
- return frontierMeadowWrite({...data,dead:[...data.dead,o.meadowId]});
+ const ok=frontierMeadowWrite({...data,dead:[...data.dead,o.meadowId]});
+ if(ok)frontierGuildFieldDefeat(o);return ok;
 }
 function frontierMeadowFrame(now,rng){
  const data=frontierMeadowRead(),plan=facilitySite?.meadow;
@@ -48549,7 +48685,7 @@ function frontierSectorOutside(b){
 }
 // BEGIN FRONTIER WORLD TRAVEL
 const FRONTIER_WORLD_DESTINATIONS=Object.freeze({
- '0,0':['西の深い森','woods',43,29,3],
+ '0,0':['ゴブリンの巣窟','woods',43,29,3],
  '64,0':['リネア村','village',115,30,3],
  '128,0':['川辺の野原','road',137,30,1],
  '192,0':['神聖な森','woods',200,29,1],
@@ -48572,13 +48708,13 @@ function frontierWorldAnchor(dest){
   {name:'区画 '+(Math.floor(dest.x/FRONTIER_SECTOR)+1)+' / '+(Math.floor(dest.z/FRONTIER_SECTOR)+1),kind:'road',
    x:dest.x+Math.floor(FRONTIER_SECTOR/2),z:dest.z+Math.floor(FRONTIER_SECTOR/2),face:2};
 }
-const FRONTIER_WORLD_TRAVEL=new Set(['64,0','128,0']);
+
 function frontierSectorLocation(x,z){
  const key=frontierSectorKeyAt(x,z)?.join(',');
  return {name:FRONTIER_WORLD_DESTINATIONS[key]?.[0]??facilitySite.name,...frontierSectorDifficulty(key)};
 }
 function frontierSectorDifficulty(key){
- const difficulty=key==='64,0'?0:key==='128,64'?2:1;
+ const difficulty=key==='64,0'?0:key==='192,0'?10:key==='128,64'||key==='0,0'?2:1;
  return {difficulty,stars:'★'.repeat(difficulty)+'☆'.repeat(10-difficulty)};
 }
 function frontierWorldDisplayName(dest){
@@ -48670,7 +48806,7 @@ function frontierWorldZoomBind(){
 function frontierWorldOpen(preferred=null){
  if(frontierWorldOpenNow()||!frontierWorldPermitted())return false;
  const [cx,cz]=frontierSectorKeyAt(poiWalkX,poiWalkZ)??[];
- const targets=frontierSurfaceSections().filter(([x,z])=>FRONTIER_WORLD_TRAVEL.has(x+','+z));
+ const kit=poiHotbarRead(),targets=frontierSurfaceSections().filter(([x,z])=>frontierGuildTravelAllowed(x+','+z,kit));
  if(!targets.length)return false;
  poiAnalogStop();poiStopRepeat();poiTownDialogueClose();poiCompanionUiClose();poiTownClockSuspend();
  const landscape=$('frontierWorldZoomLayer');
@@ -48724,7 +48860,7 @@ function frontierSectorBegin(dx,dz,now){
 }
 function frontierWorldDepart(){
  const dest=frontierWorldSelected;
- if(!dest||!FRONTIER_WORLD_TRAVEL.has(dest.x+','+dest.z)||!frontierWorldPermitted())return;
+ if(!dest||!frontierGuildTravelAllowed(dest.x+','+dest.z)||!frontierWorldPermitted())return;
  const point=frontierWorldLanding(dest);
  if(!point){$('frontierWorldStatus').textContent='安全に着ける場所が見つかりません。';return}
  frontierSectorLoading={site:facilitySite,point,at:performance.now(),paint:false,stage:0};
@@ -48742,6 +48878,7 @@ function frontierSectorFrame(now){
   poiOtherworldTravelSerial++;poiOtherworldKeyReleaseRequired=true;
   poiIceFangCasts=poiIceFangCasts.filter(q=>q.source==='resident');
   poiWalkReset(p.x,p.z,0,p.face);
+  frontierGuildArrival(frontierSectorKeyAt(poiWalkX,poiWalkZ)?.join(','));
   poiOrchestraBattleUntil=-Infinity;poiAudioMusicPhrase();
   if(frontierMeadowPlayerHere())frontierMeadowNewVisit(now);
   else if(frontierLineaHere())frontierLineaNewVisit();
