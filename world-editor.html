@@ -1756,7 +1756,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v522）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v523）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="2500" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -24281,6 +24281,10 @@ function poiHotbarRead(){
  }
  const fallen=frontierFallenDecode(saved.frontierFallen);if(fallen.length)kit.frontierFallen=fallen;
  const humanParty=typeof poiHumanPartyDecode==='function'?poiHumanPartyDecode(saved.humanParty,saved.adventureVitals!==1,saved.roanHp70!==true,kit.guildMembers,saved.guardHp110130!==true):[];if(humanParty.length)kit.humanParty=humanParty;
+ if(facilitySite?.id==='frontier'){
+  const bench=frontierPartyBenchDecode(saved.frontierPartyBench,kit);
+  if(bench.length)kit.frontierPartyBench=bench;
+ }
  const pv=typeof poiPortQuestDecode==='function'?poiPortQuestDecode(saved.portQuests):null;
  if(pv)kit.portQuests=pv;
  const worn=poiArmorDecode(saved.worn);if(worn)kit.worn=worn;
@@ -24424,6 +24428,7 @@ function poiHotbarSave(kit=poiHotbarState){
    ...(kit.frontierTrades?{frontierTrades:kit.frontierTrades}:{}),
    ...Object.fromEntries(FRONTIER_ESTATE_KEYS.filter(key=>kit[key]).map(key=>[key,kit[key]])),
    ...(frontierFallenDecode(kit.frontierFallen).length?{frontierFallen:frontierFallenDecode(kit.frontierFallen)}:{}),
+   ...(facilitySite?.id==='frontier'&&kit.frontierPartyBench?.length?{frontierPartyBench:frontierPartyBenchDecode(kit.frontierPartyBench,kit)}:{}),
    ...(typeof poiHumanPartyDecode==='function'&&poiHumanPartyDecode(kit.humanParty,false,false,kit.guildMembers).length?{humanParty:poiHumanPartyDecode(kit.humanParty,false,false,kit.guildMembers)}:{}),
    ...(typeof poiPlayerSatietyDecode==='function'&&poiPlayerSatietyDecode(kit.satiety)?{satiety:poiPlayerSatietyDecode(kit.satiety)}:{}),
    ...(typeof poiCompanionDecode==='function'&&poiCompanionDecode(kit.companionSoul)?{companionSoul:poiCompanionDecode(kit.companionSoul)}:{}),
@@ -31932,7 +31937,9 @@ function poiHumanPartyMembers(kit){
 function poiHumanPartyAway(npcId,kit){
  if(!Object.values(POI_HUMAN_PARTY_IDS).includes(npcId))return false;
  if(kit===undefined)kit=typeof poiHotbarHasKit==='function'&&poiHotbarHasKit()?poiHotbarRead():null;
- return frontierFallenDecode(kit?.frontierFallen).includes(npcId)||poiHumanPartyDecode(kit?.humanParty).some(a=>POI_HUMAN_PARTY_IDS[a.id]===npcId);
+ return frontierFallenDecode(kit?.frontierFallen).includes(npcId)||
+  kit?.frontierPartyBench?.some(a=>POI_HUMAN_PARTY_IDS[a.id]===npcId)||
+  poiHumanPartyDecode(kit?.humanParty).some(a=>POI_HUMAN_PARTY_IDS[a.id]===npcId);
 }
 const POI_ADVENTURE_RANKS=Object.freeze(['F','E','D','C','B','A','S']);
 const POI_RANK_HP=Object.freeze({F:100,E:160,D:250,C:380,B:550,A:750,S:1000});
@@ -32242,6 +32249,65 @@ function frontierInnAvailable(actor){
   actor?.role.id==='frontierinnkeeper'&&!actor.death&&!actor.recessed&&
   frontierHouseForTile(poiWalkX,poiWalkZ)?.id==='frontierInn';
 }
+// An ally on the inn bench is still recruited, but does not spawn or
+// occupy an active slot. Moving between lists never changes their vitals.
+function frontierPartyBenchDecode(raw,kit){
+ const active=new Set((kit.humanParty??[]).map(m=>m.id));
+ for(const m of poiCompanionDecode(kit.companionSoul)?.members??[])active.add(m.id);
+ const fallen=new Set(kit.frontierFallen??[]),seen=new Set(),out=[];
+ if(!Array.isArray(raw))return out;
+ for(const r of raw.slice(0,24)){
+  if(!r||typeof r.id!=='string'||seen.has(r.id)||active.has(r.id))continue;
+  const npc=Object.hasOwn(POI_HUMAN_PARTY_IDS,r.id)?POI_HUMAN_PARTY_IDS[r.id]:null;
+  const mode=r.mode==='follow'?'follow':'fight';
+  let row=null;
+  if(npc&&npc.startsWith('frontier')&&!fallen.has(npc))
+   row=poiHumanPartyDecode([{id:r.id,hp:r.hp,mode}],false,false,kit.guildMembers??{})[0]??null;
+  else if(poiCompanionType(r.id))row={id:r.id,mode};
+  if(row){out.push(row);seen.add(r.id)}
+ }
+ return out;
+}
+function frontierPartyBenchRead(kit){
+ const slots=poiInventorySlots(kit);
+ return frontierPartyBenchDecode(kit.frontierPartyBench,kit).flatMap(r=>{
+  const soul=poiCompanionType(r.id);
+  if(soul){
+   const c=slots.find(o=>o?.type===r.id);
+   return c?[{...r,hp:c.durability??soul.hp,maxHp:soul.hp,name:soul.name.replace(/の魂$/,''),kind:'monster'}]:[];
+  }
+  const human=poiHumanPartySpec(r.id);
+  return human?[{...human,...r}]:[];
+ });
+}
+function frontierInnPartyRows(kit){
+ const active=poiPartyMembers(kit),bench=frontierPartyBenchRead(kit);
+ const slots=active.map(m=>({id:'party-bench:'+m.id,label:'同行中：'+m.name+(m.hp<=0?'（戦闘不能）':'')+' → 待機'}));
+ return [...slots,...bench.map(m=>({id:'party-field:'+m.id,label:'待機中：'+m.name+(m.hp<=0?'（戦闘不能）':'')+' → 同行',
+  unavailable:active.length>=POI_PARTY_LIMIT}))];
+}
+function frontierInnPartyMove(actor,id,toBench,now){
+ const fail=reason=>({ok:false,reason});
+ if(!frontierInnAvailable(actor)||!poiCompanionAllowed()||poiTownDialogueTarget(now)!==actor)return fail('unavailable');
+ const kit=poiHotbarRead(),active=poiPartyMembers(kit),bench=frontierPartyBenchRead(kit);
+ const selected=(toBench?active:bench).find(r=>r.id===id);
+ if(!selected)return fail('missing');
+ if(!toBench&&active.length>=POI_PARTY_LIMIT)return fail('full');
+ const record={id,mode:selected.mode,...(selected.kind==='human'?{hp:selected.hp}:{})};
+ const humans=poiHumanPartyDecode(kit.humanParty,false,false,kit.guildMembers??{});
+ const souls=poiPartySoulMembers(kit);
+ let next={...kit,frontierPartyBench:bench.filter(v=>v.id!==id).map(({id,mode,hp,kind})=>({id,mode,...(kind==='human'?{hp}:{})}))};
+ if(toBench)next.frontierPartyBench.push(record);
+ const change=rows=>toBench?rows.filter(r=>r.id!==id):[...rows,record];
+ if(selected.kind==='human')next.humanParty=change(humans);
+ else next=poiPartySoulWrite(next,change(souls));
+ if(!poiEconomyWrite(next))return fail('storage');
+ // Give the regular companion runtime the same active roster used by combat.
+ // The benched human remains excluded from NPC reconstruction.
+ poiCompanionTick(now);poiEconomyRefresh();dirty=true;
+ return {ok:true,name:selected.name};
+}
+
 function frontierInnRest(actor){
  if(!frontierInnAvailable(actor))return {ok:false,reason:'unavailable'};
  const kit=poiHotbarRead(),gold=poiEconomyGold(),max=poiPlayerMaxHp(kit),members=poiPartyMembers(kit);
@@ -33314,7 +33380,9 @@ function poiNpcMenuRows(d){
  if(d.page==='guild-counter')return [{id:'guild-list',label:'依頼一覧'},row('status'),row('back')];
  if(d.page==='guild-list')return [...frontierGuildChoices().map(q=>({id:'guild-'+q.id,label:q.title})),row('back')];
  if(d.page==='toolshop')return [{id:[POI_VALDIA_GROCER_ID,POI_FRONTIER_SHOP_ID].includes(d.actor.role.id)?'buy':'shop',label:'買う'},{id:'sell',label:'売る'},row('back')];
- if(d.page==='root')return [...(frontierInnAvailable(d.actor)?['stay']:[]),'status','request',...(d.actor.frontierPartyId?['tactics']:[]),...(quests.length?['quest']:[]),'back'].map(row);
+ if(d.page==='party-roster')return frontierInnAvailable(d.actor)?[...frontierInnPartyRows(poiHotbarRead()),row('back')]:[row('back')];
+ if(d.page==='root')return [...(frontierInnAvailable(d.actor)?['stay','party-roster']:[]),'status','request',...(d.actor.frontierPartyId?['tactics']:[]),...(quests.length?['quest']:[]),'back']
+  .map(id=>id==='party-roster'?{id,label:'パーティ編成'}:row(id));
  if(d.page==='tactics'&&d.actor.frontierPartyId){
   const mode=poiCompanionMode(poiHotbarRead(),d.actor.frontierPartyId);
   return [{...row('party-fight'),pressed:mode==='fight'},{...row('party-follow'),pressed:mode==='follow'},row('dismiss'),row('back')];
@@ -34036,7 +34104,7 @@ function poiNpcMenuMark(){
    }
    const stop=!counterSide&&map&&map.right>bounds.left&&map.left<bounds.right?Math.max(edge,map.bottom+3):edge;
    // Keep the choices above the speech card, below the mini HUD when room permits.
-   const questList=d.page==='quest';
+   const questList=d.page==='quest'||d.page==='party-roster';
    const room=bounds.bottom-stop,compact=!questList&&(!!counterSide||bounds.width>=176&&room>=32&&room<75);
    menu.toggleAttribute('data-compact',compact);
    const top=room>=(questList?90:compact?32:42)?stop:edge;
@@ -34063,10 +34131,10 @@ function poiNpcMenuRender(now){
  poiNpcInventorySync(inspecting?d.actor:null);
  poiNpcTradePanelSync(d,tradeMode);
  menu.hidden=d.sleeping||d.page==='speech'&&!d.pendingRecruit||inspecting||!!tradeMode;
- menu.toggleAttribute('data-quest-list',d.page==='quest');
+ menu.toggleAttribute('data-quest-list',d.page==='quest'||d.page==='party-roster');
  menu.replaceChildren(...(d.page==='quest'?[poiQuestListHeading()]:[]),...(inspecting||tradeMode?[]:d.rows).map(r=>{
   const b=document.createElement('button');b.type='button';b.dataset.npcAction=r.id;
-  if(r.offer?.canTrade===false)b.dataset.npcUnavailable='';
+  if(r.offer?.canTrade===false||r.unavailable)b.dataset.npcUnavailable='';
   if(typeof r.pressed==='boolean')b.setAttribute('aria-pressed',String(r.pressed));
   b.textContent=r.label;return b;
  }));
@@ -34102,6 +34170,17 @@ function poiNpcMenuChoose(id,now=performance.now()){
  if(d.toolshopCounter&&!poiNpcShopCounter(d.actor)||d.guildCounter&&!frontierGuildAtCounter(d.actor)||poiTownDialogueTarget(now)!==d.actor){poiTownDialogueClose();poiShopSync();return true}
  const row=d.rows.find(r=>r.id===id);if(!row)return false;
  if(id==='back')return poiNpcMenuBack(now);
+ if(id==='party-roster'&&d.page==='root'&&frontierInnAvailable(d.actor)){
+  d.page='party-roster';d.index=0;
+  d.text=frontierInnPartyRows(poiHotbarRead()).length?'同行は3人まで。誰と行く？':'仲間を連れてきたら、ここで同行と待機を切り替えられるよ。';
+  poiNpcMenuRender(now);return true;
+ }
+ if(d.page==='party-roster'&&(id.startsWith('party-bench:')||id.startsWith('party-field:'))){
+  const toBench=id.startsWith('party-bench:'),result=frontierInnPartyMove(d.actor,id.slice(id.indexOf(':')+1),toBench,now);
+  d.text=result.ok?result.name+(toBench?'は宿で待機する。':'が同行する。'):
+   result.reason==='full'?'同行は3人まで。誰かを先に待機させてね。':result.reason==='storage'?'保存できなかったので、編成は変えていないよ。':'今は編成を変えられないよ。';
+  poiNpcMenuRender(now);return true;
+ }
  if(id==='guild-list'&&d.guildCounter){
   d.page='guild-list';d.index=0;d.text='どの依頼を見るかね？';poiNpcMenuRender(now);poiShopSync();return true;
  }
@@ -36158,7 +36237,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v522',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v523',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -36273,7 +36352,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v522';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v523';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -36488,7 +36567,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v522',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v523',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
