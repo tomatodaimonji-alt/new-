@@ -1755,7 +1755,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v476）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v477）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="2500" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -21826,16 +21826,17 @@ function poiDrawCompanionOne(now,vp){
  if(!poiCompanionWorldVisible(a)){poiCompanionWorldActor=null;return}
  if(poiOverlandDrawing&&!poiOverlandActorVisible(vp,a.x,a.z,a.y,a.site?.id)){poiCompanionWorldActor=null;return}
  const pose=poiCompanionWorldPose(a,now),fast=!!pose.attack||a.freeMoving;
+ const hint=a.y===0&&!a.frontierCave&&poiFrontierTreeReveal(pose.x,pose.y+(pose.human?.64:.43),pose.z);
  if(facilitySite?.id==='frontier'&&a.y===0&&!a.frontierCave&&poiCompanionType(a.id)?.enemy==='monsterSlime'&&poiCompanionSummonOpacity(a,now)>=1){
   poiCompanionWorldActor=a;poiCompanionDrawPose=pose;poiCompanionMeshKey=null;
-  poiOutdoorSlimeDraw(pose,pose.facing,vp,a.hurtAt,now);return;
+  poiOutdoorSlimeDraw(pose,pose.facing,vp,a.hurtAt,now,hint);return;
  }
  const rig=poiCompanionWalkRig(a,pose,now);
  if(rig){
   poiCompanionWorldActor=a;poiCompanionDrawPose=pose;poiCompanionMeshKey=null;
   gl.uniform4f(loc.partyOffset,pose.x,pose.y,pose.z,1);
   gl.uniform2f(loc.partyTurn,Math.cos(pose.heading),Math.sin(pose.heading));
-  try{draw(rig,vp)}finally{gl.uniform4f(loc.partyOffset,0,0,0,0)}
+  try{if(hint)poiDrawOccludedSilhouette(rig,vp);draw(rig,vp)}finally{gl.uniform4f(loc.partyOffset,0,0,0,0)}
   return;
  }
  const art=a.attackMotion;
@@ -21861,6 +21862,7 @@ function poiDrawCompanionOne(now,vp){
   finally{gl.depthMask(true);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.blendColor(0,0,0,0);gl.disable(gl.BLEND);}
   return;
  }
+ if(hint)poiDrawOccludedSilhouette(poiCompanionMesh,vp);
  if(typeof poiDrawMonsterHitFlash==='function'&&now-a.hurtAt<210){
   poiCompanionMesh.hitFlashSpans=[{first:0,end:poiCompanionMesh.count,source:{hitFlashAt:a.hurtAt}}];
   poiDrawMonsterHitFlash(poiCompanionMesh,vp,now);
@@ -22498,6 +22500,14 @@ function poiInventoryEmptyHotbar(kit,slots=poiInventorySlots(kit)){
  return slots.findIndex((c,i)=>i<POI_HOTBAR_SIZE&&!c&&i!==reserved);
 }
 const POI_GOLD_BAG_DEFAULT=Object.freeze(Array.from({length:POI_GOLD_BAG_ID+1},(_,i)=>i));
+function poiGoldBagLayout(kit,firstCredit=false){
+ const order=(!firstCredit&&kit?.goldBagOrder)||POI_GOLD_BAG_DEFAULT;
+ if(order!==POI_GOLD_BAG_DEFAULT||poiWalletGold(kit)<=0||poiGoldHotbarSlot(kit)!==null)return order;
+ const slots=poiInventorySlots(kit);
+ const free=order.findIndex(i=>i!==POI_GOLD_BAG_ID&&!slots[POI_HOTBAR_SIZE+i]);
+ if(free<0)return order;
+ const positioned=order.slice(0,-1);positioned.splice(free,0,POI_GOLD_BAG_ID);return positioned;
+}
 function poiGoldBagDecode(raw){
  if(!Array.isArray(raw)||raw.length!==POI_GOLD_BAG_DEFAULT.length||new Set(raw).size!==raw.length||
   !POI_GOLD_BAG_DEFAULT.every(id=>raw.includes(id)))return null;
@@ -23083,6 +23093,14 @@ function poiEconomyWrite(kit){
   if(stacks.length)kit.goldStacks=stacks;else delete kit.goldStacks;
  }
  if(poiWalletGold(kit)<=0&&Object.hasOwn(kit,'goldHotbarSlot')){kit={...kit};delete kit.goldHotbarSlot}
+ if(poiWalletGold(kit)>0&&poiGoldHotbarSlot(kit)===null){
+  const first=!!poiHotbarState&&poiWalletGold(poiHotbarState)===0;
+  const order=poiGoldBagLayout(kit,first);
+  if(order!==(kit.goldBagOrder||POI_GOLD_BAG_DEFAULT)){
+   kit={...kit};const stored=poiGoldBagDecode(order);
+   if(stored)kit.goldBagOrder=stored;else delete kit.goldBagOrder;
+  }
+ }
  if(!poiHotbarSave(kit))return false;
  poiHotbarState=kit;return true;
 }
@@ -24583,7 +24601,7 @@ function poiMoveGoldToBag(ref){
  }else if(zone==='bag'&&poiStorageIndexExists(index,POI_BAG_UNLOCKED)){
   if(poiInventoryCell(kit,ref))return result('occupied');
   delete next.goldHotbarSlot;
-  const order=(kit.goldBagOrder||POI_GOLD_BAG_DEFAULT).slice();
+  const order=poiGoldBagLayout(kit).slice();
   const a=order.indexOf(POI_GOLD_BAG_ID),b=order.indexOf(index);
   [order[a],order[b]]=[order[b],order[a]];
   const changed=poiGoldBagDecode(order);
@@ -24595,7 +24613,7 @@ function poiMoveGoldToBag(ref){
 function poiInventorySnapshot(){
  const kit=poiHotbarHasKit()?poiHotbarRead():null;
  const cells=(kit?poiInventorySlots(kit):[]).map(c=>c?{...c}:null);
- const goldBagOrder=(kit?.goldBagOrder||POI_GOLD_BAG_DEFAULT).slice();
+ const goldBagOrder=poiGoldBagLayout(kit).slice();
  return {goldHotbarSlot:poiGoldHotbarSlot(kit),goldBagOrder,goldBagSlot:goldBagOrder.indexOf(POI_GOLD_BAG_ID),sword:!!kit&&kit.sword!==false,potions:kit?.potions||0,weapon:kit?.weapon??null,drops:kit?.drops||[],
   hotbar:Array.from({length:POI_HOTBAR_SIZE},(_,i)=>cells[i]??null),
   ...(kit?.mineTreasureChest?{mineTreasureChest:{version:1,slots:kit.mineTreasureChest.slots.map(c=>c?{...c}:null)}}:{}),
@@ -31489,7 +31507,7 @@ function poiNpcTradeGrid(d,mode){
   if(frontierPrivateTrade(d.actor))grid.append(frontierTradeGearGrid(rows));
   return grid;
  }
- const kit=poiHotbarRead(),slots=poiInventorySlots(kit),order=kit.goldBagOrder||POI_GOLD_BAG_DEFAULT;
+ const kit=poiHotbarRead(),slots=poiInventorySlots(kit),order=poiGoldBagLayout(kit);
  const sellCell=i=>{const row=rows.find(r=>r.offer.sourceIndex===i);return row?.offer.gearPart?poiNpcTradeCell(null,null,i):poiNpcTradeCell(slots[i],row,i)};
  for(let i=0;i<25;i++){
   const logical=i<order.length?order[i]:i-1;
@@ -33739,6 +33757,8 @@ function frontierTownResidentsDraw(actors,now,vp,isPosing,inTime){
    entry={key,gpu:upload(m,entry?.gpu.buf,gl.DYNAMIC_DRAW)};
    frontierNpcPoseGpu.set(a,entry);
   }
+  const p=a.visual??a;
+  if(a.y===0&&poiFrontierTreeReveal(p.x+.5,frontierWalkSurface(p.x+.5,p.z+.5)+.64,p.z+.5))poiDrawOccludedSilhouette(entry.gpu,vp);
   draw(entry.gpu,vp);
  }
 }
@@ -33810,7 +33830,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v476',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v477',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -33925,7 +33945,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v476';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v477';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -34140,7 +34160,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v476',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v477',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -37211,14 +37231,14 @@ function poiSouthMobModel(art){
  return model;
 }
 let poiOutdoorSlimeGpu=null;
-function poiOutdoorSlimeDraw(pose,facing,vp,hitAt,now){
+function poiOutdoorSlimeDraw(pose,facing,vp,hitAt,now,hint=false){
  if(!poiOutdoorSlimeGpu)poiOutdoorSlimeGpu=upload(poiSouthMobModel('monsterSlime'));
  const {x,y,z,attack,heading}=pose;
  const [c,s]=Number.isFinite(heading)?[Math.cos(heading),Math.sin(heading)]:rot2(1,0,attack?.facing??facing);
  gl.uniform4f(loc.partyOffset,x,y,z,1);
  gl.uniform2f(loc.partyTurn,c,s);
  gl.uniform3f(loc.slimePose,attack?.width??1,attack?.squash??1,(attack?.tell??0)*.17);
- try{poiDrawHitFlashSpan(poiOutdoorSlimeGpu,vp,0,poiOutdoorSlimeGpu.count,poiHitFlashAmount(hitAt,now))}
+ try{if(hint)poiDrawOccludedSilhouette(poiOutdoorSlimeGpu,vp);poiDrawHitFlashSpan(poiOutdoorSlimeGpu,vp,0,poiOutdoorSlimeGpu.count,poiHitFlashAmount(hitAt,now))}
  finally{gl.uniform3f(loc.slimePose,0,0,0);gl.uniform4f(loc.partyOffset,0,0,0,0)}
 }
 function poiMonsterRender(now,vp,sacredPeek=false){
@@ -43172,16 +43192,40 @@ function poiDrawLowRoomForeground(vp){
   gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.disable(gl.BLEND);
  }
 }
+function poiDrawOccludedSilhouette(mesh,vp){
+ // Render before an actor's opaque mesh; the scene depth gates the hint.
+ gl.depthMask(false);gl.depthFunc(gl.GREATER);
+ gl.uniform4f(loc.occlusionInfo,0,0,0,-2);
+ try{draw(mesh,vp)}
+ finally{gl.uniform4f(loc.occlusionInfo,0,0,0,0);gl.depthFunc(gl.LESS);gl.depthMask(true)}
+}
+function poiFrontierTreeReveal(x,y,z){
+ if(!frontierGameFixed()||poiWalkLevel!==0||frontierPlayCave||
+    !(frontierLineaHere()||frontierMeadowPlayerHere())||!frontierSectorActor(Math.floor(x),Math.floor(z))||
+    Math.hypot(x-poiWalkViewX-.5,z-poiWalkViewZ-.5)>14)return false;
+ // An inexpensive world-space prefilter: only try a reverse-depth pass if
+ // a nearby crown overlaps the ray toward the current fixed camera.
+ const sx=Math.sin(yaw),sz=Math.cos(yaw),slope=Math.tan(FRONTIER_FIXED_ELEV);
+ const bound=4,tree=frontierWalkCellIndex(world).cells;
+ for(let j=Math.floor(z)-bound;j<=Math.floor(z)+bound;j++)for(let i=Math.floor(x)-bound;i<=Math.floor(x)+bound;i++){
+  const dx=i+.5-x,dz=j+.5-z,along=dx*sx+dz*sz,side=Math.abs(dx*sz-dz*sx);
+  if(along<=0||along>3.95||side>1.37||!frontierSectorActor(i,j))continue;
+  const o=tree.get(i+','+j+',0')?.find(p=>frontierTreeTrunkType(p.type));if(!o)continue;
+  const height=frontierSampleHeight(i+.5,j+.5),h=y+slope*along-height;
+  if(h<.15||h>7.1)continue;
+  let clear=true;
+  for(let t=0;t<along+.25;t+=.42){
+   const a=Math.floor(x+sx*t),b=Math.floor(z+sz*t);
+   if(frontierHouseForTile(a,b)||frontierVillageFence(a,b)){clear=false;break}
+  }
+  if(clear)return true;
+ }
+ return false;
+}
 function poiDrawWalkAvatar(vp,now=performance.now()){
  if(!poiWalkMesh)return;
- if(!pineAIActive&&!(typeof poiOcclusionFrame!=='undefined'&&poiOcclusionFrame.localRoomForeground)){
-  // Write no depth: only scene/actor occluders matter, not the player's
-  // own triangles. The opaque avatar pass wins normally in visible areas.
-  gl.depthMask(false);gl.depthFunc(gl.GREATER);
-  gl.uniform4f(loc.occlusionInfo,0,0,0,-2);
-  try{draw(poiWalkMesh,vp)}
-  finally{gl.uniform4f(loc.occlusionInfo,0,0,0,0);gl.depthFunc(gl.LESS);gl.depthMask(true)}
- }
+ if(!pineAIActive&&!(typeof poiOcclusionFrame!=='undefined'&&poiOcclusionFrame.localRoomForeground))
+  poiDrawOccludedSilhouette(poiWalkMesh,vp);
  poiDrawHitFlashSpan(poiWalkMesh,vp,0,poiWalkMesh.count,poiHitFlashAmount(poiPlayerHitFlashAt,now));
 }
 function poiAvatarOcclusion(p,now){
@@ -44665,7 +44709,7 @@ function render(){
   poiOverlandPresent(p.vp);
  }else{if(!(frontierGameFixed()&&frontierPlayCave))stockGradeDraw(sceneMesh?.ground,p.vp);
  if(facilitySite?.id!=='frontier'||facilityViewLevel()>=0){
-  frontierDrawNorth(p.vp,now);frontierDrawSouth(p.vp);frontierDrawMapEdgeRocks(p.vp);frontierDrawBurrow(p.vp);frontierMeadowChestDraw(p.vp);
+  frontierDrawNorth(p.vp,now);frontierDrawSouth(p.vp);frontierDrawMapEdgeRocks(p.vp);frontierDrawBurrow(p.vp);
  }
  poiDrawSceneOcclusion(sceneMesh,p.vp);frontierTempleWallDraw(p);frontierSouthDrawCovered(p.vp,now,p.eye);
  if(facilitySite?.id!=='frontier'||facilityViewLevel()>=0){frontierDrawVillage(p.vp);frontierDrawHouse(p.vp);}
@@ -44704,7 +44748,7 @@ function render(){
   // No simulation, collision, scheduling or aggro state changes here.
   poiFieldHazeStart();
   try{
-  poiEconomyDraw(p.vp,now);poiInventoryDraw(p.vp,now);
+  frontierMeadowChestDraw(p.vp);poiEconomyDraw(p.vp,now);poiInventoryDraw(p.vp,now);
   if(typeof poiTownResidentsDraw==='function')poiTownResidentsDraw(now,p.vp);
   if(typeof poiCompanionSummonDraw==='function')poiCompanionSummonDraw(now,p.vp);
   if(typeof poiDrawCompanion==='function')poiDrawCompanion(now,p.vp);
@@ -48346,7 +48390,9 @@ function frontierMeadowChestDraw(vp){
    const m=mesh();deco(m,open?'mineVaultChestOpenVisual':'chest',c.x+.5,frontierWalkSurface(c.x+.5,c.z+.5),c.z+.5,c.rot);
    frontierMeadowChestMeshes.set(c.key,{c,open,gpu:upload(m)});
   }
-  draw(frontierMeadowChestMeshes.get(c.key).gpu,vp);
+  const gpu=frontierMeadowChestMeshes.get(c.key).gpu;
+  if(poiFrontierTreeReveal(c.x+.5,frontierWalkSurface(c.x+.5,c.z+.5)+.38,c.z+.5))poiDrawOccludedSilhouette(gpu,vp);
+  draw(gpu,vp);
  }
 }
 // END SEEDED RIVERSIDE MEADOW
