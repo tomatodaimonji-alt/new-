@@ -1755,7 +1755,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v541）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v542）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="2500" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -25274,6 +25274,13 @@ function poiDrawLootMesh(batch,vp,now=performance.now()){
 }
 const poiLootContentIcons=new Map();
 function poiLootContentIcon(type){
+ if(type==='humanBonesSoul'){
+  if(!poiLootContentIcons.has(type)){
+   const cv=document.createElement('canvas');cv.width=cv.height=96;cv.dataset.itemModel=type;
+   frontierBonePortrait(cv);poiLootContentIcons.set(type,cv);
+  }
+  return poiLootContentIcons.get(type);
+ }
  if(type!=='kitchenKnife'&&type!==POI_RECOVERY_POTION&&!poiFoodItem(type)&&type!==POI_FIRE_WAND&&!poiHotbarWeaponForType(type))return null;
  if(poiLootContentIcons.has(type))return poiLootContentIcons.get(type);
  const cv=document.createElement('canvas');
@@ -26159,7 +26166,7 @@ function poiUseStorageConsumable(kit,index){
  const result=poiStorageActionResult,cell=poiInventorySlots(kit)[index];
  if(!cell)return result('empty');
  if(typeof poiCompanionType==='function'&&poiCompanionType(cell.type))return poiCompanionUse(kit,index);
- if(cell.type==='humanBonesSoul')return frontierSoulSummon(kit,index);
+ if(cell.type==='humanBonesSoul')return frontierSoulBegin(kit,index);
  if(cell.type===POI_FIRE_WAND)return poiHealingCastActive()?result('healing'):
   typeof poiWandArm==='function'?poiWandArm(index):result('unavailable');
  if(poiFoodItem(cell.type))return poiUseFood(kit,index);
@@ -27885,7 +27892,7 @@ function poiInventoryPresentItem(host,cell,durability=false){
   if(g){
    if(preview.dataset.itemModel)copy.dataset.itemModel=preview.dataset.itemModel;
    g.drawImage(preview,0,0);icon.replaceChildren(copy);
-  }else if(!coin)icon.textContent=(typeof poiCompanionType==='function'?poiCompanionType(type)?.icon:null)||{gold:'●',equipWoodSword:'⚔︎',healingHerb:'🌿',kitchenKnife:'🔪',cannedFood:'🧪',freshProduce:'🥕',frontierSurveyReport:'📜',humanBonesSoul:'✧'}[type]||'';
+  }else if(!coin)icon.textContent=(typeof poiCompanionType==='function'?poiCompanionType(type)?.icon:null)||{gold:'●',equipWoodSword:'⚔︎',healingHerb:'🌿',kitchenKnife:'🔪',cannedFood:'🧪',freshProduce:'🥕',frontierSurveyReport:'📜'}[type]||'';
  }
  if(amount)amount.textContent=type==='fireWand'?String(cell.charges):
   (type==='gold'||poiHealingItem(type)||poiFoodItem(type))&&cell.count>0?String(cell.count):'';
@@ -27977,7 +27984,7 @@ function poiItemDetailAction(action){
   return;
  }
  poiItemDetailClose();
- if(action==='use'&&typeof poiHealingCastActive==='function'&&poiHealingCastActive())poiBagSetOpen(false);
+ if(action==='use'&&(cell.type==='humanBonesSoul'||typeof poiHealingCastActive==='function'&&poiHealingCastActive()))poiBagSetOpen(false);
  if(action==='drop')toast('地面に置いた');
 }
 function poiBagGestureTarget(point,moved,slot,blocked,stage,protectedRects){
@@ -28021,7 +28028,7 @@ function poiWireMovingWeaponShortcuts(bar,bag,find){
   if(slot===poiGoldHotbarSlot(kit))return null;
   const type=poiInventorySlot(kit,slot);
   // The normal shortcut for bare hands is a truly empty slot.
-  return type===null||type===POI_FIRE_WAND||!!poiHotbarWeaponForType(type)||poiHealingItem(type)||poiFoodItem(type)||(typeof poiCompanionType==='function'&&!!poiCompanionType(type))?{slot,type}:null;
+  return type===null||type===POI_FIRE_WAND||type==='humanBonesSoul'||!!poiHotbarWeaponForType(type)||poiHealingItem(type)||poiFoodItem(type)||(typeof poiCompanionType==='function'&&!!poiCompanionType(type))?{slot,type}:null;
  };
  const clear=()=>{right=null;clicks.length=0};
  bar.addEventListener('pointerdown',e=>{
@@ -28304,7 +28311,7 @@ function poiHotbarUse(slot){
  if(typeof poiCompanionClearShortcut==='function'&&poiCompanionSelectedShortcut(kit)!==null){
   poiCompanionClearShortcut();if(typeof poiCompanionUiClose==='function')poiCompanionUiClose(false);poiHotbarRender();
  }
- if(!poiHealingItem(item)&&!poiFoodItem(item)&&item!==POI_FIRE_WAND){
+ if(!poiHealingItem(item)&&!poiFoodItem(item)&&item!==POI_FIRE_WAND&&item!=='humanBonesSoul'){
   const weapon=poiHotbarWeaponForType(item);
   if((kit.weapon!==weapon||poiFrontierRepeatableLootWeapon(weapon)&&poiEquippedWeaponSlot(kit)!==slot)&&
      !poiEconomyWrite({...kit,weapon,weaponSlot:weapon?slot:null})){toast('装備を保存できませんでした');return}
@@ -28316,6 +28323,7 @@ function poiHotbarUse(slot){
  if(result.reason==='healthy')toast('HPは満タンです。');
  else if(result.reason==='sated')toast('お腹はいっぱいです。');
  else if(result.reason==='storage')toast(poiInventoryItemName(item)+'を保存できませんでした');
+ else if(item==='humanBonesSoul'&&!result.ok)toast(poiItemDetailReason(result.reason));
 }
 function poiCombatActorMake(o){const stats=typeof poiMonsterStatsAt==='function'?poiMonsterStatsAt(o):POI_MONSTER_STATS[o.type];const maxMp=poiMonsterManaMax(o.type);return {x:o.x,z:o.z,fromX:o.x,fromZ:o.z,moveStarted:-10000,facing:0,hp:stats.hp,mp:maxMp,maxMp,nextAttack:0,...(poiTempleDragon(o)&&frontierGrandMonster(o)?{dragonBody:true}:{}),...(facilitySite?.id==='frontier'&&(frontierStarEnemy(o)||frontierMeadowDungeonMob(o)||frontierGrandMonster(o)||frontierWoodMonster(o)||frontierRuinsBoss(o)||frontierRuinsDefeatKey(o))?{frontierRuins:true,frontierRuinsBoss:frontierRuinsBoss(o)}:{})}}
 // BEGIN NORTH FORT RETURN ENCOUNTER
@@ -34814,9 +34822,11 @@ function frontierPartyCardActor(id,member=null){
  if(!a||a.partyDown||!poiCompanionAllowed()||!poiCompanionSame(a,poiCompanionPlace())||
     !frontierPlaneMatches(a.frontierCave,frontierPlayCave))return null;
  member??=poiPartyMembers(poiHotbarRead()).find(m=>m.id===id);
- const role=facilitySite?.residents?.find(r=>r.id===member?.npcId);
- if(!role||!(member.hp>0))return null;
  let view=frontierPartyTalkCache.get(id);
+ const owner=member?.npcId;
+ const role=facilitySite?.residents?.find(r=>r.id===owner)??
+  (frontierSoulProfiles.has(owner)?(view?.role.id===owner?view.role:frontierSoulRole(owner)):null);
+ if(!role||!(member.hp>0))return null;
  if(!view||view.role!==role){view={frontierPartyId:id,role};frontierPartyTalkCache.set(id,view)}
  const pos=poiCompanionPosition(a);
  Object.assign(view,{x:pos.x,z:pos.z,y:a.y,hp:member.hp,facing:0,weapon:member.weapon,gear:member.gear,activity:'companion'});
@@ -35122,7 +35132,7 @@ function frontierNpcAcquire(kit,role,life,cell){
 }
 function frontierLifeDecode(raw,fallen,legacy=false,legacyRoan=false,guild=poiHotbarState?.guildMembers,legacyGuardHp=false,legacyFWeapons=false){
  const out={};
- for(const id of Object.keys(FRONTIER_RESIDENT_WEAPONS)){
+ for(const id of [...Object.keys(FRONTIER_RESIDENT_WEAPONS),...frontierSoulProfiles.keys()]){
   if(Array.isArray(fallen)&&fallen.includes(id))continue;
   const r=raw?.[id]??(id===POI_FRONTIER_SHOP_ID?{hp:poiTownNpcMaxHp(id)}:null);
   const max=poiTownNpcMaxHp(id,null,guild),before=legacyRoan&&id==='frontierchief'?100:legacy&&raw?.[id]?poiNpcLegacyHp(id):max;
@@ -36680,7 +36690,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v541',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v542',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -36795,7 +36805,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v541';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v542';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -37010,7 +37020,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v541',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v542',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -38598,15 +38608,32 @@ function frontierFusionRows(keep,donor){
   return {id,old,material,allows,level:old&&material?Math.min(10,Math.max(old+1,material)):old||material};
  });
 }
-function frontierSoulSummon(kit,index){
+function frontierSoulCheck(kit,index){
+ if(facilitySite?.id!=='frontier'||!frontierLineaHere()||poiWalkLevel!==0)return 'soul-village';
+ if((kit.frontierSouls?.length??0)>=FRONTIER_SOUL_LIMIT)return 'soul-full';
+ if(poiInventorySlots(kit)[index]?.type!=='humanBonesSoul')return 'type';
+ return null;
+}
+function frontierSoulBegin(kit,index){
+ const reason=frontierSoulCheck(kit,index);
+ if(reason)return poiStorageActionResult(reason);
+ const place=facilitySite,area=world,person=frontierOriginRoll();
+ const result=frontierOriginRoulette(person,{
+  label:p=>p.name+'（'+p.job+'）',
+  commit:()=>{
+   if(facilitySite!==place||world!==area)return 'soul-village';
+   return frontierSoulSummon(poiHotbarRead(),index,person).reason;
+  },
+  cancelable:true
+ });
+ return poiStorageActionResult(result?null:'unavailable');
+}
+function frontierSoulSummon(kit,index,p=frontierOriginRoll()){
  const fail=poiStorageActionResult;
- if(facilitySite?.id!=='frontier'||!frontierLineaHere()||poiWalkLevel!==0)return fail('soul-village');
- const list=kit.frontierSouls??[];
- if(list.length>=FRONTIER_SOUL_LIMIT)return fail('soul-full');
- const slots=poiInventorySlots(kit).slice(),cell=slots[index];
- if(cell?.type!=='humanBonesSoul')return fail('type');
+ const reason=frontierSoulCheck(kit,index);if(reason)return fail(reason);
+ const list=kit.frontierSouls??[],slots=poiInventorySlots(kit).slice();
  const serial=Math.max(0,kit.frontierSoulSerial??0,...list.map(r=>Number(r.id.split('-')[1])))+1;
- const p=frontierOriginRoll(),id='frontiersoul-'+serial;
+ const id='frontiersoul-'+serial;
  const history=frontierTalentNewHistory(p.job);
  const r={...p,id,history,skills:frontierTalentRoll(p.job)};
  const nextList=[...list,r];
@@ -56893,8 +56920,20 @@ function frontierPlayerOrigin(){return facilitySite?.id==='frontier'?poiHotbarRe
 function frontierOriginIntro(){
  const origin=frontierPlayerOrigin();
  if(!origin?.pending||!poiWalkActive)return;
- const dialog=$('frontierOrigin'),bones=$('frontierOriginBones'),portrait=$('frontierOriginPortrait'),button=$('frontierOriginTap'),name=$('frontierOriginText');
- if(dialog.open)return;
+ frontierOriginRoulette(origin,{
+  label:p=>p.job,
+  commit:()=>{
+   const kit=poiHotbarRead(),{pending,...person}=kit.playerOrigin??origin;
+   const history=frontierTalentNewHistory(person.job);if(history.length)person.history=history;
+   const next={...kit,playerOrigin:person,frontierTalents:{...kit.frontierTalents,player:frontierTalentRoll(person.job,Math.random,true)}};
+   if(!poiEconomyWrite(next))return 'storage';
+   poiPlayerHP=poiPlayerMaxHp(next);
+   return null;
+  },
+  atBlack:()=>{poiCombatHud();poiWalkAvatar();workshopResumeWrite()}
+ });
+}
+function frontierBonePortrait(canvas){
  const art=mesh();
  frontierCurledSkeleton(art,0,0,0);
  // Tilt the shared world model toward the viewer so the skull and ribs read on the intro screen.
@@ -56903,15 +56942,22 @@ function frontierOriginIntro(){
   points[i+1]=y*.74-z*.673;
   points[i+2]=y*.673+z*.74;
  }
+ poiDrawPaperDoll(canvas,art,{yaw:0,zoom:1,frame:poiPaperDollFrame(art,canvas.width,canvas.height)});
+}
+function frontierOriginRoulette(person,{label,commit,atBlack,cancelable=false}){
+ const dialog=$('frontierOrigin'),bones=$('frontierOriginBones'),portrait=$('frontierOriginPortrait'),button=$('frontierOriginTap'),name=$('frontierOriginText');
+ if(dialog.open||!poiWalkActive||poiPlayerDying())return false;
  const boneCanvas=bones.querySelector('canvas');
- poiDrawPaperDoll(boneCanvas,art,{yaw:0,zoom:1,frame:poiPaperDollFrame(art,boneCanvas.width,boneCanvas.height)});
+ if(!boneCanvas.dataset.ready){frontierBonePortrait(boneCanvas);boneCanvas.dataset.ready='yes'}
  let stage='idle',timer=0,lastKey='';
  const setStage=value=>{stage=value;dialog.dataset.stage=value};
  setStage('idle');bones.hidden=false;portrait.hidden=true;name.hidden=false;name.textContent='旅人の魂をタップ';
  button.setAttribute('aria-label',name.textContent);
- try{dialog.showModal()}catch(_e){return}
- dialog.oncancel=e=>e.preventDefault();poiStopRepeat();
+ try{dialog.showModal()}catch(_e){return false}
+ poiStopRepeat();
  const cache=new Map(),context=portrait.getContext('2d'),reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+ const close=()=>{clearTimeout(timer);dialog.onclick=null;dialog.oncancel=null;dialog.close();cache.clear()};
+ dialog.oncancel=e=>{e.preventDefault();if(cancelable&&(stage==='idle'||stage==='spinning'))close()};
  const show=profile=>{
   const key=profile.appearance+'|'+profile.job;
   let pixels=cache.get(key);
@@ -56938,24 +56984,21 @@ function frontierOriginIntro(){
    return;
   }
   if(stage!=='spinning')return;
-  const kit=poiHotbarRead(),{pending,...person}=kit.playerOrigin??origin;
-  person.history=frontierTalentNewHistory(person.job);
-  const next={...kit,playerOrigin:person,frontierTalents:{...kit.frontierTalents,player:frontierTalentRoll(person.job,Math.random,true)}};
-  if(!poiEconomyWrite(next)){
-   name.hidden=false;name.textContent='保存できませんでした。もう一度タップしてください。';return;
+  const reason=commit();
+  if(reason){
+   name.hidden=false;name.textContent=reason==='storage'?'保存できませんでした。もう一度タップしてください。':poiItemDetailReason(reason);return;
   }
   clearTimeout(timer);setStage('confirmed');
-  show(person);name.textContent=person.job;name.hidden=false;poiSound('origin-roll-stop');
-  poiPlayerHP=poiPlayerMaxHp(next);
+  show(person);name.textContent=label(person);name.hidden=false;poiSound('origin-roll-stop');
   setTimeout(()=>{
-   setStage('black');poiCombatHud();poiWalkAvatar();workshopResumeWrite();
+   setStage('black');atBlack?.();
    setTimeout(()=>{
     setStage('reveal');
-    setTimeout(()=>{dialog.close();cache.clear()},reduced?40:360);
+    setTimeout(close,reduced?40:360);
    },reduced?80:310);
-  },1250);
+  },cancelable?1650:1250);
  };
- dialog.onclick=accept;
+ dialog.onclick=e=>{if(stage!=='idle'||button.contains(e.target))accept()};return true;
 }
 function poiGameResetSeedOwned(raw){
  if(typeof raw!=='string')return false;
