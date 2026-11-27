@@ -1755,7 +1755,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v456）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v457）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="2500" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -32000,7 +32000,6 @@ function frontierNpcStrike(a,now){
  const s=poiMonsterStates.get(q.obj);
  if(!s||s.hp<=0||q.obj.y!==a.y||
     (q.frontierCertain?(s!==q.state):Math.hypot(s.x-a.x,s.z-a.z)>q.range||!poiCompanionAttackClear(a,s,a.y)))return;
- if(poiBowType(q.weapon))a.frontierBowHeading=poiHumanBowHeading(s.x-a.x,s.z-a.z)??a.frontierBowHeading;
  const before=s.hp,reach=q.frontierCertain?q.reach:Math.hypot(s.x-a.x,s.z-a.z),shaft=poiSpearType(q.weapon)&&reach<q.range-(q.profile?.tipLength??0);
  const attack=poiTownNpcAttackPower(a)??POI_TOWN_RESIDENT_MELEE;
  poiPlayerDamageTarget([q.obj,s],s.x,s.z,shaft?Math.max(1,Math.round(attack*.75)):attack,q.weapon,now,!poiTownNpcCombatNear(a.x,a.z,a.y),true,{companion:true,resident:true,started:a.swingAt,actorId:a.role.id});
@@ -32442,10 +32441,42 @@ function frontierExpeditionCollectCoin(a,now,budget){
  poiTownNpcMove(a,frontierNpcHome(coin.x,coin.z),'collecting',now,budget);
  return true;
 }
+// BEGIN FRONTIER POST COMBAT
+function frontierNpcPost(a){
+ return a.frontierPost??={x:a.x,z:a.z,y:a.y,facing:a.facing};
+}
+function frontierNpcAim(a,o,s,now){
+ const from=poiTownNpcVisualPosition(a,now),p=poiMonsterPose(o,s,now,true);
+ const target={x:p.x-.5,z:p.z-.5};
+ const dx=target.x-from.x,dz=target.z-from.z;
+ return {from,target,dist:Math.hypot(dx,dz),heading:poiHumanBowHeading(dx,dz)};
+}
+function frontierNpcEngage(a,post,s,range,now,budget){
+ if(a.actorLeg||poiTownNpcStepT(a,now)<1)return;
+ const options=[];
+ // Prefer a reachable adjacent stand-off cell, not the enemy's own tile.
+ for(const [u,v] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]){
+  const p={x:s.x+u,z:s.z+v,y:a.y};
+  if(Math.hypot(u,v)>range+.09||Math.hypot(p.x-post.x,p.z-post.z)>8||
+     !frontierSectorActor(p.x,p.z)||poiTownNpcActorOccupied(p.x,p.z,p.y,a)||!poiTownNpcStance(p)||
+     poiTownNpcWalkEnemy(p.x,p.z,p.y)||!poiCompanionAttackClear(p,s,p.y))continue;
+  options.push(p);
+ }
+ options.sort((p,q)=>Math.hypot(p.x-a.x,p.z-a.z)-Math.hypot(q.x-a.x,q.z-a.z));
+ let p=options.find(n=>n.x===a.goal?.x&&n.z===a.goal?.z)??options[0];
+ if(p&&now<a.nextPlan&&!a.path?.length)p=options.find(n=>n!==p)??p;
+ if(p)poiTownNpcMove(a,p,'hunt',now,budget);
+}
+function frontierNpcGoBack(a,post,now,budget){
+ if(a.actorLeg||poiTownNpcStepT(a,now)<1)return false;
+ return poiTownNpcMove(a,post,'post-return',now,budget);
+}
+// END FRONTIER POST COMBAT
 function frontierNpcLifeStep(a,clock,now,budget,stationary=false){
  if(a.death||a.recessed||a.frontierSkillCast)return;
- if(a.role.id===POI_FRONTIER_INN_ID){
-  if(stationary||poiTownDialogue?.actor===a)return;
+ const post=stationary?frontierNpcPost(a):null;
+ if(!stationary&&a.role.id===POI_FRONTIER_INN_ID){
+  if(poiTownDialogue?.actor===a)return;
   const quiet=(clock.hour>=23||clock.hour<5)&&Math.hypot(poiWalkX-a.role.public.x,poiWalkZ-a.role.public.z)>5;
   const label=quiet?'going-home':'work';
   if(poiTownNpcMove(a,quiet?a.role.home:a.role.public,label,now,budget)&&poiTownNpcStepT(a,now)>=1){
@@ -32458,11 +32489,12 @@ function frontierNpcLifeStep(a,clock,now,budget,stationary=false){
  if(a.frontierStrike)return;
  frontierNpcCollect(a,now);
  const id=a.role.id,shop=id===POI_FRONTIER_SHOP_ID,expedition=frontierExpeditionForActor(a);
- const partyTarget=frontierNpcPartyTarget(a);
+ const partyTarget=stationary?null:frontierNpcPartyTarget(a);
  let target=partyTarget,dist=partyTarget?.d??frontierNpcSense(a)+.01;
  if(!partyTarget)for(const [o,s] of poiMonsterStates){
   if(s.hp<=0||o.y!==a.y||o.type==='monsterStoneDavid'||s.townOwned)continue;
   if(expedition&&a.y===-1&&!frontierSouthRecordId(o))continue;
+  if(stationary&&(s.frontierRuins||!frontierSectorActor(s.x,s.z)||Math.hypot(s.x-post.x,s.z-post.z)>9))continue;
   const d=Math.hypot(s.x-a.x,s.z-a.z);
   if(d>=dist||!poiCompanionAttackClear(a,s,a.y))continue;
   target={o,s};dist=d;
@@ -32475,19 +32507,31 @@ function frontierNpcLifeStep(a,clock,now,budget,stationary=false){
    frontierNeedLine(id,a,a.hp,true,now);
    if(!stationary)poiTownNpcMove(a,a.role.home,'going-home',now,budget);return;
   }
-  if(id==='frontierregna'&&now>=(a.attackAt||0)&&poiIceFangStart(id,a,target.o,target.s,now,'resident'))return;
+  const aim=frontierNpcAim(a,target.o,target.s,now),windup=now-(a.swingAt??-Infinity);
+  const elapsedPose=poiPlayerActionProfile(a.weapon)?.pose??260;
+  if(stationary&&windup<elapsedPose)return;
+  if(stationary&&(a.actorLeg||poiTownNpcStepT(a,now)<1)){
+   const range=poiPlayerActionProfile(a.weapon)?.range??1.45;
+   if(a.actorLeg&&aim.dist<=range)poiTownNpcActorSettle(a,now);
+   return;
+  }
+  if(id==='frontierregna'&&now>=(a.attackAt||0)&&poiIceFangStart(id,a,target.o,target.s,now,'resident')){
+   if(a.frontierSkillCast&&Number.isFinite(aim.heading))a.frontierSkillCast.visualHeading=aim.heading;
+   return;
+  }
   const profile=poiPlayerActionProfile(a.weapon),range=profile?.range??1.45;
-  if(dist<=range){
+  if(stationary?aim.dist<=range&&poiCompanionAttackClear(aim.from,aim.target,a.y):dist<=range){
    if(a.actorLeg)poiTownNpcActorSettle(a,now);
    poiTownNpcFace(a,poiTownNpcFaces(a.x,a.z,target.s.x,target.s.z));poiTownNpcAct(a,'fight');
    if(now>=(a.attackAt||0)){
     a.attackAt=now+(profile?.ready??760);a.swingAt=now;
     a.hitAt=now+(profile?.hit??108);
-    a.frontierStrike={obj:target.o,state:target.s,frontierCertain:true,reach:dist,hit:a.hitAt,range,weapon:a.weapon,profile};
-    if(poiBowType(a.weapon))a.frontierBowHeading=poiHumanBowHeading(target.s.x-a.x,target.s.z-a.z);
+    a.frontierAttackHeading=aim.heading;
+    a.frontierStrike={obj:target.o,state:target.s,frontierCertain:true,reach:aim.dist,heading:aim.heading,hit:a.hitAt,range,weapon:a.weapon,profile};
     if(poiBowType(a.weapon)&&poiTownNpcCombatNear(a.x,a.z,a.y))poiSound('bow-draw');
    }
-  }else if(!stationary&&!shop&&(expedition?.phase==='out'||a.hp>poiTownNpcMaxHp(id)*.25)){
+  }else if(stationary){frontierNpcEngage(a,post,target.s,range,now,budget);
+  }else if(!shop&&(expedition?.phase==='out'||a.hp>poiTownNpcMaxHp(id)*.25)){
    const options=[[1,0],[-1,0],[0,1],[0,-1]].map(([x,z])=>({x:target.s.x+x,z:target.s.z+z,y:a.y}))
     .filter(p=>!poiTownNpcActorOccupied(p.x,p.z,p.y,a)&&poiTownNpcStance(p))
     .sort((p,q)=>Math.hypot(p.x-a.x,p.z-a.z)-Math.hypot(q.x-a.x,q.z-a.z));
@@ -32499,7 +32543,10 @@ function frontierNpcLifeStep(a,clock,now,budget,stationary=false){
  if(now<(a.frontierTradeAt||0))return;
  if(stationary){
   frontierNpcHeal(a,now);
-  poiTownNpcAct(a,frontierNpcStationActivity(a.role));
+  if(now-(a.swingAt??-Infinity)<(poiPlayerActionProfile(a.weapon)?.pose??260))return;
+  if(!frontierNpcGoBack(a,post,now,budget))return;
+  const resting=frontierNpcStationActivity(a.role);
+  if(a.activity!==resting){a.frontierAttackHeading=null;poiTownNpcAct(a,resting)}
   return;
  }
  if((expedition?.gateTalk===0||expedition?.gateTalk===1)&&frontierExpeditionMove(a,expedition,now,budget))return;
@@ -32760,11 +32807,15 @@ function poiTownResidentsFrame(now){
     Math.max(Math.abs(a.x-poiWalkX),Math.abs(a.z-poiWalkZ))<=18;
   const partyActors=poiPartyActors();frontierPartyHerbFrame(now,partyActors);
   for(const a of partyActors)if(POI_HUMAN_PARTY_IDS[a.id])frontierHumanCompanionHeal(a,now);
-  for(const a of poiTownNpcActors)if(stationActive(a)&&!a.death&&a.frontierStrike)frontierNpcStrike(a,now);
+  for(const a of poiTownNpcActors)if(stationActive(a)&&!a.death){
+   if(a.actorLeg&&!a.recessed)poiTownNpcActorRun(a,now,poiTownNpcGraph());
+   if(a.frontierStrike)frontierNpcStrike(a,now);
+  }
   if(now>=poiTownNpcNext){
    poiTownNpcNext=now+POI_TOWN_RESIDENT_TICK;
    // No autonomous travel, schedule pathfinding, or new expeditions.
-   for(const a of poiTownNpcActors)if(stationActive(a)&&poiTownNpcRecover(a,now))frontierNpcLifeStep(a,null,now,null,true);
+   const budget={plans:2};
+   for(const a of poiTownNpcActors)if(stationActive(a)&&poiTownNpcRecover(a,now))frontierNpcLifeStep(a,null,now,budget,true);
    poiTownDialogueUpdate(now);poiTownDialogueSyncPrompt(now);
   }
   return;
@@ -32954,7 +33005,7 @@ function poiFrontierResidentRigidWeapon(a,now,x,y,z,heading,stride){
   return poiBuildPlayerMesh(a.weapon,chant.pose,a.gear,0,0,x,y,z,chant.heading,true,a.role.appearance);
  }
  const age=now-(a.swingAt??-Infinity),profile=poiPlayerWeaponProfile(a.weapon),pose=poiPlayerProfilePose(a.weapon,age);
- if(pose&&poiBowType(a.weapon)&&Number.isFinite(a.frontierBowHeading))heading=a.frontierBowHeading;
+ if(pose&&Number.isFinite(a.frontierAttackHeading))heading=a.frontierAttackHeading;
  const dir={x:-Math.sin(heading),z:Math.cos(heading)},o={x:x-.5,z:z-.5,y:a.y};
  if(pose){
   if(poiSpearType(a.weapon))pose.spearVisual={originX:x,originZ:z,dx:dir.x,dz:dir.z,
@@ -33014,7 +33065,7 @@ function poiTownResidentsDraw(now,vp){
  const walking=new Map();
  let cadence=poseFast?54:!fixed&&nearActors.length?125:0;
  for(const a of actors){
-  const rate=a.death||fixed?0:poiTownNpcVisualCadence(a,now);if(!rate)continue;
+  const rate=a.death||fixed&&!a.actorLeg&&!/^(?:hunt|post-return)$/.test(a.activity)?0:poiTownNpcVisualCadence(a,now);if(!rate)continue;
   walking.set(a,rate);if(!cadence||rate<cadence)cadence=rate;
  }
  // Include the sample interval so start/settle cannot reuse a stale bucket.
@@ -33030,7 +33081,7 @@ function poiTownResidentsDraw(now,vp){
    const bed=sleeping?(POI_TOWN_INN_BEDS.find(b=>b.id===a.bedId)||a.role.bed):null;
    const frontierBed=bed&&facilitySite?.id==='frontier';
    const p=frontierBed?frontierBedPose(bed):bed||a,part=poiTownNpcModel(a.role.type,a);
-   const near=poiTownNpcMotionNear(a)&&(!fixed||isPosing(a)),motion=poiTownNpcMotion(a,now,near);
+   const near=poiTownNpcMotionNear(a)&&(!fixed||walking.has(a)||isPosing(a)),motion=poiTownNpcMotion(a,now,near);
    const rate=bed?0:walking.get(a)||0;
    const sample=poiTownNpcVisualPosition(p,now,!!rate),{x,z,t}=sample;
    a.visual={...sample,moving:rate>0,cadence:rate||cadence};
@@ -33041,7 +33092,9 @@ function poiTownResidentsDraw(now,vp){
     (t===1?h(p.x,p.z):h(a.fromX,a.fromZ)*(1-t)+h(p.x,p.z)*t)+(p.y===0&&a.role.role==='kingdom-citizen'?poiKingdomPalaceHeight(x,z):0);
    const firstVertex=m.p.length;
    const y=(grade??ground+p.y*1.4)+(bed?.57:.025),r=[2,3,0,1][p.facing]||0;
-   const heading=motion.kind==='walk'&&Number.isFinite(sample.heading)?sample.heading:null,c=Math.cos(heading??0),ss=Math.sin(heading??0);
+   const heading=motion.kind==='walk'&&Number.isFinite(sample.heading)?sample.heading:
+    fixed&&!rate&&Number.isFinite(a.frontierAttackHeading)&&(motion.kind==='swing'||a.activity==='fight')?a.frontierAttackHeading:null;
+   const c=Math.cos(heading??0),ss=Math.sin(heading??0);
    const rotate=heading===null?(xx,zz)=>rot2(xx,zz,r):(xx,zz)=>[xx*c-zz*ss,xx*ss+zz*c];
    const parts=part.townParts;
    const pose=poiTownNpcHeldPose(a,Number.isFinite(a.swingAt)?now-a.swingAt:Infinity,near,bed);
@@ -33141,7 +33194,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v456',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v457',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -33256,7 +33309,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v456';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v457';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -33471,7 +33524,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v456',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v457',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -39496,6 +39549,29 @@ function frontierRefineGroundTile(t,tint,roadMidpoint=null){
  }
  t.p=p.concat(t.p.slice(18));t.c=c.concat(t.c.slice(18));t.n=n.concat(t.n.slice(18));
 }
+// BEGIN FRONTIER CRISP HOUSE FLOORS
+// One opaque plane, with resolved seams sharing edges with the boards.
+// Phase and palette are anchored to the house, not restarted on every tile.
+function frontierCrispHouseFloor(m,x,z,home){
+ const tint=[[.67,.485,.303],[.62,.451,.291],[.69,.496,.327],[.643,.465,.301]][home.tone%4]??[.65,.46,.30];
+ const put=(l,r,t,b,c)=>{if(r-l>1e-9&&b-t>1e-9)
+  quad(m,[l,.13,t],[l,.13,b],[r,.13,b],[r,.13,t],c)};
+ const seam=tint.map(v=>v*.70);
+ const length=2.15,width=.043;
+ for(let j=0;j<3;j++){
+  const row=(z-home.z1)*3+j,z0=z+j/3,z1=z+(j+1)/3;
+  const phase=(row%2)*.76+(Math.floor(row/2)%2)*.26;
+  const origin=home.x1+phase,first=Math.floor((x-origin)/length);
+  put(x,x+1,z0,z0+.041,seam);
+  for(let i=first;i<=first+1;i++){
+   const a=origin+i*length,b=a+length;
+   const color=tint.map(v=>v*(.91+surfaceNoise(i+home.x1,row+home.z1*13)*.16));
+   put(Math.max(a,x),Math.min(a+width,x+1),z0+.041,z1,seam);
+   put(Math.max(a+width,x),Math.min(b,x+1),z0+.041,z1,color);
+  }
+ }
+}
+// END FRONTIER CRISP HOUSE FLOORS
 function frontierClassicTiles(target,water=false,ranges=null){
  const area=FRONTIER_W*FRONTIER_H,temple=facilitySite?.davidTemple;
  const trees=new Set();
@@ -39565,7 +39641,9 @@ function frontierClassicTiles(target,water=false,ranges=null){
      }
     }
    }
-  }else addFloorTile(t,x,z,type,area*3,0,null,true);
+  }else if(type==='woodfloorLight'&&poiWalkActive&&!pineAIActive&&frontierHomeCell(x,z))
+   frontierCrispHouseFloor(t,x,z,frontierHomeCell(x,z));
+  else addFloorTile(t,x,z,type,area*3,0,null,true);
   if(shade&&temple.interiorFloors.has(x+','+z))pineBakeFloorLighting(t,x,z,0,shade.blockers,shade.lamps);
   const c0=frontierHeight(x,z),c1=frontierHeight(x+1,z),c2=frontierHeight(x,z+1),c3=frontierHeight(x+1,z+1);
   for(let i=0;i<t.p.length;i+=3){
@@ -52009,7 +52087,7 @@ function frontierHomeGeometry(d,cut){
  }
  const plank=(u,v,x,z,color,y=.019)=>quad(m,[u,y,v],[u,y,z],[x,y,z],[x,y,v],color);
  // Inlaid borders fill gaps at the wall without extending the footprint.
- for(const [a,b,c,d]of [[L+.34,B+.34,R-.34,B+1],[L+.34,B+1,L+1,F-.34],[R-1,B+1,R-.34,F-.34]]){
+ if(!openTop)for(const [a,b,c,d]of [[L+.34,B+.34,R-.34,B+1],[L+.34,B+1,L+1,F-.34],[R-1,B+1,R-.34,F-.34]]){
   for(let j=b;j<d;j+=.29)plank(a,j,c,Math.min(d,j+.286),tint(oak,.92+((Math.floor(j*110)%5)*.035)),.011);
  }
  const utensil=(x,y,z,r=.1,col=iron)=>{
