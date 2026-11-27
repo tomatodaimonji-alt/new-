@@ -1755,7 +1755,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v475）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v476）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="2500" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -2056,6 +2056,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
   <button type="button" data-item-detail-action="buy" hidden>買う</button>
   <button type="button" data-item-detail-action="guild-accept" hidden>受注する</button>
   <button type="button" data-item-detail-action="guild-report" hidden>調査書を納品する</button>
+  <button type="button" data-item-detail-action="guild-abandon" hidden>破棄する</button>
   <button type="button" data-item-detail-action="equip" hidden>装備する</button>
   <button type="button" data-item-detail-action="unequip" hidden>取り外す</button>
   <button type="button" data-item-detail-action="use" hidden>使う</button>
@@ -25993,7 +25994,7 @@ function poiInventoryPresentItem(host,cell,durability=false){
 function poiItemDetailAvailableActions(ref,cell){
  if(ref.zone==='guild-detail'){
   const step=frontierGuildStatus();
-  return [...(step==='open'?['guild-accept']:step==='ready'?['guild-report']:[]),'back'];
+  return [...(step==='open'?['guild-accept']:step==='ready'?['guild-report','guild-abandon']:step==='active'?['guild-abandon']:[]),'back'];
  }
  const space=cell.type==='gold'&&ref.zone!=='npc'&&ref.zone!=='chest'?poiGoldSplitTarget(poiHotbarRead(),ref)>=0:ref.zone!=='hotbar'||poiInventoryEmptyHotbar(poiHotbarRead())>=0;
  return poiItemDetailActions(ref.zone,cell,poiChestIsOpen(),space);
@@ -31527,10 +31528,12 @@ function frontierGuildHasReport(kit){return poiInventorySlots(kit).some(c=>c?.ty
 function frontierGuildStatus(kit=poiHotbarRead()){
  return kit.frontierSurvey==='done'?'done':kit.frontierSurvey==='active'?frontierGuildHasReport(kit)?'ready':'active':'open';
 }
+function frontierGuildStars(){return frontierSectorDifficulty('128,0').stars}
 function frontierGuildDescription(){
  const s=frontierGuildStatus();
- return '川辺の野原へ行き、宝箱に残された調査書を回収してロアンに納品する。\n報酬：木の剣\n'+
-  {open:'未受注',active:'受注済み：調査書を探す',ready:'調査書を納品できます',done:'完了済み'}[s];
+ return '川辺の野原へ行き、宝箱に残された調査書を回収してロアンに納品する。\n難易度：'+frontierGuildStars()+'\n報酬：木の剣\n'+
+  {open:'未受注',active:'受注済み：調査書を探す',ready:'調査書を納品できます',done:'完了済み'}[s]+
+  (s==='active'||s==='ready'?'\n破棄すると調査書はなくなります。依頼は再受注できます。':'');
 }
 function frontierGuildCatalog(){
  const list=document.createElement('div');list.id='poiGuildCatalog';list.setAttribute('aria-label','依頼一覧');
@@ -31538,8 +31541,8 @@ function frontierGuildCatalog(){
  icon.className='hotbar-icon';icon.textContent='📜';icon.setAttribute('aria-hidden','true');
  const name=document.createElement('strong');name.className='poiShopRowName';name.textContent=FRONTIER_GUILD_QUEST;
  const state=document.createElement('span');state.className='poiShopRowPrice';
- state.textContent={open:'★1',active:'受注済み',ready:'納品可',done:'完了'}[frontierGuildStatus()];
- const desc=document.createElement('span');desc.className='poiShopRowDesc';desc.textContent='宝箱の調査書を回収して納品。報酬：木の剣';
+ state.textContent=frontierGuildStars();state.setAttribute('aria-label','難易度 1／10');
+ const desc=document.createElement('span');desc.className='poiShopRowDesc';desc.textContent=({open:'',active:'【受注済み】',ready:'【納品可】',done:'【完了】'})[frontierGuildStatus()]+'宝箱の調査書を回収して納品。報酬：木の剣';
  b.append(icon,name,state,desc);list.append(b);return list;
 }
 function frontierGuildDetailValid(ref){
@@ -31570,18 +31573,27 @@ function frontierGuildReward(kit){
  if(next.drops?.some(c=>c.type===type))next.drops=next.drops.filter(c=>c.type!==type);
  slots[report]={type,count:1,durability};return poiInventoryEdited(next,slots);
 }
+function frontierGuildDiscard(kit){
+ const next={...kit};delete next.frontierSurvey;
+ for(const key of FRONTIER_MEADOW_CHEST_KEYS)if(kit[key]?.slots.some(c=>c?.type===FRONTIER_SURVEY_REPORT))
+  next[key]={...kit[key],slots:kit[key].slots.map(c=>c?.type===FRONTIER_SURVEY_REPORT?null:c)};
+ return poiInventoryEdited(next,poiInventorySlots(kit).map(c=>c?.type===FRONTIER_SURVEY_REPORT?null:c));
+}
 function frontierGuildCommit(ref,action,now=performance.now()){
  if(!frontierGuildDetailValid(ref))return false;
  const kit=poiHotbarRead(),state=frontierGuildStatus(kit);
  const accept=action==='guild-accept'&&state==='open',deliver=action==='guild-report'&&state==='ready';
- if(!accept&&!deliver)return false;
- const next=deliver?frontierGuildReward(kit):kit;
- if(!next||!poiEconomyWrite({...next,frontierSurvey:deliver?'done':'active'})){
+ const abandon=action==='guild-abandon'&&(state==='active'||state==='ready');
+ if(!accept&&!deliver&&!abandon)return false;
+ const next=deliver?frontierGuildReward(kit):abandon?frontierGuildDiscard(kit):kit;
+ if(!next||!poiEconomyWrite(abandon?next:{...next,frontierSurvey:deliver?'done':'active'})){
   $('poiItemDetailFeedback').textContent='保存できませんでした。もう一度お試しください。';return false;
  }
  poiItemDetailClose(false);
  const d=poiTownDialogue;
- d.text=deliver?'調査書を受け取った。これが報酬の木の剣じゃ。よく戻ったな。':
+ if(accept){d.page='speech';d.guildExitAfterSpeech=true;d.guildReadUntil=null;d.index=0}
+ d.text=abandon?'依頼は取り下げたぞ。また引き受けたくなったら声をかけてくれ。':
+  deliver?'調査書を受け取った。これが報酬の木の剣じゃ。よく戻ったな。':
   '受注したな。川辺の野原の宝箱に調査書が入っとる。見つけたら、ここへ持ってきてくれ。';
  poiEconomyRefresh();
  if(deliver)poiSound('item-pickup',POI_INVENTORY_SWORD);
@@ -32079,7 +32091,8 @@ function poiTownDialogueSyncPrompt(now){
 function poiTownDialogueUpdate(now){
  if(!poiTownDialogue)return null;
  const d=poiTownDialogue;
- if((d.until&&now>=d.until)||(typeof poiPlayerDying==='function'&&poiPlayerDying())||(d.pendingRecruit?!poiNpcRecruitStillHere(d,now):poiTownDialogueTarget(now)!==d.actor)||
+ if(d.guildExitAfterSpeech&&!poiMessageTyping)d.guildReadUntil??=now+2200;
+ if((d.guildReadUntil&&now>=d.guildReadUntil)||(d.until&&now>=d.until)||(typeof poiPlayerDying==='function'&&poiPlayerDying())||(d.pendingRecruit?!poiNpcRecruitStillHere(d,now):poiTownDialogueTarget(now)!==d.actor)||
   poiTownNpcSleeping(d.actor)!==d.bedside||(d.toolshopCounter&&!poiNpcShopCounter(d.actor))||(d.guildCounter&&!frontierGuildAtCounter(d.actor))){
   poiTownDialogueClose();if(typeof poiShopSync==='function')poiShopSync();return null;
  }
@@ -32125,6 +32138,9 @@ function poiTownDialogueAction(now){
  const expected=arguments[1]??null;
  if(poiTownDialogueSpeechOnly()){
   if(expected)return false;
+  if(poiTownDialogue.guildExitAfterSpeech&&poiMessageTyping){
+   poiMessageSpeechFrame(now+1050);return true;
+  }
   if(poiTownDialogue.sleeping){
    const d=poiTownDialogue;
    if(poiTownDialogueTarget(now)!==d.actor){poiTownDialogueClose();poiShopSync();return false}
@@ -33794,7 +33810,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v475',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v476',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -33909,7 +33925,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v475';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v476';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -34124,7 +34140,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v475',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v476',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
