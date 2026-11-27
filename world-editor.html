@@ -1756,7 +1756,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v497）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v498）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="2500" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -13742,6 +13742,7 @@ function poiDavidScoreTick(scene,deck,now){
 function poiFrontierSurfaceMusicZone(){
  // Buildings and riverbank tiles inside the same travel area do not change BGM.
  const key=frontierSectorKeyAt(poiWalkX,poiWalkZ)?.join(',');
+ if(key===FRONTIER_STAR_KEY)return 'starLake';
  if(key===FRONTIER_WOOD_SECTOR)return 'spiderWoods';
  if(key==='0,0'&&frontierPlayCave)return 'mine';
  return ['0,0','128,0','192,0'].includes(key)?'outside':'indoor';
@@ -13758,7 +13759,7 @@ function poiOrchestraScene(now){
  const zone=facilitySite?.id==='snowpass'?'outside':facilitySite?.id==='base'?poiAudioMusicZone():facilitySite?.id==='frontier'?poiFrontierSurfaceMusicZone():'indoor';
  if(poiAudioSnowActive())return 'snow';
  // Field combat uses the same recording as field exploration.
- if(zone==='outside'||zone==='spiderWoods')return zone;
+ if(zone==='outside'||zone==='spiderWoods'||zone==='starLake')return zone;
  // Prefer the musical exploration cue until an attack is truly committed,
  // rather than using an idle lock reticle to turn every wildlife sighting
  // into a battle. Being hit and landing a hit also refresh the combat hold.
@@ -14113,7 +14114,7 @@ function poiRecordedZoneClip(ctx,key,encoded){
  return entry;
 }
 function poiRecordedZoneKey(scene){
- return scene==='southSettlement'?'indoor':scene==='southRuinsBoss'?'battle':scene==='southRuins'?'mine':scene;
+ return scene==='starLake'?'spiderWoods':scene==='southSettlement'?'indoor':scene==='southRuinsBoss'?'battle':scene==='southRuins'?'mine':scene;
 }
 function poiRecordedZoneEncoded(key){return key==='spiderWoods'?POI_SPIDER_WOODS_OGG:POI_ZONE_RECORDINGS[key]}
 function poiOrchestraPrime(scene,ctx){
@@ -14206,15 +14207,15 @@ function poiCreekAudioStop(){
  for(const node of [source,filter,gain])node.disconnect();
 }
 function poiCreekAudioSync(){
- const anchor=facilitySite?.id==='base'?facilitySite.creek?.sound:null;
+ const star=frontierStarPlayer(),anchor=star?frontierStarCurrent.waterfall:facilitySite?.id==='base'?facilitySite.creek?.sound:null;
  const ctx=poiAudioContext;
- if(!anchor||!facilityCreekIndex?.hasWater||!ctx||!poiWalkActive||poiWalkLevel!==0||!poiAudioEnabled||!poiAudioAllowed()){
+ if(!anchor||!star&&!facilityCreekIndex?.hasWater||!ctx||!poiWalkActive||poiWalkLevel!==0||!poiAudioEnabled||!poiAudioAllowed()){
   poiCreekAudioStop();return;
  }
- const near=1-Math.min(1,Math.hypot(poiWalkX-anchor.x,poiWalkZ-anchor.z)/7);
+ const near=1-Math.min(1,Math.hypot(poiWalkX-anchor.x,poiWalkZ-anchor.z-(star?3:0))/(star?11:7));
  const branch=facilitySite.canal?.sound;
  const nearCanal=branch?1-Math.min(1,Math.hypot(poiWalkX-branch.x,poiWalkZ-branch.z)/5):0;
- const level=.145*Math.max(near*near,.55*nearCanal*nearCanal);
+ const level=(star?.087:.145)*Math.max(near*near,.55*nearCanal*nearCanal);
  if(!poiCreekAudio){
   if(!level)return;
   const source=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),gain=ctx.createGain();
@@ -22928,6 +22929,7 @@ function poiOrvasRewardRestore(kit,raw,minute=poiDungeonPopulationMinute()){
 // END ORVAS REWARD CORE
 function poiDungeonRememberDefeat(o,state,debris=null,source=null){
  if(!poiWalkActive||pineAIActive||state?.hp!==0)return false;
+ if(facilitySite?.id==='frontier'&&frontierStarEnemy(o))return frontierStarRemember(o);
  if(facilitySite?.id==='frontier'&&frontierMeadowDungeonMob(o))return frontierMeadowDungeonRemember(o,state);
  if(facilitySite?.id==='frontier'&&o.meadowId!==undefined)return frontierMeadowRecordDefeat(o);
  if(facilitySite?.id==='frontier'&&frontierSouthRecordId(o))return frontierSouthRemember(o,state,source);
@@ -23142,6 +23144,10 @@ function poiHotbarRead(){
   const south=frontierSouthDefeatsDecode(saved.southDefeats);if(south.length)kit.southDefeats=south;
   if(['expedition','other'].includes(saved.southClearBy))kit.southClearBy=saved.southClearBy;
   const denCurrent=saved.frontierDenLayout===1&&(saved.frontierDenVisitSeed??0)===(frontierMeadowRead().denSeed??0);
+  if(saved.frontierStarSeed===(frontierStarCurrent?.seed??0)){
+   const c=poiChestDecode(saved.frontierStarChest);if(c)kit.frontierStarChest=c;
+   if(Array.isArray(saved.frontierStarDead))kit.frontierStarDead=[...new Set(saved.frontierStarDead.filter(id=>Number.isInteger(id)&&id>=0&&id<3))];
+  }
   if(saved.frontierMeadowDungeonSeed===(frontierMeadowDungeon?.seed??0)){
    if(saved.frontierMeadowDungeonStock===frontierMeadowDungeon?.seed)kit.frontierMeadowDungeonStock=saved.frontierMeadowDungeonStock;
    if(Array.isArray(saved.frontierMeadowDungeonDead)){
@@ -23324,6 +23330,7 @@ function poiHotbarSave(kit=poiHotbarState){
    ...(kit.frontierSouthLootPlaced===true?{frontierSouthLootPlaced:true}:{}),
    ...(kit.frontierSouthChest?{frontierSouthChest:kit.frontierSouthChest}:{}),
    ...(kit.frontierMeadowChest?{frontierMeadowChest:kit.frontierMeadowChest}:{}),
+   ...(facilitySite?.id==='frontier'?{frontierStarSeed:frontierStarCurrent?.seed??0,frontierStarChest:kit.frontierStarChest,frontierStarDead:kit.frontierStarDead}:{}),
    ...(kit.frontierMeadowChest2?{frontierMeadowChest2:kit.frontierMeadowChest2}:{}),
    ...(kit.frontierSurvey?{frontierSurvey:kit.frontierSurvey}:{}),
    frontierDenLayout:1,
@@ -23809,7 +23816,7 @@ function poiHotbarHerbIcon(){
 }
 
 const POI_INVENTORY_LIMIT=36,POI_INVENTORY_HERB='healingHerb',POI_INVENTORY_SWORD='equipWoodSword';
-const POI_CHEST_STORE_KEYS=['kitchenChest','mineTreasureChest','otherworldChest','chapelChest','frontierRuinsChest','frontierSouthChest','frontierOrvasChest','frontierWoodChest','frontierMeadowChest','frontierMeadowChest2'];
+const POI_CHEST_STORE_KEYS=['kitchenChest','mineTreasureChest','otherworldChest','chapelChest','frontierRuinsChest','frontierSouthChest','frontierOrvasChest','frontierWoodChest','frontierMeadowChest','frontierMeadowChest2','frontierStarChest'];
 const POI_CHEST_SIZE=18,POI_KNIFE_DURABILITY=40,POI_KNIFE_BONUS=12;
 const POI_KNIFE='kitchenKnife',POI_RECOVERY_POTION='cannedFood',POI_FIRE_WAND='fireWand',POI_FRESH_PRODUCE='freshProduce';
 // Preserve the saved item key so existing slots, stock, chests and drops still load.
@@ -24105,6 +24112,7 @@ function poiChestDecode(raw){
 }
 let poiKitchenChestRoll=null,poiChestActiveKey='kitchenChest';
 function poiActiveChestReachable(key=poiChestActiveKey){
+ if(key===FRONTIER_STAR_CHEST)return !!frontierStarChestReachable();
  if(frontierMeadowChestKey(key))return !!frontierMeadowChestHere(key);
  if(key===FRONTIER_WOOD_CHEST_KEY)return frontierWoodChestReachable();
  if(key===FRONTIER_ORVAS_CHEST_KEY)return frontierOrvasChestReachable();
@@ -25442,7 +25450,7 @@ function poiMineVaultChestReachable(){
  return !poiMonsterAt(chest.x,chest.z)&&world.some(o=>o.x===chest.x&&o.z===chest.z&&o.y===chest.y&&o.type===chest.type);
 }
 function poiMineUnlockSafe(key='mineTreasureChest'){
- return poiInventoryAllowed()&&(frontierMeadowChestKey(key)?frontierMeadowChestHere(key):key===FRONTIER_WOOD_CHEST_KEY?frontierWoodChestReachable():key===FRONTIER_ORVAS_CHEST_KEY?frontierOrvasChestReachable():key===FRONTIER_SOUTH_CHEST_KEY?frontierSouthChestReachable():key===FRONTIER_RUINS_CHEST_KEY?frontierRuinsChestReachable():key==='kitchenChest'?poiKitchenChestReachable():
+ return poiInventoryAllowed()&&(key===FRONTIER_STAR_CHEST?frontierStarChestReachable():frontierMeadowChestKey(key)?frontierMeadowChestHere(key):key===FRONTIER_WOOD_CHEST_KEY?frontierWoodChestReachable():key===FRONTIER_ORVAS_CHEST_KEY?frontierOrvasChestReachable():key===FRONTIER_SOUTH_CHEST_KEY?frontierSouthChestReachable():key===FRONTIER_RUINS_CHEST_KEY?frontierRuinsChestReachable():key==='kitchenChest'?poiKitchenChestReachable():
   key==='chapelChest'?poiChapelChestReachable():key==='otherworldChest'?poiOtherworldChestReachable():poiMineVaultChestReachable())&&
   (typeof poiAudioAllowed!=='function'||poiAudioAllowed())&&
   $('poiBagPanel')?.hidden!==false&&!document.querySelector?.('dialog[open],.modal.open');
@@ -25456,9 +25464,9 @@ function poiMineUnlockDraw(vp){
  if(!poiMineUnlock)return;
  const el=$('poiMineUnlockProgress');if(!el)return;
  const key=poiMineUnlock.key,ruins=key===FRONTIER_RUINS_CHEST_KEY||key===FRONTIER_WOOD_CHEST_KEY;
- const chest=frontierMeadowChestKey(key)?frontierMeadowCurrentChests().find(c=>c.key===key):key===FRONTIER_WOOD_CHEST_KEY?frontierWoodPlanCurrent.CHEST:ruins?FRONTIER_RUINS.CHEST:key===FRONTIER_ORVAS_CHEST_KEY?frontierOrvasChestPoint():key===FRONTIER_SOUTH_CHEST_KEY?FRONTIER_SOUTH_TREASURE:key==='kitchenChest'?{x:27,z:32,y:-1}:key==='chapelChest'?facilitySite?.chapel?.chest:
+ const chest=key===FRONTIER_STAR_CHEST?frontierStarCurrent?.chest:frontierMeadowChestKey(key)?frontierMeadowCurrentChests().find(c=>c.key===key):key===FRONTIER_WOOD_CHEST_KEY?frontierWoodPlanCurrent.CHEST:ruins?FRONTIER_RUINS.CHEST:key===FRONTIER_ORVAS_CHEST_KEY?frontierOrvasChestPoint():key===FRONTIER_SOUTH_CHEST_KEY?FRONTIER_SOUTH_TREASURE:key==='kitchenChest'?{x:27,z:32,y:-1}:key==='chapelChest'?facilitySite?.chapel?.chest:
   key==='otherworldChest'?facilitySite?.otherworld?.chest:facilitySite?.mine?.vault?.chest;
- const height=chest?(ruins||key===FRONTIER_ORVAS_CHEST_KEY?frontierWalkSurface(chest.x+.5,chest.z+.5,ruins):key===FRONTIER_SOUTH_CHEST_KEY?FRONTIER_SOUTH_BEDROCK:chest.y*1.4+terrainY(chest.x,chest.z))+1:null;
+ const height=chest?(key===FRONTIER_STAR_CHEST?frontierBurrowFloor():ruins||key===FRONTIER_ORVAS_CHEST_KEY?frontierWalkSurface(chest.x+.5,chest.z+.5,ruins):key===FRONTIER_SOUTH_CHEST_KEY?FRONTIER_SOUTH_BEDROCK:chest.y*1.4+terrainY(chest.x,chest.z))+1:null;
  const p=chest?.y===poiWalkLevel?poiWorldToScreen(vp,chest.x+.5,height,chest.z+.5):null;
  const visible=!!p&&p.x>=0&&p.x<=canvas.clientWidth&&p.y>=0&&p.y<=canvas.clientHeight;
  el.hidden=!visible;if(!visible)return;
@@ -25466,7 +25474,7 @@ function poiMineUnlockDraw(vp){
  const bar=el.querySelector('progress');if(bar)bar.value=poiMineUnlock.elapsed;
 }
 function poiMineUnlockStart(now,key='mineTreasureChest'){
- if(!['mineTreasureChest','otherworldChest','chapelChest','kitchenChest',FRONTIER_RUINS_CHEST_KEY,FRONTIER_SOUTH_CHEST_KEY,FRONTIER_ORVAS_CHEST_KEY,FRONTIER_WOOD_CHEST_KEY,...FRONTIER_MEADOW_CHEST_KEYS].includes(key)||poiMineUnlock||
+ if(!['mineTreasureChest','otherworldChest','chapelChest','kitchenChest',FRONTIER_RUINS_CHEST_KEY,FRONTIER_SOUTH_CHEST_KEY,FRONTIER_ORVAS_CHEST_KEY,FRONTIER_WOOD_CHEST_KEY,FRONTIER_STAR_CHEST,...FRONTIER_MEADOW_CHEST_KEYS].includes(key)||poiMineUnlock||
   !poiMineUnlockSafe(key)||poiHotbarRead()[key])return false;
  poiMineUnlock={key,start:now,elapsed:0,nextRattle:now+720};
  if(typeof poiStopRepeat==='function')poiStopRepeat();
@@ -25491,8 +25499,8 @@ function poiMineUnlockFrame(now){
  }
  poiMineUnlockCancel();
  const kit=poiHotbarRead(),key=a.key;if(kit[key])return;
- if(frontierMeadowChestKey(key)||key===FRONTIER_WOOD_CHEST_KEY||key===FRONTIER_ORVAS_CHEST_KEY||key===FRONTIER_RUINS_CHEST_KEY||key===FRONTIER_SOUTH_CHEST_KEY||key==='kitchenChest'){
-  if(!(frontierMeadowChestKey(key)?frontierMeadowChestInit(key):key===FRONTIER_WOOD_CHEST_KEY?frontierWoodChestInit():key===FRONTIER_ORVAS_CHEST_KEY?frontierOrvasChestInit():key===FRONTIER_SOUTH_CHEST_KEY?frontierSouthRewardInit():key===FRONTIER_RUINS_CHEST_KEY?frontierRuinsRewardInit():poiOpenKitchenChest())){
+ if(key===FRONTIER_STAR_CHEST||frontierMeadowChestKey(key)||key===FRONTIER_WOOD_CHEST_KEY||key===FRONTIER_ORVAS_CHEST_KEY||key===FRONTIER_RUINS_CHEST_KEY||key===FRONTIER_SOUTH_CHEST_KEY||key==='kitchenChest'){
+  if(!(key===FRONTIER_STAR_CHEST?frontierStarChestInit():frontierMeadowChestKey(key)?frontierMeadowChestInit(key):key===FRONTIER_WOOD_CHEST_KEY?frontierWoodChestInit():key===FRONTIER_ORVAS_CHEST_KEY?frontierOrvasChestInit():key===FRONTIER_SOUTH_CHEST_KEY?frontierSouthRewardInit():key===FRONTIER_RUINS_CHEST_KEY?frontierRuinsRewardInit():poiOpenKitchenChest())){
    toast('宝箱の解錠を保存できませんでした。');return;
   }
   poiSound('mine-lock-click');poiChestSetOpen(true,key,false);return;
@@ -25730,7 +25738,7 @@ function poiChestSetOpen(open,key='kitchenChest',sound=true){
  if(open){
   if(!poiActiveChestReachable(key)||!poiInventoryAllowed())return;
   poiChestActiveKey=key;
-  const heading=$('poiChestHeading');if(heading)heading.textContent=frontierMeadowChestKey(key)?'川辺の野原の宝箱':key===FRONTIER_WOOD_CHEST_KEY?'蜘蛛の森の宝箱':key===FRONTIER_ORVAS_CHEST_KEY?'オルヴァスの宝箱':key===FRONTIER_SOUTH_CHEST_KEY?'灰刻の地下遺跡の宝箱':key===FRONTIER_RUINS_CHEST_KEY?'森の遺跡の宝箱':FRONTIER_ESTATE_KEYS.includes(key)?(facilitySite?.residents?.find(r=>r.id===poiHotbarRead()[key]?.npcId)?.name||'仲間')+'の遺品袋':key==='chapelChest'?'礼拝堂の宝箱':key==='otherworldChest'?'回廊の宝箱':key==='mineTreasureChest'?'宝物庫の宝箱':'チェスト';
+  const heading=$('poiChestHeading');if(heading)heading.textContent=key===FRONTIER_STAR_CHEST?'星映しの洞窟の宝箱':frontierMeadowChestKey(key)?'川辺の野原の宝箱':key===FRONTIER_WOOD_CHEST_KEY?'蜘蛛の森の宝箱':key===FRONTIER_ORVAS_CHEST_KEY?'オルヴァスの宝箱':key===FRONTIER_SOUTH_CHEST_KEY?'灰刻の地下遺跡の宝箱':key===FRONTIER_RUINS_CHEST_KEY?'森の遺跡の宝箱':FRONTIER_ESTATE_KEYS.includes(key)?(facilitySite?.residents?.find(r=>r.id===poiHotbarRead()[key]?.npcId)?.name||'仲間')+'の遺品袋':key==='chapelChest'?'礼拝堂の宝箱':key==='otherworldChest'?'回廊の宝箱':key==='mineTreasureChest'?'宝物庫の宝箱':'チェスト';
   poiBagSetOpen(true);
   if(bag.hidden)return;
  }
@@ -26709,7 +26717,7 @@ function poiHotbarUse(slot){
  else if(result.reason==='sated')toast('お腹はいっぱいです。');
  else if(result.reason==='storage')toast(poiInventoryItemName(item)+'を保存できませんでした');
 }
-function poiCombatActorMake(o){const stats=typeof poiMonsterStatsAt==='function'?poiMonsterStatsAt(o):POI_MONSTER_STATS[o.type];return {x:o.x,z:o.z,fromX:o.x,fromZ:o.z,moveStarted:-10000,facing:0,hp:stats.hp,nextAttack:0,...(poiTempleDragon(o)&&frontierGrandMonster(o)?{dragonBody:true}:{}),...(facilitySite?.id==='frontier'&&(frontierMeadowDungeonMob(o)||frontierGrandMonster(o)||frontierWoodMonster(o)||frontierRuinsBoss(o)||frontierRuinsDefeatKey(o))?{frontierRuins:true,frontierRuinsBoss:frontierRuinsBoss(o)}:{})}}
+function poiCombatActorMake(o){const stats=typeof poiMonsterStatsAt==='function'?poiMonsterStatsAt(o):POI_MONSTER_STATS[o.type];return {x:o.x,z:o.z,fromX:o.x,fromZ:o.z,moveStarted:-10000,facing:0,hp:stats.hp,nextAttack:0,...(poiTempleDragon(o)&&frontierGrandMonster(o)?{dragonBody:true}:{}),...(facilitySite?.id==='frontier'&&(frontierStarEnemy(o)||frontierMeadowDungeonMob(o)||frontierGrandMonster(o)||frontierWoodMonster(o)||frontierRuinsBoss(o)||frontierRuinsDefeatKey(o))?{frontierRuins:true,frontierRuinsBoss:frontierRuinsBoss(o)}:{})}}
 // BEGIN NORTH FORT RETURN ENCOUNTER
 const POI_NORTH_RETURN_FOES=Object.freeze([57,59,61].map((x,northReturnSlot)=>
  Object.freeze({x,z:16,y:-1,type:'monsterGoblin',rot:0,northReturnSlot})));
@@ -26780,7 +26788,7 @@ function poiNorthReturnExit(realm){
 function poiResetCombat(){poiWildClear();poiPlayerHP=poiPlayerMaxHp();poiMonsterStates=new Map();const kit=(facilitySite?.id==='base'||facilitySite?.id==='frontier')?poiHotbarRead():null;
  const population=kit?poiDungeonPopulationDecode(kit.dungeonPopulation):null;
  const frontierDead=facilitySite?.id==='frontier'?new Set([...(kit?.frontierRuinsDefeats||[]),...(kit?.southDefeats||[])]):null;
- for(const o of world){if(poiIsMonster(o.type)&&!(frontierMeadowDungeonMob(o)&&kit?.frontierMeadowDungeonDead?.includes(o.meadowDungeonId))&&!(frontierRuinsBoss(o)&&kit?.frontierRuinsCleared)&&!(frontierWoodMonster(o)&&(o.type==='monsterGiantSpider'?frontierWoodCleared(kit):kit?.frontierWoodDefeats?.includes(frontierWoodDefeatKey(o))))&&!kit?.frontierGrandDefeats?.includes(frontierGrandDefeatKey(o))&&!frontierDead?.has(frontierRuinsDefeatKey(o)??frontierSouthRecordId(o))&&!(typeof poiWildFieldFixedPolicy==='function'&&poiWildFieldFixedPolicy(o))&&!(typeof poiNorthWatchGuardDefeated==='function'&&poiNorthWatchGuardDefeated(o))&&!(population&&poiDungeonActorAbsent(o,population)))poiMonsterStates.set(o,poiCombatActorMake(o))}frontierMeadowRestoreActors(performance.now());poiDamageLabels=[];poiNextMobTick=0;poiAttackReady=0;poiMonsterMeshDirty=true;poiCombatHud();dirty=true}
+ for(const o of world){if(poiIsMonster(o.type)&&!(frontierStarEnemy(o)&&kit?.frontierStarDead?.includes(o.starEnemy))&&!(frontierMeadowDungeonMob(o)&&kit?.frontierMeadowDungeonDead?.includes(o.meadowDungeonId))&&!(frontierRuinsBoss(o)&&kit?.frontierRuinsCleared)&&!(frontierWoodMonster(o)&&(o.type==='monsterGiantSpider'?frontierWoodCleared(kit):kit?.frontierWoodDefeats?.includes(frontierWoodDefeatKey(o))))&&!kit?.frontierGrandDefeats?.includes(frontierGrandDefeatKey(o))&&!frontierDead?.has(frontierRuinsDefeatKey(o)??frontierSouthRecordId(o))&&!(typeof poiWildFieldFixedPolicy==='function'&&poiWildFieldFixedPolicy(o))&&!(typeof poiNorthWatchGuardDefeated==='function'&&poiNorthWatchGuardDefeated(o))&&!(population&&poiDungeonActorAbsent(o,population)))poiMonsterStates.set(o,poiCombatActorMake(o))}frontierMeadowRestoreActors(performance.now());poiDamageLabels=[];poiNextMobTick=0;poiAttackReady=0;poiMonsterMeshDirty=true;poiCombatHud();dirty=true}
 const POI_MESSAGE_LIFETIME=5000,POI_MESSAGE_MAX=2;
 const poiMessageLines=[];
 let poiMessageSpeech=null,poiMessageTyping=null;
@@ -26998,9 +27006,9 @@ function poiMonsterAt(x,z,reserveSlide=false,except=null,layer=null,floor=null){
   if(state===except||!frontierPlaneMatches(state.frontierRuins,layer??(except?!!except.frontierRuins:frontierCollisionCave??frontierPlayCave))||(facilitySite&&obj.y!==(floor??poiWalkLevel))||state.hp<=0)continue;
   if(state.dragonBody){
    const p=poiDragonPosition(state);
-   if(reserveSlide&&state.actorFree&&p.t<1?state.actorFree.cells.has(x+','+z):
-      reserveSlide?poiMonsterActorFootprint(p.x,p.z,POI_DRAGON_BODY).has(x+','+z):
-      Math.abs(x-p.x)<=POI_DRAGON_BODY&&Math.abs(z-p.z)<=POI_DRAGON_BODY)return [obj,state];
+   const end=reserveSlide&&state.actorFree&&p.t<1?state.actorFree:p;
+   const r=POI_DRAGON_BODY+(reserveSlide?POI_ACTOR_RADIUS:0);
+   if(poiDragonSegmentDist2(x,z,p,end)<r*r-POI_FREE_EPS)return [obj,state];
    continue;
   }
   const landing=reserveSlide&&obj.type==='monsterStoneDavid'&&state.david?.attack;
@@ -28256,13 +28264,50 @@ const poiDragonPoisons=[];
 function poiDragonPosition(s,now=performance.now()){
  return s.actorFree?poiMonsterActorPoint(s.actorFree,now):s;
 }
-function poiDragonBodyStand(x,z,s,actors=false){
+// The photographed wings and tail can overhang. The shared .94 body
+// radius is the same round solid core already used by weapon tracing.
+function poiDragonSegmentDist2(x,z,a,b){
+ const dx=b.x-a.x,dz=b.z-a.z,den=dx*dx+dz*dz;
+ const t=den?Math.max(0,Math.min(1,((x-a.x)*dx+(z-a.z)*dz)/den)):0;
+ return (x-a.x-t*dx)**2+(z-a.z-t*dz)**2;
+}
+function poiDragonCells(x,z,actorCentres=false,r=POI_DRAGON_BODY+(actorCentres?POI_ACTOR_RADIUS:0)){
+ const cells=new Set(),pad=actorCentres?0:.5,limit=r*r-POI_FREE_EPS;
+ for(let u=Math.ceil(x-r-pad);u<=Math.floor(x+r+pad);u++)
+  for(let v=Math.ceil(z-r-pad);v<=Math.floor(z+r+pad);v++){
+   if(Math.max(0,Math.abs(x-u)-pad)**2+Math.max(0,Math.abs(z-v)-pad)**2<limit)cells.add(u+','+v);
+  }
+ return cells;
+}
+function poiDragonBodyStand(x,z,s,actors=false,r=POI_DRAGON_BODY){
  if(!s.dragonBody)return true;
- for(const k of poiMonsterActorFootprint(x,z,POI_DRAGON_BODY)){
+ const chest=frontierGrandCurrent?.chest;
+ for(const k of poiDragonCells(x,z,false,r)){
   const [u,v]=k.split(',').map(Number);
-  if(!frontierGrandCell(u,v)||(actors&&(poiMonsterAt(u,v,true,s)||poiWalkX===u&&poiWalkZ===v)))return false;
+  if(!frontierGrandCell(u,v)||chest?.x===u&&chest.z===v&&frontierOrvasPrizeReady())return false;
+ }
+ if(!actors)return true;
+ const player=typeof poiFreePose!=='undefined'&&poiFreePose?.level===poiWalkLevel?poiFreePose:{x:poiWalkX,z:poiWalkZ};
+ if(poiDragonSegmentDist2(x,z,player,player)<(r+POI_FREE_RADIUS)**2-POI_FREE_EPS)return false;
+ for(const k of poiDragonCells(x,z,true,r+POI_ACTOR_RADIUS)){
+  const [u,v]=k.split(',').map(Number);
+  if(poiMonsterAt(u,v,true,s))return false;
  }
  return true;
+}
+function poiDragonRoundAdvance(from,to,length,expect,legal,s,cells){
+ const n=Math.max(1,Math.ceil(expect/.085)),dx=(to.x-from.x)*expect/length,dz=(to.z-from.z)*expect/length;
+ let fx=poiFreeCell(from.x),fz=poiFreeCell(from.z),x=from.x,z=from.z;
+ for(let i=1;i<=n;i++){
+  const u=from.x+dx*i/n,v=from.z+dz*i/n,tx=poiFreeCell(u),tz=poiFreeCell(v);
+  // Midpoint expanded by half the substep covers its entire continuous
+  // terrain sweep, not just the discrete samples or bounding-box corners.
+  if(!poiDragonBodyStand((x+u)/2,(z+v)/2,s,true,POI_DRAGON_BODY+expect/n/2)||
+    !poiDragonBodyStand(u,v,s,true)||(tx!==fx||tz!==fz)&&!legal(tx,tz,fx,fz))return {x,z,distance:0,stopped:true};
+  for(const k of poiDragonCells(u,v,true))cells.add(k);
+  x=u;z=v;fx=tx;fz=tz;
+ }
+ return {x,z,distance:expect,stopped:false};
 }
 function poiDragonPursue(o,s,target,aim,can,now,memory){
  const from=poiDragonPosition(s,now);
@@ -28895,7 +28940,7 @@ function poiMonsterActorOccupies(leg,now,x,z,reserve){
  return (p.t<1?leg.cells:leg.endCells).has(x+','+z);
 }
 function poiMonsterActorStart(obj,state,now,from,x,z,ms,cells,settle=false){
- const endCells=poiMonsterActorFootprint(x,z,state.dragonBody?POI_DRAGON_BODY:POI_ACTOR_RADIUS);
+ const endCells=state.dragonBody?poiDragonCells(x,z,true):poiMonsterActorFootprint(x,z);
  for(const k of endCells)cells.add(k);
  state.fromX=state.x;state.fromZ=state.z;state.moveStarted=now;
  state.actorFree={fromX:from.x,fromZ:from.z,x,z,start:now,ms:settle?ms:ms/poiMovementFactor(poiStatBase(null,obj.type).speed,3),cells,endCells,settle,
@@ -28931,8 +28976,8 @@ function poiMonsterWalkToward(obj,state,now,to,legal,duration=POI_MONSTER_FREE_T
  const from=motion||state,dx=to.x-from.x,dz=to.z-from.z,length=Math.hypot(dx,dz);
  if(!Number.isFinite(length)||length<1e-5||!(maxDistance>0))return false;
  const radius=state.dragonBody?POI_DRAGON_BODY:POI_ACTOR_RADIUS;
- const expect=Math.min(length,maxDistance),cells=poiMonsterActorFootprint(from.x,from.z,radius),cache=new Map();
- const next=poiActorAdvance(from,to,maxDistance,(x,z,fx,fz)=>{
+ const expect=Math.min(length,maxDistance),cells=state.dragonBody?poiDragonCells(from.x,from.z,true):poiMonsterActorFootprint(from.x,from.z,radius),cache=new Map();
+ const next=state.dragonBody?poiDragonRoundAdvance(from,to,length,expect,legal,state,cells):poiActorAdvance(from,to,maxDistance,(x,z,fx,fz)=>{
   const k=x+','+z+','+fx+','+fz;
   if(!cache.has(k))cache.set(k,!!legal(x,z,fx,fz));
   const pass=cache.get(k);if(pass)cells.add(x+','+z);return pass;
@@ -28942,7 +28987,7 @@ function poiMonsterWalkToward(obj,state,now,to,legal,duration=POI_MONSTER_FREE_T
  // overlaps. A path node is a destination, not an instant position write.
  if(next.stopped||Math.abs(Math.hypot(ax,az)-expect)>1e-5||
     Math.abs(next.distance-expect)>1e-5||Math.abs(ax*dz-az*dx)>1e-5||
-    [...poiMonsterActorFootprint(next.x,next.z,radius)].some(k=>!cells.has(k))||state.dragonBody&&!poiDragonBodyStand(next.x,next.z,state,true))return false;
+    [...(state.dragonBody?poiDragonCells(next.x,next.z,true):poiMonsterActorFootprint(next.x,next.z,radius))].some(k=>!cells.has(k))||state.dragonBody&&!poiDragonBodyStand(next.x,next.z,state,true))return false;
  poiMonsterActorStart(obj,state,now,from,next.x,next.z,duration,cells);
  state.facing=Math.abs(ax)>=Math.abs(az)?(ax>0?3:1):(az<0?2:0);
  poiMonsterMeshDirty=true;return true;
@@ -32390,7 +32435,7 @@ function frontierGuildCommit(ref,action,now=performance.now()){
  return true;
 }
 function frontierGuildTravelAllowed(key,kit=poiHotbarRead()){
- if(key==='64,0'||key==='128,0')return true;
+ if(key==='64,0'||key==='128,0'||key===FRONTIER_STAR_KEY)return true;
  const board=frontierGuildBoard(kit);
  return board.known.includes(key)||(key===FRONTIER_GUILD_RUINS.sector&&board.ruins==='active')||
   (key===FRONTIER_GUILD_ORVAS.sector&&board.orvas==='active')||(key===FRONTIER_WOOD_SECTOR&&board.wood==='active');
@@ -33088,7 +33133,7 @@ function frontierGuardDuty(role,clock){
 }
 function frontierLifeId(id){return id===POI_FRONTIER_SHOP_ID||frontierResident(id)}
 function frontierReturnPoint(p){
- return p&&Number.isFinite(p.x)&&Number.isFinite(p.z)&&p.x>=0&&p.x<FRONTIER_W&&((p.z>=0||frontierNorthOwn(p.x,p.z))&&p.z<FRONTIER_H||frontierSouthOwn(p.x,p.z))?
+ return p&&Number.isFinite(p.x)&&Number.isFinite(p.z)&&p.x>=0&&p.x<FRONTIER_W&&((p.z>=0||frontierNorthOwn(p.x,p.z))&&p.z<FRONTIER_H||frontierSouthOwn(p.x,p.z)||frontierStarOwn(p.x,p.z))?
   {x:p.x,z:p.z,y:0,facing:Number.isInteger(p.facing)&&p.facing>=0&&p.facing<4?p.facing:2}:null;
 }
 const FRONTIER_GEAR_PARTS=Object.freeze(['weapon','head','torso','legs','feet']);
@@ -34647,7 +34692,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v497',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v498',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -34762,7 +34807,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v497';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v498';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -34977,7 +35022,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v497',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v498',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -38590,6 +38635,7 @@ function poiWalkCanStep(x,z,fromX,fromZ,exceptMonster,skipNpcTile=false,freeTree
  const cave=frontier?(layer??(exceptMonster?!!exceptMonster.frontierRuins:frontierCollisionCave??frontierPlayCave)):false;
  if(frontier&&(cave?frontierGrandOwn(x,z)?frontierGrandCurrent?.chest.x===x&&frontierGrandCurrent.chest.z===z&&frontierOrvasPrizeReady():frontierWoodOwn(x,z)?frontierWoodPlanCurrent?.CHEST.x===x&&frontierWoodPlanCurrent.CHEST.z===z&&frontierWoodCleared():frontierRuinsChestAt(x,z)&&frontierRuinsGateOpen():
    x>=192&&poiDavidTempleEnclosedAt(facilitySite,x,z,0)&&frontierOrvasChestPoint()?.x===x&&frontierOrvasChestPoint()?.z===z&&frontierOrvasPrizeReady()))return false;
+ if(frontier&&cave&&frontierStarPlayer()&&x===frontierStarCurrent?.chest.x&&z===frontierStarCurrent.chest.z)return false;
  if(frontier&&cave&&frontierMeadowIn(x,z)&&frontierMeadowCurrentChests().some(c=>c.x===x&&c.z===z))return false;
  if(frontier&&(!frontierBurrowWalkEdge(x,z,fromX,fromZ,cave)||cave&&frontierRuinsGateAt(x,z)&&!frontierRuinsGateOpen()||!cave&&(frontierVillageFence(x,z)&&!(freeTrees&&frontierEastGateFineCell(x,z))||frontierGroundKind(x,z)==='river'&&!facilitySite.decks.has(x+','+z))))return false;
  const north=facilitySite?.id==='base'?(facilitySite.townOffset||0):null;
@@ -38815,6 +38861,7 @@ function poiLocalProject(crop,v){
 }
 function poiLocalBits(){return new Uint8Array(POI_LOCAL_BYTES)}
 function poiLocalBit(x,z){
+ if(facilitySite?.id==='frontier'&&frontierStarOwn(x,z)&&Number.isInteger(x)&&Number.isInteger(z))return (z-66)*44+x-194;
  if(facilitySite?.id==='frontier'&&Number.isInteger(x)&&Number.isInteger(z)&&frontierWoodOwn(x,z))return (z-64)*64+x-64;
  if(facilitySite?.id==='frontier'&&Number.isInteger(x)&&Number.isInteger(z)&&frontierSouthOwn(x,z))
   return 20480+(z-64)*64+x-128;
@@ -38965,9 +39012,11 @@ function poiFrontierSurfaceMarker(x,z){
  return frontierDenExitStand(x,z)?8:null;
 }
 function poiFrontierCaveMapAccess(x,z){
+ if(frontierStarOwn(x,z))return frontierStarSeen(x,z);
  return poiFrontierSurfaceMarker(x,z)!==null||frontierBurrowCell(x+.5,z+.5);
 }
 function poiFrontierCaveMapTone(x,z){
+ if(frontierStarOwn(x,z))return frontierStarCurrent?.entrance.exitStand(x,z)?8:frontierStarCurrent?.water.has(x+','+z)?3:2;
  if(frontierMeadowIn(x,z))return frontierMeadowDungeon?.entrance.exitStand(x,z)?8:frontierMeadowDungeon?.water.has(x+','+z)?3:1;
  if(frontierGrandOwn(x,z))return frontierGrandCurrent?.entrance.exitStand(x,z)?8:3;
  return frontierWoodOwn(x,z)?(frontierWoodExitStand(x,z)?8:frontierWoodPlanCurrent?.water.has(x+','+z)?3:1):poiFrontierSurfaceMarker(x,z)??(frontierRuinsCell(x,z)?3:2);
@@ -38976,7 +39025,7 @@ function poiFrontierCaveMapTone(x,z){
 function poiLocalCapture(x,z,y,site,realmKey,realm,concealed,quests){
  const frontierCave=poiFrontierCaveMap(site,x,z,y);
  const crop=poiLocalCrop(x,z),hasSite=site&&/^[a-z0-9_-]{1,36}$/.test(site.id),
-  scope=hasSite?site.id+':'+y+':'+(frontierCave?frontierMeadowIn(x,z)?'riverside-dungeon':frontierGrandOwn(x,z)?'orvas-temple':frontierWoodOwn(x,z)?'spider-woods':'west-ruins':realmKey||'surface'):null;
+  scope=hasSite?site.id+':'+y+':'+(frontierCave?frontierStarOwn(x,z)?'star-lake':frontierMeadowIn(x,z)?'riverside-dungeon':frontierGrandOwn(x,z)?'orvas-temple':frontierWoodOwn(x,z)?'spider-woods':'west-ruins':realmKey||'surface'):null;
  const map=poiLocalTopologyFor(site,concealed),row=map.levels.get(y);
  const bits=scope?poiLocalSurvey(scope):null; // Temporary editor preview is never recorded.
  const door=poiWalkDoorOpen;
@@ -38995,7 +39044,7 @@ function poiLocalCapture(x,z,y,site,realmKey,realm,concealed,quests){
  const cropped=sectorKey?FRONTIER_SECTOR_WINDOWS[sectorKey.join(',')]:null;
  const access=(x,z)=>(!cropped||frontierSectorAt(x,z)===cropped)&&(site?.id==='frontier'&&y===0&&!frontierCave&&frontierNorthOwn(x,z)||
   x>=0&&z>=0&&(field?poiOverlandSquareOwner(x,z)==='base':x<MAP_W&&z<MAP_H)&&
-   (site?.id!=='frontier'||(y<0?frontierSouthRuinsOwn(x,z):z<64||frontierSouthOwn(x,z)||frontierCave&&frontierWoodOwn(x,z))))&&
+   (site?.id!=='frontier'||(y<0?frontierSouthRuinsOwn(x,z):z<64||frontierSouthOwn(x,z)||frontierCave&&(frontierWoodOwn(x,z)||frontierStarOwn(x,z)))))&&
   (!realm||x>=realm.x1&&x<=realm.x2&&z>=realm.z1&&z<=realm.z2)&&(!frontierCave||poiFrontierCaveMapAccess(x,z));
  const temple=concealed&&site?.davidTemple,closed=(tx,tz)=>!access(tx,tz)||(temple&&poiSacredMiniEntrance(temple,tx,tz))||
   (frontierCave?frontierRuinsGateAt(tx,tz)&&!frontierRuinsGateOpen():poiLocalBlocked(row,site,y,tx,tz))||
@@ -39663,7 +39712,7 @@ function poiWalkEnterCell(dx,dz,now,continuous=false,onDoorCue,sectorCommit=fals
  if(facilitySite?.id==='base'&&poiWalkLevel===0&&typeof poiLookoutEnter==='function')poiLookoutEnter(poiWalkFromX,poiWalkFromZ,poiWalkX,poiWalkZ);
  if(facilitySite?.id==='base'){if(facilitySite.creek)poiCreekAudioSync();poiEconomyCollect(poiWalkX,poiWalkZ);if(typeof poiGroundGoldPickup==='function')poiGroundGoldPickup(poiWalkX,poiWalkZ);poiInventoryPickup(poiWalkX,poiWalkZ);poiMineFindExplore(poiWalkX,poiWalkZ);poiMineFindPickup(poiWalkX,poiWalkZ);poiArmedPickup(poiWalkX,poiWalkZ);if(typeof poiPortQuestVisit==='function')poiPortQuestVisit();if(typeof poiNorthTrailPickup==='function')poiNorthTrailPickup(poiWalkX,poiWalkZ)}
  if(facilitySite?.id==='snowpass'){poiGroundGoldPickup(poiWalkX,poiWalkZ);poiInventoryPickup(poiWalkX,poiWalkZ)}
- if(facilitySite?.id==='frontier'){frontierRuinsStockLoot();frontierWoodStockLoot();frontierSouthStockLoot();if(!frontierPlayCave)poiEconomyCollect(poiWalkX,poiWalkZ);poiGroundGoldPickup(poiWalkX,poiWalkZ);poiInventoryPickup(poiWalkX,poiWalkZ)}
+ if(facilitySite?.id==='frontier'){if(frontierStarPlayer())poiCreekAudioSync();frontierRuinsStockLoot();frontierWoodStockLoot();frontierSouthStockLoot();if(!frontierPlayCave)poiEconomyCollect(poiWalkX,poiWalkZ);poiGroundGoldPickup(poiWalkX,poiWalkZ);poiInventoryPickup(poiWalkX,poiWalkZ)}
  if(typeof poiSoulFloorWalkover==='function')poiSoulFloorWalkover(poiWalkX,poiWalkZ,now);
  frontierEstateWalkover();
  if(!poiWalkDoorFoley(door,fromLevel,onDoorCue)&&!continuous)poiWalkFootstep(wet);
@@ -41294,7 +41343,7 @@ function frontierDenDoorstep(x,z){return frontierDenCurrentEntrance().doorstep(x
 function frontierDenOutdoorMouth(x,z){
  const entry=frontierDenCurrentEntrance();return entry.doorstep(x,z)&&entry.local(x,z)[0]>=entry.east-3;
 }
-function frontierBurrowCell(x,z){return frontierRuinsCell(Math.floor(x),Math.floor(z))||frontierDenDoorstep(x,z)||frontierWoodCell(x,z)||frontierGrandCell(x,z)||frontierMeadowDungeonCell(x,z)}
+function frontierBurrowCell(x,z){return frontierRuinsCell(Math.floor(x),Math.floor(z))||frontierDenDoorstep(x,z)||frontierWoodCell(x,z)||frontierGrandCell(x,z)||frontierMeadowDungeonCell(x,z)||frontierStarCell(x,z)}
 function frontierBurrowRoofAt(x,z){return frontierBurrowCell(x,z)}
 function frontierDenExitStand(x,z){return frontierDenCurrentEntrance().exitStand(x,z)}
 function frontierDenExitEdge(x,z,fx,fz){return frontierDenCurrentEntrance().exitEdge(x,z,fx,fz)}
@@ -41940,7 +41989,7 @@ function frontierRuinsFacesChest(x,z,facing,goal){
 }
 // END RUIN INTERACTION VISIBILITY
 function frontierRuinsChestReachable(){
- return poiWalkActive&&poiWalkLevel===0&&frontierPlayCave&&!frontierWoodPlayer()&&!frontierGrandPlayer()&&frontierRuinsGateOpen()&&
+ return poiWalkActive&&poiWalkLevel===0&&frontierPlayCave&&!frontierWoodPlayer()&&!frontierGrandPlayer()&&!frontierStarPlayer()&&frontierRuinsGateOpen()&&
   frontierRuinsFacesChest(poiWalkX,poiWalkZ,poiWalkFacing,FRONTIER_RUINS.CHEST)&&
   poiPlayerRayClear(FRONTIER_RUINS.CHEST.x,FRONTIER_RUINS.CHEST.z,0,poiWalkX,poiWalkZ);
 }
@@ -42290,6 +42339,7 @@ function frontierOrvasPrizeReady(){
 }
 function frontierBossPrizeHere(){
  if(facilitySite?.id!=='frontier'||!poiWalkActive||pineAIActive)return null;
+ if(frontierStarPlayer())return {key:FRONTIER_STAR_CHEST,chest:frontierStarCurrent.chest,portal:frontierStarCurrent.portal};
  if(frontierWoodPlayer())return frontierWoodCleared()?
   {key:FRONTIER_WOOD_CHEST_KEY,chest:frontierWoodPlanCurrent.CHEST,portal:frontierWoodPlanCurrent.PORTAL}:null;
  if(frontierMeadowDungeonPlayer())return frontierMeadowDungeonCleared()?
@@ -42326,7 +42376,7 @@ function frontierDrawBossPrize(vp){
  const {key,chest,portal}=a;
  let cache=frontierBossPrizeGpu.get(key);
  if(!cache){
-  const h=p=>(key===FRONTIER_RUINS_CHEST_KEY||key===FRONTIER_WOOD_CHEST_KEY||key==='frontierMeadowChest2'&&frontierMeadowDungeonPlayer()||key===FRONTIER_ORVAS_CHEST_KEY&&frontierGrandPlayer())?frontierBurrowFloor()+.019:p.y===-1?FRONTIER_SOUTH_BEDROCK:frontierWalkSurface(p.x+.5,p.z+.5,false);
+  const h=p=>(key===FRONTIER_STAR_CHEST||key===FRONTIER_RUINS_CHEST_KEY||key===FRONTIER_WOOD_CHEST_KEY||key==='frontierMeadowChest2'&&frontierMeadowDungeonPlayer()||key===FRONTIER_ORVAS_CHEST_KEY&&frontierGrandPlayer())?frontierBurrowFloor()+.019:p.y===-1?FRONTIER_SOUTH_BEDROCK:frontierWalkSurface(p.x+.5,p.z+.5,false);
   const m=mesh(),r=mesh(),x=portal.x+.5,y=h(portal)+.028,z=portal.z+.5;
   deco(m,'chest',chest.x+.5,h(chest),chest.z+.5,2);
   roundStack(m,x,y,z,[[0,.47,.47],[.065,.42,.42]],12,[.31,.38,.35]);
@@ -42356,7 +42406,7 @@ function frontierSouthChestReachable(){
   frontierSouthBossDefeated()&&poiPlayerRayClear(p.x,p.z,p.y,poiWalkX,poiWalkZ);
 }
 function frontierChestKeyHere(){
- return frontierMeadowChestHere()?.key??(frontierWoodChestReachable()?FRONTIER_WOOD_CHEST_KEY:frontierOrvasChestReachable()?FRONTIER_ORVAS_CHEST_KEY:frontierSouthChestReachable()?FRONTIER_SOUTH_CHEST_KEY:frontierRuinsChestReachable()?FRONTIER_RUINS_CHEST_KEY:null);
+ return (frontierStarChestReachable()?FRONTIER_STAR_CHEST:null)??frontierMeadowChestHere()?.key??(frontierWoodChestReachable()?FRONTIER_WOOD_CHEST_KEY:frontierOrvasChestReachable()?FRONTIER_ORVAS_CHEST_KEY:frontierSouthChestReachable()?FRONTIER_SOUTH_CHEST_KEY:frontierRuinsChestReachable()?FRONTIER_RUINS_CHEST_KEY:null);
 }
 function frontierSouthRewardInit(){
  if(!frontierSouthChestReachable())return false;
@@ -42962,7 +43012,7 @@ function frontierSouthLampVisible(x,z,y,limit=4){
 }
 function frontierTorchFrame(now,x,z,y){
  const pack=new Float32Array(16),t=now/1000;
- if(frontierMeadowDungeonPlayer()){} // Outdoor-style cave, no Den lanterns.
+ if(frontierMeadowDungeonPlayer()||frontierStarPlayer()){} // Outdoor-style cave, no Den lanterns.
  else if(frontierGrandPlayer())frontierOrvasArtLights(frontierGrandCurrent,now,x,z,y,pack);
  else if(facilitySite?.id==='frontier'&&poiWalkActive&&poiWalkLevel===0&&(x<36||frontierPlayCave)){
   const lights=frontierRuinsVisibleTorches(x,z,y);
@@ -43244,7 +43294,13 @@ void main(){
   }
  }
  vec3 paint=pow(max(vCol,vec3(0.0)),vec3(.92));
- if(uFrontierWater.x>.5){
+ if(uFrontierWater.x>1.5){
+  float t=uFrontierWater.y;
+  float r=sin(dot(vLootXZ,vec2(.82,1.34))+cos(vLootXZ.y*.35))*
+          cos(dot(vLootXZ,vec2(.38,-.59))+t*.57);
+  float sheen=smoothstep(.42,.97,r);
+  paint+=sheen*vec3(.013,.023,.033);
+ }else if(uFrontierWater.x>.5){
   OCCP vec2 p=vLootXZ-vec2(${FRONTIER_WEST_OFFSET.toFixed(1)},0.0);
   ${frontierWaterShaderShape()}
   float t=uFrontierWater.y,lateral=p.x-center;
@@ -46044,7 +46100,7 @@ function render(){
  // The Den foyer and stone rooms share an exposure. Material colors and
  // world-space candle light distinguish them without relighting the screen.
  const goblinDen=facilitySite?.id==='frontier'&&poiWalkActive&&poiWalkLevel===0&&frontierPlayCave&&!frontierWoodPlayer();
- const daylight=frontierMeadowDungeonPlayer()?frontierMeadowDungeonArtAmbient:frontierGrandPlayer()?frontierOrvasArtAmbient:goblinDen?[.54,.50,.47]:ambient;
+ const daylight=frontierStarPlayer()?frontierStarAmbient:frontierMeadowDungeonPlayer()?frontierMeadowDungeonArtAmbient:frontierGrandPlayer()?frontierOrvasArtAmbient:goblinDen?[.54,.50,.47]:ambient;
  const flameViewY=facilitySite?.id==='frontier'&&(ux<36||frontierPlayCave)?frontierWalkSurface(ux,uz)+.75:
   poiWalkLevel*1.4+poiCreekPlayerHeight(now)+.75;
  const sector=frontierActiveSector();
@@ -46053,7 +46109,7 @@ function render(){
  gl.uniform3f(loc.daylight,...daylight);
  if(typeof poiSacredApplyFog==='function')poiSacredApplyFog(now,daylight);
  poiFieldHazePrepare(now);
- if(den){poiFieldHazeFrame=null;if(frontierWoodPlayer())gl.clearColor(.055,.075,.048,1);else gl.clearColor(.057,.049,.041,1);}
+ if(den){poiFieldHazeFrame=null;if(frontierStarPlayer())gl.clearColor(.032,.045,.072,1);else if(frontierWoodPlayer())gl.clearColor(.055,.075,.048,1);else gl.clearColor(.057,.049,.041,1);}
  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
  if(den)gl.clearColor(0,0,0,0);
  poiOcclusionBegin(p,now);
@@ -46066,7 +46122,7 @@ function render(){
  }else{if(!(frontierGameFixed()&&frontierPlayCave))stockGradeDraw(sceneMesh?.ground,p.vp);
  if(facilitySite?.id!=='frontier'||facilityViewLevel()>=0){
   if(!frontierPlayCave){frontierDrawNorth(p.vp,now);frontierDrawSouth(p.vp);frontierDrawMapEdgeRocks(p.vp);}
-  if(frontierMeadowDungeonPlayer())frontierMeadowDungeonArtDraw(frontierMeadowDungeon,p.vp,now);else if(frontierGrandPlayer())frontierOrvasArtDraw(frontierGrandCurrent,p.vp,now);else frontierDrawBurrow(p.vp);
+  if(frontierStarPlayer())frontierStarArtDraw(frontierStarCurrent,p.vp,now);else if(frontierMeadowDungeonPlayer())frontierMeadowDungeonArtDraw(frontierMeadowDungeon,p.vp,now);else if(frontierGrandPlayer())frontierOrvasArtDraw(frontierGrandCurrent,p.vp,now);else frontierDrawBurrow(p.vp);
  }
  if(!den){poiDrawSceneOcclusion(sceneMesh,p.vp);frontierTempleWallDraw(p);frontierSouthDrawCovered(p.vp,now,p.eye);
  if(facilitySite?.id!=='frontier'||facilityViewLevel()>=0){frontierDrawVillage(p.vp);frontierDrawHouse(p.vp);}
@@ -46117,7 +46173,7 @@ function render(){
   poiPlayerWeaponDraw(now,p.vp);
   poiIceFangDraw(now,p.vp);
   if(facilitySite?.id==='frontier'){
-   if(!frontierMeadowDungeonPlayer()&&!frontierGrandPlayer()&&poiWalkLevel===0&&(ux<36||frontierPlayCave))frontierDrawFlames(p.vp,now);
+   if(!frontierStarPlayer()&&!frontierMeadowDungeonPlayer()&&!frontierGrandPlayer()&&poiWalkLevel===0&&(ux<36||frontierPlayCave))frontierDrawFlames(p.vp,now);
    frontierDrawSouthFlames(p.vp,now,ux,uz,flameViewY);
   }
   }finally{poiFieldHazeStop()}
@@ -50470,6 +50526,239 @@ function frontierMeadowDungeonRemember(o,state){
  return true;
 }
 // END F RANK RIVERSIDE DUNGEON
+// BEGIN STARLAKE PLAN
+const FRONTIER_STAR_KEY='192,64',FRONTIER_STAR_NAME='星映しの洞窟',FRONTIER_STAR_CHEST='frontierStarChest';
+const FRONTIER_STAR_BOX=Object.freeze([194,66,238,110]);
+const frontierStarOwn=(x,z)=>x>=194&&x<238&&z>=66&&z<110;
+function frontierStarPlan(seed){
+ seed>>>=0;let state=seed;
+ const r=(a,b)=>{
+  state=(state+0x6d2b79f5)>>>0;let t=Math.imul(state^(state>>>15),state|1);
+  t^=t+Math.imul(t^(t>>>7),t|61);return a+Math.floor(((t^(t>>>14))>>>0)/4294967296*(b-a+1));
+ };
+ const key=(x,z)=>(x+194)+','+(z+66),p=(x,z)=>({x:x+194,z:z+66,y:0});
+ const floor=new Set(),water=new Set(),rooms=[],halls=[];
+ const stamp=(x,z)=>{if(x>=0&&x<44&&z>=0&&z<44)floor.add(key(x,z));};
+ const room=(x,z,w,h,kind)=>{
+  rooms.push({...p(x,z),w,h,kind});
+  for(let dx=-w;dx<=w;dx++)for(let dz=-h;dz<=h;dz++)
+   if(Math.abs(dx)<w||Math.abs(dz)<h)stamp(x+dx,z+dz);
+  return [x,z];
+ };
+ const dig=(a,b,wide)=>{
+  halls.push({from:p(...a),to:p(...b)});
+  let [x,z]=a;const rx=Math.sign(b[0]-x),rz=Math.sign(b[1]-z);
+  if(rx&&rz)throw Error('Expected an orthogonal segment');
+  for(;;){
+   stamp(x,z);stamp(x-rz,z+rx);
+   if(wide)stamp(x+rz,z-rx);
+   if(x===b[0]&&z===b[1])break;
+   x+=rx;z+=rz;
+  }
+ };
+ const path=(a,b,wide=false)=>{
+  const mid=r(0,1)?[a[0],b[1]]:[b[0],a[1]];
+  dig(a,mid,wide);dig(mid,b,wide);
+ };
+ const startZ=r(8,13),main=[
+  room(4,startZ,2,2,'main'),
+  room(r(11,13),r(7,10),2,r(2,3),'main'),
+  room(r(11,14),r(16,19),r(2,3),2,'main'),
+  room(r(7,9),r(25,28),r(2,3),2,'main'),
+  room(r(14,17),r(29,33),2,r(2,3),'main')
+ ];
+ dig([0,startZ],main[0],true);
+ for(let i=1;i<main.length;i++)path(main[i-1],main[i],i>2);
+ const side=r(0,1)?room(r(4,6),r(34,38),2,2,'branch'):room(r(6,8),r(16,18),2,2,'branch');
+ path(side,side[1]>25?main[3]:main[2]);
+ // The lake, shoreline and overlook don't move when the tunnels reroll.
+ for(let x=19;x<=43;x++)for(let z=10;z<=36;z++){
+  if(((x-31)/12.7)**2+((z-23)/12.2)**2<=1)stamp(x,z);
+  if(((x-31.8)/8.8)**2+((z-23)/7.9)**2<=1){
+   const k=key(x,z);water.add(k);floor.delete(k);
+  }
+ }
+ path(main.at(-1),[22,29],true);
+ const lookout=p(42,24),portal=p(36,32),waterfall=p(37,12);
+ // A passage along the eastern bank curls behind the curtain of water.
+ const nook=room(r(36,38),r(8,9),2,2,'secret');
+ dig([40,19],[40,10],false);path([40,10],nook);
+ const chest=p(nook[0],nook[1]-1);
+ const actors=main.slice(1,4).map(([x,z],i)=>({...p(x+(i===1?1:-1),z-1),starEnemy:i,type:i===1?'monsterWoodRat':'monsterWoodBeetle',rot:r(0,3)}));
+ const mouth=p(0,startZ),outside=p(-1,startZ),spawn={...p(1,startZ),face:1};
+ const exitStand=(x,z)=>x===mouth.x&&Math.abs(z-mouth.z)<=1;
+ return {seed,floor,water,rooms,halls,lookout,portal,waterfall,chest,actors,
+  entrance:{mouth,spawn,outside,exitStand,exitEdge:(x,z,fx,fz)=>exitStand(fx,fz)&&x===fx-1&&z===fz}};
+}
+// END STARLAKE PLAN
+// BEGIN STARLAKE RUNTIME
+let frontierStarCurrent=null,frontierStarGpu=null;
+const frontierStarEnemy=o=>Number.isInteger(o?.starEnemy)&&frontierStarOwn(o.x,o.z);
+const frontierStarPlayer=()=>facilitySite?.id==='frontier'&&poiWalkActive&&poiWalkLevel===0&&frontierPlayCave&&frontierStarOwn(poiWalkX,poiWalkZ);
+const frontierStarCell=(x,z)=>!!frontierStarCurrent?.floor.has(Math.floor(x)+','+Math.floor(z));
+function frontierStarSeen(x,z){return frontierStarCell(x,z)||!!frontierStarCurrent?.water.has(x+','+z)}
+function frontierStarClearGpu(){
+ if(!frontierStarGpu)return;
+ for(const m of [frontierStarGpu.ground,frontierStarGpu.water,frontierStarGpu.falls,...frontierStarGpu.walls])if(m)gl.deleteBuffer(m.buf);
+ frontierStarGpu=null;
+}
+function frontierStarVisit(){
+ const data=frontierMeadowRead(),prev=frontierStarCurrent,seed=frontierVisitSeed(data.starSeed??0),p=frontierStarPlan(seed);
+ const k=poiHotbarRead(),kit=frontierDenRehome(k,{cells:p.floor,CHEST:p.chest,PORTAL:p.portal},frontierStarOwn,()=>false,p.entrance.spawn);
+ delete kit.frontierStarDead;delete kit[FRONTIER_STAR_CHEST];
+ if(!frontierMeadowWrite({...data,starSeed:seed}))return false;
+ frontierStarCurrent=p;
+ if(!poiEconomyWrite(kit)){frontierStarCurrent=prev;frontierMeadowWrite(data);return false}
+ for(const [o,s] of poiMonsterStates)if(frontierStarEnemy(o)){
+  poiEnemyPending.delete(s);poiMonsterWalkDue.delete(o);poiMonsterActorActive.delete(o);poiMonsterStates.delete(o);
+ }
+ frontierVisitSwapWorld(frontierStarEnemy,p.actors);
+ for(const o of p.actors)poiMonsterStates.set(o,poiCombatActorMake(o));
+ frontierStarClearGpu();frontierDenFields.clear();poiMonsterMeshDirty=true;
+ const prize=frontierBossPrizeGpu.get(FRONTIER_STAR_CHEST);
+ if(prize){gl.deleteBuffer(prize.base.buf);gl.deleteBuffer(prize.light.buf);frontierBossPrizeGpu.delete(FRONTIER_STAR_CHEST)}
+ poiLocalSurvey('frontier:0:star-lake').fill(0);poiMiniLast=null;poiLocalInvalidate();poiLocalDirty();poiLocalSave();
+ return true;
+}
+function frontierStarRemember(o){
+ const kit=poiHotbarRead(),ids=kit.frontierStarDead??[];
+ return ids.includes(o.starEnemy)||poiEconomyWrite({...kit,frontierStarDead:[...ids,o.starEnemy]});
+}
+function frontierStarChestReachable(){
+ const c=frontierStarCurrent?.chest;
+ return frontierStarPlayer()&&!pineAIActive&&c&&frontierRuinsFacesChest(poiWalkX,poiWalkZ,poiWalkFacing,c)&&!poiMonsterAt(c.x,c.z);
+}
+function frontierStarChestInit(){
+ if(!frontierStarChestReachable())return false;
+ const kit=poiHotbarRead();if(kit[FRONTIER_STAR_CHEST])return true;
+ const slots=Array(POI_CHEST_SIZE).fill(null),type=frontierStarCurrent.seed%3===0?'equipStoneMace':frontierStarCurrent.seed%3===1?'equipIronSword':'equipIronAxe';
+ slots[0]={type,count:1,durability:poiEquipmentDurabilityMax(type)};
+ slots[1]={type:POI_RECOVERY_POTION,count:2};
+ return poiEconomyWrite({...kit,[FRONTIER_STAR_CHEST]:{version:1,slots}});
+}
+// END STARLAKE RUNTIME
+// BEGIN STARLAKE ART
+const frontierStarAmbient=Object.freeze([.88,.94,1.08]);
+function frontierStarArtBuild(plan,g=frontierBurrowFloor()){
+ const ground=mesh(),water=mesh(),falls=mesh(),walls=Array.from({length:4},()=>mesh());
+ const dirs=[[0,-1],[1,0],[0,1],[-1,0]],key=(x,z)=>x+','+z,parse=k=>k.split(',').map(Number);
+ const n=(x,z)=>surfaceNoise(x+.79,z+15.8);
+ const tint=(rgb,s)=>rgb.map(v=>v*s);
+ const grad=(m,a,b,c,ca,cb,cc)=>{tri(m,a,b,c,ca);m.c.splice(-6,6,...cb,...cc)};
+ const fx=plan.waterfall.x, fz=plan.waterfall.z+3.25,yWater=g-.16;
+ const waterHue=(x,z)=>{
+  const dx=(x-226.3)/8.8,dz=(z-89.5)/7.9,ed=Math.min(1,Math.max(0,1.10-Math.hypot(dx,dz))*3);
+  const glow=.09*Math.exp(-((x-fx-.5)**2+(z-fz)**2)/19)+.018*Math.sin(x*.56+z*.83);
+  return [.08+glow+.058*ed,.23+glow+.095*ed,.34+glow+.14*ed];
+ };
+ const split=(m,x,z,y,c)=>{
+  const a=[x,y,z],b=[x,y,z+1],d=[x+1,y,z+1],e=[x+1,y,z],ca=c(x,z),cb=c(x,z+1),cd=c(x+1,z+1),ce=c(x+1,z);
+  grad(m,a,b,d,ca,cb,cd);grad(m,a,d,e,ca,cd,ce);
+ };
+ for(const k of plan.water){
+  const [x,z]=parse(k);split(water,x,z,yWater,waterHue);
+  const r=n(x,z),f=n(z,x);
+  if(r>.47){
+   const tx=x+.12+f*.66,tz=z+.08+r*.77,h=yWater+.012,len=.055+.29*f;
+   const c=r>.91?[.54,.83,.96]:r>.73?[.29,.56,.66]:[.16,.38,.51];
+   quad(water,[tx-len*.4,h,tz],[tx-len*.25,h,tz+.026],[tx+len,h,tz+.036],[tx+len*.72,h,tz+.011],c);
+  }
+ }
+ const crystal=(m,x,z,base,h,w,lean,seed)=>{
+  const sides=5,ring=[],foot=[];
+  for(let i=0;i<sides;i++){
+   const a=i*2*Math.PI/sides+seed*5,dx=Math.cos(a)*w,dz=Math.sin(a)*w;
+   foot.push([x+dx*.78,base,z+dz*.78]);ring.push([x+dx+lean*.55,base+h*.73,z+dz-.045]);
+  }
+  const tip=[x+lean,base+h,z-.079];
+  for(let i=0;i<sides;i++){
+   const j=(i+1)%sides,b=.62+(i%3)*.17;
+   quad(m,foot[i],foot[j],ring[j],ring[i],tint([.19,.49,.67],b));
+   tri(m,ring[i],ring[j],tip,tint([.41,.78,.92],b));
+  }
+ };
+ const rocky=new Set(),rockTones=[[.26,.31,.38],[.28,.32,.39],[.30,.34,.40]];
+ const splitEdge=(m,x,z,dx,dz,base,high,c)=>{
+  const sx=x+.5+dx*.501,sz=z+.5+dz*.501,cx=-dz*.5,cz=dx*.5;
+  const pos=(s,y,deep)=>[sx+cx*s+dx*deep,y,sz+cz*s+dz*deep];
+  quad(m,pos(-1,base,0),pos(1,base,0),pos(1,high,.31),pos(-1,high,.31),c);
+  quad(m,pos(-1,high,.31),pos(1,high,.31),pos(1,high+.08,.65),pos(-1,high+.08,.65),tint(c,1.12));
+ };
+ for(const k of plan.floor){
+  const [x,z]=parse(k),rand=n(x,z),byLake=dirs.some(([u,v])=>plan.water.has(key(x+u,z+v))),floor=g+.017;
+  const palette=(u,v)=>{const a=.032*Math.sin(u*1.1+v*.8)+.018*Math.cos(v*.37-u*.67);
+   return byLake?[.29+a,.345+a,.393+a]:[.27+a,.28+a,.33+a];};
+  split(ground,x,z,floor,palette);
+  const init=plan.entrance.mouth;
+  if(x<=init.x+4&&Math.abs(z-init.z)<=1&&z===init.z){
+   for(const j of [.25,.75])quad(ground,[x,floor+.008,z+j],[x,floor+.008,z+j+.044],[x+1,floor+.008,z+j+.044],[x+1,floor+.008,z+j],[.39,.35,.31]);
+  }else if(byLake&&rand>.67&&Math.abs(x-plan.lookout.x)+Math.abs(z-plan.lookout.z)>1){
+   // Tiny edge shards are decoration, not independent blocking bodies.
+   crystal(ground,x+.28,z+.38,floor,.19+rand*.17,.084,.014,rand);
+  }
+  for(const [face,[dx,dz]] of dirs.entries()){
+   const u=x+dx,v=z+dz,at=key(u,v);
+   if(plan.floor.has(at)||plan.entrance.exitEdge(u,v,x,z))continue;
+   if(plan.water.has(at)){
+    const bx=x+.5+dx*.50,bz=z+.5+dz*.50,sx=dz*.5,sz=dx*.5;
+    quad(ground,[bx-sx,yWater,bz+sz],[bx+sx,yWater,bz-sz],[bx+sx,floor,bz-sz],[bx-sx,floor,bz+sz],[.24,.36,.40]);
+    continue;
+   }
+   const m=walls[face],q=n(u,v),t=n(v,u),tone=rockTones[Math.floor(q*3)%3],high=g+1.36+q*.72;
+   splitEdge(m,x,z,dx,dz,floor,high,tone);
+   if(rocky.has(at))continue;rocky.add(at);
+   const xx=u+.5,zz=v+.5;
+   if(q>.62||q>.47&&x>216){
+    const h=.55+.71*t;
+    crystal(m,xx,zz,high-.24,h,.14+t*.13,.18,t);
+    crystal(m,xx+.20,zz-.17,high-.20,h*.65,.11,-.10,q);
+    crystal(m,xx-.22,zz+.09,high-.21,h*.71,.14,-.17,q+.5);
+   }else if(q<.43){
+    naturalRock(m,xx,high-.26,zz,.37+t*.15,.44+q*.55,.39,tint(tone,.96),u*43+v);
+   }
+  }
+ }
+ // Raised quartz shelves catch light; thin blue facets across the basin
+ // approximate broken crystal reflections without a second scene render.
+ for(let i=0;i<49;i++){
+  const x=221.4+n(i,fx)*11.0,z=83.0+n(fx,i)*9.8;
+  if(!plan.water.has(key(Math.floor(x),Math.floor(z))))continue;
+  const y=yWater+.024,s=.055+n(i,fz)*.21,tw=n(i+1,fz)*.12;
+  quad(water,[x-s,y,z],[x+s,y,z+tw],[x+s*.41,y,z+.047+tw],[x-s*.82,y,z+.049],[.30+i%3*.071,.63+i%3*.065,.78+i%3*.063]);
+  if(i%3!==2){
+   const c=[.64+i%3*.10,.84+i%3*.10,.97+i%3*.09],rr=.023+tw*.23,sub=y+.004;
+   quad(water,[x-rr*1.45,sub,z],[x,sub,z+rr],[x+rr*1.45,sub,z],[x,sub,z-rr],c);
+  }
+ }
+ for(let i=0;i<8;i++){
+  const x=fx-.37+i*.26,w=.25,top=g+2.60+n(i,5)*.22,middle=g+1.17,low=yWater+.025,off=i%2?.085:-.08;
+  const a=[x,top,fz-.32],b=[x+w,top,fz-.34],c=[x+w+off,middle,fz+.11],d=[x+off,middle,fz+.095];
+  const e=[x+w+.18,low,fz+1.59],f=[x-.15,low,fz+1.56];
+  const blue=tint([.42,.72,.86],.84+i%3*.09),pale=tint([.57,.81,.89],.80+i%3*.10);
+  grad(falls,a,b,c,blue,blue,pale);grad(falls,a,c,d,blue,pale,pale);
+  grad(falls,d,c,e,pale,pale,blue);grad(falls,d,e,f,pale,blue,blue);
+ }
+ for(let i=0;i<23;i++){
+  const q=n(i+30,fx),t=n(i,fz),x=fx-.44+q*2.03,z=fz+1.43+t*.86,yy=yWater+.037;
+  const r=.024+t*.15;
+  tri(falls,[x-r,yy,z-.022],[x+r,yy,z-.019],[x+r*.26,yy+.033,z+.061],[.66+q*.13,.83+q*.09,.90+t*.07]);
+ }
+ return {ground,water,falls,walls};
+}
+function frontierStarArtDraw(plan,vp,now){
+ if(!plan)return;
+ if(frontierStarGpu?.plan!==plan){
+  frontierStarClearGpu();
+  const a=frontierStarArtBuild(plan),put=m=>m.p.length?upload(m):null;
+  frontierStarGpu={plan,ground:put(a.ground),water:put(a.water),falls:put(a.falls),walls:a.walls.map(put)};
+ }
+ const a=frontierStarGpu;
+ draw(a.ground,vp);
+ for(const face of frontierDenViewWalls())if(a.walls[face])draw(a.walls[face],vp);
+ gl.uniform2f(loc.frontierWater,2,(now/1000)%300);
+ try{draw(a.water,vp);draw(a.falls,vp)}finally{gl.uniform2f(loc.frontierWater,0,0)}
+}
+// END STARLAKE ART
 const FRONTIER_MEADOW_CHEST_KEYS=['frontierMeadowChest','frontierMeadowChest2'];
 function frontierMeadowChestKey(key){return FRONTIER_MEADOW_CHEST_KEYS.includes(key)}
 const FRONTIER_MEADOW_START={x:137,z:30},FRONTIER_MEADOW_CARDINAL=[[0,-1],[1,0],[0,1],[-1,0]];
@@ -50503,7 +50792,7 @@ function frontierMeadowSaveDecode(raw){
  const uint=(v,f=0)=>Number.isInteger(v)&&v>=0&&v<=0xffffffff?v:f;
  const turn=v=>Number.isInteger(v)&&v>=0&&v<=3?v:null;
  const keys=v=>Array.isArray(v)?v.slice(0,200).filter(k=>typeof k==='string'&&/^\d{3},\d{1,2}$/.test(k)):[];
- return {v:1,seed:raw.seed,runSeed,births,dead,guildSeed:uint(raw.guildSeed,raw.seed),denSeed:uint(raw.denSeed),meadowDungeonSeed:uint(raw.meadowDungeonSeed),woodSeed:uint(raw.woodSeed),denTurn:turn(raw.denTurn),woodTurn:turn(raw.woodTurn),grandSeed:uint(raw.grandSeed),grandLayout:raw.grandLayout===2?2:1,forestSeed:uint(raw.forestSeed),
+ return {v:1,seed:raw.seed,runSeed,births,dead,guildSeed:uint(raw.guildSeed,raw.seed),denSeed:uint(raw.denSeed),starSeed:uint(raw.starSeed),meadowDungeonSeed:uint(raw.meadowDungeonSeed),woodSeed:uint(raw.woodSeed),denTurn:turn(raw.denTurn),woodTurn:turn(raw.woodTurn),grandSeed:uint(raw.grandSeed),grandLayout:raw.grandLayout===2?2:1,forestSeed:uint(raw.forestSeed),
   meadowSafe:keys(raw.meadowSafe),forestSafe:keys(raw.forestSafe),lineaBirths:Number.isInteger(raw.lineaBirths)?Math.max(0,Math.min(3,raw.lineaBirths)):0};
 }
 function frontierMeadowWrite(next){
@@ -50877,6 +51166,7 @@ function frontierSite(){
  const woodSeed=visits.woodSeed??0;
  frontierWoodPlanCurrent=frontierWoodPlan(woodSeed,10+Math.floor(frontierMeadowRandom(woodSeed^0x17231)()*3)*2,visits.woodTurn??null);
  frontierMeadowDungeon=frontierMeadowDungeonMake(visits.meadowDungeonSeed??0);
+ frontierStarCurrent=frontierStarPlan(visits.starSeed??0);
  const world=[],fenceCells=[],buildings=FRONTIER_HOMES.map(p=>{
   const {dx,...b}=p,door=b.frontNorth?{x:b.x1+b.x2-dx,z:b.z1}:{x:dx,z:b.z2},footprint=[];
   const furniture=frontierRotateFurniture(b,b.furniture);
@@ -50924,6 +51214,7 @@ function frontierSite(){
   if(kind!=='grass')put(x,z,kind);
  }
  for(const o of frontierMeadowDungeon.actors)put(o.x,o.z,o.type,o.rot,0,{meadowDungeonId:o.meadowDungeonId});
+ for(const o of frontierStarCurrent.actors)world.push(o);
  for(const b of buildings)for(const [x,z,,type] of b.furniture)put(x,z,type);
  for(const [x,z,type,rot] of [[43,24,'lantern',0],
     [47,33,'wellStone',0],[46,32,'benchWood',2],[44,27,'benchWood',0],
@@ -50954,7 +51245,7 @@ function frontierSite(){
 // BEGIN FRONTIER SINGLE SECTOR
 // BEGIN FRONTIER VARIABLE SECTOR BOUNDS
 // Stable travel-card coordinates and world coordinates stay unchanged.
-const FRONTIER_SECTOR_WINDOWS=Object.freeze({'64,0':Object.freeze([88,12,128,52]),'128,0':Object.freeze([128,14,160,46])});
+const FRONTIER_SECTOR_WINDOWS=Object.freeze({'64,0':Object.freeze([88,12,128,52]),'128,0':Object.freeze([128,14,160,46]),'192,64':FRONTIER_STAR_BOX});
 function frontierSectorBounds(x,z){
  return FRONTIER_SECTOR_WINDOWS[x+','+z]??[x,z,x+FRONTIER_SECTOR,z+FRONTIER_SECTOR];
 }
@@ -50973,7 +51264,7 @@ function frontierSectorAt(x,z){
 // world map without moving the player into a missing terrain cell.
 function frontierCropExit(x,z,fromX,fromZ){
  if(!frontierGameFixed()||poiWalkLevel!==0||Math.abs(x-fromX)+Math.abs(z-fromZ)!==1)return false;
- if(frontierPlayCave)return frontierDenExitEdge(x,z,fromX,fromZ)||frontierWoodExitEdge(x,z,fromX,fromZ)||frontierGrandCurrent?.entrance.exitEdge(x,z,fromX,fromZ)||frontierMeadowDungeon?.entrance.exitEdge(x,z,fromX,fromZ);
+ if(frontierPlayCave)return frontierDenExitEdge(x,z,fromX,fromZ)||frontierWoodExitEdge(x,z,fromX,fromZ)||frontierGrandCurrent?.entrance.exitEdge(x,z,fromX,fromZ)||frontierMeadowDungeon?.entrance.exitEdge(x,z,fromX,fromZ)||frontierStarCurrent?.entrance.exitEdge(x,z,fromX,fromZ);
  const from=frontierSectorAt(fromX,fromZ);
  return !!from&&(x<from[0]||x>=from[2]||z<from[1]||z>=from[3]);
 }
@@ -50995,6 +51286,7 @@ const FRONTIER_WORLD_DESTINATIONS=Object.freeze({
  '64,0':['リネア村','village',115,30,3],
  '128,0':['川辺の野原','road',137,30,1],
  '192,0':[FRONTIER_GRAND_NAME,'temple',193,7,1],
+ '192,64':[FRONTIER_STAR_NAME,'ruins',195,76,1],
  '64,-64':['北の水辺','water',105,-5,0],
  '128,64':['枯れ野の石門','ruins',149,67,2]
 });
@@ -51008,7 +51300,7 @@ function frontierWorldPermitted(){
  if(!frontierGameFixed()||poiPlayerDying()||frontierSectorLoading)return false;
  if(frontierBossExitHere())return true;
  if(poiWalkLevel!==0)return false;
- if(frontierPlayCave)return frontierDenExitStand(poiWalkX,poiWalkZ)||frontierWoodExitStand(poiWalkX,poiWalkZ)||frontierGrandCurrent?.entrance.exitStand(poiWalkX,poiWalkZ)||frontierMeadowDungeon?.entrance.exitStand(poiWalkX,poiWalkZ);
+ if(frontierPlayCave)return frontierDenExitStand(poiWalkX,poiWalkZ)||frontierWoodExitStand(poiWalkX,poiWalkZ)||frontierGrandCurrent?.entrance.exitStand(poiWalkX,poiWalkZ)||frontierMeadowDungeon?.entrance.exitStand(poiWalkX,poiWalkZ)||frontierStarCurrent?.entrance.exitStand(poiWalkX,poiWalkZ);
  return !poiWalkIndoor()&&!frontierSouthVestibuleCell(poiWalkX,poiWalkZ)&&!poiSacredInteriorPlayer();
 }
 function frontierWorldAnchor(dest){
@@ -51023,7 +51315,7 @@ function frontierSectorLocation(x,z){
  return {name:FRONTIER_WORLD_DESTINATIONS[key]?.[0]??facilitySite.name,...frontierSectorDifficulty(key)};
 }
 function frontierSectorDifficulty(key){
- const difficulty=key==='64,0'?0:key==='192,0'?10:key==='128,64'||key==='0,0'||key===FRONTIER_WOOD_SECTOR?2:1;
+ const difficulty=key==='64,0'?0:key==='192,0'?10:key===FRONTIER_STAR_KEY?4:key==='128,64'||key==='0,0'||key===FRONTIER_WOOD_SECTOR?2:1;
  return {difficulty,stars:'★'.repeat(difficulty)+'☆'.repeat(10-difficulty)};
 }
 function frontierWorldDisplayName(dest){
@@ -51031,6 +51323,7 @@ function frontierWorldDisplayName(dest){
 }
 function frontierWorldLanding(dest){
  const p=frontierWorldAnchor(dest);
+ if(dest.x===192&&dest.z===64)return {...p,...frontierStarCurrent.entrance.spawn,cave:true};
  if(dest.x===128&&dest.z===0)return {...p,...frontierMeadowDungeon.entrance.spawn,cave:true};
  if(dest.x===192&&dest.z===0)return {...p,...frontierGrandCurrent.entrance.spawn,cave:true};
  if(dest.x===64&&dest.z===64)return {...p,...frontierWoodEntrance().spawn,cave:true};
@@ -51194,7 +51487,7 @@ function frontierWorldOpen(preferred=null){
  for(const [x,z] of targets){
   const p={x,z,here:x===cx&&z===cz},key=x+','+z,name=frontierWorldDisplayName(p),b=document.createElement('button');
   const {difficulty}=frontierSectorDifficulty(key);
-  const rank=[FRONTIER_GUILD_MEADOW,FRONTIER_GUILD_RUINS,FRONTIER_GUILD_WOOD,FRONTIER_GUILD_ORVAS].find(q=>q.sector===key)?.rank;
+  const rank=key===FRONTIER_STAR_KEY?'D':[FRONTIER_GUILD_MEADOW,FRONTIER_GUILD_RUINS,FRONTIER_GUILD_WOOD,FRONTIER_GUILD_ORVAS].find(q=>q.sector===key)?.rank;
   const rankText=!difficulty?'安全':rank?rank+'ランク':'難易度 '+difficulty;
   b.className='fwTile';b.type='button';b.dataset.sector=key;
   const label=document.createElement('span');label.className='fwName';label.textContent=name;
@@ -51217,7 +51510,7 @@ function frontierSectorBegin(dx,dz,now){
  if(!frontierGameFixed()||poiWalkLevel!==0)return false;
  if(frontierSectorLoading||frontierWorldOpenNow())return true;
  if(frontierPlayCave){
-  if(!frontierDenExitEdge(poiWalkX+dx,poiWalkZ+dz,poiWalkX,poiWalkZ)&&!frontierWoodExitEdge(poiWalkX+dx,poiWalkZ+dz,poiWalkX,poiWalkZ)&&!frontierGrandCurrent?.entrance.exitEdge(poiWalkX+dx,poiWalkZ+dz,poiWalkX,poiWalkZ)&&!frontierMeadowDungeon?.entrance.exitEdge(poiWalkX+dx,poiWalkZ+dz,poiWalkX,poiWalkZ))return false;
+  if(!frontierDenExitEdge(poiWalkX+dx,poiWalkZ+dz,poiWalkX,poiWalkZ)&&!frontierWoodExitEdge(poiWalkX+dx,poiWalkZ+dz,poiWalkX,poiWalkZ)&&!frontierGrandCurrent?.entrance.exitEdge(poiWalkX+dx,poiWalkZ+dz,poiWalkX,poiWalkZ)&&!frontierMeadowDungeon?.entrance.exitEdge(poiWalkX+dx,poiWalkZ+dz,poiWalkX,poiWalkZ)&&!frontierStarCurrent?.entrance.exitEdge(poiWalkX+dx,poiWalkZ+dz,poiWalkX,poiWalkZ))return false;
   frontierWorldOpen();return true;
  }
  const x=poiWalkX+dx,z=poiWalkZ+dz,a=frontierActiveSector(),b=frontierSectorAt(x,z);
@@ -51251,6 +51544,7 @@ function frontierSectorFrame(now){
   else if(dropKey===FRONTIER_MEADOW_DUNGEON_KEY)frontierMeadowDungeonVisit(now);
   else if(dropKey===FRONTIER_GRAND_KEY)frontierGrandVisit(now);
   else if(dropKey===FRONTIER_WOOD_SECTOR)frontierWoodVisit(now);
+  else if(dropKey===FRONTIER_STAR_KEY&&!frontierStarVisit()){frontierSectorCancel();toast('洞窟の準備を保存できなかった。');return false}
   const p=(t.point.cave?frontierWorldLanding(t.dest):frontierWorldEdgeArrival(t.dest))??t.point;
   poiOtherworldTravelSerial++;poiOtherworldKeyReleaseRequired=true;
   poiIceFangCasts=poiIceFangCasts.filter(q=>q.source==='resident');
@@ -51284,7 +51578,7 @@ function frontierFixedCamera(q,x,z,y,reach){
 // its sector alongside its terrain, never an authored location-specific wall.
 const FRONTIER_SURFACE_SECTIONS=Object.freeze([
  ...Array.from({length:FRONTIER_W/FRONTIER_SECTOR},(_,i)=>Object.freeze([i*FRONTIER_SECTOR,0])),
- Object.freeze([FRONTIER_NORTH_X,FRONTIER_NORTH_EDGE]),Object.freeze([128,64]),Object.freeze([64,64])
+ Object.freeze([FRONTIER_NORTH_X,FRONTIER_NORTH_EDGE]),Object.freeze([128,64]),Object.freeze([64,64]),Object.freeze([192,64])
 ]);
 const frontierSectionIndexCache=new WeakMap();
 const frontierSurfaceSections=(site=facilitySite)=>site?.surfaceSections??FRONTIER_SURFACE_SECTIONS;
@@ -57167,10 +57461,17 @@ function workshopResumeDecode(raw){
  const field=deep&&d.play===true&&!Object.hasOwn(d,'region')&&p?.y===0&&
   typeof poiSquareFieldAt==='function'&&poiSquareFieldAt(p.x,p.z);
  const position=p&&Number.isInteger(p.x)&&p.x>=0&&Number.isInteger(p.z)&&(p.z>=0||d.id==='frontier'&&p.y===0&&p.cave!==true&&frontierNorthOwn(p.x,p.z))&&
-  (field||d.id==='frontier'&&p.x<FRONTIER_W&&(p.z<FRONTIER_H||frontierSouthOwn(p.x,p.z))||p.x<MAX_MAP&&(p.z<MAX_MAP||deep&&p.y>=0&&(p.x<POI_SACRED_DEPTH_W||typeof poiSnowSleeveOwn==='function'&&poiSnowSleeveOwn(p.x,p.z))&&p.z<POI_SACRED_DEPTH_H))&&
+  (field||d.id==='frontier'&&p.x<FRONTIER_W&&(p.z<FRONTIER_H||frontierSouthOwn(p.x,p.z)||frontierStarOwn(p.x,p.z))||p.x<MAX_MAP&&(p.z<MAX_MAP||deep&&p.y>=0&&(p.x<POI_SACRED_DEPTH_W||typeof poiSnowSleeveOwn==='function'&&poiSnowSleeveOwn(p.x,p.z))&&p.z<POI_SACRED_DEPTH_H))&&
   Number.isInteger(p.y)&&p.y>=-1&&p.y<=MAX_LEVEL&&Number.isInteger(p.facing)&&p.facing>=0&&p.facing<4
   ?{x:p.x,z:p.z,y:p.y,facing:p.facing,...(d.id==='frontier'&&typeof p.cave==='boolean'?{cave:p.cave}:{}),...(d.id==='frontier'&&p.y===0&&frontierResumeFine(p)?{subX:p.subX,subZ:p.subZ}:{})}:null;
  let shifted=d.id==='frontier'&&d.frontierWest!==1?frontierShiftPoint(position):position;
+ if(d.id==='frontier'&&shifted&&frontierStarOwn(shifted.x,shifted.z)){
+  const seed=frontierMeadowRead().starSeed??0;
+  if(shifted.cave!==true||d.starSeed!==seed){
+   const {x,z,face}=frontierStarPlan(seed).entrance.spawn;
+   shifted={...shifted,x,z,facing:face,cave:true,subX:undefined,subZ:undefined};
+  }
+ }
  if(d.id==='frontier'&&shifted?.x<64&&(d.denSeed??0)!==(frontierMeadowRead().denSeed??0)){
   const {x,z,face}=frontierDungeonEntrance(frontierMeadowRead().denTurn??null).spawn;
   shifted={...shifted,x,z,facing:face,cave:true,subX:undefined,subZ:undefined};
@@ -57248,7 +57549,7 @@ function workshopResumeWrite(override,seed=false){
   ...(facilitySite?.id==='snowpass'&&poiWalkActive?{region:'snowpass',regionHp:poiPlayerDeath?poiPlayerMaxHp():poiPlayerHP,regionMaxHp:poiPlayerMaxHp()}:{}),
   ...(facilitySite?.id==='base'?(facilitySite.townOffset>=22?{townLayout:5,townMapHeight:facilitySite.map.height}:{townLayout:facilitySite.townOffset?4:3}):{}),
   ...(facilitySite?.id==='base'&&facilitySite.davidTemple?.depth===1?{templeDepth:1}:{}),
-  ...(facilitySite?.id==='frontier'?{frontierWest:1,denSeed:frontierMeadowRead().denSeed??0,woodSeed:frontierMeadowRead().woodSeed??0,meadowDungeonSeed:frontierMeadowRead().meadowDungeonSeed??0,grandSeed:frontierMeadowRead().grandSeed??0,...(poiWalkActive?{frontierHp:poiPlayerDeath&&!poiPlayerDeath.relocated?poiPlayerMaxHp():Math.max(1,Math.min(poiPlayerMaxHp(),Math.round(poiPlayerHP))),frontierMaxHp:poiPlayerMaxHp()}:{})}:{}),
+  ...(facilitySite?.id==='frontier'?{frontierWest:1,starSeed:frontierMeadowRead().starSeed??0,denSeed:frontierMeadowRead().denSeed??0,woodSeed:frontierMeadowRead().woodSeed??0,meadowDungeonSeed:frontierMeadowRead().meadowDungeonSeed??0,grandSeed:frontierMeadowRead().grandSeed??0,...(poiWalkActive?{frontierHp:poiPlayerDeath&&!poiPlayerDeath.relocated?poiPlayerMaxHp():Math.max(1,Math.min(poiPlayerMaxHp(),Math.round(poiPlayerHP))),frontierMaxHp:poiPlayerMaxHp()}:{})}:{}),
   tag:route==='editor'||route==='map-play'?workshopResumeTag:null,
   position:poiWalkActive?(typeof poiPlayerDeath!=='undefined'&&poiPlayerDeath&&!poiPlayerDeath.relocated?
    {...poiPlayerDeathSpawn(poiPlayerDeath.checkpoint),...(facilitySite?.id==='frontier'?{cave:false}:{})}:{x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,facing:poiWalkFacing,...(facilitySite?.id==='frontier'?{cave:frontierPlayCave}:{}),...frontierResumeCoordinates()}):null,
@@ -57303,6 +57604,13 @@ function workshopResumeRestorePosition(p){
   if(landing)p={...p,x:landing.x,z:landing.z,subX:undefined,subZ:undefined,cave:false};
  }
  if(facilitySite?.id==='frontier'&&p?.y===0&&frontierWoodOwn(p.x,p.z))p={...p,cave:true};
+ if(facilitySite?.id==='frontier'&&p?.y===0&&frontierStarOwn(p.x,p.z)){
+  if(!frontierStarCell(p.x,p.z)){
+   const {x,z,face}=frontierStarCurrent.entrance.spawn;
+   p={...p,x,z,facing:face,subX:undefined,subZ:undefined};
+  }
+  p={...p,cave:true};
+ }
  if(facilitySite?.id==='frontier'&&p?.y===0&&frontierMeadowIn(p.x,p.z)){
   if(!frontierMeadowDungeonCell(p.x,p.z)){
    const {x,z,face}=frontierMeadowDungeon.entrance.spawn;
@@ -59737,13 +60045,21 @@ function poiPlayerNpcBodyClip(now){
   if(Math.abs(b.x-poiWalkX)>3||Math.abs(b.z-poiWalkZ)>3)continue;
   bodies.push({x:b.x,z:b.z,tx,tz});
  }
+ // Tile reservations alone cannot keep an analog foot point outside a
+ // circular body while allowing the visibly empty diagonal approach.
+ if(facilitySite?.id==='frontier'&&frontierPlayCave)for(const [o,s] of poiMonsterStates){
+  if(!s.dragonBody||s.hp<=0||o.y!==poiWalkLevel||!frontierPlaneMatches(s.frontierRuins))continue;
+  const d=poiDragonPosition(s,now);
+  if(Math.abs(d.x-poiWalkX)>4||Math.abs(d.z-poiWalkZ)>4)continue;
+  bodies.push({x:d.x,z:d.z,tx:d.x,tz:d.z,r:POI_DRAGON_BODY+POI_FREE_RADIUS});
+ }
  if(!bodies.length)return null;
  return (p,q,next,swap)=>{
   for(const b of bodies){
    const a=swap?b.z:b.x,end=swap?b.tz:b.tx;
    const u=swap?b.x:b.z,v=swap?b.tx:b.tz;
    const lateral=q-Math.max(Math.min(u,v),Math.min(Math.max(u,v),q));
-   const r2=POI_PLAYER_NPC_CLEARANCE**2-lateral*lateral;
+   const r2=(b.r??POI_PLAYER_NPC_CLEARANCE)**2-lateral*lateral;
    if(r2<=POI_PLAYER_NPC_EPS)continue;
    const r=Math.sqrt(r2),lo=Math.min(a,end)-r,hi=Math.max(a,end)+r;
    if(p<=lo+POI_PLAYER_NPC_EPS&&next>lo)next=Math.max(p,lo);
