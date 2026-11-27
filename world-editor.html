@@ -1755,7 +1755,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v481）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v482）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="2500" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -22915,10 +22915,11 @@ function poiHotbarRead(){
  if(facilitySite?.id==='frontier'){
   const south=frontierSouthDefeatsDecode(saved.southDefeats);if(south.length)kit.southDefeats=south;
   if(['expedition','other'].includes(saved.southClearBy))kit.southClearBy=saved.southClearBy;
-  if(saved.frontierDenLayout===1&&saved.frontierRuinsCleared===true)kit.frontierRuinsCleared=true;
-  const defeated=frontierRuinsDefeatsDecode(saved.frontierDenLayout===1?saved.frontierRuinsDefeats:null);if(defeated.length)kit.frontierRuinsDefeats=defeated;
-  if(saved.frontierDenLayout===1&&saved.frontierRuinsLootPlaced===true)kit.frontierRuinsLootPlaced=true;
-  const chest=poiChestDecode(saved.frontierRuinsChest);if(chest)kit.frontierRuinsChest=chest;
+  const denCurrent=saved.frontierDenLayout===1&&(saved.frontierDenVisitSeed??0)===(frontierMeadowRead().denSeed??0);
+  if(denCurrent&&saved.frontierRuinsCleared===true)kit.frontierRuinsCleared=true;
+  const defeated=frontierRuinsDefeatsDecode(denCurrent?saved.frontierRuinsDefeats:null);if(defeated.length)kit.frontierRuinsDefeats=defeated;
+  if(denCurrent&&saved.frontierRuinsLootPlaced===true)kit.frontierRuinsLootPlaced=true;
+  const chest=poiChestDecode(saved.frontierRuinsChest);if(chest&&denCurrent)kit.frontierRuinsChest=chest;
   const orvasChest=poiChestDecode(saved.frontierOrvasChest);if(orvasChest)kit.frontierOrvasChest=orvasChest;
   if(saved.frontierSouthLootPlaced===true)kit.frontierSouthLootPlaced=true;
   for(const key of FRONTIER_MEADOW_CHEST_KEYS){
@@ -23076,6 +23077,7 @@ function poiHotbarSave(kit=poiHotbarState){
    ...(kit.frontierMeadowChest2?{frontierMeadowChest2:kit.frontierMeadowChest2}:{}),
    ...(kit.frontierSurvey?{frontierSurvey:kit.frontierSurvey}:{}),
    frontierDenLayout:1,
+   ...(facilitySite?.id==='frontier'?{frontierDenVisitSeed:frontierMeadowRead().denSeed??0}:{}),
    ...(kit.frontierGuildBoard?{frontierGuildBoard:kit.frontierGuildBoard,frontierGuildAttemptVersion:1}:{}),
    ...(kit.frontierGuildRun?{frontierGuildRun:kit.frontierGuildRun}:{}),
    ...(kit.guildMembers?{guildMembers:kit.guildMembers}:{}),
@@ -24474,7 +24476,7 @@ function poiInventoryReadDrops(raw){
   const c=poiInventorySanitizeCell({...d,count}),isWeapon=poiHotbarWeaponForType(d.type)&&!poiRepeatableMonsterWeapon(d.type);
   if(!c||seen.has(key)||isWeapon&&unique.has(d.type))continue;
   if(isWeapon)unique.add(d.type);seen.add(key);
-  out.push({type:d.type,x:d.x,z:d.z,y:d.y,...(d.region==='snowpass'?{region:d.region}:{}),...(typeof d.frontierCave==='boolean'?{frontierCave:d.frontierCave}:{}),...(count>1?{count}:null),...(c.durability?{durability:c.durability}:null),...(c.charges?{charges:c.charges}:null)});
+  out.push({type:d.type,x:d.x,z:d.z,y:d.y,...(d.region==='snowpass'?{region:d.region}:{}),...(typeof d.frontierCave==='boolean'?{frontierCave:d.frontierCave}:{}),...(d.frontierDenStock===true&&d.y===0&&d.x<64?{frontierDenStock:true}:{}),...(count>1?{count}:null),...(c.durability?{durability:c.durability}:null),...(c.charges?{charges:c.charges}:null)});
  }
  return out;
 }
@@ -31726,7 +31728,7 @@ function frontierGuildBoardDecode(raw){
 function frontierGuildBoard(kit){return kit.frontierGuildBoard??frontierGuildBoardDecode(null)}
 function frontierGuildNewBoard(board,rank=poiHotbarState?.adventureRank){
  const cycle=board.cycle+1,day=board.nextDay||poiTownClockSnapshot().day;
- const rng=frontierMeadowRandom((frontierMeadowRead().seed^Math.imul(cycle,0x9e3779b9)^day)>>>0);
+ const rng=frontierMeadowRandom(((frontierMeadowRead().guildSeed??frontierMeadowRead().seed)^Math.imul(cycle,0x9e3779b9)^day)>>>0);
  const kinds=Object.keys(FRONTIER_GUILD_ROTATION),offers=[];
  const base=Math.max(0,POI_ADVENTURE_RANKS.indexOf(poiAdventureRankDecode(rank)));
  const higher=Math.min(base+1,POI_ADVENTURE_RANKS.length-1);
@@ -34126,7 +34128,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v481',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v482',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -34241,7 +34243,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v481';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v482';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -34456,7 +34458,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v481',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v482',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -38522,7 +38524,7 @@ function poiLocalAtlasCamera(b,r,zoom=1,cx,cz){
  return {zoom:n,scale,cx:center(cx,b.x1,b.x2,width),cz:center(cz,b.z1,b.z2,height),width,height};
 }
 function poiLocalAtlasBounds(f){
- if(f.frontierCave)return {x1:0,z1:7,x2:52,z2:59,global:false};
+ if(f.frontierCave)return {x1:0,z1:0,x2:57,z2:59,global:false};
  const id=facilitySite?.id,global=f.y===0&&!f.realm&&(poiSquareFieldSite(facilitySite)||id==='snowpass');
  if(global){const side=poiOverlandSquareStatus().side;return {x1:0,z1:0,x2:side,z2:side,global}}
  const b=f.realm&&facilitySite?.[f.realm]?.bounds;
@@ -40649,7 +40651,7 @@ function frontierShiftPoint(p,by=FRONTIER_WEST_OFFSET){
 }
 // Authored west-sector den. Only the three main rooms connect entrance to
 // boss; the study and collapsed passage are optional out-and-back branches.
-const FRONTIER_RUINS=(()=>{
+const FRONTIER_RUINS_ORIGINAL=(()=>{
  const cells=new Set(),MOBS=[],groups=[];
  const P=(x,z)=>({x,z,y:0});
  const add=(kind,segments,points)=>{
@@ -40669,8 +40671,90 @@ const FRONTIER_RUINS=(()=>{
  add('boss',[[38,40,51,53]],[]);
  return {cells,MOBS,groups,height:5,ARENA:{x1:38,z1:40,x2:51,z2:53},
   directions:[[0,-1],[1,0],[0,1],[-1,0]],
-  BOSS:P(44,46),CHEST:P(44,52),ENTRY:P(9,29),LOOT:[P(2,9),P(5,58),P(28,41)]};
+  BOSS:P(44,46),CHEST:P(44,52),PORTAL:P(48,51),ENTRY:P(9,29),LOOT:[P(2,9),P(5,58),P(28,41)]};
 })();
+function frontierDenPlan(seed){
+ if(!seed)return FRONTIER_RUINS_ORIGINAL;
+ const rng=frontierMeadowRandom(seed),n=(a,b)=>a+Math.floor(rng()*(b-a+1));
+ const mirror=seed%2===1,flip=z=>mirror?58-z:z;
+ const rect=(x,z,a,b)=>[x,Math.min(flip(z),flip(b)),a,Math.max(flip(z),flip(b))];
+ const point=(x,z)=>({x,z:flip(z),y:0});
+ const aEnd=n(32,33),aTop=n(24,25),b0=aEnd+9,b1=b0+n(6,7),bEast=n(9,11);
+ const c0=bEast+n(9,10),c1=c0+n(6,8),cTop=b0+n(-1,0),cBot=Math.max(cTop+6,b1+n(0,2));
+ const lane=b0+2,turn=n(-1,1),span=n(8,9),middle=c1+n(3,5);
+ const gate=c1+span+1,arenaTop=n(39,41),edge=gate+n(12,14),bottom=arenaTop+n(12,14);
+ const sideEdge=aTop-n(9,10),sideTop=sideEdge-n(6,8),sideX=n(1,2);
+ const deadEnd=b1+8, spur=n(3,5);
+ const cells=new Set(),groups=[],MOBS=[],occupied=new Set();
+ const K=(x,z)=>x+','+z;
+ const add=(kind,parts,count,slimes=0)=>{
+  const tiles=new Map();
+  for(const [x,z,b,d] of parts)for(let v=z;v<=d;v++)for(let u=x;u<=b;u++){
+   const p=point(u,v),k=K(p.x,p.z);cells.add(k);tiles.set(k,p);
+  }
+  const pool=[...tiles.values()].filter(p=>!occupied.has(K(p.x,p.z))&&(groups.length!==0||p.x<8));
+  const candidates=pool.length>=count?pool:[...tiles.values()];
+  for(let i=candidates.length-1;i>0;i--){const j=n(0,i);[candidates[i],candidates[j]]=[candidates[j],candidates[i]]}
+  const mobs=candidates.slice(0,count).map((p,i)=>{
+   occupied.add(K(p.x,p.z));
+   return {...p,type:i<slimes?'monsterSlime':'monsterGoblin',rot:n(0,3)};
+  });
+  MOBS.push(...mobs);groups.push({kind,segments:parts.map(p=>rect(...p)),mobs});
+ };
+ add('main',[[n(1,2),aTop,9,aEnd]],5,1);
+ add('hall',[[4,aEnd+1,6,b0-1]],2);
+ add('main',[[1,b0,bEast,b1]],6,1);
+ add('hall',[[bEast+1,lane,c0-1,lane+2]],2,1);
+ add('main',[[c0,cTop,c1,cBot]],6,1);
+ add('hall',[[c1+1,lane,middle-1,lane+2],
+  [middle,Math.min(lane,lane+turn),middle+1,Math.max(lane+2,lane+2+turn)],
+  [middle+2,lane+turn,gate-1,lane+turn+2]],2,1);
+ add('side',[[sideX,sideTop,sideX+n(6,8),sideEdge]],5,1);
+ add('hall',[[3,sideEdge+1,5,aTop-1]],1);
+ add('hall',[[spur,b1+1,spur+2,deadEnd]],1);
+ add('boss',[[gate,arenaTop,edge,bottom]],0);
+ const [x1,z1,x2,z2]=rect(gate,arenaTop,edge,bottom),cx=Math.floor((gate+edge)/2),cz=Math.floor((arenaTop+bottom)/2);
+ const loot=[point(sideX,sideTop),point(spur+1,deadEnd),point(c1,cTop)];
+ // Keep drops off the initial monster spawn cells.
+ for(let i=0;i<loot.length;i++){
+  const p=loot[i],g=groups[[6,8,4][i]],used=g.mobs;
+  if(used.some(o=>o.x===p.x&&o.z===p.z)){
+   const [a,b,c,d]=g.segments[0];
+   for(let z=b;z<=d;z++)for(let x=a;x<=c;x++)if(!used.some(o=>o.x===x&&o.z===z)){loot[i]={x,z,y:0};z=d+1;break}
+  }
+ }
+ return {cells,MOBS,groups,height:5,ARENA:{x1,z1,x2,z2},directions:FRONTIER_RUINS_ORIGINAL.directions,
+  BOSS:point(cx,cz),CHEST:point(cx,bottom-1),PORTAL:point(cx+4,bottom-2),ENTRY:point(9,29),LOOT:loot};
+}
+function frontierDenValid(d){
+ const key=(x,z)=>x+','+z,floor=p=>d.cells.has(key(p.x,p.z));
+ const inside=(p,[a,b,c,z])=>p.x>=a&&p.x<=c&&p.z>=b&&p.z<=z;
+ const reach=blocked=>{
+  if(blocked&&inside(d.ENTRY,blocked))return new Set();
+  const q=[d.ENTRY],seen=new Set([key(d.ENTRY.x,d.ENTRY.z)]);
+  for(let i=0;i<q.length;i++)for(const [dx,dz] of d.directions){
+   const p={x:q[i].x+dx,z:q[i].z+dz},k=key(p.x,p.z);
+   if(!seen.has(k)&&floor(p)&&!(blocked&&inside(p,blocked))){seen.add(k);q.push(p)}
+  }
+  return seen;
+ };
+ const main=d.groups.filter(g=>g.kind==='main');
+ const boss=key(d.BOSS.x,d.BOSS.z);
+ return main.length===3&&d.MOBS.length===30&&d.MOBS.filter(p=>p.type==='monsterSlime').length===6&&
+  new Set(d.MOBS.map(p=>key(p.x,p.z))).size===30&&
+  [d.ENTRY,d.BOSS,d.CHEST,d.PORTAL,...d.MOBS,...d.LOOT].every(p=>p&&floor(p)&&p.x>0&&p.x<64&&p.z>0&&p.z<64)&&
+  [27,28,29,30,31].every(z=>d.cells.has(key(9,z)))&&reach(null).size===d.cells.size&&
+  main.every(g=>!reach(g.segments[0]).has(boss));
+}
+function frontierVisitSeed(prior,parity=null){
+ let seed=(prior+0x9E3779B9)>>>0;
+ try{seed=crypto.getRandomValues(new Uint32Array(1))[0]}catch(_){}
+ if(parity!==null)seed=((seed&~1)|parity)>>>0;
+ if(!seed||seed===prior)seed=prior===2||parity===1?3:2;
+ return seed;
+}
+
+let FRONTIER_RUINS=FRONTIER_RUINS_ORIGINAL;
 function frontierDenVisibleWalls(dx,dz){
  // Inward normals must point towards the camera; omit the reverse face.
  return [dz, -dx, -dz, dx].flatMap((v,i)=>v>1e-6?[i]:[]);
@@ -40678,16 +40762,21 @@ function frontierDenVisibleWalls(dx,dz){
 function frontierDenViewWalls(){
  return frontierDenVisibleWalls(Math.sin(yaw),Math.cos(yaw));
 }
-const FRONTIER_DEN_FLOOR=new Set(FRONTIER_RUINS.cells);
-for(let x=FRONTIER_BURROW.west;x<FRONTIER_BURROW.east;x++)
- for(let z=FRONTIER_BURROW.north;z<FRONTIER_BURROW.south;z++)FRONTIER_DEN_FLOOR.add(x+','+z);
-const FRONTIER_DEN_EDGES=[];
-for(const k of FRONTIER_DEN_FLOOR){
- const [x,z]=k.split(',').map(Number);
- FRONTIER_RUINS.directions.forEach(([dx,dz],i)=>{
-  if(!FRONTIER_DEN_FLOOR.has((x+dx)+','+(z+dz))&&!(i===1&&frontierDenExitStand(x,z)))
-   FRONTIER_DEN_EDGES.push({x,z,i,dx,dz});
- });
+let FRONTIER_DEN_FLOOR,FRONTIER_DEN_EDGES;
+function frontierDenApplyPlan(seed){
+ FRONTIER_RUINS=frontierDenPlan(seed);
+ FRONTIER_DEN_FLOOR=new Set(FRONTIER_RUINS.cells);FRONTIER_DEN_EDGES=[];
+ for(let x=FRONTIER_BURROW.west;x<FRONTIER_BURROW.east;x++)
+  for(let z=FRONTIER_BURROW.north;z<FRONTIER_BURROW.south;z++)FRONTIER_DEN_FLOOR.add(x+','+z);
+ for(const k of FRONTIER_DEN_FLOOR){
+  const [x,z]=k.split(',').map(Number);
+  FRONTIER_RUINS.directions.forEach(([dx,dz],i)=>{
+   if(!FRONTIER_DEN_FLOOR.has((x+dx)+','+(z+dz))&&!(i===1&&frontierDenExitStand(x,z)))
+    FRONTIER_DEN_EDGES.push({x,z,i,dx,dz});
+  });
+ }
+ FRONTIER_DEN_CANDLES=frontierDenCandles();
+ FRONTIER_DEN_PORTAL=FRONTIER_RUINS.PORTAL;
 }
 function frontierRuinsGeometry(){
  const ground=mesh(),walls=FRONTIER_RUINS.directions.map(()=>mesh()),g=frontierBurrowFloor(10);
@@ -40695,7 +40784,7 @@ function frontierRuinsGeometry(){
  const tone=(c,x,z,k=.26)=>c.map(v=>v*(1+(surfaceNoise(x,z)-.5)*k));
  const top=(m,x0,z0,x1,z1,y,col)=>quad(m,[x1,y,z0],[x0,y,z0],[x0,y,z1],[x1,y,z1],col);
  for(const k of FRONTIER_DEN_FLOOR){
-  const [x,z]=k.split(',').map(Number),dist=Math.hypot(x-44.5,z-46.5);
+  const [x,z]=k.split(',').map(Number),dist=Math.hypot(x-FRONTIER_RUINS.BOSS.x-.5,z-FRONTIER_RUINS.BOSS.z-.5);
   if(frontierDenDoorstep(x,z)&&x>=11){
    const grass=z===27||z===31||x===13&&z!==29;
    const earth=[.45,.347,.229],green=[.326,.438,.227];
@@ -40821,9 +40910,9 @@ function frontierRuinsStockLoot(){
   const {type,count}=FRONTIER_RUINS_LOOT[i];
   if(taken.has(p.x+','+p.z+','+p.y))return [];
   if(poiHotbarWeaponForType(type)&&(list.some(d=>d.type===type)||poiInventoryOrdinarySlots(kit).some(c=>c?.type===type)||poiAnyChestHas(kit,type)))
-   return [{...p,type:'healingHerb',count:2}];
+   return [{...p,type:'healingHerb',count:2,frontierCave:true,frontierDenStock:true}];
   const durability=poiEquipmentDurabilityMax(type);
-  return [{...p,type,count,...(durability?{durability}:{})}];
+  return [{...p,type,count,frontierCave:true,frontierDenStock:true,...(durability?{durability}:{})}];
  });
  if(list.length+items.length>POI_INVENTORY_LIMIT)return false;
  return poiEconomyWrite({...kit,drops:list.concat(items),frontierRuinsLootPlaced:true});
@@ -41121,7 +41210,7 @@ const FRONTIER_SOUTH_TREASURE=Object.freeze({x:160,z:126,y:-1,type:'rewardChest'
 const FRONTIER_SOUTH_CHEST_KEY='frontierSouthChest';
 // Fixed rewards share the chest UI and one-way world-map exits; neither
 // path replaces any of the boss's original loot.
-const FRONTIER_DEN_PORTAL=Object.freeze({x:48,z:51,y:0});
+let FRONTIER_DEN_PORTAL=FRONTIER_RUINS_ORIGINAL.PORTAL;
 const FRONTIER_SOUTH_PORTAL=Object.freeze({x:163,z:125,y:-1});
 const FRONTIER_ORVAS_CHEST_KEY='frontierOrvasChest';
 function frontierOrvasChestPoint(){
@@ -41755,13 +41844,14 @@ function frontierShoreDetails(m){
 }
 // END FRONTIER RIVER ART
 // BEGIN FRONTIER RUINS TORCHES
-const FRONTIER_DEN_CANDLES=Object.freeze(FRONTIER_DEN_EDGES.filter(({x,z,i})=>!frontierDenDoorstep(x,z)&&
+let FRONTIER_DEN_CANDLES=[];
+function frontierDenCandles(){return FRONTIER_DEN_EDGES.filter(({x,z,i})=>!frontierDenDoorstep(x,z)&&
  // Regular spacing, staggered around corners and across opposing walls.
  (i%2===0?x:z)%4===(i===0||i===1?1:3)
 ).map(({x,z,i,dx,dz})=>{
  const wx=x+.5+dx*.5,wz=z+.5+dz*.5;
  return {x:wx-dx*.24,z:wz-dz*.24,y:frontierBurrowFloor(10)+2,kind:'candle',wall:[wx,wz],side:i};
-}));
+})}
 function frontierTorchPulse(time,i){
  const p=i*2.309;
  return .83+.105*Math.sin(time*9.3+p)+.071*Math.sin(time*16.9-2*p)+.040*Math.sin(time*27.7+.3*p);
@@ -48273,11 +48363,13 @@ function frontierMeadowSaveDecode(raw){
   births.push({x:p.x,z:p.z,type:p.type==='monsterGoblin'?p.type:'monsterSlime'});
  }
  const dead=[...new Set(validRun&&Array.isArray(raw.dead)?raw.dead.filter(n=>Number.isInteger(n)&&n>=0&&n<FRONTIER_MEADOW_INITIAL+births.length):[])];
- return {v:1,seed:raw.seed,runSeed,births,dead,lineaBirths:Number.isInteger(raw.lineaBirths)?Math.max(0,Math.min(3,raw.lineaBirths)):0};
+ const uint=(v,f=0)=>Number.isInteger(v)&&v>=0&&v<=0xffffffff?v:f;
+ const keys=v=>Array.isArray(v)?v.slice(0,200).filter(k=>typeof k==='string'&&/^\d{3},\d{1,2}$/.test(k)):[];
+ return {v:1,seed:raw.seed,runSeed,births,dead,guildSeed:uint(raw.guildSeed,raw.seed),denSeed:uint(raw.denSeed),forestSeed:uint(raw.forestSeed),
+  meadowSafe:keys(raw.meadowSafe),forestSafe:keys(raw.forestSafe),lineaBirths:Number.isInteger(raw.lineaBirths)?Math.max(0,Math.min(3,raw.lineaBirths)):0};
 }
 function frontierMeadowWrite(next){
- frontierMeadowSave=next;
- try{localStorage.setItem(FRONTIER_MEADOW_KEY,JSON.stringify(next));return true}catch(_){return false}
+ try{localStorage.setItem(FRONTIER_MEADOW_KEY,JSON.stringify(next));frontierMeadowSave=next;return true}catch(_){return false}
 }
 function frontierMeadowRead(){
  if(frontierMeadowSave)return frontierMeadowSave;
@@ -48285,9 +48377,9 @@ function frontierMeadowRead(){
  if(!frontierMeadowSave){
   let seed=Math.floor(Math.random()*4294967296);
   try{seed=crypto.getRandomValues(new Uint32Array(1))[0]}catch(_){}
-  frontierMeadowWrite({v:1,seed,runSeed:(seed^0x4BC6A17F)>>>0,births:[],dead:[],lineaBirths:0});
+  frontierMeadowWrite({v:1,seed,guildSeed:seed,runSeed:(seed^0x4BC6A17F)>>>0,births:[],dead:[],lineaBirths:0});
  }
- return frontierMeadowSave;
+ return frontierMeadowSave??={v:1,seed:1,guildSeed:1,runSeed:7,births:[],dead:[],lineaBirths:0};
 }
 function frontierMeadowPlan(seed){
  const rng=frontierMeadowRandom(seed),tiles=[];
@@ -48308,7 +48400,8 @@ function frontierMeadowPlan(seed){
    !props.some(p=>frontierTreeTrunkType(p.type)&&Math.hypot(p.x-x,p.z-z)<2.2);
   if(tree||r>.87)props.push({x,z,type:tree?['treeBirch','treePine','treeCedar'][Math.floor(rng()*3)]:r>.96?'flowerField':'tallGrass',rot:Math.floor(rng()*4)});
  }
- return {seed,props,tiles};
+ const safe=new Set(frontierMeadowRead().meadowSafe??[]);
+ return {seed,props:props.filter(o=>!safe.has(o.x+','+o.z)&&frontierTreeInsideSector({...o,y:0})),tiles};
 }
 function frontierMeadowChests(plan,runSeed){
  const cached=frontierMeadowLayouts.get(plan);
@@ -48388,6 +48481,115 @@ function frontierLineaNewVisit(){
  }
  poiWildRemaining=0;poiWildPause();
 }
+function frontierVisitSurvey(kind){
+ const scope=kind==='den'?'frontier:0:west-ruins':'frontier:0:surface',bits=poiLocalSurvey(scope);
+ if(kind==='den')bits.fill(0);
+ else{
+  const [x1,z1,x2,z2]=kind==='meadow'?frontierSectorBounds(128,0):frontierSectorBounds(192,0);
+  for(let z=z1;z<z2;z++)for(let x=x1;x<x2;x++){
+   if(kind==='forest'&&frontierTempleGround(x+.5,z+.5))continue;
+   const i=poiLocalBit(x,z);if(i>=0)bits[i>>3]&=~(1<<(i&7));
+  }
+ }
+ poiMiniLast=null;poiLocalInvalidate();poiLocalDirty();poiLocalSave();
+}
+function frontierVisitSwapWorld(remove,added){
+ const site=facilitySite,t=site.davidTemple?.authored,oldIndex=t?.index??site.map.world.length,oldCount=t?.count??0;
+ const swap=source=>{
+  const before=source.slice(0,oldIndex).filter(o=>!remove(o));
+  return [...before,...added,...source.slice(oldIndex,oldIndex+oldCount),...source.slice(oldIndex+oldCount)];
+ };
+ const list=swap(site.map.world),live=world===site.map.world?list:swap(world);
+ if(t)t.index=list.length-(site.map.world.length-oldIndex);
+ facilityInvalidateScenes();site.map.world=list;world=live;
+ frontierSupportCaches.delete(site);poiLocalInvalidate();poiInventoryReleaseMesh();dirty=true;
+}
+function frontierDenRehome(kit,plan){
+ const next={...kit},usable=p=>(plan.cells.has(p.x+','+p.z)||frontierDenDoorstep(p.x,p.z))&&
+  !(p.x===plan.CHEST.x&&p.z===plan.CHEST.z)&&!(p.x===plan.PORTAL.x&&p.z===plan.PORTAL.z);
+ const fallbacks=Array.from(plan.cells,k=>{const [x,z]=k.split(',').map(Number);return {x,z}})
+  .sort((a,b)=>Math.hypot(a.x-12,a.z-29)-Math.hypot(b.x-12,b.z-29));
+ for(const field of ['drops','groundGold','soulDrops']){
+  if(!kit[field]?.length)continue;
+  const entries=kit[field].filter(p=>field!=='drops'||!p.frontierDenStock);
+  const used=new Set(entries.filter(p=>p.y===0&&p.x<64&&usable(p)).map(p=>p.x+','+p.z));
+  next[field]=entries.map(p=>{
+   if(p.y!==0||p.x>=64||p.region||usable(p))return p;
+   const spot=fallbacks.find(q=>usable(q)&&!used.has(q.x+','+q.z));
+   if(!spot)return p;
+   used.add(spot.x+','+spot.z);return {...p,...spot,...(field==='soulDrops'?{}:{frontierCave:true})};
+  });
+ }
+ return next;
+}
+function frontierDenNewVisit(now){
+ const data=frontierMeadowRead(),old=data.denSeed??0;
+ let seed=frontierVisitSeed(old,1-old%2),plan=frontierDenPlan(seed);
+ if(!frontierDenValid(plan)){
+  seed=seed%2?1:2;plan=frontierDenPlan(seed);
+  if(!frontierDenValid(plan))return false;
+ }
+ const kit=frontierDenRehome(poiHotbarRead(),plan);
+ delete kit.frontierRuinsDefeats;delete kit.frontierRuinsCleared;delete kit.frontierRuinsLootPlaced;
+ if(!kit.frontierRuinsChest?.slots.some(Boolean))delete kit.frontierRuinsChest;
+ // Existing loose items are kept; they move to legal ground if a wall now occupies their former tile.
+ if(!frontierMeadowWrite({...data,denSeed:seed}))return false;
+ if(!poiEconomyWrite(kit)){frontierMeadowWrite(data);return false}
+ for(const [o,state] of poiMonsterStates)if(o.y===0&&o.x<64){
+  poiEnemyPending.delete(state);poiMonsterWalkDue.delete(o);poiMonsterActorActive.delete(o);poiMonsterStates.delete(o);
+ }
+ frontierDenApplyPlan(seed);
+ const added=[{...plan.BOSS,type:'monsterGoblin',rot:2},...plan.MOBS];
+ frontierVisitSwapWorld(o=>o.y===0&&o.x<64&&poiIsMonster(o.type),added);
+ for(const o of added)poiMonsterStates.set(o,poiCombatActorMake(o));
+ if(frontierDenGpu){
+  for(const m of [frontierDenGpu.ground,...frontierDenGpu.walls])gl.deleteBuffer(m.buf);
+  frontierDenGpu=null;
+ }
+ const prize=frontierBossPrizeGpu.get(FRONTIER_RUINS_CHEST_KEY);
+ if(prize){gl.deleteBuffer(prize.base.buf);gl.deleteBuffer(prize.light.buf);frontierBossPrizeGpu.delete(FRONTIER_RUINS_CHEST_KEY)}
+ frontierDenFields.clear();lastFrontierFlames=-Infinity;poiMonsterMeshDirty=true;
+ frontierVisitSurvey('den');
+ return true;
+}
+function frontierVisitLooseKeys(owns){
+ const kit=poiHotbarRead();
+ return [...new Set(['drops','groundGold','soulDrops','armedDrops'].flatMap(k=>((kit[k]??[]).filter(o=>o.y===0&&owns(o)).map(o=>o.x+','+o.z))))].slice(0,200);
+}
+function frontierForestVisitProp(x,z,seed,safe){
+ const u=x-FRONTIER_WEST_OFFSET;
+ if(u<128||u>=190||(seed&&Math.hypot(x-200,z-29)<3)||safe.has(x+','+z)||z<=4||z>=61||frontierGroundKind(x,z)!=='grass'||frontierTempleGround(x+.5,z+.5))return null;
+ const trail=30.5-19.5*frontierSmooth(125,156,u);
+ if((u<=159&&Math.abs(z-trail)<3.5)||(u>=155&&u<=164&&z<29))return null;
+ const h=((Math.imul((x+71)^(seed&65535),73856093)^Math.imul((z+53)^(seed>>>16),19349663))>>>0)%997;
+ const type=h<22&&(x+z)%2===0?h%3===0?'treeBirch':h%3===1?'treeCedar':'treePine':h>45&&h<60?h%2?'rockMossy':'tallGrass':null;
+ const o=type?{x,z,y:0,type,rot:h%4,frontierVisitArt:'forest'}:null;
+ return o&&frontierTreeInsideSector(o)?o:null;
+}
+function frontierForestNewVisit(){
+ const data=frontierMeadowRead(),seed=frontierVisitSeed(data.forestSeed??0);
+ const forestSafe=frontierVisitLooseKeys(p=>p.x>=192&&p.x<256&&p.z>=0&&p.z<64);
+ if(!frontierMeadowWrite({...data,forestSeed:seed,forestSafe}))return false;
+ const t=facilitySite.davidTemple.authored,protectedCells=new Set(facilitySite.map.world.slice(t.index,t.index+t.count).filter(o=>o.y===0).map(o=>o.x+','+o.z)),added=[];
+ const drops=new Set(forestSafe);
+ for(let z=5;z<61;z++)for(let x=192;x<254;x++){
+  const k=x+','+z;if(protectedCells.has(k)||drops.has(k))continue;
+  if(Math.hypot(x-200,z-29)<3)continue;
+  const o=frontierForestVisitProp(x,z,seed,drops);
+  if(o)added.push(o);
+ }
+ frontierVisitSwapWorld(o=>o.frontierVisitArt==='forest',added);frontierVisitSurvey('forest');
+ return true;
+}
+function frontierMeadowVisitArt(plan){
+ const art=[];
+ for(let z=14;z<46;z++)for(let x=128;x<160;x++){
+  const type=frontierGroundKind(x,z);if(type!=='grass')art.push({x,z,y:0,type,rot:0});
+ }
+ for(const o of plan.props)art.push({...o,y:0});
+ return art;
+}
+
 function frontierMeadowNewVisit(now){
  if(!facilitySite?.meadow)return false;
  const data=frontierMeadowRead(),kit=poiHotbarRead();
@@ -48395,12 +48597,17 @@ function frontierMeadowNewVisit(now){
   const next={...kit};for(const key of FRONTIER_MEADOW_CHEST_KEYS)delete next[key];
   if(!poiEconomyWrite(next))return false;
  }
- // A world-map arrival, not an app reload, starts a fresh encounter.
- let runSeed=(data.runSeed+0x9E3779B9)>>>0;
- try{const draw=crypto.getRandomValues(new Uint32Array(1))[0];if(draw!==data.runSeed)runSeed=draw}catch(_){}
- frontierMeadowWrite({...data,runSeed,births:[],dead:[]});
+ // Layout and enemies have separate seeds, both stable through a reload.
+ const meadowSafe=frontierVisitLooseKeys(p=>frontierMeadowIn(p.x,p.z));
+ if(!frontierMeadowWrite({...data,seed:frontierVisitSeed(data.seed),runSeed:frontierVisitSeed(data.runSeed),meadowSafe,births:[],dead:[]}))return false;
+ const plan=frontierMeadowPlan(frontierMeadowRead().seed);
+ facilitySite.meadow=plan;
+ frontierVisitSwapWorld(o=>o.y===0&&frontierMeadowIn(o.x,o.z),frontierMeadowVisitArt(plan));
+ for(const {gpu} of frontierMeadowChestMeshes.values())gl.deleteBuffer(gpu.buf);
+ frontierMeadowChestMeshes.clear();
+ frontierVisitSurvey('meadow');
  for(const [o,state] of poiMonsterStates)if(o.meadowId!==undefined){
-  poiEnemyPending.delete(state);poiMonsterWalkDue.delete(o);poiMonsterStates.delete(o);
+  poiEnemyPending.delete(state);poiMonsterWalkDue.delete(o);poiMonsterActorActive.delete(o);poiMonsterStates.delete(o);
  }
  frontierMeadowRestoreActors(now);poiMonsterMeshDirty=true;return true;
 }
@@ -48520,7 +48727,8 @@ function frontierTreeInsideSector(o){
  return true;
 }
 function frontierSite(){
- const meadow=frontierMeadowPlan(frontierMeadowRead().seed);
+ const visits=frontierMeadowRead(),forestSafe=new Set(visits.forestSafe??[]);frontierDenApplyPlan(visits.denSeed??0);
+ const meadow=frontierMeadowPlan(visits.seed);
  const world=[],fenceCells=[],buildings=FRONTIER_HOMES.map(p=>{
   const {dx,...b}=p,door=b.frontNorth?{x:b.x1+b.x2-dx,z:b.z1}:{x:dx,z:b.z2},footprint=[];
   const furniture=frontierRotateFurniture(b,b.furniture);
@@ -48550,11 +48758,9 @@ function frontierSite(){
    const rot=z===b.z2?0:x===b.x1?1:z===b.z1?2:x===b.x2?3:null;
    b.footprint.push({x,z});
    if(rot!==null)put(x,z,corner?'plasterwallAll':'plasterwall'+(b.door.x===x&&b.door.z===z?'Door':z===b.z2||z===b.z1?'Window':''),rot);
-  }else if(u>=125&&kind==='grass'&&!frontierTempleGround(x+.5,z+.5)&&u<190&&z>4&&z<61){
-   const trail=30.5-19.5*frontierSmooth(125,156,u);
-   const approaches=(u<=159&&Math.abs(z-trail)<3.5)||(u>=155&&u<=164&&z<29);
-   if(!approaches&&h<22&&(x+z)%2===0)put(x,z,h%3===0?'treeBirch':h%3===1?'treeCedar':'treePine',h%4);
-   else if(!approaches&&h>45&&h<60)put(x,z,h%2?'rockMossy':'tallGrass',h%4);
+  }else if(u>=128){
+   const art=frontierForestVisitProp(x,z,visits.forestSeed??0,forestSafe);
+   if(art)put(x,z,art.type,art.rot,0,{frontierVisitArt:'forest'});
   }else if(kind==='grass'&&!fence&&u>2&&u<125&&z>2&&z<61&&
     Math.abs(Math.hypot(x+.5-FRONTIER_VILLAGE.x,z+.5-30.5)-frontierVillageRadius(x+.5-FRONTIER_VILLAGE.x,z+.5-30.5))>1.20&&Math.hypot(u-46,z-25)>7&&
     (u>109||Math.abs(z+.5-frontierVillageTrack(u+.5))>(u<21?2.8:3.6))&&
@@ -48839,14 +49045,16 @@ function frontierSectorFrame(now){
   if(!report.ok){frontierSectorCancel();toast('依頼の状態を保存できなかったため、移動を中止しました。');return false}
   if(report.failed.length)frontierGuildReplaceEnemies(report.failed,now);
   t.stage=2;
-  const p=t.point;
+  const p=t.point,dropKey=frontierSectorKeyAt(p.x,p.z)?.join(',');
+  if(dropKey==='0,0')frontierDenNewVisit(now);
+  else if(dropKey==='128,0')frontierMeadowNewVisit(now);
+  else if(dropKey==='192,0')frontierForestNewVisit();
   poiOtherworldTravelSerial++;poiOtherworldKeyReleaseRequired=true;
   poiIceFangCasts=poiIceFangCasts.filter(q=>q.source==='resident');
   poiWalkReset(p.x,p.z,0,p.face,false,!!p.cave);
   frontierGuildArrival(frontierSectorKeyAt(poiWalkX,poiWalkZ)?.join(','));
   poiOrchestraBattleUntil=-Infinity;poiAudioMusicPhrase();
-  if(frontierMeadowPlayerHere())frontierMeadowNewVisit(now);
-  else if(frontierLineaHere())frontierLineaNewVisit();
+  if(frontierLineaHere())frontierLineaNewVisit();
   frontierGuildStartRun(frontierSectorKeyAt(poiWalkX,poiWalkZ)?.join(','),now);
   poiDamageLabels=[];poiMonsterMeshDirty=true;
   poiCompanionTick(now);
@@ -54756,7 +54964,8 @@ function workshopResumeDecode(raw){
   (field||d.id==='frontier'&&p.x<FRONTIER_W&&(p.z<FRONTIER_H||frontierSouthOwn(p.x,p.z))||p.x<MAX_MAP&&(p.z<MAX_MAP||deep&&p.y>=0&&(p.x<POI_SACRED_DEPTH_W||typeof poiSnowSleeveOwn==='function'&&poiSnowSleeveOwn(p.x,p.z))&&p.z<POI_SACRED_DEPTH_H))&&
   Number.isInteger(p.y)&&p.y>=-1&&p.y<=MAX_LEVEL&&Number.isInteger(p.facing)&&p.facing>=0&&p.facing<4
   ?{x:p.x,z:p.z,y:p.y,facing:p.facing,...(d.id==='frontier'&&typeof p.cave==='boolean'?{cave:p.cave}:{}),...(d.id==='frontier'&&p.y===0&&frontierResumeFine(p)?{subX:p.subX,subZ:p.subZ}:{})}:null;
- const shifted=d.id==='frontier'&&d.frontierWest!==1?frontierShiftPoint(position):position;
+ let shifted=d.id==='frontier'&&d.frontierWest!==1?frontierShiftPoint(position):position;
+ if(d.id==='frontier'&&shifted?.x<64&&(d.denSeed??0)!==(frontierMeadowRead().denSeed??0))shifted={...shifted,...FRONTIER_BURROW.spawn,facing:3,cave:true,subX:undefined,subZ:undefined};
  return {version:1,route:d.route,id:d.route==='facility'?d.id:null,play:d.play===true,position:shifted,
   ...(typeof poiSnowPassDecode==='function'?poiSnowPassDecode(d,position):{}),
   ...(d.route==='facility'&&d.id==='base'&&d.templeDepth===1?{templeDepth:1}:{}),
@@ -54815,7 +55024,7 @@ function workshopResumeWrite(override,seed=false){
   ...(facilitySite?.id==='snowpass'&&poiWalkActive?{region:'snowpass',regionHp:poiPlayerDeath?poiPlayerMaxHp():poiPlayerHP,regionMaxHp:poiPlayerMaxHp()}:{}),
   ...(facilitySite?.id==='base'?(facilitySite.townOffset>=22?{townLayout:5,townMapHeight:facilitySite.map.height}:{townLayout:facilitySite.townOffset?4:3}):{}),
   ...(facilitySite?.id==='base'&&facilitySite.davidTemple?.depth===1?{templeDepth:1}:{}),
-  ...(facilitySite?.id==='frontier'?{frontierWest:1,...(poiWalkActive?{frontierHp:poiPlayerDeath&&!poiPlayerDeath.relocated?poiPlayerMaxHp():Math.max(1,Math.min(poiPlayerMaxHp(),Math.round(poiPlayerHP))),frontierMaxHp:poiPlayerMaxHp()}:{})}:{}),
+  ...(facilitySite?.id==='frontier'?{frontierWest:1,denSeed:frontierMeadowRead().denSeed??0,...(poiWalkActive?{frontierHp:poiPlayerDeath&&!poiPlayerDeath.relocated?poiPlayerMaxHp():Math.max(1,Math.min(poiPlayerMaxHp(),Math.round(poiPlayerHP))),frontierMaxHp:poiPlayerMaxHp()}:{})}:{}),
   tag:route==='editor'||route==='map-play'?workshopResumeTag:null,
   position:poiWalkActive?(typeof poiPlayerDeath!=='undefined'&&poiPlayerDeath&&!poiPlayerDeath.relocated?
    {...poiPlayerDeathSpawn(poiPlayerDeath.checkpoint),...(facilitySite?.id==='frontier'?{cave:false}:{})}:{x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,facing:poiWalkFacing,...(facilitySite?.id==='frontier'?{cave:frontierPlayCave}:{}),...frontierResumeCoordinates()}):null,
