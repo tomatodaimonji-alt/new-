@@ -1756,7 +1756,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v503）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v504）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="2500" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -13839,9 +13839,8 @@ function poiDavidScoreScene(now){
   if(now-poiDavidScoreVisit.inside<=.44)return poiDavidScoreVisit.scene;
   poiDavidScoreReset();return null;
  }
- const awake=arena&&(typeof poiDavidBattleActive==='function'?poiDavidBattleActive(performance.now()):
-  typeof poiDavidActive!=='undefined'&&poiDavidActive?.s?.david?.awake&&!poiDavidActive.s.david.returning);
- const scene=awake?'davidAwake':'davidStill';
+ // This changes the music at the physical threshold, without waking the boss.
+ const scene=arena?'davidAwake':'davidStill';
  const visit=poiDavidScoreVisit??={site,epoch:null};
  visit.inside=now;visit.scene=scene;return scene;
 }
@@ -13891,19 +13890,33 @@ function poiFrontierSurfaceMusicZone(){
  if(key==='0,0'&&frontierPlayCave)return 'mine';
  return ['0,0','128,0','192,0'].includes(key)?'outside':'indoor';
 }
+function poiDungeonBossRectContains(r,x,z){
+ if(!r)return false;
+ if(Number.isFinite(r.x1))return x>=r.x1&&x<=r.x2&&z>=r.z1&&z<=r.z2;
+ return Number.isFinite(r.w)&&Number.isFinite(r.h)&&Math.abs(x-r.x)<=r.w&&Math.abs(z-r.z)<=r.h;
+}
+function poiFrontierBossMusicRoom(x,z,y){
+ if(facilitySite?.id!=='frontier'||!poiWalkActive||pineAIActive||poiPlayerDying())return false;
+ if(y===-1)return x>=153&&x<=167&&z>=116&&z<=126&&frontierSouthRuinsOwn(x,z);
+ if(y!==0||!frontierPlayCave)return false;
+ const sector=frontierSectorKeyAt(x,z)?.join(',');
+ const r=sector==='0,0'?FRONTIER_RUINS.ARENA:
+  sector===FRONTIER_WOOD_SECTOR?frontierWoodPlanCurrent?.ARENA:
+  sector==='128,0'?frontierMeadowDungeon?.arena:
+  sector===FRONTIER_STAR_KEY?frontierStarCurrent?.arena:null;
+ return poiDungeonBossRectContains(r,x,z);
+}
 function poiOrchestraScene(now){
  if(typeof poiValdiaMusicHere==='function'&&poiValdiaMusicHere())return 'valdia';
  const temple=typeof poiDavidScoreScene==='function'?poiDavidScoreScene(now):null;
  if(temple)return temple;
- if(facilitySite?.id==='frontier'&&poiWalkActive&&poiWalkLevel===-1&&frontierSouthRuinsOwn(poiWalkX,poiWalkZ)){
-  const chamber=poiWalkX>=153&&poiWalkX<=167&&poiWalkZ>=116&&poiWalkZ<=126;
-  return chamber&&!frontierSouthBossDefeated()?'southRuinsBoss':'southRuins';
- }
+ if(poiFrontierBossMusicRoom(poiWalkX,poiWalkZ,poiWalkLevel))return 'dungeonBoss';
+ if(facilitySite?.id==='frontier'&&poiWalkActive&&poiWalkLevel===-1&&frontierSouthRuinsOwn(poiWalkX,poiWalkZ))return 'southRuins';
  if(poiSouthSettlementContains(facilitySite,poiWalkX,poiWalkZ,poiWalkLevel))return 'southSettlement';
  const zone=facilitySite?.id==='snowpass'?'outside':facilitySite?.id==='base'?poiAudioMusicZone():facilitySite?.id==='frontier'?poiFrontierSurfaceMusicZone():'indoor';
  if(poiAudioSnowActive())return 'snow';
  // Field combat uses the same recording as field exploration.
- if(zone==='outside'||zone==='spiderWoods'||zone==='starLake')return zone;
+ if(facilitySite?.id==='frontier'&&frontierPlayCave||zone==='outside'||zone==='spiderWoods'||zone==='starLake')return zone;
  // Prefer the musical exploration cue until an attack is truly committed,
  // rather than using an idle lock reticle to turn every wildlife sighting
  // into a battle. Being hit and landing a hit also refresh the combat hold.
@@ -13925,7 +13938,7 @@ function poiOrchestraScore(scene){
  if(poiOrchestraScoreCache.has(scene))return poiOrchestraScoreCache.get(scene);
  // The existing flute/cello chamber arrangement is calmer than market
  // music. Give it one dedicated clock through the whole southern walk.
- const scoreKey=scene==='southSettlement'?'indoor':scene==='southRuinsBoss'?'battle':scene==='southRuins'?'mine':scene;
+ const scoreKey=scene==='southSettlement'?'indoor':scene==='dungeonBoss'?'battle':scene==='southRuins'?'mine':scene;
  const s=POI_ORCHESTRAL_SCORES[scoreKey]||POI_ORCHESTRAL_SCORES.indoor,sec=60/s.bpm;
  const events=Object.entries(s.tracks).flatMap(([instrument,notes])=>notes.filter(
   n=>POI_ORCHESTRA_INSTRUMENTS[instrument]&&n[0]>=0&&n[0]<s.beats&&n[2]>0&&n[3]>0
@@ -14260,7 +14273,7 @@ function poiRecordedZoneClip(ctx,key,encoded){
  return entry;
 }
 function poiRecordedZoneKey(scene){
- return scene==='southSettlement'?'indoor':scene==='southRuinsBoss'?'battle':scene==='southRuins'?'mine':scene;
+ return scene==='southSettlement'?'indoor':scene==='dungeonBoss'?'battle':scene==='southRuins'?'mine':scene;
 }
 function poiRecordedZoneEncoded(key){return key==='starLake'?POI_STAR_LAKE_OGG:key==='spiderWoods'?POI_SPIDER_WOODS_OGG:POI_ZONE_RECORDINGS[key]}
 function poiOrchestraPrime(scene,ctx){
@@ -23301,7 +23314,7 @@ function poiHotbarRead(){
   if(['expedition','other'].includes(saved.southClearBy))kit.southClearBy=saved.southClearBy;
   const denCurrent=saved.frontierDenLayout===1&&(saved.frontierDenVisitSeed??0)===(frontierMeadowRead().denSeed??0);
   if(saved.frontierStarSeed===(frontierStarCurrent?.seed??0)){
-   if(saved.frontierStarLayout===FRONTIER_STAR_LAYOUT){
+   if(saved.frontierStarLayout===(frontierStarCurrent?.revision??2)){
     for(const key of [FRONTIER_STAR_CHEST,FRONTIER_STAR_BOSS_CHEST]){
      const c=poiChestDecode(saved[key]);if(c)kit[key]=c;
     }
@@ -23496,7 +23509,7 @@ function poiHotbarSave(kit=poiHotbarState){
    ...(kit.frontierSouthLootPlaced===true?{frontierSouthLootPlaced:true}:{}),
    ...(kit.frontierSouthChest?{frontierSouthChest:kit.frontierSouthChest}:{}),
    ...(kit.frontierMeadowChest?{frontierMeadowChest:kit.frontierMeadowChest}:{}),
-   ...(facilitySite?.id==='frontier'?{frontierStarSeed:frontierStarCurrent?.seed??0,frontierStarLayout:FRONTIER_STAR_LAYOUT,frontierStarChest:kit.frontierStarChest,frontierStarBossChest:kit.frontierStarBossChest,frontierStarStockSeed:kit.frontierStarStockSeed,frontierStarDead:kit.frontierStarDead}:{}),
+   ...(facilitySite?.id==='frontier'?{frontierStarSeed:frontierStarCurrent?.seed??0,frontierStarLayout:frontierStarCurrent?.revision??2,frontierStarChest:kit.frontierStarChest,frontierStarBossChest:kit.frontierStarBossChest,frontierStarStockSeed:kit.frontierStarStockSeed,frontierStarDead:kit.frontierStarDead}:{}),
    ...(kit.frontierMeadowChest2?{frontierMeadowChest2:kit.frontierMeadowChest2}:{}),
    ...(kit.frontierSurvey?{frontierSurvey:kit.frontierSurvey}:{}),
    frontierDenLayout:1,
@@ -27112,7 +27125,7 @@ function poiEnemyHealthAnchor(vp,pose,bounds){
  return {x:center.x,y:highest};
 }
 // END ENEMY HEALTH GEOMETRY
-const poiEnemyBars=new Map();
+const poiEnemyBars=new Map(),poiDungeonVisibleHealth=new Map();
 let poiEnemyBarFrame=0;
 let poiPlayerOverheadBar=null;
 function poiRenderPlayerOverhead(now,vp,layer){
@@ -27140,13 +27153,13 @@ function poiRenderEnemyHealth(now,vp,eye=null){
  if(typeof poiAimRenderMarker==='function')poiAimRenderMarker(now,vp,layer);
  const frame=++poiEnemyBarFrame;
  if(poiWalkActive&&!pineAIActive)for(const [obj,state] of poiMonsterStates){
-  if(obj.type==='monsterStoneDavid'&&(!state.david?.awake||state.david.returning))continue;
   if(state.hp<=0||!frontierSectorActor(state.x,state.z)||!frontierRuinsHealthVisible(state)||!poiSacredInteriorHostileVisible(obj)||(facilitySite&&obj.y!==poiWalkLevel)||
-    (typeof poiDungeonVisualVisible==='function'&&!poiDungeonVisualVisible(obj.x,obj.z,obj.y))||
-    Math.max(Math.abs(state.x-poiWalkX),Math.abs(state.z-poiWalkZ))>10)continue;
-  const pose=poiMonsterPose(obj,state,now);
+    !poiDungeonVisualVisible(obj.x,obj.z,obj.y))continue;
+  const pose=poiDungeonMonsterScope?poiDungeonVisibleHealth.get(obj):
+   poiOverlandActorVisible(vp,state.x,state.z,obj.y)?poiMonsterPose(obj,state,now):null;
+  if(!pose)continue;
   if(facilitySite?.id==='frontier'&&state.frontierRuins&&!frontierRuinsBarLineClear(pose))continue;
-  if(poiSouthSentinelSpec(obj)&&typeof frontierSouthRuinsOwn==='function'){
+  if(obj.y===-1&&frontierSouthRecordId(obj)){
    const from={x:poiWalkViewX,z:poiWalkViewZ},dx=pose.x-.5-from.x,dz=pose.z-.5-from.z,d=Math.hypot(dx,dz);
    if(d>.01&&poiAimWallLimit(from,{x:dx/d,z:dz/d},d,frontierSouthRuinsOwn)+.015<d)continue;
   }
@@ -27155,20 +27168,32 @@ function poiRenderEnemyHealth(now,vp,eye=null){
    obj.type==='monsterNorthMinotaur'?{crown:'minotaur',head:poiNorthMinotaurArtPose(pose.attack?state.playerAttack:null,now).head,
     heading:swing?Math.atan2(-swing.dx,swing.dz):undefined,facing:state.facing}:
    poiEnemyHealthEnvelope(poiMonsterRenderType(obj));
-  const point=poiEnemyHealthAnchor(vp,frontierRuinsBoss(obj)?{...pose,y:pose.y+.67}:pose,bounds);
-  if(!point||point.x<0||point.x>canvas.clientWidth||point.y<0||point.y>canvas.clientHeight)continue;
+  const width=canvas.clientWidth,height=canvas.clientHeight,gap=bounds.crown?8:POI_ENEMY_BAR_GAP;
+  const onScreen=p=>p&&p.x>=0&&p.x<=width&&p.y>=0&&p.y<=height;
+  let point=poiEnemyHealthAnchor(vp,frontierRuinsBoss(obj)?{...pose,y:pose.y+.67}:pose,bounds);
+  if(!onScreen(point)){
+   const middle=poiWorldToScreen(vp,pose.x,pose.y+Math.min(.8,(bounds.top??1.4)*.54),pose.z);
+   const base=onScreen(middle)?middle:poiWorldToScreen(vp,pose.x,pose.y+.12,pose.z);
+   if(!onScreen(base))continue;
+   // On a tall creature the crown can leave the screen before its body.
+   point={x:base.x,y:point?Math.max(0,Math.min(height,point.y)):0};
+  }
+  const barX=Math.max(23,Math.min(width-23,Math.round(point.x)));
+  const barY=Math.max(11,Math.round(point.y)-gap);
   poiCodexEncounter(obj,pose);
   let bar=poiEnemyBars.get(obj);
   if(!bar){
    const el=document.createElement('progress');el.className='poiEnemyHealth';
-   el.max=(typeof poiMonsterStatsAt==='function'?poiMonsterStatsAt(obj):POI_MONSTER_STATS[obj.type]).hp;
+   el.max=Math.max(1,state.maxHp??poiMonsterStatsAt(obj)?.hp??state.hp);
    el.setAttribute('aria-label',(frontierRuinsBoss(obj)?FRONTIER_RUINS_BOSS_NAME:byId(obj.type)?.name||'敵')+'のHP');
    layer.append(el);bar={el,hp:null,x:null,y:null};poiEnemyBars.set(obj,bar);
   }
   if(obj.type==='monsterStoneDavid'&&state.david?.wakeDone&&typeof POI_ORVAS_NAME==='string')bar.el.setAttribute('aria-label',POI_ORVAS_NAME+'のHP');
   bar.seen=frame;
+  const max=Math.max(1,state.maxHp??poiMonsterStatsAt(obj)?.hp??state.hp);
+  if(bar.el.max!==max)bar.el.max=max;
   if(bar.hp!==state.hp){bar.hp=state.hp;bar.el.value=state.hp}
-  const x=Math.round(point.x),y=Math.round(point.y)-(bounds.crown?8:POI_ENEMY_BAR_GAP);
+  const x=barX,y=barY;
   if(bar.x!==x||bar.y!==y){
    bar.x=x;bar.y=y;bar.el.style.transform='translate3d('+x+'px, '+y+'px, 0) translate(-50%, -100%)';
   }
@@ -28657,6 +28682,104 @@ const POI_SOUTH_SENTINELS=Object.freeze({
   {key:'regent-rune',shape:'lane',range:6.15,near:3.45,healthPhase:.50,half:Math.PI/2,width:.63,windup:970,cool:1140,damage:47}
  ]}
 });
+// BEGIN FRONTIER DUNGEON ATTACK ROSTER
+// Counts describe monster tiers, not the party or the dungeon's recommended
+// rank. A strong boss may have more moves than nearby low-rank creatures.
+const FRONTIER_DUNGEON_MOVE_RANK=Object.freeze({F:1,E:1,D:2,C:2,B:3,A:3,S:3});
+const frontierDungeonFan=(key,range,half,windup,cool,damage)=>({key,shape:'fan',range,half,windup,cool,damage});
+const frontierDungeonRing=(key,range,windup,cool,damage)=>({key,shape:'ring',range,half:Math.PI,windup,cool,damage});
+const frontierDungeonLane=(key,range,width,windup,cool,damage)=>({key,shape:'lane',range,width,half:Math.PI/2,fixed:true,windup,cool,damage});
+const FRONTIER_DUNGEON_MOVES=Object.freeze({
+ monsterSlime:['F',1.32,[frontierDungeonRing('slime-splash',1.64,750,940,9)]],
+ monsterGoblin:['F',1.42,[frontierDungeonFan('goblin-club-arc',1.86,1.15,760,910,16)]],
+ monsterSkeleton:['E',1.45,[frontierDungeonFan('skeleton-rib-sweep',2.07,.89,840,980,15)]],
+ monsterWoodBeetle:['F',1.22,[frontierDungeonLane('beetle-horn-scrape',2.15,.44,740,1020,14)]],
+ monsterWoodRat:['E',1.34,[frontierDungeonLane('rat-lunge',2.50,.51,710,970,21)]],
+ monsterGiantSpider:['D',1.61,[frontierDungeonFan('spider-leg-sweep',2.25,1.19,785,1060,26),frontierDungeonLane('spider-venom-spit',3.45,.48,900,1220,27)]],
+ monsterCrystalCrab:['D',1.37,[frontierDungeonRing('crystal-shell-burst',1.86,865,1060,22)]],
+ monsterCrystalBat:['D',1.42,[frontierDungeonFan('crystal-wing-shear',2.20,1.10,810,1140,21)]],
+ monsterCrystalGuardian:['B',1.80,[]],
+ monsterBigSlime:['B',1.68,[]],
+ monsterTempleDragonZombie:['A',2.10,[]],
+ monsterTempleStatue:['C',1.70,[frontierDungeonRing('temple-gravel-shock',2.32,1000,1380,33)]],
+ monsterTempleEye:['C',3.8,[frontierDungeonRing('temple-eye-radiance',2.16,920,1300,29)]],
+ monsterBasaltHound:['C',1.56,[frontierDungeonLane('basalt-raking-charge',3.32,.56,820,1190,29)]],
+ monsterRuneWarden:['C',1.65,[frontierDungeonRing('rune-warden-burst',2.38,980,1440,33)]],
+ monsterObsidianRegent:['B',2.02,[]],
+ monsterSkelWarrior:['D',1.42,[frontierDungeonFan('bone-sword-arc',2.28,1.00,760,1080,20),frontierDungeonRing('bone-sword-rebound',1.8,880,1190,17)]],
+ monsterSkelKnight:['C',1.58,[frontierDungeonFan('shield-sword-cleave',2.42,1.07,825,1100,24),frontierDungeonLane('shield-line-bash',2.76,.68,925,1290,22)]],
+ monsterSkelArcher:['D',5.8,[frontierDungeonFan('bone-arrow-fan',3.7,.44,900,1210,18),frontierDungeonLane('bone-arrow-multishot',5.45,.81,1040,1320,19)]],
+ monsterSkelSpearman:['D',2.0,[frontierDungeonLane('bone-spear-drive',3.6,.55,810,1080,21),frontierDungeonFan('bone-spear-sweep',2.14,.97,930,1250,18)]],
+ monsterSkelMage:['C',4.0,[frontierDungeonRing('bone-ember-pulse',2.45,900,1130,26),frontierDungeonLane('bone-ember-wave',4.7,.71,980,1370,23)]],
+ monsterSkelLongStaff:['D',1.82,[frontierDungeonFan('bone-staff-sweep',2.47,1.15,810,1120,23),frontierDungeonLane('bone-staff-shock',3.62,.60,950,1290,22)]],
+ monsterDragon:['A',1.92,[frontierDungeonFan('dragon-claw-cleave',2.62,.96,820,1220,32),frontierDungeonLane('dragon-fire-breath',4.28,.80,990,1470,38),frontierDungeonRing('dragon-wing-burst',2.70,1020,1420,34)]]
+});
+const FRONTIER_DUNGEON_BIG_GOBLIN=['B',1.82,[
+ frontierDungeonFan('big-goblin-overhead',2.29,.72,790,1030,27),
+ frontierDungeonLane('big-goblin-rush',3.35,.73,890,1160,25),
+ frontierDungeonRing('big-goblin-ground-slam',2.68,1040,1390,30)
+]];
+const frontierDungeonRosterCache=new Map();
+function frontierDungeonMoveRoster(o,s){
+ if(!o||!s||o.type==='monsterStoneDavid'||facilitySite?.id!=='frontier'||s.townOwned||s.townHunt)return null;
+ const bigGoblin=o.type==='monsterGoblin'&&frontierRuinsBoss(o);
+ if(!(bigGoblin||s.wildSpawn||s.frontierRuins||frontierSouthRecordId(o)||o.dungeonCombat===true))return null;
+ const base=bigGoblin?FRONTIER_DUNGEON_BIG_GOBLIN:FRONTIER_DUNGEON_MOVES[o.type];
+ if(!base)return null;
+ const [tier,range,extra]=base,rank=Object.hasOwn(FRONTIER_DUNGEON_MOVE_RANK,o.combatRank)?o.combatRank:tier;
+ const key=(bigGoblin?'bigGoblin':o.type)+'|'+rank;
+ let roster=frontierDungeonRosterCache.get(key);
+ if(!roster){
+  const established=poiSouthSentinelSpec(o)?.patterns??[],stats=poiMonsterStatsAt(o);
+  const count=Math.max(established.length,FRONTIER_DUNGEON_MOVE_RANK[rank]),patterns=[...established,...extra].slice(0,count);
+  if(patterns.length<count)patterns.push(frontierDungeonFan(o.type+'-breaker',2.35,.88,875,1160,stats.attack+3));
+  if(patterns.length<count)patterns.push(frontierDungeonRing(o.type+'-shockwave',2.45,1030,1350,stats.attack+5));
+  roster={range,rank,patterns,established:established.length};frontierDungeonRosterCache.set(key,roster);
+ }
+ return roster;
+}
+function frontierDungeonAttackPick(o,s,x,z){
+ const roster=frontierDungeonMoveRoster(o,s);
+ if(!roster||!poiSouthSentinelAdmit(o,x,z))return null;
+ const p=poiTempleDragon(o)?poiDragonPosition(s):s,dx=x-p.x,dz=z-p.z,d=Math.hypot(dx,dz);
+ if(!(d>.01))return null;
+ const eligible=(m)=>d<=m.range+1e-7&&d>=(m.near??0)&&(!m.healthPhase||s.hp<=poiMonsterStatsAt(o).hp*m.healthPhase);
+ const normalPossible=d<=roster.range+1e-7;
+ const cursor=Number.isInteger(s.dungeonAreaTurn)?s.dungeonAreaTurn:0;
+ const wantsNormal=(s.dungeonAttackTurn??0)%2===0;
+ let slot=-1;
+ if(!wantsNormal||!normalPossible){
+  for(let j=0;j<roster.patterns.length;j++){
+   const i=(cursor+j)%roster.patterns.length;
+   if(eligible(roster.patterns[i])){slot=i;break}
+  }
+ }
+ if(slot<0&&!normalPossible)return null;
+ const fx=dx/d,fz=dz/d,origin={x:p.x,z:p.z,y:o.y};
+ if(poiAimWallLimit(origin,{x:fx,z:fz},d,poiAimWall(origin))+1e-7<d)return null;
+ if(slot<0){
+  const armed=POI_ARMED_FOES[o.type];
+  return {normal:true,key:'normal',range:roster.range,fx,fz,windup:armed?.windup??POI_ENEMY_WINDUP[o.type]??560,
+   cool:Math.max(430,(armed?.cool??POI_ENEMY_COOLDOWN)-545),damage:poiMonsterStatsAt(o).attack};
+ }
+ const a=roster.patterns[slot],range=a.shape==='lane'&&!a.fixed?Math.min(a.range,d+.55):a.range;
+ return {...a,range,sx:p.x,sz:p.z,y:o.y,fx,fz,dx:fx,dz:fz,motion:slot<roster.established?slot:0,
+  dungeonSlot:slot,dungeonCount:roster.patterns.length,dungeonNew:slot>=roster.established};
+}
+function frontierDungeonAttackAdvance(s,move){
+ s.dungeonAttackTurn=((s.dungeonAttackTurn??0)+1)%2;
+ if(!move.normal)s.dungeonAreaTurn=(move.dungeonSlot+1)%move.dungeonCount;
+}
+function frontierDungeonAttackPose(a){
+ const q=a.southSentinel;
+ if(a.dungeonNormal)return ['dungeon-normal',.27,.48,-.28,.19,.09,.29,.045,315];
+ if(!q?.dungeonNew)return null;
+ if(q.shape==='ring')return [q.key,-.29,.64,-.10,.14,.02,.06,.11,530];
+ if(q.shape==='lane')return [q.key,-.28,.37,-.16,.18,.13,.38,.10,485];
+ return [q.key,.33,.51,-.80,.83,.12,.40,.07,490];
+}
+// END FRONTIER DUNGEON ATTACK ROSTER
+
 function poiSouthSentinelSpec(obj){return Object.hasOwn(POI_SOUTH_SENTINELS,obj?.type)?POI_SOUTH_SENTINELS[obj.type]:null}
 function poiSouthSentinelAdmit(obj,x,z){
  if(frontierCrystalType(obj))return facilitySite?.id==='frontier'&&frontierCrystalAdmit(obj,x,z);
@@ -28745,8 +28868,8 @@ function poiEnemyVisualAttack(type,s,now){
  if(FRONTIER_WOOD_FOES.has(type))type='monsterGoblin';
  if(type==='monsterStoneDavid'&&typeof poiDavidPose==='function'){const p=poiDavidPose(s,now);return p.phase==='dormant'||p.phase==='ready'?null:p}
  if(type==='monsterNorthMinotaur'&&typeof poiNorthMinotaurPose==='function')return poiNorthMinotaurPose(s,now);
- if(type===POI_BIG_SLIME)return poiBigSlimePose(s,now);
- if(type==='monsterSlime')return poiSlimeAttackPose(s,now);
+ if(type===POI_BIG_SLIME&&!s.playerAttack?.dungeonNormal)return poiBigSlimePose(s,now);
+ if(type==='monsterSlime'&&!s.playerAttack?.southSentinel)return poiSlimeAttackPose(s,now);
  if(type==='monsterPondSkater')return poiPondSkaterPose(s,now);
  const a=s.playerAttack;
  if(!a)return null;
@@ -28756,7 +28879,7 @@ function poiEnemyVisualAttack(type,s,now){
   return {phase:age>=0?'release':'windup',dx:0,dz:0,lift:0,width:1,squash:1,heading:Math.atan2(-ray.x,ray.z),tell:age>=0?.7:Math.max(0,Math.min(.7,(now-a.start)/820))};
  }
  if(type==='monsterSkeleton'&&a.obj&&typeof poiChapelEliteMatch==='function'&&poiChapelEliteMatch(a.obj))type='monsterChapelWardenVisual';
- const options=POI_ENEMY_VISUAL_PROFILES[type],p=options?.[a.motion]||options?.[0];
+ const options=POI_ENEMY_VISUAL_PROFILES[type],p=frontierDungeonAttackPose(a)??options?.[a.motion]??options?.[0];
  if(!p)return null;
  const [variant,prePitch,hitPitch,preTwist,hitTwist,back,reach,hop,recover]=p;
  const facing=a.dx>0?3:a.dx<0?1:a.dz<0?2:0;
@@ -28962,12 +29085,15 @@ function poiEnemyBeginPlayer(obj,s,now){
  const ally=arguments[3]??null,tx=ally?.x??poiWalkX,tz=ally?.z??poiWalkZ;
  if(obj.type==='monsterNorthMinotaur'&&typeof poiNorthMinotaurBegin==='function')return poiNorthMinotaurBegin(obj,s,now,ally);
  if(ally&&typeof poiEnemyAllyValid==='function'&&!poiEnemyAllyValid(obj,s,ally.actor))return false;
- const south=poiSouthSentinelAim(obj,s,tx,tz);
- if(poiSouthSentinelSpec(obj)&&!south)return false;
+ const roster=frontierDungeonMoveRoster(obj,s),move=roster?frontierDungeonAttackPick(obj,s,tx,tz):null;
+ if(roster&&!move)return false;
+ const normal=move?.normal?move:null;
+ const south=roster?(normal?null:move):poiSouthSentinelAim(obj,s,tx,tz);
+ if(poiSouthSentinelSpec(obj)&&!south&&!normal)return false;
  const guardian=obj.type==='monsterMineGuard',armed=typeof POI_ARMED_FOES==='object'?POI_ARMED_FOES[obj.type]:null,
   skater=obj.type==='monsterPondSkater',
   guardTrial=guardian&&typeof poiMineGuardTrial==='function'&&poiMineGuardTrial(obj),
-  windup=guardian?(guardTrial?POI_MINE_TRIAL_WINDUP_MS:POI_MINE_GUARD_WINDUP):skater?POI_POND_SKATER_WINDUP:south?.windup??armed?.windup??POI_ENEMY_WINDUP[obj.type];
+  windup=move?.windup??(guardian?(guardTrial?POI_MINE_TRIAL_WINDUP_MS:POI_MINE_GUARD_WINDUP):skater?POI_POND_SKATER_WINDUP:south?.windup??armed?.windup??POI_ENEMY_WINDUP[obj.type]);
  if(!windup||!poiEnemyThreatEnabled()||s.playerAttack?.pending||now<s.nextAttack||s.townOwned||
     poiMonsterStates.get(obj)!==s||s.hp<=0||(facilitySite&&obj.y!==poiWalkLevel)||
     (s.wildSpawn&&!poiWildPlayerOutside())||
@@ -28980,29 +29106,30 @@ function poiEnemyBeginPlayer(obj,s,now){
  }
  const dx=tx-s.x,dz=tz-s.z;
  const sweep=guardian&&now>=Math.max(s.guardSlideUntil||0,s.guardRestUntil||0)&&poiMineGuardHere(obj,s)?(guardTrial?poiMineGuardTrialAim(s,now,true,ally?.p):poiMineGuardAim(s,dx,dz)):null;
- const line=armed?poiArmedAim(obj,s,tx,tz):null;
+ const line=armed&&!move?poiArmedAim(obj,s,tx,tz):null;
  const adjacent=guardian||armed||skater||typeof poiEnemyAdjacent!=='function'?
   Math.abs(dx)+Math.abs(dz)===1:poiEnemyAdjacent(obj,s,tx,tz);
- if(!south&&(guardian?!sweep:armed?!line:!adjacent))return false;
- const diagonal=!south&&!guardian&&!line&&!skater&&dx&&dz&&typeof poiEnemyAttackTrace==='function'?
+ if(!south&&!normal&&(guardian?!sweep:armed?!line:!adjacent))return false;
+ const diagonal=!south&&!normal&&!guardian&&!line&&!skater&&dx&&dz&&typeof poiEnemyAttackTrace==='function'?
   {...poiEnemyAttackTrace(s.x,s.z,tx,tz,(u,v,fx,fz)=>poiEnemyCombatEdge(u,v,fx,fz,poiWalkLevel,s)),angular:true}:null;
- const attack=south||sweep||line||diagonal;
+ const attack=south||normal||sweep||line||diagonal;
  if(south){
   s.attackVisualSequence=south.motion+1;
   s.facing=Math.abs(south.dx)>=Math.abs(south.dz)?(south.dx>0?3:1):(south.dz<0?2:0);
  }
  if(line)s.facing=line.fx?(line.fx>0?3:1):(line.fz<0?2:0);
- if(ally&&!line)s.facing=Math.abs(dx)>=Math.abs(dz)?(dx>0?3:1):(dz<0?2:0);
+ if((ally||normal)&&!line)s.facing=Math.abs(dx)>=Math.abs(dz)?(dx>0?3:1):(dz<0?2:0);
  if(sweep?.guardTrial)s.guardTrialHeading=[sweep.fx,sweep.fz];
- s.nextAttack=now+(guardian?(guardTrial?POI_MINE_TRIAL_COOLDOWN_MS:POI_MINE_GUARD_COOLDOWN):skater?POI_POND_SKATER_COOLDOWN:south?windup+south.cool:armed?.cool??POI_ENEMY_COOLDOWN);
+ s.nextAttack=now+(move?windup+move.cool:guardian?(guardTrial?POI_MINE_TRIAL_COOLDOWN_MS:POI_MINE_GUARD_COOLDOWN):skater?POI_POND_SKATER_COOLDOWN:south?windup+south.cool:armed?.cool??POI_ENEMY_COOLDOWN);
  s.playerAttack={obj,start:now,hit:now+windup,x:tx,z:tz,y:poiWalkLevel,...(ally?{companionVictim:ally.actor}:null),
   sx:s.x,sz:s.z,dx:attack?.fx??dx,dz:attack?.fz??dz,pending:true,motion:south?.motion??(typeof poiEnemyNextVisualVariant==='function'?poiEnemyNextVisualVariant(obj.type,s):0),
-  ...(south?{southSentinel:south,kind:south.key,angular:true}:attack?{tiles:attack.tiles}:null),...(attack?.angular?{angular:true}:null),...(sweep?.guardTrial?{guardTrial:true}:null)};
+  ...(south?{southSentinel:south,kind:south.key,angular:true}:normal?{dungeonNormal:true,kind:'normal',tiles:[{x:tx,z:tz}]}:attack?{tiles:attack.tiles}:null),...(attack?.angular?{angular:true}:null),...(sweep?.guardTrial?{guardTrial:true}:null)};
  if(facilitySite?.id==='frontier'&&!frontierSpecialEnemyContact(s.playerAttack)){
   if(!poiCompanionAttackClear(s,ally?.p??{x:tx,z:tz},poiWalkLevel)){
    s.playerAttack=null;s.nextAttack=now+120;return false;
   }
  }
+ if(move)frontierDungeonAttackAdvance(s,move);
  poiEnemyPending.add(s);if(obj.type==='monsterSlime'||guardian||line||skater||typeof poiEnemyVisualAttack==='function')poiMonsterMeshDirty=true;
  return true;
 }
@@ -29029,7 +29156,7 @@ function poiEnemyResolvePlayer(now){
   if(!poiEnemyAttackSourceValid(s,a)){
    poiEnemyPending.delete(s);s.playerAttack=null;poiMonsterMeshDirty=true;continue;
   }
-  const mage=a.obj.type==='monsterSkelMage'&&typeof poiEnemyMageBoltRelease==='function';
+  const mage=!a.dungeonNormal&&!a.southSentinel&&a.obj.type==='monsterSkelMage'&&typeof poiEnemyMageBoltRelease==='function';
   if(mage&&a.mageReach===undefined&&now>=a.hit-180&&now-a.hit<poiEnemyContactTolerance(a))
    a.mageReach=poiEnemyMageBoltRelease(a,a.hit-180);
   if(now<a.hit)continue;
@@ -29601,7 +29728,7 @@ function frontierSouthPursuitFrame(o,s,now,human){
  if(s.actorFree&&poiMonsterActorSettle(o,s,now))return;
  if(target.kind==='npc'){
   if(frontierExpeditionEnemyTurn(o,s,now,target.actor))return;
- }else if(poiSouthSentinelAim(o,s,target.x,target.z)){
+ }else if(frontierDungeonAttackPick(o,s,target.x,target.z)||poiSouthSentinelAim(o,s,target.x,target.z)){
   if(now>=s.nextAttack&&poiWalkLevel===-1)poiEnemyBeginPlayer(o,s,now,target.kind==='party'?target:null);
   return;
  }
@@ -29692,7 +29819,7 @@ function poiAreaPursuitTurn(o,s,now,patrol){
  }
  if(target.key!==memory.key){memory.key=target.key;memory.route=null;memory.retryAt=0}
  const ally=target.actor?target:null;
- if(special?poiSouthSentinelAim(o,s,target.x,target.z):
+ if(frontierDungeonMoveRoster(o,s)?frontierDungeonAttackPick(o,s,target.x,target.z):special?poiSouthSentinelAim(o,s,target.x,target.z):
     armed?poiArmedAim(o,s,target.x,target.z):poiEnemyAdjacent(o,s,target.x,target.z)&&poiCompanionAttackClear(s,target,o.y)){
   if(s.actorFree&&!s.dragonBody&&poiMonsterActorSettle(o,s,now))return true;
   if(now>=s.nextAttack)poiEnemyBeginPlayer(o,s,now,ally);
@@ -34229,14 +34356,17 @@ function frontierExpeditionEnemyTurn(o,s,now,focus=null){
   return true;
  }
  if(!focus||!frontierSouthPursuitNpcValid(focus))return false;
- const pattern=poiSouthSentinelAim(o,s,focus.x,focus.z);
+ const roster=frontierDungeonMoveRoster(o,s),pattern=roster?frontierDungeonAttackPick(o,s,focus.x,focus.z):poiSouthSentinelAim(o,s,focus.x,focus.z);
  if(!pattern)return false;
  if(now<Math.max(s.nextAttack||0,s.expeditionNext||0))return true;
  s.expeditionNext=s.nextAttack=now+pattern.windup+pattern.cool;
  s.facing=[2,1,0,3][poiTownNpcFaces(s.x,s.z,focus.x,focus.z)];
- s.attackVisualSequence=pattern.motion+1;
+ if(roster)frontierDungeonAttackAdvance(s,pattern);
+ if(!pattern.normal)s.attackVisualSequence=pattern.motion+1;
  s.counterAt=now;s.counterHitAt=now+pattern.windup;
- s.expeditionCounter={hit:s.counterHitAt,pattern,warning:poiEnemyResidentWarn(o,s,now,s.counterHitAt,focus,pattern)};
+ const warning=poiEnemyResidentWarn(o,s,now,s.counterHitAt,focus,pattern.normal?null:pattern);
+ if(pattern.normal){warning.dungeonNormal=true;warning.kind='normal'}
+ s.expeditionCounter={hit:s.counterHitAt,pattern,warning};
  poiMonsterMeshDirty=true;
  return true;
 }
@@ -34412,7 +34542,7 @@ function frontierWildResidentTurn(obj,s,now){
   const hit=s.frontierCounter,a=hit.actor;s.frontierCounter=null;s.counterHitAt=null;
   if(poiTownNpcActors.includes(a)&&!a.death&&!a.recessed&&a.y===obj.y&&poiEnemyResidentContact(hit.warning,s,a,now)){
    const key=poiEnemyLearnKey(obj);
-   const hp=Math.max(0,a.hp-Math.max(1,poiMonsterStatsAt(obj).attack-poiTownNpcDefense(a)));
+   const hp=Math.max(0,a.hp-Math.max(1,(hit.move?.damage??poiMonsterStatsAt(obj).attack)-poiTownNpcDefense(a)));
    if(hp?frontierLifeSetHp(a,hp):frontierNpcDeath(a,now)){
     poiRecordAttack(a,key,now);a.hurtAt=now;frontierLifeLine(a.role.id,a,hp<=poiTownNpcMaxHp(a.role.id)*.22?'critical':'pain',now);
     if(poiTownNpcCombatNear(a.x,a.z,a.y)){
@@ -34432,11 +34562,18 @@ function frontierWildResidentTurn(obj,s,now){
   a=n;dist=d;
  }
  if(!a){s.frontierCounter=null;s.counterHitAt=null;return false}
- if(dist<=1.38){
+ const roster=frontierDungeonMoveRoster(obj,s),move=roster?frontierDungeonAttackPick(obj,s,a.x,a.z):null;
+ if(move||!roster&&dist<=1.38){
   if(s.actorFree&&poiMonsterActorSettle(obj,s,now))return true;
   if(now>=(s.nextAttack||0)){
-   s.nextAttack=now+1500;s.counterAt=now;s.counterHitAt=now+(POI_ENEMY_WINDUP[obj.type]??480);
-   s.frontierCounter={actor:a,hit:s.counterHitAt,before:a.hp,warning:poiEnemyResidentWarn(obj,s,now,s.counterHitAt,a)};poiMonsterMeshDirty=true;
+   const windup=move?.windup??POI_ENEMY_WINDUP[obj.type]??480;
+   s.nextAttack=now+(move?windup+move.cool:1500);s.counterAt=now;s.counterHitAt=now+windup;
+   const warning=poiEnemyResidentWarn(obj,s,now,s.counterHitAt,a,move&&!move.normal?move:null);
+   if(move){
+    frontierDungeonAttackAdvance(s,move);
+    if(move.normal){warning.dungeonNormal=true;warning.kind='normal'}
+   }
+   s.frontierCounter={actor:a,hit:s.counterHitAt,before:a.hp,move,warning};poiMonsterMeshDirty=true;
   }
  }else if(!s.actorFree||!poiMonsterActorSettle(obj,s,now))poiTownNpcPreyAdvance(a,s,now,obj);
  return true;
@@ -35050,7 +35187,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v503',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v504',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -35165,7 +35302,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v503';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v504';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -35380,7 +35517,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v503',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v504',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -38640,6 +38777,7 @@ function poiDungeonMonsterRender(now,vp,onSlice){
   if(s.hp<=0||!onSlice(o,s))continue;
   const pose=poiMonsterPose(o,s,now),art=poiMonsterRenderType(o),scale=frontierRuinsBoss(o)?1.60:1;
   if(!poiDungeonActorInCamera(vp,o,pose,art,scale))continue;
+  poiDungeonVisibleHealth.set(o,pose);
   if(art==='monsterSlime'||!pose.attack&&art!=='monsterStoneDavid'&&art!=='monsterTempleDragonZombie'&&art!=='monsterCrystalBat')
    poiDungeonDrawRigid(o,s,pose,art,scale,now,vp);
   else poiDungeonDrawAnimated(o,s,pose,art,now,vp);
@@ -38647,6 +38785,7 @@ function poiDungeonMonsterRender(now,vp,onSlice){
  poiDungeonMonsterDebris(now,vp);
 }
 function poiMonsterRender(now,vp,sacredPeek=false){
+ poiDungeonVisibleHealth.clear();
  if(!poiWalkActive)return;
  const sacred=sacredPeek||poiSacredInteriorPlayer();
  if(sacred!==poiSacredBossSlice){poiSacredBossSlice=sacred;poiMonsterMeshDirty=true}
@@ -41775,7 +41914,214 @@ const FRONTIER_RUINS_ORIGINAL=(()=>{
   directions:[[0,-1],[1,0],[0,1],[-1,0]],
   BOSS:P(44,46),CHEST:P(44,52),PORTAL:P(48,51),ENTRY:P(9,29),LOOT:[P(2,9),P(5,58),P(28,41)]};
 })();
-function frontierDenPlan(seed,orientation=null){
+const FRONTIER_RANK_MAX_HALL=Object.freeze({F:8,E:10,D:12,C:14,B:16,A:18,S:20});
+const FRONTIER_RANK_HALL_DIRS=[[0,-1],[1,0],[0,1],[-1,0]];
+const frontierRankKey=(x,z)=>x+','+z;
+const frontierRankBox=(h,fn)=>{for(let z=h.z1;z<=h.z2;z++)for(let x=h.x1;x<=h.x2;x++)fn(x,z)};
+const frontierRankInside=(h,x,z)=>h&&x>=h.x1&&x<=h.x2&&z>=h.z1&&z<=h.z2;
+// Width is perpendicular to each center-line segment; length is the number
+// of steps from doorway to doorway, including the two doorway positions.
+function frontierRankHalls(rooms,halls,rank,rng,size,keep=()=>false){
+ const max=FRONTIER_RANK_MAX_HALL[rank]??8;
+ const draw=h=>{const keys=new Set();frontierRankBox(h,(x,z)=>keys.add(frontierRankKey(x,z)));return keys};
+ const originals=halls.map(draw),chosen=[];
+ const rand=(a,b)=>a+Math.floor(rng()*(b-a+1));
+ for(const [i,h] of halls.entries()){
+  const from=rooms[h.from],to=rooms[h.to];
+  const hor=from&&to?(from.z1+from.z2===to.z1+to.z2||Math.abs(from.x1+from.x2-to.x1-to.x2)>Math.abs(from.z1+from.z2-to.z1-to.z2)):h.x2-h.x1>h.z2-h.z1;
+  const lo=hor?h.x1:h.z1,hi=hor?h.x2:h.z2,v=hor?h.z1:h.x1,w=h.width,shoulder=Math.floor((w-1)/2),base=v+shoulder;
+  const basePath=Array.from({length:Math.max(1,hi-lo+3)},(_,j)=>hor?[lo-1+j,base]:[base,lo-1+j]);
+  const baseline={...h,path:basePath,length:basePath.length,bends:0,tiles:originals[i]};
+  let result=baseline;
+  if(!from||!to||h.kind==='entrance'||keep(h)||hi<=lo){chosen.push(result);continue}
+  const blocked=new Set(),foreign=new Set();
+  for(const [j,r] of rooms.entries())if(j!==h.from&&j!==h.to)frontierRankBox(r,(x,z)=>blocked.add(frontierRankKey(x,z)));
+  for(let j=0;j<halls.length;j++)if(j!==i)for(const k of (chosen[j]?.tiles??originals[j]))foreign.add(k);
+  const ax=(x,z)=>hor?[x,z]:[z,x];
+  const [x0,z0]=ax(lo-1,base),left=frontierRankInside(from,x0,z0)?from:to,right=left===from?to:from;
+  const tryPath=(points,sideRoute=false)=>{
+   if(points.length<3||points.length>max)return null;
+   const tiles=new Set();let prev=null,bends=0;
+   if(sideRoute&&points.slice(1,-1).some(([x,z])=>frontierRankInside(left,x,z)||frontierRankInside(right,x,z)))return null;
+   for(let j=1;j<points.length;j++){
+    const [x,z]=points[j-1],[a,b]=points[j],dx=a-x,dz=b-z,dir=dx===1?1:dx===-1?3:dz===1?2:0;
+    if(prev!==null&&dir!==prev)bends++;prev=dir;
+    if(bends>5)return null;
+    for(const [px,pz]of [[x,z],[a,b]])for(let off=-shoulder;off<w-shoulder;off++){
+     const nx=px+Math.abs(dz)*off,nz=pz+Math.abs(dx)*off,y=hor?nx:nz;
+     if(!sideRoute&&(y<lo||y>hi)||sideRoute&&(frontierRankInside(left,nx,nz)||frontierRankInside(right,nx,nz)))continue;
+     if(nx<1||nx>=size-1||nz<1||nz>=size-1)return null;
+     const k=frontierRankKey(nx,nz);
+     if(blocked.has(k)||foreign.has(k)||FRONTIER_RANK_HALL_DIRS.some(([u,v])=>blocked.has(frontierRankKey(nx+u,nz+v))||foreign.has(frontierRankKey(nx+u,nz+v))))return null;
+     tiles.add(k);
+    }
+   }
+   return {...h,tiles,path:points,length:points.length,bends};
+  };
+  // Side entry is possible only when there's room outside the end room's
+  // lateral wall. It contributes odd bend counts without fake zig-zag steps.
+  if(rng()<.74)for(let tries=0;tries<20;tries++){
+   const s=base+rand(-3,3),side=rng()<.5?-1:1;
+   if(!frontierRankInside(left,...ax(lo-1,s-shoulder))||!frontierRankInside(left,...ax(lo-1,s+w-shoulder-1)))continue;
+   const edge=hor?(side<0?right.z1:right.z2):(side<0?right.x1:right.x2);
+   const roomEnd=hor?right.x2:right.z2,a=Math.min(roomEnd-1,hi+rand(2,3));
+   if(a<=hi)continue;
+   const outside=edge+side*(1+Math.max(shoulder,w-shoulder-1));
+   const form=rand(1,3),slot=rand(lo,hi-1);
+   let corners;
+   if(form===1&&Math.sign(s-edge)===side&&Math.abs(s-edge)>=Math.abs(outside-edge))corners=[[a,s],[a,edge]];
+   else if(form===3&&s!==outside&&s+Math.sign(outside-s)!==outside){
+    const shift=rand(Math.min(outside,s)+1,Math.max(outside,s)-1);
+    corners=[[slot,s],[slot,shift],[slot+1,shift],[slot+1,outside],[a,outside],[a,edge]];
+   }else if(s!==outside)corners=[[slot,s],[slot,outside],[a,outside],[a,edge]];
+   else continue;
+   let u=lo-1,v=s;const points=[ax(u,v)];
+   for(const [a,b]of corners){
+    while(u!==a){u+=Math.sign(a-u);points.push(ax(u,v))}
+    while(v!==b){v+=Math.sign(b-v);points.push(ax(u,v))}
+   }
+   const next=tryPath(points,true);
+   if(next?.bends%2===1){result=next;break}
+  }
+  if(!result.bends&&rng()<.86)for(let tries=0;tries<26;tries++){
+   const s=base+rand(-2,2),e=base+rand(-2,2),n=rand(1,Math.min(2,hi-lo));
+   if(!frontierRankInside(left,...ax(lo-1,s-shoulder))||!frontierRankInside(left,...ax(lo-1,s+w-shoulder-1))
+     ||!frontierRankInside(right,...ax(hi+1,e-shoulder))||!frontierRankInside(right,...ax(hi+1,e+w-shoulder-1)))continue;
+   const slot=rand(lo,hi-1),f=rand(slot+1,hi),turns=n===1?[[slot,e]]:[[slot,e===s?s+rand(1,3):s+rand(-3,3)],[f,e]];
+   if(turns[0][1]===s&&turns.at(-1)[1]===s)continue;
+   let v=s;
+   const points=[ax(lo-1,v)];
+   for(let x=lo;x<=hi+1;x++){
+    points.push(ax(x,v));
+    for(const [at,u]of turns)if(x===at)while(v!==u){v+=Math.sign(u-v);points.push(ax(x,v))}
+   }
+   const next=tryPath(points);
+   if(next?.bends){result=next;break}
+  }
+  chosen.push(result);
+ }
+ return chosen;
+}
+function frontierRankHallWorld(h,point){
+ const box=({...h});
+ if(h.path)box.path=h.path.map(([x,z])=>point(x,z));
+ if(h.tiles)box.tiles=new Set([...h.tiles].map(k=>{const {x,z}=point(...k.split(',').map(Number));return frontierRankKey(x,z)}));
+ return box;
+}
+// Rectangular room lattice, primarily used by the medium-rank dungeons.
+// Slots form a path with genuine one-entry dead ends; the upper-left start
+// always continues straight into the second trail room before the first turn.
+function frontierRankLattice(seed,{rank,size,cols=3,rows=3,centersX,centersZ,main,range,branchMax=2,arena=9,widths=[2,3]}){
+ const rng=frontierMeadowRandom(seed^0x39a2cda5),n=(a,b)=>a+Math.floor(rng()*(b-a+1)),choose=v=>v[n(0,v.length-1)];
+ const adjacent=s=>{
+  const x=s%cols,z=Math.floor(s/cols);
+  return FRONTIER_RANK_HALL_DIRS.map(([dx,dz])=>[x+dx,z+dz]).filter(([x,z])=>x>=0&&x<cols&&z>=0&&z<rows).map(([x,z])=>z*cols+x);
+ };
+ const candidates=[];
+ const visit=(path,used)=>{
+  const slot=path.at(-1);
+  if(path.length===main+1){
+   if(slot%cols+Math.floor(slot/cols)>=2&&path.slice(1,-1).some(p=>adjacent(p).some(a=>!used.has(a))))candidates.push(path);
+   return;
+  }
+  for(const j of adjacent(slot))if(!used.has(j))visit([...path,j],new Set([...used,j]));
+ };
+ visit([0,1],new Set([0,1]));
+ const route=choose(candidates),used=new Set(route),rooms=[],halls=[];
+ const room=(slot,kind,branch=null,deadEnd=false)=>{
+  const col=slot%cols,row=Math.floor(slot/cols),index=rooms.length,cx=centersX[col],cz=centersZ[row];
+  const w=kind==='boss'?arena:n(...range),h=kind==='boss'?arena:n(...range);
+  const x1=cx-Math.floor((w-1)/2),z1=cz-Math.floor((h-1)/2);
+  const r={index,kind,col,row,cx,cz,x1,x2:x1+w-1,z1,z2:z1+h-1,branch,deadEnd};rooms.push(r);return r;
+ };
+ const link=(a,b,kind,width=n(...widths))=>{
+  const off=Math.floor((width-1)/2);let r;
+  if(a.row===b.row){
+   const [x,z]=a.col<b.col?[a,b]:[b,a];r={x1:x.x2+1,x2:z.x1-1,z1:x.cz-off,z2:x.cz-off+width-1};
+  }else{
+   const [x,z]=a.row<b.row?[a,b]:[b,a];r={z1:x.z2+1,z2:z.z1-1,x1:x.cx-off,x2:x.cx-off+width-1};
+  }
+  halls.push({...r,from:a.index,to:b.index,kind,width});
+ };
+ const trunk=route.map((s,i)=>room(s,i===main?'boss':'main')),start=trunk[0],boss=trunk.at(-1);
+ halls.push({x1:0,x2:start.x1-1,z1:start.cz-1,z2:start.cz+1,from:-1,to:0,kind:'entrance',width:3});
+ for(let i=1;i<trunk.length;i++)link(trunk[i-1],trunk[i],'main',i===main?3:n(...widths));
+ const b=[];
+ for(const [i,anchor]of route.slice(1,-1).entries()){
+  const walk=(slot,path)=>{
+   if(path.length)b.push({anchor:trunk[i+1],path});
+   if(path.length===branchMax)return;
+   for(const j of adjacent(slot))if(!used.has(j)&&!path.includes(j))walk(j,[...path,j]);
+  };
+  walk(anchor,[]);
+ }
+ const max=Math.max(...b.map(x=>x.path.length)),len=n(1,max),choice=choose(b.filter(x=>x.path.length===len));
+ let tip=choice.anchor;
+ for(const [i,s]of choice.path.entries()){
+  const r=room(s,'branch',0,i===len-1);link(tip,r,'branch');tip=r;
+ }
+ const floor=new Set();
+ const checked=frontierRankHalls(rooms,halls,rank,rng,size,h=>h.from===0&&h.to===1);
+ for(const r of rooms)frontierRankBox(r,(x,z)=>floor.add(frontierRankKey(x,z)));
+ for(const h of checked)for(const k of h.tiles)floor.add(k);
+ return {rooms,trunk,start,boss,tip,branch:choice,previous:trunk.at(-2),halls:checked,floor,rng,n,choose};
+}
+
+function frontierRankDenEntrance(turn,offset=0,mid=11){
+ const t=turn??0;
+ const spot=(x,z)=>{const [a,b]=frontierDungeonPoint(x,z,t);return {x:a+offset,z:b+offset}};
+ const local=(x,z)=>frontierDungeonPoint(x-offset,z-offset,4-t);
+ const doorstep=(x,z)=>{const [a,b]=local(Math.floor(x),Math.floor(z));return a>=60&&a<=63&&Math.abs(b-mid)<=1};
+ const exitStand=(x,z)=>{const [a,b]=local(x,z);return a===63&&Math.abs(b-mid)<=1};
+ const exitEdge=(x,z,fx,fz)=>{
+  const [a,b]=local(x,z),[p,q]=local(fx,fz);return a===64&&p===63&&b===q&&Math.abs(b-mid)<=1;
+ };
+ return {rankLayout:2,turn:t,east:64,mid,spot,local,doorstep,exitStand,exitEdge,floor:[],
+  spawn:{...spot(62,mid),face:(3+t)%4},mouth:spot(63,mid),outside:spot(64,mid)};
+}
+function frontierRankDenPlan(seed,turn){
+ const rng=frontierMeadowRandom(seed^0x3fa1574f),main=3+Math.floor(rng()*3);
+ const layout=frontierRankLattice(seed,{rank:'E',main,size:64,cols:4,rows:3,centersX:[11,25,39,53],centersZ:[11,25,39],range:[8,10],branchMax:3,arena:13});
+ const {rooms,trunk,start,boss,tip,previous,halls,floor,n}=layout,e=frontierRankDenEntrance(turn,0,start.cz);
+ const point=(u,z)=>({...e.spot(63-u,z),y:0});
+ const worldRect=h=>{
+  const a=point(h.x1,h.z1),b=point(h.x2,h.z2);return {x1:Math.min(a.x,b.x),x2:Math.max(a.x,b.x),z1:Math.min(a.z,b.z),z2:Math.max(a.z,b.z)};
+ };
+ const cells=new Set([...floor].map(k=>{const p=point(...k.split(',').map(Number));return frontierRankKey(p.x,p.z)}));
+ const tokens=rooms.filter(r=>r.kind!=='boss'),MOBS=[],groups=[];
+ for(const [i,r]of tokens.entries()){
+  const p=[];
+  for(let z=r.z1+1;z<r.z2;z++)for(let x=r.x1+1;x<r.x2;x++)if(i!==0||x>=r.x1+3)p.push({x,z});
+  const count=Math.floor(30/tokens.length)+(i<30%tokens.length?1:0),mobs=[];
+  for(let j=0;j<count;j++){
+   const u=p.splice(n(0,p.length-1),1)[0];
+   const o={...point(u.x,u.z),type:(MOBS.length%5===0)?'monsterSlime':'monsterGoblin',rot:n(0,3)};
+   mobs.push(o);MOBS.push(o);
+  }
+  const a=worldRect(r);groups.push({kind:r.kind==='branch'?'side':r.kind,segments:[[a.x1,a.z1,a.x2,a.z2]],mobs});
+ }
+ const ARENA=worldRect(boss);groups.push({kind:'boss',segments:[[ARENA.x1,ARENA.z1,ARENA.x2,ARENA.z2]],mobs:[]});
+ for(const h of halls){
+  const a=worldRect(h);groups.push({kind:'hall',segments:[[a.x1,a.z1,a.x2,a.z2]],mobs:[]});
+ }
+ const safe=(r,x,z)=>{
+  const p=point(x,z);
+  if(!MOBS.some(o=>o.x===p.x&&o.z===p.z))return p;
+  for(let j=r.z2;j>=r.z1;j--)for(let i=r.x2;i>=r.x1;i--){
+   const p=point(i,j);if(!MOBS.some(o=>o.x===p.x&&o.z===p.z))return p;
+  }
+  return p;
+ };
+ const dx=Math.sign(boss.cx-previous.cx),dz=Math.sign(boss.cz-previous.cz);
+ const corridor=halls.map(h=>({...frontierRankHallWorld(h,point),...worldRect(h)}));
+ const LOOT=[safe(tip,tip.x2,tip.z2),safe(trunk[1],trunk[1].x1,trunk[1].z2),safe(trunk[2],trunk[2].x2,trunk[2].z1)];
+ return {rankLayout:2,cells,MOBS,groups,height:5,ARENA,entrance:e,corridors:corridor,directions:FRONTIER_RANK_HALL_DIRS,
+  BOSS:point(boss.cx,boss.cz),CHEST:point(boss.cx+dx*4-dz*2,boss.cz+dz*4+dx*2),PORTAL:point(boss.cx+dx*4+dz*2,boss.cz+dz*4-dx*2),
+  ENTRY:{...e.spawn,y:0},LOOT};
+}
+
+function frontierDenPlan(seed,orientation=null,rankLayout=1){
+ if(rankLayout===2)return frontierRankDenPlan(seed,orientation??0);
  if(!seed&&orientation===null)return FRONTIER_RUINS_ORIGINAL;
  const extra=orientation===null?0:Math.floor(frontierMeadowRandom(seed^0x4d276a9b)()*3);
  const rng=frontierMeadowRandom(seed),n=(a,b)=>a+Math.floor(rng()*(b-a+1));
@@ -41878,7 +42224,7 @@ function frontierDenValid(d){
  return main.length>=3&&main.length<=5&&d.MOBS.length===30&&d.MOBS.filter(p=>p.type==='monsterSlime').length===6&&
   new Set(d.MOBS.map(p=>key(p.x,p.z))).size===30&&
   [d.ENTRY,d.BOSS,d.CHEST,d.PORTAL,...d.MOBS,...d.LOOT].every(p=>p&&floor(p)&&p.x>=0&&p.x<64&&p.z>=0&&p.z<64)&&
-  [27,28,29,30,31].every(z=>{const p=d.entrance?.spot(9,z)??{x:9,z};return d.cells.has(key(p.x,p.z))})&&reach(null).size===d.cells.size+entranceCells.size&&
+  (d.rankLayout===2?floor(d.entrance.spawn):[27,28,29,30,31].every(z=>{const p=d.entrance?.spot(9,z)??{x:9,z};return d.cells.has(key(p.x,p.z))}))&&reach(null).size===d.cells.size+entranceCells.size&&
   main.every(g=>!reach(g.segments[0]).has(boss));
 }
 function frontierVisitSeed(prior,parity=null){
@@ -41898,8 +42244,8 @@ function frontierDenViewWalls(){
  return frontierDenVisibleWalls(Math.sin(yaw),Math.cos(yaw));
 }
 let FRONTIER_DEN_FLOOR,FRONTIER_DEN_EDGES;
-function frontierDenApplyPlan(seed,turn=null){
- FRONTIER_RUINS=frontierDenPlan(seed,turn);
+function frontierDenApplyPlan(seed,turn=null,rankLayout=1){
+ FRONTIER_RUINS=frontierDenPlan(seed,turn,rankLayout);
  FRONTIER_DEN_FLOOR=new Set(FRONTIER_RUINS.cells);FRONTIER_DEN_EDGES=[];
  for(const {x,z} of frontierDenCurrentEntrance().floor)FRONTIER_DEN_FLOOR.add(x+','+z);
  for(const k of FRONTIER_DEN_FLOOR){
@@ -41921,7 +42267,7 @@ function frontierRuinsGeometry(){
   const [x,z]=k.split(',').map(Number),dist=Math.hypot(x-FRONTIER_RUINS.BOSS.x-.5,z-FRONTIER_RUINS.BOSS.z-.5);
   const entrance=frontierDenCurrentEntrance(),[u,v]=entrance.local(x,z);
   if(frontierDenOutdoorMouth(x,z)){
-   const grass=v===27||v===31||u===entrance.east-1&&v!==29;
+   const grass=Math.abs(v-(entrance.mid??29))>=2||u===entrance.east-1&&v!==(entrance.mid??29);
    const earth=[.45,.347,.229],green=[.326,.438,.227];
    top(ground,x,z,x+1,z+1,g+.012,tone(earth,x,z,.16));
    top(ground,x+.022,z+.022,x+.978,z+.978,g+.018,tone(grass?green:earth,x,z,.20));
@@ -41973,10 +42319,10 @@ function frontierWoodEntrance(){return frontierWoodPlanCurrent?.entrance??FRONTI
 function frontierWoodDoorstep(x,z){return frontierWoodEntrance().doorstep(x,z)}
 function frontierWoodExitStand(x,z){return frontierWoodEntrance().exitStand(x,z)}
 function frontierWoodExitEdge(x,z,fx,fz){return frontierWoodEntrance().exitEdge(x,z,fx,fz)}
-function frontierWoodPlan(seed,count,turn=null){
- let source=frontierDenPlan(seed||1,turn);
- if(!frontierDenValid(source))source=frontierDenPlan(1,turn);
- const entrance=frontierDungeonEntrance(turn,64);
+function frontierWoodPlan(seed,count,turn=null,rankLayout=1){
+ let source=frontierDenPlan(seed||1,turn,rankLayout);
+ if(!frontierDenValid(source))source=frontierDenPlan(1,turn,rankLayout);
+ const entrance=rankLayout===2?frontierRankDenEntrance(turn,64,source.entrance.mid):frontierDungeonEntrance(turn,64);
  const rng=frontierMeadowRandom(seed^0x713A12FD),move=p=>({...p,x:p.x+64,z:p.z+64}),key=p=>p.x+','+p.z;
  const cells=new Set([...source.cells].map(k=>{const [x,z]=k.split(',').map(Number);return (x+64)+','+(z+64)}));
  const floor=new Set(cells);
@@ -41989,7 +42335,7 @@ function frontierWoodPlan(seed,count,turn=null){
  const MOBS=regular.map((p,i)=>({...p,type:i%2?'monsterWoodRat':'monsterWoodBeetle'}));
  const BOSS={...move(source.BOSS),type:'monsterGiantSpider',rot:(2+(turn??0))%4},CHEST=move(source.CHEST),PORTAL=move(source.PORTAL),LOOT=source.LOOT.map(move);
  const reserved=new Set([BOSS,CHEST,PORTAL,...LOOT,...MOBS].map(key)),water=new Set();
- for(const g of groups.filter((g,i)=>i===2||i===4||i===6)){
+ for(const g of (rankLayout===2?groups.filter(g=>g.kind==='main'||g.kind==='side').slice(1,4):groups.filter((g,i)=>i===2||i===4||i===6))){
   const [a,b,c,d]=g.segments[0];let placed=false;
   for(let j=0;j<24&&!placed;j++){
    const x=a+1+Math.floor(rng()*(c-a-2)),z=b+1+Math.floor(rng()*(d-b-2));
@@ -42000,7 +42346,9 @@ function frontierWoodPlan(seed,count,turn=null){
   }
  }
  const ARENA={x1:source.ARENA.x1+64,x2:source.ARENA.x2+64,z1:source.ARENA.z1+64,z2:source.ARENA.z2+64};
- return {cells,floor,groups,MOBS,BOSS,CHEST,PORTAL,LOOT,ARENA,water,seed,entrance,validation:frontierDenValid(source),
+ const corridors=source.corridors?.map(h=>({...h,x1:h.x1+64,z1:h.z1+64,x2:h.x2+64,z2:h.z2+64,path:h.path.map(move),
+  tiles:new Set([...h.tiles].map(k=>{const [x,z]=k.split(',').map(Number);return (x+64)+','+(z+64)}))}));
+ return {rankLayout,corridors,cells,floor,groups,MOBS,BOSS,CHEST,PORTAL,LOOT,ARENA,water,seed,entrance,validation:frontierDenValid(source),
   defs:new Set(MOBS.map(o=>o.type+':'+o.x+':'+o.z))};
 }
 let frontierWoodPlanCurrent=null,frontierWoodGpu=null;
@@ -42026,11 +42374,11 @@ function frontierWoodRemember(o,state){
 function frontierWoodVisit(now){
  const data=frontierMeadowRead(),old=data.woodSeed??0,seed=frontierVisitSeed(old,1-old%2);
  const turn=frontierDungeonNextTurn(data.woodTurn,seed);
- const next=frontierWoodPlan(seed,10+Math.floor(frontierMeadowRandom(seed^0x17231)()*3)*2,turn);
+ const next=frontierWoodPlan(seed,10+Math.floor(frontierMeadowRandom(seed^0x17231)()*3)*2,turn,2);
  const kit=frontierDenRehome(poiHotbarRead(),next,frontierWoodOwn,next.entrance.doorstep,next.entrance.spawn);
  delete kit.frontierWoodCleared;delete kit.frontierWoodDefeats;delete kit.frontierWoodLootPlaced;
  if(!kit.frontierWoodChest?.slots.some(Boolean))delete kit.frontierWoodChest;
- if(!frontierMeadowWrite({...data,woodSeed:seed,woodTurn:turn}))return false;
+ if(!frontierMeadowWrite({...data,woodSeed:seed,woodTurn:turn,woodRankLayout:2}))return false;
  if(!poiEconomyWrite(kit)){frontierMeadowWrite(data);return false}
  for(const [o,state] of poiMonsterStates)if(frontierWoodMonster(o)){
   poiEnemyPending.delete(state);poiMonsterWalkDue.delete(o);poiMonsterActorActive.delete(o);poiMonsterStates.delete(o);
@@ -42115,7 +42463,7 @@ function frontierWoodMobGeometry(m,id,x,y,z){
 }
 // The old trail gate is an orienting landmark, not a cutaway wall.
 function frontierWoodTrailGate(m,beacon,g,entrance){
- const x=entrance.east-.47,z=29.50;
+ const x=entrance.east-.47,z=(entrance.mid??29)+.50;
  const stone=[.44,.45,.36],dark=[.30,.32,.24],wood=[.38,.235,.122],trim=[.53,.37,.20];
  // A worn fan of stepping stones takes the eye from the green path to the gap.
  for(let i=0;i<4;i++){
@@ -42162,7 +42510,7 @@ function frontierWoodScene(){
  const field=(x,z)=>Math.sin(x*.38+z*.25)*.52+Math.sin(z*.51-x*.19)*.28+Math.sin(x*.85+z*.63)*.20;
  const fringe=new Map(),queue=[];
  const {entrance}=plan;
- const inAperture=(x,z)=>{const [u,v]=entrance.local(x,z);return u>=entrance.east&&v>=28&&v<=30};
+ const inAperture=(x,z)=>{const [u,v]=entrance.local(x,z);return u>=entrance.east&&Math.abs(v-(entrance.mid??29))<=1};
  const addFringe=(x,z,face,depth)=>{
   const key=k(x,z);
   if(!frontierWoodOwn(x,z)||plan.floor.has(key)||fringe.has(key)||inAperture(x,z))return;
@@ -42249,11 +42597,11 @@ function frontierWoodScene(){
   const tx=x+.5+(n-.5)*.32,tz=z+.5+(r-.5)*.32;
   // Thin the nearest canopy around the landmark, not the surrounding belt.
   const [u,v]=entrance.local(x,z);
-  if(u>=entrance.east-2&&Math.abs(v-29)<=3){
+  if(u>=entrance.east-2&&Math.abs(v-(entrance.mid??29))<=3){
    if(n>.26)lobe(m,tx,g+.025,tz,.34+r*.17,.36+r*.27,leaves[2],r*6.28);
    continue;
   }
-  const isGate=u>=entrance.east-1&&Math.abs(v-29)<=4;
+  const isGate=u>=entrance.east-1&&Math.abs(v-(entrance.mid??29))<=4;
   if(isGate&&depth>=2&&n<.40)continue;
   if(n<.065&&depth===1){
    roundStack(m,tx,g,tz,[[0,.32,.29],[.23,.25,.22],[.58,.18,.16],[.64,.12,.11]],5,[.30,.31,.20]);
@@ -45077,7 +45425,7 @@ function poiEnemyCuePoint(x,z,y){
  return [x+.5,terrainY(Math.floor(x+.5),Math.floor(z+.5))+y*1.4+.153,z+.5];
 }
 function poiEnemyCueRanged(a){
- return a?.obj?.type==='monsterSkelArcher'||a?.obj?.type==='monsterSkelMage';
+ return !a?.dungeonNormal&&!a?.southSentinel&&(a?.obj?.type==='monsterSkelArcher'||a?.obj?.type==='monsterSkelMage');
 }
 const POI_ENEMY_RANGED_CUE_WIDTH=.20;
 function poiEnemyRangedArea(a,s){
@@ -49816,7 +50164,7 @@ function frontierGrandLegacyPlan(seed){
 // The broad round chamber reserves the far band of the sector. A simple
 // path above it makes every trunk room mandatory, with unjoined side walks.
 const frontierGrandRoundRoutes=new Map();
-function frontierGrandPlan(seed,layout=2){
+function frontierGrandPlan(seed,layout=2,rankLayout=1){
  if(layout===1)return frontierGrandLegacyPlan(seed);
  seed=seed>>>0;
  let state=seed;
@@ -49909,14 +50257,17 @@ function frontierGrandPlan(seed,layout=2){
   const r=trunk[i],edge=rng()<.5;
   loot.push({x:edge?r.x1+1:r.x2-1,z:edge?r.z2-1:r.z1+1,y:0,kind:'main',room:r.index});
  }
- const worldRooms=rooms.map(rect),worldCorridors=corridors.map(rect),floor=new Set(),cells=new Set();
+ const routes=rankLayout===2?frontierRankHalls(rooms,corridors,'S',frontierMeadowRandom(seed^0xe3a72911),64,h=>h===approach||h.from===0&&h.to===1):corridors;
+ const worldRooms=rooms.map(rect),worldCorridors=routes.map(h=>rect(frontierRankHallWorld(h,spot))),floor=new Set(),cells=new Set();
  const fill=(r,disk=false)=>{
   for(let z=r.z1;z<=r.z2;z++)for(let x=r.x1;x<=r.x2;x++){
    if(disk&&Math.hypot(x-cx,z-cz)>radius)continue;
    const p=spot(x,z),k=key(p.x,p.z);floor.add(k);if(disk)cells.add(k);
   }
  };
- rooms.forEach(r=>fill(r,r.kind==='boss'));corridors.forEach(r=>fill(r));
+ rooms.forEach(r=>fill(r,r.kind==='boss'));
+ if(rankLayout===2)for(const h of routes)for(const k of h.tiles){const a=spot(...k.split(',').map(Number));floor.add(key(a.x,a.z))}
+ else corridors.forEach(r=>fill(r));
  const mouth=spot(0,6),spawn={...spot(1,6),face:(1+turn)%4},outside=spot(-1,6);
  const gates=new Map([5,6,7].map(z=>{
   const a=spot(0,z),b=spot(-1,z);return [key(a.x,a.z),key(b.x,b.z)];
@@ -50198,8 +50549,8 @@ function frontierGrandMonster(o){return !!o?.frontierGrand&&o.y===0&&frontierGra
 function frontierGrandDefeatKey(o){
  return frontierGrandMonster(o)&&o.type!=='monsterStoneDavid'?o.frontierGrand:null;
 }
-function frontierGrandVisitData(seed,layout=2){
- const plan=frontierGrandPlan(seed,layout),rng=frontierMeadowRandom(seed^0x597bcf27),mobs=[];
+function frontierGrandVisitData(seed,layout=2,rankLayout=2){
+ const plan=frontierGrandPlan(seed,layout,rankLayout),rng=frontierMeadowRandom(seed^0x597bcf27),mobs=[];
  const occupied=new Set(plan.loot.map(q=>q.x+','+q.z));
  for(const r of plan.rooms){
   if(r.index===0||r.kind==='boss')continue;
@@ -50249,7 +50600,7 @@ function frontierGrandVisit(now){
  for(let i=0;i<8&&next.turn===old?.turn;i++){
   seed=((seed+0x9e3779b9)>>>0)||1;next=frontierGrandVisitData(seed);
  }
- if(!frontierMeadowWrite({...prior,grandSeed:seed,grandLayout:2}))return false;
+ if(!frontierMeadowWrite({...prior,grandSeed:seed,grandLayout:2,grandRankLayout:2}))return false;
  const before=poiHotbarRead();
  let kit=frontierDenRehome(before,{cells:next.floor,CHEST:next.chest,PORTAL:next.portal},
   frontierGrandOwn,()=>false,next.entrance.spawn);
@@ -50283,7 +50634,7 @@ function frontierGrandVisit(now){
 // END FRONTIER GRAND TEMPLE
 
 function frontierAppendTemple(site){
- frontierGrandCurrent=frontierGrandVisitData(frontierMeadowRead().grandSeed??0,frontierMeadowRead().grandLayout??1);
+ frontierGrandCurrent=frontierGrandVisitData(frontierMeadowRead().grandSeed??0,frontierMeadowRead().grandLayout??1,frontierMeadowRead().grandRankLayout??1);
  site.davidTemple=frontierGrandSiteTemple(frontierGrandCurrent);
  site.templeTiles=new Map();
  site.map.world.push(...frontierGrandCurrent.actors);
@@ -50489,7 +50840,7 @@ const FRONTIER_MEADOW_KEY='world-workshop-meadow-v1';
 // One seeded version of the riverside route. Room edges never touch unless
 // the generator has dug a corridor, so mere proximity cannot skip a fight.
 const frontierMeadowDungeonRoutes=new Map();
-function frontierMeadowDungeonPlan(seed){
+function frontierMeadowDungeonPlan(seed,rankLayout=1){
  seed=seed>>>0;
  let state=seed;
  const rng=()=>{
@@ -50581,9 +50932,11 @@ function frontierMeadowDungeonPlan(seed){
  const chest={...spot(bcx+dx*3-dz*2,bcz+dz*3+dx*2),y:0};
  const portal={...spot(bcx+dx*3+dz*2,bcz+dz*3-dx*2),y:0};
  const localFloor=new Set(),floor=new Set(),water=new Set(),crossings=new Set();
- for(const r of [...rooms,...halls])for(let z=r.z1;z<=r.z2;z++)for(let x=r.x1;x<=r.x2;x++){
+ const routes=rankLayout===2?frontierRankHalls(rooms,halls,'F',frontierMeadowRandom(seed^0xdcd4318d),32,h=>h.from===0&&h.to===1):halls;
+ for(const r of rankLayout===2?rooms:[...rooms,...halls])for(let z=r.z1;z<=r.z2;z++)for(let x=r.x1;x<=r.x2;x++){
   const p=spot(x,z);localFloor.add(key(x,z));floor.add(key(p.x,p.z));
  }
+ if(rankLayout===2)for(const h of routes)for(const k of h.tiles){const p=spot(...k.split(',').map(Number));localFloor.add(k);floor.add(key(p.x,p.z))}
  const fromKey=k=>{const [x,z]=k.split(',').map(Number);return {x,z}};
  const path=(start,end,allows,rotation)=>{
   const a=key(start.x,start.z),target=key(end.x,end.z),log=new Map([[a,null]]),q=[a];
@@ -50632,7 +50985,7 @@ function frontierMeadowDungeonPlan(seed){
   exitStand:(x,z)=>mouths.has(key(x,z)),
   exitEdge:(x,z,fx,fz)=>mouths.get(key(fx,fz))===key(x,z)};
  const bounds=rect(arena);
- return {seed,turn,mainCount,floor,rooms:rooms.map(rect),corridors:halls.map(rect),entrance,boss,chest,portal,
+ return {rankLayout,seed,turn,mainCount,floor,rooms:rooms.map(rect),corridors:routes.map(h=>rect(frontierRankHallWorld(h,spot))),entrance,boss,chest,portal,
   arena:{x1:bounds.x1,z1:bounds.z1,x2:bounds.x2,z2:bounds.z2,minX:bounds.x1,maxX:bounds.x2,minZ:bounds.z1,maxZ:bounds.z2},
   loot:loot.map(p=>({...p,...spot(p.x,p.z)})),water,crossings};
 }
@@ -50862,8 +51215,8 @@ function frontierMeadowDungeonCell(x,z){
 function frontierMeadowDungeonPlayer(){
  return facilitySite?.id==='frontier'&&poiWalkLevel===0&&frontierPlayCave&&frontierMeadowIn(poiWalkX,poiWalkZ);
 }
-function frontierMeadowDungeonMake(seed){
- const plan=frontierMeadowDungeonPlan(seed),random=frontierMeadowRandom(seed^0x690c091b);
+function frontierMeadowDungeonMake(seed,rankLayout=2){
+ const plan=frontierMeadowDungeonPlan(seed,rankLayout),random=frontierMeadowRandom(seed^0x690c091b);
  const taken=new Set([plan.chest,plan.portal,plan.boss,...plan.loot].map(q=>q.x+','+q.z));
  const rooms=plan.rooms.filter(r=>r.kind==='main').slice(1),want=5+Math.floor(random()*3),mobs=[];
  for(let i=0;i<want;i++){
@@ -50910,7 +51263,7 @@ function frontierMeadowDungeonVisit(now){
   if(kit[field])kit[field]=kit[field].map(p=>p.y===0&&!p.region&&frontierMeadowIn(p.x,p.z)?{...p,frontierCave:true}:p);
  for(const key of FRONTIER_MEADOW_CHEST_KEYS)delete kit[key];
  delete kit.frontierMeadowDungeonDead;
- if(!frontierMeadowWrite({...previous,meadowDungeonSeed:seed}))return false;
+ if(!frontierMeadowWrite({...previous,meadowDungeonSeed:seed,meadowRankLayout:2}))return false;
  frontierMeadowDungeon=plan;
  if(!poiEconomyWrite(frontierMeadowDungeonStock(kit,plan))){
   frontierMeadowDungeon=priorPlan;frontierMeadowWrite(previous);return false;
@@ -50949,11 +51302,11 @@ function frontierMeadowDungeonRemember(o,state){
 // END F RANK RIVERSIDE DUNGEON
 // BEGIN STARLAKE PLAN
 const FRONTIER_STAR_KEY='192,64',FRONTIER_STAR_NAME='星映しの洞窟',FRONTIER_STAR_CHEST='frontierStarChest';
-const FRONTIER_STAR_BOSS_CHEST='frontierStarBossChest',FRONTIER_STAR_BOSS_ID=100,FRONTIER_STAR_LAYOUT=2;
+const FRONTIER_STAR_BOSS_CHEST='frontierStarBossChest',FRONTIER_STAR_BOSS_ID=100,FRONTIER_STAR_LAYOUT=3;
 const FRONTIER_STAR_BOX=Object.freeze([194,66,238,110]);
 const frontierStarOwn=(x,z)=>x>=194&&x<238&&z>=66&&z<110;
 const frontierStarRouteCache=new Map();
-function frontierStarPlan(seed){
+function frontierStarLegacyPlan(seed){
  seed>>>=0;let state=seed;
  const r=(a,b)=>{
   state=(state+0x6d2b79f5)>>>0;let t=Math.imul(state^(state>>>15),state|1);
@@ -51036,6 +51389,62 @@ function frontierStarPlan(seed){
  return {seed,floor,water,rooms,halls,lookout,portal,chest,bossChest,boss,arena,actors,forkItems,
   entrance:{mouth,spawn,outside,exitStand,exitEdge:(x,z,fx,fz)=>exitStand(fx,fz)&&x===fx-1&&z===fz}};
 }
+function frontierStarPlan(seed,revision=3){
+ if(revision!==3)return frontierStarLegacyPlan(seed);
+ seed>>>=0;
+ const rng=frontierMeadowRandom(seed^0x8ef27abd),n=(a,b)=>a+Math.floor(rng()*(b-a+1));
+ const main=n(4,6),layout=frontierRankLattice(seed,{rank:'D',size:44,main,centersX:[6,21,36],centersZ:[6,21,36],range:[8,10],branchMax:2,arena:11});
+ const {rooms,trunk,start,boss:br,tip,previous,halls,floor:raw}=layout,turn=n(0,3);
+ const p=(u,v)=>{
+  const [x,z]=turn===1?[43-v,u]:turn===2?[43-u,43-v]:turn===3?[v,43-u]:[u,v];
+  return {x:x+194,z:z+66,y:0};
+ };
+ const rect=h=>{
+  const a=p(h.x1,h.z1),b=p(h.x2,h.z2);
+  return {x1:Math.min(a.x,b.x),x2:Math.max(a.x,b.x),z1:Math.min(a.z,b.z),z2:Math.max(a.z,b.z)};
+ };
+ const k=(x,z)=>frontierRankKey(x,z),site=r=>p(r.cx,r.cz), floor=new Set([...raw].map(c=>{const a=p(...c.split(',').map(Number));return k(a.x,a.z)}));
+ const water=new Set(),actors=[];
+ const wetRoom=n(0,4)===0?null:trunk[n(1,main-1)];
+ let lake=null;
+ if(wetRoom){
+  const {cx,cz}=wetRoom,rx=n(2,Math.min(3,cx-wetRoom.x1-1,wetRoom.x2-cx-1)),rz=n(2,Math.min(3,cz-wetRoom.z1-1,wetRoom.z2-cz-1)),tiles=[];
+  for(let x=cx-rx;x<=cx+rx;x++)for(let z=cz-rz;z<=cz+rz;z++)if((x-cx)**2/(rx+.1)**2+(z-cz)**2/(rz+.1)**2<=1){
+   const a=p(x,z),q=k(a.x,a.z);water.add(q);floor.delete(q);tiles.push(q);
+  }
+  lake={...p(cx,cz),rx:turn%2?rz:rx,rz:turn%2?rx:rz,kind:'lake',tiles};
+ }
+ const chest=p(tip.x2-1,tip.z2-1),forkItems=[p(tip.x1+1,tip.z2-1)];
+ const dir=Math.sign(br.cx-previous.cx),dv=Math.sign(br.cz-previous.cz);
+ const arena={...site(br),...rect(br),kind:'boss',w:5,h:5};
+ const leash=[arena.x1,arena.z1,arena.x2,arena.z2];
+ const boss={...site(br),starLeash:leash,starEnemy:FRONTIER_STAR_BOSS_ID,type:'monsterCrystalGuardian',rot:((dir===1?1:dir===-1?3:dv===1?2:0)+turn)%4};
+ const portal=p(br.cx+dir*3+dv*2,br.cz+dv*3-dir*2),bossChest=p(br.cx+dir*3-dv*2,br.cz+dv*3+dir*2);
+ const occupied=new Set([chest,bossChest,boss,portal,...forkItems].map(o=>k(o.x,o.z)));
+ for(const r of rooms)if(r.index&&r.kind!=='boss'){
+  const options=[];
+  for(let x=r.x1+1;x<r.x2;x++)for(let z=r.z1+1;z<r.z2;z++){
+   const o=p(x,z);if(floor.has(k(o.x,o.z))&&!occupied.has(k(o.x,o.z)))options.push(o);
+  }
+  const count=r.kind==='branch'?1:n(2,3);
+  for(let j=0;j<count&&options.length;j++){
+   const a=options.splice(n(0,options.length-1),1)[0];
+   actors.push({...a,starEnemy:actors.length,type:n(0,1)?'monsterCrystalCrab':'monsterCrystalBat',rot:n(0,3)});
+  }
+ }
+ actors.push(boss);
+ const mouth=p(0,start.cz),outside=p(-1,start.cz),spawn={...p(1,start.cz),face:(1+turn)%4},gates=new Map();
+ for(let dz=-1;dz<=1;dz++){
+  const a=p(0,start.cz+dz),b=p(-1,start.cz+dz);gates.set(k(a.x,a.z),k(b.x,b.z));
+ }
+ const entrance={mouth,outside,spawn,exitStand:(x,z)=>gates.has(k(x,z)),exitEdge:(x,z,fx,fz)=>gates.get(k(fx,fz))===k(x,z)};
+ const lookout=lake?{...lake,x:lake.x+lake.rx+1}:site(start);
+ const elements=rooms.map(r=>({...site(r),...rect(r),kind:r.kind,w:(r.x2-r.x1)/2,h:(r.z2-r.z1)/2}));
+ if(lake)elements.push(lake);
+ return {revision,seed,turn,mainCount:main,floor,water,lake,rooms:elements,
+  halls:halls.map(h=>({...frontierRankHallWorld(h,p),...rect(h)})),lookout,entrance,portal,chest,bossChest,boss,arena,actors,forkItems};
+}
+
 // END STARLAKE PLAN
 // BEGIN STARLAKE RUNTIME
 let frontierStarCurrent=null,frontierStarGpu=null;
@@ -51059,10 +51468,12 @@ function frontierStarStock(kit,p=frontierStarCurrent){
  return {...kit,drops,frontierStarStockSeed:p.seed};
 }
 function frontierStarVisit(){
- const data=frontierMeadowRead(),prev=frontierStarCurrent,seed=frontierVisitSeed(data.starSeed??0),p=frontierStarPlan(seed);
+ const data=frontierMeadowRead(),prev=frontierStarCurrent;
+ let seed=frontierVisitSeed(data.starSeed??0),p=frontierStarPlan(seed);
+ for(let i=0;i<12&&p.turn===prev?.turn;i++){seed=((seed+0x9e3779b9)>>>0)||1;p=frontierStarPlan(seed)}
  const k=poiHotbarRead(),kit=frontierDenRehome(k,{cells:p.floor,CHEST:p.chest,PORTAL:p.portal},frontierStarOwn,()=>false,p.entrance.spawn);
  delete kit.frontierStarDead;delete kit.frontierStarStockSeed;delete kit[FRONTIER_STAR_CHEST];delete kit[FRONTIER_STAR_BOSS_CHEST];
- if(!frontierMeadowWrite({...data,starSeed:seed}))return false;
+ if(!frontierMeadowWrite({...data,starSeed:seed,starRankLayout:3}))return false;
  frontierStarCurrent=p;
  if(!poiEconomyWrite(frontierStarStock(kit,p))){frontierStarCurrent=prev;frontierMeadowWrite(data);return false}
  for(const [o,s] of poiMonsterStates)if(frontierStarEnemy(o)){
@@ -51112,10 +51523,10 @@ function frontierStarArtBuild(plan,g=frontierBurrowFloor()){
  const n=(x,z)=>surfaceNoise(x+.79,z+15.8);
  const tint=(rgb,s)=>rgb.map(v=>v*s);
  const grad=(m,a,b,c,ca,cb,cc)=>{tri(m,a,b,c,ca);m.c.splice(-6,6,...cb,...cc)};
- const fx=plan.lookout.x-5,fz=plan.lookout.z-8.75,yWater=g-.16;
+ const lake=plan.lake,fx=lake?.x??plan.lookout.x-5,fz=lake?.z??plan.lookout.z-8.75,yWater=g-.16;
  deco(ground,'chest',plan.chest.x+.5,g+.019,plan.chest.z+.5,2);
  const waterHue=(x,z)=>{
-  const dx=(x-226.3)/8.8,dz=(z-89.5)/7.9,ed=Math.min(1,Math.max(0,1.10-Math.hypot(dx,dz))*3);
+  const dx=(x-(lake?lake.x+.5:226.3))/(lake?.rx??8.8),dz=(z-(lake?lake.z+.5:89.5))/(lake?.rz??7.9),ed=Math.min(1,Math.max(0,1.10-Math.hypot(dx,dz))*3);
   const glow=.09*Math.exp(-((x-fx-.5)**2+(z-fz)**2)/19)+.018*Math.sin(x*.56+z*.83);
   return [.08+glow+.058*ed,.23+glow+.095*ed,.34+glow+.14*ed];
  };
@@ -51164,8 +51575,10 @@ function frontierStarArtBuild(plan,g=frontierBurrowFloor()){
    crystal(ground,x+.5,z+.5,yy+.095,.87,.17,.08,rand);
   }
   const init=plan.entrance.mouth;
-  if(x<=init.x+4&&Math.abs(z-init.z)<=1&&z===init.z){
-   for(const j of [.25,.75])quad(ground,[x,floor+.008,z+j],[x,floor+.008,z+j+.044],[x+1,floor+.008,z+j+.044],[x+1,floor+.008,z+j],[.39,.35,.31]);
+  const front=dirs[plan.entrance.spawn.face],along=(x-init.x)*front[0]+(z-init.z)*front[1],side=(x-init.x)*front[1]-(z-init.z)*front[0];
+  if(along>=0&&along<=4&&side===0){
+   for(const j of [.25,.75])if(front[0])quad(ground,[x,floor+.008,z+j],[x,floor+.008,z+j+.044],[x+1,floor+.008,z+j+.044],[x+1,floor+.008,z+j],[.39,.35,.31]);
+    else quad(ground,[x+j,floor+.008,z],[x+j,floor+.008,z+1],[x+j+.044,floor+.008,z+1],[x+j+.044,floor+.008,z],[.39,.35,.31]);
   }else if(byLake&&rand>.67&&Math.abs(x-plan.lookout.x)+Math.abs(z-plan.lookout.z)>1){
    // Tiny edge shards are decoration, not independent blocking bodies.
    crystal(ground,x+.28,z+.38,floor,.19+rand*.17,.084,.014,rand);
@@ -51195,7 +51608,7 @@ function frontierStarArtBuild(plan,g=frontierBurrowFloor()){
  // Raised quartz shelves catch light; thin blue facets across the basin
  // approximate broken crystal reflections without a second scene render.
  for(let i=0;i<49;i++){
-  const x=221.4+n(i,fx)*11.0,z=83.0+n(fx,i)*9.8;
+  const x=lake?lake.x+.5+(n(i,fx)-.5)*lake.rx*2:221.4+n(i,fx)*11.0,z=lake?lake.z+.5+(n(fx,i)-.5)*lake.rz*2:83.0+n(fx,i)*9.8;
   if(!plan.water.has(key(Math.floor(x),Math.floor(z))))continue;
   const y=yWater+.024,s=.055+n(i,fz)*.21,tw=n(i+1,fz)*.12;
   quad(water,[x-s,y,z],[x+s,y,z+tw],[x+s*.41,y,z+.047+tw],[x-s*.82,y,z+.049],[.30+i%3*.071,.63+i%3*.065,.78+i%3*.063]);
@@ -51253,7 +51666,7 @@ function frontierMeadowSaveDecode(raw){
  const uint=(v,f=0)=>Number.isInteger(v)&&v>=0&&v<=0xffffffff?v:f;
  const turn=v=>Number.isInteger(v)&&v>=0&&v<=3?v:null;
  const keys=v=>Array.isArray(v)?v.slice(0,200).filter(k=>typeof k==='string'&&/^\d{3},\d{1,2}$/.test(k)):[];
- return {v:1,seed:raw.seed,runSeed,births,dead,guildSeed:uint(raw.guildSeed,raw.seed),denSeed:uint(raw.denSeed),starSeed:uint(raw.starSeed),meadowDungeonSeed:uint(raw.meadowDungeonSeed),woodSeed:uint(raw.woodSeed),denTurn:turn(raw.denTurn),woodTurn:turn(raw.woodTurn),grandSeed:uint(raw.grandSeed),grandLayout:raw.grandLayout===2?2:1,forestSeed:uint(raw.forestSeed),
+ return {v:1,seed:raw.seed,runSeed,births,dead,guildSeed:uint(raw.guildSeed,raw.seed),denSeed:uint(raw.denSeed),starSeed:uint(raw.starSeed),meadowDungeonSeed:uint(raw.meadowDungeonSeed),woodSeed:uint(raw.woodSeed),denTurn:turn(raw.denTurn),woodTurn:turn(raw.woodTurn),grandSeed:uint(raw.grandSeed),grandLayout:raw.grandLayout===2?2:1,grandRankLayout:raw.grandRankLayout===2?2:1,denRankLayout:raw.denRankLayout===2?2:1,woodRankLayout:raw.woodRankLayout===2?2:1,meadowRankLayout:raw.meadowRankLayout===2?2:1,starRankLayout:raw.starRankLayout===3?3:2,forestSeed:uint(raw.forestSeed),
   meadowSafe:keys(raw.meadowSafe),forestSafe:keys(raw.forestSafe),lineaBirths:Number.isInteger(raw.lineaBirths)?Math.max(0,Math.min(3,raw.lineaBirths)):0};
 }
 function frontierMeadowWrite(next){
@@ -51415,21 +51828,21 @@ function frontierDenNewVisit(now){
  const data=frontierMeadowRead(),old=data.denSeed??0;
  let seed=frontierVisitSeed(old,1-old%2);
  const turn=frontierDungeonNextTurn(data.denTurn,seed);
- let plan=frontierDenPlan(seed,turn);
+ let plan=frontierDenPlan(seed,turn,2);
  if(!frontierDenValid(plan)){
-  seed=seed%2?1:2;plan=frontierDenPlan(seed,turn);
+  seed=seed%2?1:2;plan=frontierDenPlan(seed,turn,2);
   if(!frontierDenValid(plan))return false;
  }
  const kit=frontierDenRehome(poiHotbarRead(),plan,undefined,plan.entrance.doorstep,plan.entrance.spawn);
  delete kit.frontierRuinsDefeats;delete kit.frontierRuinsCleared;delete kit.frontierRuinsLootPlaced;
  if(!kit.frontierRuinsChest?.slots.some(Boolean))delete kit.frontierRuinsChest;
  // Existing loose items are kept; they move to legal ground if a wall now occupies their former tile.
- if(!frontierMeadowWrite({...data,denSeed:seed,denTurn:turn}))return false;
+ if(!frontierMeadowWrite({...data,denSeed:seed,denTurn:turn,denRankLayout:2}))return false;
  if(!poiEconomyWrite(kit)){frontierMeadowWrite(data);return false}
  for(const [o,state] of poiMonsterStates)if(o.y===0&&o.x<64){
   poiEnemyPending.delete(state);poiMonsterWalkDue.delete(o);poiMonsterActorActive.delete(o);poiMonsterStates.delete(o);
  }
- frontierDenApplyPlan(seed,turn);
+ frontierDenApplyPlan(seed,turn,2);
  const added=[{...plan.BOSS,type:'monsterGoblin',rot:(2+turn)%4},...plan.MOBS];
  frontierVisitSwapWorld(o=>o.y===0&&o.x<64&&poiIsMonster(o.type),added);
  for(const o of added)poiMonsterStates.set(o,poiCombatActorMake(o));
@@ -51628,11 +52041,11 @@ function frontierTreeInsideSector(o){
  return true;
 }
 function frontierSite(){
- const visits=frontierMeadowRead();frontierDenApplyPlan(visits.denSeed??0,visits.denTurn??null);
+ const visits=frontierMeadowRead();frontierDenApplyPlan(visits.denSeed??0,visits.denTurn??null,visits.denRankLayout??1);
  const woodSeed=visits.woodSeed??0;
- frontierWoodPlanCurrent=frontierWoodPlan(woodSeed,10+Math.floor(frontierMeadowRandom(woodSeed^0x17231)()*3)*2,visits.woodTurn??null);
- frontierMeadowDungeon=frontierMeadowDungeonMake(visits.meadowDungeonSeed??0);
- frontierStarCurrent=frontierStarPlan(visits.starSeed??0);
+ frontierWoodPlanCurrent=frontierWoodPlan(woodSeed,10+Math.floor(frontierMeadowRandom(woodSeed^0x17231)()*3)*2,visits.woodTurn??null,visits.woodRankLayout??1);
+ frontierMeadowDungeon=frontierMeadowDungeonMake(visits.meadowDungeonSeed??0,visits.meadowRankLayout??1);
+ frontierStarCurrent=frontierStarPlan(visits.starSeed??0,visits.starRankLayout??2);
  const world=[],fenceCells=[],buildings=FRONTIER_HOMES.map(p=>{
   const {dx,...b}=p,door=b.frontNorth?{x:b.x1+b.x2-dx,z:b.z1}:{x:dx,z:b.z2},footprint=[];
   const furniture=frontierRotateFurniture(b,b.furniture);
@@ -57934,18 +58347,18 @@ function workshopResumeDecode(raw){
  let shifted=d.id==='frontier'&&d.frontierWest!==1?frontierShiftPoint(position):position;
  if(d.id==='frontier'&&shifted&&frontierStarOwn(shifted.x,shifted.z)){
   const seed=frontierMeadowRead().starSeed??0;
-  if(shifted.cave!==true||(d.starSeed!==seed||d.starLayout!==FRONTIER_STAR_LAYOUT)){
-   const {x,z,face}=frontierStarPlan(seed).entrance.spawn;
+  if(shifted.cave!==true||(d.starSeed!==seed||d.starLayout!==(frontierMeadowRead().starRankLayout??2))){
+   const {x,z,face}=frontierStarPlan(seed,frontierMeadowRead().starRankLayout??2).entrance.spawn;
    shifted={...shifted,x,z,facing:face,cave:true,subX:undefined,subZ:undefined};
   }
  }
  if(d.id==='frontier'&&shifted?.x<64&&(d.denSeed??0)!==(frontierMeadowRead().denSeed??0)){
-  const {x,z,face}=frontierDungeonEntrance(frontierMeadowRead().denTurn??null).spawn;
+  const {x,z,face}=(frontierMeadowRead().denRankLayout===2?frontierRankDenEntrance(frontierMeadowRead().denTurn):frontierDungeonEntrance(frontierMeadowRead().denTurn??null)).spawn;
   shifted={...shifted,x,z,facing:face,cave:true,subX:undefined,subZ:undefined};
  }
  if(d.id==='frontier'&&shifted&&frontierMeadowIn(shifted.x,shifted.z)&&
     (shifted.cave!==true||d.meadowDungeonSeed!==(frontierMeadowRead().meadowDungeonSeed??0))){
-  const {x,z,face}=frontierMeadowDungeonPlan(frontierMeadowRead().meadowDungeonSeed??0).entrance.spawn;
+  const {x,z,face}=frontierMeadowDungeonPlan(frontierMeadowRead().meadowDungeonSeed??0,frontierMeadowRead().meadowRankLayout??1).entrance.spawn;
   shifted={...shifted,x,z,facing:face,cave:true,subX:undefined,subZ:undefined};
  }
  if(d.id==='frontier'&&shifted&&frontierGrandOwn(shifted.x,shifted.z)&&
@@ -57955,7 +58368,7 @@ function workshopResumeDecode(raw){
  }
  if(d.id==='frontier'&&shifted&&frontierWoodOwn(shifted.x,shifted.z)&&
     Object.hasOwn(d,'woodSeed')&&d.woodSeed!==(frontierMeadowRead().woodSeed??0)){
-  const {x,z,face}=frontierDungeonEntrance(frontierMeadowRead().woodTurn??null,64).spawn;
+  const {x,z,face}=(frontierMeadowRead().woodRankLayout===2?frontierRankDenEntrance(frontierMeadowRead().woodTurn,64):frontierDungeonEntrance(frontierMeadowRead().woodTurn??null,64)).spawn;
   shifted={...shifted,x,z,facing:face,cave:true,subX:undefined,subZ:undefined};
  }
  return {version:1,route:d.route,id:d.route==='facility'?d.id:null,play:d.play===true,position:shifted,
@@ -58016,7 +58429,7 @@ function workshopResumeWrite(override,seed=false){
   ...(facilitySite?.id==='snowpass'&&poiWalkActive?{region:'snowpass',regionHp:poiPlayerDeath?poiPlayerMaxHp():poiPlayerHP,regionMaxHp:poiPlayerMaxHp()}:{}),
   ...(facilitySite?.id==='base'?(facilitySite.townOffset>=22?{townLayout:5,townMapHeight:facilitySite.map.height}:{townLayout:facilitySite.townOffset?4:3}):{}),
   ...(facilitySite?.id==='base'&&facilitySite.davidTemple?.depth===1?{templeDepth:1}:{}),
-  ...(facilitySite?.id==='frontier'?{frontierWest:1,starLayout:FRONTIER_STAR_LAYOUT,starSeed:frontierMeadowRead().starSeed??0,denSeed:frontierMeadowRead().denSeed??0,woodSeed:frontierMeadowRead().woodSeed??0,meadowDungeonSeed:frontierMeadowRead().meadowDungeonSeed??0,grandSeed:frontierMeadowRead().grandSeed??0,...(poiWalkActive?{frontierHp:poiPlayerDeath&&!poiPlayerDeath.relocated?poiPlayerMaxHp():Math.max(1,Math.min(poiPlayerMaxHp(),Math.round(poiPlayerHP))),frontierMaxHp:poiPlayerMaxHp()}:{})}:{}),
+  ...(facilitySite?.id==='frontier'?{frontierWest:1,starLayout:frontierMeadowRead().starRankLayout??2,starSeed:frontierMeadowRead().starSeed??0,denSeed:frontierMeadowRead().denSeed??0,woodSeed:frontierMeadowRead().woodSeed??0,meadowDungeonSeed:frontierMeadowRead().meadowDungeonSeed??0,grandSeed:frontierMeadowRead().grandSeed??0,...(poiWalkActive?{frontierHp:poiPlayerDeath&&!poiPlayerDeath.relocated?poiPlayerMaxHp():Math.max(1,Math.min(poiPlayerMaxHp(),Math.round(poiPlayerHP))),frontierMaxHp:poiPlayerMaxHp()}:{})}:{}),
   tag:route==='editor'||route==='map-play'?workshopResumeTag:null,
   position:poiWalkActive?(typeof poiPlayerDeath!=='undefined'&&poiPlayerDeath&&!poiPlayerDeath.relocated?
    {...poiPlayerDeathSpawn(poiPlayerDeath.checkpoint),...(facilitySite?.id==='frontier'?{cave:false}:{})}:{x:poiWalkX,z:poiWalkZ,y:poiWalkLevel,facing:poiWalkFacing,...(facilitySite?.id==='frontier'?{cave:frontierPlayCave}:{}),...frontierResumeCoordinates()}):null,
