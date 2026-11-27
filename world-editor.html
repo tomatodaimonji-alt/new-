@@ -1755,7 +1755,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v464）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v465）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="2500" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -1974,6 +1974,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
   <h2 id="poiCompanionCommandsTitle"></h2>
   <span id="poiCompanionCommandsHP" hidden></span>
   <div class="poiCompanionCommandButtons">
+   <button type="button" data-companion-command="tactics" hidden>作戦</button>
    <button type="button" data-companion-command="summon" hidden></button>
    <button type="button" data-companion-command="fight">戦いを優先</button>
    <button type="button" data-companion-command="follow">追尾優先</button>
@@ -20411,8 +20412,7 @@ function poiCompanionAdvance(a,to,now,stop,doorCross=false){
  const treeClip=frontierMovementClip(null,p.x,p.z,a.y);
  const solve=(x,z)=>poiFreeAdvance(p.x,p.z,x,z,POI_COMPANION_FREE_RADIUS,edge,edge,treeClip);
  const bodies=frontierNpcBodies(a.y,a,now);
- const clip=result=>poiTownNpcPlayerBodyBlocks(p.x,p.z,result.x,result.z,a.y,now)||
-   frontierNpcSweepBlocked(p.x,p.z,result.x,result.z,bodies);
+ const clip=result=>frontierNpcSweepBlocked(p.x,p.z,result.x,result.z,bodies);
  let next=solve(dx*step/len,dz*step/len);
  if(clip(next)){
   const slides=[solve(dx*step/len,0),solve(0,dz*step/len)].filter(p=>p.distance>.001&&!clip(p));
@@ -20471,7 +20471,7 @@ function poiCompanionPose(a,now){
  return {x:a.fx+(a.x-a.fx)*e,z:a.fz+(a.z-a.fz)*e,y:a.y,t,hop:Math.sin(t*Math.PI)*.19};
 }
 function poiCompanionCell(x,z,y,fx,fz){
- if(poiWalkX===x&&poiWalkZ===z||!poiWalkCanStep(x,z,fx,fz,undefined,false,true))return false;
+ if(!poiWalkCanStep(x,z,fx,fz,undefined,false,true))return false;
  return !(typeof poiTownNpcActorOccupied==='function'&&poiTownNpcActorOccupied(x,z,y));
 }
 function poiFindLocalDetour(from,to,can,arrived,maxNodes=72,maxDepth=24){
@@ -21076,9 +21076,8 @@ function poiHumanSidestepClear(a,p,tx,tz,now,actors){
  const edge=(x,z,fx,fz)=>poiCompanionCell(x,z,a.y,fx,fz)&&!poiMonsterAt(x,z,true);
  const clip=frontierMovementClip(null,p.x,p.z,a.y);
  const next=poiFreeAdvance(p.x,p.z,tx-p.x,tz-p.z,POI_COMPANION_FREE_RADIUS,edge,edge,clip);
- if(Math.hypot(next.x-tx,next.z-tz)>1e-4||poiTownNpcPlayerBodyBlocks(p.x,p.z,tx,tz,a.y,now))return false;
+ if(Math.hypot(next.x-tx,next.z-tz)>1e-4)return false;
  const others=frontierNpcBodies(a.y,a,now);
- for(const b of actors)if(b!==a&&b.y===a.y)others.push(poiCompanionPosition(b));
  // Include enemy bodies even when both the start and destination are in
  // the same walkable tile. Only allow an overlap already in progress to separate.
  for(const [o,s] of poiMonsterStates)
@@ -21173,12 +21172,7 @@ function frontierQuietEligible(a,member,now,goal){
   member?.hp>55&&!poiFreePose?.walking&&now-poiWalkStarted>800&&
   !(typeof poiHealingCastActive==='function'&&poiHealingCastActive());
 }
-function frontierQuietLine(a,text,now){
- const id=POI_HUMAN_PARTY_IDS[a.id],old=frontierLifeSpeech.get(id);
- if(old&&now<old.until)return false;
- frontierLifeSpeech.set(id,{actor:a,text,kind:'party-idle',until:now+2100});
- return true;
-}
+function frontierQuietLine(){return false}
 function frontierQuietClose(a){
  a.frontierQuiet=null;
  if(frontierQuietReply?.to===a||frontierQuietReply?.from===a)frontierQuietReply=null;
@@ -22185,13 +22179,6 @@ function poiCompanionHostileIntent(o,s,now){
  if(!armed&&!poiCompanionNormal(o,s)&&o.type!=='monsterDragon')return null;
  const hero=typeof poiAimOrigin==='function'?poiAimOrigin(now):{x:poiWalkX,z:poiWalkZ,y:poiWalkLevel};
  return poiEnemyAllyChoice(o,s,s,now,Math.max(6.5,armed?.reach||0),hero);
-}
-function poiCompanionBlocksHostileTile(x,z,y,now){
- return poiPartyActors().some(a=>{
-  if(!poiCompanionSame(a,poiCompanionPlace())||y!==a.y)return false;
-  const p=poiCompanionPose(a,now);
-  return x===a.x&&z===a.z||x===Math.round(p.x)&&z===Math.round(p.z);
- });
 }
 function poiCompanionHostileChase(o,s,now,patrol){
  const goal=poiCompanionHostileIntent(o,s,now);
@@ -24120,7 +24107,7 @@ function poiCompanionThumbnail(type){
 function poiCompanionUiClose(restore=true){
  const node=$('poiCompanionCommands');
  if(!node||node.hidden)return;
- node.hidden=true;poiPartySelectedHuman=null;
+ node.hidden=true;poiPartySelectedHuman=null;poiCompanionCardPage=null;
  poiCompanionCommandType=null;poiCompanionCommandSlot=null;
  const focus=poiCompanionCommandReturn;poiCompanionCommandReturn=null;
  if(restore&&focus?.isConnected)focus.focus({preventScroll:true});
@@ -24146,18 +24133,20 @@ function poiCompanionUiHealth(cell,spec,active){
   if(node.textContent!==value)node.textContent=value;
  }
 }
-function poiCompanionUiOpen(kit,index,focus=null){
+let poiCompanionCardPage=null;
+function poiCompanionUiOpen(kit,index,focus=null,cardPage=null){
  const node=$('poiCompanionCommands'),cell=poiInventorySlots(kit)[index],spec=poiCompanionType(cell?.type);
  if(!node||!spec||cell.durability<=0||!poiCompanionAllowed()||document.querySelector('dialog[open],.modal.open'))
   return {ok:false,reason:'unavailable'};
- poiPartySelectedHuman=null;poiCompanionCommandType=cell.type;poiCompanionCommandSlot=index;poiCompanionCommandReturn=focus;
+ poiPartySelectedHuman=null;poiCompanionCardPage=cardPage;poiCompanionCommandType=cell.type;poiCompanionCommandSlot=index;poiCompanionCommandReturn=focus;
  const title=$('poiCompanionCommandsTitle'),status=$('poiCompanionCommandsStatus');
  if(title)title.textContent=spec.name.replace(/の魂$/,'');
  if(status)status.textContent='';
  const active=poiPartyActive(kit,cell.type),mode=active?poiCompanionMode(kit,cell.type):null;
  for(const button of node.querySelectorAll?.('[data-companion-command]')??[]){
   const command=button.dataset.companionCommand;
-  button.hidden=command==='summon'?active:command!=='back'&&!active;
+  button.hidden=cardPage==='root'?command!=='tactics'&&command!=='back':
+   command==='tactics'||(command==='summon'?active:command!=='back'&&!active);
   if(command==='dismiss')button.textContent='魂に戻す';
   if(command==='summon')button.textContent=spec.name.replace(/の魂$/,'')+'を呼ぶ';
   if(command==='fight'||command==='follow')button.setAttribute('aria-pressed',String(command===mode));
@@ -24177,6 +24166,9 @@ function poiCompanionShortcutTap(kit,index){
  return result;
 }
 function poiCompanionUiCommand(mode){
+ if((mode==='tactics'&&poiCompanionCardPage==='root')||(mode==='back'&&poiCompanionCardPage==='tactics')){
+  poiCompanionUiOpen(poiHotbarRead(),poiCompanionCommandSlot,poiCompanionCommandReturn,mode==='back'?'root':'tactics');return;
+ }
  if(mode==='back'){poiCompanionUiClose();return}
  if(!['fight','follow','dismiss','summon'].includes(mode))return;
  if(poiPartySelectedHuman){
@@ -24206,7 +24198,7 @@ function poiPartyHumanMenu(member,anchor){
  const hp=$('poiCompanionCommandsHP');hp.hidden=false;hp.textContent='HP '+member.hp+' / '+member.maxHp;
  for(const b of panel.querySelectorAll('[data-companion-command]')){
   const command=b.dataset.companionCommand;
-  b.hidden=command==='summon'||member.hp<=0&&['fight','follow'].includes(command);
+  b.hidden=command==='summon'||command==='tactics'||member.hp<=0&&['fight','follow'].includes(command);
   if(command==='dismiss')b.textContent='別れる';
   if(command==='fight'||command==='follow')b.setAttribute('aria-pressed',String(command===member.mode));
  }
@@ -24246,10 +24238,13 @@ function poiPartyOpenCard(card){
  if(!poiCompanionAllowed())return;
  const kit=poiHotbarRead(),member=poiPartyMembers(kit).find(x=>x.id===card.dataset.companion);
  if(!member)return;
- if(member.kind==='human')poiPartyHumanMenu(member,card);
+ if(member.kind==='human'){
+  if(facilitySite?.id==='frontier')frontierPartyOpenDialogue(member);
+  else poiPartyHumanMenu(member,card);
+ }
  else{
   const slot=poiInventorySlots(kit).findIndex(c=>c?.type===member.id);
-  if(slot>=0)poiCompanionUiOpen(kit,slot,card);
+  if(slot>=0){poiTownDialogueClose();poiCompanionUiOpen(kit,slot,card,'root')}
  }
 }
 // END COMPANION COMMAND UI
@@ -26865,8 +26860,6 @@ function poiWildSnapshot(){
 }
 function poiMonsterCanMove(x,z,except,fromX,fromZ){
  if(except?.frontierRuins&&(!frontierRuinsCell(x,z)||except.frontierRuinsBoss&&(x<1||x>9||z<38||z>46)))return false;
- if(except?.companionAware&&typeof poiCompanionBlocksHostileTile==='function'&&
-    poiCompanionBlocksHostileTile(x,z,poiWalkLevel,performance.now()))return false;
  const northFoe=except?.northReturnFoe;
  if(northFoe&&typeof poiNorthReturnCanStand==='function'&&!poiNorthReturnCanStand(northFoe,x,z))return false;
  const wild=except?.wildSpawn;
@@ -30143,8 +30136,6 @@ function frontierNpcBodies(y,self,now){
  const out=[];
  for(const a of poiTownNpcActors)
   if(frontierPlaneMatches(false)&&a!==self&&!a.death&&!a.recessed&&a.y===y&&!poiTownNpcSleeping(a))out.push(poiTownNpcVisualPosition(a,now));
- for(const a of poiPartyActors())
-  if(a!==self&&frontierPlaneMatches(a.frontierCave)&&a.y===y&&frontierResident(POI_HUMAN_PARTY_IDS[a.id])&&poiCompanionSame(a,poiCompanionPlace()))out.push(poiCompanionPosition(a));
  return out;
 }
 function frontierPlayerTrafficClip(state,clip,now,facing){
@@ -31001,7 +30992,7 @@ const POI_NPC_EXTRA_SPEECH=Object.freeze({
  portfisher:['水面が静かでも、足元の流れは別ものさ。桟橋の先では足元に気をつけて。','岸の明かりが見えたら、そろそろ帰る時間だな。'],
  southmerchant:['店の裏は荷ほどき場だ。通りからは表の入口が近いよ。','日が落ちたら向かいの宿に戻る。旅の支度は明るいうちがいいよ。']
 });
-const POI_NPC_MENU_LABELS={status:'状態',request:'依頼','local-help':'用事を聞く',quest:'クエスト','quest-accept':'受ける','quest-report':'報告する',shop:'買い物する',stay:'泊まる',sell:'アイテムを売る',
+const POI_NPC_MENU_LABELS={status:'状態',request:'依頼',tactics:'作戦','party-fight':'戦いを優先','party-follow':'追尾優先','local-help':'用事を聞く',quest:'クエスト','quest-accept':'受ける','quest-report':'報告する',shop:'買い物する',stay:'泊まる',sell:'アイテムを売る',
  buy:'アイテムを買う','private-sell':'個人売買：売る','private-buy':'個人売買：買う',recruit:'仲間になってほしい',dismiss:'仲間から外す','join-confirm':'決定',back:'戻る',confirm:'はい'};
 // Topics belong to this loaded NPC, not to a single menu visit or a save.
 const poiNpcTalkCursor=new WeakMap();
@@ -31161,7 +31152,11 @@ function poiNpcMenuRows(d){
  if(d.page==='speech')return d.pendingRecruit?[row('join-confirm'),row('back')]:[];
  const quests=d.actor.role.id==='guildkeeper'&&typeof poiQuestsForClerk==='function'?poiQuestsForClerk():[];
  if(d.page==='toolshop')return [{id:[POI_VALDIA_GROCER_ID,POI_FRONTIER_SHOP_ID].includes(d.actor.role.id)?'buy':'shop',label:'買う'},{id:'sell',label:'売る'},row('back')];
- if(d.page==='root')return [...(frontierInnAvailable(d.actor)?['stay']:[]),'status','request',...(quests.length?['quest']:[]),'back'].map(row);
+ if(d.page==='root')return [...(frontierInnAvailable(d.actor)?['stay']:[]),'status','request',...(d.actor.frontierPartyId?['tactics']:[]),...(quests.length?['quest']:[]),'back'].map(row);
+ if(d.page==='tactics'&&d.actor.frontierPartyId){
+  const mode=poiCompanionMode(poiHotbarRead(),d.actor.frontierPartyId);
+  return [{...row('party-fight'),pressed:mode==='fight'},{...row('party-follow'),pressed:mode==='follow'},row('dismiss'),row('back')];
+ }
  if(d.page==='frontier-inn-confirm')return [{id:'inn-pay',label:'泊まる（'+FRONTIER_INN_PRICE+'G）'},row('back')];
  if(d.page==='quest')return [...quests.map(q=>({id:'quest:'+q.id,
   label:q.label+(({accepted:'（受注済み）',surveyed:'（報告可能）',reported:'（報告済み）'})[poiNpcQuestProgress(q.id)]||''),quest:q})),row('back')];
@@ -31173,8 +31168,8 @@ function poiNpcMenuRows(d){
  const port=typeof poiPortQuestMenuRows==='function'?poiPortQuestMenuRows(d):null;
  if(d.page==='port-detail')return port||[row('back')];
  if(d.page==='request'){
+  if(d.actor.frontierPartyId)return ['private-sell','private-buy','back'].map(row);
   if(d.actor.role.id===POI_FRONTIER_INN_ID)return [row('back')];
-  if(d.actor.frontierPartyId)return ['dismiss','private-sell','private-buy','back'].map(row);
   if(facilitySite?.id==='frontier'&&frontierResident(d.actor.role.id))return (d.actor.role.id===POI_FRONTIER_SHOP_ID?['recruit','private-sell','private-buy','back']:['recruit','sell','buy','back']).map(row);
   if(d.actor.role.portBounds)return [...(port||[]),...['local-help','recruit','back'].map(row)];
   if(d.actor.role.id==='toolkeeper')return ['recruit','back'].map(row);
@@ -31501,6 +31496,7 @@ function poiNpcMenuRender(now){
  menu.replaceChildren(...(d.page==='quest'?[poiQuestListHeading()]:[]),...(inspecting||tradeMode?[]:d.rows).map(r=>{
   const b=document.createElement('button');b.type='button';b.dataset.npcAction=r.id;
   if(r.offer?.canTrade===false)b.dataset.npcUnavailable='';
+  if(typeof r.pressed==='boolean')b.setAttribute('aria-pressed',String(r.pressed));
   b.textContent=r.label;return b;
  }));
  poiNpcMenuMark();
@@ -31535,6 +31531,15 @@ function poiNpcMenuChoose(id,now=performance.now()){
  if(d.toolshopCounter&&!poiNpcShopCounter(d.actor)||poiTownDialogueTarget(now)!==d.actor){poiTownDialogueClose();poiShopSync();return true}
  const row=d.rows.find(r=>r.id===id);if(!row)return false;
  if(id==='back')return poiNpcMenuBack(now);
+ if(id==='tactics'&&d.actor.frontierPartyId){
+  d.page='tactics';d.index=0;d.text='どう動けばいい？';poiNpcMenuRender(now);poiShopSync();return true;
+ }
+ if((id==='party-fight'||id==='party-follow')&&d.actor.frontierPartyId){
+  const mode=id==='party-fight'?'fight':'follow';
+  d.text=poiHumanPartyCommand(d.actor.frontierPartyId,mode)?
+   (mode==='fight'?'戦いを優先するね。':'ついていくのを優先するね。'):'今は指示できません。';
+  poiNpcMenuRender(now);poiShopSync();return true;
+ }
  if(id==='dismiss'&&d.actor.frontierPartyId){
   const name=d.actor.role.name,result=poiHumanPartyDismiss(d.actor.frontierPartyId,now);
   if(!result.ok){d.text='まだ仲間から外せなかった。';poiNpcMenuRender(now);return true}
@@ -31699,27 +31704,25 @@ function frontierPartyTalkActors(){
  return poiPartyActors().filter(a=>frontierPlaneMatches(a.frontierCave,frontierPlayCave)&&a.y===poiWalkLevel&&frontierResident(POI_HUMAN_PARTY_IDS[a.id])&&
   poiCompanionSame(a,poiCompanionPlace()));
 }
-function frontierPartyTalkTarget(now,origin,expected=null,current=null){
- const eligible=frontierPartyTalkActors(),members=eligible.length?poiPartyMembers(poiHotbarRead()):[];
- const open=new Set(eligible.map(a=>a.id));
- for(const id of frontierPartyTalkCache.keys())if(!open.has(id))frontierPartyTalkCache.delete(id);
- let best=null,score=Infinity;
- for(const a of eligible){
-  if(expected&&expected.frontierPartyId!==a.id)continue;
-  const member=members.find(m=>m.id===a.id);
-  const role=facilitySite.residents?.find(r=>r.id===member?.npcId);
-  if(!role||a.attackMotion?.pending||a.partyDown)continue;
-  const pos=poiCompanionPosition(a),dx=pos.x-origin.x,dz=pos.z-origin.z,dist=Math.hypot(dx,dz);
-  const hold=current?.frontierPartyId===a.id;
-  if(dist>(hold?1.78:1.49)||!hold&&origin.dir&&dx*origin.dir.x+dz*origin.dir.z<-.05||
-     !poiCompanionAttackClear(origin,pos,a.y))continue;
-  let view=frontierPartyTalkCache.get(a.id);
-  if(!view){view={frontierPartyId:a.id,role};frontierPartyTalkCache.set(a.id,view)}
-  Object.assign(view,{x:pos.x,z:pos.z,y:a.y,hp:member.hp,facing:0,weapon:member.weapon,gear:member.gear,activity:'companion'});
-  if(hold)return view;
-  if(dist<score){best=view;score=dist}
- }
- return best;
+function frontierPartyCardActor(id,member=null){
+ const a=poiPartyActorById(id);
+ if(!a||a.partyDown||!poiCompanionAllowed()||!poiCompanionSame(a,poiCompanionPlace())||
+    !frontierPlaneMatches(a.frontierCave,frontierPlayCave))return null;
+ member??=poiPartyMembers(poiHotbarRead()).find(m=>m.id===id);
+ const role=facilitySite?.residents?.find(r=>r.id===member?.npcId);
+ if(!role||!(member.hp>0))return null;
+ let view=frontierPartyTalkCache.get(id);
+ if(!view||view.role!==role){view={frontierPartyId:id,role};frontierPartyTalkCache.set(id,view)}
+ const pos=poiCompanionPosition(a);
+ Object.assign(view,{x:pos.x,z:pos.z,y:a.y,hp:member.hp,facing:0,weapon:member.weapon,gear:member.gear,activity:'companion'});
+ return view;
+}
+function frontierPartyOpenDialogue(member){
+ if(facilitySite?.id!=='frontier'||document.querySelector('dialog[open],.modal.open'))return false;
+ const actor=frontierPartyCardActor(member.id,member);
+ if(!actor)return false;
+ poiCompanionUiClose(false);poiTownDialogueClose();poiAnalogStop();
+ return poiTownDialogueOpenActor(actor,performance.now(),{});
 }
 function poiNpcGreetingBlockedByLock(now){
  if(!poiWalkActive||!poiHotbarHasKit())return false;
@@ -31742,6 +31745,9 @@ function poiTownBedsideScore(origin,bed,held){
  return d-.29*facing;
 }
 function poiTownDialogueTarget(now,selection=null,expected=null){
+ const companion=poiTownDialogue?.actor;
+ if(companion?.frontierPartyId)return !expected||expected===companion?frontierPartyCardActor(companion.frontierPartyId):null;
+ if(expected?.frontierPartyId)return null;
  if(!poiTownNpcActive()||!poiTownNpcActors.length)return null;
  if(!poiTownDialogue&&poiNpcGreetingBlockedByLock(now))return null;
  const [dx,dz]=[[0,-1],[1,0],[0,1],[-1,0]][poiWalkFacing]||[0,0];
@@ -31753,8 +31759,6 @@ function poiTownDialogueTarget(now,selection=null,expected=null){
   !/^(sleep|rest|fight|buy|seek-inn)/.test(a.activity);
  const live=typeof poiAimOrigin==='function'&&typeof poiTownNpcVisualPosition==='function';
  const origin=live?poiAimOrigin(now):null;
- if(origin&&current?.frontierPartyId)return frontierPartyTalkTarget(now,origin,expected,current);
- if(origin&&expected?.frontierPartyId)return frontierPartyTalkTarget(now,origin,expected);
  if(live&&current&&poiTownDialogueLiveTarget(origin,now,a=>a===current&&engaged(a),current,!!expected))return current;
  if(live&&expected&&poiTownDialogueLiveTarget(origin,now,a=>a===expected&&engaged(a),expected,true)){
   if(selection)selection.movingGreeting=true;
@@ -31790,7 +31794,6 @@ function poiTownDialogueTarget(now,selection=null,expected=null){
  const counter=current&&atCounter(current)?current:poiTownNpcActors.find(atCounter);
  if(counter)return counter;
  if(live){
-  const ally=frontierPartyTalkTarget(now,origin,expected);if(ally)return ally;
   const candidate=poiTownDialogueLiveTarget(origin,now,engaged,null);
   if(candidate&&selection)selection.movingGreeting=true;
   return candidate;
@@ -31898,7 +31901,9 @@ function poiTownDialogueAction(now){
   if(id)poiNpcMenuChoose(id,now);
   return true;
  }
- if(!actor)return false;
+ return actor?poiTownDialogueOpenActor(actor,now,selection):false;
+}
+function poiTownDialogueOpenActor(actor,now,selection){
  const {id,role}=actor.role,sleeping=poiTownNpcSleeping(actor);
  const greeting=POI_TOWN_SPEECH[id]||(role==='adventurer'?'外へ行くのか？　草むらにスライムがいることがある。気をつけて。':
   role==='visitor'?'いい町ですね。門をくぐると、ほっとします。':'こんにちは。今日は過ごしやすいですね。');
@@ -32041,6 +32046,7 @@ function frontierLifeSetHp(a,hp){
 }
 const frontierLifeSpeech=new Map(),frontierLifeSpeechNodes=new Map();
 function frontierLifeLine(id,actor,kind,now){
+ if(actor?.id&&poiPartyActorById(actor.id)===actor)return;
  const old=frontierLifeSpeech.get(id);
  if(old&&old.kind!=='party-idle'&&now<old.until+400&&kind==='pain')return;
  if(old?.kind===kind&&now<old.until+2500)return;
@@ -32065,7 +32071,7 @@ function frontierLifeSpeechDraw(now,vp){
  if(facilitySite?.id!=='frontier'||!poiWalkActive){frontierLifeSpeech.clear()}
  for(const [id,s] of frontierLifeSpeech){
   const a=s.actor;
-  if(now>=s.until||a.death||a.partyDown||a.recessed||a.y!==poiWalkLevel){frontierLifeSpeech.delete(id);continue}
+  if((a.id&&poiPartyActorById(a.id)===a)||now>=s.until||a.death||a.partyDown||a.recessed||a.y!==poiWalkLevel){frontierLifeSpeech.delete(id);continue}
   const p=a.role?poiTownNpcVisualPosition(a,now):poiCompanionPosition(a);
   const x=p.x+.5,z=p.z+.5;
   let el=frontierLifeSpeechNodes.get(id);
@@ -33498,7 +33504,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v464',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v465',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -33613,7 +33619,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v464';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v465';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -33828,7 +33834,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v464',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v465',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -56459,10 +56465,6 @@ function poiPlayerNpcBodyClip(now){
   const tx=!a.actorLeg&&b.t<1?a.x:b.x,tz=!a.actorLeg&&b.t<1?a.z:b.z;
   if(Math.abs(b.x-poiWalkX)>3||Math.abs(b.z-poiWalkZ)>3)continue;
   bodies.push({x:b.x,z:b.z,tx,tz});
- }
- for(const a of frontierPartyTalkActors()){
-  const b=poiCompanionPosition(a);
-  if(Math.abs(b.x-poiWalkX)<=3&&Math.abs(b.z-poiWalkZ)<=3)bodies.push({x:b.x,z:b.z,tx:b.x,tz:b.z});
  }
  if(!bodies.length)return null;
  return (p,q,next,swap)=>{
