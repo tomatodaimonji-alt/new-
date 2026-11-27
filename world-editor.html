@@ -1756,7 +1756,7 @@ body .modalBody{background-color:var(--workshop-panel-surface)!important}
  background:rgba(18,30,38,.88);color:#e5edf0;font:600 16px system-ui,sans-serif;letter-spacing:.07em}
 #poiSnowTransitionVeil[hidden]{display:none}
 </style>
-<div id="app" inert><header><h1>3Dワールド工房（v519）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
+<div id="app" inert><header><h1>3Dワールド工房（v520）</h1><span class="hint">自分だけの3D建材と建物を制作・共有</span><div class="grow"></div><button id="undo">↶ 戻す</button><button id="redo">↷ 進む</button><span id="batteryIndicator" class="unknown" role="status" aria-label="バッテリー残量は取得できません" title="バッテリー情報を取得できません"><span class="batteryShape" aria-hidden="true"><span class="batteryFill"></span></span><span id="batteryPercent">--%</span></span></header>
 <aside id="palette"><h2>建材ライブラリ</h2><section id="facilitySessionActions" hidden><p><strong id="facilitySessionName"></strong> · この画面だけの一時編集</p><div class="row"><button id="facilityExport" type="button">JSON保存</button><button id="facilityExit" type="button">元の編集に戻る</button></div></section><div class="section" id="buildList"></div><div class="section" id="roadList"></div><div class="section" id="decorList"></div><div class="section" id="characterList"></div><div class="section" id="equipmentList"></div><div id="poiSampleCategories" class="poiSampleCategories"></div><h3>編集ツール</h3><div class="section"><button class="item" data-mode="place"><span class="glyph">✚</span><span>配置</span></button><button class="item" data-mode="erase"><span class="glyph">⌫</span><span>消去</span></button><button class="item" id="clearEntireMap" type="button" title="配置物と地形の高低差をすべて消去"><span class="glyph">✕</span><span>全消去</span></button><button class="item" id="openMapSize" type="button"><span class="glyph">▣</span><span>マップサイズ変更</span></button><button class="item" id="registerPOI" type="button"><span class="glyph">▦</span><span>POIとして登録</span></button></div></aside>
 <main id="viewWrap"><canvas id="view"></canvas><div id="poiDeathFade" aria-hidden="true" hidden></div><div id="poiPlayerDamageEdge" aria-hidden="true"></div><canvas id="poiScreenNoteStill" aria-hidden="true" hidden></canvas><div id="poiDungeonFade" aria-hidden="true"></div><div id="poiMineUnlockProgress" hidden><progress max="2500" value="0" aria-label="宝箱を解錠中"></progress></div><div id="pineCheckOverlay" aria-hidden="true"></div><div id="pineCheckToolbar" hidden>
  <span id="pineCheckCount">0件</span>
@@ -24771,19 +24771,55 @@ function poiLookoutEnter(fromX,fromZ,x,z,roll=Math.random){
  return true;
 }
 function poiFieldCoinsAllowed(){return poiEconomyAllowed()||facilitySite?.id==='frontier'&&poiWildActive()}
-function poiEconomyDrop(obj,state,actorId=null){
- if(!poiFieldCoinsAllowed()||obj.type!=='monsterSlime'||obj.y!==0||!state.wildSpawn||
-    state.hp!==0||poiEconomyDropActors.has(state))return;
- const {x,z}=state;
- if(!poiWildExterior(x,z)||!poiWalkCanStep(x,z,null,null,null,true))return;
- poiEconomyDropActors.add(state);
- const key=x+','+z,prior=poiEconomyDrops.get(key);
- if(!prior&&poiEconomyDrops.size>=24)poiEconomyDrops.delete(poiEconomyDrops.keys().next().value);
- const amount=Math.min(POI_ECONOMY_GOLD_MAX,(prior?.amount||0)+POI_ECONOMY_COIN);
- const expeditionCoin=!!prior?.expeditionCoin||facilitySite?.id==='frontier'&&FRONTIER_EXPEDITION_NPCS.includes(actorId);
- poiEconomyDrops.set(key,{x,z,amount,y:0,frontierCave:false,...(expeditionCoin?{expeditionCoin:true}:null)});poiEconomyMeshDirty=true;
- if(!state.townOwned&&amount!==(prior?.amount||0)&&typeof poiSound==='function')poiSound('enemy-loot','coin');
+// BEGIN RANKED DEFEAT GOLD
+const POI_ENEMY_GOLD_BY_RANK=Object.freeze({
+ F:[1,3],E:[2,5],D:[4,7],C:[6,10],B:[9,14],A:[13,20],S:[18,28]
+});
+const POI_GROUND_GOLD_LIMIT=384;
+function poiEnemyGoldRank(obj,state,site=facilitySite){
+ if(site?.id==='frontier'){
+  const key=frontierSectorKeyAt(obj.x??state.x,obj.z??state.z)?.join(',');
+  return ({'0,0':'E','64,64':'E','192,64':'D','128,64':'B','192,0':'S'})[key]??'F';
+ }
+ if(obj.type==='monsterStoneDavid')return 'S';
+ const theme=poiDungeonThemeAt(site,state.x,state.z,obj.y);
+ return ({mine:'E',chapel:'D',northFort:'C',otherworld:'B'})[theme]??'F';
 }
+function poiEnemyGoldAmount(rank,rng=Math.random){
+ const [min,max]=POI_ENEMY_GOLD_BY_RANK[rank]??POI_ENEMY_GOLD_BY_RANK.F;
+ return min+Math.min(max-min,Math.max(0,Math.floor(rng()*(max-min+1))));
+}
+function poiEnemyGoldAdd(kit,point,amount){
+ const gold=kit.groundGold??[],layer=p=>p.y===point.y&&p.region===point.region&&!!p.frontierCave===!!point.frontierCave;
+ let old=gold.find(p=>layer(p)&&p.x===point.x&&p.z===point.z);
+ if(!old&&gold.length>=POI_GROUND_GOLD_LIMIT){
+  let best=Infinity;
+  for(const p of gold)if(p.enemyGold&&layer(p)&&p.amount+amount<=POI_ECONOMY_GOLD_MAX){
+   const d=Math.abs(p.x-point.x)+Math.abs(p.z-point.z);if(d<best){best=d;old=p}
+  }
+  if(!old)return kit;
+ }
+ if(!old)return {...kit,groundGold:[...gold,{...point,amount,enemyGold:true}]};
+ const total=Math.min(POI_ECONOMY_GOLD_MAX,old.amount+amount);
+ return total===old.amount?kit:{...kit,groundGold:gold.map(p=>p===old?
+  {...p,amount:total,...(point.expeditionCoin?{expeditionCoin:true}:{})}:p)};
+}
+function poiEconomyDrop(obj,state,actorId=null){
+ if(!poiWalkActive||pineAIActive||!poiHotbarHasKit()||!poiIsMonster(obj.type)||state.hp!==0||poiEconomyDropActors.has(state))return false;
+ const {x,z}=state,y=obj.y;
+ if(![x,z,y].every(Number.isInteger))return false;
+ const frontier=facilitySite?.id==='frontier',cave=frontier&&y===0&&!!state.frontierRuins;
+ const point={x,z,y,...(frontier?{frontierCave:cave}:{}),
+  ...(poiSnowGroundActive()?{region:'snowpass'}:{}),
+  ...(frontier&&FRONTIER_EXPEDITION_NPCS.includes(actorId)?{expeditionCoin:true}:{})};
+ const kit=poiHotbarRead(),next=poiEnemyGoldAdd(kit,point,poiEnemyGoldAmount(poiEnemyGoldRank(obj,state)));
+ if(next===kit||!poiEconomyWrite(next))return false;
+ poiEconomyDropActors.add(state);poiInventoryReleaseMesh();
+ if(y===poiWalkLevel&&(!frontier||frontierPlaneMatches(cave,frontierPlayCave))&&Math.hypot(x-poiWalkX,z-poiWalkZ)<14)
+  poiSound('enemy-loot','coin');
+ return true;
+}
+// END RANKED DEFEAT GOLD
 function poiEconomyCollect(x,z){
  if(!poiFieldCoinsAllowed())return false;
  const key=x+','+z,drop=poiEconomyDrops.get(key),cache=poiEconomyCaches.get(key);
@@ -26000,11 +26036,12 @@ function poiInventorySnapshot(){
 function poiGroundGoldDecode(raw){
  const seen=new Set(),out=[];
  if(!Array.isArray(raw))return out;
- for(const p of raw.slice(0,POI_INVENTORY_LIMIT)){
+ for(const p of raw.slice(0,POI_GROUND_GOLD_LIMIT)){
   if(!p||![p.x,p.z,p.y,p.amount].every(Number.isSafeInteger)||p.x<0||p.z<0&&!frontierNorthGroundRecord(p)||((p.x>=MAX_MAP||p.z>=MAX_MAP)&&(typeof poiDavidDepthGroundPoint!=='function'||!poiDavidDepthGroundPoint(p)))||p.y< -1||p.y>9||p.amount<1||p.amount>POI_ECONOMY_GOLD_MAX)continue;
   const key=(p.region==='snowpass'?'s:':p.frontierCave===true?'b:':'')+p.x+','+p.z+','+p.y;
   if(seen.has(key))continue;
-  seen.add(key);out.push({x:p.x,z:p.z,y:p.y,amount:p.amount,...(p.frontierRoomLoot===true?{frontierRoomLoot:true}:{}),...(p.region==='snowpass'?{region:p.region}:{}),...(typeof p.frontierCave==='boolean'?{frontierCave:p.frontierCave}:{})});
+  seen.add(key);out.push({x:p.x,z:p.z,y:p.y,amount:p.amount,...(p.frontierRoomLoot===true?{frontierRoomLoot:true}:{}),
+   ...(p.enemyGold===true?{enemyGold:true}:{}),...(p.expeditionCoin===true?{expeditionCoin:true}:{}),...(p.region==='snowpass'?{region:p.region}:{}),...(typeof p.frontierCave==='boolean'?{frontierCave:p.frontierCave}:{})});
  }
  return out;
 }
@@ -26025,7 +26062,7 @@ function poiDropNearestCell(x,z,facing,radius,step,available){
 }
 function poiDropGroundLocation(kit,soul=false){
  const y=poiWalkLevel;
- if(!soul&&((kit.drops?.length||0)+(kit.groundGold?.length||0)>=POI_INVENTORY_LIMIT))return {reason:'full'};
+ if(!soul&&((kit.drops?.length||0)+(kit.groundGold?.filter(p=>!p.enemyGold).length||0)>=POI_INVENTORY_LIMIT))return {reason:'full'};
  const realm=poiDungeonTravelKey(facilitySite,poiWalkX,poiWalkZ,y);
  const cells=new Map();
  const key=(x,z)=>x+','+z;
@@ -34738,10 +34775,8 @@ function frontierNpcCoinGoal(a,p,expeditionOnly=false){
   best=o;distance=d;
  };
  if(!a.frontierCave&&a.y===0)for(const o of poiEconomyDrops.values())consider(o);
- if(!expeditionOnly){
-  for(const o of kit.groundGold||[])consider(o);
-  for(const o of kit.drops||[])consider(o);
- }
+ for(const o of kit.groundGold||[])consider(o);
+ if(!expeditionOnly)for(const o of kit.drops||[])consider(o);
  return best;
 }
 function frontierNpcCoinFoley(a,p){
@@ -36067,7 +36102,7 @@ function pineAIRecord(o,index){
   x:o.x,z:o.z,y:o.y,rot:o.rot||0,degrees:(o.rot||0)*90};
 }
 function pineAIExport(){
- return{format:'pine-ai-layout-v1',editorVersion:'v519',width:MAP_W,height:MAP_H,
+ return{format:'pine-ai-layout-v1',editorVersion:'v520',width:MAP_W,height:MAP_H,
   coordinateSystem:'x increases right, z increases down, y=0 is ground; rot is quarter turns (0-3)',
   objects:world.map(pineAIRecord),
   checks:pineCheckMarks.map(p=>({...p})),
@@ -36182,7 +36217,7 @@ function pineAIPlanRender(){
   g.font='bold '+Math.max(6,Math.min(13,cell*.62))+'px monospace';g.textAlign='center';
   g.fillText(label,px+cell/2,py+cell/2,Math.max(1,cell-1));
  }
- panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v519';
+ panel.querySelector('#pineAIPlanTitle').textContent='AI図面　階 '+floor+'　'+width+'×'+height+'　v520';
  const warnings=[];
  if(pineAINumberEntries.length>999)warnings.push('番号が999件を超えています');
  if(missingPalette.length)warnings.push('未登録パレット: '+missingPalette.join(', '));
@@ -36397,7 +36432,7 @@ async function pineAIFullCapture(){
  pineAIRenderHumanGrid($('pineCaptureMap'),objects,level,Math.min(window.innerWidth-10,window.innerHeight*.34));
  $('pineCaptureCaption').textContent='地図は目視用。下のカラーコードに全階層・全件の正式ID・座標・回転・重なり・床・地形を収録';
  try{
-  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v519',save:shotData}));
+  const source=new TextEncoder().encode(JSON.stringify({format:'pine-ai-screenshot-v1',editorVersion:'v520',save:shotData}));
   const gzip=await pineAIGzip(source);
   if(generation!==pineAICaptureGeneration||!document.getElementById('pineAIFullCapture'))return;
   const payload=pineAIFrameBytes(gzip);
@@ -38209,7 +38244,7 @@ function poiPlayerDamageTarget(monster,x,z,amount,weapon,now,silent=false,atCont
   ...(guarded?[false,false,true]:[]));
  if(!state.hp&&(!stone||before>0)){
   const debris=poiMonsterBreak(obj,state,now);
-  if(obj.type==='monsterSlime'&&state.wildSpawn)poiEconomyDrop(obj,state,source?.actorId);
+  if(before>0)poiEconomyDrop(obj,state,source?.actorId);
   if(obj.type==='monsterSkeleton'&&typeof poiChapelRecordDefeat==='function')poiChapelRecordDefeat(obj,state);
   if(obj.type==='monsterDragon'&&typeof poiOtherworldRecordDefeat==='function')poiOtherworldRecordDefeat(obj,state);
   if(obj.type==='monsterMineGuard'){
@@ -44299,7 +44334,7 @@ function frontierSouthVisit(now){
  frontierSouthApplyPlan(next);
  for(const field of ['drops','groundGold','soulDrops','armedDrops']){
   if(!kit[field]?.length)continue;
-  const records=kit[field].filter(o=>!(o.y===-1&&frontierSouthOwn(o.x,o.z)&&(o.frontierRoomLoot||o.frontierSouthBranchLoot)));
+  const records=kit[field].filter(o=>!(o.y===-1&&frontierSouthOwn(o.x,o.z)&&(o.frontierRoomLoot||o.frontierSouthBranchLoot||o.enemyGold)));
   const busy=new Set(records.filter(p=>p.y===-1&&frontierSouthRuinsOwn(p.x,p.z)&&!frontierSouthChestAt(p.x,p.z)).map(o=>o.x+','+o.z));
   stock[field]=records.map(o=>{
    if(o.y!==-1||!frontierSouthOwn(o.x,o.z)||frontierSouthRuinsOwn(o.x,o.z)&&!frontierSouthChestAt(o.x,o.z))return o;
@@ -52479,16 +52514,7 @@ function frontierMeadowDungeonVisit(now){
 function frontierMeadowDungeonRemember(o,state){
  const kit=poiHotbarRead(),dead=kit.frontierMeadowDungeonDead??[];
  if(dead.includes(o.meadowDungeonId))return true;
- let groundGold=kit.groundGold||[];
- if(o.type==='monsterSlime'){
-  const x=state.x,z=state.z;
-  const match=q=>q.x===x&&q.z===z&&q.y===0&&q.frontierCave;
-  const coins=groundGold.find(match);
-  if(coins)groundGold=groundGold.map(q=>q===coins?{...q,amount:Math.min(POI_ECONOMY_GOLD_MAX,q.amount+3)}:q);
-  else if(groundGold.length<POI_INVENTORY_LIMIT)groundGold=[...groundGold,{x,z,y:0,amount:3,frontierCave:true}];
- }
- if(!poiEconomyWrite({...kit,groundGold,frontierMeadowDungeonDead:[...dead,o.meadowDungeonId]}))return false;
- if(groundGold!==kit.groundGold)poiInventoryReleaseMesh();
+ if(!poiEconomyWrite({...kit,frontierMeadowDungeonDead:[...dead,o.meadowDungeonId]}))return false;
  if(o.type==='monsterBigSlime')poiMessagePush('ビッグスライムを倒した。宝箱と帰還地点が現れた。','item');
  frontierGuildFieldDefeat(o);
  return true;
@@ -53009,7 +53035,7 @@ function frontierRoomLootAdd(kit,{rank,rooms,floor,seed,water,level=0,reserved=[
  const walkable=(x,z)=>floor.has(key(x,z))&&!water?.has(key(x,z));
  let count=0;
  for(const [x1,z1,x2,z2] of picks){
-  if(count>=limit||drops.length+groundGold.length>=POI_INVENTORY_LIMIT)break;
+  if(count>=limit||drops.length+groundGold.filter(p=>!p.enemyGold).length>=POI_INVENTORY_LIMIT)break;
   const tiles=[];
   for(let z=z1+1;z<z2;z++)for(let x=x1+1;x<x2;x++){
    if(x!==x1+1&&x!==x2-1&&z!==z1+1&&z!==z2-1)continue;
@@ -53047,7 +53073,7 @@ function frontierSouthRoomLoot(kit,seed){
   const drops=(kit.drops??[]).filter(o=>!(o.y===-1&&frontierSouthOwn(o.x,o.z)&&(o.frontierRoomLoot||o.frontierSouthBranchLoot)));
   const groundGold=(kit.groundGold??[]).filter(o=>!(o.y===-1&&frontierSouthOwn(o.x,o.z)&&o.frontierRoomLoot));
   const occupied=[...drops,...groundGold,...(kit.soulDrops??[])].some(o=>o.x===p.branch.x&&o.z===p.branch.z&&o.y===-1);
-  if(p.branchRoll<.42&&!occupied&&drops.length+groundGold.length<POI_INVENTORY_LIMIT)
+  if(p.branchRoll<.42&&!occupied&&drops.length+groundGold.filter(p=>!p.enemyGold).length<POI_INVENTORY_LIMIT)
    drops.push({...p.branch,type:p.branchRoll<.18?POI_RECOVERY_POTION:POI_INVENTORY_HERB,count:1,frontierSouthBranchLoot:true});
   return {...frontierRoomLootAdd({...kit,drops,groundGold},{rank:'B',seed,rooms:frontierRoomLootRects(p.rooms),
    floor:p.floor,level:-1,reserved:[...p.actors,p.chest,p.portal,p.branch]}),frontierSouthRoomLootSeed:seed,frontierSouthLootPlaced:true};
@@ -53069,7 +53095,7 @@ function frontierDenRehome(kit,plan,owns=(x,z)=>x<64,doorstep=frontierDenDoorste
  for(const field of ['drops','groundGold','soulDrops']){
   if(!kit[field]?.length)continue;
   const entries=kit[field].filter(p=>p.y!==0||!owns(p.x,p.z)||
-   !(p.frontierRoomLoot&&(field==='drops'||field==='groundGold')||field==='drops'&&p.frontierDenStock));
+   !((p.frontierRoomLoot||p.enemyGold)&&(field==='drops'||field==='groundGold')||field==='drops'&&p.frontierDenStock));
   const used=new Set(entries.filter(p=>p.y===0&&owns(p.x,p.z)&&usable(p)).map(p=>p.x+','+p.z));
   next[field]=entries.map(p=>{
    if(p.y!==0||!owns(p.x,p.z)||p.region||usable(p))return p;
